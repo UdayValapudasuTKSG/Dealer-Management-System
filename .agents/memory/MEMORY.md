@@ -1,0 +1,2 @@
+- [AURA dashboard conventions](aura-dashboard.md) — percentages are pre-scaled 0–100 (never *100 in UI); monthlyRevenue is current-month-only; restart api-server after route changes.
+- [Drizzle date-mode-string + Zod coercion](drizzle-date-zod.md) — date columns with mode:"string" clash with Zod-coerced Date bodies; convert to YYYY-MM-DD before write.

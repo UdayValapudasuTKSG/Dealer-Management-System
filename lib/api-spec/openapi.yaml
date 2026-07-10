@@ -3,13 +3,33 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: AURA Dealership Operating System API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: vehicles
+    description: Inventory of vehicles
+  - name: leads
+    description: Sales leads and demand
+  - name: customers
+    description: Customer records
+  - name: deals
+    description: Deal desking and negotiation
+  - name: appraisals
+    description: Trade-in appraisals
+  - name: finance
+    description: Finance applications
+  - name: service
+    description: Service and repair orders
+  - name: agents
+    description: AI agents
+  - name: activity
+    description: Activity feed
+  - name: dashboard
+    description: Aggregated dashboard data
 paths:
   /healthz:
     get:
@@ -24,6 +44,692 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /vehicles:
+    get:
+      operationId: listVehicles
+      tags: [vehicles]
+      summary: List inventory vehicles
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: powertrain
+          in: query
+          required: false
+          schema: { type: string }
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of vehicles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+    post:
+      operationId: createVehicle
+      tags: [vehicles]
+      summary: Add a vehicle to inventory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+  /vehicles/{id}:
+    get:
+      operationId: getVehicle
+      tags: [vehicles]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateVehicle
+      tags: [vehicles]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteVehicle
+      tags: [vehicles]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /leads:
+    get:
+      operationId: listLeads
+      tags: [leads]
+      summary: List leads
+      parameters:
+        - name: phase
+          in: query
+          required: false
+          schema: { type: string }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of leads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Lead"
+    post:
+      operationId: createLead
+      tags: [leads]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+  /leads/{id}:
+    get:
+      operationId: getLead
+      tags: [leads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateLead
+      tags: [leads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteLead
+      tags: [leads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [customers]
+      responses:
+        "200":
+          description: List of customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
+    post:
+      operationId: createCustomer
+      tags: [customers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      tags: [customers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateCustomer
+      tags: [customers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /deals:
+    get:
+      operationId: listDeals
+      tags: [deals]
+      parameters:
+        - name: stage
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of deals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Deal"
+    post:
+      operationId: createDeal
+      tags: [deals]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+  /deals/{id}:
+    get:
+      operationId: getDeal
+      tags: [deals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateDeal
+      tags: [deals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Deal"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /appraisals:
+    get:
+      operationId: listAppraisals
+      tags: [appraisals]
+      responses:
+        "200":
+          description: List of appraisals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Appraisal"
+    post:
+      operationId: createAppraisal
+      tags: [appraisals]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppraisalInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appraisal"
+  /appraisals/{id}:
+    patch:
+      operationId: updateAppraisal
+      tags: [appraisals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppraisalUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appraisal"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /finance-applications:
+    get:
+      operationId: listFinanceApplications
+      tags: [finance]
+      responses:
+        "200":
+          description: List of finance applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FinanceApplication"
+    post:
+      operationId: createFinanceApplication
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceApplicationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceApplication"
+  /finance-applications/{id}:
+    patch:
+      operationId: updateFinanceApplication
+      tags: [finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceApplicationUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceApplication"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /service-orders:
+    get:
+      operationId: listServiceOrders
+      tags: [service]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of service orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceOrder"
+    post:
+      operationId: createServiceOrder
+      tags: [service]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceOrderInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceOrder"
+  /service-orders/{id}:
+    patch:
+      operationId: updateServiceOrder
+      tags: [service]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceOrderUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceOrder"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /agents:
+    get:
+      operationId: listAgents
+      tags: [agents]
+      responses:
+        "200":
+          description: List of AI agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Agent"
+  /agents/{id}:
+    get:
+      operationId: getAgent
+      tags: [agents]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateAgent
+      tags: [agents]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [activity]
+      summary: Recent activity feed across the dealership
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Activity feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Activity"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Headline metrics for the command center
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /dashboard/pipeline:
+    get:
+      operationId: getPipeline
+      tags: [dashboard]
+      summary: Lead pipeline funnel by journey phase
+      responses:
+        "200":
+          description: Pipeline stages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PipelineStage"
+  /dashboard/sales-performance:
+    get:
+      operationId: getSalesPerformance
+      tags: [dashboard]
+      summary: Monthly revenue and unit sales
+      responses:
+        "200":
+          description: Sales performance series
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalesPoint"
+  /dashboard/inventory-breakdown:
+    get:
+      operationId: getInventoryBreakdown
+      tags: [dashboard]
+      summary: Inventory counts grouped by powertrain
+      responses:
+        "200":
+          description: Inventory breakdown
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryBreakdownItem"
+
 components:
   schemas:
     HealthStatus:
@@ -33,4 +739,395 @@ components:
           type: string
       required:
         - status
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
 
+    Vehicle:
+      type: object
+      required: [id, make, model, year, price, powertrain, mileageKm, exteriorColor, status, bodyType, featured, createdAt]
+      properties:
+        id: { type: integer }
+        make: { type: string }
+        model: { type: string }
+        trim: { type: ["string", "null"] }
+        year: { type: integer }
+        vin: { type: ["string", "null"] }
+        price: { type: number }
+        powertrain: { type: string, enum: [EV, Hybrid, Petrol, Diesel] }
+        rangeKm: { type: ["integer", "null"] }
+        mileageKm: { type: integer }
+        exteriorColor: { type: string }
+        bodyType: { type: string }
+        status: { type: string, enum: [available, reserved, in_transit, sold, service] }
+        imageUrl: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+        featured: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    VehicleInput:
+      type: object
+      required: [make, model, year, price, powertrain, mileageKm, exteriorColor, bodyType]
+      properties:
+        make: { type: string, minLength: 1 }
+        model: { type: string, minLength: 1 }
+        trim: { type: string }
+        year: { type: integer }
+        vin: { type: string }
+        price: { type: number }
+        powertrain: { type: string, enum: [EV, Hybrid, Petrol, Diesel] }
+        rangeKm: { type: integer }
+        mileageKm: { type: integer }
+        exteriorColor: { type: string }
+        bodyType: { type: string }
+        status: { type: string, enum: [available, reserved, in_transit, sold, service] }
+        imageUrl: { type: string }
+        description: { type: string }
+        featured: { type: boolean }
+    VehicleUpdate:
+      type: object
+      properties:
+        make: { type: string, minLength: 1 }
+        model: { type: string, minLength: 1 }
+        trim: { type: string }
+        year: { type: integer }
+        vin: { type: string }
+        price: { type: number }
+        powertrain: { type: string, enum: [EV, Hybrid, Petrol, Diesel] }
+        rangeKm: { type: integer }
+        mileageKm: { type: integer }
+        exteriorColor: { type: string }
+        bodyType: { type: string }
+        status: { type: string, enum: [available, reserved, in_transit, sold, service] }
+        imageUrl: { type: string }
+        description: { type: string }
+        featured: { type: boolean }
+
+    Lead:
+      type: object
+      required: [id, name, channel, phase, status, aiScore, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        channel: { type: string, enum: [web, social, mobile, walkin] }
+        phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
+        status: { type: string, enum: [new, qualified, engaged, converted, lost] }
+        interestedVehicleId: { type: ["integer", "null"] }
+        assignedTo: { type: ["string", "null"] }
+        aiScore: { type: integer }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    LeadInput:
+      type: object
+      required: [name, channel]
+      properties:
+        name: { type: string, minLength: 1 }
+        email: { type: string }
+        phone: { type: string }
+        channel: { type: string, enum: [web, social, mobile, walkin] }
+        phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
+        status: { type: string, enum: [new, qualified, engaged, converted, lost] }
+        interestedVehicleId: { type: integer }
+        assignedTo: { type: string }
+        aiScore: { type: integer }
+        notes: { type: string }
+    LeadUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        email: { type: string }
+        phone: { type: string }
+        channel: { type: string, enum: [web, social, mobile, walkin] }
+        phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
+        status: { type: string, enum: [new, qualified, engaged, converted, lost] }
+        interestedVehicleId: { type: integer }
+        assignedTo: { type: string }
+        aiScore: { type: integer }
+        notes: { type: string }
+
+    Customer:
+      type: object
+      required: [id, name, lifetimeValue, vehiclesOwned, loyaltyTier, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        avatarUrl: { type: ["string", "null"] }
+        location: { type: ["string", "null"] }
+        lifetimeValue: { type: number }
+        vehiclesOwned: { type: integer }
+        loyaltyTier: { type: string, enum: [new, silver, gold, platinum] }
+        createdAt: { type: string, format: date-time }
+    CustomerInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        email: { type: string }
+        phone: { type: string }
+        avatarUrl: { type: string }
+        location: { type: string }
+        lifetimeValue: { type: number }
+        vehiclesOwned: { type: integer }
+        loyaltyTier: { type: string, enum: [new, silver, gold, platinum] }
+    CustomerUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        email: { type: string }
+        phone: { type: string }
+        avatarUrl: { type: string }
+        location: { type: string }
+        lifetimeValue: { type: number }
+        vehiclesOwned: { type: integer }
+        loyaltyTier: { type: string, enum: [new, silver, gold, platinum] }
+
+    Deal:
+      type: object
+      required: [id, vehicleId, stage, vehiclePrice, discount, tradeInValue, accessories, otdPrice, depositPaid, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        leadId: { type: ["integer", "null"] }
+        vehicleId: { type: integer }
+        customerName: { type: ["string", "null"] }
+        stage: { type: string, enum: [desking, negotiation, finance, committed, delivered, lost] }
+        vehiclePrice: { type: number }
+        discount: { type: number }
+        tradeInValue: { type: number }
+        accessories: { type: number }
+        otdPrice: { type: number }
+        monthlyPayment: { type: ["number", "null"] }
+        depositPaid: { type: boolean }
+        salesAdvisor: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    DealInput:
+      type: object
+      required: [vehicleId, vehiclePrice]
+      properties:
+        customerId: { type: integer }
+        leadId: { type: integer }
+        vehicleId: { type: integer }
+        customerName: { type: string }
+        stage: { type: string, enum: [desking, negotiation, finance, committed, delivered, lost] }
+        vehiclePrice: { type: number }
+        discount: { type: number }
+        tradeInValue: { type: number }
+        accessories: { type: number }
+        otdPrice: { type: number }
+        monthlyPayment: { type: number }
+        depositPaid: { type: boolean }
+        salesAdvisor: { type: string }
+    DealUpdate:
+      type: object
+      properties:
+        customerId: { type: integer }
+        leadId: { type: integer }
+        vehicleId: { type: integer }
+        customerName: { type: string }
+        stage: { type: string, enum: [desking, negotiation, finance, committed, delivered, lost] }
+        vehiclePrice: { type: number }
+        discount: { type: number }
+        tradeInValue: { type: number }
+        accessories: { type: number }
+        otdPrice: { type: number }
+        monthlyPayment: { type: number }
+        depositPaid: { type: boolean }
+        salesAdvisor: { type: string }
+
+    Appraisal:
+      type: object
+      required: [id, year, make, model, mileageKm, condition, aiEstimate, status, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        year: { type: integer }
+        make: { type: string }
+        model: { type: string }
+        mileageKm: { type: integer }
+        condition: { type: string, enum: [excellent, good, fair, poor] }
+        aiEstimate: { type: number }
+        finalOffer: { type: ["number", "null"] }
+        status: { type: string, enum: [pending, valued, accepted, declined] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    AppraisalInput:
+      type: object
+      required: [year, make, model, mileageKm, condition]
+      properties:
+        customerId: { type: integer }
+        customerName: { type: string }
+        year: { type: integer }
+        make: { type: string, minLength: 1 }
+        model: { type: string, minLength: 1 }
+        mileageKm: { type: integer }
+        condition: { type: string, enum: [excellent, good, fair, poor] }
+        aiEstimate: { type: number }
+        finalOffer: { type: number }
+        status: { type: string, enum: [pending, valued, accepted, declined] }
+        notes: { type: string }
+    AppraisalUpdate:
+      type: object
+      properties:
+        condition: { type: string, enum: [excellent, good, fair, poor] }
+        aiEstimate: { type: number }
+        finalOffer: { type: number }
+        status: { type: string, enum: [pending, valued, accepted, declined] }
+        notes: { type: string }
+
+    FinanceApplication:
+      type: object
+      required: [id, customerName, amount, termMonths, apr, status, protectionProducts, createdAt]
+      properties:
+        id: { type: integer }
+        dealId: { type: ["integer", "null"] }
+        customerName: { type: string }
+        amount: { type: number }
+        termMonths: { type: integer }
+        apr: { type: number }
+        lender: { type: ["string", "null"] }
+        status: { type: string, enum: [submitted, under_review, approved, declined, funded] }
+        protectionProducts:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+    FinanceApplicationInput:
+      type: object
+      required: [customerName, amount, termMonths, apr]
+      properties:
+        dealId: { type: integer }
+        customerName: { type: string, minLength: 1 }
+        amount: { type: number }
+        termMonths: { type: integer }
+        apr: { type: number }
+        lender: { type: string }
+        status: { type: string, enum: [submitted, under_review, approved, declined, funded] }
+        protectionProducts:
+          type: array
+          items: { type: string }
+    FinanceApplicationUpdate:
+      type: object
+      properties:
+        amount: { type: number }
+        termMonths: { type: integer }
+        apr: { type: number }
+        lender: { type: string }
+        status: { type: string, enum: [submitted, under_review, approved, declined, funded] }
+        protectionProducts:
+          type: array
+          items: { type: string }
+
+    ServiceOrder:
+      type: object
+      required: [id, vehicleInfo, type, status, scheduledDate, estimatedCost, jobs, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        vehicleInfo: { type: string }
+        type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
+        status: { type: string, enum: [scheduled, checked_in, in_progress, awaiting_approval, completed, delivered] }
+        scheduledDate: { type: string, format: date }
+        technician: { type: ["string", "null"] }
+        estimatedCost: { type: number }
+        jobs:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+    ServiceOrderInput:
+      type: object
+      required: [vehicleInfo, type, scheduledDate]
+      properties:
+        customerId: { type: integer }
+        customerName: { type: string }
+        vehicleInfo: { type: string, minLength: 1 }
+        type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
+        status: { type: string, enum: [scheduled, checked_in, in_progress, awaiting_approval, completed, delivered] }
+        scheduledDate: { type: string, format: date }
+        technician: { type: string }
+        estimatedCost: { type: number }
+        jobs:
+          type: array
+          items: { type: string }
+    ServiceOrderUpdate:
+      type: object
+      properties:
+        type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
+        status: { type: string, enum: [scheduled, checked_in, in_progress, awaiting_approval, completed, delivered] }
+        scheduledDate: { type: string, format: date }
+        technician: { type: string }
+        estimatedCost: { type: number }
+        jobs:
+          type: array
+          items: { type: string }
+
+    Agent:
+      type: object
+      required: [id, key, name, domain, description, status, tasksToday, successRate]
+      properties:
+        id: { type: integer }
+        key: { type: string }
+        name: { type: string }
+        domain: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [active, idle, paused] }
+        tasksToday: { type: integer }
+        successRate: { type: number }
+    AgentUpdate:
+      type: object
+      properties:
+        status: { type: string, enum: [active, idle, paused] }
+
+    Activity:
+      type: object
+      required: [id, actor, isAi, action, createdAt]
+      properties:
+        id: { type: integer }
+        agentKey: { type: ["string", "null"] }
+        actor: { type: string }
+        isAi: { type: boolean }
+        action: { type: string }
+        entity: { type: ["string", "null"] }
+        detail: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    DashboardSummary:
+      type: object
+      required: [totalLeads, activeDeals, inventoryCount, monthlyRevenue, serviceOrdersOpen, agentTasksToday, conversionRate, avgResponseSeconds]
+      properties:
+        totalLeads: { type: integer }
+        activeDeals: { type: integer }
+        inventoryCount: { type: integer }
+        monthlyRevenue: { type: number }
+        serviceOrdersOpen: { type: integer }
+        agentTasksToday: { type: integer }
+        conversionRate: { type: number }
+        avgResponseSeconds: { type: integer }
+    PipelineStage:
+      type: object
+      required: [phase, label, count, value]
+      properties:
+        phase: { type: string }
+        label: { type: string }
+        count: { type: integer }
+        value: { type: number }
+    SalesPoint:
+      type: object
+      required: [month, revenue, units]
+      properties:
+        month: { type: string }
+        revenue: { type: number }
+        units: { type: integer }
+    InventoryBreakdownItem:
+      type: object
+      required: [powertrain, count]
+      properties:
+        powertrain: { type: string }
+        count: { type: integer }

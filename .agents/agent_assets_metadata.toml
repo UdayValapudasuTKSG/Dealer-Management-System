@@ -1,0 +1,50 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "MVf7Q5EOsJeA6pZuNPNME"
+uri = "file://attached_assets/generated_images/professional_automotive_dealership_photo_5df3.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "8o-DjZOc6jLUS7urZg4rd"
+uri = "file://attached_assets/generated_images/professional_automotive_dealership_photo_5b38.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "EeIugfv1FD7K4rtFUSOmH"
+uri = "file://attached_assets/generated_images/professional_automotive_dealership_photo_971c.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "yud0zJB0x8GcodkX3UMvY"
+uri = "file://attached_assets/generated_images/professional_automotive_dealership_photo_1265.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "z2qreYJlS3dUip-wDXtdW"
+uri = "file://attached_assets/generated_images/professional_automotive_dealership_photo_fa15.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "CPSQD9knmuAM5mL8J8Fi6"
+uri = "file://attached_assets/generated_images/professional_automotive_dealership_photo_56d4.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "QUlhxGFB1gwp1xStmrC4k"
+uri = "file://attached_assets/generated_images/professional_automotive_dealership_photo_7738.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "Z12HXyAgiXicC-xzqEDgU"
+uri = "file://attached_assets/generated_images/professional_automotive_dealership_photo_f974.png"
+type = "image"
+title = "generated_image"

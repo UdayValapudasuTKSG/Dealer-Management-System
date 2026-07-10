@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "AURA Dealership OS"
+version = "1.0.0"
+id = "artifacts/aura"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19345
+
+[services.development]
+run = "pnpm --filter @workspace/aura run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/aura", "run", "build" ]
+publicDir = "artifacts/aura/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19345"
+BASE_PATH = "/"
