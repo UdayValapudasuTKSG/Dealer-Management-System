@@ -1,4 +1,4 @@
-import { CopilotSidebar } from "@copilotkit/react-ui";
+import { CopilotPopup } from "@copilotkit/react-ui";
 import { Sidebar } from "./sidebar";
 import { AuraCopilot } from "@/components/copilot/aura-copilot";
 
@@ -18,9 +18,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </main>
 
       <AuraCopilot />
-      <CopilotSidebar
-        defaultOpen
-        clickOutsideToClose={false}
+      <CopilotPopup
+        clickOutsideToClose
         labels={{
           title: "AURA Concierge",
           initial:
