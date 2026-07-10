@@ -948,6 +948,55 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /gra/extract:
+    post:
+      operationId: extractGraFiling
+      tags: [gra]
+      summary: Extract a GRA vehicle-duty filing draft from an uploaded document image
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GraExtractRequest"
+      responses:
+        "200":
+          description: Extracted filing draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraFilingDraft"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /gra/filings:
+    post:
+      operationId: submitGraFiling
+      tags: [gra]
+      summary: Submit a completed GRA filing draft; raises a gra_filing decision gate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GraFilingSubmission"
+      responses:
+        "200":
+          description: Created gate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gate"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   schemas:
     AnthropicConversation:
@@ -1481,6 +1530,59 @@ components:
         note: { type: string }
         adjustedAmount: { type: number }
         resolvedBy: { type: string }
+
+    GraExtractRequest:
+      type: object
+      required: [imageBase64, mediaType]
+      properties:
+        imageBase64:
+          type: string
+          description: Base64-encoded document image (no data-URL prefix)
+        mediaType:
+          type: string
+          enum: [image/png, image/jpeg, image/webp, image/gif]
+    GraFilingDraft:
+      type: object
+      required:
+        - ownerName
+        - tin
+        - vin
+        - make
+        - model
+        - year
+        - engineCc
+        - fuelType
+        - hsCode
+        - cifValue
+        - importDuty
+        - vat
+        - nhil
+        - getfundLevy
+        - exciseDuty
+        - totalPayable
+      properties:
+        ownerName: { type: string }
+        tin: { type: string, description: Taxpayer Identification Number }
+        vin: { type: string, description: Chassis / VIN number }
+        make: { type: string }
+        model: { type: string }
+        year: { type: integer }
+        engineCc: { type: integer, description: Engine capacity in cubic centimetres }
+        fuelType: { type: string }
+        hsCode: { type: string, description: Harmonised System tariff code }
+        cifValue: { type: number, description: Cost, Insurance & Freight value in GHS }
+        importDuty: { type: number }
+        vat: { type: number }
+        nhil: { type: number, description: National Health Insurance Levy }
+        getfundLevy: { type: number, description: GETFund Levy }
+        exciseDuty: { type: number }
+        totalPayable: { type: number }
+        notes: { type: ["string", "null"] }
+    GraFilingSubmission:
+      type: object
+      required: [draft]
+      properties:
+        draft: { $ref: "#/components/schemas/GraFilingDraft" }
 
     Customer360:
       type: object

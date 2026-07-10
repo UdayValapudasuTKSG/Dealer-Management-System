@@ -13,6 +13,8 @@ import dashboardRouter from "./dashboard";
 import timelineRouter from "./timeline";
 import gatesRouter from "./gates";
 import anthropicRouter from "./anthropic";
+import copilotkitRouter from "./copilotkit";
+import graRouter from "./gra";
 
 const router: IRouter = Router();
 
@@ -30,5 +32,7 @@ router.use(dashboardRouter);
 router.use(timelineRouter);
 router.use(gatesRouter);
 router.use(anthropicRouter);
+router.use(copilotkitRouter);
+router.use(graRouter);
 
 export default router;

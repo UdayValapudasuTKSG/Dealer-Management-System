@@ -960,6 +960,54 @@ export interface GateResolution {
   resolvedBy?: string;
 }
 
+export type GraExtractRequestMediaType = typeof GraExtractRequestMediaType[keyof typeof GraExtractRequestMediaType];
+
+
+export const GraExtractRequestMediaType = {
+  'image/png': 'image/png',
+  'image/jpeg': 'image/jpeg',
+  'image/webp': 'image/webp',
+  'image/gif': 'image/gif',
+} as const;
+
+export interface GraExtractRequest {
+  /** Base64-encoded document image (no data-URL prefix) */
+  imageBase64: string;
+  mediaType: GraExtractRequestMediaType;
+}
+
+export interface GraFilingDraft {
+  ownerName: string;
+  /** Taxpayer Identification Number */
+  tin: string;
+  /** Chassis / VIN number */
+  vin: string;
+  make: string;
+  model: string;
+  year: number;
+  /** Engine capacity in cubic centimetres */
+  engineCc: number;
+  fuelType: string;
+  /** Harmonised System tariff code */
+  hsCode: string;
+  /** Cost */
+  cifValue: number;
+  importDuty: number;
+  vat: number;
+  /** National Health Insurance Levy */
+  nhil: number;
+  /** GETFund Levy */
+  getfundLevy: number;
+  exciseDuty: number;
+  totalPayable: number;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface GraFilingSubmission {
+  draft: GraFilingDraft;
+}
+
 export interface Customer360 {
   customer: Customer;
   ownedVehicles: Vehicle[];

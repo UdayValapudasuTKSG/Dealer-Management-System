@@ -141,3 +141,23 @@
 .glass-panel {
   @apply bg-white/80 backdrop-blur-2xl border border-white/60 shadow-[0_4px_24px_rgba(0,0,0,0.02)];
 }
+
+/* CopilotKit — red/white glass luxury theme */
+.copilotKitSidebar {
+  --copilot-kit-primary-color: hsl(350 100% 45%);
+  --copilot-kit-contrast-color: #ffffff;
+  --copilot-kit-background-color: rgba(255, 255, 255, 0.85);
+  --copilot-kit-secondary-color: rgba(255, 255, 255, 0.7);
+  --copilot-kit-secondary-contrast-color: hsl(0 0% 10%);
+  --copilot-kit-separator-color: rgba(0, 0, 0, 0.06);
+  --copilot-kit-muted-color: hsl(0 0% 45%);
+}
+.copilotKitSidebar .copilotKitWindow {
+  backdrop-filter: blur(24px);
+  background: rgba(255, 255, 255, 0.85);
+  border-left: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.04);
+}
+.copilotKitSidebarContentWrapper {
+  --copilot-kit-primary-color: hsl(350 100% 45%);
+}

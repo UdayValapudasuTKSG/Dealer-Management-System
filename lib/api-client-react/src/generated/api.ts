@@ -46,6 +46,9 @@ import type {
   FinanceApplicationUpdate,
   Gate,
   GateResolution,
+  GraExtractRequest,
+  GraFilingDraft,
+  GraFilingSubmission,
   HealthStatus,
   InventoryBreakdownItem,
   Lead,
@@ -3408,5 +3411,147 @@ export const useResolveGate = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getResolveGateMutationOptions(options));
+    }
+
+export const getExtractGraFilingUrl = () => {
+
+
+
+
+  return `/api/gra/extract`
+}
+
+/**
+ * @summary Extract a GRA vehicle-duty filing draft from an uploaded document image
+ */
+export const extractGraFiling = async (graExtractRequest: GraExtractRequest, options?: RequestInit): Promise<GraFilingDraft> => {
+
+  return customFetch<GraFilingDraft>(getExtractGraFilingUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(graExtractRequest)
+  }
+);}
+
+
+
+
+
+export const getExtractGraFilingMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractGraFiling>>, TError,{data: BodyType<GraExtractRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof extractGraFiling>>, TError,{data: BodyType<GraExtractRequest>}, TContext> => {
+
+const mutationKey = ['extractGraFiling'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof extractGraFiling>>, {data: BodyType<GraExtractRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  extractGraFiling(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExtractGraFilingMutationResult = NonNullable<Awaited<ReturnType<typeof extractGraFiling>>>
+    export type ExtractGraFilingMutationBody = BodyType<GraExtractRequest>
+    export type ExtractGraFilingMutationError = ErrorType<Error>
+
+    /**
+ * @summary Extract a GRA vehicle-duty filing draft from an uploaded document image
+ */
+export const useExtractGraFiling = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractGraFiling>>, TError,{data: BodyType<GraExtractRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof extractGraFiling>>,
+        TError,
+        {data: BodyType<GraExtractRequest>},
+        TContext
+      > => {
+      return useMutation(getExtractGraFilingMutationOptions(options));
+    }
+
+export const getSubmitGraFilingUrl = () => {
+
+
+
+
+  return `/api/gra/filings`
+}
+
+/**
+ * @summary Submit a completed GRA filing draft; raises a gra_filing decision gate
+ */
+export const submitGraFiling = async (graFilingSubmission: GraFilingSubmission, options?: RequestInit): Promise<Gate> => {
+
+  return customFetch<Gate>(getSubmitGraFilingUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(graFilingSubmission)
+  }
+);}
+
+
+
+
+
+export const getSubmitGraFilingMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGraFiling>>, TError,{data: BodyType<GraFilingSubmission>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitGraFiling>>, TError,{data: BodyType<GraFilingSubmission>}, TContext> => {
+
+const mutationKey = ['submitGraFiling'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitGraFiling>>, {data: BodyType<GraFilingSubmission>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitGraFiling(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitGraFilingMutationResult = NonNullable<Awaited<ReturnType<typeof submitGraFiling>>>
+    export type SubmitGraFilingMutationBody = BodyType<GraFilingSubmission>
+    export type SubmitGraFilingMutationError = ErrorType<Error>
+
+    /**
+ * @summary Submit a completed GRA filing draft; raises a gra_filing decision gate
+ */
+export const useSubmitGraFiling = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGraFiling>>, TError,{data: BodyType<GraFilingSubmission>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitGraFiling>>,
+        TError,
+        {data: BodyType<GraFilingSubmission>},
+        TContext
+      > => {
+      return useMutation(getSubmitGraFilingMutationOptions(options));
     }
 

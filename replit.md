@@ -58,7 +58,9 @@ Command Center dashboard (KPIs, live orchestration feed, sales-performance chart
 - After adding/changing API routes, restart the `artifacts/api-server` workflow — new routes 404 until restart.
 - Percentages (`conversionRate`, `successRate`) are already scaled to 0–100; never `* 100` in the UI.
 - Access services through the shared proxy at `localhost:80` (e.g. `localhost:80/api/...`), never service ports directly.
-- The AI chat send endpoint (`POST /anthropic/conversations/{id}/messages`) is an SSE stream with NO usable generated hook — the client consumes it via `fetch` + `ReadableStream` (buffer partial frames across chunks), not `useSendAnthropicMessage`. The server persists the assistant message in a `finally`/abort path so partials survive client disconnect.
+- The AI chat send endpoint (`POST /anthropic/conversations/{id}/messages`) is an SSE stream with NO usable generated hook — the client consumes it via `fetch` + `ReadableStream` (buffer partial frames across chunks), not `useSendAnthropicMessage`. The server persists the assistant message in a `finally`/abort path so partials survive client disconnect. (Legacy; the concierge now runs on CopilotKit.)
+- The agentic concierge runs on CopilotKit: runtime mounted at `POST /api/copilotkit` (AnthropicAdapter over the Replit Anthropic client), web app wrapped in `<CopilotKit>` with a persistent `CopilotSidebar`. The copilotkit route sets `Cache-Control: no-cache, no-transform` + `X-Accel-Buffering: no` (proxy cuts the stream otherwise → `ERR_INCOMPLETE_CHUNKED_ENCODING`), sets `req.url = req.originalUrl`, and is excluded from Express body parsing.
+- GRA duty filing (`/gra`): upload an import document image → `POST /gra/extract` (Anthropic vision) autofills a duty draft → `POST /gra/filings` creates a `gra_filing` human decision gate surfaced in Approvals.
 
 ## Pointers
 

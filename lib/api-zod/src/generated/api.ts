@@ -1214,3 +1214,82 @@ export const ResolveGateResponse = zod.object({
 })
 
 
+/**
+ * @summary Extract a GRA vehicle-duty filing draft from an uploaded document image
+ */
+export const ExtractGraFilingBody = zod.object({
+  "imageBase64": zod.string().describe('Base64-encoded document image (no data-URL prefix)'),
+  "mediaType": zod.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+})
+
+export const ExtractGraFilingResponse = zod.object({
+  "ownerName": zod.string(),
+  "tin": zod.string().describe('Taxpayer Identification Number'),
+  "vin": zod.string().describe('Chassis \/ VIN number'),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "engineCc": zod.number().describe('Engine capacity in cubic centimetres'),
+  "fuelType": zod.string(),
+  "hsCode": zod.string().describe('Harmonised System tariff code'),
+  "cifValue": zod.number().describe('Cost'),
+  "importDuty": zod.number(),
+  "vat": zod.number(),
+  "nhil": zod.number().describe('National Health Insurance Levy'),
+  "getfundLevy": zod.number().describe('GETFund Levy'),
+  "exciseDuty": zod.number(),
+  "totalPayable": zod.number(),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Submit a completed GRA filing draft; raises a gra_filing decision gate
+ */
+export const SubmitGraFilingBody = zod.object({
+  "draft": zod.object({
+  "ownerName": zod.string(),
+  "tin": zod.string().describe('Taxpayer Identification Number'),
+  "vin": zod.string().describe('Chassis \/ VIN number'),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "engineCc": zod.number().describe('Engine capacity in cubic centimetres'),
+  "fuelType": zod.string(),
+  "hsCode": zod.string().describe('Harmonised System tariff code'),
+  "cifValue": zod.number().describe('Cost'),
+  "importDuty": zod.number(),
+  "vat": zod.number(),
+  "nhil": zod.number().describe('National Health Insurance Levy'),
+  "getfundLevy": zod.number().describe('GETFund Levy'),
+  "exciseDuty": zod.number(),
+  "totalPayable": zod.number(),
+  "notes": zod.string().nullish()
+})
+})
+
+export const SubmitGraFilingResponse = zod.object({
+  "id": zod.number(),
+  "type": zod.enum(['below_floor_price', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release']),
+  "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
+  "priority": zod.enum(['high', 'normal', 'low']),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "recommendation": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "floorAmount": zod.number().nullish(),
+  "evidence": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string()
+})),
+  "resolution": zod.string().nullish(),
+  "resolvedBy": zod.string().nullish(),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+

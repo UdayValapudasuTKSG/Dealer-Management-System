@@ -10,6 +10,7 @@ import {
   UserCircle, 
   Sparkles, 
   ShieldCheck,
+  FileText,
   Route as RouteIcon 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,7 @@ const navigation = [
   { name: "Finance", href: "/finance", icon: Banknote },
   { name: "Service", href: "/service", icon: Wrench },
   { name: "Customers", href: "/customers", icon: UserCircle },
-  { name: "Concierge", href: "/assistant", icon: Sparkles },
+  { name: "GRA Filing", href: "/gra", icon: FileText },
 ];
 
 export function Sidebar() {

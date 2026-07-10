@@ -26,8 +26,23 @@ app.use(
   }),
 );
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// CopilotKit's runtime endpoint is served by GraphQL Yoga, which reads the raw
+// request stream itself. Skip Express body-parsing for that path, or the parser
+// drains the stream and Yoga hangs.
+const jsonParser = express.json();
+const urlencodedParser = express.urlencoded({ extended: true });
+const isCopilotKit = (url: string): boolean =>
+  url.startsWith("/api/copilotkit");
+
+app.use((req, res, next) => {
+  if (isCopilotKit(req.originalUrl)) return next();
+  jsonParser(req, res, next);
+});
+app.use((req, res, next) => {
+  if (isCopilotKit(req.originalUrl)) return next();
+  urlencodedParser(req, res, next);
+});
 
 app.use("/api", router);
 

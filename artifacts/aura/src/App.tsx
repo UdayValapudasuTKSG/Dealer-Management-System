@@ -1,5 +1,7 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { CopilotKit } from "@copilotkit/react-core";
+import "@copilotkit/react-ui/styles.css";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Shell } from "@/components/layout/shell";
@@ -15,7 +17,7 @@ import Customers from "@/pages/customers";
 import CustomerDetail from "@/pages/customer-detail";
 import Approvals from "@/pages/approvals";
 import Journey from "@/pages/journey";
-import Assistant from "@/pages/assistant";
+import Gra from "@/pages/gra";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -42,7 +44,7 @@ function Router() {
         <Route path="/customers" component={Customers} />
         <Route path="/customers/:id" component={CustomerDetail} />
         <Route path="/journey" component={Journey} />
-        <Route path="/assistant" component={Assistant} />
+        <Route path="/gra" component={Gra} />
         <Route component={NotFound} />
       </Switch>
     </Shell>
@@ -52,12 +54,14 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
+      <CopilotKit runtimeUrl={`${import.meta.env.BASE_URL}api/copilotkit`}>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </CopilotKit>
     </QueryClientProvider>
   );
 }
