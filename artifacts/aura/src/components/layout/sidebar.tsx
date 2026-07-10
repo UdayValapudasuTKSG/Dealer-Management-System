@@ -8,7 +8,7 @@ import {
   Banknote, 
   Wrench, 
   UserCircle, 
-  Cpu, 
+  Sparkles, 
   Route as RouteIcon 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,7 +23,7 @@ const navigation = [
   { name: "Finance", href: "/finance", icon: Banknote },
   { name: "Service", href: "/service", icon: Wrench },
   { name: "Customers", href: "/customers", icon: UserCircle },
-  { name: "AI Agents", href: "/agents", icon: Cpu },
+  { name: "Concierge", href: "/assistant", icon: Sparkles },
 ];
 
 export function Sidebar() {
@@ -33,7 +33,7 @@ export function Sidebar() {
     <div className="flex h-full w-64 flex-col bg-white border-r border-border">
       <div className="flex h-16 shrink-0 items-center px-6 border-b border-border">
         <div className="flex items-center gap-2">
-          <Cpu className="h-6 w-6 text-primary" />
+          <Sparkles className="h-6 w-6 text-primary" />
           <span className="text-lg font-bold tracking-tight font-sans">AURA<span className="text-primary">.OS</span></span>
         </div>
       </div>

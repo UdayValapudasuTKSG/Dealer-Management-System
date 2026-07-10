@@ -12,8 +12,8 @@ import Appraisals from "@/pages/appraisals";
 import Finance from "@/pages/finance";
 import Service from "@/pages/service";
 import Customers from "@/pages/customers";
-import Agents from "@/pages/agents";
 import Journey from "@/pages/journey";
+import Assistant from "@/pages/assistant";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -37,8 +37,8 @@ function Router() {
         <Route path="/finance" component={Finance} />
         <Route path="/service" component={Service} />
         <Route path="/customers" component={Customers} />
-        <Route path="/agents" component={Agents} />
         <Route path="/journey" component={Journey} />
+        <Route path="/assistant" component={Assistant} />
         <Route component={NotFound} />
       </Switch>
     </Shell>

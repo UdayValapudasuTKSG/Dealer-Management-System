@@ -40,7 +40,11 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 
 ## Product
 
-Command Center dashboard (KPIs, live agent feed, sales-performance chart), Inventory, Journey pipeline, Leads, Deals, Appraisals, Finance, Service, Customers, and an AI Agent Fleet (12 agents). Light/bright, automotive-themed UI.
+Command Center dashboard (KPIs, live orchestration feed, sales-performance chart), Inventory showroom, Journey (agent-orchestration centerpiece), Leads, Deals, Appraisals, Finance, Service, Customers, and a real streaming AI Concierge chat. Red/white, Apple-style glassmorphism, luxury automotive UI with cinematic motion and showroom videos.
+
+- AI agents are INTERNAL orchestration — there is no user-facing "agent fleet" page or `/agents` route. Agent/activity data is reframed as ambient concierge orchestration (Journey page + dashboard feed).
+- AI Concierge chat (`/assistant`) is REAL, powered by Anthropic via Replit AI Integrations (no own key; billed to credits). It streams responses and answers with live dealership data injected into the system prompt.
+- Showroom videos live in `artifacts/aura/public/videos/` (referenced via `import.meta.env.BASE_URL`).
 
 ## User preferences
 
@@ -54,6 +58,7 @@ Command Center dashboard (KPIs, live agent feed, sales-performance chart), Inven
 - After adding/changing API routes, restart the `artifacts/api-server` workflow — new routes 404 until restart.
 - Percentages (`conversionRate`, `successRate`) are already scaled to 0–100; never `* 100` in the UI.
 - Access services through the shared proxy at `localhost:80` (e.g. `localhost:80/api/...`), never service ports directly.
+- The AI chat send endpoint (`POST /anthropic/conversations/{id}/messages`) is an SSE stream with NO usable generated hook — the client consumes it via `fetch` + `ReadableStream` (buffer partial frames across chunks), not `useSendAnthropicMessage`. The server persists the assistant message in a `finally`/abort path so partials survive client disconnect.
 
 ## Pointers
 

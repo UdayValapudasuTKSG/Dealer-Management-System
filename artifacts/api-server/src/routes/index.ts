@@ -10,6 +10,7 @@ import serviceRouter from "./service";
 import agentsRouter from "./agents";
 import activityRouter from "./activity";
 import dashboardRouter from "./dashboard";
+import anthropicRouter from "./anthropic";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(serviceRouter);
 router.use(agentsRouter);
 router.use(activityRouter);
 router.use(dashboardRouter);
+router.use(anthropicRouter);
 
 export default router;

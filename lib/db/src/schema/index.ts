@@ -7,3 +7,5 @@ export * from "./financeApplications";
 export * from "./serviceOrders";
 export * from "./agents";
 export * from "./activity";
+export * from "./conversations";
+export * from "./messages";

@@ -1,157 +1,157 @@
-import { useGetDashboardSummary, useListActivity, useGetSalesPerformance } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, Users, Car, DollarSign, CheckCircle } from "lucide-react";
+import { useState } from "react";
+import { 
+  useGetDashboardSummary, 
+  useGetSalesPerformance,
+  useListActivity
+} from "@workspace/api-client-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Loader2, TrendingUp, Users, Car, AlertCircle, ArrowUpRight } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format } from "date-fns";
-import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { motion } from "framer-motion";
 
 export default function Dashboard() {
-  const { data: summary, isLoading: isSummaryLoading } = useGetDashboardSummary();
-  const { data: activities, isLoading: isActivityLoading } = useListActivity({ limit: 10 });
-  const { data: salesPerformance } = useGetSalesPerformance();
-
-  if (isSummaryLoading || isActivityLoading) {
-    return <div className="animate-pulse space-y-4">
-      <div className="h-8 w-64 bg-muted rounded"></div>
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => <div key={i} className="h-32 bg-muted rounded"></div>)}
-      </div>
-    </div>;
-  }
+  const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
+  const { data: performance, isLoading: isLoadingPerf } = useGetSalesPerformance();
+  const { data: activities } = useListActivity({ limit: 5 });
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Command Center</h1>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-white px-3 py-1.5 rounded-full border shadow-sm">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-          </span>
-          Agents Active
+    <div className="h-full overflow-y-auto">
+      {/* Hero Section */}
+      <div className="relative h-[45vh] min-h-[300px] w-full overflow-hidden bg-black flex items-center justify-center">
+        <video 
+          autoPlay 
+          muted 
+          loop 
+          playsInline 
+          className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-screen"
+        >
+          <source src={`${import.meta.env.BASE_URL}videos/red_car_leaving_showroom.mp4`} type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent z-10" />
+        <div className="relative z-20 text-center px-6">
+          <motion.h1 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-4"
+          >
+            AURA <span className="font-light">Concierge</span>
+          </motion.h1>
+          <motion.p 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+            className="text-lg md:text-xl text-white/80 font-light tracking-wide max-w-2xl mx-auto"
+          >
+            Choreographing the luxury automotive experience.
+          </motion.p>
         </div>
       </div>
 
-      {summary && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="hover-elevate">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${summary.monthlyRevenue.toLocaleString()}</div>
-            </CardContent>
-          </Card>
-          <Card className="hover-elevate">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Leads</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{summary.totalLeads}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {summary.conversionRate.toFixed(1)}% conversion
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="hover-elevate">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Inventory Count</CardTitle>
-              <Car className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{summary.inventoryCount}</div>
-            </CardContent>
-          </Card>
-          <Card className="hover-elevate">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Agent Tasks Today</CardTitle>
-              <CheckCircle className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">{summary.agentTasksToday}</div>
-            </CardContent>
-          </Card>
+      <div className="p-6 md:p-10 -mt-20 relative z-30 max-w-7xl mx-auto space-y-8">
+        
+        {/* KPI Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <KPICard 
+            title="Total Revenue" 
+            value={summary ? `$${(summary.monthlyRevenue / 1000).toFixed(1)}k` : "$0"}
+            trend="+12.5%"
+            icon={TrendingUp}
+            isLoading={isLoadingSummary}
+            delay={0.1}
+          />
+          <KPICard 
+            title="Active Deals" 
+            value={summary?.activeDeals ?? 0}
+            trend="+3"
+            icon={Briefcase}
+            isLoading={isLoadingSummary}
+            delay={0.2}
+          />
+          <KPICard 
+            title="Conversion" 
+            value={summary ? `${summary.conversionRate}%` : "0%"}
+            trend="+2.1%"
+            icon={Users}
+            isLoading={isLoadingSummary}
+            delay={0.3}
+          />
+          <KPICard 
+            title="Inventory" 
+            value={summary?.inventoryCount ?? 0}
+            trend="Stable"
+            icon={Car}
+            isLoading={isLoadingSummary}
+            delay={0.4}
+          />
         </div>
-      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="col-span-2">
-          {/* Main content area */}
-          <Card className="h-[400px]">
-             <CardHeader>
-               <CardTitle>Sales Performance</CardTitle>
-             </CardHeader>
-             <CardContent className="h-[320px]">
-               <ResponsiveContainer width="100%" height="100%">
-                 <AreaChart data={salesPerformance ?? []} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                   <defs>
-                     <linearGradient id="revenueFill" x1="0" y1="0" x2="0" y2="1">
-                       <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                       <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                     </linearGradient>
-                   </defs>
-                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                   <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="hsl(var(--muted-foreground))" />
-                   <YAxis
-                     tickLine={false}
-                     axisLine={false}
-                     fontSize={12}
-                     stroke="hsl(var(--muted-foreground))"
-                     tickFormatter={(v) => `$${(Number(v) / 1000).toFixed(0)}k`}
-                   />
-                   <Tooltip
-                     formatter={(value: number, name) =>
-                       name === "revenue" ? [`$${Number(value).toLocaleString()}`, "Revenue"] : [value, "Units"]
-                     }
-                     contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))" }}
-                   />
-                   <Area
-                     type="monotone"
-                     dataKey="revenue"
-                     stroke="hsl(var(--primary))"
-                     strokeWidth={2.5}
-                     fill="url(#revenueFill)"
-                   />
-                 </AreaChart>
-               </ResponsiveContainer>
-             </CardContent>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Performance Chart */}
+          <Card className="lg:col-span-2 glass-panel border-none shadow-xl overflow-hidden">
+            <div className="p-6 pb-2">
+              <h3 className="text-lg font-semibold tracking-wide">Performance Trajectory</h3>
+            </div>
+            <CardContent className="p-0 h-[300px]">
+              {isLoadingPerf ? (
+                <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-primary w-8 h-8" /></div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={performance} margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(val) => `$${val/1000}k`} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)', borderRadius: '12px', border: '1px solid rgba(0,0,0,0.1)' }}
+                      itemStyle={{ color: 'hsl(var(--foreground))' }}
+                    />
+                    <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
           </Card>
-        </div>
-        <div>
-          <Card className="h-[400px] flex flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5" />
-                Live Agent Feed
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-auto pr-2">
-              <div className="space-y-4">
-                {activities?.map((activity) => (
-                  <div key={activity.id} className="flex gap-3 text-sm">
-                    <div className="mt-0.5 flex-none">
-                      <div className={`h-2 w-2 rounded-full ${activity.isAi ? 'bg-primary' : 'bg-gray-300'}`} />
+
+          {/* Activity Feed */}
+          <Card className="glass-panel border-none shadow-xl flex flex-col">
+            <div className="p-6 border-b border-border/50">
+              <h3 className="text-lg font-semibold tracking-wide">Live Orchestration</h3>
+            </div>
+            <CardContent className="flex-1 p-6 overflow-y-auto">
+              <div className="space-y-6">
+                {activities?.map((activity, i) => (
+                  <motion.div 
+                    key={activity.id}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="flex gap-4 relative"
+                  >
+                    {i !== activities.length - 1 && (
+                      <div className="absolute top-8 bottom-[-24px] left-[11px] w-px bg-border/80" />
+                    )}
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 z-10 ${
+                      activity.isAi ? "bg-primary/20 text-primary" : "bg-black/5 text-foreground"
+                    }`}>
+                      <div className={`w-2 h-2 rounded-full ${activity.isAi ? "bg-primary" : "bg-foreground"}`} />
                     </div>
                     <div>
-                      <p className="text-gray-900">
-                        <span className="font-medium">{activity.actor}</span>{" "}
-                        {activity.action}
-                        {activity.entity && <span className="font-medium text-primary"> {activity.entity}</span>}
+                      <p className="text-sm font-medium">
+                        {activity.isAi ? "Concierge" : activity.actor} <span className="font-normal text-muted-foreground">{activity.action}</span> {activity.entity}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(activity.createdAt), "HH:mm:ss a")}
+                      {activity.detail && <p className="text-xs text-muted-foreground mt-1">{activity.detail}</p>}
+                      <p className="text-[10px] text-muted-foreground mt-2 uppercase tracking-wider">
+                        {format(new Date(activity.createdAt), "HH:mm")}
                       </p>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </CardContent>
@@ -159,5 +159,39 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
+  );
+}
+
+function Briefcase(props: any) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+}
+
+function KPICard({ title, value, trend, icon: Icon, isLoading, delay }: any) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay, duration: 0.5 }}
+    >
+      <Card className="glass-panel border-none shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-300">
+        <CardContent className="p-6 relative">
+          <div className="absolute right-0 top-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity transform group-hover:scale-110 duration-500">
+            <Icon className="w-24 h-24" />
+          </div>
+          <p className="text-sm font-medium text-muted-foreground mb-4 uppercase tracking-widest">{title}</p>
+          {isLoading ? (
+            <div className="h-8 w-16 bg-black/5 rounded animate-pulse" />
+          ) : (
+            <div className="flex items-end gap-3">
+              <h2 className="text-3xl font-bold tracking-tight">{value}</h2>
+              <span className="text-sm font-medium text-primary flex items-center mb-1 bg-primary/10 px-2 py-0.5 rounded-full">
+                <ArrowUpRight className="w-3 h-3 mr-1" />
+                {trend}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }
