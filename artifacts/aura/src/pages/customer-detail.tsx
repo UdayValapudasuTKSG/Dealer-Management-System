@@ -3,7 +3,8 @@ import { useGetCustomerOverview } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Timeline } from "@/components/timeline";
-import { motion } from "framer-motion";
+import { GateCard, GATE_LABEL } from "@/components/gate-card";
+import { AnimatePresence } from "framer-motion";
 import {
   Loader2,
   ArrowLeft,
@@ -11,7 +12,6 @@ import {
   Crown,
   Car,
   ShieldAlert,
-  ChevronRight,
 } from "lucide-react";
 
 const withBase = (path: string) =>
@@ -127,27 +127,34 @@ export default function CustomerDetail() {
         </CardContent>
       </Card>
 
-      {/* Open gates for this client */}
+      {/* Open gates for this client — actionable in-context */}
       {openGates.length > 0 && (
-        <Link href="/approvals">
-          <Card className="border-none shadow-lg overflow-hidden bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center shrink-0">
-                <ShieldAlert className="w-5 h-5" />
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold">
-                  {openGates.length} decision
-                  {openGates.length > 1 ? "s" : ""} awaiting your approval
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {openGates.map((gate) => gate.title).join(" · ")}
-                </p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </CardContent>
-          </Card>
-        </Link>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold tracking-wide">
+                {openGates.length} decision
+                {openGates.length > 1 ? "s" : ""} awaiting your approval
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Resolve these here without leaving the client.
+              </p>
+            </div>
+          </div>
+          <AnimatePresence mode="popLayout">
+            {openGates.map((gate) => (
+              <GateCard
+                key={gate.id}
+                gate={gate}
+                label={GATE_LABEL[gate.type]}
+                showCustomerLink={false}
+              />
+            ))}
+          </AnimatePresence>
+        </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
