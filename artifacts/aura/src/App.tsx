@@ -12,6 +12,8 @@ import Appraisals from "@/pages/appraisals";
 import Finance from "@/pages/finance";
 import Service from "@/pages/service";
 import Customers from "@/pages/customers";
+import CustomerDetail from "@/pages/customer-detail";
+import Approvals from "@/pages/approvals";
 import Journey from "@/pages/journey";
 import Assistant from "@/pages/assistant";
 import NotFound from "@/pages/not-found";
@@ -36,7 +38,9 @@ function Router() {
         <Route path="/appraisals" component={Appraisals} />
         <Route path="/finance" component={Finance} />
         <Route path="/service" component={Service} />
+        <Route path="/approvals" component={Approvals} />
         <Route path="/customers" component={Customers} />
+        <Route path="/customers/:id" component={CustomerDetail} />
         <Route path="/journey" component={Journey} />
         <Route path="/assistant" component={Assistant} />
         <Route component={NotFound} />

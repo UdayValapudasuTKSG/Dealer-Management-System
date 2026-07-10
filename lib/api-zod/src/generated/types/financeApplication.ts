@@ -11,6 +11,8 @@ export interface FinanceApplication {
   id: number;
   /** @nullable */
   dealId?: number | null;
+  /** @nullable */
+  customerId?: number | null;
   customerName: string;
   amount: number;
   termMonths: number;

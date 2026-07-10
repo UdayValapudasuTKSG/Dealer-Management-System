@@ -30,6 +30,10 @@ tags:
     description: Activity feed
   - name: dashboard
     description: Aggregated dashboard data
+  - name: timeline
+    description: Connected cross-domain event receipts
+  - name: gates
+    description: Human decision gates (never-list)
   - name: anthropic
     description: Anthropic AI chat operations
 paths:
@@ -847,6 +851,103 @@ paths:
                 items:
                   $ref: "#/components/schemas/InventoryBreakdownItem"
 
+  /customers/{id}/overview:
+    get:
+      operationId: getCustomerOverview
+      tags: [customers]
+      summary: Unified 360 view for a customer across every domain
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Customer 360 overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer360"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /timeline:
+    get:
+      operationId: listTimeline
+      tags: [timeline]
+      summary: Connected cross-domain event receipts
+      parameters:
+        - name: customerId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Timeline events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimelineEvent"
+
+  /gates:
+    get:
+      operationId: listGates
+      tags: [gates]
+      summary: Human decision gates (the never-list) with assembled evidence
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Gates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Gate"
+  /gates/{id}/resolve:
+    post:
+      operationId: resolveGate
+      tags: [gates]
+      summary: Approve, adjust, or dismiss a gate; advances the connected process
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GateResolution"
+      responses:
+        "200":
+          description: Resolved gate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gate"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   schemas:
     AnthropicConversation:
@@ -1008,6 +1109,7 @@ components:
         channel: { type: string, enum: [web, social, mobile, walkin] }
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
         status: { type: string, enum: [new, qualified, engaged, converted, lost] }
+        customerId: { type: ["integer", "null"] }
         interestedVehicleId: { type: ["integer", "null"] }
         assignedTo: { type: ["string", "null"] }
         aiScore: { type: integer }
@@ -1179,6 +1281,7 @@ components:
       properties:
         id: { type: integer }
         dealId: { type: ["integer", "null"] }
+        customerId: { type: ["integer", "null"] }
         customerName: { type: string }
         amount: { type: number }
         termMonths: { type: integer }
@@ -1322,3 +1425,93 @@ components:
       properties:
         powertrain: { type: string }
         count: { type: integer }
+
+    TimelineEvent:
+      type: object
+      required: [id, domain, kind, title, actor, isAgent, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        domain: { type: string, enum: [leads, deals, finance, appraisals, service, vehicles, gate, system] }
+        kind: { type: string }
+        title: { type: string }
+        detail: { type: ["string", "null"] }
+        actor: { type: string }
+        isAgent: { type: boolean }
+        cause: { type: ["string", "null"] }
+        refType: { type: ["string", "null"] }
+        refId: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+
+    GateEvidenceItem:
+      type: object
+      required: [label, value]
+      properties:
+        label: { type: string }
+        value: { type: string }
+    Gate:
+      type: object
+      required: [id, type, status, priority, title, summary, evidence, createdAt]
+      properties:
+        id: { type: integer }
+        type: { type: string, enum: [below_floor_price, credit_decline, capital_order, gra_filing, refund_release] }
+        status: { type: string, enum: [pending, approved, adjusted, dismissed] }
+        priority: { type: string, enum: [high, normal, low] }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        refType: { type: ["string", "null"] }
+        refId: { type: ["integer", "null"] }
+        title: { type: string }
+        summary: { type: string }
+        recommendation: { type: ["string", "null"] }
+        amount: { type: ["number", "null"] }
+        floorAmount: { type: ["number", "null"] }
+        evidence:
+          type: array
+          items: { $ref: "#/components/schemas/GateEvidenceItem" }
+        resolution: { type: ["string", "null"] }
+        resolvedBy: { type: ["string", "null"] }
+        resolvedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    GateResolution:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [approve, adjust, dismiss] }
+        note: { type: string }
+        adjustedAmount: { type: number }
+        resolvedBy: { type: string }
+
+    Customer360:
+      type: object
+      required: [customer, ownedVehicles, deals, appraisals, financeApplications, serviceOrders, leads, timeline, openGates]
+      properties:
+        customer: { $ref: "#/components/schemas/Customer" }
+        ownedVehicles:
+          type: array
+          items: { $ref: "#/components/schemas/Vehicle" }
+        activeDeal:
+          oneOf:
+            - $ref: "#/components/schemas/Deal"
+            - type: "null"
+        deals:
+          type: array
+          items: { $ref: "#/components/schemas/Deal" }
+        appraisals:
+          type: array
+          items: { $ref: "#/components/schemas/Appraisal" }
+        financeApplications:
+          type: array
+          items: { $ref: "#/components/schemas/FinanceApplication" }
+        serviceOrders:
+          type: array
+          items: { $ref: "#/components/schemas/ServiceOrder" }
+        leads:
+          type: array
+          items: { $ref: "#/components/schemas/Lead" }
+        timeline:
+          type: array
+          items: { $ref: "#/components/schemas/TimelineEvent" }
+        openGates:
+          type: array
+          items: { $ref: "#/components/schemas/Gate" }

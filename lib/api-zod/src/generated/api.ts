@@ -276,6 +276,7 @@ export const ListLeadsResponseItem = zod.object({
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "assignedTo": zod.string().nullish(),
   "aiScore": zod.number(),
@@ -309,6 +310,7 @@ export const CreateLeadResponse = zod.object({
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "assignedTo": zod.string().nullish(),
   "aiScore": zod.number(),
@@ -329,6 +331,7 @@ export const GetLeadResponse = zod.object({
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "assignedTo": zod.string().nullish(),
   "aiScore": zod.number(),
@@ -365,6 +368,7 @@ export const UpdateLeadResponse = zod.object({
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "assignedTo": zod.string().nullish(),
   "aiScore": zod.number(),
@@ -679,6 +683,7 @@ export const UpdateAppraisalResponse = zod.object({
 export const ListFinanceApplicationsResponseItem = zod.object({
   "id": zod.number(),
   "dealId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
   "customerName": zod.string(),
   "amount": zod.number(),
   "termMonths": zod.number(),
@@ -708,6 +713,7 @@ export const CreateFinanceApplicationBody = zod.object({
 export const CreateFinanceApplicationResponse = zod.object({
   "id": zod.number(),
   "dealId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
   "customerName": zod.string(),
   "amount": zod.number(),
   "termMonths": zod.number(),
@@ -735,6 +741,7 @@ export const UpdateFinanceApplicationBody = zod.object({
 export const UpdateFinanceApplicationResponse = zod.object({
   "id": zod.number(),
   "dealId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
   "customerName": zod.string(),
   "amount": zod.number(),
   "termMonths": zod.number(),
@@ -939,5 +946,271 @@ export const GetInventoryBreakdownResponseItem = zod.object({
   "count": zod.number()
 })
 export const GetInventoryBreakdownResponse = zod.array(GetInventoryBreakdownResponseItem)
+
+
+/**
+ * @summary Unified 360 view for a customer across every domain
+ */
+export const GetCustomerOverviewParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetCustomerOverviewResponse = zod.object({
+  "customer": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "avatarUrl": zod.string().nullish(),
+  "location": zod.string().nullish(),
+  "lifetimeValue": zod.number(),
+  "vehiclesOwned": zod.number(),
+  "loyaltyTier": zod.enum(['new', 'silver', 'gold', 'platinum']),
+  "createdAt": zod.coerce.date()
+}),
+  "ownedVehicles": zod.array(zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "trim": zod.string().nullish(),
+  "year": zod.number(),
+  "vin": zod.string().nullish(),
+  "price": zod.number(),
+  "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
+  "rangeKm": zod.number().nullish(),
+  "mileageKm": zod.number(),
+  "exteriorColor": zod.string(),
+  "bodyType": zod.string(),
+  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "imageUrl": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "featured": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})),
+  "activeDeal": zod.union([zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
+  "vehicleId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "stage": zod.enum(['desking', 'negotiation', 'finance', 'committed', 'delivered', 'lost']),
+  "vehiclePrice": zod.number(),
+  "discount": zod.number(),
+  "tradeInValue": zod.number(),
+  "accessories": zod.number(),
+  "otdPrice": zod.number(),
+  "monthlyPayment": zod.number().nullish(),
+  "depositPaid": zod.boolean(),
+  "salesAdvisor": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional(),
+  "deals": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
+  "vehicleId": zod.number(),
+  "customerName": zod.string().nullish(),
+  "stage": zod.enum(['desking', 'negotiation', 'finance', 'committed', 'delivered', 'lost']),
+  "vehiclePrice": zod.number(),
+  "discount": zod.number(),
+  "tradeInValue": zod.number(),
+  "accessories": zod.number(),
+  "otdPrice": zod.number(),
+  "monthlyPayment": zod.number().nullish(),
+  "depositPaid": zod.boolean(),
+  "salesAdvisor": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "appraisals": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "year": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "mileageKm": zod.number(),
+  "condition": zod.enum(['excellent', 'good', 'fair', 'poor']),
+  "aiEstimate": zod.number(),
+  "finalOffer": zod.number().nullish(),
+  "status": zod.enum(['pending', 'valued', 'accepted', 'declined']),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "financeApplications": zod.array(zod.object({
+  "id": zod.number(),
+  "dealId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "amount": zod.number(),
+  "termMonths": zod.number(),
+  "apr": zod.number(),
+  "lender": zod.string().nullish(),
+  "status": zod.enum(['submitted', 'under_review', 'approved', 'declined', 'funded']),
+  "protectionProducts": zod.array(zod.string()),
+  "createdAt": zod.coerce.date()
+})),
+  "serviceOrders": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection']),
+  "status": zod.enum(['scheduled', 'checked_in', 'in_progress', 'awaiting_approval', 'completed', 'delivered']),
+  "scheduledDate": zod.coerce.date(),
+  "technician": zod.string().nullish(),
+  "estimatedCost": zod.number(),
+  "jobs": zod.array(zod.string()),
+  "createdAt": zod.coerce.date()
+})),
+  "leads": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
+  "interestedVehicleId": zod.number().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "aiScore": zod.number(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "timeline": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'gate', 'system']),
+  "kind": zod.string(),
+  "title": zod.string(),
+  "detail": zod.string().nullish(),
+  "actor": zod.string(),
+  "isAgent": zod.boolean(),
+  "cause": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "openGates": zod.array(zod.object({
+  "id": zod.number(),
+  "type": zod.enum(['below_floor_price', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release']),
+  "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
+  "priority": zod.enum(['high', 'normal', 'low']),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "recommendation": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "floorAmount": zod.number().nullish(),
+  "evidence": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string()
+})),
+  "resolution": zod.string().nullish(),
+  "resolvedBy": zod.string().nullish(),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Connected cross-domain event receipts
+ */
+export const ListTimelineQueryParams = zod.object({
+  "customerId": zod.coerce.number().optional(),
+  "limit": zod.coerce.number().optional()
+})
+
+export const ListTimelineResponseItem = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'gate', 'system']),
+  "kind": zod.string(),
+  "title": zod.string(),
+  "detail": zod.string().nullish(),
+  "actor": zod.string(),
+  "isAgent": zod.boolean(),
+  "cause": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListTimelineResponse = zod.array(ListTimelineResponseItem)
+
+
+/**
+ * @summary Human decision gates (the never-list) with assembled evidence
+ */
+export const ListGatesQueryParams = zod.object({
+  "status": zod.coerce.string().optional()
+})
+
+export const ListGatesResponseItem = zod.object({
+  "id": zod.number(),
+  "type": zod.enum(['below_floor_price', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release']),
+  "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
+  "priority": zod.enum(['high', 'normal', 'low']),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "recommendation": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "floorAmount": zod.number().nullish(),
+  "evidence": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string()
+})),
+  "resolution": zod.string().nullish(),
+  "resolvedBy": zod.string().nullish(),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListGatesResponse = zod.array(ListGatesResponseItem)
+
+
+/**
+ * @summary Approve, adjust, or dismiss a gate; advances the connected process
+ */
+export const ResolveGateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ResolveGateBody = zod.object({
+  "action": zod.enum(['approve', 'adjust', 'dismiss']),
+  "note": zod.string().optional(),
+  "adjustedAmount": zod.number().optional(),
+  "resolvedBy": zod.string().optional()
+})
+
+export const ResolveGateResponse = zod.object({
+  "id": zod.number(),
+  "type": zod.enum(['below_floor_price', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release']),
+  "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
+  "priority": zod.enum(['high', 'normal', 'low']),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "recommendation": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "floorAmount": zod.number().nullish(),
+  "evidence": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string()
+})),
+  "resolution": zod.string().nullish(),
+  "resolvedBy": zod.string().nullish(),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
 
 

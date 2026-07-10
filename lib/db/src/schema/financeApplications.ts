@@ -12,6 +12,7 @@ import { z } from "zod/v4";
 export const financeApplicationsTable = pgTable("finance_applications", {
   id: serial("id").primaryKey(),
   dealId: integer("deal_id"),
+  customerId: integer("customer_id"),
   customerName: text("customer_name").notNull(),
   amount: doublePrecision("amount").notNull(),
   termMonths: integer("term_months").notNull(),

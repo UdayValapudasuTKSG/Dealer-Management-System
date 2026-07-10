@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useListFinanceApplications } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,11 @@ export default function Finance() {
                 <CardContent className="p-6 md:p-8">
                   <div className="flex justify-between items-start mb-6">
                     <div>
-                      <h3 className="font-bold text-2xl leading-tight mb-1 group-hover:text-primary transition-colors">{app.customerName}</h3>
+                      {app.customerId ? (
+                        <Link href={`/customers/${app.customerId}`} className="font-bold text-2xl leading-tight mb-1 hover:text-primary transition-colors block">{app.customerName}</Link>
+                      ) : (
+                        <h3 className="font-bold text-2xl leading-tight mb-1 group-hover:text-primary transition-colors">{app.customerName}</h3>
+                      )}
                       <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                         <Building className="w-4 h-4" />
                         {app.lender || 'Pending Lender'}

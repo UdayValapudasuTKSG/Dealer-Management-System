@@ -33,6 +33,7 @@ import type {
   AppraisalInput,
   AppraisalUpdate,
   Customer,
+  Customer360,
   CustomerInput,
   CustomerUpdate,
   DashboardSummary,
@@ -43,6 +44,8 @@ import type {
   FinanceApplication,
   FinanceApplicationInput,
   FinanceApplicationUpdate,
+  Gate,
+  GateResolution,
   HealthStatus,
   InventoryBreakdownItem,
   Lead,
@@ -50,14 +53,17 @@ import type {
   LeadUpdate,
   ListActivityParams,
   ListDealsParams,
+  ListGatesParams,
   ListLeadsParams,
   ListServiceOrdersParams,
+  ListTimelineParams,
   ListVehiclesParams,
   PipelineStage,
   SalesPoint,
   ServiceOrder,
   ServiceOrderInput,
   ServiceOrderUpdate,
+  TimelineEvent,
   Vehicle,
   VehicleInput,
   VehicleUpdate
@@ -3086,4 +3092,321 @@ export function useGetInventoryBreakdown<TData = Awaited<ReturnType<typeof getIn
 
 
 
+
+export const getGetCustomerOverviewUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/overview`
+}
+
+/**
+ * @summary Unified 360 view for a customer across every domain
+ */
+export const getCustomerOverview = async (id: number, options?: RequestInit): Promise<Customer360> => {
+
+  return customFetch<Customer360>(getGetCustomerOverviewUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCustomerOverviewQueryKey = (id: number,) => {
+    return [
+    `/api/customers/${id}/overview`
+    ] as const;
+    }
+
+
+export const getGetCustomerOverviewQueryOptions = <TData = Awaited<ReturnType<typeof getCustomerOverview>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerOverview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCustomerOverviewQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCustomerOverview>>> = ({ signal }) => getCustomerOverview(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCustomerOverview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCustomerOverviewQueryResult = NonNullable<Awaited<ReturnType<typeof getCustomerOverview>>>
+export type GetCustomerOverviewQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Unified 360 view for a customer across every domain
+ */
+
+export function useGetCustomerOverview<TData = Awaited<ReturnType<typeof getCustomerOverview>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerOverview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCustomerOverviewQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListTimelineUrl = (params?: ListTimelineParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/timeline?${stringifiedParams}` : `/api/timeline`
+}
+
+/**
+ * @summary Connected cross-domain event receipts
+ */
+export const listTimeline = async (params?: ListTimelineParams, options?: RequestInit): Promise<TimelineEvent[]> => {
+
+  return customFetch<TimelineEvent[]>(getListTimelineUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTimelineQueryKey = (params?: ListTimelineParams,) => {
+    return [
+    `/api/timeline`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListTimelineQueryOptions = <TData = Awaited<ReturnType<typeof listTimeline>>, TError = ErrorType<unknown>>(params?: ListTimelineParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTimeline>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTimelineQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTimeline>>> = ({ signal }) => listTimeline(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTimeline>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTimelineQueryResult = NonNullable<Awaited<ReturnType<typeof listTimeline>>>
+export type ListTimelineQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Connected cross-domain event receipts
+ */
+
+export function useListTimeline<TData = Awaited<ReturnType<typeof listTimeline>>, TError = ErrorType<unknown>>(
+ params?: ListTimelineParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTimeline>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTimelineQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListGatesUrl = (params?: ListGatesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/gates?${stringifiedParams}` : `/api/gates`
+}
+
+/**
+ * @summary Human decision gates (the never-list) with assembled evidence
+ */
+export const listGates = async (params?: ListGatesParams, options?: RequestInit): Promise<Gate[]> => {
+
+  return customFetch<Gate[]>(getListGatesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGatesQueryKey = (params?: ListGatesParams,) => {
+    return [
+    `/api/gates`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListGatesQueryOptions = <TData = Awaited<ReturnType<typeof listGates>>, TError = ErrorType<unknown>>(params?: ListGatesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGatesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGates>>> = ({ signal }) => listGates(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGatesQueryResult = NonNullable<Awaited<ReturnType<typeof listGates>>>
+export type ListGatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Human decision gates (the never-list) with assembled evidence
+ */
+
+export function useListGates<TData = Awaited<ReturnType<typeof listGates>>, TError = ErrorType<unknown>>(
+ params?: ListGatesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGatesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getResolveGateUrl = (id: number,) => {
+
+
+
+
+  return `/api/gates/${id}/resolve`
+}
+
+/**
+ * @summary Approve, adjust, or dismiss a gate; advances the connected process
+ */
+export const resolveGate = async (id: number,
+    gateResolution: GateResolution, options?: RequestInit): Promise<Gate> => {
+
+  return customFetch<Gate>(getResolveGateUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(gateResolution)
+  }
+);}
+
+
+
+
+
+export const getResolveGateMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveGate>>, TError,{id: number;data: BodyType<GateResolution>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resolveGate>>, TError,{id: number;data: BodyType<GateResolution>}, TContext> => {
+
+const mutationKey = ['resolveGate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resolveGate>>, {id: number;data: BodyType<GateResolution>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  resolveGate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResolveGateMutationResult = NonNullable<Awaited<ReturnType<typeof resolveGate>>>
+    export type ResolveGateMutationBody = BodyType<GateResolution>
+    export type ResolveGateMutationError = ErrorType<Error>
+
+    /**
+ * @summary Approve, adjust, or dismiss a gate; advances the connected process
+ */
+export const useResolveGate = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveGate>>, TError,{id: number;data: BodyType<GateResolution>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resolveGate>>,
+        TError,
+        {id: number;data: BodyType<GateResolution>},
+        TContext
+      > => {
+      return useMutation(getResolveGateMutationOptions(options));
+    }
 

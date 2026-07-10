@@ -1,19 +1,21 @@
-import { useState } from "react";
+import { Link } from "wouter";
 import { 
   useGetDashboardSummary, 
   useGetSalesPerformance,
-  useListActivity
+  useListTimeline,
+  useListGates
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, TrendingUp, Users, Car, AlertCircle, ArrowUpRight } from "lucide-react";
+import { Loader2, TrendingUp, Users, Car, ArrowUpRight, ShieldAlert, ChevronRight } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { format } from "date-fns";
+import { Timeline } from "@/components/timeline";
 import { motion } from "framer-motion";
 
 export default function Dashboard() {
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
   const { data: performance, isLoading: isLoadingPerf } = useGetSalesPerformance();
-  const { data: activities } = useListActivity({ limit: 5 });
+  const { data: timeline } = useListTimeline({ limit: 8 });
+  const { data: gates } = useListGates({ status: "pending" });
 
   return (
     <div className="h-full overflow-y-auto">
@@ -44,7 +46,7 @@ export default function Dashboard() {
             transition={{ duration: 0.8, delay: 0.6 }}
             className="text-lg md:text-xl text-white/80 font-light tracking-wide max-w-2xl mx-auto"
           >
-            Choreographing the luxury automotive experience.
+            The luxury automotive experience, orchestrated end to end.
           </motion.p>
         </div>
       </div>
@@ -87,6 +89,28 @@ export default function Dashboard() {
           />
         </div>
 
+        {/* Decision gates banner */}
+        {gates && gates.length > 0 && (
+          <Link href="/approvals">
+            <Card className="border-none shadow-lg overflow-hidden bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
+              <CardContent className="p-5 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center shrink-0">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold">
+                    {gates.length} decision{gates.length > 1 ? "s" : ""} awaiting approval
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    The concierge handled everything else. Review what needs a human.
+                  </p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </Link>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Performance Chart */}
           <Card className="lg:col-span-2 glass-panel border-none shadow-xl overflow-hidden">
@@ -119,41 +143,14 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Activity Feed */}
+          {/* Connected event stream */}
           <Card className="glass-panel border-none shadow-xl flex flex-col">
             <div className="p-6 border-b border-border/50">
               <h3 className="text-lg font-semibold tracking-wide">Live Orchestration</h3>
+              <p className="text-xs text-muted-foreground mt-1">Every domain, one connected stream.</p>
             </div>
             <CardContent className="flex-1 p-6 overflow-y-auto">
-              <div className="space-y-6">
-                {activities?.map((activity, i) => (
-                  <motion.div 
-                    key={activity.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.1 }}
-                    className="flex gap-4 relative"
-                  >
-                    {i !== activities.length - 1 && (
-                      <div className="absolute top-8 bottom-[-24px] left-[11px] w-px bg-border/80" />
-                    )}
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 z-10 ${
-                      activity.isAi ? "bg-primary/20 text-primary" : "bg-black/5 text-foreground"
-                    }`}>
-                      <div className={`w-2 h-2 rounded-full ${activity.isAi ? "bg-primary" : "bg-foreground"}`} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">
-                        {activity.isAi ? "Concierge" : activity.actor} <span className="font-normal text-muted-foreground">{activity.action}</span> {activity.entity}
-                      </p>
-                      {activity.detail && <p className="text-xs text-muted-foreground mt-1">{activity.detail}</p>}
-                      <p className="text-[10px] text-muted-foreground mt-2 uppercase tracking-wider">
-                        {format(new Date(activity.createdAt), "HH:mm")}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
+              <Timeline events={timeline ?? []} />
             </CardContent>
           </Card>
         </div>

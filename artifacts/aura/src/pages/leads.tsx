@@ -1,7 +1,8 @@
+import { Link } from "wouter";
 import { useListLeads } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, MessageSquare, Phone, Mail, User, Sparkles } from "lucide-react";
+import { Plus, MessageSquare, Phone, Mail, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Leads() {
@@ -14,7 +15,7 @@ export default function Leads() {
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-4xl font-light tracking-tight mb-2">Pipeline <span className="font-semibold">Orchestration</span></h1>
-          <p className="text-muted-foreground text-lg">Choreographing the client journey.</p>
+          <p className="text-muted-foreground text-lg">Every client journey, in motion.</p>
         </div>
         <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
           <Plus className="w-5 h-5" />
@@ -50,10 +51,13 @@ export default function Leads() {
                         <div className="font-semibold text-lg leading-tight group-hover:text-primary transition-colors">
                           {lead.name}
                         </div>
-                        {lead.aiScore && (
-                          <div className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${lead.aiScore > 80 ? 'bg-primary/10 text-primary' : 'bg-black/5 text-muted-foreground'}`}>
-                            <Sparkles className="w-3 h-3" /> {lead.aiScore}
-                          </div>
+                        {lead.customerId && (
+                          <Link
+                            href={`/customers/${lead.customerId}`}
+                            className="text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                          >
+                            Client <ChevronRight className="w-3 h-3" />
+                          </Link>
                         )}
                       </div>
                       

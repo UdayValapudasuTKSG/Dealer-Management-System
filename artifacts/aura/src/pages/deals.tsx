@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useListDeals } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,9 +48,18 @@ export default function Deals() {
                   <Card className="cursor-pointer border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl bg-white/60 hover:bg-white overflow-hidden group">
                     <CardContent className="p-5">
                       <div className="flex justify-between items-start mb-4">
-                        <div className="font-semibold text-lg leading-tight truncate pr-4">
-                          {deal.customerName || "Unknown Customer"}
-                        </div>
+                        {deal.customerId ? (
+                          <Link
+                            href={`/customers/${deal.customerId}`}
+                            className="font-semibold text-lg leading-tight truncate pr-4 hover:text-primary transition-colors"
+                          >
+                            {deal.customerName || "Unknown Customer"}
+                          </Link>
+                        ) : (
+                          <div className="font-semibold text-lg leading-tight truncate pr-4">
+                            {deal.customerName || "Unknown Customer"}
+                          </div>
+                        )}
                         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                           <FileText className="w-4 h-4 text-primary" />
                         </div>

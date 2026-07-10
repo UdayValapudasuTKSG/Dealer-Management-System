@@ -9,6 +9,7 @@ import {
   Wrench, 
   UserCircle, 
   Sparkles, 
+  ShieldCheck,
   Route as RouteIcon 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 const navigation = [
   { name: "Command Center", href: "/", icon: LayoutDashboard },
   { name: "Journey", href: "/journey", icon: RouteIcon },
+  { name: "Approvals", href: "/approvals", icon: ShieldCheck },
   { name: "Inventory", href: "/inventory", icon: CarFront },
   { name: "Leads", href: "/leads", icon: Users },
   { name: "Deals", href: "/deals", icon: Briefcase },

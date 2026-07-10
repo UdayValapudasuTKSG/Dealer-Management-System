@@ -218,6 +218,8 @@ export interface Lead {
   phase: LeadPhase;
   status: LeadStatus;
   /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
   interestedVehicleId?: number | null;
   /** @nullable */
   assignedTo?: string | null;
@@ -602,6 +604,8 @@ export interface FinanceApplication {
   id: number;
   /** @nullable */
   dealId?: number | null;
+  /** @nullable */
+  customerId?: number | null;
   customerName: string;
   amount: number;
   termMonths: number;
@@ -840,6 +844,135 @@ export interface InventoryBreakdownItem {
   count: number;
 }
 
+export type TimelineEventDomain = typeof TimelineEventDomain[keyof typeof TimelineEventDomain];
+
+
+export const TimelineEventDomain = {
+  leads: 'leads',
+  deals: 'deals',
+  finance: 'finance',
+  appraisals: 'appraisals',
+  service: 'service',
+  vehicles: 'vehicles',
+  gate: 'gate',
+  system: 'system',
+} as const;
+
+export interface TimelineEvent {
+  id: number;
+  /** @nullable */
+  customerId?: number | null;
+  domain: TimelineEventDomain;
+  kind: string;
+  title: string;
+  /** @nullable */
+  detail?: string | null;
+  actor: string;
+  isAgent: boolean;
+  /** @nullable */
+  cause?: string | null;
+  /** @nullable */
+  refType?: string | null;
+  /** @nullable */
+  refId?: number | null;
+  createdAt: string;
+}
+
+export interface GateEvidenceItem {
+  label: string;
+  value: string;
+}
+
+export type GateType = typeof GateType[keyof typeof GateType];
+
+
+export const GateType = {
+  below_floor_price: 'below_floor_price',
+  credit_decline: 'credit_decline',
+  capital_order: 'capital_order',
+  gra_filing: 'gra_filing',
+  refund_release: 'refund_release',
+} as const;
+
+export type GateStatus = typeof GateStatus[keyof typeof GateStatus];
+
+
+export const GateStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  adjusted: 'adjusted',
+  dismissed: 'dismissed',
+} as const;
+
+export type GatePriority = typeof GatePriority[keyof typeof GatePriority];
+
+
+export const GatePriority = {
+  high: 'high',
+  normal: 'normal',
+  low: 'low',
+} as const;
+
+export interface Gate {
+  id: number;
+  type: GateType;
+  status: GateStatus;
+  priority: GatePriority;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  /** @nullable */
+  refType?: string | null;
+  /** @nullable */
+  refId?: number | null;
+  title: string;
+  summary: string;
+  /** @nullable */
+  recommendation?: string | null;
+  /** @nullable */
+  amount?: number | null;
+  /** @nullable */
+  floorAmount?: number | null;
+  evidence: GateEvidenceItem[];
+  /** @nullable */
+  resolution?: string | null;
+  /** @nullable */
+  resolvedBy?: string | null;
+  /** @nullable */
+  resolvedAt?: string | null;
+  createdAt: string;
+}
+
+export type GateResolutionAction = typeof GateResolutionAction[keyof typeof GateResolutionAction];
+
+
+export const GateResolutionAction = {
+  approve: 'approve',
+  adjust: 'adjust',
+  dismiss: 'dismiss',
+} as const;
+
+export interface GateResolution {
+  action: GateResolutionAction;
+  note?: string;
+  adjustedAmount?: number;
+  resolvedBy?: string;
+}
+
+export interface Customer360 {
+  customer: Customer;
+  ownedVehicles: Vehicle[];
+  activeDeal?: Deal | null;
+  deals: Deal[];
+  appraisals: Appraisal[];
+  financeApplications: FinanceApplication[];
+  serviceOrders: ServiceOrder[];
+  leads: Lead[];
+  timeline: TimelineEvent[];
+  openGates: Gate[];
+}
+
 export type ListVehiclesParams = {
 status?: string;
 powertrain?: string;
@@ -861,5 +994,14 @@ status?: string;
 
 export type ListActivityParams = {
 limit?: number;
+};
+
+export type ListTimelineParams = {
+customerId?: number;
+limit?: number;
+};
+
+export type ListGatesParams = {
+status?: string;
 };
 

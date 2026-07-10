@@ -16,6 +16,7 @@ export const leadsTable = pgTable("leads", {
   channel: text("channel").notNull().default("web"),
   phase: text("phase").notNull().default("aware"),
   status: text("status").notNull().default("new"),
+  customerId: integer("customer_id"),
   interestedVehicleId: integer("interested_vehicle_id"),
   assignedTo: text("assigned_to"),
   aiScore: integer("ai_score").notNull().default(50),

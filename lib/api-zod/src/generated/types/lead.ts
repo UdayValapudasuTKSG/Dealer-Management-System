@@ -20,6 +20,8 @@ export interface Lead {
   phase: LeadPhase;
   status: LeadStatus;
   /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
   interestedVehicleId?: number | null;
   /** @nullable */
   assignedTo?: string | null;

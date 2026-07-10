@@ -1,7 +1,8 @@
+import { Link } from "wouter";
 import { useListAppraisals } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Calculator, Car, Sparkles } from "lucide-react";
+import { Plus, Car, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 
@@ -13,7 +14,7 @@ export default function Appraisals() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-light tracking-tight mb-2">Trade <span className="font-semibold">Valuations</span></h1>
-          <p className="text-muted-foreground text-lg">AI-powered acquisition estimates.</p>
+          <p className="text-muted-foreground text-lg">Acquisition offers, ready to present.</p>
         </div>
         <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
           <Plus className="w-5 h-5" />
@@ -42,7 +43,17 @@ export default function Appraisals() {
                       <div className="text-sm font-semibold tracking-widest text-primary mb-1 uppercase">{appraisal.year}</div>
                       <h3 className="font-bold text-2xl leading-tight mb-2">{appraisal.make} <span className="font-light">{appraisal.model}</span></h3>
                       <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-3">
-                        <span>{appraisal.customerName || 'Walk-in'}</span>
+                        {appraisal.customerId ? (
+                          <Link
+                            href={`/customers/${appraisal.customerId}`}
+                            className="flex items-center gap-1 text-primary hover:underline"
+                          >
+                            {appraisal.customerName || 'Client'}
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </Link>
+                        ) : (
+                          <span>{appraisal.customerName || 'Walk-in'}</span>
+                        )}
                         <span className="w-1 h-1 rounded-full bg-border" />
                         <span>{appraisal.mileageKm.toLocaleString()} KM</span>
                         <span className="w-1 h-1 rounded-full bg-border" />
@@ -54,7 +65,7 @@ export default function Appraisals() {
                   <div className="flex flex-col md:flex-row items-start md:items-center gap-8 w-full md:w-auto">
                     <div className="text-left md:text-right">
                       <div className="text-xs font-semibold tracking-widest uppercase text-muted-foreground flex items-center justify-start md:justify-end gap-1.5 mb-2">
-                        <Sparkles className="w-3.5 h-3.5 text-primary" /> AI Estimate
+                        Valuation
                       </div>
                       <div className="font-light text-3xl tracking-tight">${appraisal.aiEstimate.toLocaleString()}</div>
                     </div>

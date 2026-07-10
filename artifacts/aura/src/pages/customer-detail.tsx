@@ -1,0 +1,322 @@
+import { useRoute, Link } from "wouter";
+import { useGetCustomerOverview } from "@workspace/api-client-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Timeline } from "@/components/timeline";
+import { motion } from "framer-motion";
+import {
+  Loader2,
+  ArrowLeft,
+  MapPin,
+  Crown,
+  Car,
+  ShieldAlert,
+  ChevronRight,
+} from "lucide-react";
+
+const withBase = (path: string) =>
+  `${import.meta.env.BASE_URL.replace(/\/$/, "")}${path}`;
+
+export default function CustomerDetail() {
+  const [, params] = useRoute("/customers/:id");
+  const id = params ? Number(params.id) : NaN;
+  const { data, isLoading, isError } = useGetCustomerOverview(id);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-32">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="text-center py-32 text-muted-foreground font-light">
+        Client not found.
+        <div className="mt-4">
+          <Link
+            href="/customers"
+            className="text-primary font-medium hover:underline"
+          >
+            Back to portfolio
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const {
+    customer,
+    ownedVehicles,
+    activeDeal,
+    deals,
+    appraisals,
+    financeApplications,
+    serviceOrders,
+    leads,
+    timeline,
+    openGates,
+  } = data;
+
+  const money = (n: number) => `$${n.toLocaleString("en-US")}`;
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto">
+      <Link
+        href="/customers"
+        className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" /> Client Portfolio
+      </Link>
+
+      {/* Identity header */}
+      <Card className="glass-panel border-none shadow-xl overflow-hidden">
+        <CardContent className="p-8 flex flex-col md:flex-row md:items-center gap-6">
+          <div className="w-24 h-24 rounded-full bg-white shadow-md flex items-center justify-center overflow-hidden border-2 border-white shrink-0">
+            {customer.avatarUrl ? (
+              <img
+                src={customer.avatarUrl}
+                alt={customer.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-3xl font-light text-muted-foreground/40">
+                {customer.name.charAt(0)}
+              </span>
+            )}
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-4xl font-light tracking-tight">
+                {customer.name}
+              </h1>
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-primary/10 text-primary">
+                <Crown className="w-3.5 h-3.5" />
+                {customer.loyaltyTier}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+              {customer.location && (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4" /> {customer.location}
+                </span>
+              )}
+              {customer.email && <span>{customer.email}</span>}
+              {customer.phone && <span>{customer.phone}</span>}
+            </div>
+          </div>
+          <div className="flex gap-8">
+            <div>
+              <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-1">
+                Lifetime Value
+              </div>
+              <div className="font-light text-3xl tracking-tight text-primary">
+                ${(customer.lifetimeValue / 1000).toFixed(1)}k
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-1">
+                Owned
+              </div>
+              <div className="font-light text-3xl tracking-tight">
+                {ownedVehicles.length}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Open gates for this client */}
+      {openGates.length > 0 && (
+        <Link href="/approvals">
+          <Card className="border-none shadow-lg overflow-hidden bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold">
+                  {openGates.length} decision
+                  {openGates.length > 1 ? "s" : ""} awaiting your approval
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {openGates.map((gate) => gate.title).join(" · ")}
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Timeline */}
+        <div className="lg:col-span-2 space-y-4">
+          <h2 className="text-lg font-semibold tracking-wide">
+            Relationship Timeline
+          </h2>
+          <Card className="glass-panel border-none shadow-lg">
+            <CardContent className="p-6">
+              <Timeline events={timeline} />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right column */}
+        <div className="space-y-8">
+          {activeDeal && (
+            <Section title="Active Deal">
+              <div className="p-4 rounded-2xl bg-white/60">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold capitalize">
+                    {activeDeal.stage}
+                  </span>
+                  <Badge className="rounded-full text-[10px] uppercase tracking-widest">
+                    {money(activeDeal.otdPrice)} OTD
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {activeDeal.salesAdvisor
+                    ? `Advisor: ${activeDeal.salesAdvisor}`
+                    : "Concierge-led"}
+                </p>
+              </div>
+            </Section>
+          )}
+
+          {ownedVehicles.length > 0 && (
+            <Section title="Owned Vehicles">
+              <div className="space-y-3">
+                {ownedVehicles.map((v) => (
+                  <div
+                    key={v.id}
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-white/60"
+                  >
+                    <div className="w-14 h-10 rounded-lg bg-black/5 overflow-hidden shrink-0 flex items-center justify-center">
+                      {v.imageUrl ? (
+                        <img
+                          src={withBase(v.imageUrl)}
+                          alt={`${v.make} ${v.model}`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Car className="w-5 h-5 text-muted-foreground/40" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">
+                        {v.year} {v.make} {v.model}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {v.powertrain}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {financeApplications.length > 0 && (
+            <Section title="Financing">
+              <div className="space-y-2">
+                {financeApplications.map((f) => (
+                  <RowItem
+                    key={f.id}
+                    label={money(f.amount)}
+                    value={f.status}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {appraisals.length > 0 && (
+            <Section title="Trade Appraisals">
+              <div className="space-y-2">
+                {appraisals.map((a) => (
+                  <RowItem
+                    key={a.id}
+                    label={`${a.year} ${a.make} ${a.model}`}
+                    value={a.status}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {serviceOrders.length > 0 && (
+            <Section title="Service">
+              <div className="space-y-2">
+                {serviceOrders.map((s) => (
+                  <RowItem
+                    key={s.id}
+                    label={s.vehicleInfo}
+                    value={s.status.replace(/_/g, " ")}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {leads.length > 0 && (
+            <Section title="Origin">
+              <div className="space-y-2">
+                {leads.map((l) => (
+                  <RowItem
+                    key={l.id}
+                    label={`${l.channel} lead`}
+                    value={l.phase}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {deals.length > 0 && (
+            <Section title="All Deals">
+              <div className="space-y-2">
+                {deals.map((d) => (
+                  <RowItem
+                    key={d.id}
+                    label={money(d.otdPrice)}
+                    value={d.stage}
+                  />
+                ))}
+              </div>
+            </Section>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-3">
+      <h2 className="text-lg font-semibold tracking-wide">{title}</h2>
+      <Card className="glass-panel border-none shadow-lg">
+        <CardContent className="p-4">{children}</CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function RowItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white/60">
+      <span className="text-sm font-medium truncate">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-widest text-primary capitalize shrink-0">
+        {value}
+      </span>
+    </div>
+  );
+}

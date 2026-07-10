@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useListServiceOrders } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,12 @@ export default function Service() {
                       </div>
                       <h3 className="font-bold text-2xl leading-tight mb-2">{order.vehicleInfo}</h3>
                       <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                        <User className="w-4 h-4" /> {order.customerName || 'Unknown'}
+                        <User className="w-4 h-4" />
+                        {order.customerId ? (
+                          <Link href={`/customers/${order.customerId}`} className="text-primary hover:underline">{order.customerName || 'Unknown'}</Link>
+                        ) : (
+                          <span>{order.customerName || 'Unknown'}</span>
+                        )}
                       </div>
                     </div>
                   </div>

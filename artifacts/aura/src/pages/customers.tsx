@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useListCustomers } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ export default function Customers() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
             >
+              <Link href={`/customers/${customer.id}`} className="block h-full">
               <Card className="glass-panel border-none shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer rounded-3xl group overflow-hidden h-full flex flex-col">
                 <CardContent className="p-0 flex flex-col h-full">
                   <div className="p-6 bg-gradient-to-b from-black/5 to-transparent relative border-b border-border/40">
@@ -92,6 +94,7 @@ export default function Customers() {
                   </div>
                 </CardContent>
               </Card>
+              </Link>
             </motion.div>
           ))
         )}

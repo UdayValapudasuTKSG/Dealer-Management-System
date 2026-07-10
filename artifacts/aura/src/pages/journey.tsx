@@ -1,15 +1,14 @@
 import { useState } from "react";
-import { useListLeads, useListActivity, useListVehicles } from "@workspace/api-client-react";
+import { Link } from "wouter";
+import { useListLeads, useListVehicles } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, ArrowRight, User, Car, Zap, CheckCircle2, ChevronRight } from "lucide-react";
+import { Loader2, User, Zap, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatDistanceToNow } from "date-fns";
 
 const PHASES = ["aware", "consider", "engage", "negotiate", "won", "lost"] as const;
 
 export default function Journey() {
   const { data: leads, isLoading: isLoadingLeads } = useListLeads();
-  const { data: activities } = useListActivity({ limit: 10 });
   const { data: vehicles } = useListVehicles();
   const [selectedPhase, setSelectedPhase] = useState<string>("engage");
 
@@ -17,26 +16,24 @@ export default function Journey() {
 
   const getNextStep = (lead: any) => {
     if (lead.phase === "aware") {
-      return `Concierge is drafting a personalized welcome message referencing their interest via ${lead.channel}.`;
+      return `A personalized welcome is on its way, referencing their interest from ${lead.channel}.`;
     }
     if (lead.phase === "consider") {
       const vehicle = vehicles?.find(v => v.id === lead.interestedVehicleId);
       return vehicle 
-        ? `Preparing a bespoke digital brochure for the ${vehicle.make} ${vehicle.model}.` 
-        : `Gathering preferences to match with available inventory.`;
+        ? `A bespoke brochure for the ${vehicle.make} ${vehicle.model} is being prepared.` 
+        : `Preferences are being matched with available inventory.`;
     }
     if (lead.phase === "engage") {
-      return lead.aiScore > 80 
-        ? `High intent detected (${lead.aiScore}/100). Scheduling priority test drive.` 
-        : `Nurturing with recent dealership events and luxury lifestyle content.`;
+      return `A priority test drive is being arranged around their schedule.`;
     }
     if (lead.phase === "negotiate") {
-      return `Finance team structuring bespoke terms for ${lead.assignedTo || 'Specialist'} to present.`;
+      return `Bespoke terms are being structured for ${lead.assignedTo || 'the specialist'} to present.`;
     }
     if (lead.phase === "won") {
-      return `Choreographing delivery experience. Vehicle detailing initiated.`;
+      return `The delivery experience is underway. Detailing has begun.`;
     }
-    return `Reviewing lost reason for future re-engagement.`;
+    return `The relationship is being reviewed for future re-engagement.`;
   };
 
   return (
@@ -69,7 +66,7 @@ export default function Journey() {
             transition={{ delay: 0.2 }}
             className="text-muted-foreground max-w-2xl mx-auto"
           >
-            Watch the invisible concierge choreograph every client interaction in real-time.
+            Every client relationship, advancing in real time.
           </motion.p>
         </div>
 
@@ -130,13 +127,22 @@ export default function Journey() {
                           </div>
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Intent Score</span>
-                              <span className="font-medium text-primary">{lead.aiScore}/100</span>
+                              <span className="text-muted-foreground">Channel</span>
+                              <span className="font-medium capitalize">{lead.channel}</span>
                             </div>
                             <div className="flex justify-between text-sm">
                               <span className="text-muted-foreground">Status</span>
                               <span className="font-medium capitalize">{lead.status}</span>
                             </div>
+                            {lead.customerId && (
+                              <Link
+                                href={`/customers/${lead.customerId}`}
+                                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline pt-1"
+                              >
+                                View client
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </Link>
+                            )}
                           </div>
                         </div>
                         <div className="p-6 md:w-2/3 flex flex-col justify-center bg-gradient-to-r from-transparent to-white/20">
@@ -145,7 +151,7 @@ export default function Journey() {
                               <Zap className="w-4 h-4" />
                             </div>
                             <div>
-                              <h4 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-2">Choreographed Next Step</h4>
+                              <h4 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-2">In Motion</h4>
                               <p className="text-lg font-light leading-relaxed">
                                 {getNextStep(lead)}
                               </p>

@@ -1,1 +1,2 @@
-- [Anthropic SSE chat](anthropic-sse-chat.md) — the message-send endpoint streams via SSE; no usable generated hook, and persistence/abort have non-obvious correctness requirements.
+- [Orval query-hook options](orval-query-hooks.md) — generated useGet* hooks' `query` option is a full UseQueryOptions (requires queryKey); passing `{query:{enabled}}` fails TS2741.
+- [Server output Zod validation](server-output-validation.md) — list endpoints validate every row against Zod; one bad enum value in the DB 500s the whole list, not just the row.

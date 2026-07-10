@@ -10,6 +10,8 @@ import serviceRouter from "./service";
 import agentsRouter from "./agents";
 import activityRouter from "./activity";
 import dashboardRouter from "./dashboard";
+import timelineRouter from "./timeline";
+import gatesRouter from "./gates";
 import anthropicRouter from "./anthropic";
 
 const router: IRouter = Router();
@@ -25,6 +27,8 @@ router.use(serviceRouter);
 router.use(agentsRouter);
 router.use(activityRouter);
 router.use(dashboardRouter);
+router.use(timelineRouter);
+router.use(gatesRouter);
 router.use(anthropicRouter);
 
 export default router;
