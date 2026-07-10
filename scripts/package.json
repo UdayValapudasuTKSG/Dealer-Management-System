@@ -7,6 +7,7 @@
     "hello": "tsx ./src/hello.ts",
     "seed-connectivity": "tsx ./src/seed-connectivity.ts",
     "verify-gate-cascades": "tsx ./src/verify-gate-cascades.ts",
+    "check-gate-cascades": "bash ./run-gate-cascade-check.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
