@@ -12,7 +12,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <Sidebar />
 
       <main className="flex-1 overflow-y-auto relative z-10 scroll-smooth">
-        <div className="min-h-full">
+        <div className="min-h-full h-full">
           {children}
         </div>
       </main>

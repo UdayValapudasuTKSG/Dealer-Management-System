@@ -2,8 +2,17 @@ import { Link } from "wouter";
 import { useListDeals } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Briefcase, FileText } from "lucide-react";
+import { Plus, FileText } from "lucide-react";
 import { motion } from "framer-motion";
+import { Page, PageHeader } from "@/components/layout/page";
+
+const STAGE_LABEL: Record<string, string> = {
+  desking: "Desking",
+  negotiation: "Negotiation",
+  finance: "Finance",
+  committed: "Committed",
+  delivered: "Delivered",
+};
 
 export default function Deals() {
   const { data: deals, isLoading } = useListDeals();
@@ -11,93 +20,120 @@ export default function Deals() {
   const stages = ["desking", "negotiation", "finance", "committed", "delivered"];
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col">
-      <div className="flex items-center justify-between shrink-0">
-        <div>
-          <h1 className="text-4xl font-light tracking-tight mb-2">Deal <span className="font-semibold">Structuring</span></h1>
-          <p className="text-muted-foreground text-lg">Bespoke negotiation and closing.</p>
-        </div>
-        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-          <Plus className="w-5 h-5" />
-          Desk New Deal
-        </Button>
-      </div>
+    <Page width="full" fill>
+      <PageHeader
+        title="Deal"
+        accent="Structuring"
+        subtitle="Bespoke negotiation and closing."
+        className="mb-8 shrink-0"
+        action={
+          <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
+            <Plus className="w-5 h-5" />
+            Desk New Deal
+          </Button>
+        }
+      />
 
-      <div className="flex gap-6 overflow-x-auto pb-4 flex-1 hide-scrollbar">
-        {stages.map((stage, stageIndex) => (
-          <div key={stage} className="min-w-[340px] flex-1 flex flex-col glass-panel rounded-3xl p-5">
-            <div className="flex items-center justify-between mb-6 px-2">
-              <h3 className="font-semibold text-sm uppercase tracking-widest text-muted-foreground">
-                {stage}
-              </h3>
-              <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold">
-                {deals?.filter(d => d.stage === stage).length || 0}
-              </span>
-            </div>
-            
-            <div className="space-y-4 flex-1 overflow-y-auto pr-2 pb-4">
-              {isLoading ? (
-                [1].map((i) => <div key={i} className="h-40 bg-black/5 rounded-2xl animate-pulse" />)
-              ) : deals?.filter((d) => d.stage === stage).map((deal, i) => (
-                <motion.div
-                  key={deal.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: stageIndex * 0.1 + i * 0.05 }}
-                >
-                  <Card className="cursor-pointer border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl bg-white/60 hover:bg-white overflow-hidden group">
-                    <CardContent className="p-5">
-                      <div className="flex justify-between items-start mb-4">
-                        {deal.customerId ? (
-                          <Link
-                            href={`/customers/${deal.customerId}`}
-                            className="font-semibold text-lg leading-tight truncate pr-4 hover:text-primary transition-colors"
-                          >
-                            {deal.customerName || "Unknown Customer"}
-                          </Link>
-                        ) : (
-                          <div className="font-semibold text-lg leading-tight truncate pr-4">
-                            {deal.customerName || "Unknown Customer"}
-                          </div>
-                        )}
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                          <FileText className="w-4 h-4 text-primary" />
-                        </div>
-                      </div>
-
-                      <div className="font-light text-3xl mb-4 tracking-tight text-primary">
-                        ${deal.otdPrice.toLocaleString()}
-                      </div>
-                      
-                      <div className="space-y-2 text-sm font-medium text-muted-foreground pt-4 border-t border-border/50">
-                        <div className="flex justify-between items-center">
-                          <span className="uppercase tracking-wider text-xs">MSRP</span>
-                          <span className="text-foreground">${deal.vehiclePrice.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between items-center text-primary">
-                          <span className="uppercase tracking-wider text-xs">Discount</span>
-                          <span>-${deal.discount.toLocaleString()}</span>
-                        </div>
-                        {deal.monthlyPayment && (
-                          <div className="flex justify-between items-center pt-2">
-                            <span className="uppercase tracking-wider text-xs">Monthly</span>
-                            <span className="text-foreground font-bold">${deal.monthlyPayment}/mo</span>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-              {deals?.filter((d) => d.stage === stage).length === 0 && (
-                <div className="flex flex-col items-center justify-center h-32 text-muted-foreground/50 text-sm border-2 border-dashed border-border/50 rounded-2xl uppercase tracking-widest font-semibold">
-                  Empty
+      <div className="flex gap-6 overflow-x-auto pb-4 flex-1 hide-scrollbar -mx-1 px-1">
+        {stages.map((stage, stageIndex) => {
+          const stageDeals = deals?.filter((d) => d.stage === stage) ?? [];
+          return (
+            <div
+              key={stage}
+              className="w-[340px] shrink-0 flex flex-col rounded-3xl bg-white/60 backdrop-blur-2xl border border-white/60 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-5"
+            >
+              <div className="flex items-center justify-between mb-5 px-1">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2 h-2 rounded-full bg-primary" />
+                  <h3 className="font-semibold text-sm uppercase tracking-widest text-foreground">
+                    {STAGE_LABEL[stage] ?? stage}
+                  </h3>
                 </div>
-              )}
+                <span className="bg-primary/10 text-primary min-w-7 h-7 px-2 rounded-full text-xs font-bold flex items-center justify-center">
+                  {stageDeals.length}
+                </span>
+              </div>
+
+              <div className="space-y-3.5 flex-1 overflow-y-auto pr-1.5 -mr-1.5 hide-scrollbar">
+                {isLoading ? (
+                  [1].map((i) => (
+                    <div
+                      key={i}
+                      className="h-40 bg-black/5 rounded-2xl animate-pulse"
+                    />
+                  ))
+                ) : stageDeals.length === 0 ? (
+                  <div className="flex items-center justify-center h-24 text-muted-foreground/50 text-xs border-2 border-dashed border-border/60 rounded-2xl uppercase tracking-widest font-semibold">
+                    Empty
+                  </div>
+                ) : (
+                  stageDeals.map((deal, i) => (
+                    <motion.div
+                      key={deal.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: stageIndex * 0.06 + i * 0.04 }}
+                    >
+                      <Card className="cursor-pointer border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl bg-white/80 hover:bg-white overflow-hidden group">
+                        <CardContent className="p-5">
+                          <div className="flex justify-between items-start mb-4 gap-3">
+                            {deal.customerId ? (
+                              <Link
+                                href={`/customers/${deal.customerId}`}
+                                className="font-semibold text-base leading-tight truncate hover:text-primary transition-colors"
+                              >
+                                {deal.customerName || "Unknown Customer"}
+                              </Link>
+                            ) : (
+                              <div className="font-semibold text-base leading-tight truncate">
+                                {deal.customerName || "Unknown Customer"}
+                              </div>
+                            )}
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                              <FileText className="w-4 h-4 text-primary" />
+                            </div>
+                          </div>
+
+                          <div className="font-light text-3xl mb-4 tracking-tight text-primary">
+                            ${deal.otdPrice.toLocaleString()}
+                          </div>
+
+                          <div className="space-y-2 text-sm font-medium text-muted-foreground pt-4 border-t border-border/50">
+                            <div className="flex justify-between items-center">
+                              <span className="uppercase tracking-wider text-xs">
+                                MSRP
+                              </span>
+                              <span className="text-foreground">
+                                ${deal.vehiclePrice.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center text-primary">
+                              <span className="uppercase tracking-wider text-xs">
+                                Discount
+                              </span>
+                              <span>-${deal.discount.toLocaleString()}</span>
+                            </div>
+                            {deal.monthlyPayment && (
+                              <div className="flex justify-between items-center pt-2">
+                                <span className="uppercase tracking-wider text-xs">
+                                  Monthly
+                                </span>
+                                <span className="text-foreground font-bold">
+                                  ${deal.monthlyPayment}/mo
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-    </div>
+    </Page>
   );
 }

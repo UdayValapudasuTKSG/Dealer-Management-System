@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Timeline } from "@/components/timeline";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
+import { Page } from "@/components/layout/page";
 import { AnimatePresence } from "framer-motion";
 import {
   Loader2,
@@ -62,7 +63,7 @@ export default function CustomerDetail() {
   const money = (n: number) => `$${n.toLocaleString("en-US")}`;
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl mx-auto">
+    <Page className="space-y-8">
       <Link
         href="/customers"
         className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
@@ -296,7 +297,7 @@ export default function CustomerDetail() {
           )}
         </div>
       </div>
-    </div>
+    </Page>
   );
 }
 

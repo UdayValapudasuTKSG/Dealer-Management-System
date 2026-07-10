@@ -51,7 +51,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="p-6 md:p-10 -mt-20 relative z-30 max-w-7xl mx-auto space-y-8">
+      <div className="px-6 md:px-10 lg:px-14 pb-14 -mt-20 relative z-30 max-w-7xl mx-auto space-y-8">
         
         {/* KPI Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

@@ -8,9 +8,8 @@ import {
   type Gate,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
@@ -20,7 +19,8 @@ import {
   Check,
   SlidersHorizontal,
   X,
-  ChevronRight,
+  ArrowUpRight,
+  Sparkles,
 } from "lucide-react";
 
 export const GATE_LABEL: Record<string, string> = {
@@ -29,6 +29,30 @@ export const GATE_LABEL: Record<string, string> = {
   capital_order: "Capital Order",
   gra_filing: "GRA Filing",
   refund_release: "Refund Release",
+};
+
+const PRIORITY_META: Record<
+  string,
+  { rail: string; dot: string; chip: string; label: string }
+> = {
+  high: {
+    rail: "bg-primary",
+    dot: "bg-primary",
+    chip: "bg-primary/10 text-primary",
+    label: "High priority",
+  },
+  normal: {
+    rail: "bg-amber-400",
+    dot: "bg-amber-500",
+    chip: "bg-amber-500/10 text-amber-600",
+    label: "Normal priority",
+  },
+  low: {
+    rail: "bg-black/15",
+    dot: "bg-muted-foreground/50",
+    chip: "bg-black/5 text-muted-foreground",
+    label: "Low priority",
+  },
 };
 
 export function GateCard({
@@ -78,181 +102,189 @@ export function GateCard({
     },
   });
 
-  const priorityColor =
-    gate.priority === "high"
-      ? "bg-primary/10 text-primary"
-      : gate.priority === "low"
-        ? "bg-black/5 text-muted-foreground"
-        : "bg-amber-500/10 text-amber-600";
+  const meta = PRIORITY_META[gate.priority] ?? PRIORITY_META.normal;
+  const evidence = gate.evidence.slice(0, 4);
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 260, damping: 26 }}
     >
-      <Card className="glass-panel border-none shadow-lg overflow-hidden">
-        <CardContent className="p-0">
-          <div className="p-6 md:p-8 bg-white/40">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="w-11 h-11 rounded-full bg-primary text-white flex items-center justify-center shrink-0">
-                <ShieldAlert className="w-5 h-5" />
-              </div>
-              <div className="flex-1">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  {label && (
-                    <span className="text-xs font-bold uppercase tracking-widest text-primary">
-                      {label}
-                    </span>
-                  )}
-                  <Badge
-                    className={`rounded-full text-[10px] uppercase tracking-widest ${priorityColor}`}
-                    variant="secondary"
-                  >
-                    {gate.priority} priority
-                  </Badge>
-                </div>
-                <h3 className="text-xl font-semibold leading-tight">
-                  {gate.title}
-                </h3>
-                {showCustomerLink && gate.customerId && gate.customerName && (
-                  <Link
-                    href={`/customers/${gate.customerId}`}
-                    className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors mt-1"
-                  >
-                    {gate.customerName}
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </Link>
+      <Card className="group relative overflow-hidden border-none bg-white/80 backdrop-blur-2xl shadow-[0_4px_24px_rgba(0,0,0,0.04)] hover:shadow-[0_16px_48px_rgba(0,0,0,0.08)] transition-shadow duration-300 rounded-2xl">
+        {/* Priority rail */}
+        <div className={`absolute left-0 top-0 bottom-0 w-1 ${meta.rail}`} />
+
+        <div className="p-5 md:p-6 pl-6 md:pl-7">
+          {/* Header */}
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1.5">
+                {label && (
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-primary">
+                    {label}
+                  </span>
                 )}
-              </div>
-            </div>
-
-            <p className="text-muted-foreground leading-relaxed mb-6">
-              {gate.summary}
-            </p>
-
-            {/* Evidence pack */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 mb-6">
-              {gate.evidence.map((item, i) => (
-                <div
-                  key={i}
-                  className="flex items-baseline justify-between gap-4 border-b border-border/40 pb-2"
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest ${meta.chip}`}
                 >
-                  <span className="text-xs uppercase tracking-widest text-muted-foreground shrink-0">
-                    {item.label}
-                  </span>
-                  <span className="text-sm font-medium text-right">
-                    {item.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {gate.recommendation && (
-              <div className="rounded-2xl bg-primary/5 border border-primary/10 p-4 mb-6">
-                <div className="text-xs font-bold uppercase tracking-widest text-primary mb-1">
-                  Recommendation
-                </div>
-                <p className="text-sm leading-relaxed">{gate.recommendation}</p>
-              </div>
-            )}
-
-            {adjusting && (
-              <div className="mb-4 flex items-center gap-3">
-                <span className="text-sm font-medium text-muted-foreground">
-                  $
+                  <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+                  {gate.priority}
                 </span>
-                <Input
-                  type="number"
-                  value={adjustValue}
-                  onChange={(e) => setAdjustValue(e.target.value)}
-                  placeholder="Adjusted amount"
-                  className="max-w-[220px]"
-                />
               </div>
-            )}
-
-            <div className="flex flex-wrap gap-3">
-              {adjusting ? (
-                <>
-                  <Button
-                    disabled={resolve.isPending || adjustValue === ""}
-                    onClick={() =>
-                      resolve.mutate({
-                        id: gate.id,
-                        data: {
-                          action: "adjust",
-                          adjustedAmount: Number(adjustValue),
-                        },
-                      })
-                    }
-                    className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
-                  >
-                    {resolve.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Check className="w-4 h-4" />
-                    )}
-                    Approve at ${Number(adjustValue || 0).toLocaleString()}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => setAdjusting(false)}
-                    className="rounded-full px-6"
-                  >
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    disabled={resolve.isPending}
-                    onClick={() =>
-                      resolve.mutate({
-                        id: gate.id,
-                        data: { action: "approve" },
-                      })
-                    }
-                    className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
-                  >
-                    {resolve.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Check className="w-4 h-4" />
-                    )}
-                    Approve
-                  </Button>
-                  {gate.amount != null && (
-                    <Button
-                      variant="outline"
-                      disabled={resolve.isPending}
-                      onClick={() => setAdjusting(true)}
-                      className="rounded-full px-6 gap-2"
-                    >
-                      <SlidersHorizontal className="w-4 h-4" />
-                      Adjust
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    disabled={resolve.isPending}
-                    onClick={() =>
-                      resolve.mutate({
-                        id: gate.id,
-                        data: { action: "dismiss" },
-                      })
-                    }
-                    className="rounded-full px-6 gap-2 text-muted-foreground"
-                  >
-                    <X className="w-4 h-4" />
-                    Dismiss
-                  </Button>
-                </>
+              <h3 className="text-lg md:text-xl font-semibold leading-snug tracking-tight">
+                {gate.title}
+              </h3>
+              {showCustomerLink && gate.customerId && gate.customerName && (
+                <Link
+                  href={`/customers/${gate.customerId}`}
+                  className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors mt-1"
+                >
+                  {gate.customerName}
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </Link>
               )}
             </div>
           </div>
-        </CardContent>
+
+          {/* Decision question / summary */}
+          <p className="text-sm text-muted-foreground leading-relaxed mt-4">
+            {gate.summary}
+          </p>
+
+          {/* Evidence — compact stat tiles */}
+          {evidence.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
+              {evidence.map((item, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl bg-black/[0.03] px-3 py-2.5 min-w-0"
+                >
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">
+                    {item.label}
+                  </div>
+                  <div className="text-sm font-semibold mt-0.5 tracking-tight truncate">
+                    {item.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Recommendation — slim inline callout */}
+          {gate.recommendation && (
+            <div className="mt-4 flex items-start gap-2.5 rounded-xl border-l-2 border-primary/40 bg-primary/[0.04] px-3.5 py-2.5">
+              <Sparkles className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-widest text-primary mr-1.5">
+                  Recommended
+                </span>
+                <span className="text-sm leading-relaxed">
+                  {gate.recommendation}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Adjust input */}
+          {adjusting && (
+            <div className="mt-4 flex items-center gap-2">
+              <span className="text-sm font-medium text-muted-foreground">$</span>
+              <Input
+                type="number"
+                value={adjustValue}
+                onChange={(e) => setAdjustValue(e.target.value)}
+                placeholder="Adjusted amount"
+                className="max-w-[220px] h-10 rounded-xl"
+              />
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex flex-wrap items-center gap-2 mt-5">
+            {adjusting ? (
+              <>
+                <Button
+                  disabled={resolve.isPending || adjustValue === ""}
+                  onClick={() =>
+                    resolve.mutate({
+                      id: gate.id,
+                      data: {
+                        action: "adjust",
+                        adjustedAmount: Number(adjustValue),
+                      },
+                    })
+                  }
+                  className="bg-primary hover:bg-primary/90 text-white rounded-full px-5 h-10 gap-2"
+                >
+                  {resolve.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  Approve at ${Number(adjustValue || 0).toLocaleString()}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setAdjusting(false)}
+                  className="rounded-full px-4 h-10 text-muted-foreground"
+                >
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  disabled={resolve.isPending}
+                  onClick={() =>
+                    resolve.mutate({
+                      id: gate.id,
+                      data: { action: "approve" },
+                    })
+                  }
+                  className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-10 gap-2 shadow-lg shadow-primary/20"
+                >
+                  {resolve.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Check className="w-4 h-4" />
+                  )}
+                  Approve
+                </Button>
+                {gate.amount != null && (
+                  <Button
+                    variant="ghost"
+                    disabled={resolve.isPending}
+                    onClick={() => setAdjusting(true)}
+                    className="rounded-full px-4 h-10 gap-2 text-foreground hover:bg-black/5"
+                  >
+                    <SlidersHorizontal className="w-4 h-4" />
+                    Adjust
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  disabled={resolve.isPending}
+                  onClick={() =>
+                    resolve.mutate({
+                      id: gate.id,
+                      data: { action: "dismiss" },
+                    })
+                  }
+                  className="rounded-full px-4 h-10 gap-2 text-muted-foreground hover:text-foreground ml-auto"
+                >
+                  <X className="w-4 h-4" />
+                  Dismiss
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
       </Card>
     </motion.div>
   );

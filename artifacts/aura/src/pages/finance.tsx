@@ -5,22 +5,24 @@ import { Button } from "@/components/ui/button";
 import { Plus, Building, FileText, CheckCircle2, DollarSign, Percent, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
+import { Page, PageHeader } from "@/components/layout/page";
 
 export default function Finance() {
   const { data: apps, isLoading } = useListFinanceApplications();
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-light tracking-tight mb-2">Finance & <span className="font-semibold">Insurance</span></h1>
-          <p className="text-muted-foreground text-lg">Credit applications and protection portfolios.</p>
-        </div>
-        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-          <Plus className="w-5 h-5" />
-          New Application
-        </Button>
-      </div>
+    <Page className="space-y-10">
+      <PageHeader
+        title="Finance &"
+        accent="Insurance"
+        subtitle="Credit applications and protection portfolios."
+        action={
+          <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
+            <Plus className="w-5 h-5" />
+            New Application
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {isLoading ? (
@@ -94,6 +96,6 @@ export default function Finance() {
           ))
         )}
       </div>
-    </div>
+    </Page>
   );
 }

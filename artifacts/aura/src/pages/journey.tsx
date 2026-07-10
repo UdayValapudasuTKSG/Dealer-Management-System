@@ -4,8 +4,12 @@ import { useListLeads, useListVehicles } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, User, Zap, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Car } from "lucide-react";
 
 const PHASES = ["aware", "consider", "engage", "negotiate", "won", "lost"] as const;
+
+const withBase = (url: string) =>
+  `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`;
 
 export default function Journey() {
   const { data: leads, isLoading: isLoadingLeads } = useListLeads();
@@ -51,7 +55,7 @@ export default function Journey() {
         <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/80 to-background" />
       </div>
 
-      <div className="relative z-10 p-8 flex-1 flex flex-col">
+      <div className="relative z-10 px-6 md:px-10 lg:px-14 py-10 md:py-14 flex-1 flex flex-col">
         <div className="mb-12 text-center">
           <motion.h1 
             initial={{ opacity: 0, y: -20 }}
@@ -104,15 +108,19 @@ export default function Journey() {
                 No active journeys in this phase.
               </motion.div>
             ) : (
-              leadsInPhase.map((lead, i) => (
+              leadsInPhase.map((lead, i) => {
+                const vehicle = vehicles?.find(
+                  (v) => v.id === lead.interestedVehicleId,
+                );
+                return (
                 <motion.div
                   key={lead.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ delay: i * 0.1 }}
+                  transition={{ delay: i * 0.08 }}
                 >
-                  <Card className="glass-panel border-none shadow-lg overflow-hidden group">
+                  <Card className="glass-panel border-none shadow-lg hover:shadow-2xl transition-shadow duration-500 overflow-hidden group">
                     <CardContent className="p-0">
                       <div className="flex flex-col md:flex-row">
                         <div className="p-6 md:w-1/3 border-b md:border-b-0 md:border-r border-border/40 bg-white/40">
@@ -125,6 +133,26 @@ export default function Journey() {
                               <p className="text-xs text-muted-foreground uppercase tracking-wider">{lead.channel} lead</p>
                             </div>
                           </div>
+                          {vehicle && (
+                            <div className="mb-4 rounded-2xl overflow-hidden bg-black/[0.04] aspect-[16/9] relative">
+                              {vehicle.imageUrl ? (
+                                <img
+                                  src={withBase(vehicle.imageUrl)}
+                                  alt={`${vehicle.make} ${vehicle.model}`}
+                                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <Car className="w-8 h-8 text-muted-foreground/30" />
+                                </div>
+                              )}
+                              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/50 to-transparent p-3">
+                                <p className="text-xs font-semibold text-white tracking-wide">
+                                  {vehicle.make} {vehicle.model}
+                                </p>
+                              </div>
+                            </div>
+                          )}
                           <div className="space-y-2">
                             <div className="flex justify-between text-sm">
                               <span className="text-muted-foreground">Channel</span>
@@ -162,7 +190,8 @@ export default function Journey() {
                     </CardContent>
                   </Card>
                 </motion.div>
-              ))
+                );
+              })
             )}
           </AnimatePresence>
         </div>

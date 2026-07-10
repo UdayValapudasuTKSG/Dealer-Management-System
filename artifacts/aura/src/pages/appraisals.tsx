@@ -5,22 +5,24 @@ import { Button } from "@/components/ui/button";
 import { Plus, Car, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
+import { Page, PageHeader } from "@/components/layout/page";
 
 export default function Appraisals() {
   const { data: appraisals, isLoading } = useListAppraisals();
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-4xl font-light tracking-tight mb-2">Trade <span className="font-semibold">Valuations</span></h1>
-          <p className="text-muted-foreground text-lg">Acquisition offers, ready to present.</p>
-        </div>
-        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-          <Plus className="w-5 h-5" />
-          New Valuation
-        </Button>
-      </div>
+    <Page className="space-y-10">
+      <PageHeader
+        title="Trade"
+        accent="Valuations"
+        subtitle="Acquisition offers, ready to present."
+        action={
+          <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
+            <Plus className="w-5 h-5" />
+            New Valuation
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-6">
         {isLoading ? (
@@ -89,6 +91,6 @@ export default function Appraisals() {
           ))
         )}
       </div>
-    </div>
+    </Page>
   );
 }
