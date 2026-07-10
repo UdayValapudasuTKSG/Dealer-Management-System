@@ -26,8 +26,17 @@ export const timelineEventsTable = pgTable("timeline_events", {
     .defaultNow(),
 });
 
-export const insertTimelineEventSchema = createInsertSchema(
-  timelineEventsTable,
-).omit({ id: true, createdAt: true });
+export const insertTimelineEventSchema = createInsertSchema(timelineEventsTable, {
+  domain: z.enum([
+    "leads",
+    "deals",
+    "finance",
+    "appraisals",
+    "service",
+    "vehicles",
+    "gate",
+    "system",
+  ]),
+}).omit({ id: true, createdAt: true });
 export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;
 export type TimelineEvent = typeof timelineEventsTable.$inferSelect;

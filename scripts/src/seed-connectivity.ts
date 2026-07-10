@@ -11,6 +11,9 @@ import {
   vehiclesTable,
   timelineEventsTable,
   gatesTable,
+  insertCustomerSchema,
+  insertTimelineEventSchema,
+  insertGateSchema,
   type GateEvidenceItem,
 } from "@workspace/db";
 
@@ -20,10 +23,28 @@ const g = (usd: number) =>
 const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
 const dual = (n: number) => `${usd(n)} (${g(n)})`;
 
+// Validate a seed row against the drizzle-zod insert schema (which now enforces
+// the same enum values the API uses). A bad value fails loudly here at seed
+// time instead of silently 500-ing a list endpoint at request time.
+function validate<T>(
+  schema: { parse: (input: unknown) => T },
+  label: string,
+  row: unknown,
+): T {
+  try {
+    return schema.parse(row);
+  } catch (err) {
+    console.error(`Invalid seed row for ${label}:`, JSON.stringify(row));
+    throw err;
+  }
+}
+
 async function ensureCustomer(
   name: string,
   fields: Partial<typeof customersTable.$inferInsert>,
 ): Promise<number> {
+  const row = { name, ...fields };
+  validate(insertCustomerSchema, `customer "${name}"`, row);
   const [existing] = await db
     .select()
     .from(customersTable)
@@ -37,7 +58,7 @@ async function ensureCustomer(
   }
   const [created] = await db
     .insert(customersTable)
-    .values({ name, ...fields })
+    .values(row)
     .returning();
   return created.id;
 }
@@ -239,6 +260,9 @@ async function main() {
   add(owen, "leads", "qualified", "Owen is comparing a RAV4", "Qualified lead evaluating a hybrid RAV4 with a trade.", { refType: "lead", refId: 7, minsAgo: 3500 });
   add(owen, "appraisals", "requested", "Mazda 3 submitted for appraisal", `Trade submitted; preliminary value ${dual(6200)} pending inspection.`, { cause: "Owen is comparing a RAV4", refType: "appraisal", refId: 4, minsAgo: 3200 });
 
+  events.forEach((e, i) =>
+    validate(insertTimelineEventSchema, `timeline event #${i} (${e.title})`, e),
+  );
   await db.insert(timelineEventsTable).values(events);
   console.log(`Inserted ${events.length} timeline events.`);
 
@@ -369,6 +393,9 @@ async function main() {
     ],
   });
 
+  gates.forEach((gate, i) =>
+    validate(insertGateSchema, `gate #${i} (${gate.title})`, gate),
+  );
   await db.insert(gatesTable).values(gates);
   console.log(`Inserted ${gates.length} gates.`);
 

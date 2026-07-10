@@ -24,7 +24,9 @@ export const customersTable = pgTable("customers", {
     .defaultNow(),
 });
 
-export const insertCustomerSchema = createInsertSchema(customersTable).omit({
+export const insertCustomerSchema = createInsertSchema(customersTable, {
+  loyaltyTier: z.enum(["new", "silver", "gold", "platinum"]),
+}).omit({
   id: true,
   createdAt: true,
 });

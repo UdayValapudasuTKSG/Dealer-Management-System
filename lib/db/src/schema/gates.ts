@@ -38,7 +38,17 @@ export const gatesTable = pgTable("gates", {
     .defaultNow(),
 });
 
-export const insertGateSchema = createInsertSchema(gatesTable).omit({
+export const insertGateSchema = createInsertSchema(gatesTable, {
+  type: z.enum([
+    "below_floor_price",
+    "credit_decline",
+    "capital_order",
+    "gra_filing",
+    "refund_release",
+  ]),
+  status: z.enum(["pending", "approved", "adjusted", "dismissed"]),
+  priority: z.enum(["high", "normal", "low"]),
+}).omit({
   id: true,
   createdAt: true,
 });
