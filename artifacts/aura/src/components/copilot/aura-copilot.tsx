@@ -1,6 +1,5 @@
 import { useLocation } from "wouter";
 import { useCopilotReadable, useCopilotAction } from "@copilotkit/react-core";
-import { useCopilotChatSuggestions } from "@copilotkit/react-core";
 import { useGetDashboardSummary, useListGates } from "@workspace/api-client-react";
 
 const ROUTE_MAP: Record<string, string> = {
@@ -121,16 +120,6 @@ export function AuraCopilot() {
       return "Opened the GRA filing workspace. Upload the import document to autofill the duty pack.";
     },
   });
-
-  useCopilotChatSuggestions(
-    {
-      instructions:
-        "Suggest 3 short, high-value next actions for a luxury car dealership manager based on the current page and the pending decision gates. Examples: reviewing an urgent gate, starting a GRA filing, checking the sales pipeline. Keep each suggestion under 8 words. Never use emojis.",
-      minSuggestions: 2,
-      maxSuggestions: 3,
-    },
-    [location, pendingGates],
-  );
 
   return null;
 }
