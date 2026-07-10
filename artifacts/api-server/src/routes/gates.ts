@@ -19,6 +19,8 @@ import {
 
 const router: IRouter = Router();
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 router.get("/gates", async (req, res): Promise<void> => {
   const query = ListGatesQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -39,8 +41,13 @@ router.get("/gates", async (req, res): Promise<void> => {
   res.json(ListGatesResponse.parse(rows));
 });
 
-async function writeReceipt(gate: Gate, title: string, detail: string) {
-  await db.insert(timelineEventsTable).values({
+async function writeReceipt(
+  tx: Tx,
+  gate: Gate,
+  title: string,
+  detail: string,
+) {
+  await tx.insert(timelineEventsTable).values({
     customerId: gate.customerId ?? null,
     domain: "gate",
     kind: `gate_${gate.type}`,
@@ -56,6 +63,7 @@ async function writeReceipt(gate: Gate, title: string, detail: string) {
 
 // Applies the connected downstream effect of approving/adjusting a gate.
 async function applyCascade(
+  tx: Tx,
   gate: Gate,
   action: "approve" | "adjust",
   adjustedAmount: number | undefined,
@@ -68,7 +76,7 @@ async function applyCascade(
   switch (gate.type) {
     case "below_floor_price": {
       if (gate.refId) {
-        const [deal] = await db
+        const [deal] = await tx
           .select()
           .from(dealsTable)
           .where(eq(dealsTable.id, gate.refId));
@@ -78,7 +86,7 @@ async function applyCascade(
             effectiveAmount -
             deal.tradeInValue +
             deal.accessories;
-          await db
+          await tx
             .update(dealsTable)
             .set({ discount: effectiveAmount, otdPrice: otd })
             .where(eq(dealsTable.id, gate.refId));
@@ -94,7 +102,7 @@ async function applyCascade(
     }
     case "credit_decline": {
       if (gate.refId) {
-        await db
+        await tx
           .update(financeApplicationsTable)
           .set({ status: action === "adjust" ? "under_review" : "declined" })
           .where(eq(financeApplicationsTable.id, gate.refId));
@@ -113,7 +121,7 @@ async function applyCascade(
     }
     case "capital_order": {
       if (gate.refId) {
-        await db
+        await tx
           .update(vehiclesTable)
           .set({ status: "in_transit" })
           .where(eq(vehiclesTable.id, gate.refId));
@@ -134,13 +142,13 @@ async function applyCascade(
       let vinReturned = false;
       if (gate.refId) {
         if (gate.refType === "vehicle") {
-          await db
+          await tx
             .update(vehiclesTable)
             .set({ status: "available" })
             .where(eq(vehiclesTable.id, gate.refId));
           vinReturned = true;
         } else if (gate.refType === "deal") {
-          await db
+          await tx
             .update(dealsTable)
             .set({ depositPaid: false })
             .where(eq(dealsTable.id, gate.refId));
@@ -192,30 +200,35 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
         ? "adjusted"
         : "dismissed";
 
-  const [updated] = await db
-    .update(gatesTable)
-    .set({
-      status,
-      resolution: note ?? null,
-      resolvedBy: resolvedBy ?? "Manager",
-      resolvedAt: new Date(),
-      ...(action === "adjust" && adjustedAmount !== undefined
-        ? { amount: adjustedAmount }
-        : {}),
-    })
-    .where(eq(gatesTable.id, gate.id))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(gatesTable)
+      .set({
+        status,
+        resolution: note ?? null,
+        resolvedBy: resolvedBy ?? "Manager",
+        resolvedAt: new Date(),
+        ...(action === "adjust" && adjustedAmount !== undefined
+          ? { amount: adjustedAmount }
+          : {}),
+      })
+      .where(eq(gatesTable.id, gate.id))
+      .returning();
 
-  if (action !== "dismiss") {
-    const receipt = await applyCascade(updated, action, adjustedAmount);
-    await writeReceipt(updated, receipt.title, receipt.detail);
-  } else {
-    await writeReceipt(
-      updated,
-      "Gate dismissed",
-      note ?? "Decision deferred by the manager.",
-    );
-  }
+    if (action !== "dismiss") {
+      const receipt = await applyCascade(tx, row, action, adjustedAmount);
+      await writeReceipt(tx, row, receipt.title, receipt.detail);
+    } else {
+      await writeReceipt(
+        tx,
+        row,
+        "Gate dismissed",
+        note ?? "Decision deferred by the manager.",
+      );
+    }
+
+    return row;
+  });
 
   res.json(ResolveGateResponse.parse(updated));
 });
