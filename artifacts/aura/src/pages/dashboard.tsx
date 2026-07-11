@@ -3,10 +3,16 @@ import {
   useGetDashboardSummary,
   useGetSalesPerformance,
   useGetPipeline,
+  useGetInventoryBreakdown,
   useListTimeline,
   useListGates,
 } from "@workspace/api-client-react";
-import type { Gate, TimelineEvent, PipelineStage } from "@workspace/api-client-react";
+import type {
+  Gate,
+  TimelineEvent,
+  PipelineStage,
+  InventoryBreakdownItem,
+} from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Loader2,
@@ -17,13 +23,22 @@ import {
   ShieldAlert,
   ChevronRight,
   ArrowUpRight,
+  ArrowDownRight,
   ArrowRight,
   CheckCircle2,
   Clock,
+  Layers,
+  BarChart3,
+  GitBranch,
 } from "lucide-react";
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -43,6 +58,22 @@ const GATE_LABEL: Record<string, string> = {
 
 const PRIORITY_RANK: Record<string, number> = { high: 0, normal: 1, low: 2 };
 
+const POWERTRAIN_COLORS: Record<string, string> = {
+  EV: "hsl(0 82% 50%)",
+  Hybrid: "hsl(18 82% 52%)",
+  Petrol: "hsl(0 0% 58%)",
+  Diesel: "hsl(0 0% 38%)",
+};
+const POWERTRAIN_FALLBACK = "hsl(0 0% 45%)";
+
+const TOOLTIP_STYLE = {
+  background: "hsl(var(--popover))",
+  border: "1px solid hsl(var(--popover-border))",
+  borderRadius: "12px",
+  backdropFilter: "blur(10px)",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+} as const;
+
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
@@ -50,10 +81,19 @@ function greeting() {
   return "Good evening";
 }
 
+function deltaPct(series: number[]): number | null {
+  if (series.length < 2) return null;
+  const prev = series[series.length - 2];
+  const cur = series[series.length - 1];
+  if (!prev) return null;
+  return ((cur - prev) / prev) * 100;
+}
+
 export default function Dashboard() {
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
   const { data: performance, isLoading: isLoadingPerf } = useGetSalesPerformance();
   const { data: pipeline } = useGetPipeline();
+  const { data: inventory } = useGetInventoryBreakdown();
   const { data: timeline } = useListTimeline({ limit: 12 });
   const { data: gates } = useListGates({ status: "pending" });
 
@@ -63,10 +103,14 @@ export default function Dashboard() {
   );
   const agentEvents = (timeline ?? []).filter((e) => e.isAgent);
 
+  const revenueTrend = (performance ?? []).map((p) => p.revenue);
+  const revDelta = deltaPct(revenueTrend);
+  const unitsDelta = deltaPct((performance ?? []).map((p) => p.units));
+
   return (
     <div className="h-full overflow-y-auto">
       {/* Compact cinematic briefing band */}
-      <div className="relative h-[240px] w-full overflow-hidden bg-black">
+      <div className="relative h-[220px] w-full overflow-hidden bg-black">
         <video
           autoPlay
           muted
@@ -110,44 +154,114 @@ export default function Dashboard() {
             isLoading={isLoadingSummary}
             delay={0.05}
             accent
-          />
-          <KPICard
-            title="Handled Autonomously"
-            value={summary?.agentTasksToday ?? 0}
-            sub={
-              summary
-                ? `${summary.avgResponseSeconds}s avg response`
-                : "tasks today"
-            }
-            icon={Zap}
-            isLoading={isLoadingSummary}
-            delay={0.1}
+            delta={revDelta}
+            trend={revenueTrend}
           />
           <KPICard
             title="Active Deals"
             value={summary?.activeDeals ?? 0}
             sub={summary ? `${summary.totalLeads} live leads` : "in motion"}
-            icon={Briefcase}
+            icon={GitBranch}
             isLoading={isLoadingSummary}
-            delay={0.15}
+            delay={0.1}
           />
           <KPICard
             title="Conversion"
             value={summary ? `${summary.conversionRate}%` : "0%"}
-            sub={
-              summary
-                ? `${summary.serviceOrdersOpen} service orders open`
-                : "lead to deal"
-            }
+            sub="Lead to delivery"
             icon={Users}
+            isLoading={isLoadingSummary}
+            delay={0.15}
+          />
+          <KPICard
+            title="Handled Autonomously"
+            value={summary?.agentTasksToday ?? 0}
+            sub={summary ? `${summary.avgResponseSeconds}s avg response` : "today"}
+            icon={Zap}
             isLoading={isLoadingSummary}
             delay={0.2}
           />
         </div>
 
+        {/* Revenue trajectory + Inventory mix */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2 glass-panel border-none shadow-xl overflow-hidden">
+            <ChartHeader
+              icon={TrendingUp}
+              title="Revenue Trajectory"
+              sub="Delivered revenue over recent months"
+            />
+            <CardContent className="p-0 h-[260px]">
+              {isLoadingPerf ? (
+                <ChartLoader />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={performance}
+                    margin={{ top: 16, right: 24, left: 8, bottom: 16 }}
+                  >
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(val) => `$${val / 1000}k`} width={44} />
+                    <Tooltip
+                      contentStyle={TOOLTIP_STYLE}
+                      itemStyle={{ color: "hsl(var(--foreground))" }}
+                      labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+                      formatter={(val: number) => [`$${val.toLocaleString()}`, "Revenue"]}
+                    />
+                    <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="glass-panel border-none shadow-xl flex flex-col">
+            <ChartHeader
+              icon={Layers}
+              title="Inventory Mix"
+              sub="Showroom stock by powertrain"
+            />
+            <CardContent className="px-6 pb-6 pt-0 flex-1">
+              <InventoryDonut data={inventory ?? []} />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Pipeline + Units delivered */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col">
+            <ChartHeader
+              icon={GitBranch}
+              title="Sales Pipeline"
+              sub="Opportunity value by stage"
+            />
+            <CardContent className="px-6 pb-6 pt-0 flex-1">
+              <PipelineFunnel stages={pipeline ?? []} />
+            </CardContent>
+          </Card>
+
+          <Card className="glass-panel border-none shadow-xl flex flex-col">
+            <ChartHeader
+              icon={BarChart3}
+              title="Units Delivered"
+              sub="Closed deals per month"
+              delta={unitsDelta}
+            />
+            <CardContent className="px-4 pb-4 pt-0 flex-1 min-h-[220px]">
+              <UnitsBar data={performance ?? []} />
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Decisions + Autonomous activity */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Human-in-the-loop decision queue */}
           <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col">
             <div className="p-6 pb-4 flex items-center justify-between">
               <div>
@@ -158,7 +272,7 @@ export default function Dashboard() {
                   </h3>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  AURA handled everything else. These are reserved for a human.
+                  Reserved for a human. AURA handled the rest.
                 </p>
               </div>
               {sortedGates.length > 0 && (
@@ -179,12 +293,12 @@ export default function Dashboard() {
                   </div>
                   <p className="font-medium">All clear</p>
                   <p className="text-sm text-muted-foreground max-w-xs mt-1">
-                    No decisions are waiting. AURA has the dealership under control.
+                    No decisions waiting. AURA has it under control.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {sortedGates.slice(0, 4).map((gate, i) => (
+                  {sortedGates.slice(0, 3).map((gate, i) => (
                     <DecisionRow key={gate.id} gate={gate} delay={i * 0.05} />
                   ))}
                 </div>
@@ -192,7 +306,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Autonomous activity (was: Live Orchestration) */}
           <Card className="glass-panel border-none shadow-xl flex flex-col">
             <div className="p-6 pb-4 border-b border-border/50">
               <div className="flex items-center gap-2">
@@ -202,79 +315,21 @@ export default function Dashboard() {
                 </h3>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Actions AURA took across the dealership on its own.
+                What AURA did on its own.
               </p>
             </div>
-            <CardContent className="flex-1 p-6 overflow-y-auto max-h-[420px]">
+            <CardContent className="flex-1 p-6 overflow-y-auto max-h-[360px]">
               {agentEvents.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground text-sm">
                   No activity yet.
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {agentEvents.slice(0, 8).map((event, i) => (
+                  {agentEvents.slice(0, 6).map((event, i) => (
                     <ActivityRow key={event.id} event={event} delay={i * 0.04} />
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Performance + Pipeline */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 glass-panel border-none shadow-xl overflow-hidden">
-            <div className="p-6 pb-2">
-              <h3 className="text-lg font-semibold tracking-wide">
-                Performance Trajectory
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Revenue delivered over recent months.
-              </p>
-            </div>
-            <CardContent className="p-0 h-[280px]">
-              {isLoadingPerf ? (
-                <div className="h-full flex items-center justify-center">
-                  <Loader2 className="animate-spin text-primary w-8 h-8" />
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={performance}
-                    margin={{ top: 20, right: 20, left: 20, bottom: 20 }}
-                  >
-                    <defs>
-                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(val) => `$${val / 1000}k`} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: "rgba(12,12,14,0.92)", backdropFilter: "blur(10px)", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.1)" }}
-                      itemStyle={{ color: "hsl(var(--foreground))" }}
-                      labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-                    />
-                    <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="glass-panel border-none shadow-xl flex flex-col">
-            <div className="p-6 pb-4">
-              <h3 className="text-lg font-semibold tracking-wide">
-                Pipeline snapshot
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Where opportunity value sits right now.
-              </p>
-            </div>
-            <CardContent className="px-6 pb-6 pt-0 flex-1">
-              <PipelineSnapshot stages={pipeline ?? []} />
             </CardContent>
           </Card>
         </div>
@@ -295,21 +350,104 @@ function briefingLine(
   if (!summary) return "Bringing the dealership online...";
   const decisions =
     pendingCount === 0
-      ? "nothing needs your sign-off"
-      : `${pendingCount} decision${pendingCount > 1 ? "s" : ""} need${pendingCount > 1 ? "" : "s"} your sign-off`;
-  return `AURA handled ${summary.agentTasksToday} tasks today across ${summary.activeDeals} active deals — ${decisions}.`;
+      ? "you're all clear"
+      : `${pendingCount} need${pendingCount > 1 ? "" : "s"} your sign-off`;
+  return `${summary.agentTasksToday} tasks handled autonomously — ${decisions}.`;
 }
 
-function Briefcase(props: any) {
+function ChartHeader({
+  icon: Icon,
+  title,
+  sub,
+  delta,
+}: {
+  icon: any;
+  title: string;
+  sub?: string;
+  delta?: number | null;
+}) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <rect width="20" height="14" x="2" y="7" rx="2" ry="2" />
-      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-    </svg>
+    <div className="p-6 pb-3 flex items-start justify-between">
+      <div>
+        <div className="flex items-center gap-2">
+          <Icon className="w-4 h-4 text-primary" />
+          <h3 className="text-lg font-semibold tracking-wide">{title}</h3>
+        </div>
+        {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+      </div>
+      {delta != null && <TrendBadge delta={delta} />}
+    </div>
   );
 }
 
-function KPICard({ title, value, sub, icon: Icon, isLoading, delay, accent }: any) {
+function ChartLoader() {
+  return (
+    <div className="h-full flex items-center justify-center">
+      <Loader2 className="animate-spin text-primary w-8 h-8" />
+    </div>
+  );
+}
+
+function TrendBadge({ delta, accent }: { delta: number; accent?: boolean }) {
+  const up = delta >= 0;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-[11px] font-semibold rounded-full px-1.5 py-0.5 tabular-nums shrink-0 ${
+        accent
+          ? "bg-white/20 text-white"
+          : up
+            ? "bg-emerald-500/15 text-emerald-400"
+            : "bg-red-500/15 text-red-400"
+      }`}
+    >
+      {up ? (
+        <ArrowUpRight className="w-3 h-3" />
+      ) : (
+        <ArrowDownRight className="w-3 h-3" />
+      )}
+      {Math.abs(delta).toFixed(0)}%
+    </span>
+  );
+}
+
+function Sparkline({ data, accent }: { data: number[]; accent?: boolean }) {
+  const points = data.map((v, i) => ({ i, v }));
+  const stroke = accent ? "rgba(255,255,255,0.9)" : "hsl(var(--primary))";
+  const gradId = accent ? "sparkAccent" : "sparkPrimary";
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={points} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity={accent ? 0.4 : 0.3} />
+            <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <Area
+          type="monotone"
+          dataKey="v"
+          stroke={stroke}
+          strokeWidth={2}
+          fill={`url(#${gradId})`}
+          dot={false}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+function KPICard({
+  title,
+  value,
+  sub,
+  icon: Icon,
+  isLoading,
+  delay,
+  accent,
+  delta,
+  trend,
+}: any) {
+  const hasTrend = Array.isArray(trend) && trend.length > 1;
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -322,30 +460,39 @@ function KPICard({ title, value, sub, icon: Icon, isLoading, delay, accent }: an
         }`}
       >
         <CardContent className="p-5 relative">
-          <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity transform group-hover:scale-110 duration-500">
-            <Icon className="w-16 h-16" />
+          <div className="flex items-start justify-between">
+            <p
+              className={`text-[11px] font-medium uppercase tracking-widest ${
+                accent ? "text-white/80" : "text-muted-foreground"
+              }`}
+            >
+              {title}
+            </p>
+            <Icon
+              className={`w-4 h-4 ${accent ? "text-white/60" : "text-muted-foreground/50"}`}
+            />
           </div>
-          <p
-            className={`text-xs font-medium mb-3 uppercase tracking-widest ${
-              accent ? "text-white/80" : "text-muted-foreground"
-            }`}
-          >
-            {title}
-          </p>
           {isLoading ? (
-            <div className="h-8 w-16 bg-white/[0.05] rounded animate-pulse" />
+            <div className="h-8 w-16 bg-white/[0.05] rounded animate-pulse mt-3" />
           ) : (
             <>
-              <h2 className="text-3xl font-bold tracking-tight leading-none">
-                {value}
-              </h2>
-              <p
-                className={`text-xs mt-2 ${
-                  accent ? "text-white/70" : "text-muted-foreground"
-                }`}
-              >
-                {sub}
-              </p>
+              <div className="flex items-end gap-2 mt-3">
+                <h2 className="text-3xl font-bold tracking-tight leading-none">
+                  {value}
+                </h2>
+                {delta != null && <TrendBadge delta={delta} accent={accent} />}
+              </div>
+              {hasTrend ? (
+                <div className="h-8 mt-3 -mb-1">
+                  <Sparkline data={trend} accent={accent} />
+                </div>
+              ) : (
+                <p
+                  className={`text-xs mt-2 ${accent ? "text-white/70" : "text-muted-foreground"}`}
+                >
+                  {sub}
+                </p>
+              )}
             </>
           )}
         </CardContent>
@@ -386,10 +533,11 @@ function DecisionRow({ gate, delay }: { gate: Gate; delay: number }) {
             <p className="font-semibold text-sm leading-snug truncate mt-0.5">
               {gate.title}
             </p>
-            <p className="text-xs text-muted-foreground truncate mt-0.5">
-              {gate.customerName ? `${gate.customerName} · ` : ""}
-              {gate.summary}
-            </p>
+            {gate.customerName && (
+              <p className="text-xs text-muted-foreground truncate mt-0.5">
+                {gate.customerName}
+              </p>
+            )}
           </div>
           {gate.amount != null && (
             <div className="text-right shrink-0">
@@ -422,11 +570,6 @@ function ActivityRow({ event, delay }: { event: TimelineEvent; delay: number }) 
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium leading-snug">{event.title}</p>
-        {event.detail && (
-          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-            {event.detail}
-          </p>
-        )}
         <div className="flex items-center gap-1.5 mt-1 text-[10px] uppercase tracking-widest text-muted-foreground">
           <Clock className="w-3 h-3" />
           {formatDistanceToNow(new Date(event.createdAt), { addSuffix: true })}
@@ -436,7 +579,106 @@ function ActivityRow({ event, delay }: { event: TimelineEvent; delay: number }) 
   );
 }
 
-function PipelineSnapshot({ stages }: { stages: PipelineStage[] }) {
+function InventoryDonut({ data }: { data: InventoryBreakdownItem[] }) {
+  if (data.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground text-sm">
+        No inventory data yet.
+      </div>
+    );
+  }
+  const total = data.reduce((s, d) => s + d.count, 0);
+  return (
+    <div className="flex flex-col">
+      <div className="relative w-full h-[176px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="count"
+              nameKey="powertrain"
+              innerRadius={58}
+              outerRadius={82}
+              paddingAngle={2}
+              stroke="none"
+            >
+              {data.map((d, i) => (
+                <Cell
+                  key={i}
+                  fill={POWERTRAIN_COLORS[d.powertrain] ?? POWERTRAIN_FALLBACK}
+                />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={TOOLTIP_STYLE}
+              itemStyle={{ color: "hsl(var(--foreground))" }}
+              labelStyle={{ display: "none" }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="text-3xl font-bold leading-none tabular-nums">
+            {total}
+          </span>
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
+            In stock
+          </span>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 mt-5">
+        {data.map((d) => (
+          <div
+            key={d.powertrain}
+            className="flex items-center justify-between text-sm"
+          >
+            <span className="flex items-center gap-2 min-w-0">
+              <span
+                className="w-2.5 h-2.5 rounded-full shrink-0"
+                style={{
+                  background:
+                    POWERTRAIN_COLORS[d.powertrain] ?? POWERTRAIN_FALLBACK,
+                }}
+              />
+              <span className="text-muted-foreground truncate">
+                {d.powertrain}
+              </span>
+            </span>
+            <span className="font-semibold tabular-nums">{d.count}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function UnitsBar({ data }: { data: { month: string; units: number }[] }) {
+  if (data.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+        No sales data yet.
+      </div>
+    );
+  }
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 12, right: 8, left: -12, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} dy={6} />
+        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} allowDecimals={false} width={28} />
+        <Tooltip
+          cursor={{ fill: "hsl(var(--muted) / 0.18)" }}
+          contentStyle={TOOLTIP_STYLE}
+          itemStyle={{ color: "hsl(var(--foreground))" }}
+          labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+          formatter={(val: number) => [val, "Units"]}
+        />
+        <Bar dataKey="units" radius={[6, 6, 0, 0]} fill="hsl(var(--primary))" maxBarSize={40} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function PipelineFunnel({ stages }: { stages: PipelineStage[] }) {
   if (stages.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground text-sm">
@@ -445,31 +687,42 @@ function PipelineSnapshot({ stages }: { stages: PipelineStage[] }) {
     );
   }
   const max = Math.max(...stages.map((s) => s.value), 1);
+  const totalValue = stages.reduce((s, x) => s + x.value, 0);
   return (
-    <div className="space-y-4">
-      {stages.map((stage, i) => (
-        <motion.div
-          key={stage.phase}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: i * 0.06 }}
-        >
-          <div className="flex items-baseline justify-between mb-1.5">
-            <span className="text-sm font-medium">{stage.label}</span>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {stage.count} · ${(stage.value / 1000).toFixed(0)}k
-            </span>
-          </div>
-          <div className="h-2 rounded-full bg-white/[0.05] overflow-hidden">
-            <motion.div
-              className="h-full rounded-full bg-primary"
-              initial={{ width: 0 }}
-              animate={{ width: `${(stage.value / max) * 100}%` }}
-              transition={{ delay: i * 0.06 + 0.1, duration: 0.6 }}
-            />
-          </div>
-        </motion.div>
-      ))}
+    <div className="flex flex-col h-full">
+      <div className="flex items-baseline justify-between mb-4">
+        <span className="text-xs uppercase tracking-widest text-muted-foreground">
+          Total open value
+        </span>
+        <span className="text-2xl font-bold tabular-nums">
+          ${(totalValue / 1000).toFixed(0)}k
+        </span>
+      </div>
+      <div className="space-y-3.5 flex-1">
+        {stages.map((stage, i) => (
+          <motion.div
+            key={stage.phase}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: i * 0.06 }}
+          >
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="text-sm font-medium">{stage.label}</span>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {stage.count} · ${(stage.value / 1000).toFixed(0)}k
+              </span>
+            </div>
+            <div className="h-2.5 rounded-full bg-white/[0.05] overflow-hidden">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-primary/70 to-primary"
+                initial={{ width: 0 }}
+                animate={{ width: `${(stage.value / max) * 100}%` }}
+                transition={{ delay: i * 0.06 + 0.1, duration: 0.6 }}
+              />
+            </div>
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 }
