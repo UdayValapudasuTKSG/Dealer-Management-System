@@ -18,6 +18,7 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -66,30 +67,41 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        "flex h-full flex-col bg-sidebar/90 backdrop-blur-2xl border-r border-sidebar-border transition-[width] duration-300 ease-out",
+        "relative z-20 flex h-full flex-col bg-sidebar text-sidebar-foreground backdrop-blur-2xl border-r border-sidebar-border transition-[width] duration-300 ease-out",
+        "shadow-[4px_0_32px_-16px_rgba(0,0,0,0.45)]",
         collapsed ? "w-[76px]" : "w-64",
       )}
     >
+      {/* Ambient red wash at the top for depth */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-primary/[0.07] to-transparent" />
+
       {/* Brand -> landing */}
-      <div className="flex h-16 shrink-0 items-center px-4 border-b border-sidebar-border">
+      <div className="relative flex h-16 shrink-0 items-center px-4 border-b border-sidebar-border">
         <Link
           href="/"
           className={cn(
-            "flex items-center gap-2 group",
+            "flex items-center gap-3 group",
             collapsed && "justify-center w-full",
           )}
           title="Back to landing"
         >
-          <Sparkles className="h-6 w-6 text-primary shrink-0 transition-transform group-hover:scale-110" />
+          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-primary/25 transition-transform group-hover:scale-105">
+            <Sparkles className="h-5 w-5 text-primary" />
+          </span>
           {!collapsed && (
-            <span className="text-lg font-bold tracking-tight">
-              AURA<span className="text-primary">.OS</span>
-            </span>
+            <div className="flex flex-col leading-none">
+              <span className="text-lg font-bold tracking-tight">
+                AURA<span className="text-primary">.OS</span>
+              </span>
+              <span className="mt-1 text-[9px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
+                Dealership OS
+              </span>
+            </div>
           )}
         </Link>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden pt-4 pb-4">
+      <div className="relative flex flex-1 flex-col overflow-y-auto overflow-x-hidden pt-4 pb-4">
         <nav className="flex-1 space-y-6 px-3">
           {navGroups.map((group) => (
             <div key={group.label} className="space-y-1">
@@ -109,19 +121,26 @@ export function Sidebar() {
                     href={item.href}
                     title={collapsed ? item.name : undefined}
                     className={cn(
+                      "group relative flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-colors",
                       isActive
-                        ? "bg-primary/15 text-primary"
-                        : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
-                      "group flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-colors",
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground",
                       collapsed && "justify-center",
                     )}
                   >
+                    {isActive && (
+                      <motion.span
+                        layoutId="nav-active-indicator"
+                        transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                        className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary shadow-[0_0_12px_hsl(var(--primary))]"
+                      />
+                    )}
                     <item.icon
                       className={cn(
+                        "h-5 w-5 shrink-0 transition-colors",
                         isActive
                           ? "text-primary"
                           : "text-muted-foreground group-hover:text-foreground",
-                        "h-5 w-5 shrink-0 transition-colors",
                         !collapsed && "mr-3",
                       )}
                       aria-hidden="true"
@@ -134,12 +153,12 @@ export function Sidebar() {
           ))}
         </nav>
 
-        <div className="px-3 pt-3 space-y-1">
+        <div className="mt-4 mx-3 pt-3 space-y-1 border-t border-sidebar-border">
           <button
             onClick={toggle}
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             className={cn(
-              "flex items-center rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-white/[0.04] hover:text-foreground transition-colors w-full",
+              "flex items-center rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground transition-colors w-full",
               collapsed && "justify-center",
             )}
           >
@@ -165,7 +184,7 @@ export function Sidebar() {
             onClick={() => setCollapsed((c) => !c)}
             title={collapsed ? "Expand" : "Collapse"}
             className={cn(
-              "flex items-center rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-white/[0.04] hover:text-foreground transition-colors w-full",
+              "flex items-center rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground transition-colors w-full",
               collapsed && "justify-center",
             )}
           >

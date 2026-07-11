@@ -1,4 +1,2 @@
-- [Orval query-hook options](orval-query-hooks.md) — generated useGet* hooks' `query` option is a full UseQueryOptions (requires queryKey); passing `{query:{enabled}}` fails TS2741.
-- [Server output Zod validation](server-output-validation.md) — list endpoints validate every row against Zod; one bad enum value in the DB 500s the whole list, not just the row.
-- [CopilotKit runtime](copilotkit-runtime.md) — streaming needs no-transform + X-Accel-Buffering:no or proxy cuts it; req.url=originalUrl; skip body-parse; opentelemetry peer split.
-- [Verify UI via computed styles](verify-ui-computed-styles.md) — screenshot tool can serve a stale image; confirm "not showing" visual changes with getComputedStyle in browser console, not screenshots.
+- [Tailwind v4 theme tokens](tailwind-v4-theme-tokens.md) — `bg-*/text-*/border-*` utilities only work if the matching `--color-*` token is declared in `@theme inline`; unregistered = silent no-op (transparent).
+- [Verify UI computed styles](verify-ui-computed-styles.md) — the screenshot tool's persistent browser can serve stale images; verify theme/DOM via getComputedStyle or a workflow restart, not screenshots alone.
