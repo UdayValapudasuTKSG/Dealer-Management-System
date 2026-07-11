@@ -15,8 +15,11 @@ import {
   Route as RouteIcon,
   PanelLeftClose,
   PanelLeftOpen,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/hooks/use-theme";
 
 type NavItem = { name: string; href: string; icon: typeof LayoutDashboard };
 
@@ -58,6 +61,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
 export function Sidebar() {
   const [location] = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const { theme, toggle } = useTheme();
 
   return (
     <div
@@ -130,7 +134,33 @@ export function Sidebar() {
           ))}
         </nav>
 
-        <div className="px-3 pt-3">
+        <div className="px-3 pt-3 space-y-1">
+          <button
+            onClick={toggle}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className={cn(
+              "flex items-center rounded-xl px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-white/[0.04] hover:text-foreground transition-colors w-full",
+              collapsed && "justify-center",
+            )}
+          >
+            {theme === "dark" ? (
+              collapsed ? (
+                <Sun className="h-5 w-5 shrink-0" />
+              ) : (
+                <>
+                  <Sun className="h-5 w-5 shrink-0 mr-3" />
+                  Light mode
+                </>
+              )
+            ) : collapsed ? (
+              <Moon className="h-5 w-5 shrink-0" />
+            ) : (
+              <>
+                <Moon className="h-5 w-5 shrink-0 mr-3" />
+                Dark mode
+              </>
+            )}
+          </button>
           <button
             onClick={() => setCollapsed((c) => !c)}
             title={collapsed ? "Expand" : "Collapse"}

@@ -43,6 +43,7 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 Cinematic landing/welcome page (`/`, full-bleed showroom video hero, Aston-Martin/BMW-inspired, rendered OUTSIDE the app Shell/sidebar — "Enter Command Center" CTA leads into the app), Command Center dashboard (`/command-center`, KPIs, live orchestration feed, sales-performance chart), Inventory showroom, Journey (agent-orchestration centerpiece), Leads, Deals, Appraisals, Finance, Service, Customers, and a real streaming AI Concierge chat. Blood-red/black, Netflix-inspired dark premium glassmorphism, luxury automotive UI with cinematic motion and showroom videos.
 
 - Theme is DARK by default (blood-red on near-black): tokens live in `artifacts/aura/src/index.css` (bg ~5% lightness, primary `0 82% 44%`; `.glass`/`.glass-panel` dark surfaces, `.glow-red`/`.text-glow` utils; CopilotKit window themed + rounded). Convert page surfaces with the `bg-white/[0.0x]` + `border-white/10` glass convention, NOT hardcoded `bg-white`/`bg-black/*`.
+- LIGHT/DARK toggle: `src/hooks/use-theme.ts` (`useTheme`/`initTheme`/`applyTheme`; localStorage key `aura-theme`, default dark) toggles `.light`/`.dark` on `<html>`; `initTheme()` runs in `main.tsx` before render. Sun/Moon button lives at the sidebar bottom. Light tokens are `:root.light {…}` in `index.css` (dark `:root` stays default), plus attribute-selector flips (`:root.light [class~="bg-white/…"]` / `border-white/…`) that convert the dark glass overlays to faint dark overlays on white, and a light CopilotKit theme. When adding new pages, use `text-foreground`/`text-muted-foreground` (NOT `text-white`) so they invert in light mode.
 - Sidebar (`components/layout/sidebar.tsx`): logo is a `<Link href="/">` back to the landing page; nav is grouped (Intelligence / Sales / Operations / Clients / Compliance) and collapsible (`w-64` ↔ `w-[76px]`); Finance is labelled "F&I".
 - Concierge chat is a right-docked in-flow `<CopilotChat>` panel in `components/layout/shell.tsx` (rounded left edge, framer-motion width animation) that PUSHES page content; a floating "Concierge" launcher shows when closed.
 - Inventory (`pages/inventory.tsx`): clicking a vehicle opens a `VehicleDetail` dialog with a Photo/360° toggle (360 uses a turntable video) plus a full spec grid.
@@ -57,7 +58,7 @@ Cinematic landing/welcome page (`/`, full-bleed showroom video hero, Aston-Marti
 
 ## User preferences
 
-- DARK mode, blood-red + black, premium/futuristic (Netflix-inspired). (This reverses the earlier "light mode only" preference — the user explicitly asked for dark.)
+- DARK mode is the DEFAULT (blood-red + black, premium/futuristic, Netflix-inspired), but a LIGHT/white mode toggle is available (Sun/Moon at the sidebar bottom; preference persists in localStorage).
 - Strongly car/automotive-themed and aesthetic; use real images.
 - No emojis in the UI.
 - Keep all features end-to-end — no dead-end clicks.

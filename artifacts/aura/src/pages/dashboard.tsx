@@ -88,11 +88,11 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-white/70 mb-3">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground mb-3">
               <Bot className="w-4 h-4" />
               AURA Concierge · Command Center
             </div>
-            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-white max-w-3xl leading-tight">
+            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground max-w-3xl leading-tight">
               {greeting()}. {briefingLine(summary, sortedGates.length)}
             </h1>
           </motion.div>

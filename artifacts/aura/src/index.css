@@ -122,6 +122,39 @@
   --sidebar-ring: 0 82% 48%;
 }
 
+/* Light mode — clean near-white with the same blood-red accent */
+:root.light {
+  --background: 0 0% 98%;
+  --foreground: 0 0% 9%;
+  --card: 0 0% 100% / 0.85;
+  --card-foreground: 0 0% 9%;
+  --card-border: 0 0% 0% / 0.08;
+  --popover: 0 0% 100% / 0.98;
+  --popover-foreground: 0 0% 9%;
+  --popover-border: 0 0% 0% / 0.1;
+  --primary: 0 82% 46%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 95%;
+  --secondary-foreground: 0 0% 12%;
+  --muted: 0 0% 94%;
+  --muted-foreground: 0 0% 38%;
+  --accent: 0 82% 46% / 0.1;
+  --accent-foreground: 0 74% 42%;
+  --destructive: 0 74% 46%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 0% / 0.1;
+  --input: 0 0% 0% / 0.12;
+  --ring: 0 82% 48%;
+  --sidebar: 0 0% 100% / 0.92;
+  --sidebar-foreground: 0 0% 20%;
+  --sidebar-border: 0 0% 0% / 0.08;
+  --sidebar-primary: 0 82% 46%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 82% 46% / 0.1;
+  --sidebar-accent-foreground: 0 74% 42%;
+  --sidebar-ring: 0 82% 48%;
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -172,4 +205,75 @@
   border-radius: 1.25rem !important;
   overflow: hidden;
   box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(220, 20, 20, 0.15);
+}
+
+/* ============================================================
+   LIGHT MODE OVERRIDES
+   Pages were built on dark glass (bg-white/[…] + border-white/…).
+   In light mode we flip those faint white overlays to faint dark
+   overlays so surfaces and hairlines stay legible on white.
+   ============================================================ */
+:root.light body {
+  background-color: hsl(0 0% 97%);
+  background-image:
+    radial-gradient(circle at 12% 8%, rgba(200, 16, 16, 0.05) 0%, transparent 42%),
+    radial-gradient(circle at 88% 92%, rgba(200, 16, 16, 0.04) 0%, transparent 45%);
+}
+
+:root.light .glass {
+  background-color: rgb(255 255 255 / 0.7);
+  border-color: rgb(0 0 0 / 0.08);
+  box-shadow: 0 8px 32px rgba(15, 15, 20, 0.08);
+}
+:root.light .glass-panel {
+  background-color: rgb(255 255 255 / 0.85);
+  border-color: rgb(0 0 0 / 0.08);
+  box-shadow: 0 4px 24px rgba(15, 15, 20, 0.08);
+}
+
+:root.light .text-glow {
+  text-shadow: none;
+}
+:root.light .glow-red {
+  box-shadow: 0 0 0 1px rgba(200, 16, 16, 0.2), 0 12px 40px -12px rgba(200, 16, 16, 0.35);
+}
+
+/* Faint white surface overlays -> faint dark surface overlays */
+:root.light [class~="bg-white/[0.03]"] { background-color: rgb(0 0 0 / 0.03); }
+:root.light [class~="bg-white/[0.04]"] { background-color: rgb(0 0 0 / 0.035); }
+:root.light [class~="bg-white/[0.05]"] { background-color: rgb(0 0 0 / 0.045); }
+:root.light [class~="bg-white/[0.06]"] { background-color: rgb(0 0 0 / 0.05); }
+:root.light [class~="bg-white/[0.07]"] { background-color: rgb(0 0 0 / 0.055); }
+:root.light [class~="bg-white/[0.1]"] { background-color: rgb(0 0 0 / 0.06); }
+:root.light [class~="bg-white/[0.12]"] { background-color: rgb(0 0 0 / 0.07); }
+:root.light [class~="bg-white/5"] { background-color: rgb(0 0 0 / 0.045); }
+:root.light [class~="bg-white/10"] { background-color: rgb(0 0 0 / 0.06); }
+:root.light [class~="bg-white/15"] { background-color: rgb(0 0 0 / 0.08); }
+:root.light [class~="bg-white/30"] { background-color: rgb(0 0 0 / 0.12); }
+
+:root.light [class~="hover:bg-white/[0.04]"]:hover { background-color: rgb(0 0 0 / 0.04); }
+:root.light [class~="hover:bg-white/[0.05]"]:hover { background-color: rgb(0 0 0 / 0.05); }
+:root.light [class~="hover:bg-white/[0.07]"]:hover { background-color: rgb(0 0 0 / 0.06); }
+:root.light [class~="hover:bg-white/[0.1]"]:hover { background-color: rgb(0 0 0 / 0.07); }
+:root.light [class~="hover:bg-white/[0.12]"]:hover { background-color: rgb(0 0 0 / 0.08); }
+
+/* Hairline borders */
+:root.light [class~="border-white/10"] { border-color: rgb(0 0 0 / 0.1); }
+:root.light [class~="border-white/15"] { border-color: rgb(0 0 0 / 0.12); }
+:root.light [class~="border-white/30"] { border-color: rgb(0 0 0 / 0.18); }
+:root.light [class~="border-white/60"] { border-color: rgb(0 0 0 / 0.3); }
+
+/* CopilotKit — light theme */
+:root.light .copilotKitPopup,
+:root.light .copilotKitWindow {
+  --copilot-kit-background-color: rgba(255, 255, 255, 0.97);
+  --copilot-kit-secondary-color: rgba(245, 245, 247, 0.95);
+  --copilot-kit-secondary-contrast-color: hsl(0 0% 12%);
+  --copilot-kit-separator-color: rgba(0, 0, 0, 0.08);
+  --copilot-kit-muted-color: hsl(0 0% 45%);
+}
+:root.light .copilotKitWindow {
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(200, 16, 16, 0.1);
 }

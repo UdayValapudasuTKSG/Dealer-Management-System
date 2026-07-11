@@ -83,18 +83,18 @@ export default function Service() {
             >
               <Card className="glass-panel border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl overflow-hidden group relative">
                 <div className={`absolute top-0 bottom-0 left-0 w-1.5 ${order.status === 'completed' ? 'bg-primary' : 'bg-white/10'}`} />
-                <CardContent className="p-6 md:p-8 flex flex-col md:flex-row gap-8 justify-between pl-8 md:pl-10">
-                  <div className="flex gap-6 items-start w-full md:w-2/5">
-                    <div className="w-16 h-16 rounded-2xl bg-white/[0.05] flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors duration-500">
-                      <Wrench className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors duration-500" />
+                <CardContent className="p-6 md:p-7 flex flex-col md:flex-row gap-6 justify-between pl-7 md:pl-8">
+                  <div className="flex gap-4 items-start w-full md:w-2/5">
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center shrink-0 group-hover:border-primary/40 group-hover:bg-primary/10 transition-colors duration-300">
+                      <Wrench className="w-[18px] h-[18px] text-muted-foreground group-hover:text-primary transition-colors duration-300" />
                     </div>
                     <div>
-                      <div className="text-sm font-semibold tracking-widest text-primary mb-1 uppercase flex items-center gap-2">
+                      <div className="text-xs font-semibold tracking-widest text-primary mb-1 uppercase flex items-center gap-2">
                         RO #{order.id.toString().padStart(5, '0')}
                         <span className="w-1 h-1 rounded-full bg-primary" />
                         <span className="text-muted-foreground">{order.type}</span>
                       </div>
-                      <h3 className="font-bold text-2xl leading-tight mb-2">{order.vehicleInfo}</h3>
+                      <h3 className="font-bold text-xl leading-tight mb-2">{order.vehicleInfo}</h3>
                       <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                         <User className="w-4 h-4" />
                         {order.customerId ? (
@@ -133,7 +133,7 @@ export default function Service() {
                       <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase flex items-center justify-start md:justify-end gap-1.5 mb-2">
                         <DollarSign className="w-3.5 h-3.5" /> Est. Total
                       </div>
-                      <div className="font-light text-3xl tracking-tight">${order.estimatedCost.toLocaleString()}</div>
+                      <div className="font-light text-2xl tracking-tight">${order.estimatedCost.toLocaleString()}</div>
                     </div>
                   </div>
                 </CardContent>
