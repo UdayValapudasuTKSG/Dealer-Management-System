@@ -844,6 +844,31 @@ export interface InventoryBreakdownItem {
   count: number;
 }
 
+export type PipelineSuggestionActionPriority = typeof PipelineSuggestionActionPriority[keyof typeof PipelineSuggestionActionPriority];
+
+
+export const PipelineSuggestionActionPriority = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
+} as const;
+
+export interface PipelineSuggestionAction {
+  title: string;
+  detail: string;
+  priority: PipelineSuggestionActionPriority;
+  /** @nullable */
+  leadName?: string | null;
+}
+
+export interface PipelineSuggestions {
+  phase: string;
+  label: string;
+  count: number;
+  headline: string;
+  actions: PipelineSuggestionAction[];
+}
+
 export type TimelineEventDomain = typeof TimelineEventDomain[keyof typeof TimelineEventDomain];
 
 
@@ -1043,6 +1068,22 @@ status?: string;
 export type ListActivityParams = {
 limit?: number;
 };
+
+export type GetPipelineSuggestionsParams = {
+phase: GetPipelineSuggestionsPhase;
+};
+
+export type GetPipelineSuggestionsPhase = typeof GetPipelineSuggestionsPhase[keyof typeof GetPipelineSuggestionsPhase];
+
+
+export const GetPipelineSuggestionsPhase = {
+  aware: 'aware',
+  consider: 'consider',
+  engage: 'engage',
+  negotiate: 'negotiate',
+  won: 'won',
+  lost: 'lost',
+} as const;
 
 export type ListTimelineParams = {
 customerId?: number;

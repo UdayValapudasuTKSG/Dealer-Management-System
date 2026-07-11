@@ -15,6 +15,7 @@ import gatesRouter from "./gates";
 import anthropicRouter from "./anthropic";
 import copilotkitRouter from "./copilotkit";
 import graRouter from "./gra";
+import pipelineRouter from "./pipeline";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(gatesRouter);
 router.use(anthropicRouter);
 router.use(copilotkitRouter);
 router.use(graRouter);
+router.use(pipelineRouter);
 
 export default router;

@@ -96,7 +96,7 @@ export default function Landing() {
             className="mt-12 flex flex-wrap items-center gap-4"
           >
             <Link
-              href="/command-center"
+              href="/pipeline"
               className="group inline-flex items-center gap-2 h-14 px-8 rounded-full bg-primary text-white text-base font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all duration-300"
             >
               Enter Command Center

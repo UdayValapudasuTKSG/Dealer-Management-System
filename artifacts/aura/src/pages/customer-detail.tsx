@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Timeline } from "@/components/timeline";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page } from "@/components/layout/page";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 import {
   Loader2,
   ArrowLeft,
@@ -61,6 +62,29 @@ export default function CustomerDetail() {
   } = data;
 
   const money = (n: number) => `$${n.toLocaleString("en-US")}`;
+
+  const JOURNEY_PHASES = ["aware", "consider", "engage", "negotiate", "won"] as const;
+  const JOURNEY_LABEL: Record<string, string> = {
+    aware: "New Lead",
+    consider: "Working",
+    engage: "Appointment",
+    negotiate: "Desking",
+    won: "Delivered",
+  };
+  const leadPhaseIndex = leads.reduce(
+    (max, l) => Math.max(max, JOURNEY_PHASES.indexOf(l.phase as never)),
+    -1,
+  );
+  const dealStageIndex = deals.reduce((max, d) => {
+    const idx =
+      d.stage === "delivered"
+        ? 4
+        : ["desking", "negotiation", "finance", "committed"].includes(d.stage)
+          ? 3
+          : -1;
+    return Math.max(max, idx);
+  }, -1);
+  const currentIndex = Math.max(leadPhaseIndex, dealStageIndex);
 
   return (
     <Page className="space-y-8">
@@ -127,6 +151,75 @@ export default function CustomerDetail() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Journey stage — where this client sits in the pipeline */}
+      {currentIndex >= 0 && (
+        <Card className="glass-panel border-none shadow-lg overflow-hidden">
+          <CardContent className="p-6 md:p-8">
+            <div className="flex items-baseline justify-between mb-6">
+              <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                Journey Stage
+              </h2>
+              <span className="text-sm font-semibold text-primary">
+                {JOURNEY_LABEL[JOURNEY_PHASES[currentIndex]]}
+              </span>
+            </div>
+            <div className="relative flex items-start justify-between gap-2">
+              <div className="pointer-events-none absolute left-0 right-0 top-4 mx-6 h-[2px] bg-white/10 rounded-full" />
+              <div
+                className="pointer-events-none absolute left-0 top-4 mx-6 h-[2px] bg-primary rounded-full shadow-[0_0_12px_hsl(var(--primary))] transition-all duration-700"
+                style={{
+                  width:
+                    JOURNEY_PHASES.length > 1
+                      ? `calc(${(currentIndex / (JOURNEY_PHASES.length - 1)) * 100}% - ${
+                          (currentIndex / (JOURNEY_PHASES.length - 1)) * 3
+                        }rem)`
+                      : "0%",
+                }}
+              />
+              {JOURNEY_PHASES.map((phase, i) => {
+                const isCurrent = i === currentIndex;
+                const isPast = i < currentIndex;
+                return (
+                  <div
+                    key={phase}
+                    className="relative z-10 flex flex-col items-center gap-2.5 flex-1 min-w-0"
+                  >
+                    <span
+                      className={cn(
+                        "relative flex h-8 w-8 items-center justify-center rounded-full transition-colors",
+                        isCurrent
+                          ? "text-white"
+                          : isPast
+                            ? "bg-primary/25 text-primary"
+                            : "bg-foreground/[0.06] text-muted-foreground",
+                      )}
+                    >
+                      {isCurrent && (
+                        <motion.span
+                          layoutId="customer-journey-node"
+                          className="absolute inset-0 rounded-full bg-primary shadow-lg shadow-primary/40"
+                        />
+                      )}
+                      <span className="relative z-10 h-1.5 w-1.5 rounded-full bg-current" />
+                    </span>
+                    <span
+                      className={cn(
+                        "text-[10px] md:text-[11px] font-semibold uppercase tracking-widest text-center transition-colors",
+                        isCurrent
+                          ? "text-foreground"
+                          : "text-muted-foreground/70",
+                      )}
+                    >
+                      {JOURNEY_LABEL[phase]}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Open gates for this client — actionable in-context */}
       {openGates.length > 0 && (

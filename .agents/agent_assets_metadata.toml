@@ -48,3 +48,33 @@ id = "Z12HXyAgiXicC-xzqEDgU"
 uri = "file://attached_assets/generated_images/professional_automotive_dealership_photo_f974.png"
 type = "image"
 title = "generated_image"
+
+[[generated]]
+id = "IIETnSUi2dd87qdomGwLo"
+uri = "file://artifacts/aura/public/nav/intelligence.png"
+type = "image"
+title = "intelligence orb icon"
+
+[[generated]]
+id = "YoFMYY2oKXRNWStqWxQUZ"
+uri = "file://artifacts/aura/public/nav/sales.png"
+type = "image"
+title = "sales growth icon"
+
+[[generated]]
+id = "f7--PxM2Bcyq0LZkFeGTK"
+uri = "file://artifacts/aura/public/nav/operations.png"
+type = "image"
+title = "operations gear icon"
+
+[[generated]]
+id = "vtgwbvovD1CRNyVQhw5vl"
+uri = "file://artifacts/aura/public/nav/clients.png"
+type = "image"
+title = "clients crest icon"
+
+[[generated]]
+id = "ZYSi-egZU_TKqhG00ZMcl"
+uri = "file://artifacts/aura/public/nav/compliance.png"
+type = "image"
+title = "compliance shield icon"

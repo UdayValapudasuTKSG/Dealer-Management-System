@@ -949,6 +949,27 @@ export const GetInventoryBreakdownResponse = zod.array(GetInventoryBreakdownResp
 
 
 /**
+ * @summary AI-generated next actions for a pipeline stage
+ */
+export const GetPipelineSuggestionsQueryParams = zod.object({
+  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost'])
+})
+
+export const GetPipelineSuggestionsResponse = zod.object({
+  "phase": zod.string(),
+  "label": zod.string(),
+  "count": zod.number(),
+  "headline": zod.string(),
+  "actions": zod.array(zod.object({
+  "title": zod.string(),
+  "detail": zod.string(),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "leadName": zod.string().nullish()
+}))
+})
+
+
+/**
  * @summary Unified 360 view for a customer across every domain
  */
 export const GetCustomerOverviewParams = zod.object({

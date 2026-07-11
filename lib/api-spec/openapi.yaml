@@ -851,6 +851,32 @@ paths:
                 items:
                   $ref: "#/components/schemas/InventoryBreakdownItem"
 
+  /pipeline/suggestions:
+    get:
+      operationId: getPipelineSuggestions
+      tags: [pipeline]
+      summary: AI-generated next actions for a pipeline stage
+      parameters:
+        - name: phase
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [aware, consider, engage, negotiate, won, lost]
+      responses:
+        "200":
+          description: Agentic suggestions for the requested stage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PipelineSuggestions"
+        "502":
+          description: The suggestion service is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /customers/{id}/overview:
     get:
       operationId: getCustomerOverview
@@ -1474,6 +1500,27 @@ components:
       properties:
         powertrain: { type: string }
         count: { type: integer }
+
+    PipelineSuggestionAction:
+      type: object
+      required: [title, detail, priority]
+      properties:
+        title: { type: string }
+        detail: { type: string }
+        priority: { type: string, enum: [high, medium, low] }
+        leadName: { type: ["string", "null"] }
+    PipelineSuggestions:
+      type: object
+      required: [phase, label, count, headline, actions]
+      properties:
+        phase: { type: string }
+        label: { type: string }
+        count: { type: integer }
+        headline: { type: string }
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PipelineSuggestionAction"
 
     TimelineEvent:
       type: object

@@ -46,6 +46,7 @@ import type {
   FinanceApplicationUpdate,
   Gate,
   GateResolution,
+  GetPipelineSuggestionsParams,
   GraExtractRequest,
   GraFilingDraft,
   GraFilingSubmission,
@@ -62,6 +63,7 @@ import type {
   ListTimelineParams,
   ListVehiclesParams,
   PipelineStage,
+  PipelineSuggestions,
   SalesPoint,
   ServiceOrder,
   ServiceOrderInput,
@@ -3084,6 +3086,90 @@ export function useGetInventoryBreakdown<TData = Awaited<ReturnType<typeof getIn
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetInventoryBreakdownQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPipelineSuggestionsUrl = (params: GetPipelineSuggestionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/pipeline/suggestions?${stringifiedParams}` : `/api/pipeline/suggestions`
+}
+
+/**
+ * @summary AI-generated next actions for a pipeline stage
+ */
+export const getPipelineSuggestions = async (params: GetPipelineSuggestionsParams, options?: RequestInit): Promise<PipelineSuggestions> => {
+
+  return customFetch<PipelineSuggestions>(getGetPipelineSuggestionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPipelineSuggestionsQueryKey = (params?: GetPipelineSuggestionsParams,) => {
+    return [
+    `/api/pipeline/suggestions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPipelineSuggestionsQueryOptions = <TData = Awaited<ReturnType<typeof getPipelineSuggestions>>, TError = ErrorType<Error>>(params: GetPipelineSuggestionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPipelineSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPipelineSuggestionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPipelineSuggestions>>> = ({ signal }) => getPipelineSuggestions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPipelineSuggestions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPipelineSuggestionsQueryResult = NonNullable<Awaited<ReturnType<typeof getPipelineSuggestions>>>
+export type GetPipelineSuggestionsQueryError = ErrorType<Error>
+
+
+/**
+ * @summary AI-generated next actions for a pipeline stage
+ */
+
+export function useGetPipelineSuggestions<TData = Awaited<ReturnType<typeof getPipelineSuggestions>>, TError = ErrorType<Error>>(
+ params: GetPipelineSuggestionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPipelineSuggestions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPipelineSuggestionsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

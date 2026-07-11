@@ -34,9 +34,10 @@ function AppShell() {
   return (
     <Shell>
       <Switch>
+        <Route path="/pipeline" component={Leads} />
+        <Route path="/leads" component={Leads} />
         <Route path="/command-center" component={Dashboard} />
         <Route path="/inventory" component={Inventory} />
-        <Route path="/leads" component={Leads} />
         <Route path="/deals" component={Deals} />
         <Route path="/appraisals" component={Appraisals} />
         <Route path="/finance" component={Finance} />

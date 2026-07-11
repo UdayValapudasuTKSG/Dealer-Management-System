@@ -3,15 +3,16 @@ import { useCopilotReadable, useCopilotAction } from "@copilotkit/react-core";
 import { useGetDashboardSummary, useListGates } from "@workspace/api-client-react";
 
 const ROUTE_MAP: Record<string, string> = {
+  home: "/pipeline",
   "command center": "/command-center",
   dashboard: "/command-center",
-  home: "/command-center",
   journey: "/journey",
   approvals: "/approvals",
   gates: "/approvals",
   inventory: "/inventory",
   showroom: "/inventory",
-  leads: "/leads",
+  pipeline: "/pipeline",
+  leads: "/pipeline",
   deals: "/deals",
   appraisals: "/appraisals",
   finance: "/finance",
@@ -27,7 +28,8 @@ const ROUTE_LABEL: Record<string, string> = {
   "/journey": "Journey",
   "/approvals": "Approvals",
   "/inventory": "Inventory",
-  "/leads": "Leads",
+  "/pipeline": "Pipeline",
+  "/leads": "Pipeline",
   "/deals": "Deals",
   "/appraisals": "Appraisals",
   "/finance": "Finance",

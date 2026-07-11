@@ -2,7 +2,7 @@ import { useState } from "react";
 import { CopilotChat } from "@copilotkit/react-ui";
 import { MessageSquare, X, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Sidebar } from "./sidebar";
+import { TopNav } from "./top-nav";
 import { AuraCopilot } from "@/components/copilot/aura-copilot";
 
 const CONCIERGE_INSTRUCTIONS =
@@ -16,66 +16,68 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false);
 
   return (
-    <div className="flex h-screen w-full bg-background overflow-hidden relative selection:bg-primary/30 selection:text-white">
+    <div className="flex flex-col h-screen w-full bg-background overflow-hidden relative selection:bg-primary/30 selection:text-white">
       {/* Ambient background glow */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
 
-      <Sidebar />
+      <TopNav />
 
-      <main className="flex-1 overflow-y-auto relative z-10 scroll-smooth min-w-0">
-        <div className="min-h-full h-full">{children}</div>
-      </main>
+      <div className="flex flex-1 min-h-0 w-full">
+        <main className="flex-1 overflow-y-auto relative z-10 scroll-smooth min-w-0">
+          <div className="min-h-full h-full">{children}</div>
+        </main>
 
-      {/* Right-docked concierge that pushes content */}
-      <AnimatePresence initial={false}>
-        {chatOpen && (
-          <motion.aside
-            key="concierge"
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 400, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 260, damping: 30 }}
-            className="relative z-20 h-full shrink-0 overflow-hidden"
-          >
-            <div className="h-full w-[400px] flex flex-col rounded-l-3xl border-l border-white/10 bg-[#0c0c0c]/95 backdrop-blur-2xl shadow-[-24px_0_64px_-24px_rgba(0,0,0,0.8)]">
-              <div className="flex items-center justify-between px-5 h-16 border-b border-white/10 shrink-0">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                  </span>
-                  <div>
-                    <div className="text-sm font-semibold tracking-tight">
-                      AURA Concierge
-                    </div>
-                    <div className="text-[10px] uppercase tracking-widest text-primary">
-                      Live · Orchestrating
+        {/* Right-docked concierge that pushes content */}
+        <AnimatePresence initial={false}>
+          {chatOpen && (
+            <motion.aside
+              key="concierge"
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 400, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 260, damping: 30 }}
+              className="relative z-20 h-full shrink-0 overflow-hidden"
+            >
+              <div className="h-full w-[400px] flex flex-col rounded-l-3xl border-l border-white/10 bg-background/95 backdrop-blur-2xl shadow-[-24px_0_64px_-24px_rgba(0,0,0,0.8)]">
+                <div className="flex items-center justify-between px-5 h-16 border-b border-white/10 shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-primary" />
+                    </span>
+                    <div>
+                      <div className="text-sm font-semibold tracking-tight">
+                        AURA Concierge
+                      </div>
+                      <div className="text-[10px] uppercase tracking-widest text-primary">
+                        Live · Orchestrating
+                      </div>
                     </div>
                   </div>
+                  <button
+                    onClick={() => setChatOpen(false)}
+                    className="w-9 h-9 rounded-full bg-foreground/[0.06] hover:bg-foreground/[0.12] flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Close concierge"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setChatOpen(false)}
-                  className="w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Close concierge"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="flex-1 min-h-0">
+                  <CopilotChat
+                    className="h-full"
+                    instructions={CONCIERGE_INSTRUCTIONS}
+                    labels={{
+                      initial:
+                        "I run the dealership alongside you. Ask me to open a section, brief you on a decision gate, or start a GRA duty filing.",
+                      placeholder: "Ask the concierge to act...",
+                    }}
+                  />
+                </div>
               </div>
-              <div className="flex-1 min-h-0">
-                <CopilotChat
-                  className="h-full"
-                  instructions={CONCIERGE_INSTRUCTIONS}
-                  labels={{
-                    initial:
-                      "I run the dealership alongside you. Ask me to open a section, brief you on a decision gate, or start a GRA duty filing.",
-                    placeholder: "Ask the concierge to act...",
-                  }}
-                />
-              </div>
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Floating launcher */}
       <AnimatePresence>
