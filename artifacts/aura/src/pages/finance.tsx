@@ -1,14 +1,19 @@
 import { Link } from "wouter";
-import { useListFinanceApplications } from "@workspace/api-client-react";
+import { useListFinanceApplications, useListGates } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Building, FileText, CheckCircle2, DollarSign, Percent, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page, PageHeader } from "@/components/layout/page";
 
 export default function Finance() {
   const { data: apps, isLoading } = useListFinanceApplications();
+  const { data: gates } = useListGates({ status: "pending" });
+
+  const gatesForApp = (appId: number) =>
+    (gates ?? []).filter((g) => g.refType === "finance" && g.refId === appId);
 
   return (
     <Page className="space-y-10">
@@ -92,6 +97,17 @@ export default function Finance() {
                   </div>
                 </CardContent>
               </Card>
+              <AnimatePresence mode="popLayout">
+                {gatesForApp(app.id).map((gate) => (
+                  <div key={gate.id} className="mt-4">
+                    <GateCard
+                      gate={gate}
+                      label={GATE_LABEL[gate.type]}
+                      showCustomerLink={false}
+                    />
+                  </div>
+                ))}
+              </AnimatePresence>
             </motion.div>
           ))
         )}

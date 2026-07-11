@@ -1,9 +1,10 @@
 import { Link } from "wouter";
-import { useListDeals } from "@workspace/api-client-react";
+import { useListDeals, useListGates } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page, PageHeader } from "@/components/layout/page";
 
 const STAGE_LABEL: Record<string, string> = {
@@ -16,6 +17,10 @@ const STAGE_LABEL: Record<string, string> = {
 
 export default function Deals() {
   const { data: deals, isLoading } = useListDeals();
+  const { data: gates } = useListGates({ status: "pending" });
+
+  const gatesForDeal = (dealId: number) =>
+    (gates ?? []).filter((g) => g.refType === "deal" && g.refId === dealId);
 
   const stages = ["desking", "negotiation", "finance", "committed", "delivered"];
 
@@ -74,7 +79,7 @@ export default function Deals() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: stageIndex * 0.06 + i * 0.04 }}
                     >
-                      <Card className="cursor-pointer border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl bg-white/80 hover:bg-white overflow-hidden group">
+                      <Card className="border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl bg-white/80 hover:bg-white overflow-hidden group">
                         <CardContent className="p-5">
                           <div className="flex justify-between items-start mb-4 gap-3">
                             {deal.customerId ? (
@@ -126,6 +131,17 @@ export default function Deals() {
                           </div>
                         </CardContent>
                       </Card>
+                      <AnimatePresence mode="popLayout">
+                        {gatesForDeal(deal.id).map((gate) => (
+                          <div key={gate.id} className="mt-4">
+                            <GateCard
+                              gate={gate}
+                              label={GATE_LABEL[gate.type]}
+                              showCustomerLink={false}
+                            />
+                          </div>
+                        ))}
+                      </AnimatePresence>
                     </motion.div>
                   ))
                 )}
