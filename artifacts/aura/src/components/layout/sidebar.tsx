@@ -16,7 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const navigation = [
-  { name: "Command Center", href: "/", icon: LayoutDashboard },
+  { name: "Command Center", href: "/command-center", icon: LayoutDashboard },
   { name: "Journey", href: "/journey", icon: RouteIcon },
   { name: "Approvals", href: "/approvals", icon: ShieldCheck },
   { name: "Inventory", href: "/inventory", icon: CarFront },

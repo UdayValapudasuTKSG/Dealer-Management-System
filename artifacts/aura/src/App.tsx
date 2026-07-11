@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Shell } from "@/components/layout/shell";
 
+import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import Inventory from "@/pages/inventory";
 import Leads from "@/pages/leads";
@@ -29,11 +30,11 @@ const queryClient = new QueryClient({
   },
 });
 
-function Router() {
+function AppShell() {
   return (
     <Shell>
       <Switch>
-        <Route path="/" component={Dashboard} />
+        <Route path="/command-center" component={Dashboard} />
         <Route path="/inventory" component={Inventory} />
         <Route path="/leads" component={Leads} />
         <Route path="/deals" component={Deals} />
@@ -57,7 +58,12 @@ function App() {
       <CopilotKit runtimeUrl={`${import.meta.env.BASE_URL}api/copilotkit`}>
         <TooltipProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
+            <Switch>
+              <Route path="/" component={Landing} />
+              <Route>
+                <AppShell />
+              </Route>
+            </Switch>
           </WouterRouter>
           <Toaster />
         </TooltipProvider>

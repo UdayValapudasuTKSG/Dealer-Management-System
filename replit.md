@@ -40,7 +40,9 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 
 ## Product
 
-Command Center dashboard (KPIs, live orchestration feed, sales-performance chart), Inventory showroom, Journey (agent-orchestration centerpiece), Leads, Deals, Appraisals, Finance, Service, Customers, and a real streaming AI Concierge chat. Red/white, Apple-style glassmorphism, luxury automotive UI with cinematic motion and showroom videos.
+Cinematic landing/welcome page (`/`, full-bleed showroom video hero, Aston-Martin/BMW-inspired, rendered OUTSIDE the app Shell/sidebar — "Enter Command Center" CTA leads into the app), Command Center dashboard (`/command-center`, KPIs, live orchestration feed, sales-performance chart), Inventory showroom, Journey (agent-orchestration centerpiece), Leads, Deals, Appraisals, Finance, Service, Customers, and a real streaming AI Concierge chat. Red/white, Apple-style glassmorphism, luxury automotive UI with cinematic motion and showroom videos.
+
+- Routing: `/` is the landing page (no sidebar); all other pages render inside `<Shell>`. The dashboard lives at `/command-center` (NOT `/`) — update the sidebar nav and the copilot ROUTE_MAP/ROUTE_LABEL together if this ever changes.
 
 - AI agents are INTERNAL orchestration — there is no user-facing "agent fleet" page or `/agents` route. Agent/activity data is reframed as ambient concierge orchestration (Journey page + dashboard feed).
 - AI Concierge chat (`/assistant`) is REAL, powered by Anthropic via Replit AI Integrations (no own key; billed to credits). It streams responses and answers with live dealership data injected into the system prompt.
