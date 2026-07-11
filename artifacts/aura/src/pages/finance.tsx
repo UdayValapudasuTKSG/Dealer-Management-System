@@ -1,5 +1,11 @@
 import { Link } from "wouter";
-import { useListFinanceApplications, useListGates } from "@workspace/api-client-react";
+import {
+  useListFinanceApplications,
+  useListGates,
+  useCreateFinanceApplication,
+  getListFinanceApplicationsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Building, FileText, CheckCircle2, DollarSign, Percent, ShieldCheck } from "lucide-react";
@@ -7,10 +13,15 @@ import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page, PageHeader } from "@/components/layout/page";
+import { CreateRecordDialog } from "@/components/create-record-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Finance() {
   const { data: apps, isLoading } = useListFinanceApplications();
   const { data: gates } = useListGates({ status: "pending" });
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const createApp = useCreateFinanceApplication();
 
   const gatesForApp = (appId: number) =>
     (gates ?? []).filter((g) => g.refType === "finance" && g.refId === appId);
@@ -22,16 +33,36 @@ export default function Finance() {
         accent="Insurance"
         subtitle="Credit applications and protection portfolios."
         action={
-          <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-            <Plus className="w-5 h-5" />
-            New Application
-          </Button>
+          <CreateRecordDialog
+            title="New Application"
+            description="Submit a credit application — AURA routes it to lenders."
+            pending={createApp.isPending}
+            submitLabel="Submit application"
+            trigger={
+              <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
+                <Plus className="w-5 h-5" />
+                New Application
+              </Button>
+            }
+            fields={[
+              { name: "customerName", label: "Customer", type: "text", required: true, span: "full", placeholder: "Efua Sarpong" },
+              { name: "amount", label: "Amount financed", type: "number", required: true, span: "half", placeholder: "85000" },
+              { name: "termMonths", label: "Term (months)", type: "number", required: true, span: "half", defaultValue: "60", placeholder: "60" },
+              { name: "apr", label: "APR (%)", type: "number", required: true, span: "half", placeholder: "8.5" },
+              { name: "lender", label: "Lender", type: "text", span: "half", placeholder: "Optional" },
+            ]}
+            onSubmit={async (values) => {
+              await createApp.mutateAsync({ data: values as never });
+              queryClient.invalidateQueries({ queryKey: getListFinanceApplicationsQueryKey() });
+              toast({ title: "Application submitted", description: "AURA is routing to lenders." });
+            }}
+          />
         }
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {isLoading ? (
-          [...Array(6)].map((_, i) => <div key={i} className="h-64 bg-black/5 rounded-3xl animate-pulse" />)
+          [...Array(6)].map((_, i) => <div key={i} className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />)
         ) : (
           apps?.map((app, i) => (
             <motion.div
@@ -41,7 +72,7 @@ export default function Finance() {
               transition={{ delay: i * 0.05 }}
             >
               <Card className="glass-panel border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl overflow-hidden group">
-                <div className={`h-1.5 w-full ${app.status === 'approved' ? 'bg-primary' : 'bg-black/10'}`} />
+                <div className={`h-1.5 w-full ${app.status === 'approved' ? 'bg-primary' : 'bg-white/10'}`} />
                 <CardContent className="p-6 md:p-8">
                   <div className="flex justify-between items-start mb-6">
                     <div>
@@ -86,7 +117,7 @@ export default function Finance() {
                     <div className="flex flex-wrap gap-2">
                       {app.protectionProducts.length > 0 ? (
                         app.protectionProducts.map(p => (
-                          <span key={p} className="bg-black/5 px-3 py-1.5 rounded-full text-xs font-medium text-foreground tracking-wide">
+                          <span key={p} className="bg-white/[0.05] px-3 py-1.5 rounded-full text-xs font-medium text-foreground tracking-wide">
                             {p}
                           </span>
                         ))

@@ -253,8 +253,9 @@ export default function Dashboard() {
                     <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} dy={10} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(val) => `$${val / 1000}k`} />
                     <Tooltip
-                      contentStyle={{ backgroundColor: "rgba(255,255,255,0.9)", backdropFilter: "blur(10px)", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.1)" }}
+                      contentStyle={{ backgroundColor: "rgba(12,12,14,0.92)", backdropFilter: "blur(10px)", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.1)" }}
                       itemStyle={{ color: "hsl(var(--foreground))" }}
+                      labelStyle={{ color: "hsl(var(--muted-foreground))" }}
                     />
                     <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
                   </AreaChart>
@@ -332,7 +333,7 @@ function KPICard({ title, value, sub, icon: Icon, isLoading, delay, accent }: an
             {title}
           </p>
           {isLoading ? (
-            <div className="h-8 w-16 bg-black/5 rounded animate-pulse" />
+            <div className="h-8 w-16 bg-white/[0.05] rounded animate-pulse" />
           ) : (
             <>
               <h2 className="text-3xl font-bold tracking-tight leading-none">
@@ -361,7 +362,7 @@ function DecisionRow({ gate, delay }: { gate: Gate; delay: number }) {
       transition={{ delay }}
     >
       <Link href="/approvals">
-        <div className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-white/50 hover:bg-primary/5 hover:border-primary/30 transition-colors p-4 cursor-pointer">
+        <div className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-white/[0.05] hover:bg-primary/5 hover:border-primary/30 transition-colors p-4 cursor-pointer">
           <div
             className={`w-1.5 self-stretch rounded-full shrink-0 ${
               gate.priority === "high"
@@ -414,7 +415,7 @@ function ActivityRow({ event, delay }: { event: TimelineEvent; delay: number }) 
     >
       <div
         className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-          event.isAgent ? "bg-primary/10 text-primary" : "bg-black/5 text-foreground"
+          event.isAgent ? "bg-primary/10 text-primary" : "bg-white/[0.05] text-foreground"
         }`}
       >
         {event.isAgent ? <Bot className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
@@ -459,7 +460,7 @@ function PipelineSnapshot({ stages }: { stages: PipelineStage[] }) {
               {stage.count} · ${(stage.value / 1000).toFixed(0)}k
             </span>
           </div>
-          <div className="h-2 rounded-full bg-black/5 overflow-hidden">
+          <div className="h-2 rounded-full bg-white/[0.05] overflow-hidden">
             <motion.div
               className="h-full rounded-full bg-primary"
               initial={{ width: 0 }}

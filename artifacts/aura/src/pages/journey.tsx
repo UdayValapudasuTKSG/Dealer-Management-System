@@ -8,6 +8,15 @@ import { Car } from "lucide-react";
 
 const PHASES = ["aware", "consider", "engage", "negotiate", "won", "lost"] as const;
 
+const PHASE_LABEL: Record<string, string> = {
+  aware: "New Lead",
+  consider: "Working",
+  engage: "Appointment",
+  negotiate: "Desking",
+  won: "Delivered",
+  lost: "Lost",
+};
+
 const withBase = (url: string) =>
   `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`;
 
@@ -90,7 +99,7 @@ export default function Journey() {
                     className="absolute inset-0 bg-primary rounded-full -z-10 shadow-lg shadow-primary/30"
                   />
                 )}
-                <span className="relative z-10">{phase}</span>
+                <span className="relative z-10">{PHASE_LABEL[phase] ?? phase}</span>
               </button>
             ))}
           </div>
@@ -123,7 +132,7 @@ export default function Journey() {
                   <Card className="glass-panel border-none shadow-lg hover:shadow-2xl transition-shadow duration-500 overflow-hidden group">
                     <CardContent className="p-0">
                       <div className="flex flex-col md:flex-row">
-                        <div className="p-6 md:w-1/3 border-b md:border-b-0 md:border-r border-border/40 bg-white/40">
+                        <div className="p-6 md:w-1/3 border-b md:border-b-0 md:border-r border-white/10 bg-white/[0.03]">
                           <div className="flex items-center gap-4 mb-4">
                             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                               <User className="w-5 h-5" />
@@ -134,7 +143,7 @@ export default function Journey() {
                             </div>
                           </div>
                           {vehicle && (
-                            <div className="mb-4 rounded-2xl overflow-hidden bg-black/[0.04] aspect-[16/9] relative">
+                            <div className="mb-4 rounded-2xl overflow-hidden bg-white/[0.03] aspect-[16/9] relative">
                               {vehicle.imageUrl ? (
                                 <img
                                   src={withBase(vehicle.imageUrl)}
@@ -173,7 +182,7 @@ export default function Journey() {
                             )}
                           </div>
                         </div>
-                        <div className="p-6 md:w-2/3 flex flex-col justify-center bg-gradient-to-r from-transparent to-white/20">
+                        <div className="p-6 md:w-2/3 flex flex-col justify-center bg-gradient-to-r from-transparent to-white/[0.02]">
                           <div className="flex items-start gap-4">
                             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white shrink-0 mt-1 shadow-md shadow-primary/20">
                               <Zap className="w-4 h-4" />

@@ -1,22 +1,34 @@
 import { Link } from "wouter";
-import { useListLeads, useListVehicles } from "@workspace/api-client-react";
+import {
+  useListLeads,
+  useListVehicles,
+  useCreateLead,
+  getListLeadsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Phone, Mail, ArrowUpRight, Car } from "lucide-react";
 import { motion } from "framer-motion";
 import { Page, PageHeader } from "@/components/layout/page";
+import { CreateRecordDialog } from "@/components/create-record-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 const PHASE_LABEL: Record<string, string> = {
-  aware: "Aware",
-  consider: "Consider",
-  engage: "Engage",
-  negotiate: "Negotiate",
-  won: "Won",
+  aware: "New Lead",
+  consider: "Working",
+  engage: "Appointment",
+  negotiate: "Desking",
+  won: "Delivered",
+  lost: "Lost",
 };
 
 export default function Leads() {
   const { data: leads, isLoading } = useListLeads();
   const { data: vehicles } = useListVehicles();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const createLead = useCreateLead();
 
   const phases = ["aware", "consider", "engage", "negotiate", "won"];
 
@@ -31,10 +43,57 @@ export default function Leads() {
         subtitle="Every client journey, in motion."
         className="mb-8 shrink-0"
         action={
-          <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-            <Plus className="w-5 h-5" />
-            Add Client
-          </Button>
+          <CreateRecordDialog
+            title="New Lead"
+            description="Capture a prospect — AURA scores and routes it instantly."
+            pending={createLead.isPending}
+            submitLabel="Add to pipeline"
+            trigger={
+              <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
+                <Plus className="w-5 h-5" />
+                New Lead
+              </Button>
+            }
+            fields={[
+              { name: "name", label: "Name", type: "text", required: true, span: "full", placeholder: "Kojo Asante" },
+              {
+                name: "channel",
+                label: "Channel",
+                type: "select",
+                required: true,
+                span: "half",
+                defaultValue: "web",
+                options: [
+                  { value: "web", label: "Web" },
+                  { value: "social", label: "Social" },
+                  { value: "mobile", label: "Mobile" },
+                  { value: "walkin", label: "Walk-in" },
+                ],
+              },
+              {
+                name: "interestedVehicleId",
+                label: "Interested vehicle",
+                type: "select",
+                span: "half",
+                placeholder: "Optional",
+                options: (vehicles ?? []).map((v) => ({
+                  value: String(v.id),
+                  label: `${v.make} ${v.model}`,
+                })),
+              },
+              { name: "email", label: "Email", type: "text", span: "half", placeholder: "kojo@email.com" },
+              { name: "phone", label: "Phone", type: "text", span: "half", placeholder: "+233 …" },
+              { name: "notes", label: "Notes", type: "textarea", span: "full", placeholder: "What are they looking for?" },
+            ]}
+            onSubmit={async (values) => {
+              const payload = { ...values };
+              if (payload.interestedVehicleId != null)
+                payload.interestedVehicleId = Number(payload.interestedVehicleId);
+              await createLead.mutateAsync({ data: payload as never });
+              queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+              toast({ title: "Lead captured", description: "AURA is scoring and routing this prospect." });
+            }}
+          />
         }
       />
 
@@ -44,7 +103,7 @@ export default function Leads() {
           return (
             <div
               key={phase}
-              className="w-[340px] shrink-0 flex flex-col rounded-3xl bg-white/60 backdrop-blur-2xl border border-white/60 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-5"
+              className="w-[340px] shrink-0 flex flex-col rounded-3xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.35)] p-5"
             >
               <div className="flex items-center justify-between mb-5 px-1">
                 <div className="flex items-center gap-2.5">
@@ -63,7 +122,7 @@ export default function Leads() {
                   [1, 2].map((i) => (
                     <div
                       key={i}
-                      className="h-28 bg-black/5 rounded-2xl animate-pulse"
+                      className="h-28 bg-white/[0.03] rounded-2xl animate-pulse"
                     />
                   ))
                 ) : phaseLeads.length === 0 ? (
@@ -82,10 +141,10 @@ export default function Leads() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: phaseIndex * 0.06 + i * 0.04 }}
                       >
-                        <Card className="cursor-pointer border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl bg-white/80 hover:bg-white overflow-hidden group">
+                        <Card className="cursor-pointer border border-white/10 shadow-sm hover:shadow-xl hover:shadow-primary/10 hover:border-primary/40 transition-all duration-300 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] overflow-hidden group">
                           <CardContent className="p-0">
                             <div className="flex items-stretch">
-                              <div className="w-20 shrink-0 bg-black/[0.04] flex items-center justify-center overflow-hidden">
+                              <div className="w-20 shrink-0 bg-white/[0.03] flex items-center justify-center overflow-hidden">
                                 {vehicle?.imageUrl ? (
                                   <img
                                     src={withBase(vehicle.imageUrl)}

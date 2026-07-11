@@ -54,7 +54,7 @@ export function Timeline({ events }: { events: TimelineEvent[] }) {
                   ? "bg-primary text-white"
                   : event.isAgent
                     ? "bg-primary/10 text-primary"
-                    : "bg-black/5 text-foreground"
+                    : "bg-white/[0.05] text-foreground"
               }`}
             >
               <Icon className="w-4 h-4" />

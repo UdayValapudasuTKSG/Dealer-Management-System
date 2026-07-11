@@ -30,7 +30,7 @@ export default function Approvals() {
 
         {total > 0 && (
           <div className="flex gap-3">
-            <div className="rounded-2xl bg-white/70 backdrop-blur-xl border border-white/60 px-5 py-3 shadow-sm">
+            <div className="rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/10 px-5 py-3 shadow-sm">
               <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
                 <Layers className="w-3.5 h-3.5" /> Awaiting
               </div>

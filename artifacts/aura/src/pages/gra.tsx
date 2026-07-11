@@ -201,7 +201,7 @@ export default function Gra() {
                   const file = e.dataTransfer.files?.[0];
                   if (file) handleFile(file);
                 }}
-                className="relative rounded-2xl border-2 border-dashed border-primary/30 bg-white/40 hover:border-primary/60 hover:bg-primary/5 transition-colors cursor-pointer aspect-[4/3] flex flex-col items-center justify-center text-center p-6 overflow-hidden"
+                className="relative rounded-2xl border-2 border-dashed border-primary/30 bg-white/[0.03] hover:border-primary/60 hover:bg-primary/5 transition-colors cursor-pointer aspect-[4/3] flex flex-col items-center justify-center text-center p-6 overflow-hidden"
               >
                 {preview ? (
                   <img
@@ -222,7 +222,7 @@ export default function Gra() {
                 )}
 
                 {extract.isPending && (
-                  <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center">
+                  <div className="absolute inset-0 bg-white/[0.04] backdrop-blur-sm flex flex-col items-center justify-center">
                     <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
                     <p className="text-sm font-medium text-primary">
                       Reading the document...
@@ -278,7 +278,7 @@ export default function Gra() {
               >
                 <Card className="glass-panel border-none shadow-lg h-full">
                   <CardContent className="p-12 flex flex-col items-center justify-center text-center min-h-[400px]">
-                    <div className="w-14 h-14 rounded-full bg-black/5 text-muted-foreground flex items-center justify-center mb-4">
+                    <div className="w-14 h-14 rounded-full bg-white/[0.05] text-muted-foreground flex items-center justify-center mb-4">
                       <FileText className="w-7 h-7" />
                     </div>
                     <p className="text-lg font-medium">No filing yet</p>
@@ -444,7 +444,7 @@ function Field({
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="bg-white/70 border-border focus-visible:ring-primary/20"
+        className="bg-white/[0.04] border-border focus-visible:ring-primary/20"
       />
     </div>
   );

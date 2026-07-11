@@ -74,7 +74,7 @@ export default function CustomerDetail() {
       {/* Identity header */}
       <Card className="glass-panel border-none shadow-xl overflow-hidden">
         <CardContent className="p-8 flex flex-col md:flex-row md:items-center gap-6">
-          <div className="w-24 h-24 rounded-full bg-white shadow-md flex items-center justify-center overflow-hidden border-2 border-white shrink-0">
+          <div className="w-24 h-24 rounded-full bg-white/[0.06] shadow-md flex items-center justify-center overflow-hidden border-2 border-white/10 shrink-0">
             {customer.avatarUrl ? (
               <img
                 src={customer.avatarUrl}
@@ -175,7 +175,7 @@ export default function CustomerDetail() {
         <div className="space-y-8">
           {activeDeal && (
             <Section title="Active Deal">
-              <div className="p-4 rounded-2xl bg-white/60">
+              <div className="p-4 rounded-2xl bg-white/[0.03]">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold capitalize">
                     {activeDeal.stage}
@@ -199,9 +199,9 @@ export default function CustomerDetail() {
                 {ownedVehicles.map((v) => (
                   <div
                     key={v.id}
-                    className="flex items-center gap-3 p-3 rounded-2xl bg-white/60"
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.03]"
                   >
-                    <div className="w-14 h-10 rounded-lg bg-black/5 overflow-hidden shrink-0 flex items-center justify-center">
+                    <div className="w-14 h-10 rounded-lg bg-white/[0.05] overflow-hidden shrink-0 flex items-center justify-center">
                       {v.imageUrl ? (
                         <img
                           src={withBase(v.imageUrl)}
@@ -320,7 +320,7 @@ function Section({
 
 function RowItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white/60">
+    <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white/[0.03]">
       <span className="text-sm font-medium truncate">{label}</span>
       <span className="text-xs font-semibold uppercase tracking-widest text-primary capitalize shrink-0">
         {value}

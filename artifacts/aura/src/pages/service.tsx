@@ -1,5 +1,10 @@
 import { Link } from "wouter";
-import { useListServiceOrders } from "@workspace/api-client-react";
+import {
+  useListServiceOrders,
+  useCreateServiceOrder,
+  getListServiceOrdersQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Wrench, Calendar, Clock, DollarSign, PenTool } from "lucide-react";
@@ -7,9 +12,14 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Page, PageHeader } from "@/components/layout/page";
+import { CreateRecordDialog } from "@/components/create-record-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Service() {
   const { data: orders, isLoading } = useListServiceOrders();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const createOrder = useCreateServiceOrder();
 
   return (
     <Page className="space-y-10">
@@ -18,16 +28,51 @@ export default function Service() {
         accent="Operations"
         subtitle="Maintaining excellence in the bays."
         action={
-          <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-            <Plus className="w-5 h-5" />
-            Create Order
-          </Button>
+          <CreateRecordDialog
+            title="Create Service Order"
+            description="Book a bay — AURA schedules and assigns a technician."
+            pending={createOrder.isPending}
+            submitLabel="Create order"
+            trigger={
+              <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
+                <Plus className="w-5 h-5" />
+                Create Order
+              </Button>
+            }
+            fields={[
+              { name: "customerName", label: "Customer", type: "text", span: "full", placeholder: "Nana Adjei" },
+              { name: "vehicleInfo", label: "Vehicle", type: "text", required: true, span: "full", placeholder: "2022 BMW X5" },
+              {
+                name: "type",
+                label: "Type",
+                type: "select",
+                required: true,
+                span: "half",
+                defaultValue: "maintenance",
+                options: [
+                  { value: "maintenance", label: "Maintenance" },
+                  { value: "repair", label: "Repair" },
+                  { value: "warranty", label: "Warranty" },
+                  { value: "recall", label: "Recall" },
+                  { value: "inspection", label: "Inspection" },
+                ],
+              },
+              { name: "scheduledDate", label: "Scheduled date", type: "date", required: true, span: "half" },
+              { name: "technician", label: "Technician", type: "text", span: "half", placeholder: "Optional" },
+              { name: "estimatedCost", label: "Est. cost", type: "number", span: "half", placeholder: "0" },
+            ]}
+            onSubmit={async (values) => {
+              await createOrder.mutateAsync({ data: values as never });
+              queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
+              toast({ title: "Order created", description: "AURA scheduled the service bay." });
+            }}
+          />
         }
       />
 
       <div className="grid grid-cols-1 gap-6">
         {isLoading ? (
-          [...Array(4)].map((_, i) => <div key={i} className="h-40 bg-black/5 rounded-3xl animate-pulse" />)
+          [...Array(4)].map((_, i) => <div key={i} className="h-40 bg-white/[0.05] rounded-3xl animate-pulse" />)
         ) : (
           orders?.map((order, i) => (
             <motion.div
@@ -37,10 +82,10 @@ export default function Service() {
               transition={{ delay: i * 0.05 }}
             >
               <Card className="glass-panel border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl overflow-hidden group relative">
-                <div className={`absolute top-0 bottom-0 left-0 w-1.5 ${order.status === 'completed' ? 'bg-primary' : 'bg-black/10'}`} />
+                <div className={`absolute top-0 bottom-0 left-0 w-1.5 ${order.status === 'completed' ? 'bg-primary' : 'bg-white/10'}`} />
                 <CardContent className="p-6 md:p-8 flex flex-col md:flex-row gap-8 justify-between pl-8 md:pl-10">
                   <div className="flex gap-6 items-start w-full md:w-2/5">
-                    <div className="w-16 h-16 rounded-2xl bg-black/5 flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors duration-500">
+                    <div className="w-16 h-16 rounded-2xl bg-white/[0.05] flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors duration-500">
                       <Wrench className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors duration-500" />
                     </div>
                     <div>
@@ -72,7 +117,7 @@ export default function Service() {
                     
                     <div>
                       <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-2">Status</div>
-                      <Badge variant="secondary" className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest border-none bg-black/5 text-foreground">
+                      <Badge variant="secondary" className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest border-none bg-white/[0.05] text-foreground">
                         {order.status.replace('_', ' ')}
                       </Badge>
                     </div>

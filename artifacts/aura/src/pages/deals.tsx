@@ -1,11 +1,21 @@
-import { Link } from "wouter";
-import { useListDeals, useListGates } from "@workspace/api-client-react";
+import { useEffect, useState } from "react";
+import { Link, useSearch, useLocation } from "wouter";
+import {
+  useListDeals,
+  useListGates,
+  useListVehicles,
+  useCreateDeal,
+  getListDealsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page, PageHeader } from "@/components/layout/page";
+import { CreateRecordDialog } from "@/components/create-record-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 const STAGE_LABEL: Record<string, string> = {
   desking: "Desking",
@@ -18,6 +28,27 @@ const STAGE_LABEL: Record<string, string> = {
 export default function Deals() {
   const { data: deals, isLoading } = useListDeals();
   const { data: gates } = useListGates({ status: "pending" });
+  const { data: vehicles } = useListVehicles();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const createDeal = useCreateDeal();
+
+  const search = useSearch();
+  const [, navigate] = useLocation();
+  const [deskOpen, setDeskOpen] = useState(false);
+  const prefillVehicleId = new URLSearchParams(search).get("vehicle") ?? "";
+  const prefillVehicle = (vehicles ?? []).find(
+    (v) => String(v.id) === prefillVehicleId,
+  );
+
+  useEffect(() => {
+    if (prefillVehicleId && prefillVehicle) setDeskOpen(true);
+  }, [prefillVehicleId, prefillVehicle]);
+
+  const handleOpenChange = (open: boolean) => {
+    setDeskOpen(open);
+    if (!open && prefillVehicleId) navigate("/deals", { replace: true });
+  };
 
   const gatesForDeal = (dealId: number) =>
     (gates ?? []).filter((g) => g.refType === "deal" && g.refId === dealId);
@@ -32,10 +63,66 @@ export default function Deals() {
         subtitle="Bespoke negotiation and closing."
         className="mb-8 shrink-0"
         action={
-          <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-            <Plus className="w-5 h-5" />
-            Desk New Deal
-          </Button>
+          <CreateRecordDialog
+            title="Desk a New Deal"
+            description="Structure a deal — AURA computes OTD and flags approvals."
+            pending={createDeal.isPending}
+            submitLabel="Desk deal"
+            open={deskOpen}
+            onOpenChange={handleOpenChange}
+            trigger={
+              <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
+                <Plus className="w-5 h-5" />
+                Desk New Deal
+              </Button>
+            }
+            fields={[
+              {
+                name: "vehicleId",
+                label: "Vehicle",
+                type: "select",
+                required: true,
+                span: "full",
+                placeholder: "Select a vehicle",
+                defaultValue: prefillVehicle ? String(prefillVehicle.id) : undefined,
+                options: (vehicles ?? []).map((v) => ({
+                  value: String(v.id),
+                  label: `${v.year} ${v.make} ${v.model} — $${v.price.toLocaleString()}`,
+                })),
+              },
+              { name: "customerName", label: "Customer", type: "text", span: "full", placeholder: "Ama Owusu" },
+              {
+                name: "vehiclePrice",
+                label: "Vehicle price",
+                type: "number",
+                required: true,
+                span: "half",
+                placeholder: "72000",
+                defaultValue: prefillVehicle ? String(prefillVehicle.price) : undefined,
+              },
+              { name: "discount", label: "Discount", type: "number", span: "half", placeholder: "0" },
+              {
+                name: "stage",
+                label: "Stage",
+                type: "select",
+                span: "full",
+                defaultValue: "desking",
+                options: [
+                  { value: "desking", label: "Desking" },
+                  { value: "negotiation", label: "Negotiation" },
+                  { value: "finance", label: "Finance" },
+                  { value: "committed", label: "Committed" },
+                ],
+              },
+            ]}
+            onSubmit={async (values) => {
+              const payload = { ...values };
+              if (payload.vehicleId != null) payload.vehicleId = Number(payload.vehicleId);
+              await createDeal.mutateAsync({ data: payload as never });
+              queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
+              toast({ title: "Deal desked", description: "AURA computed the OTD structure." });
+            }}
+          />
         }
       />
 
@@ -45,7 +132,7 @@ export default function Deals() {
           return (
             <div
               key={stage}
-              className="w-[340px] shrink-0 flex flex-col rounded-3xl bg-white/60 backdrop-blur-2xl border border-white/60 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-5"
+              className="w-[340px] shrink-0 flex flex-col rounded-3xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-5"
             >
               <div className="flex items-center justify-between mb-5 px-1">
                 <div className="flex items-center gap-2.5">
@@ -64,7 +151,7 @@ export default function Deals() {
                   [1].map((i) => (
                     <div
                       key={i}
-                      className="h-40 bg-black/5 rounded-2xl animate-pulse"
+                      className="h-40 bg-white/[0.05] rounded-2xl animate-pulse"
                     />
                   ))
                 ) : stageDeals.length === 0 ? (
@@ -79,7 +166,7 @@ export default function Deals() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: stageIndex * 0.06 + i * 0.04 }}
                     >
-                      <Card className="border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl bg-white/80 hover:bg-white overflow-hidden group">
+                      <Card className="border border-white/10 shadow-sm hover:shadow-xl hover:shadow-primary/10 hover:border-primary/40 transition-all duration-300 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] overflow-hidden group">
                         <CardContent className="p-5">
                           <div className="flex justify-between items-start mb-4 gap-3">
                             {deal.customerId ? (

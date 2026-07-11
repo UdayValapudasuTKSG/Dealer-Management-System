@@ -40,7 +40,14 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 
 ## Product
 
-Cinematic landing/welcome page (`/`, full-bleed showroom video hero, Aston-Martin/BMW-inspired, rendered OUTSIDE the app Shell/sidebar — "Enter Command Center" CTA leads into the app), Command Center dashboard (`/command-center`, KPIs, live orchestration feed, sales-performance chart), Inventory showroom, Journey (agent-orchestration centerpiece), Leads, Deals, Appraisals, Finance, Service, Customers, and a real streaming AI Concierge chat. Red/white, Apple-style glassmorphism, luxury automotive UI with cinematic motion and showroom videos.
+Cinematic landing/welcome page (`/`, full-bleed showroom video hero, Aston-Martin/BMW-inspired, rendered OUTSIDE the app Shell/sidebar — "Enter Command Center" CTA leads into the app), Command Center dashboard (`/command-center`, KPIs, live orchestration feed, sales-performance chart), Inventory showroom, Journey (agent-orchestration centerpiece), Leads, Deals, Appraisals, Finance, Service, Customers, and a real streaming AI Concierge chat. Blood-red/black, Netflix-inspired dark premium glassmorphism, luxury automotive UI with cinematic motion and showroom videos.
+
+- Theme is DARK by default (blood-red on near-black): tokens live in `artifacts/aura/src/index.css` (bg ~5% lightness, primary `0 82% 44%`; `.glass`/`.glass-panel` dark surfaces, `.glow-red`/`.text-glow` utils; CopilotKit window themed + rounded). Convert page surfaces with the `bg-white/[0.0x]` + `border-white/10` glass convention, NOT hardcoded `bg-white`/`bg-black/*`.
+- Sidebar (`components/layout/sidebar.tsx`): logo is a `<Link href="/">` back to the landing page; nav is grouped (Intelligence / Sales / Operations / Clients / Compliance) and collapsible (`w-64` ↔ `w-[76px]`); Finance is labelled "F&I".
+- Concierge chat is a right-docked in-flow `<CopilotChat>` panel in `components/layout/shell.tsx` (rounded left edge, framer-motion width animation) that PUSHES page content; a floating "Concierge" launcher shows when closed.
+- Inventory (`pages/inventory.tsx`): clicking a vehicle opens a `VehicleDetail` dialog with a Photo/360° toggle (360 uses a turntable video) plus a full spec grid.
+- Create actions are wired end-to-end via the shared `components/create-record-dialog.tsx` (config-driven form) on Leads, Deals, Customers, Appraisals, Finance, Service — each uses its `useCreateX` hook + `getListXQueryKey()` invalidation + a toast. Coerce select-sourced id fields (e.g. `vehicleId`, `interestedVehicleId`) to `Number` in `onSubmit`. There is no DELETE customer route.
+- Pipeline/Journey use dealer-grade phase labels (New Lead / Working / Appointment / Desking / Delivered / Lost) mapped from the `aware/consider/engage/negotiate/won/lost` DB values.
 
 - Routing: `/` is the landing page (no sidebar); all other pages render inside `<Shell>`. The dashboard lives at `/command-center` (NOT `/`) — update the sidebar nav and the copilot ROUTE_MAP/ROUTE_LABEL together if this ever changes.
 
@@ -50,10 +57,10 @@ Cinematic landing/welcome page (`/`, full-bleed showroom video hero, Aston-Marti
 
 ## User preferences
 
-- Light/bright mode only (NOT dark).
+- DARK mode, blood-red + black, premium/futuristic (Netflix-inspired). (This reverses the earlier "light mode only" preference — the user explicitly asked for dark.)
 - Strongly car/automotive-themed and aesthetic; use real images.
 - No emojis in the UI.
-- Keep all features end-to-end.
+- Keep all features end-to-end — no dead-end clicks.
 
 ## Gotchas
 

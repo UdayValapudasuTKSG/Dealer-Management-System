@@ -48,9 +48,9 @@ const PRIORITY_META: Record<
     label: "Normal priority",
   },
   low: {
-    rail: "bg-black/15",
+    rail: "bg-white/15",
     dot: "bg-muted-foreground/50",
-    chip: "bg-black/5 text-muted-foreground",
+    chip: "bg-white/[0.05] text-muted-foreground",
     label: "Low priority",
   },
 };
@@ -113,7 +113,7 @@ export function GateCard({
       exit={{ opacity: 0, scale: 0.97 }}
       transition={{ type: "spring", stiffness: 260, damping: 26 }}
     >
-      <Card className="group relative overflow-hidden border-none bg-white/80 backdrop-blur-2xl shadow-[0_4px_24px_rgba(0,0,0,0.04)] hover:shadow-[0_16px_48px_rgba(0,0,0,0.08)] transition-shadow duration-300 rounded-2xl">
+      <Card className="group relative overflow-hidden border-none bg-white/[0.04] backdrop-blur-2xl shadow-[0_4px_24px_rgba(0,0,0,0.04)] hover:shadow-[0_16px_48px_rgba(0,0,0,0.08)] transition-shadow duration-300 rounded-2xl">
         {/* Priority rail */}
         <div className={`absolute left-0 top-0 bottom-0 w-1 ${meta.rail}`} />
 
@@ -163,7 +163,7 @@ export function GateCard({
               {evidence.map((item, i) => (
                 <div
                   key={i}
-                  className="rounded-xl bg-black/[0.03] px-3 py-2.5 min-w-0"
+                  className="rounded-xl bg-white/[0.03] px-3 py-2.5 min-w-0"
                 >
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">
                     {item.label}
@@ -261,7 +261,7 @@ export function GateCard({
                     variant="ghost"
                     disabled={resolve.isPending}
                     onClick={() => setAdjusting(true)}
-                    className="rounded-full px-4 h-10 gap-2 text-foreground hover:bg-black/5"
+                    className="rounded-full px-4 h-10 gap-2 text-foreground hover:bg-white/[0.05]"
                   >
                     <SlidersHorizontal className="w-4 h-4" />
                     Adjust
