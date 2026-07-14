@@ -38,6 +38,14 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 - `monthlyRevenue` = sum of `otdPrice` for delivered deals created in the current calendar month.
 - Service-order `scheduledDate` is a `date({ mode: "string" })` column; Zod coerces incoming date fields to `Date`, so routes convert to `YYYY-MM-DD` strings before insert/update.
 
+## Auth & RBAC
+
+- Auth: Replit-managed Clerk (Google SSO + email/password). Landing `/` plus `/sign-in`/`/sign-up` are public; everything else requires sign-in (signed-out → redirect to `/sign-in`, themed dark Clerk card). Web auth is cookie-based (never use setAuthTokenGetter on web).
+- JIT provisioning in `artifacts/api-server/src/middlewares/rbac.ts`: first-ever user → General Manager, later users → Sales Advisor. `requireAuth` → `authorize` (path-segment→module, HTTP method→category; POST body `action: "dismiss"` maps to reject) → `auditTrail` (logs every mutating 2xx) wrap all routers except `/healthz`. 15s permission cache with `invalidatePermCache`.
+- RBAC data: `roles`/`role_permissions`/`users`/`audit_logs` tables (`lib/db/src/schema/roles.ts` etc.); 11 roles seeded via `pnpm --filter @workspace/scripts run seed-rbac`; 11 modules × 9 categories (`PERMISSION_MODULES`/`PERMISSION_CATEGORIES`); `admin` category implies all.
+- Client: `src/lib/auth.tsx` (`AuthProvider`/`useAuthz`/`can`); top-nav clusters filtered by `can(module,"view")`; Settings cluster (Users / Roles & Permissions / Audit Logs at `/settings/*`, guarded by `RequireSettings` in App.tsx with an Access Denied panel); user menu (avatar+role, sign out logs a logout audit event first).
+- Test harness bypass: `AUTH_BYPASS=1` (dev-only, never in production) gives a synthetic full-permission user — used by `scripts/run-gate-cascade-check.sh` so the gate-cascades validation keeps passing.
+
 ## Product
 
 Cinematic landing/welcome page (`/`, full-bleed showroom video hero, Aston-Martin/BMW-inspired, rendered OUTSIDE the app Shell/sidebar — "Enter Command Center" CTA leads into the app), Command Center dashboard (`/command-center`, viz-forward: trimmed cinematic hero + 4 KPI cards with a revenue sparkline, Revenue Trajectory area chart, Inventory Mix donut (uses `useGetInventoryBreakdown` — powertrain mix), Sales Pipeline funnel with total open value, Units Delivered bar chart (from sales-performance `units`), plus trimmed Decisions/Autonomous-activity panels), Inventory showroom, Journey (agent-orchestration centerpiece), Leads, Deals, Appraisals, Finance, Service, Customers, and a real streaming AI Concierge chat. Blood-red/black, Netflix-inspired dark premium glassmorphism, luxury automotive UI with cinematic motion and showroom videos.

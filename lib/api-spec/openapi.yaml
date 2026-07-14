@@ -36,6 +36,12 @@ tags:
     description: Human decision gates (never-list)
   - name: anthropic
     description: Anthropic AI chat operations
+  - name: auth
+    description: Current user, session and effective permissions
+  - name: admin
+    description: User, role and permission administration
+  - name: audit
+    description: Audit log of every significant action
 paths:
   /anthropic/conversations:
     get:
@@ -1023,8 +1029,331 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Current signed-in user with role and effective permissions
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentUser"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /auth/logout-event:
+    post:
+      operationId: recordLogoutEvent
+      tags: [auth]
+      summary: Record a logout audit event before the client signs out
+      responses:
+        "204":
+          description: Recorded
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users with their role
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+  /admin/users/{id}:
+    patch:
+      operationId: updateAdminUser
+      tags: [admin]
+      summary: Assign a role or change status for a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/roles:
+    get:
+      operationId: listAdminRoles
+      tags: [admin]
+      summary: List roles with their permission grants
+      responses:
+        "200":
+          description: Roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RoleWithPermissions"
+    post:
+      operationId: createAdminRole
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleInput"
+      responses:
+        "201":
+          description: Created role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleWithPermissions"
+  /admin/roles/{id}:
+    patch:
+      operationId: updateAdminRole
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleUpdate"
+      responses:
+        "200":
+          description: Updated role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleWithPermissions"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteAdminRole
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          description: Role is in use or is a system role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/roles/{id}/permissions:
+    put:
+      operationId: setRolePermissions
+      tags: [admin]
+      summary: Replace the full permission grant set for a role
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RolePermissionsInput"
+      responses:
+        "200":
+          description: Updated role with permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleWithPermissions"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/permission-meta:
+    get:
+      operationId: getPermissionMeta
+      tags: [admin]
+      summary: Available permission modules and categories
+      responses:
+        "200":
+          description: Permission metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [modules, categories]
+                properties:
+                  modules:
+                    type: array
+                    items: { type: string }
+                  categories:
+                    type: array
+                    items: { type: string }
+
+  /audit-logs:
+    get:
+      operationId: listAuditLogs
+      tags: [audit]
+      summary: Filterable audit trail of significant actions
+      parameters:
+        - name: action
+          in: query
+          required: false
+          schema: { type: string }
+        - name: module
+          in: query
+          required: false
+          schema: { type: string }
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLogEntry"
+
 components:
   schemas:
+    PermissionGrant:
+      type: object
+      required: [module, category]
+      properties:
+        module:
+          type: string
+          enum: [dashboard, inventory, leads, deals, appraisals, finance, service, customers, approvals, gra, settings]
+        category:
+          type: string
+          enum: [view, create, edit, delete, approve, reject, export, assign, admin]
+    CurrentUser:
+      type: object
+      required: [id, clerkId, roleName, permissions, status]
+      properties:
+        id: { type: integer }
+        clerkId: { type: string }
+        email: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        imageUrl: { type: ["string", "null"] }
+        roleId: { type: ["integer", "null"] }
+        roleName: { type: ["string", "null"] }
+        status: { type: string }
+        permissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PermissionGrant"
+    AdminUser:
+      type: object
+      required: [id, clerkId, status, createdAt]
+      properties:
+        id: { type: integer }
+        clerkId: { type: string }
+        email: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        imageUrl: { type: ["string", "null"] }
+        roleId: { type: ["integer", "null"] }
+        roleName: { type: ["string", "null"] }
+        status: { type: string, enum: [active, suspended] }
+        lastLoginAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    AdminUserUpdate:
+      type: object
+      properties:
+        roleId: { type: ["integer", "null"] }
+        status: { type: string, enum: [active, suspended] }
+    RoleWithPermissions:
+      type: object
+      required: [id, name, isSystem, userCount, permissions, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        isSystem: { type: boolean }
+        userCount: { type: integer }
+        permissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PermissionGrant"
+        createdAt: { type: string, format: date-time }
+    RolePermissionsInput:
+      type: object
+      required: [grants]
+      properties:
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/PermissionGrant"
+    RoleInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+    RoleUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+    AuditLogEntry:
+      type: object
+      required: [id, action, module, summary, createdAt]
+      properties:
+        id: { type: integer }
+        actorUserId: { type: ["integer", "null"] }
+        actorName: { type: ["string", "null"] }
+        actorEmail: { type: ["string", "null"] }
+        action: { type: string }
+        module: { type: string }
+        entityType: { type: ["string", "null"] }
+        entityId: { type: ["string", "null"] }
+        summary: { type: string }
+        details: { type: ["object", "null"], additionalProperties: true }
+        statusCode: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+
     AnthropicConversation:
       type: object
       properties:

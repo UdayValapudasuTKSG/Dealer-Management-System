@@ -5,6 +5,155 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+export type PermissionGrantModule = typeof PermissionGrantModule[keyof typeof PermissionGrantModule];
+
+
+export const PermissionGrantModule = {
+  dashboard: 'dashboard',
+  inventory: 'inventory',
+  leads: 'leads',
+  deals: 'deals',
+  appraisals: 'appraisals',
+  finance: 'finance',
+  service: 'service',
+  customers: 'customers',
+  approvals: 'approvals',
+  gra: 'gra',
+  settings: 'settings',
+} as const;
+
+export type PermissionGrantCategory = typeof PermissionGrantCategory[keyof typeof PermissionGrantCategory];
+
+
+export const PermissionGrantCategory = {
+  view: 'view',
+  create: 'create',
+  edit: 'edit',
+  delete: 'delete',
+  approve: 'approve',
+  reject: 'reject',
+  export: 'export',
+  assign: 'assign',
+  admin: 'admin',
+} as const;
+
+export interface PermissionGrant {
+  module: PermissionGrantModule;
+  category: PermissionGrantCategory;
+}
+
+export interface CurrentUser {
+  id: number;
+  clerkId: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  /** @nullable */
+  roleId?: number | null;
+  /** @nullable */
+  roleName: string | null;
+  status: string;
+  permissions: PermissionGrant[];
+}
+
+export type AdminUserStatus = typeof AdminUserStatus[keyof typeof AdminUserStatus];
+
+
+export const AdminUserStatus = {
+  active: 'active',
+  suspended: 'suspended',
+} as const;
+
+export interface AdminUser {
+  id: number;
+  clerkId: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  /** @nullable */
+  roleId?: number | null;
+  /** @nullable */
+  roleName?: string | null;
+  status: AdminUserStatus;
+  /** @nullable */
+  lastLoginAt?: string | null;
+  createdAt: string;
+}
+
+export type AdminUserUpdateStatus = typeof AdminUserUpdateStatus[keyof typeof AdminUserUpdateStatus];
+
+
+export const AdminUserUpdateStatus = {
+  active: 'active',
+  suspended: 'suspended',
+} as const;
+
+export interface AdminUserUpdate {
+  /** @nullable */
+  roleId?: number | null;
+  status?: AdminUserUpdateStatus;
+}
+
+export interface RoleWithPermissions {
+  id: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  isSystem: boolean;
+  userCount: number;
+  permissions: PermissionGrant[];
+  createdAt: string;
+}
+
+export interface RolePermissionsInput {
+  grants: PermissionGrant[];
+}
+
+export interface RoleInput {
+  /** @minLength 1 */
+  name: string;
+  description?: string;
+}
+
+export interface RoleUpdate {
+  /** @minLength 1 */
+  name?: string;
+  description?: string;
+}
+
+/**
+ * @nullable
+ */
+export type AuditLogEntryDetails = { [key: string]: unknown } | null;
+
+export interface AuditLogEntry {
+  id: number;
+  /** @nullable */
+  actorUserId?: number | null;
+  /** @nullable */
+  actorName?: string | null;
+  /** @nullable */
+  actorEmail?: string | null;
+  action: string;
+  module: string;
+  /** @nullable */
+  entityType?: string | null;
+  /** @nullable */
+  entityId?: string | null;
+  summary: string;
+  /** @nullable */
+  details?: AuditLogEntryDetails;
+  /** @nullable */
+  statusCode?: number | null;
+  createdAt: string;
+}
+
 export interface AnthropicConversation {
   id: number;
   title: string;
@@ -1092,5 +1241,17 @@ limit?: number;
 
 export type ListGatesParams = {
 status?: string;
+};
+
+export type GetPermissionMeta200 = {
+  modules: string[];
+  categories: string[];
+};
+
+export type ListAuditLogsParams = {
+action?: string;
+module?: string;
+search?: string;
+limit?: number;
 };
 

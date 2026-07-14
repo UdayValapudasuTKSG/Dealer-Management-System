@@ -1314,3 +1314,209 @@ export const SubmitGraFilingResponse = zod.object({
 })
 
 
+/**
+ * @summary Current signed-in user with role and effective permissions
+ */
+export const GetCurrentUserResponse = zod.object({
+  "id": zod.number(),
+  "clerkId": zod.string(),
+  "email": zod.string().nullish(),
+  "name": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "roleId": zod.number().nullish(),
+  "roleName": zod.string().nullable(),
+  "status": zod.string(),
+  "permissions": zod.array(zod.object({
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
+}))
+})
+
+
+/**
+ * @summary Record a logout audit event before the client signs out
+ */
+export const RecordLogoutEventResponse = zod.void()
+
+
+/**
+ * @summary List all users with their role
+ */
+export const ListAdminUsersResponseItem = zod.object({
+  "id": zod.number(),
+  "clerkId": zod.string(),
+  "email": zod.string().nullish(),
+  "name": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "roleId": zod.number().nullish(),
+  "roleName": zod.string().nullish(),
+  "status": zod.enum(['active', 'suspended']),
+  "lastLoginAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
+
+
+/**
+ * @summary Assign a role or change status for a user
+ */
+export const UpdateAdminUserParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAdminUserBody = zod.object({
+  "roleId": zod.number().nullish(),
+  "status": zod.enum(['active', 'suspended']).optional()
+})
+
+export const UpdateAdminUserResponse = zod.object({
+  "id": zod.number(),
+  "clerkId": zod.string(),
+  "email": zod.string().nullish(),
+  "name": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "roleId": zod.number().nullish(),
+  "roleName": zod.string().nullish(),
+  "status": zod.enum(['active', 'suspended']),
+  "lastLoginAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List roles with their permission grants
+ */
+export const ListAdminRolesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "isSystem": zod.boolean(),
+  "userCount": zod.number(),
+  "permissions": zod.array(zod.object({
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
+})),
+  "createdAt": zod.coerce.date()
+})
+export const ListAdminRolesResponse = zod.array(ListAdminRolesResponseItem)
+
+
+
+
+
+export const CreateAdminRoleBody = zod.object({
+  "name": zod.string().min(1),
+  "description": zod.string().optional()
+})
+
+export const CreateAdminRoleResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "isSystem": zod.boolean(),
+  "userCount": zod.number(),
+  "permissions": zod.array(zod.object({
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const UpdateAdminRoleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateAdminRoleBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "description": zod.string().optional()
+})
+
+export const UpdateAdminRoleResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "isSystem": zod.boolean(),
+  "userCount": zod.number(),
+  "permissions": zod.array(zod.object({
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const DeleteAdminRoleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAdminRoleResponse = zod.void()
+
+
+/**
+ * @summary Replace the full permission grant set for a role
+ */
+export const SetRolePermissionsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SetRolePermissionsBody = zod.object({
+  "grants": zod.array(zod.object({
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
+}))
+})
+
+export const SetRolePermissionsResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "isSystem": zod.boolean(),
+  "userCount": zod.number(),
+  "permissions": zod.array(zod.object({
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
+})),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Available permission modules and categories
+ */
+export const GetPermissionMetaResponse = zod.object({
+  "modules": zod.array(zod.string()),
+  "categories": zod.array(zod.string())
+})
+
+
+/**
+ * @summary Filterable audit trail of significant actions
+ */
+export const ListAuditLogsQueryParams = zod.object({
+  "action": zod.coerce.string().optional(),
+  "module": zod.coerce.string().optional(),
+  "search": zod.coerce.string().optional(),
+  "limit": zod.coerce.number().optional()
+})
+
+export const ListAuditLogsResponseItem = zod.object({
+  "id": zod.number(),
+  "actorUserId": zod.number().nullish(),
+  "actorName": zod.string().nullish(),
+  "actorEmail": zod.string().nullish(),
+  "action": zod.string(),
+  "module": zod.string(),
+  "entityType": zod.string().nullish(),
+  "entityId": zod.string().nullish(),
+  "summary": zod.string(),
+  "details": zod.record(zod.string(), zod.unknown()).nullish(),
+  "statusCode": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAuditLogsResponse = zod.array(ListAuditLogsResponseItem)
+
+

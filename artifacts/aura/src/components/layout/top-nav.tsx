@@ -1,10 +1,14 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sun, Moon, Sparkles } from "lucide-react";
+import { Sun, Moon, Sparkles, LogOut, Settings } from "lucide-react";
+import { useClerk } from "@clerk/react";
+import { recordLogoutEvent } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
+import { useAuthz } from "@/lib/auth";
 
-type NavItem = { name: string; href: string };
+type NavItem = { name: string; href: string; module: string };
 type Cluster = { label: string; icon: string; items: NavItem[] };
 
 const CLUSTERS: Cluster[] = [
@@ -12,38 +16,47 @@ const CLUSTERS: Cluster[] = [
     label: "Intelligence",
     icon: "nav/intelligence.png",
     items: [
-      { name: "Command Center", href: "/command-center" },
-      { name: "Journey", href: "/journey" },
-      { name: "Approvals", href: "/approvals" },
+      { name: "Command Center", href: "/command-center", module: "dashboard" },
+      { name: "Journey", href: "/journey", module: "dashboard" },
+      { name: "Approvals", href: "/approvals", module: "approvals" },
     ],
   },
   {
     label: "Sales",
     icon: "nav/sales.png",
     items: [
-      { name: "Pipeline", href: "/pipeline" },
-      { name: "Deals", href: "/deals" },
-      { name: "Appraisals", href: "/appraisals" },
-      { name: "F&I", href: "/finance" },
+      { name: "Pipeline", href: "/pipeline", module: "leads" },
+      { name: "Deals", href: "/deals", module: "deals" },
+      { name: "Appraisals", href: "/appraisals", module: "appraisals" },
+      { name: "F&I", href: "/finance", module: "finance" },
     ],
   },
   {
     label: "Operations",
     icon: "nav/operations.png",
     items: [
-      { name: "Inventory", href: "/inventory" },
-      { name: "Service", href: "/service" },
+      { name: "Inventory", href: "/inventory", module: "inventory" },
+      { name: "Service", href: "/service", module: "service" },
     ],
   },
   {
     label: "Clients",
     icon: "nav/clients.png",
-    items: [{ name: "Customers", href: "/customers" }],
+    items: [{ name: "Customers", href: "/customers", module: "customers" }],
   },
   {
     label: "Compliance",
     icon: "nav/compliance.png",
-    items: [{ name: "GRA Filing", href: "/gra" }],
+    items: [{ name: "GRA Filing", href: "/gra", module: "gra" }],
+  },
+  {
+    label: "Settings",
+    icon: "",
+    items: [
+      { name: "Users", href: "/settings/users", module: "settings" },
+      { name: "Roles & Permissions", href: "/settings/roles", module: "settings" },
+      { name: "Audit Logs", href: "/settings/audit", module: "settings" },
+    ],
   },
 ];
 
@@ -91,12 +104,88 @@ function ThemeToggle() {
   );
 }
 
+function UserMenu() {
+  const { me } = useAuthz();
+  const { signOut } = useClerk();
+  const [open, setOpen] = useState(false);
+
+  const handleSignOut = async () => {
+    try {
+      await recordLogoutEvent();
+    } catch {
+      // best-effort audit; never block sign-out
+    }
+    await signOut({ redirectUrl: import.meta.env.BASE_URL || "/" });
+  };
+
+  const initial = (me?.name ?? me?.email ?? "?").slice(0, 1).toUpperCase();
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 rounded-full border border-white/10 bg-foreground/[0.04] hover:bg-foreground/[0.08] pl-1.5 pr-3 py-1.5 transition-colors"
+        aria-label="Account menu"
+      >
+        {me?.imageUrl ? (
+          <img src={me.imageUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+        ) : (
+          <span className="h-7 w-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
+            {initial}
+          </span>
+        )}
+        <span className="hidden md:flex flex-col items-start leading-none">
+          <span className="text-xs font-semibold max-w-[120px] truncate">
+            {me?.name ?? me?.email ?? "Account"}
+          </span>
+          {me?.roleName && (
+            <span className="mt-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">
+              {me.roleName}
+            </span>
+          )}
+        </span>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.15 }}
+              className="absolute right-0 top-full z-50 mt-2 w-56 rounded-xl border border-white/10 bg-popover shadow-2xl p-1.5"
+            >
+              <div className="px-3 py-2 border-b border-white/[0.06] mb-1">
+                <div className="text-sm font-medium truncate">{me?.name ?? "—"}</div>
+                <div className="text-xs text-muted-foreground truncate">{me?.email ?? ""}</div>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-foreground/[0.05] transition-colors"
+              >
+                <LogOut className="h-4 w-4" /> Sign out
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export function TopNav() {
   const [location, navigate] = useLocation();
+  const { can } = useAuthz();
+
+  const clusters = CLUSTERS.map((c) => ({
+    ...c,
+    items: c.items.filter((i) => can(i.module, "view")),
+  })).filter((c) => c.items.length > 0);
 
   const activeCluster =
-    CLUSTERS.find((c) => c.items.some((i) => isItemActive(location, i.href))) ??
-    CLUSTERS[0];
+    clusters.find((c) => c.items.some((i) => isItemActive(location, i.href))) ??
+    clusters[0];
 
   return (
     <header className="relative z-30 shrink-0">
@@ -128,8 +217,8 @@ export function TopNav() {
 
           {/* Primary clusters */}
           <nav className="flex items-center gap-1 flex-1 overflow-x-auto no-scrollbar">
-            {CLUSTERS.map((cluster) => {
-              const isActive = cluster.label === activeCluster.label;
+            {clusters.map((cluster) => {
+              const isActive = cluster.label === activeCluster?.label;
               return (
                 <button
                   key={cluster.label}
@@ -156,17 +245,27 @@ export function TopNav() {
                         : "bg-foreground/[0.04]",
                     )}
                   >
-                    <img
-                      src={withBase(cluster.icon)}
-                      alt=""
-                      aria-hidden="true"
-                      className={cn(
-                        "h-6 w-6 object-contain transition-all duration-300",
-                        isActive
-                          ? "opacity-100 scale-100"
-                          : "opacity-60 grayscale group-hover:opacity-90",
-                      )}
-                    />
+                    {cluster.icon ? (
+                      <img
+                        src={withBase(cluster.icon)}
+                        alt=""
+                        aria-hidden="true"
+                        className={cn(
+                          "h-6 w-6 object-contain transition-all duration-300",
+                          isActive
+                            ? "opacity-100 scale-100"
+                            : "opacity-60 grayscale group-hover:opacity-90",
+                        )}
+                      />
+                    ) : (
+                      <Settings
+                        aria-hidden="true"
+                        className={cn(
+                          "h-5 w-5 transition-all duration-300",
+                          isActive ? "text-primary" : "text-muted-foreground",
+                        )}
+                      />
+                    )}
                   </span>
                   <span className="relative hidden md:inline text-sm font-medium tracking-tight">
                     {cluster.label}
@@ -179,10 +278,12 @@ export function TopNav() {
           {/* Right rail */}
           <div className="flex items-center gap-2 shrink-0">
             <ThemeToggle />
+            <UserMenu />
           </div>
         </div>
 
         {/* Secondary row — dynamic sub-sections of the active cluster */}
+        {activeCluster && (
         <div className="relative border-t border-white/[0.06]">
           <div className="px-5 md:px-8">
             <AnimatePresence mode="wait">
@@ -229,6 +330,7 @@ export function TopNav() {
             </AnimatePresence>
           </div>
         </div>
+        )}
       </div>
     </header>
   );

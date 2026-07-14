@@ -36,7 +36,7 @@ if ! pnpm --filter @workspace/api-server run build; then
 fi
 
 echo "==> Starting api-server on port ${PORT}"
-PORT="$PORT" NODE_ENV=development node --enable-source-maps \
+PORT="$PORT" NODE_ENV=development AUTH_BYPASS=1 node --enable-source-maps \
   artifacts/api-server/dist/index.mjs &
 SERVER_PID=$!
 

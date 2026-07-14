@@ -16,10 +16,25 @@ import anthropicRouter from "./anthropic";
 import copilotkitRouter from "./copilotkit";
 import graRouter from "./gra";
 import pipelineRouter from "./pipeline";
+import authRouter from "./auth";
+import adminRouter from "./admin";
+import auditRouter from "./audit";
+import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
+// Public: health check only
 router.use(healthRouter);
+
+// Everything below requires a signed-in user, then a role permission
+// matching the route (see middlewares/rbac.ts), and mutations are audited.
+router.use(requireAuth);
+router.use(authorize);
+router.use(auditTrail);
+
+router.use(authRouter);
+router.use(adminRouter);
+router.use(auditRouter);
 router.use(vehiclesRouter);
 router.use(leadsRouter);
 router.use(customersRouter);
