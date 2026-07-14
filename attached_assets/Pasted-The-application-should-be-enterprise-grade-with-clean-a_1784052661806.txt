@@ -1,0 +1,943 @@
+The application should be enterprise-grade with clean architecture, scalable codebase, responsive UI, reusable components, proper API design, role-based access control, audit logs, workflow engine, notifications, and dashboard analytics.
+
+========================================================
+TECH STACK
+========================================================
+
+
+
+Authentication
+- Google OAuth (Google SSO)
+- JWT
+- Refresh Tokens
+- Session Management
+
+Email
+- Gmail SMTP
+- Beautiful HTML Email Templates
+- Email Queue
+- Email Logs
+
+Storage
+- Local Uploads (make easily replaceable with S3)
+
+Database
+- PostgreSQL
+
+Architecture
+- Clean Architecture
+- Repository Pattern
+- Service Layer
+- Controller Layer
+- Middleware
+- Validation Layer
+- Logger
+- Error Handler
+
+========================================================
+APPLICATION NAME
+========================================================
+
+Dealer Management System
+
+========================================================
+THEME
+========================================================
+
+Use exactly the same color theme, typography, spacing, card design, gradients, and dashboard style as our existing automotive website.
+
+Use a premium modern automotive dashboard design.
+
+Dark and Light Mode.
+
+Glassmorphism.
+
+Responsive.
+
+========================================================
+AUTHENTICATION
+========================================================
+
+Implement
+
+Google SSO Login
+
+Normal Login
+
+Forgot Password
+
+Reset Password
+
+JWT Authentication
+
+Refresh Tokens
+
+Role Based Authorization
+
+Session Timeout
+
+========================================================
+ROLES (RBAC)
+========================================================
+
+Implement complete RBAC.
+
+Roles
+
+General Manager
+
+Sales Manager
+
+Service Manager
+
+Marketing Advisor
+
+Finance Manager
+
+Sales Advisor
+
+Delivery Advisor
+
+Service Advisor
+
+Parts Advisor
+
+Technician
+
+Marketing Coordinator
+
+Each role should have configurable permissions.
+
+Permission Categories
+
+View
+
+Create
+
+Edit
+
+Delete
+
+Approve
+
+Reject
+
+Export
+
+Assign
+
+Admin
+
+Everything should be database driven.
+
+========================================================
+CUSTOMER MANAGEMENT
+========================================================
+
+Customer Profile
+
+Customer ID
+
+Full Name
+
+Email
+
+Phone
+
+WhatsApp
+
+Date of Birth
+
+Occupation
+
+Company
+
+Address
+
+Country
+
+City
+
+Documents
+
+Driver License
+
+Passport
+
+Tax Number
+
+Notes
+
+Tags
+
+Communication History
+
+Customer Timeline
+
+Uploaded Files
+
+========================================================
+CUSTOMER PERSONA
+========================================================
+
+Create Customer Persona module.
+
+Store
+
+Age Group
+
+Occupation
+
+Income
+
+Buying Budget
+
+Family Size
+
+Preferred Vehicle Type
+
+Preferred Brand
+
+Fuel Preference
+
+Driving Habits
+
+Purchase Motivation
+
+Lifestyle
+
+Buying Probability
+
+Finance Required
+
+Trade-In Vehicle
+
+Previous Purchases
+
+Communication Preference
+
+Marketing Consent
+
+Customer Lifetime Value
+
+AI Recommended Vehicle
+
+Lead Score
+
+========================================================
+LEAD MANAGEMENT
+========================================================
+
+Customers submit enquiry from website.
+
+Lead automatically created.
+
+Lead contains
+
+Customer
+
+Interested Vehicle
+
+Variant
+
+Color
+
+Source
+
+Website
+
+Walk-in
+
+Phone
+
+Facebook
+
+Instagram
+
+WhatsApp
+
+Referral
+
+Priority
+
+Lead Status
+
+Lead Owner
+
+Test Drive Date
+
+Test Drive Time
+
+Preferred Branch
+
+Comments
+
+Attachments
+
+Timeline
+
+========================================================
+EMAIL AUTOMATION
+========================================================
+
+Use Gmail SMTP.
+
+Automatically send emails for
+
+Lead Received
+
+Test Drive Confirmation
+
+Lead Assignment
+
+Finance Processing
+
+Finance Approved
+
+Vehicle Booking
+
+Payment Reminder
+
+Delivery Schedule
+
+Delivery Confirmation
+
+Service Reminder
+
+Warranty Reminder
+
+Customer Feedback
+
+Thank You Email
+
+Store email history.
+
+========================================================
+LEAD WORKFLOW
+========================================================
+
+Workflow
+
+Customer submits enquiry
+
+↓
+
+Lead Created
+
+↓
+
+Marketing Coordinator reviews
+
+↓
+
+Assign Sales Advisor
+
+↓
+
+Sales Advisor contacts customer
+
+↓
+
+Update lead status
+
+↓
+
+Schedule Test Drive
+
+↓
+
+Inventory Check
+
+↓
+
+Vehicle Available?
+
+YES
+
+↓
+
+Proceed
+
+NO
+
+↓
+
+Back Order
+
+↓
+
+Customer chooses
+
+Cash
+
+OR
+
+Finance
+
+========================================================
+FINANCE WORKFLOW
+========================================================
+
+If Finance selected
+
+Collect
+
+Employment Details
+
+Income
+
+Bank Statements
+
+Documents
+
+Loan Amount
+
+Down Payment
+
+Loan Term
+
+Generate Finance Application
+
+Integrate with Demerara LOS API.
+
+API should be abstracted.
+
+Create connector service
+
+Future integrations should be easy.
+
+Statuses
+
+Pending
+
+Submitted
+
+Under Review
+
+Approved
+
+Rejected
+
+Disbursed
+
+When loan is disbursed
+
+Automatically continue workflow.
+
+========================================================
+INVENTORY MANAGEMENT
+========================================================
+
+Vehicles
+
+VIN
+
+Model
+
+Brand
+
+Variant
+
+Engine
+
+Transmission
+
+Fuel
+
+Color
+
+Year
+
+Price
+
+Stock Status
+
+Reserved
+
+Booked
+
+Delivered
+
+Available
+
+Accessories
+
+Images
+
+Documents
+
+========================================================
+VEHICLE BOOKING
+========================================================
+
+Reserve Vehicle
+
+Booking Amount
+
+Payment Status
+
+Booking Expiry
+
+Reservation Status
+
+========================================================
+DELIVERY WORKFLOW
+========================================================
+
+After finance approved
+
+↓
+
+Generate Sales Order
+
+↓
+
+Prepare Vehicle
+
+↓
+
+Accessory Installation
+
+↓
+
+PDI Checklist
+
+↓
+
+Registration
+
+↓
+
+Insurance
+
+↓
+
+Invoice
+
+↓
+
+Delivery Appointment
+
+↓
+
+Vehicle Delivery
+
+↓
+
+Customer Signature
+
+↓
+
+Feedback
+
+↓
+
+Completed
+
+========================================================
+SERVICE MODULE
+========================================================
+
+Service History
+
+Service Booking
+
+Technician Assignment
+
+Job Cards
+
+Parts
+
+Labour
+
+Service Status
+
+Invoices
+
+Warranty
+
+AMC
+
+Service Reminders
+
+========================================================
+PARTS MANAGEMENT
+========================================================
+
+Parts Inventory
+
+Purchase
+
+Stock
+
+Supplier
+
+Reorder Level
+
+Issue Parts
+
+Return Parts
+
+========================================================
+TECHNICIAN MODULE
+========================================================
+
+Assigned Jobs
+
+Current Status
+
+Work Hours
+
+Completed Jobs
+
+Checklist
+
+========================================================
+FINANCE MODULE
+========================================================
+
+Loan Applications
+
+Banks
+
+Approvals
+
+Invoices
+
+Payments
+
+Receipts
+
+Outstanding
+
+Reports
+
+========================================================
+COMMUNICATION CENTER
+========================================================
+
+Emails
+
+SMS Ready
+
+WhatsApp Ready
+
+Call Notes
+
+Meeting Notes
+
+Timeline
+
+Activity Feed
+
+========================================================
+NOTIFICATIONS
+========================================================
+
+In App
+
+Email
+
+Browser Notifications
+
+Approval Notifications
+
+Task Notifications
+
+========================================================
+TASK MANAGEMENT
+========================================================
+
+Assign Tasks
+
+Due Date
+
+Priority
+
+Comments
+
+Attachments
+
+Completion
+
+========================================================
+REPORTS
+========================================================
+
+Lead Conversion
+
+Sales Report
+
+Revenue
+
+Inventory
+
+Finance
+
+Delivery
+
+Service
+
+Employee Performance
+
+Marketing
+
+Customer Retention
+
+========================================================
+DASHBOARD
+========================================================
+
+Role based dashboards.
+
+General Manager
+
+Complete KPI Dashboard
+
+Sales Manager
+
+Sales Pipeline
+
+Finance Manager
+
+Finance Approvals
+
+Marketing
+
+Campaign Analytics
+
+Service
+
+Service Dashboard
+
+Technician
+
+Today's Jobs
+
+Sales Advisor
+
+Assigned Leads
+
+Delivery Advisor
+
+Deliveries
+
+========================================================
+AUDIT LOGS
+========================================================
+
+Store every action.
+
+Login
+
+Logout
+
+Create
+
+Update
+
+Delete
+
+Approval
+
+Assignment
+
+Email Sent
+
+Finance Submission
+
+Vehicle Delivery
+
+========================================================
+SEARCH
+========================================================
+
+Global Search
+
+Customer
+
+Vehicle
+
+Lead
+
+Invoice
+
+Booking
+
+Service
+
+========================================================
+SETTINGS
+========================================================
+
+Company Profile
+
+Branches
+
+Departments
+
+Users
+
+Roles
+
+Permissions
+
+SMTP
+
+Google OAuth
+
+Finance API
+
+Email Templates
+
+Master Data
+
+========================================================
+API INTEGRATION
+========================================================
+
+Create integration layer.
+
+Current
+
+Demerara LOS
+
+Future
+
+Insurance API
+
+Payment Gateway
+
+SMS Provider
+
+WhatsApp
+
+CRM
+
+ERP
+
+Everything should use adapters.
+
+========================================================
+DATABASE DESIGN
+========================================================
+
+Design normalized PostgreSQL schema.
+
+Create Prisma models for all entities.
+
+Include
+
+Relationships
+
+Indexes
+
+Soft Delete
+
+Audit Columns
+
+Created By
+
+Updated By
+
+Created At
+
+Updated At
+
+========================================================
+EXTRA FEATURES
+========================================================
+
+Activity Timeline
+
+Customer 360 View
+
+Document Management
+
+Role Based Dashboard
+
+Lead Scoring
+
+Workflow Engine
+
+Approval Engine
+
+Email Queue
+
+Notification Center
+
+Calendar
+
+Test Drive Scheduler
+
+Inventory Reservation
+
+Customer History
+
+Vehicle History
+
+Finance Timeline
+
+Delivery Checklist
+
+PDF Generation
+
+Export Excel
+
+CSV Export
+
+Responsive Mobile Layout
+
+========================================================
+CODE QUALITY
+========================================================
+
+Use enterprise coding standards.
+
+Reusable Components
+
+Hooks
+
+Custom Middleware
+
+Error Handling
+
+Validation
+
+DTOs
+
+Repository Pattern
+
+Service Layer
+
+Unit Test Ready
+
+REST API Documentation
+
+Swagger
+
+Pagination
+
+Sorting
+
+Filtering
+
+Search
+
+Logging
+
+Rate Limiting
+
+Helmet
+
+CORS
+
+Compression
+
+Environment Variables
+
+========================================================
+GOAL
+========================================================
+
+The application should feel like Salesforce Automotive Cloud + DealerSocket + Oracle NetSuite Automotive + Microsoft Dynamics 365 Sales combined into a modern Dealer Management System suitable for an enterprise automotive dealership.
