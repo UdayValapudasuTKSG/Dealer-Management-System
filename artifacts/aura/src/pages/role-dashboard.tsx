@@ -243,14 +243,19 @@ const LEGEND_STYLE = { fontSize: 12, color: "hsl(var(--muted-foreground))" } as 
 
 function weekKey(dateStr: string) {
   const d = new Date(dateStr);
-  const day = d.getDay();
-  const monday = new Date(d);
-  monday.setDate(d.getDate() - ((day + 6) % 7));
-  return monday.toISOString().slice(0, 10);
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+  const mm = String(monday.getMonth() + 1).padStart(2, "0");
+  const dd = String(monday.getDate()).padStart(2, "0");
+  return `${monday.getFullYear()}-${mm}-${dd}`;
 }
 
-const weekLabel = (key: string) =>
-  new Date(key).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const weekLabel = (key: string) => {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+};
 
 /* ---------- role dashboards ---------- */
 
@@ -298,7 +303,7 @@ function SalesManagerDashboard() {
       .reduce<Record<string, { model: string; value: number; units: number }>>((acc, d) => {
         const key = modelName.get(d.vehicleId) ?? `Vehicle #${d.vehicleId}`;
         acc[key] ??= { model: key, value: 0, units: 0 };
-        acc[key].value += d.otdPrice || 0;
+        acc[key].value += d.otdPrice || d.vehiclePrice || 0;
         acc[key].units += 1;
         return acc;
       }, {}),
@@ -488,11 +493,10 @@ function MarketingDashboard() {
     .map(([s]) => s);
   const weeks: string[] = [];
   {
-    const start = new Date(weekKey(new Date().toISOString()));
+    const now = new Date();
     for (let i = 7; i >= 0; i--) {
-      const w = new Date(start);
-      w.setDate(start.getDate() - i * 7);
-      weeks.push(w.toISOString().slice(0, 10));
+      const w = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i * 7);
+      weeks.push(weekKey(w.toISOString()));
     }
   }
   const leadsOverTime = weeks.map((w) => {

@@ -6,6 +6,9 @@ import {
   useGetInventoryBreakdown,
   useListTimeline,
   useListGates,
+  useListLeads,
+  useListDeals,
+  useListVehicles,
 } from "@workspace/api-client-react";
 import type {
   Gate,
@@ -30,6 +33,10 @@ import {
   Layers,
   BarChart3,
   GitBranch,
+  LineChart as LineChartIcon,
+  Trophy,
+  Car,
+  Megaphone,
 } from "lucide-react";
 import {
   AreaChart,
@@ -44,6 +51,9 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  LineChart,
+  Line,
+  Legend,
 } from "recharts";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
@@ -81,6 +91,33 @@ function greeting() {
   return "Good evening";
 }
 
+const SERIES_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(0 0% 62%)",
+  "hsl(0 60% 62%)",
+  "hsl(0 0% 42%)",
+  "hsl(0 30% 50%)",
+];
+
+const AXIS_TICK = { fontSize: 12, fill: "hsl(var(--muted-foreground))" } as const;
+const LEGEND_STYLE = { fontSize: 12, color: "hsl(var(--muted-foreground))" } as const;
+
+function weekKey(dateStr: string) {
+  const d = new Date(dateStr);
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
+  const mm = String(monday.getMonth() + 1).padStart(2, "0");
+  const dd = String(monday.getDate()).padStart(2, "0");
+  return `${monday.getFullYear()}-${mm}-${dd}`;
+}
+
+const weekLabel = (key: string) => {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+};
+
 function deltaPct(series: number[]): number | null {
   if (series.length < 2) return null;
   const prev = series[series.length - 2];
@@ -96,6 +133,9 @@ export default function Dashboard() {
   const { data: inventory } = useGetInventoryBreakdown();
   const { data: timeline } = useListTimeline({ limit: 12 });
   const { data: gates } = useListGates({ status: "pending" });
+  const { data: leads } = useListLeads();
+  const { data: deals } = useListDeals();
+  const { data: vehicles } = useListVehicles();
 
   const sortedGates = [...(gates ?? [])].sort(
     (a, b) =>
@@ -106,6 +146,73 @@ export default function Dashboard() {
   const revenueTrend = (performance ?? []).map((p) => p.revenue);
   const revDelta = deltaPct(revenueTrend);
   const unitsDelta = deltaPct((performance ?? []).map((p) => p.units));
+
+  const sourceCounts = (leads ?? []).reduce<Record<string, number>>((acc, l) => {
+    acc[l.source] = (acc[l.source] ?? 0) + 1;
+    return acc;
+  }, {});
+  const topSources = Object.entries(sourceCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([s]) => s);
+  const weeks: string[] = [];
+  {
+    const now = new Date();
+    for (let i = 7; i >= 0; i--) {
+      const w = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i * 7);
+      weeks.push(weekKey(w.toISOString()));
+    }
+  }
+  const leadsOverTime = weeks.map((w) => {
+    const row: Record<string, string | number> = { week: weekLabel(w) };
+    for (const s of topSources) row[s] = 0;
+    for (const l of leads ?? []) {
+      if (weekKey(l.createdAt) === w && topSources.includes(l.source)) {
+        row[l.source] = (row[l.source] as number) + 1;
+      }
+    }
+    return row;
+  });
+
+  const modelName = new Map(
+    (vehicles ?? []).map((v) => [v.id, `${v.make} ${v.model}`]),
+  );
+  const salesByModel = Object.values(
+    (deals ?? [])
+      .filter((d) => d.stage !== "lost")
+      .reduce<Record<string, { model: string; value: number; units: number }>>(
+        (acc, d) => {
+          const key = modelName.get(d.vehicleId) ?? `Vehicle #${d.vehicleId}`;
+          acc[key] ??= { model: key, value: 0, units: 0 };
+          acc[key].value += d.otdPrice || d.vehiclePrice || 0;
+          acc[key].units += 1;
+          return acc;
+        },
+        {},
+      ),
+  )
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5);
+
+  const advisorPerf = Object.values(
+    (deals ?? []).reduce<
+      Record<string, { advisor: string; open: number; delivered: number }>
+    >((acc, d) => {
+      const key = d.salesAdvisor ?? "Unassigned";
+      acc[key] ??= { advisor: key, open: 0, delivered: 0 };
+      if (d.stage === "delivered") acc[key].delivered += 1;
+      else if (d.stage !== "lost") acc[key].open += 1;
+      return acc;
+    }, {}),
+  )
+    .sort((a, b) => b.delivered + b.open - (a.delivered + a.open))
+    .slice(0, 6);
+
+  const sourceMix = topSources.map((s, i) => ({
+    name: s.replace(/_/g, " "),
+    value: sourceCounts[s],
+    fill: SERIES_COLORS[i % SERIES_COLORS.length],
+  }));
 
   return (
     <div className="h-full overflow-y-auto">
@@ -256,6 +363,157 @@ export default function Dashboard() {
             />
             <CardContent className="px-4 pb-4 pt-0 flex-1 min-h-[220px]">
               <UnitsBar data={performance ?? []} />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Demand: lead flow over time + source mix */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2 glass-panel border-none shadow-xl overflow-hidden">
+            <ChartHeader
+              icon={LineChartIcon}
+              title="Leads Created Over Time"
+              sub="Weekly lead flow by top sources"
+            />
+            <CardContent className="p-0 h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={leadsOverTime} margin={{ top: 16, right: 24, left: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="week" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={6} />
+                  <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} width={32} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} cursor={{ stroke: "hsl(var(--foreground) / 0.15)" }} />
+                  <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} formatter={(v: string) => v.replace(/_/g, " ")} />
+                  {topSources.map((s, i) => (
+                    <Line
+                      key={s}
+                      type="monotone"
+                      dataKey={s}
+                      name={s.replace(/_/g, " ")}
+                      stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3, strokeWidth: 0, fill: SERIES_COLORS[i % SERIES_COLORS.length] }}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="glass-panel border-none shadow-xl flex flex-col">
+            <ChartHeader
+              icon={Megaphone}
+              title="Lead Source Mix"
+              sub="Where demand comes from"
+            />
+            <CardContent className="px-6 pb-6 pt-0 flex-1">
+              {sourceMix.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground text-sm">
+                  No leads yet.
+                </div>
+              ) : (
+                <div className="flex flex-col">
+                  <div className="relative w-full h-[176px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={sourceMix} dataKey="value" nameKey="name" innerRadius={58} outerRadius={82} paddingAngle={2} stroke="none">
+                          {sourceMix.map((d, i) => (
+                            <Cell key={i} fill={d.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ display: "none" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-3xl font-bold leading-none tabular-nums">
+                        {(leads ?? []).length}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
+                        Leads
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 mt-5">
+                    {sourceMix.map((d) => (
+                      <div key={d.name} className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: d.fill }} />
+                          <span className="text-muted-foreground truncate capitalize">{d.name}</span>
+                        </span>
+                        <span className="font-semibold tabular-nums">{d.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Team & product performance */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col">
+            <ChartHeader
+              icon={Trophy}
+              title="Advisor Performance"
+              sub="Delivered and open deals per advisor"
+            />
+            <CardContent className="px-4 pb-4 pt-0 flex-1 min-h-[260px]">
+              {advisorPerf.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground text-sm">
+                  No deals recorded yet.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={advisorPerf} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                    <XAxis type="number" axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} />
+                    <YAxis type="category" dataKey="advisor" axisLine={false} tickLine={false} tick={AXIS_TICK} width={120} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} />
+                    <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} />
+                    <Bar dataKey="delivered" name="Delivered" stackId="a" fill="hsl(var(--primary))" maxBarSize={18} />
+                    <Bar dataKey="open" name="Open" stackId="a" fill="hsl(0 0% 55%)" radius={[0, 4, 4, 0]} maxBarSize={18} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="glass-panel border-none shadow-xl flex flex-col">
+            <ChartHeader
+              icon={Car}
+              title="Sales by Model"
+              sub="Deal value by vehicle"
+            />
+            <CardContent className="px-6 pb-6 pt-0 flex-1">
+              {salesByModel.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground text-sm">
+                  No deal value to chart yet.
+                </div>
+              ) : (
+                <div className="space-y-3.5 pt-1">
+                  {salesByModel.map((m) => {
+                    const max = salesByModel[0]?.value || 1;
+                    return (
+                      <div key={m.model}>
+                        <div className="flex items-center justify-between text-sm mb-1.5">
+                          <span className="font-medium truncate pr-3">{m.model}</span>
+                          <span className="text-muted-foreground tabular-nums shrink-0">
+                            ${Math.round(m.value / 1000)}k · {m.units} {m.units === 1 ? "deal" : "deals"}
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-foreground/[0.06] overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${(m.value / max) * 100}%` }}
+                            transition={{ duration: 0.6 }}
+                            className="h-full rounded-full bg-primary"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
