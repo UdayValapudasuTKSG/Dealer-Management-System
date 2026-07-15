@@ -49,7 +49,7 @@ type TemplateDef = {
   subject: (d: TemplateData) => string;
   heading: (d: TemplateData) => string;
   body: (d: TemplateData) => string;
-  cta?: (d: TemplateData) => { label: string; note?: string };
+  cta?: (d: TemplateData) => { label: string; note?: string; href?: string };
   sample: TemplateData;
 };
 
@@ -81,6 +81,24 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       color: "Obsidian Black",
       total: "$125,000",
       validUntil: "July 29, 2026",
+    },
+  },
+  test_drive_invite: {
+    label: "Test Drive Invite",
+    description: "Invites the customer to reserve a test-drive time slot online.",
+    subject: (x) =>
+      `Reserve your test drive${x.vehicle ? ` — ${x.vehicle}` : ""}`,
+    heading: (x) => `Take the wheel, ${d(x, "name", "there")}`,
+    body: (x) =>
+      `The <strong>${d(x, "vehicle", "vehicle of your choice")}</strong> is ready when you are. Pick a time that suits you and we'll have it detailed, charged/fuelled and waiting at the showroom entrance. Reserving your slot takes under a minute — and the time is blocked exclusively for you.`,
+    cta: (x) =>
+      x.link
+        ? { label: "Choose your time slot", href: x.link }
+        : { label: "Choose your time slot" },
+    sample: {
+      name: "Alex Mensah",
+      vehicle: "2026 BMW i7 xDrive60",
+      link: "https://aura.example.com/book-test-drive/sample-token",
     },
   },
   test_drive_confirmation: {
@@ -252,7 +270,11 @@ export function renderEmail(
         ${
           cta
             ? `<tr><td style="padding:28px 44px 0;">
-            <div style="display:inline-block;background-color:#e01313;color:#ffffff;font-size:13px;font-weight:600;letter-spacing:0.5px;padding:12px 26px;border-radius:999px;">${cta.label}</div>
+            ${
+              cta.href
+                ? `<a href="${cta.href}" style="display:inline-block;background-color:#e01313;color:#ffffff;font-size:13px;font-weight:600;letter-spacing:0.5px;padding:12px 26px;border-radius:999px;text-decoration:none;">${cta.label}</a>`
+                : `<div style="display:inline-block;background-color:#e01313;color:#ffffff;font-size:13px;font-weight:600;letter-spacing:0.5px;padding:12px 26px;border-radius:999px;">${cta.label}</div>`
+            }
           </td></tr>`
             : ""
         }

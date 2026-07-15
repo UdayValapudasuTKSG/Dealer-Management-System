@@ -899,6 +899,72 @@ paths:
                 items:
                   $ref: "#/components/schemas/EnquiryVehicle"
 
+  /test-drive/{token}:
+    get:
+      operationId: getTestDriveInvite
+      tags: [leads]
+      summary: Public test-drive booking data — vehicle, slots and availability
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Booking page data for this invite link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestDriveInvite"
+        "404":
+          description: Unknown or expired link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /test-drive/{token}/book:
+    post:
+      operationId: bookTestDriveSlot
+      tags: [leads]
+      summary: Public — reserve (block) a test-drive time slot
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookTestDriveInput"
+      responses:
+        "200":
+          description: Slot reserved — returns the refreshed booking data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestDriveInvite"
+        "404":
+          description: Unknown or expired link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Slot already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Slot outside the bookable window
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /leads/advisors:
     get:
       operationId: listLeadAdvisors
@@ -965,6 +1031,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Lead"
+        "409":
+          description: Slot already booked by another lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: Not found
           content:
@@ -3947,6 +4019,42 @@ components:
         vin: { type: ["string", "null"] }
         price: { type: number }
         imageUrl: { type: ["string", "null"] }
+    TestDriveSlot:
+      type: object
+      required: [iso, label, available]
+      properties:
+        iso: { type: string }
+        label: { type: string }
+        available: { type: boolean }
+    TestDriveDay:
+      type: object
+      required: [date, label, slots]
+      properties:
+        date: { type: string }
+        label: { type: string }
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/TestDriveSlot"
+    TestDriveInvite:
+      type: object
+      required: [leadName, vehicle, vehicleImageUrl, branch, bookedAt, bookedLabel, days]
+      properties:
+        leadName: { type: string }
+        vehicle: { type: ["string", "null"] }
+        vehicleImageUrl: { type: ["string", "null"] }
+        branch: { type: ["string", "null"] }
+        bookedAt: { type: ["string", "null"] }
+        bookedLabel: { type: ["string", "null"] }
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/TestDriveDay"
+    BookTestDriveInput:
+      type: object
+      required: [slot]
+      properties:
+        slot: { type: string, format: date-time }
     AssignLeadInput:
       type: object
       required: [userId]

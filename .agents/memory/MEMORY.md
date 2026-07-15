@@ -10,3 +10,4 @@
 - [RBAC roles seed can get wiped](rbac-seed-wipe.md) — blanket 403s for everyone usually means the roles table is empty (drizzle push wiped seed, FK nulled role_ids); re-seed + restore roles.
 - [Webhook signature testing](webhook-signature-testing.md) — test signed webhooks via a dummy-secret second server instance; background procs die between bash calls, so start+curl+kill in one command.
 - [Clerk + RBAC testing](clerk-rbac-testing.md) — use testClerkAuth with SHORT test plans (long ones hit the 600s timeout); headless harnesses need a dev-only AUTH_BYPASS after global auth.
+- [Headless api-server testing](headless-server-testing.md) — never `pkill -f dist/index.mjs` to stop a headless test server; the real workflow runs the same command and dies too. Kill by captured PID.

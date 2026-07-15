@@ -13,6 +13,7 @@ import { AuthProvider, useAuthz } from "@/lib/auth";
 import { SignInPage, SignUpPage } from "@/pages/auth-pages";
 
 import Landing from "@/pages/landing";
+import BookTestDrive from "@/pages/book-test-drive";
 import RoleDashboard from "@/pages/role-dashboard";
 import Reports from "@/pages/reports";
 import Inventory from "@/pages/inventory";
@@ -257,6 +258,7 @@ function ClerkProviderWithRoutes() {
         <TooltipProvider>
           <Switch>
             <Route path="/" component={Landing} />
+            <Route path="/book-test-drive/:token" component={BookTestDrive} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route>

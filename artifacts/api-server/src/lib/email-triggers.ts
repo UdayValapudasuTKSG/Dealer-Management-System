@@ -78,6 +78,20 @@ async function leadRecipient(
 const longDate = (d: Date) =>
   d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
+/** Public origin for customer-facing links (production domain first). */
+function publicAppOrigin(): string | null {
+  const prod = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
+  const dev = process.env.REPLIT_DEV_DOMAIN?.trim();
+  const host = prod || dev;
+  return host ? `https://${host}` : null;
+}
+
+/** Self-service test-drive booking URL for a lead's invite token. */
+export function testDriveBookingUrl(token: string): string | null {
+  const origin = publicAppOrigin();
+  return origin ? `${origin}/book-test-drive/${token}` : null;
+}
+
 /**
  * New lead created → personalised PDF quote when a vehicle of interest is on
  * file (details pulled from inventory), otherwise the "lead_received" welcome.
@@ -105,35 +119,55 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
           ...(fallbackVehicleName ? { vehicle: fallbackVehicleName } : {}),
         },
       });
-      return;
+    } else {
+      const label = `${v.year} ${v.make} ${v.model}`;
+      const version =
+        v.trim || v.variant || lead.variant || "Standard specification";
+      const color = v.exteriorColor || lead.color || "";
+      const quantity = 1;
+      const now = new Date();
+      const validUntil = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+      await send({
+        template: "vehicle_quote",
+        to,
+        customerId: lead.customerId,
+        data: {
+          name,
+          vehicle: label,
+          model: v.model,
+          version,
+          color,
+          quantity: String(quantity),
+          unitPrice: money(v.price),
+          total: money(v.price * quantity),
+          quoteRef: `Q-${lead.id}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`,
+          issuedOn: longDate(now),
+          validUntil: longDate(validUntil),
+        },
+      });
     }
 
-    const label = `${v.year} ${v.make} ${v.model}`;
-    const version =
-      v.trim || v.variant || lead.variant || "Standard specification";
-    const color = v.exteriorColor || lead.color || "";
-    const quantity = 1;
-    const now = new Date();
-    const validUntil = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-
-    await send({
-      template: "vehicle_quote",
-      to,
-      customerId: lead.customerId,
-      data: {
-        name,
-        vehicle: label,
-        model: v.model,
-        version,
-        color,
-        quantity: String(quantity),
-        unitPrice: money(v.price),
-        total: money(v.price * quantity),
-        quoteRef: `Q-${lead.id}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`,
-        issuedOn: longDate(now),
-        validUntil: longDate(validUntil),
-      },
-    });
+    // Self-service booking invite — lets the customer block a test-drive
+    // slot from a unique link (skipped when a drive is already scheduled).
+    if (!lead.testDriveAt) {
+      const link = testDriveBookingUrl(lead.testDriveToken);
+      const vehicleLabel = v
+        ? `${v.year} ${v.make} ${v.model}`
+        : fallbackVehicleName;
+      if (link) {
+        await send({
+          template: "test_drive_invite",
+          to,
+          customerId: lead.customerId,
+          data: {
+            name,
+            link,
+            ...(vehicleLabel ? { vehicle: vehicleLabel } : {}),
+          },
+        });
+      }
+    }
   });
 }
 

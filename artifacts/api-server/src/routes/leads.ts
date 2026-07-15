@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, isNotNull, type SQL } from "drizzle-orm";
+import { eq, desc, and, isNotNull, ne, type SQL } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -289,6 +289,22 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
   }
 
   const when = new Date(parsed.data.scheduledAt);
+
+  // One drive at a time: block scheduling on top of a slot that any other
+  // lead already holds (customers self-book via their public invite link).
+  const [conflict] = await db
+    .select({ id: leadsTable.id, name: leadsTable.name })
+    .from(leadsTable)
+    .where(
+      and(eq(leadsTable.testDriveAt, when), ne(leadsTable.id, params.data.id)),
+    );
+  if (conflict) {
+    res.status(409).json({
+      error: `That time slot is already booked (${conflict.name}) — pick another time`,
+    });
+    return;
+  }
+
   const [lead] = await db
     .update(leadsTable)
     .set({

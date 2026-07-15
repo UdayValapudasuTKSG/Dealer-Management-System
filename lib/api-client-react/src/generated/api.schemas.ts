@@ -962,6 +962,37 @@ export interface EnquiryVehicle {
   imageUrl?: string | null;
 }
 
+export interface TestDriveSlot {
+  iso: string;
+  label: string;
+  available: boolean;
+}
+
+export interface TestDriveDay {
+  date: string;
+  label: string;
+  slots: TestDriveSlot[];
+}
+
+export interface TestDriveInvite {
+  leadName: string;
+  /** @nullable */
+  vehicle: string | null;
+  /** @nullable */
+  vehicleImageUrl: string | null;
+  /** @nullable */
+  branch: string | null;
+  /** @nullable */
+  bookedAt: string | null;
+  /** @nullable */
+  bookedLabel: string | null;
+  days: TestDriveDay[];
+}
+
+export interface BookTestDriveInput {
+  slot: string;
+}
+
 export interface AssignLeadInput {
   userId: number;
 }

@@ -30,6 +30,7 @@ import reportsRouter from "./reports";
 import searchRouter from "./search";
 import enquiriesRouter from "./enquiries";
 import webhooksRouter from "./webhooks";
+import testDriveRouter from "./test-drive";
 import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
 
 const router: IRouter = Router();
@@ -39,6 +40,8 @@ const router: IRouter = Router();
 router.use(healthRouter);
 router.use(enquiriesRouter);
 router.use(webhooksRouter);
+// Public: customer self-service test-drive booking (token-authenticated link).
+router.use(testDriveRouter);
 
 // Everything below requires a signed-in user, then a role permission
 // matching the route (see middlewares/rbac.ts), and mutations are audited.

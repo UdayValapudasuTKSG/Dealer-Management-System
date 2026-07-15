@@ -1133,6 +1133,62 @@ export const ListEnquiryVehiclesResponse = zod.array(ListEnquiryVehiclesResponse
 
 
 /**
+ * @summary Public test-drive booking data — vehicle, slots and availability
+ */
+export const GetTestDriveInviteParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const GetTestDriveInviteResponse = zod.object({
+  "leadName": zod.string(),
+  "vehicle": zod.string().nullable(),
+  "vehicleImageUrl": zod.string().nullable(),
+  "branch": zod.string().nullable(),
+  "bookedAt": zod.string().nullable(),
+  "bookedLabel": zod.string().nullable(),
+  "days": zod.array(zod.object({
+  "date": zod.string(),
+  "label": zod.string(),
+  "slots": zod.array(zod.object({
+  "iso": zod.string(),
+  "label": zod.string(),
+  "available": zod.boolean()
+}))
+}))
+})
+
+
+/**
+ * @summary Public — reserve (block) a test-drive time slot
+ */
+export const BookTestDriveSlotParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const BookTestDriveSlotBody = zod.object({
+  "slot": zod.coerce.date()
+})
+
+export const BookTestDriveSlotResponse = zod.object({
+  "leadName": zod.string(),
+  "vehicle": zod.string().nullable(),
+  "vehicleImageUrl": zod.string().nullable(),
+  "branch": zod.string().nullable(),
+  "bookedAt": zod.string().nullable(),
+  "bookedLabel": zod.string().nullable(),
+  "days": zod.array(zod.object({
+  "date": zod.string(),
+  "label": zod.string(),
+  "slots": zod.array(zod.object({
+  "iso": zod.string(),
+  "label": zod.string(),
+  "available": zod.boolean()
+}))
+}))
+})
+
+
+/**
  * @summary List users assignable as lead owners
  */
 export const ListLeadAdvisorsResponseItem = zod.object({

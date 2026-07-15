@@ -12,6 +12,7 @@ import { z } from "zod/v4";
 export const EMAIL_TEMPLATES = [
   "lead_received",
   "vehicle_quote",
+  "test_drive_invite",
   "test_drive_confirmation",
   "lead_assignment",
   "finance_processing",

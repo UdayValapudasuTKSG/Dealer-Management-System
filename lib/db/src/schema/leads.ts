@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   serial,
@@ -44,6 +45,11 @@ export const leadsTable = pgTable("leads", {
   ownerUserId: integer("owner_user_id"),
   testDriveAt: timestamp("test_drive_at", { withTimezone: true }),
   testDriveBranch: text("test_drive_branch"),
+  // Public self-service booking link token (emailed to the customer).
+  testDriveToken: text("test_drive_token")
+    .notNull()
+    .unique()
+    .default(sql`gen_random_uuid()`),
   availability: text("availability"),
   purchaseType: text("purchase_type"),
   attachments: jsonb("attachments")

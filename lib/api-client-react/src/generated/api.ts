@@ -39,6 +39,7 @@ import type {
   Bank,
   BankInput,
   BankUpdate,
+  BookTestDriveInput,
   Booking,
   BookingInput,
   BookingUpdate,
@@ -161,6 +162,7 @@ import type {
   TaskInput,
   TaskUpdate,
   TechnicianRef,
+  TestDriveInvite,
   TestEmailRequest,
   TestEmailResult,
   TimelineEvent,
@@ -2918,6 +2920,155 @@ export function useListEnquiryVehicles<TData = Awaited<ReturnType<typeof listEnq
 
 
 
+
+export const getGetTestDriveInviteUrl = (token: string,) => {
+
+
+
+
+  return `/api/test-drive/${token}`
+}
+
+/**
+ * @summary Public test-drive booking data — vehicle, slots and availability
+ */
+export const getTestDriveInvite = async (token: string, options?: RequestInit): Promise<TestDriveInvite> => {
+
+  return customFetch<TestDriveInvite>(getGetTestDriveInviteUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTestDriveInviteQueryKey = (token: string,) => {
+    return [
+    `/api/test-drive/${token}`
+    ] as const;
+    }
+
+
+export const getGetTestDriveInviteQueryOptions = <TData = Awaited<ReturnType<typeof getTestDriveInvite>>, TError = ErrorType<Error>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTestDriveInvite>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTestDriveInviteQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTestDriveInvite>>> = ({ signal }) => getTestDriveInvite(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTestDriveInvite>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTestDriveInviteQueryResult = NonNullable<Awaited<ReturnType<typeof getTestDriveInvite>>>
+export type GetTestDriveInviteQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Public test-drive booking data — vehicle, slots and availability
+ */
+
+export function useGetTestDriveInvite<TData = Awaited<ReturnType<typeof getTestDriveInvite>>, TError = ErrorType<Error>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTestDriveInvite>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTestDriveInviteQueryOptions(token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getBookTestDriveSlotUrl = (token: string,) => {
+
+
+
+
+  return `/api/test-drive/${token}/book`
+}
+
+/**
+ * @summary Public — reserve (block) a test-drive time slot
+ */
+export const bookTestDriveSlot = async (token: string,
+    bookTestDriveInput: BookTestDriveInput, options?: RequestInit): Promise<TestDriveInvite> => {
+
+  return customFetch<TestDriveInvite>(getBookTestDriveSlotUrl(token),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bookTestDriveInput)
+  }
+);}
+
+
+
+
+
+export const getBookTestDriveSlotMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bookTestDriveSlot>>, TError,{token: string;data: BodyType<BookTestDriveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bookTestDriveSlot>>, TError,{token: string;data: BodyType<BookTestDriveInput>}, TContext> => {
+
+const mutationKey = ['bookTestDriveSlot'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bookTestDriveSlot>>, {token: string;data: BodyType<BookTestDriveInput>}> = (props) => {
+          const {token,data} = props ?? {};
+
+          return  bookTestDriveSlot(token,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BookTestDriveSlotMutationResult = NonNullable<Awaited<ReturnType<typeof bookTestDriveSlot>>>
+    export type BookTestDriveSlotMutationBody = BodyType<BookTestDriveInput>
+    export type BookTestDriveSlotMutationError = ErrorType<Error>
+
+    /**
+ * @summary Public — reserve (block) a test-drive time slot
+ */
+export const useBookTestDriveSlot = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bookTestDriveSlot>>, TError,{token: string;data: BodyType<BookTestDriveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bookTestDriveSlot>>,
+        TError,
+        {token: string;data: BodyType<BookTestDriveInput>},
+        TContext
+      > => {
+      return useMutation(getBookTestDriveSlotMutationOptions(options));
+    }
 
 export const getListLeadAdvisorsUrl = () => {
 
