@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Loader2,
   ChevronRight,
+  Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Page, PageHeader } from "@/components/layout/page";
@@ -344,25 +345,21 @@ export default function Leads() {
         </motion.div>
       ) : (
         <>
-      {/* Stage rail — the navigation animation */}
-      <div className="relative rounded-3xl bg-foreground/[0.03] border border-white/10 shadow-[0_18px_48px_-28px_rgba(0,0,0,0.6)] px-4 md:px-8 py-8">
-        <div className="relative flex items-start justify-between gap-2">
-          {/* Track line */}
-          <div className="pointer-events-none absolute left-0 right-0 top-6 mx-8 h-[2px] bg-white/10 rounded-full" />
+      {/* Stage rail — segmented stepper */}
+      <div className="relative rounded-3xl bg-foreground/[0.03] border border-white/10 shadow-[0_18px_48px_-28px_rgba(0,0,0,0.6)] p-3 md:p-4">
+        {/* Progress track */}
+        <div className="relative mx-2 mb-3 h-1 rounded-full bg-foreground/[0.07] overflow-hidden">
           <motion.div
-            className="pointer-events-none absolute left-0 top-6 mx-8 h-[2px] bg-primary rounded-full shadow-[0_0_12px_hsl(var(--primary))]"
+            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary/40 via-primary to-primary shadow-[0_0_16px_hsl(var(--primary)/0.6)]"
             initial={false}
             animate={{
-              width:
-                PHASES.length > 1
-                  ? `calc(${(activeIndex / (PHASES.length - 1)) * 100}% - ${
-                      (activeIndex / (PHASES.length - 1)) * 4
-                    }rem)`
-                  : "0%",
+              width: `${((activeIndex + 1) / PHASES.length) * 100}%`,
             }}
             transition={{ type: "spring", stiffness: 200, damping: 30 }}
           />
+        </div>
 
+        <div className="grid grid-cols-5 gap-2 md:gap-3">
           {PHASES.map((phase, i) => {
             const isActive = phase === selectedPhase;
             const isPast = i < activeIndex;
@@ -370,37 +367,68 @@ export default function Leads() {
               <button
                 key={phase}
                 onClick={() => setSelectedPhase(phase)}
-                className="relative z-10 flex flex-col items-center gap-3 flex-1 min-w-0 group"
+                className={cn(
+                  "relative rounded-2xl px-3 py-3 md:px-4 md:py-4 text-left transition-colors group overflow-hidden",
+                  !isActive && "hover:bg-foreground/[0.05]",
+                )}
               >
-                <span
-                  className={cn(
-                    "relative flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold transition-colors",
-                    isActive
-                      ? "text-white"
-                      : isPast
-                        ? "bg-primary/20 text-primary"
-                        : "bg-foreground/[0.06] text-muted-foreground group-hover:text-foreground",
-                  )}
-                >
-                  {isActive && (
-                    <motion.span
-                      layoutId="pipeline-node-active"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                      className="absolute inset-0 rounded-full bg-primary shadow-lg shadow-primary/40"
-                    />
-                  )}
-                  <span className="relative z-10">{counts[phase] ?? 0}</span>
-                </span>
-                <span className="flex flex-col items-center gap-0.5 px-1">
-                  <span
-                    className={cn(
-                      "text-[11px] md:text-xs font-semibold uppercase tracking-widest transition-colors text-center",
-                      isActive
-                        ? "text-foreground"
-                        : "text-muted-foreground group-hover:text-foreground",
-                    )}
-                  >
-                    {PHASE_LABEL[phase]}
+                {isActive && (
+                  <motion.span
+                    layoutId="pipeline-node-active"
+                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary via-primary to-red-900 shadow-lg shadow-primary/40"
+                  />
+                )}
+                <span className="relative z-10 flex flex-col gap-1.5 min-w-0">
+                  <span className="flex items-center justify-between gap-2">
+                    <span
+                      className={cn(
+                        "flex h-5 w-5 md:h-6 md:w-6 items-center justify-center rounded-full text-[10px] font-bold transition-colors shrink-0",
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : isPast
+                            ? "bg-primary/15 text-primary"
+                            : "bg-foreground/[0.07] text-muted-foreground group-hover:text-foreground",
+                      )}
+                    >
+                      {isPast ? <Check className="h-3 w-3" /> : i + 1}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-xl md:text-2xl font-bold tabular-nums leading-none transition-colors",
+                        isActive
+                          ? "text-white"
+                          : isPast
+                            ? "text-foreground"
+                            : "text-muted-foreground group-hover:text-foreground",
+                      )}
+                    >
+                      {counts[phase] ?? 0}
+                    </span>
+                  </span>
+                  <span className="flex items-baseline justify-between gap-2 min-w-0">
+                    <span
+                      className={cn(
+                        "text-[10px] md:text-[11px] font-semibold uppercase tracking-widest truncate transition-colors",
+                        isActive
+                          ? "text-white/90"
+                          : "text-muted-foreground group-hover:text-foreground",
+                      )}
+                    >
+                      {PHASE_LABEL[phase]}
+                    </span>
+                    <span
+                      className={cn(
+                        "hidden md:inline text-[9px] uppercase tracking-wider shrink-0 transition-colors",
+                        isActive
+                          ? "text-white/60"
+                          : isPast
+                            ? "text-primary/80"
+                            : "text-muted-foreground/60",
+                      )}
+                    >
+                      {isActive ? "Viewing" : isPast ? "Done" : `0${i + 1}`}
+                    </span>
                   </span>
                 </span>
               </button>
