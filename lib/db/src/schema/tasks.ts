@@ -32,6 +32,8 @@ export const tasksTable = pgTable("tasks", {
     .notNull()
     .default([]),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+  dueSoonNotifiedAt: timestamp("due_soon_notified_at", { withTimezone: true }),
+  overdueNotifiedAt: timestamp("overdue_notified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -58,7 +60,14 @@ export const taskCommentsTable = pgTable("task_comments", {
 export const insertTaskSchema = createInsertSchema(tasksTable, {
   priority: z.enum(["low", "normal", "high", "urgent"]),
   status: z.enum(["open", "in_progress", "done"]),
-}).omit({ id: true, createdAt: true, updatedAt: true, completedAt: true });
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  dueSoonNotifiedAt: true,
+  overdueNotifiedAt: true,
+});
 export const insertTaskCommentSchema = createInsertSchema(
   taskCommentsTable,
 ).omit({ id: true, createdAt: true });

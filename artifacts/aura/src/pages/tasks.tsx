@@ -51,6 +51,21 @@ const STATUS_COLUMNS = [
   { key: "done", label: "Done" },
 ] as const;
 
+function todayString(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+function dueState(task: Task): "overdue" | "due-soon" | null {
+  if (!task.dueDate || task.status === "done") return null;
+  const today = todayString();
+  if (task.dueDate < today) return "overdue";
+  if (task.dueDate === today) return "due-soon";
+  return null;
+}
+
 const PRIORITY_STYLE: Record<string, string> = {
   urgent: "border-red-500/50 text-red-400",
   high: "border-orange-500/40 text-orange-400",
@@ -171,7 +186,12 @@ export default function Tasks() {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.97 }}
                       onClick={() => setDetailTask(t)}
-                      className="w-full text-left rounded-xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] p-4 transition-colors"
+                      className={cn(
+                        "w-full text-left rounded-xl border p-4 transition-colors",
+                        dueState(t) === "overdue"
+                          ? "border-red-500/40 bg-red-500/[0.06] hover:bg-red-500/[0.1]"
+                          : "border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06]",
+                      )}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span
@@ -208,8 +228,25 @@ export default function Tasks() {
                           </span>
                         )}
                         {t.dueDate && (
-                          <span className="flex items-center gap-1">
+                          <span
+                            className={cn(
+                              "flex items-center gap-1",
+                              dueState(t) === "overdue" && "text-red-400 font-semibold",
+                              dueState(t) === "due-soon" &&
+                                "text-orange-400 font-semibold",
+                            )}
+                          >
                             <CalendarDays className="h-3 w-3" /> {t.dueDate}
+                            {dueState(t) === "overdue" && (
+                              <span className="ml-1 rounded-full border border-red-500/50 bg-red-500/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-wider text-red-400">
+                                Overdue
+                              </span>
+                            )}
+                            {dueState(t) === "due-soon" && (
+                              <span className="ml-1 rounded-full border border-orange-500/40 bg-orange-500/10 px-1.5 py-px text-[9px] font-bold uppercase tracking-wider text-orange-400">
+                                Due today
+                              </span>
+                            )}
                           </span>
                         )}
                       </div>

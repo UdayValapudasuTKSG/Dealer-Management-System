@@ -1,9 +1,10 @@
 import nodemailer from "nodemailer";
-import { and, eq, lt, or } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
 import {
   db,
   emailLogsTable,
   notificationsTable,
+  tasksTable,
   timelineEventsTable,
   EMAIL_TEMPLATES,
   type EmailTemplate,
@@ -357,11 +358,89 @@ export async function processQueue(): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Task due-date reminders — due-soon (within 24h) and overdue, once each
+// ---------------------------------------------------------------------------
+
+function localDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export async function processTaskReminders(): Promise<void> {
+  const now = new Date();
+  const today = localDateString(now);
+  const tomorrow = localDateString(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+
+  const candidates = await db
+    .select()
+    .from(tasksTable)
+    .where(
+      and(
+        ne(tasksTable.status, "done"),
+        isNotNull(tasksTable.dueDate),
+        isNotNull(tasksTable.assigneeUserId),
+        lte(tasksTable.dueDate, tomorrow),
+        or(
+          isNull(tasksTable.dueSoonNotifiedAt),
+          and(lt(tasksTable.dueDate, today), isNull(tasksTable.overdueNotifiedAt)),
+        ),
+      ),
+    );
+
+  for (const task of candidates) {
+    const assigneeId = task.assigneeUserId!;
+    const dueDate = task.dueDate!;
+    try {
+      if (dueDate < today && !task.overdueNotifiedAt) {
+        await notifyUser({
+          userId: assigneeId,
+          type: "task",
+          title: `Task overdue: ${task.title}`,
+          body: `This ${task.priority}-priority task was due ${dueDate} and is still ${task.status === "in_progress" ? "in progress" : "open"}.`,
+          link: "/tasks",
+        });
+        await db
+          .update(tasksTable)
+          .set({
+            overdueNotifiedAt: now,
+            // If it slipped past due before a due-soon reminder fired, don't
+            // send a redundant "due soon" afterwards.
+            dueSoonNotifiedAt: task.dueSoonNotifiedAt ?? now,
+          })
+          .where(eq(tasksTable.id, task.id));
+        logger.info({ taskId: task.id }, "task overdue reminder sent");
+      } else if (dueDate >= today && !task.dueSoonNotifiedAt) {
+        await notifyUser({
+          userId: assigneeId,
+          type: "task",
+          title: `Task due ${dueDate === today ? "today" : "tomorrow"}: ${task.title}`,
+          body: `This ${task.priority}-priority task is due ${dueDate}. Wrap it up or update its due date.`,
+          link: "/tasks",
+        });
+        await db
+          .update(tasksTable)
+          .set({ dueSoonNotifiedAt: now })
+          .where(eq(tasksTable.id, task.id));
+        logger.info({ taskId: task.id }, "task due-soon reminder sent");
+      }
+    } catch (err) {
+      logger.error({ err, taskId: task.id }, "task reminder failed");
+    }
+  }
+}
+
 let workerTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startEmailWorker(): void {
   if (workerTimer) return;
-  workerTimer = setInterval(() => void processQueue(), 20_000);
+  workerTimer = setInterval(() => {
+    void processQueue();
+    void processTaskReminders();
+  }, 20_000);
+  setTimeout(() => void processTaskReminders(), 3_000);
   logger.info("email queue worker started");
 }
 

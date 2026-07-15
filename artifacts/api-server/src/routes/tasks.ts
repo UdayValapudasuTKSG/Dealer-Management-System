@@ -144,7 +144,13 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
   const { dueDate: rawDueDate, ...rest } = parsed.data;
   const patch: Record<string, unknown> = { ...rest, updatedAt: new Date() };
   if (rawDueDate !== undefined) {
-    patch.dueDate = new Date(rawDueDate).toISOString().slice(0, 10);
+    const nextDueDate = new Date(rawDueDate).toISOString().slice(0, 10);
+    patch.dueDate = nextDueDate;
+    // A changed due date restarts the reminder cycle.
+    if (nextDueDate !== existing.dueDate) {
+      patch.dueSoonNotifiedAt = null;
+      patch.overdueNotifiedAt = null;
+    }
   }
   if (parsed.data.status === "done" && existing.status !== "done") {
     patch.completedAt = new Date();
