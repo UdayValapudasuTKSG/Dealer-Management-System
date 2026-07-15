@@ -16,7 +16,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false);
 
   return (
-    <div className="flex flex-col h-screen w-full bg-background overflow-hidden relative selection:bg-primary/30 selection:text-white">
+    <div className="flex flex-col h-screen w-full bg-background overflow-hidden relative selection:bg-primary/30 selection:text-foreground">
       {/* Ambient background glow */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />

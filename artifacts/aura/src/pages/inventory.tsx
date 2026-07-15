@@ -287,7 +287,7 @@ function VehicleCard({
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              <CarFront className="w-20 h-20 text-white/10" />
+              <CarFront className="w-20 h-20 text-foreground/10" />
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
