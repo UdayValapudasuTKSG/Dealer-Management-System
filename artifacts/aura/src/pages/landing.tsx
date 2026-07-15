@@ -13,6 +13,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { useListEnquiryVehicles } from "@workspace/api-client-react";
 
 const QUICK_LINKS = [
   { name: "Showroom", href: "/inventory" },
@@ -32,9 +40,7 @@ function EnquiryDialog({
     name: "",
     email: "",
     phone: "",
-    vehicleName: "",
-    variant: "",
-    color: "",
+    vehicleId: "",
     preferredBranch: "",
     comments: "",
   });
@@ -42,17 +48,27 @@ function EnquiryDialog({
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { data: vehicles, isLoading: vehiclesLoading } =
+    useListEnquiryVehicles();
+  const selected = (vehicles ?? []).find(
+    (v) => String(v.id) === form.vehicleId,
+  );
+
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.vehicleId) return;
     setSubmitting(true);
     setError(null);
     try {
-      const body: Record<string, string> = { source: "website" };
-      for (const [k, v] of Object.entries(form)) {
-        if (v.trim()) body[k] = v.trim();
+      const body: Record<string, unknown> = {
+        source: "website",
+        vehicleId: Number(form.vehicleId),
+      };
+      for (const k of ["name", "email", "phone", "preferredBranch", "comments"] as const) {
+        if (form[k].trim()) body[k] = form[k].trim();
       }
       const res = await fetch(`${import.meta.env.BASE_URL}api/enquiries`, {
         method: "POST",
@@ -118,17 +134,49 @@ function EnquiryDialog({
                 <Input value={form.phone} onChange={set("phone")} placeholder="+233 …" />
               </div>
               <div className="col-span-2 space-y-1.5">
-                <Label>Vehicle of interest</Label>
-                <Input value={form.vehicleName} onChange={set("vehicleName")} placeholder="e.g. Porsche Taycan" />
+                <Label>Vehicle of interest *</Label>
+                <Select
+                  value={form.vehicleId}
+                  onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        vehiclesLoading
+                          ? "Loading showroom…"
+                          : "Select from our showroom"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(vehicles ?? []).map((v) => (
+                      <SelectItem key={v.id} value={String(v.id)}>
+                        {v.name} {v.version !== "Standard specification" ? `· ${v.version}` : ""} — {v.color}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label>Variant / trim</Label>
-                <Input value={form.variant} onChange={set("variant")} placeholder="Optional" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Preferred color</Label>
-                <Input value={form.color} onChange={set("color")} placeholder="Optional" />
-              </div>
+              {selected && (
+                <div className="col-span-2 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Model</div>
+                    <div className="font-medium">{selected.model}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Version</div>
+                    <div className="font-medium">{selected.version}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Color</div>
+                    <div className="font-medium">{selected.color}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground">VIN</div>
+                    <div className="font-medium">{selected.vin ?? "On request"}</div>
+                  </div>
+                </div>
+              )}
               <div className="col-span-2 space-y-1.5">
                 <Label>Preferred branch</Label>
                 <Input value={form.preferredBranch} onChange={set("preferredBranch")} placeholder="e.g. Accra Showroom" />
@@ -142,7 +190,7 @@ function EnquiryDialog({
               )}
               <Button
                 type="submit"
-                disabled={submitting || !form.name.trim()}
+                disabled={submitting || !form.name.trim() || !form.vehicleId}
                 className="col-span-2 rounded-full h-12"
               >
                 {submitting ? (

@@ -939,11 +939,27 @@ export interface EnquiryInput {
   email?: string;
   phone?: string;
   source?: EnquiryInputSource;
+  vehicleId?: number;
   vehicleName?: string;
   variant?: string;
   color?: string;
   preferredBranch?: string;
   comments?: string;
+}
+
+export interface EnquiryVehicle {
+  id: number;
+  year: number;
+  make: string;
+  model: string;
+  name: string;
+  version: string;
+  color: string;
+  /** @nullable */
+  vin?: string | null;
+  price: number;
+  /** @nullable */
+  imageUrl?: string | null;
 }
 
 export interface AssignLeadInput {

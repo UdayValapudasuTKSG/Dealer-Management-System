@@ -74,6 +74,7 @@ import type {
   EmailTemplatePreview,
   EnqueueEmailRequest,
   EnquiryInput,
+  EnquiryVehicle,
   Error,
   FinanceApplication,
   FinanceApplicationDetail,
@@ -2609,6 +2610,83 @@ export const useCreateEnquiry = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCreateEnquiryMutationOptions(options));
     }
+
+export const getListEnquiryVehiclesUrl = () => {
+
+
+
+
+  return `/api/enquiries/vehicles`
+}
+
+/**
+ * @summary Public showroom vehicles for the enquiry form (limited fields)
+ */
+export const listEnquiryVehicles = async ( options?: RequestInit): Promise<EnquiryVehicle[]> => {
+
+  return customFetch<EnquiryVehicle[]>(getListEnquiryVehiclesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEnquiryVehiclesQueryKey = () => {
+    return [
+    `/api/enquiries/vehicles`
+    ] as const;
+    }
+
+
+export const getListEnquiryVehiclesQueryOptions = <TData = Awaited<ReturnType<typeof listEnquiryVehicles>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEnquiryVehicles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEnquiryVehiclesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEnquiryVehicles>>> = ({ signal }) => listEnquiryVehicles({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEnquiryVehicles>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEnquiryVehiclesQueryResult = NonNullable<Awaited<ReturnType<typeof listEnquiryVehicles>>>
+export type ListEnquiryVehiclesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Public showroom vehicles for the enquiry form (limited fields)
+ */
+
+export function useListEnquiryVehicles<TData = Awaited<ReturnType<typeof listEnquiryVehicles>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEnquiryVehicles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEnquiryVehiclesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListLeadAdvisorsUrl = () => {
 

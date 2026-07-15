@@ -105,6 +105,7 @@ export * from './enqueueEmailRequest';
 export * from './enqueueEmailRequestData';
 export * from './enquiryInput';
 export * from './enquiryInputSource';
+export * from './enquiryVehicle';
 export * from './error';
 export * from './financeApplication';
 export * from './financeApplicationDetail';

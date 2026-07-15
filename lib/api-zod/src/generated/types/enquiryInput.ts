@@ -13,6 +13,7 @@ export interface EnquiryInput {
   email?: string;
   phone?: string;
   source?: EnquiryInputSource;
+  vehicleId?: number;
   vehicleName?: string;
   variant?: string;
   color?: string;

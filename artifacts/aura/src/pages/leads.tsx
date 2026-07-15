@@ -167,11 +167,12 @@ export default function Leads() {
                 name: "interestedVehicleId",
                 label: "Interested vehicle",
                 type: "select",
+                required: true,
                 span: "half",
-                placeholder: "Optional",
+                placeholder: "Select from inventory",
                 options: (vehicles ?? []).map((v) => ({
                   value: String(v.id),
-                  label: `${v.make} ${v.model}`,
+                  label: `${v.year} ${v.make} ${v.model}${v.trim ? ` ${v.trim}` : v.variant ? ` ${v.variant}` : ""} — ${v.exteriorColor}${v.vin ? ` · VIN ${v.vin}` : ""}`,
                 })),
               },
               {
@@ -197,8 +198,6 @@ export default function Leads() {
                   { value: "low", label: "Low" },
                 ],
               },
-              { name: "variant", label: "Variant / trim", type: "text", span: "half", placeholder: "Optional" },
-              { name: "color", label: "Preferred color", type: "text", span: "half", placeholder: "Optional" },
               { name: "preferredBranch", label: "Preferred branch", type: "text", span: "half", placeholder: "Optional" },
               { name: "email", label: "Email", type: "text", span: "half", placeholder: "kojo@email.com" },
               { name: "phone", label: "Phone", type: "text", span: "half", placeholder: "+233 …" },
@@ -206,8 +205,17 @@ export default function Leads() {
             ]}
             onSubmit={async (values) => {
               const payload = { ...values };
-              if (payload.interestedVehicleId != null)
+              if (payload.interestedVehicleId != null) {
                 payload.interestedVehicleId = Number(payload.interestedVehicleId);
+                const v = (vehicles ?? []).find(
+                  (x) => x.id === payload.interestedVehicleId,
+                );
+                if (v) {
+                  const version = v.trim || v.variant;
+                  if (version) payload.variant = version;
+                  payload.color = v.exteriorColor;
+                }
+              }
               await createLead.mutateAsync({ data: payload as never });
               queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
               toast({ title: "Lead captured", description: "AURA is scoring and routing this prospect." });

@@ -784,6 +784,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Lead"
 
+  /enquiries/vehicles:
+    get:
+      operationId: listEnquiryVehicles
+      tags: [leads]
+      summary: Public showroom vehicles for the enquiry form (limited fields)
+      responses:
+        "200":
+          description: Vehicles currently available to enquire about
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EnquiryVehicle"
+
   /leads/advisors:
     get:
       operationId: listLeadAdvisors
@@ -3812,11 +3827,26 @@ components:
         email: { type: string }
         phone: { type: string }
         source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral] }
+        vehicleId: { type: integer }
         vehicleName: { type: string }
         variant: { type: string }
         color: { type: string }
         preferredBranch: { type: string }
         comments: { type: string }
+    EnquiryVehicle:
+      type: object
+      required: [id, year, make, model, name, version, color, price]
+      properties:
+        id: { type: integer }
+        year: { type: integer }
+        make: { type: string }
+        model: { type: string }
+        name: { type: string }
+        version: { type: string }
+        color: { type: string }
+        vin: { type: ["string", "null"] }
+        price: { type: number }
+        imageUrl: { type: ["string", "null"] }
     AssignLeadInput:
       type: object
       required: [userId]

@@ -8,11 +8,38 @@ import {
   rolesTable,
   timelineEventsTable,
 } from "@workspace/db";
-import { CreateEnquiryBody, CreateEnquiryResponse } from "@workspace/api-zod";
+import {
+  CreateEnquiryBody,
+  CreateEnquiryResponse,
+  ListEnquiryVehiclesResponse,
+} from "@workspace/api-zod";
 import { notifyUsers } from "../lib/email";
 import { onLeadCreated } from "../lib/email-triggers";
 
 const router: IRouter = Router();
+
+// PUBLIC endpoint — limited showroom fields for the enquiry form dropdown.
+router.get("/enquiries/vehicles", async (_req, res): Promise<void> => {
+  const vehicles = await db
+    .select()
+    .from(vehiclesTable)
+    .where(eq(vehiclesTable.status, "available"));
+  const items = vehicles
+    .map((v) => ({
+      id: v.id,
+      year: v.year,
+      make: v.make,
+      model: v.model,
+      name: `${v.year} ${v.make} ${v.model}`,
+      version: v.trim || v.variant || "Standard specification",
+      color: v.exteriorColor,
+      vin: v.vin ?? null,
+      price: v.price,
+      imageUrl: v.imageUrl ?? null,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  res.json(ListEnquiryVehiclesResponse.parse(items));
+});
 
 // PUBLIC endpoint — mounted before requireAuth. Creates a lead from a
 // website enquiry, fires the lead-received email and alerts coordinators.
@@ -27,6 +54,7 @@ router.post("/enquiries", async (req, res): Promise<void> => {
     email,
     phone,
     source,
+    vehicleId,
     vehicleName,
     variant,
     color,
@@ -34,10 +62,27 @@ router.post("/enquiries", async (req, res): Promise<void> => {
     comments,
   } = parsed.data;
 
-  // Try to match the free-text vehicle name to inventory.
+  // Preferred path: an explicit inventory selection from the dropdown.
   let interestedVehicleId: number | null = null;
   let matchedVehicleLabel: string | null = null;
-  if (vehicleName && vehicleName.trim()) {
+  let matchedVariant: string | null = null;
+  let matchedColor: string | null = null;
+  if (vehicleId != null) {
+    const [v] = await db
+      .select()
+      .from(vehiclesTable)
+      .where(eq(vehiclesTable.id, vehicleId));
+    if (!v) {
+      res.status(422).json({ error: "Selected vehicle no longer exists" });
+      return;
+    }
+    interestedVehicleId = v.id;
+    matchedVehicleLabel = `${v.year} ${v.make} ${v.model}`;
+    matchedVariant = v.trim || v.variant || null;
+    matchedColor = v.exteriorColor || null;
+  }
+  // Legacy fallback: match a free-text vehicle name to inventory.
+  if (interestedVehicleId === null && vehicleName && vehicleName.trim()) {
     const vehicles = await db.select().from(vehiclesTable);
     const needle = vehicleName.trim().toLowerCase();
     const match = vehicles.find((v) => {
@@ -72,8 +117,8 @@ router.post("/enquiries", async (req, res): Promise<void> => {
       phase: "aware",
       status: "new",
       interestedVehicleId,
-      variant: variant ?? null,
-      color: color ?? null,
+      variant: variant ?? matchedVariant,
+      color: color ?? matchedColor,
       preferredBranch: preferredBranch ?? null,
       notes: noteParts.length ? noteParts.join("\n") : null,
     })

@@ -1042,6 +1042,7 @@ export const CreateEnquiryBody = zod.object({
   "email": zod.string().optional(),
   "phone": zod.string().optional(),
   "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']).optional(),
+  "vehicleId": zod.number().optional(),
   "vehicleName": zod.string().optional(),
   "variant": zod.string().optional(),
   "color": zod.string().optional(),
@@ -1082,6 +1083,24 @@ export const CreateEnquiryResponse = zod.object({
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Public showroom vehicles for the enquiry form (limited fields)
+ */
+export const ListEnquiryVehiclesResponseItem = zod.object({
+  "id": zod.number(),
+  "year": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "name": zod.string(),
+  "version": zod.string(),
+  "color": zod.string(),
+  "vin": zod.string().nullish(),
+  "price": zod.number(),
+  "imageUrl": zod.string().nullish()
+})
+export const ListEnquiryVehiclesResponse = zod.array(ListEnquiryVehiclesResponseItem)
 
 
 /**
