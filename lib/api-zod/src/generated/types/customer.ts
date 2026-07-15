@@ -15,6 +15,23 @@ export interface Customer {
   /** @nullable */
   phone?: string | null;
   /** @nullable */
+  whatsapp?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  occupation?: string | null;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  taxNumber?: string | null;
+  tags: string[];
+  /** @nullable */
   avatarUrl?: string | null;
   /** @nullable */
   location?: string | null;

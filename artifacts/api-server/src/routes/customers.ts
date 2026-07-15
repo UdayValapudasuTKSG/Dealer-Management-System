@@ -1,8 +1,13 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
+import multer from "multer";
+import { anthropic } from "@workspace/integrations-anthropic-ai";
 import {
   db,
   customersTable,
+  customerPersonasTable,
+  customerNotesTable,
+  customerDocumentsTable,
   dealsTable,
   appraisalsTable,
   financeApplicationsTable,
@@ -11,6 +16,10 @@ import {
   vehiclesTable,
   timelineEventsTable,
   gatesTable,
+  insertCustomerDocumentSchema,
+  type CustomerPersona,
+  type Customer,
+  type Vehicle,
 } from "@workspace/db";
 import {
   CreateCustomerBody,
@@ -22,12 +31,140 @@ import {
   UpdateCustomerResponse,
   GetCustomerOverviewParams,
   GetCustomerOverviewResponse,
+  GetCustomerPersonaParams,
+  GetCustomerPersonaResponse,
+  UpsertCustomerPersonaBody,
+  UpsertCustomerPersonaParams,
+  UpsertCustomerPersonaResponse,
+  RecommendCustomerVehicleParams,
+  RecommendCustomerVehicleResponse,
+  ListCustomerNotesParams,
+  ListCustomerNotesResponse,
+  CreateCustomerNoteBody,
+  CreateCustomerNoteParams,
+  CreateCustomerNoteResponse,
+  DeleteCustomerNoteParams,
+  ListCustomerDocumentsParams,
+  ListCustomerDocumentsResponse,
+  UploadCustomerDocumentParams,
+  UploadCustomerDocumentResponse,
+  DeleteCustomerDocumentParams,
+  DownloadCustomerDocumentParams,
 } from "@workspace/api-zod";
+import { storage } from "../lib/storage";
 
 const router: IRouter = Router();
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+});
+
 const ACTIVE_DEAL_STAGES = ["desking", "negotiation", "finance", "committed"];
 
+// ---------------------------------------------------------------------------
+// Lead score: computed from persona completeness + intent + real activity.
+// Returned as a whole-number 0-100 (never multiply by 100 in the UI).
+// ---------------------------------------------------------------------------
+function computeLeadScore(
+  persona: CustomerPersona | null,
+  ctx: {
+    leads: { aiScore: number }[];
+    deals: { stage: string }[];
+    customer: Customer;
+  },
+): number {
+  let score = 0;
+
+  if (persona) {
+    // Intent signals (up to 55)
+    const prob = persona.buyingProbability;
+    score +=
+      prob === "very_high" ? 30 : prob === "high" ? 22 : prob === "medium" ? 12 : prob === "low" ? 4 : 0;
+    if (persona.buyingBudget && persona.buyingBudget > 0) score += 10;
+    if (persona.financeRequired != null) score += 3;
+    if (persona.tradeIn) score += 5;
+    if (persona.marketingConsent) score += 4;
+    if ((persona.previousPurchases ?? 0) > 0)
+      score += Math.min(8, (persona.previousPurchases ?? 0) * 3);
+
+    // Profile completeness (up to 15)
+    const fields = [
+      persona.ageGroup,
+      persona.incomeRange,
+      persona.vehiclePreference,
+      persona.brandPreference,
+      persona.fuelPreference,
+      persona.drivingHabits,
+      persona.purchaseMotivation,
+      persona.lifestyle,
+      persona.communicationPreference,
+    ];
+    const filled = fields.filter((f) => f != null && f !== "").length;
+    score += Math.round((filled / fields.length) * 15);
+  }
+
+  // Real activity (up to 30)
+  const bestLeadScore = ctx.leads.reduce((m, l) => Math.max(m, l.aiScore), 0);
+  score += Math.round((Math.min(bestLeadScore, 100) / 100) * 12);
+  if (ctx.deals.some((d) => ACTIVE_DEAL_STAGES.includes(d.stage))) score += 12;
+  if (ctx.deals.some((d) => d.stage === "delivered")) score += 6;
+  if (ctx.customer.lifetimeValue > 0) score += 5;
+
+  return Math.max(0, Math.min(100, score));
+}
+
+async function loadPersonaBundle(customerId: number) {
+  const [[persona], leads, deals, [customer]] = await Promise.all([
+    db
+      .select()
+      .from(customerPersonasTable)
+      .where(eq(customerPersonasTable.customerId, customerId)),
+    db.select().from(leadsTable).where(eq(leadsTable.customerId, customerId)),
+    db.select().from(dealsTable).where(eq(dealsTable.customerId, customerId)),
+    db
+      .select()
+      .from(customersTable)
+      .where(eq(customersTable.id, customerId)),
+  ]);
+  return { persona: persona ?? null, leads, deals, customer: customer ?? null };
+}
+
+async function personaPayload(
+  customerId: number,
+  bundle?: Awaited<ReturnType<typeof loadPersonaBundle>>,
+) {
+  const b = bundle ?? (await loadPersonaBundle(customerId));
+  if (!b.customer) return null;
+
+  let aiRecommendedVehicle: Vehicle | null = null;
+  if (b.persona?.aiRecommendedVehicleId) {
+    const [v] = await db
+      .select()
+      .from(vehiclesTable)
+      .where(eq(vehiclesTable.id, b.persona.aiRecommendedVehicleId));
+    aiRecommendedVehicle = v ?? null;
+  }
+
+  const leadScore = computeLeadScore(b.persona, {
+    leads: b.leads,
+    deals: b.deals,
+    customer: b.customer,
+  });
+
+  return {
+    ...(b.persona ?? {}),
+    id: b.persona?.id ?? null,
+    customerId,
+    aiRecommendedVehicle,
+    leadScore,
+    updatedAt: b.persona?.updatedAt?.toISOString() ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Customers CRUD
+// ---------------------------------------------------------------------------
 router.get("/customers", async (_req, res): Promise<void> => {
   const rows = await db
     .select()
@@ -98,6 +235,379 @@ router.patch("/customers/:id", async (req, res): Promise<void> => {
   res.json(UpdateCustomerResponse.parse(customer));
 });
 
+// ---------------------------------------------------------------------------
+// Persona
+// ---------------------------------------------------------------------------
+router.get("/customers/:id/persona", async (req, res): Promise<void> => {
+  const params = GetCustomerPersonaParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const payload = await personaPayload(params.data.id);
+  if (!payload) {
+    res.status(404).json({ error: "Customer not found" });
+    return;
+  }
+  res.json(GetCustomerPersonaResponse.parse(payload));
+});
+
+router.put("/customers/:id/persona", async (req, res): Promise<void> => {
+  const params = UpsertCustomerPersonaParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = UpsertCustomerPersonaBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const customerId = params.data.id;
+  const [customer] = await db
+    .select()
+    .from(customersTable)
+    .where(eq(customersTable.id, customerId));
+  if (!customer) {
+    res.status(404).json({ error: "Customer not found" });
+    return;
+  }
+
+  await db
+    .insert(customerPersonasTable)
+    .values({ ...body.data, customerId, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: customerPersonasTable.customerId,
+      set: { ...body.data, updatedAt: new Date() },
+    });
+
+  const payload = await personaPayload(customerId);
+  res.json(UpsertCustomerPersonaResponse.parse(payload));
+});
+
+router.post(
+  "/customers/:id/persona/recommend",
+  async (req, res): Promise<void> => {
+    const params = RecommendCustomerVehicleParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const customerId = params.data.id;
+    const bundle = await loadPersonaBundle(customerId);
+    if (!bundle.customer) {
+      res.status(404).json({ error: "Customer not found" });
+      return;
+    }
+    const vehicles = await db
+      .select()
+      .from(vehiclesTable)
+      .where(eq(vehiclesTable.status, "available"));
+
+    if (vehicles.length === 0) {
+      res.status(502).json({ error: "No available inventory to recommend from" });
+      return;
+    }
+
+    const p = bundle.persona;
+    const personaLines = p
+      ? [
+          p.ageGroup && `Age group: ${p.ageGroup}`,
+          p.incomeRange && `Income range: ${p.incomeRange}`,
+          p.buyingBudget && `Buying budget: $${p.buyingBudget.toLocaleString()}`,
+          p.familySize != null && `Family size: ${p.familySize}`,
+          p.vehiclePreference && `Vehicle preference: ${p.vehiclePreference}`,
+          p.brandPreference && `Brand preference: ${p.brandPreference}`,
+          p.fuelPreference && `Fuel preference: ${p.fuelPreference}`,
+          p.drivingHabits && `Driving habits: ${p.drivingHabits}`,
+          p.purchaseMotivation && `Purchase motivation: ${p.purchaseMotivation}`,
+          p.lifestyle && `Lifestyle: ${p.lifestyle}`,
+          p.financeRequired != null &&
+            `Finance required: ${p.financeRequired ? "yes" : "no"}`,
+          p.tradeIn != null && `Trade-in: ${p.tradeIn ? "yes" : "no"}`,
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : "(no persona captured yet — infer from customer record)";
+
+    const inventoryLines = vehicles
+      .slice(0, 40)
+      .map(
+        (v) =>
+          `- id ${v.id}: ${v.year} ${v.make} ${v.model}, ${v.powertrain}, $${v.price.toLocaleString()}`,
+      )
+      .join("\n");
+
+    const prompt = [
+      `You are AURA, the AI concierge of an ultra-premium automotive dealership.`,
+      `Recommend the single best vehicle from live inventory for this client.`,
+      ``,
+      `Client: ${bundle.customer.name}${bundle.customer.occupation ? `, ${bundle.customer.occupation}` : ""}${bundle.customer.city ? `, based in ${bundle.customer.city}` : ""}`,
+      `Persona:`,
+      personaLines,
+      ``,
+      `Available inventory:`,
+      inventoryLines,
+      ``,
+      `Return ONLY a JSON object (no markdown) with exactly these keys:`,
+      `{ "vehicleId": number, "reason": string }`,
+      `The vehicleId MUST be one of the ids listed above. The reason is 1-2 sentences, warm and confident, referencing the client's persona.`,
+    ].join("\n");
+
+    try {
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 500,
+        messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
+      });
+      const textBlock = message.content.find((b) => b.type === "text");
+      const raw = textBlock && textBlock.type === "text" ? textBlock.text : "";
+      const jsonStart = raw.indexOf("{");
+      const jsonEnd = raw.lastIndexOf("}");
+      if (jsonStart === -1 || jsonEnd === -1) {
+        req.log.error({ raw }, "Vehicle recommendation returned no JSON");
+        res.status(502).json({ error: "The concierge could not decide" });
+        return;
+      }
+      let candidate: { vehicleId?: unknown; reason?: unknown };
+      try {
+        candidate = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+      } catch {
+        req.log.error({ raw }, "Vehicle recommendation returned invalid JSON");
+        res.status(502).json({ error: "The concierge could not decide" });
+        return;
+      }
+      const vehicleId = Number(candidate.vehicleId);
+      const reason =
+        typeof candidate.reason === "string" ? candidate.reason : null;
+      if (!vehicles.some((v) => v.id === vehicleId) || !reason) {
+        req.log.error({ candidate }, "Vehicle recommendation invalid payload");
+        res.status(502).json({ error: "The concierge picked an unknown vehicle" });
+        return;
+      }
+
+      await db
+        .insert(customerPersonasTable)
+        .values({
+          customerId,
+          aiRecommendedVehicleId: vehicleId,
+          aiRecommendationReason: reason,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: customerPersonasTable.customerId,
+          set: {
+            aiRecommendedVehicleId: vehicleId,
+            aiRecommendationReason: reason,
+            updatedAt: new Date(),
+          },
+        });
+
+      const payload = await personaPayload(customerId);
+      res.json(RecommendCustomerVehicleResponse.parse(payload));
+    } catch (err) {
+      req.log.error({ err }, "Vehicle recommendation request failed");
+      res.status(502).json({ error: "The concierge is unavailable right now" });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Notes
+// ---------------------------------------------------------------------------
+router.get("/customers/:id/notes", async (req, res): Promise<void> => {
+  const params = ListCustomerNotesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(customerNotesTable)
+    .where(eq(customerNotesTable.customerId, params.data.id))
+    .orderBy(desc(customerNotesTable.createdAt));
+  res.json(ListCustomerNotesResponse.parse(rows));
+});
+
+router.post("/customers/:id/notes", async (req, res): Promise<void> => {
+  const params = CreateCustomerNoteParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = CreateCustomerNoteBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const [customer] = await db
+    .select()
+    .from(customersTable)
+    .where(eq(customersTable.id, params.data.id));
+  if (!customer) {
+    res.status(404).json({ error: "Customer not found" });
+    return;
+  }
+  const author =
+    res.locals.user?.name ?? res.locals.user?.email ?? null;
+  const [note] = await db
+    .insert(customerNotesTable)
+    .values({ customerId: params.data.id, body: body.data.body, author })
+    .returning();
+  res.status(201).json(CreateCustomerNoteResponse.parse(note));
+});
+
+router.delete(
+  "/customers/:id/notes/:noteId",
+  async (req, res): Promise<void> => {
+    const params = DeleteCustomerNoteParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    await db
+      .delete(customerNotesTable)
+      .where(
+        and(
+          eq(customerNotesTable.id, params.data.noteId),
+          eq(customerNotesTable.customerId, params.data.id),
+        ),
+      );
+    res.status(204).end();
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------------
+router.get("/customers/:id/documents", async (req, res): Promise<void> => {
+  const params = ListCustomerDocumentsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(customerDocumentsTable)
+    .where(eq(customerDocumentsTable.customerId, params.data.id))
+    .orderBy(desc(customerDocumentsTable.createdAt));
+  res.json(ListCustomerDocumentsResponse.parse(rows));
+});
+
+router.post(
+  "/customers/:id/documents",
+  upload.single("file"),
+  async (req, res): Promise<void> => {
+    const params = UploadCustomerDocumentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ error: "No file provided (field name: file)" });
+      return;
+    }
+    const docType = insertCustomerDocumentSchema.shape.type.safeParse(
+      req.body?.type ?? "other",
+    );
+    if (!docType.success) {
+      res.status(400).json({ error: "Invalid document type" });
+      return;
+    }
+    const [customer] = await db
+      .select()
+      .from(customersTable)
+      .where(eq(customersTable.id, params.data.id));
+    if (!customer) {
+      res.status(404).json({ error: "Customer not found" });
+      return;
+    }
+
+    const key = await storage.save(req.file.buffer, req.file.originalname);
+    const uploadedBy =
+      res.locals.user?.name ?? res.locals.user?.email ?? null;
+    const [doc] = await db
+      .insert(customerDocumentsTable)
+      .values({
+        customerId: params.data.id,
+        type: docType.data,
+        fileName: req.file.originalname,
+        storageKey: key,
+        mimeType: req.file.mimetype,
+        sizeBytes: req.file.size,
+        uploadedBy,
+      })
+      .returning();
+    res.status(201).json(UploadCustomerDocumentResponse.parse(doc));
+  },
+);
+
+router.get(
+  "/customers/:id/documents/:docId/download",
+  async (req, res): Promise<void> => {
+    const params = DownloadCustomerDocumentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [doc] = await db
+      .select()
+      .from(customerDocumentsTable)
+      .where(
+        and(
+          eq(customerDocumentsTable.id, params.data.docId),
+          eq(customerDocumentsTable.customerId, params.data.id),
+        ),
+      );
+    if (!doc) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
+    try {
+      const stream = await storage.stream(doc.storageKey);
+      res.setHeader("Content-Type", doc.mimeType);
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${doc.fileName.replace(/"/g, "")}"`,
+      );
+      stream.pipe(res);
+    } catch (err) {
+      req.log.error({ err, docId: doc.id }, "Document file missing on disk");
+      res.status(404).json({ error: "Document file not found" });
+    }
+  },
+);
+
+router.delete(
+  "/customers/:id/documents/:docId",
+  async (req, res): Promise<void> => {
+    const params = DeleteCustomerDocumentParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [doc] = await db
+      .select()
+      .from(customerDocumentsTable)
+      .where(
+        and(
+          eq(customerDocumentsTable.id, params.data.docId),
+          eq(customerDocumentsTable.customerId, params.data.id),
+        ),
+      );
+    if (doc) {
+      await storage.delete(doc.storageKey);
+      await db
+        .delete(customerDocumentsTable)
+        .where(eq(customerDocumentsTable.id, doc.id));
+    }
+    res.status(204).end();
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Customer 360 overview
+// ---------------------------------------------------------------------------
 router.get("/customers/:id/overview", async (req, res): Promise<void> => {
   const params = GetCustomerOverviewParams.safeParse(req.params);
   if (!params.success) {
@@ -116,30 +626,55 @@ router.get("/customers/:id/overview", async (req, res): Promise<void> => {
     return;
   }
 
-  const [deals, appraisals, financeApplications, serviceOrders, leads, timeline, gates, vehicles] =
-    await Promise.all([
-      db.select().from(dealsTable).where(eq(dealsTable.customerId, customerId)),
-      db
-        .select()
-        .from(appraisalsTable)
-        .where(eq(appraisalsTable.customerId, customerId)),
-      db
-        .select()
-        .from(financeApplicationsTable)
-        .where(eq(financeApplicationsTable.customerId, customerId)),
-      db
-        .select()
-        .from(serviceOrdersTable)
-        .where(eq(serviceOrdersTable.customerId, customerId)),
-      db.select().from(leadsTable).where(eq(leadsTable.customerId, customerId)),
-      db
-        .select()
-        .from(timelineEventsTable)
-        .where(eq(timelineEventsTable.customerId, customerId))
-        .orderBy(desc(timelineEventsTable.createdAt)),
-      db.select().from(gatesTable).where(eq(gatesTable.customerId, customerId)),
-      db.select().from(vehiclesTable),
-    ]);
+  const [
+    deals,
+    appraisals,
+    financeApplications,
+    serviceOrders,
+    leads,
+    timeline,
+    gates,
+    vehicles,
+    notes,
+    documents,
+    [personaRow],
+  ] = await Promise.all([
+    db.select().from(dealsTable).where(eq(dealsTable.customerId, customerId)),
+    db
+      .select()
+      .from(appraisalsTable)
+      .where(eq(appraisalsTable.customerId, customerId)),
+    db
+      .select()
+      .from(financeApplicationsTable)
+      .where(eq(financeApplicationsTable.customerId, customerId)),
+    db
+      .select()
+      .from(serviceOrdersTable)
+      .where(eq(serviceOrdersTable.customerId, customerId)),
+    db.select().from(leadsTable).where(eq(leadsTable.customerId, customerId)),
+    db
+      .select()
+      .from(timelineEventsTable)
+      .where(eq(timelineEventsTable.customerId, customerId))
+      .orderBy(desc(timelineEventsTable.createdAt)),
+    db.select().from(gatesTable).where(eq(gatesTable.customerId, customerId)),
+    db.select().from(vehiclesTable),
+    db
+      .select()
+      .from(customerNotesTable)
+      .where(eq(customerNotesTable.customerId, customerId))
+      .orderBy(desc(customerNotesTable.createdAt)),
+    db
+      .select()
+      .from(customerDocumentsTable)
+      .where(eq(customerDocumentsTable.customerId, customerId))
+      .orderBy(desc(customerDocumentsTable.createdAt)),
+    db
+      .select()
+      .from(customerPersonasTable)
+      .where(eq(customerPersonasTable.customerId, customerId)),
+  ]);
 
   const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
 
@@ -157,8 +692,18 @@ router.get("/customers/:id/overview", async (req, res): Promise<void> => {
 
   const openGates = gates.filter((g) => g.status === "pending");
 
+  const persona = await personaPayload(customerId, {
+    persona: personaRow ?? null,
+    leads,
+    deals,
+    customer,
+  });
+
   const overview = {
     customer,
+    persona,
+    notes,
+    documents,
     ownedVehicles,
     activeDeal,
     deals,

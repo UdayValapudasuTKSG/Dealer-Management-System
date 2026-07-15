@@ -50,6 +50,12 @@ export default function Customers() {
               { name: "name", label: "Full name", type: "text", required: true, span: "full", placeholder: "Jane Mensah" },
               { name: "email", label: "Email", type: "text", span: "half", placeholder: "jane@email.com" },
               { name: "phone", label: "Phone", type: "text", span: "half", placeholder: "+233 …" },
+              { name: "whatsapp", label: "WhatsApp", type: "text", span: "half", placeholder: "+233 …" },
+              { name: "dateOfBirth", label: "Date of birth", type: "date", span: "half" },
+              { name: "occupation", label: "Occupation", type: "text", span: "half", placeholder: "Executive" },
+              { name: "company", label: "Company", type: "text", span: "half", placeholder: "Acme Ltd" },
+              { name: "city", label: "City", type: "text", span: "half", placeholder: "Accra" },
+              { name: "country", label: "Country", type: "text", span: "half", placeholder: "Ghana" },
               { name: "location", label: "Location", type: "text", span: "half", placeholder: "Accra" },
               {
                 name: "loyaltyTier",

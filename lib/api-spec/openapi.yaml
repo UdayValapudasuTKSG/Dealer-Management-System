@@ -907,6 +907,243 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /customers/{id}/persona:
+    get:
+      operationId: getCustomerPersona
+      tags: [customers]
+      summary: Get the persona profile (with computed lead score) for a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Persona profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerPersona"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      operationId: upsertCustomerPersona
+      tags: [customers]
+      summary: Create or update the persona profile for a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerPersonaInput"
+      responses:
+        "200":
+          description: Updated persona
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerPersona"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /customers/{id}/persona/recommend:
+    post:
+      operationId: recommendCustomerVehicle
+      tags: [customers]
+      summary: AI-recommend a vehicle from live inventory for this customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Persona with AI recommendation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerPersona"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: The recommendation service is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /customers/{id}/notes:
+    get:
+      operationId: listCustomerNotes
+      tags: [customers]
+      summary: List notes for a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomerNote"
+    post:
+      operationId: createCustomerNote
+      tags: [customers]
+      summary: Add a note to a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerNoteInput"
+      responses:
+        "201":
+          description: Created note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerNote"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /customers/{id}/notes/{noteId}:
+    delete:
+      operationId: deleteCustomerNote
+      tags: [customers]
+      summary: Delete a customer note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: noteId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+  /customers/{id}/documents:
+    get:
+      operationId: listCustomerDocuments
+      tags: [customers]
+      summary: List uploaded documents for a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomerDocument"
+    post:
+      operationId: uploadCustomerDocument
+      tags: [customers]
+      summary: Upload a document for a customer (multipart form; consumed via raw fetch, not a generated hook)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "201":
+          description: Uploaded document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerDocument"
+        "400":
+          description: Invalid upload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /customers/{id}/documents/{docId}:
+    delete:
+      operationId: deleteCustomerDocument
+      tags: [customers]
+      summary: Delete a customer document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: docId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+  /customers/{id}/documents/{docId}/download:
+    get:
+      operationId: downloadCustomerDocument
+      tags: [customers]
+      summary: Download / view a customer document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: docId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: File contents
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /timeline:
     get:
       operationId: listTimeline
@@ -1549,12 +1786,23 @@ components:
 
     Customer:
       type: object
-      required: [id, name, lifetimeValue, vehiclesOwned, loyaltyTier, createdAt]
+      required: [id, name, tags, lifetimeValue, vehiclesOwned, loyaltyTier, createdAt]
       properties:
         id: { type: integer }
         name: { type: string }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
+        whatsapp: { type: ["string", "null"] }
+        dateOfBirth: { type: ["string", "null"] }
+        occupation: { type: ["string", "null"] }
+        company: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        city: { type: ["string", "null"] }
+        taxNumber: { type: ["string", "null"] }
+        tags:
+          type: array
+          items: { type: string }
         avatarUrl: { type: ["string", "null"] }
         location: { type: ["string", "null"] }
         lifetimeValue: { type: number }
@@ -1568,6 +1816,17 @@ components:
         name: { type: string, minLength: 1 }
         email: { type: string }
         phone: { type: string }
+        whatsapp: { type: string }
+        dateOfBirth: { type: string }
+        occupation: { type: string }
+        company: { type: string }
+        address: { type: string }
+        country: { type: string }
+        city: { type: string }
+        taxNumber: { type: string }
+        tags:
+          type: array
+          items: { type: string }
         avatarUrl: { type: string }
         location: { type: string }
         lifetimeValue: { type: number }
@@ -1577,13 +1836,118 @@ components:
       type: object
       properties:
         name: { type: string, minLength: 1 }
-        email: { type: string }
-        phone: { type: string }
-        avatarUrl: { type: string }
-        location: { type: string }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        whatsapp: { type: ["string", "null"] }
+        dateOfBirth: { type: ["string", "null"] }
+        occupation: { type: ["string", "null"] }
+        company: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        city: { type: ["string", "null"] }
+        taxNumber: { type: ["string", "null"] }
+        tags:
+          type: array
+          items: { type: string }
+        avatarUrl: { type: ["string", "null"] }
+        location: { type: ["string", "null"] }
         lifetimeValue: { type: number }
         vehiclesOwned: { type: integer }
         loyaltyTier: { type: string, enum: [new, silver, gold, platinum] }
+
+    CustomerPersona:
+      type: object
+      required: [customerId, leadScore]
+      properties:
+        id: { type: ["integer", "null"] }
+        customerId: { type: integer }
+        ageGroup:
+          oneOf:
+            - { type: string, enum: ["18-24", "25-34", "35-44", "45-54", "55-64", "65+"] }
+            - { type: "null" }
+        incomeRange: { type: ["string", "null"] }
+        buyingBudget: { type: ["number", "null"] }
+        familySize: { type: ["integer", "null"] }
+        vehiclePreference: { type: ["string", "null"] }
+        brandPreference: { type: ["string", "null"] }
+        fuelPreference: { type: ["string", "null"] }
+        drivingHabits: { type: ["string", "null"] }
+        purchaseMotivation: { type: ["string", "null"] }
+        lifestyle: { type: ["string", "null"] }
+        buyingProbability:
+          oneOf:
+            - { type: string, enum: [low, medium, high, very_high] }
+            - { type: "null" }
+        financeRequired: { type: ["boolean", "null"] }
+        tradeIn: { type: ["boolean", "null"] }
+        previousPurchases: { type: ["integer", "null"] }
+        communicationPreference:
+          oneOf:
+            - { type: string, enum: [email, phone, whatsapp, sms, in_person] }
+            - { type: "null" }
+        marketingConsent: { type: ["boolean", "null"] }
+        aiRecommendedVehicleId: { type: ["integer", "null"] }
+        aiRecommendationReason: { type: ["string", "null"] }
+        aiRecommendedVehicle:
+          oneOf:
+            - $ref: "#/components/schemas/Vehicle"
+            - type: "null"
+        leadScore: { type: integer }
+        updatedAt: { type: ["string", "null"] }
+    CustomerPersonaInput:
+      type: object
+      properties:
+        ageGroup:
+          oneOf:
+            - { type: string, enum: ["18-24", "25-34", "35-44", "45-54", "55-64", "65+"] }
+            - { type: "null" }
+        incomeRange: { type: ["string", "null"] }
+        buyingBudget: { type: ["number", "null"] }
+        familySize: { type: ["integer", "null"] }
+        vehiclePreference: { type: ["string", "null"] }
+        brandPreference: { type: ["string", "null"] }
+        fuelPreference: { type: ["string", "null"] }
+        drivingHabits: { type: ["string", "null"] }
+        purchaseMotivation: { type: ["string", "null"] }
+        lifestyle: { type: ["string", "null"] }
+        buyingProbability:
+          oneOf:
+            - { type: string, enum: [low, medium, high, very_high] }
+            - { type: "null" }
+        financeRequired: { type: ["boolean", "null"] }
+        tradeIn: { type: ["boolean", "null"] }
+        previousPurchases: { type: ["integer", "null"] }
+        communicationPreference:
+          oneOf:
+            - { type: string, enum: [email, phone, whatsapp, sms, in_person] }
+            - { type: "null" }
+        marketingConsent: { type: ["boolean", "null"] }
+    CustomerNote:
+      type: object
+      required: [id, customerId, body, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: integer }
+        body: { type: string }
+        author: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    CustomerNoteInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1 }
+    CustomerDocument:
+      type: object
+      required: [id, customerId, type, fileName, mimeType, sizeBytes, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: integer }
+        type: { type: string, enum: [driver_license, passport, tax_document, other] }
+        fileName: { type: string }
+        mimeType: { type: string }
+        sizeBytes: { type: integer }
+        uploadedBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
 
     Deal:
       type: object
@@ -1962,9 +2326,19 @@ components:
 
     Customer360:
       type: object
-      required: [customer, ownedVehicles, deals, appraisals, financeApplications, serviceOrders, leads, timeline, openGates]
+      required: [customer, ownedVehicles, deals, appraisals, financeApplications, serviceOrders, leads, timeline, openGates, persona, notes, documents]
       properties:
         customer: { $ref: "#/components/schemas/Customer" }
+        persona:
+          oneOf:
+            - $ref: "#/components/schemas/CustomerPersona"
+            - type: "null"
+        notes:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerNote" }
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/CustomerDocument" }
         ownedVehicles:
           type: array
           items: { $ref: "#/components/schemas/Vehicle" }

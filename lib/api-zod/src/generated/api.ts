@@ -389,6 +389,15 @@ export const ListCustomersResponseItem = zod.object({
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
+  "whatsapp": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "occupation": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "taxNumber": zod.string().nullish(),
+  "tags": zod.array(zod.string()),
   "avatarUrl": zod.string().nullish(),
   "location": zod.string().nullish(),
   "lifetimeValue": zod.number(),
@@ -406,6 +415,15 @@ export const CreateCustomerBody = zod.object({
   "name": zod.string().min(1),
   "email": zod.string().optional(),
   "phone": zod.string().optional(),
+  "whatsapp": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "occupation": zod.string().optional(),
+  "company": zod.string().optional(),
+  "address": zod.string().optional(),
+  "country": zod.string().optional(),
+  "city": zod.string().optional(),
+  "taxNumber": zod.string().optional(),
+  "tags": zod.array(zod.string()).optional(),
   "avatarUrl": zod.string().optional(),
   "location": zod.string().optional(),
   "lifetimeValue": zod.number().optional(),
@@ -418,6 +436,15 @@ export const CreateCustomerResponse = zod.object({
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
+  "whatsapp": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "occupation": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "taxNumber": zod.string().nullish(),
+  "tags": zod.array(zod.string()),
   "avatarUrl": zod.string().nullish(),
   "location": zod.string().nullish(),
   "lifetimeValue": zod.number(),
@@ -436,6 +463,15 @@ export const GetCustomerResponse = zod.object({
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
+  "whatsapp": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "occupation": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "taxNumber": zod.string().nullish(),
+  "tags": zod.array(zod.string()),
   "avatarUrl": zod.string().nullish(),
   "location": zod.string().nullish(),
   "lifetimeValue": zod.number(),
@@ -454,10 +490,19 @@ export const UpdateCustomerParams = zod.object({
 
 export const UpdateCustomerBody = zod.object({
   "name": zod.string().min(1).optional(),
-  "email": zod.string().optional(),
-  "phone": zod.string().optional(),
-  "avatarUrl": zod.string().optional(),
-  "location": zod.string().optional(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "whatsapp": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "occupation": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "taxNumber": zod.string().nullish(),
+  "tags": zod.array(zod.string()).optional(),
+  "avatarUrl": zod.string().nullish(),
+  "location": zod.string().nullish(),
   "lifetimeValue": zod.number().optional(),
   "vehiclesOwned": zod.number().optional(),
   "loyaltyTier": zod.enum(['new', 'silver', 'gold', 'platinum']).optional()
@@ -468,6 +513,15 @@ export const UpdateCustomerResponse = zod.object({
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
+  "whatsapp": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "occupation": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "taxNumber": zod.string().nullish(),
+  "tags": zod.array(zod.string()),
   "avatarUrl": zod.string().nullish(),
   "location": zod.string().nullish(),
   "lifetimeValue": zod.number(),
@@ -982,6 +1036,15 @@ export const GetCustomerOverviewResponse = zod.object({
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
+  "whatsapp": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "occupation": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "taxNumber": zod.string().nullish(),
+  "tags": zod.array(zod.string()),
   "avatarUrl": zod.string().nullish(),
   "location": zod.string().nullish(),
   "lifetimeValue": zod.number(),
@@ -989,6 +1052,66 @@ export const GetCustomerOverviewResponse = zod.object({
   "loyaltyTier": zod.enum(['new', 'silver', 'gold', 'platinum']),
   "createdAt": zod.coerce.date()
 }),
+  "persona": zod.union([zod.object({
+  "id": zod.number().nullish(),
+  "customerId": zod.number(),
+  "ageGroup": zod.union([zod.enum(['18-24', '25-34', '35-44', '45-54', '55-64', '65+']),zod.null()]).optional(),
+  "incomeRange": zod.string().nullish(),
+  "buyingBudget": zod.number().nullish(),
+  "familySize": zod.number().nullish(),
+  "vehiclePreference": zod.string().nullish(),
+  "brandPreference": zod.string().nullish(),
+  "fuelPreference": zod.string().nullish(),
+  "drivingHabits": zod.string().nullish(),
+  "purchaseMotivation": zod.string().nullish(),
+  "lifestyle": zod.string().nullish(),
+  "buyingProbability": zod.union([zod.enum(['low', 'medium', 'high', 'very_high']),zod.null()]).optional(),
+  "financeRequired": zod.boolean().nullish(),
+  "tradeIn": zod.boolean().nullish(),
+  "previousPurchases": zod.number().nullish(),
+  "communicationPreference": zod.union([zod.enum(['email', 'phone', 'whatsapp', 'sms', 'in_person']),zod.null()]).optional(),
+  "marketingConsent": zod.boolean().nullish(),
+  "aiRecommendedVehicleId": zod.number().nullish(),
+  "aiRecommendationReason": zod.string().nullish(),
+  "aiRecommendedVehicle": zod.union([zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "trim": zod.string().nullish(),
+  "year": zod.number(),
+  "vin": zod.string().nullish(),
+  "price": zod.number(),
+  "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
+  "rangeKm": zod.number().nullish(),
+  "mileageKm": zod.number(),
+  "exteriorColor": zod.string(),
+  "bodyType": zod.string(),
+  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "imageUrl": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "featured": zod.boolean(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional(),
+  "leadScore": zod.number(),
+  "updatedAt": zod.string().nullish()
+}),zod.null()]),
+  "notes": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "body": zod.string(),
+  "author": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "documents": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "type": zod.enum(['driver_license', 'passport', 'tax_document', 'other']),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "uploadedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
   "ownedVehicles": zod.array(zod.object({
   "id": zod.number(),
   "make": zod.string(),
@@ -1136,6 +1259,293 @@ export const GetCustomerOverviewResponse = zod.object({
   "createdAt": zod.coerce.date()
 }))
 })
+
+
+/**
+ * @summary Get the persona profile (with computed lead score) for a customer
+ */
+export const GetCustomerPersonaParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetCustomerPersonaResponse = zod.object({
+  "id": zod.number().nullish(),
+  "customerId": zod.number(),
+  "ageGroup": zod.union([zod.enum(['18-24', '25-34', '35-44', '45-54', '55-64', '65+']),zod.null()]).optional(),
+  "incomeRange": zod.string().nullish(),
+  "buyingBudget": zod.number().nullish(),
+  "familySize": zod.number().nullish(),
+  "vehiclePreference": zod.string().nullish(),
+  "brandPreference": zod.string().nullish(),
+  "fuelPreference": zod.string().nullish(),
+  "drivingHabits": zod.string().nullish(),
+  "purchaseMotivation": zod.string().nullish(),
+  "lifestyle": zod.string().nullish(),
+  "buyingProbability": zod.union([zod.enum(['low', 'medium', 'high', 'very_high']),zod.null()]).optional(),
+  "financeRequired": zod.boolean().nullish(),
+  "tradeIn": zod.boolean().nullish(),
+  "previousPurchases": zod.number().nullish(),
+  "communicationPreference": zod.union([zod.enum(['email', 'phone', 'whatsapp', 'sms', 'in_person']),zod.null()]).optional(),
+  "marketingConsent": zod.boolean().nullish(),
+  "aiRecommendedVehicleId": zod.number().nullish(),
+  "aiRecommendationReason": zod.string().nullish(),
+  "aiRecommendedVehicle": zod.union([zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "trim": zod.string().nullish(),
+  "year": zod.number(),
+  "vin": zod.string().nullish(),
+  "price": zod.number(),
+  "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
+  "rangeKm": zod.number().nullish(),
+  "mileageKm": zod.number(),
+  "exteriorColor": zod.string(),
+  "bodyType": zod.string(),
+  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "imageUrl": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "featured": zod.boolean(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional(),
+  "leadScore": zod.number(),
+  "updatedAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary Create or update the persona profile for a customer
+ */
+export const UpsertCustomerPersonaParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpsertCustomerPersonaBody = zod.object({
+  "ageGroup": zod.union([zod.enum(['18-24', '25-34', '35-44', '45-54', '55-64', '65+']),zod.null()]).optional(),
+  "incomeRange": zod.string().nullish(),
+  "buyingBudget": zod.number().nullish(),
+  "familySize": zod.number().nullish(),
+  "vehiclePreference": zod.string().nullish(),
+  "brandPreference": zod.string().nullish(),
+  "fuelPreference": zod.string().nullish(),
+  "drivingHabits": zod.string().nullish(),
+  "purchaseMotivation": zod.string().nullish(),
+  "lifestyle": zod.string().nullish(),
+  "buyingProbability": zod.union([zod.enum(['low', 'medium', 'high', 'very_high']),zod.null()]).optional(),
+  "financeRequired": zod.boolean().nullish(),
+  "tradeIn": zod.boolean().nullish(),
+  "previousPurchases": zod.number().nullish(),
+  "communicationPreference": zod.union([zod.enum(['email', 'phone', 'whatsapp', 'sms', 'in_person']),zod.null()]).optional(),
+  "marketingConsent": zod.boolean().nullish()
+})
+
+export const UpsertCustomerPersonaResponse = zod.object({
+  "id": zod.number().nullish(),
+  "customerId": zod.number(),
+  "ageGroup": zod.union([zod.enum(['18-24', '25-34', '35-44', '45-54', '55-64', '65+']),zod.null()]).optional(),
+  "incomeRange": zod.string().nullish(),
+  "buyingBudget": zod.number().nullish(),
+  "familySize": zod.number().nullish(),
+  "vehiclePreference": zod.string().nullish(),
+  "brandPreference": zod.string().nullish(),
+  "fuelPreference": zod.string().nullish(),
+  "drivingHabits": zod.string().nullish(),
+  "purchaseMotivation": zod.string().nullish(),
+  "lifestyle": zod.string().nullish(),
+  "buyingProbability": zod.union([zod.enum(['low', 'medium', 'high', 'very_high']),zod.null()]).optional(),
+  "financeRequired": zod.boolean().nullish(),
+  "tradeIn": zod.boolean().nullish(),
+  "previousPurchases": zod.number().nullish(),
+  "communicationPreference": zod.union([zod.enum(['email', 'phone', 'whatsapp', 'sms', 'in_person']),zod.null()]).optional(),
+  "marketingConsent": zod.boolean().nullish(),
+  "aiRecommendedVehicleId": zod.number().nullish(),
+  "aiRecommendationReason": zod.string().nullish(),
+  "aiRecommendedVehicle": zod.union([zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "trim": zod.string().nullish(),
+  "year": zod.number(),
+  "vin": zod.string().nullish(),
+  "price": zod.number(),
+  "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
+  "rangeKm": zod.number().nullish(),
+  "mileageKm": zod.number(),
+  "exteriorColor": zod.string(),
+  "bodyType": zod.string(),
+  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "imageUrl": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "featured": zod.boolean(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional(),
+  "leadScore": zod.number(),
+  "updatedAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary AI-recommend a vehicle from live inventory for this customer
+ */
+export const RecommendCustomerVehicleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RecommendCustomerVehicleResponse = zod.object({
+  "id": zod.number().nullish(),
+  "customerId": zod.number(),
+  "ageGroup": zod.union([zod.enum(['18-24', '25-34', '35-44', '45-54', '55-64', '65+']),zod.null()]).optional(),
+  "incomeRange": zod.string().nullish(),
+  "buyingBudget": zod.number().nullish(),
+  "familySize": zod.number().nullish(),
+  "vehiclePreference": zod.string().nullish(),
+  "brandPreference": zod.string().nullish(),
+  "fuelPreference": zod.string().nullish(),
+  "drivingHabits": zod.string().nullish(),
+  "purchaseMotivation": zod.string().nullish(),
+  "lifestyle": zod.string().nullish(),
+  "buyingProbability": zod.union([zod.enum(['low', 'medium', 'high', 'very_high']),zod.null()]).optional(),
+  "financeRequired": zod.boolean().nullish(),
+  "tradeIn": zod.boolean().nullish(),
+  "previousPurchases": zod.number().nullish(),
+  "communicationPreference": zod.union([zod.enum(['email', 'phone', 'whatsapp', 'sms', 'in_person']),zod.null()]).optional(),
+  "marketingConsent": zod.boolean().nullish(),
+  "aiRecommendedVehicleId": zod.number().nullish(),
+  "aiRecommendationReason": zod.string().nullish(),
+  "aiRecommendedVehicle": zod.union([zod.object({
+  "id": zod.number(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "trim": zod.string().nullish(),
+  "year": zod.number(),
+  "vin": zod.string().nullish(),
+  "price": zod.number(),
+  "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
+  "rangeKm": zod.number().nullish(),
+  "mileageKm": zod.number(),
+  "exteriorColor": zod.string(),
+  "bodyType": zod.string(),
+  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "imageUrl": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "featured": zod.boolean(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional(),
+  "leadScore": zod.number(),
+  "updatedAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary List notes for a customer
+ */
+export const ListCustomerNotesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListCustomerNotesResponseItem = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "body": zod.string(),
+  "author": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCustomerNotesResponse = zod.array(ListCustomerNotesResponseItem)
+
+
+/**
+ * @summary Add a note to a customer
+ */
+export const CreateCustomerNoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const CreateCustomerNoteBody = zod.object({
+  "body": zod.string().min(1)
+})
+
+export const CreateCustomerNoteResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "body": zod.string(),
+  "author": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a customer note
+ */
+export const DeleteCustomerNoteParams = zod.object({
+  "id": zod.coerce.number(),
+  "noteId": zod.coerce.number()
+})
+
+export const DeleteCustomerNoteResponse = zod.void()
+
+
+/**
+ * @summary List uploaded documents for a customer
+ */
+export const ListCustomerDocumentsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListCustomerDocumentsResponseItem = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "type": zod.enum(['driver_license', 'passport', 'tax_document', 'other']),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "uploadedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCustomerDocumentsResponse = zod.array(ListCustomerDocumentsResponseItem)
+
+
+/**
+ * @summary Upload a document for a customer (multipart form; consumed via raw fetch, not a generated hook)
+ */
+export const UploadCustomerDocumentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UploadCustomerDocumentResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "type": zod.enum(['driver_license', 'passport', 'tax_document', 'other']),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "uploadedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a customer document
+ */
+export const DeleteCustomerDocumentParams = zod.object({
+  "id": zod.coerce.number(),
+  "docId": zod.coerce.number()
+})
+
+export const DeleteCustomerDocumentResponse = zod.void()
+
+
+/**
+ * @summary Download / view a customer document
+ */
+export const DownloadCustomerDocumentParams = zod.object({
+  "id": zod.coerce.number(),
+  "docId": zod.coerce.number()
+})
+
+export const DownloadCustomerDocumentResponse = zod.unknown()
 
 
 /**

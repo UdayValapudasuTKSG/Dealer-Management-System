@@ -7,6 +7,9 @@
  */
 import type { Appraisal } from './appraisal';
 import type { Customer } from './customer';
+import type { CustomerDocument } from './customerDocument';
+import type { CustomerNote } from './customerNote';
+import type { CustomerPersona } from './customerPersona';
 import type { Deal } from './deal';
 import type { FinanceApplication } from './financeApplication';
 import type { Gate } from './gate';
@@ -17,6 +20,9 @@ import type { Vehicle } from './vehicle';
 
 export interface Customer360 {
   customer: Customer;
+  persona: CustomerPersona | null;
+  notes: CustomerNote[];
+  documents: CustomerDocument[];
   ownedVehicles: Vehicle[];
   activeDeal?: Deal | null;
   deals: Deal[];

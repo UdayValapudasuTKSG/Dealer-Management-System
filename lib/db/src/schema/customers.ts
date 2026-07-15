@@ -5,6 +5,7 @@ import {
   integer,
   doublePrecision,
   timestamp,
+  date,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -14,6 +15,18 @@ export const customersTable = pgTable("customers", {
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
+  whatsapp: text("whatsapp"),
+  dateOfBirth: date("date_of_birth", { mode: "string" }),
+  occupation: text("occupation"),
+  company: text("company"),
+  address: text("address"),
+  country: text("country"),
+  city: text("city"),
+  taxNumber: text("tax_number"),
+  tags: text("tags")
+    .array()
+    .notNull()
+    .default([] as string[]),
   avatarUrl: text("avatar_url"),
   location: text("location"),
   lifetimeValue: doublePrecision("lifetime_value").notNull().default(0),

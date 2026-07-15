@@ -12,6 +12,15 @@ export interface CustomerInput {
   name: string;
   email?: string;
   phone?: string;
+  whatsapp?: string;
+  dateOfBirth?: string;
+  occupation?: string;
+  company?: string;
+  address?: string;
+  country?: string;
+  city?: string;
+  taxNumber?: string;
+  tags?: string[];
   avatarUrl?: string;
   location?: string;
   lifetimeValue?: number;

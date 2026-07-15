@@ -490,6 +490,23 @@ export interface Customer {
   /** @nullable */
   phone?: string | null;
   /** @nullable */
+  whatsapp?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  occupation?: string | null;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  taxNumber?: string | null;
+  tags: string[];
+  /** @nullable */
   avatarUrl?: string | null;
   /** @nullable */
   location?: string | null;
@@ -514,6 +531,15 @@ export interface CustomerInput {
   name: string;
   email?: string;
   phone?: string;
+  whatsapp?: string;
+  dateOfBirth?: string;
+  occupation?: string;
+  company?: string;
+  address?: string;
+  country?: string;
+  city?: string;
+  taxNumber?: string;
+  tags?: string[];
   avatarUrl?: string;
   location?: string;
   lifetimeValue?: number;
@@ -534,13 +560,211 @@ export const CustomerUpdateLoyaltyTier = {
 export interface CustomerUpdate {
   /** @minLength 1 */
   name?: string;
-  email?: string;
-  phone?: string;
-  avatarUrl?: string;
-  location?: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  whatsapp?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  occupation?: string | null;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  taxNumber?: string | null;
+  tags?: string[];
+  /** @nullable */
+  avatarUrl?: string | null;
+  /** @nullable */
+  location?: string | null;
   lifetimeValue?: number;
   vehiclesOwned?: number;
   loyaltyTier?: CustomerUpdateLoyaltyTier;
+}
+
+export type CustomerPersonaAgeGroup = typeof CustomerPersonaAgeGroup[keyof typeof CustomerPersonaAgeGroup] | null;
+
+
+export const CustomerPersonaAgeGroup = {
+  '18-24': '18-24',
+  '25-34': '25-34',
+  '35-44': '35-44',
+  '45-54': '45-54',
+  '55-64': '55-64',
+  '65+': '65+',
+} as const;
+
+export type CustomerPersonaBuyingProbability = typeof CustomerPersonaBuyingProbability[keyof typeof CustomerPersonaBuyingProbability] | null;
+
+
+export const CustomerPersonaBuyingProbability = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  very_high: 'very_high',
+} as const;
+
+export type CustomerPersonaCommunicationPreference = typeof CustomerPersonaCommunicationPreference[keyof typeof CustomerPersonaCommunicationPreference] | null;
+
+
+export const CustomerPersonaCommunicationPreference = {
+  email: 'email',
+  phone: 'phone',
+  whatsapp: 'whatsapp',
+  sms: 'sms',
+  in_person: 'in_person',
+} as const;
+
+export interface CustomerPersona {
+  /** @nullable */
+  id?: number | null;
+  customerId: number;
+  ageGroup?: CustomerPersonaAgeGroup;
+  /** @nullable */
+  incomeRange?: string | null;
+  /** @nullable */
+  buyingBudget?: number | null;
+  /** @nullable */
+  familySize?: number | null;
+  /** @nullable */
+  vehiclePreference?: string | null;
+  /** @nullable */
+  brandPreference?: string | null;
+  /** @nullable */
+  fuelPreference?: string | null;
+  /** @nullable */
+  drivingHabits?: string | null;
+  /** @nullable */
+  purchaseMotivation?: string | null;
+  /** @nullable */
+  lifestyle?: string | null;
+  buyingProbability?: CustomerPersonaBuyingProbability;
+  /** @nullable */
+  financeRequired?: boolean | null;
+  /** @nullable */
+  tradeIn?: boolean | null;
+  /** @nullable */
+  previousPurchases?: number | null;
+  communicationPreference?: CustomerPersonaCommunicationPreference;
+  /** @nullable */
+  marketingConsent?: boolean | null;
+  /** @nullable */
+  aiRecommendedVehicleId?: number | null;
+  /** @nullable */
+  aiRecommendationReason?: string | null;
+  aiRecommendedVehicle?: Vehicle | null;
+  leadScore: number;
+  /** @nullable */
+  updatedAt?: string | null;
+}
+
+export type CustomerPersonaInputAgeGroup = typeof CustomerPersonaInputAgeGroup[keyof typeof CustomerPersonaInputAgeGroup] | null;
+
+
+export const CustomerPersonaInputAgeGroup = {
+  '18-24': '18-24',
+  '25-34': '25-34',
+  '35-44': '35-44',
+  '45-54': '45-54',
+  '55-64': '55-64',
+  '65+': '65+',
+} as const;
+
+export type CustomerPersonaInputBuyingProbability = typeof CustomerPersonaInputBuyingProbability[keyof typeof CustomerPersonaInputBuyingProbability] | null;
+
+
+export const CustomerPersonaInputBuyingProbability = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  very_high: 'very_high',
+} as const;
+
+export type CustomerPersonaInputCommunicationPreference = typeof CustomerPersonaInputCommunicationPreference[keyof typeof CustomerPersonaInputCommunicationPreference] | null;
+
+
+export const CustomerPersonaInputCommunicationPreference = {
+  email: 'email',
+  phone: 'phone',
+  whatsapp: 'whatsapp',
+  sms: 'sms',
+  in_person: 'in_person',
+} as const;
+
+export interface CustomerPersonaInput {
+  ageGroup?: CustomerPersonaInputAgeGroup;
+  /** @nullable */
+  incomeRange?: string | null;
+  /** @nullable */
+  buyingBudget?: number | null;
+  /** @nullable */
+  familySize?: number | null;
+  /** @nullable */
+  vehiclePreference?: string | null;
+  /** @nullable */
+  brandPreference?: string | null;
+  /** @nullable */
+  fuelPreference?: string | null;
+  /** @nullable */
+  drivingHabits?: string | null;
+  /** @nullable */
+  purchaseMotivation?: string | null;
+  /** @nullable */
+  lifestyle?: string | null;
+  buyingProbability?: CustomerPersonaInputBuyingProbability;
+  /** @nullable */
+  financeRequired?: boolean | null;
+  /** @nullable */
+  tradeIn?: boolean | null;
+  /** @nullable */
+  previousPurchases?: number | null;
+  communicationPreference?: CustomerPersonaInputCommunicationPreference;
+  /** @nullable */
+  marketingConsent?: boolean | null;
+}
+
+export interface CustomerNote {
+  id: number;
+  customerId: number;
+  body: string;
+  /** @nullable */
+  author?: string | null;
+  createdAt: string;
+}
+
+export interface CustomerNoteInput {
+  /** @minLength 1 */
+  body: string;
+}
+
+export type CustomerDocumentType = typeof CustomerDocumentType[keyof typeof CustomerDocumentType];
+
+
+export const CustomerDocumentType = {
+  driver_license: 'driver_license',
+  passport: 'passport',
+  tax_document: 'tax_document',
+  other: 'other',
+} as const;
+
+export interface CustomerDocument {
+  id: number;
+  customerId: number;
+  type: CustomerDocumentType;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  /** @nullable */
+  uploadedBy?: string | null;
+  createdAt: string;
 }
 
 export type DealStage = typeof DealStage[keyof typeof DealStage];
@@ -1184,6 +1408,9 @@ export interface GraFilingSubmission {
 
 export interface Customer360 {
   customer: Customer;
+  persona: CustomerPersona | null;
+  notes: CustomerNote[];
+  documents: CustomerDocument[];
   ownedVehicles: Vehicle[];
   activeDeal?: Deal | null;
   deals: Deal[];
