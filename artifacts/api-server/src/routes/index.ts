@@ -19,6 +19,10 @@ import pipelineRouter from "./pipeline";
 import authRouter from "./auth";
 import adminRouter from "./admin";
 import auditRouter from "./audit";
+import emailsRouter from "./emails";
+import notificationsRouter from "./notifications";
+import tasksRouter from "./tasks";
+import communicationsRouter from "./communications";
 import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
 
 const router: IRouter = Router();
@@ -51,5 +55,9 @@ router.use(anthropicRouter);
 router.use(copilotkitRouter);
 router.use(graRouter);
 router.use(pipelineRouter);
+router.use(emailsRouter);
+router.use(notificationsRouter);
+router.use(tasksRouter);
+router.use(communicationsRouter);
 
 export default router;

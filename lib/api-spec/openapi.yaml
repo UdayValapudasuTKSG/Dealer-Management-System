@@ -42,6 +42,12 @@ tags:
     description: User, role and permission administration
   - name: audit
     description: Audit log of every significant action
+  - name: emails
+    description: Email engine, templates, queue and delivery logs
+  - name: notifications
+    description: In-app notification center
+  - name: tasks
+    description: Task management
 paths:
   /anthropic/conversations:
     get:
@@ -1494,6 +1500,331 @@ paths:
                 items:
                   $ref: "#/components/schemas/AuditLogEntry"
 
+  /emails/settings:
+    get:
+      operationId: getEmailSettings
+      tags: [emails]
+      summary: SMTP configuration status
+      responses:
+        "200":
+          description: Email settings status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailSettings"
+  /emails/test-send:
+    post:
+      operationId: sendTestEmail
+      tags: [emails]
+      summary: Send a test email through the configured SMTP transport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestEmailRequest"
+      responses:
+        "200":
+          description: Result of the test send
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestEmailResult"
+  /emails/templates:
+    get:
+      operationId: listEmailTemplates
+      tags: [emails]
+      summary: List the email trigger catalog
+      responses:
+        "200":
+          description: Template catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EmailTemplateInfo"
+  /emails/templates/{key}/preview:
+    get:
+      operationId: previewEmailTemplate
+      tags: [emails]
+      summary: Rendered HTML preview of a template with sample data
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Rendered template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTemplatePreview"
+        "404":
+          description: Unknown template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /emails/send:
+    post:
+      operationId: enqueueEmail
+      tags: [emails]
+      summary: Enqueue a templated email (manual trigger)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnqueueEmailRequest"
+      responses:
+        "201":
+          description: Queued email log entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailLog"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /emails/logs:
+    get:
+      operationId: listEmailLogs
+      tags: [emails]
+      summary: Delivery log of every email
+      parameters:
+        - name: customerId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Email logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EmailLog"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: Current user's notifications
+      responses:
+        "200":
+          description: Notifications, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+  /notifications/read:
+    post:
+      operationId: markNotificationsRead
+      tags: [notifications]
+      summary: Mark notifications as read
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MarkNotificationsReadRequest"
+      responses:
+        "200":
+          description: Number of notifications marked read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarkNotificationsReadResult"
+
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List tasks
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: assigneeUserId
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      operationId: createTask
+      tags: [tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+  /tasks/{id}:
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+  /tasks/{id}/comments:
+    get:
+      operationId: listTaskComments
+      tags: [tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskComment"
+    post:
+      operationId: createTaskComment
+      tags: [tasks]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskCommentInput"
+      responses:
+        "201":
+          description: Created comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskComment"
+        "404":
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /customers/{id}/communications:
+    get:
+      operationId: getCustomerCommunications
+      tags: [customers]
+      summary: Communication center data for a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Emails, notes and timeline for the customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerCommunications"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /customers/{id}/comm-notes:
+    post:
+      operationId: createCommNote
+      tags: [customers]
+      summary: Log a call or meeting note against a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommNoteInput"
+      responses:
+        "201":
+          description: Created note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommNote"
+        "404":
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   schemas:
     PermissionGrant:
@@ -2367,3 +2698,186 @@ components:
         openGates:
           type: array
           items: { $ref: "#/components/schemas/Gate" }
+
+    EmailSettings:
+      type: object
+      required: [configured, fromAddress, queueDepth]
+      properties:
+        configured: { type: boolean }
+        fromAddress: { type: ["string", "null"] }
+        queueDepth: { type: integer }
+    TestEmailRequest:
+      type: object
+      required: [to]
+      properties:
+        to: { type: string, minLength: 3 }
+    TestEmailResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        error: { type: ["string", "null"] }
+    EmailTemplateInfo:
+      type: object
+      required: [key, label, description]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        description: { type: string }
+    EmailTemplatePreview:
+      type: object
+      required: [key, subject, html]
+      properties:
+        key: { type: string }
+        subject: { type: string }
+        html: { type: string }
+    EnqueueEmailRequest:
+      type: object
+      required: [template, to]
+      properties:
+        template: { type: string }
+        to: { type: string, minLength: 3 }
+        customerId: { type: integer }
+        data:
+          type: object
+          additionalProperties: { type: string }
+    EmailLog:
+      type: object
+      required: [id, recipient, subject, template, channel, status, attempts, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        recipient: { type: string }
+        subject: { type: string }
+        template: { type: string }
+        channel: { type: string, enum: [email, sms, whatsapp] }
+        status: { type: string, enum: [queued, sending, sent, failed] }
+        attempts: { type: integer }
+        lastError: { type: ["string", "null"] }
+        sentAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    Notification:
+      type: object
+      required: [id, userId, type, title, read, createdAt]
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        type: { type: string, enum: [approval, assignment, task, email, system] }
+        title: { type: string }
+        body: { type: ["string", "null"] }
+        link: { type: ["string", "null"] }
+        read: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    MarkNotificationsReadRequest:
+      type: object
+      properties:
+        ids:
+          type: array
+          items: { type: integer }
+        all: { type: boolean }
+    MarkNotificationsReadResult:
+      type: object
+      required: [updated]
+      properties:
+        updated: { type: integer }
+
+    TaskAttachment:
+      type: object
+      required: [name, url]
+      properties:
+        name: { type: string }
+        url: { type: string }
+    Task:
+      type: object
+      required: [id, title, priority, status, attachments, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: ["string", "null"] }
+        assigneeUserId: { type: ["integer", "null"] }
+        assigneeName: { type: ["string", "null"] }
+        createdByUserId: { type: ["integer", "null"] }
+        createdByName: { type: ["string", "null"] }
+        dueDate: { type: ["string", "null"], format: date }
+        priority: { type: string, enum: [low, normal, high, urgent] }
+        status: { type: string, enum: [open, in_progress, done] }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/TaskAttachment" }
+        completedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TaskInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1 }
+        description: { type: string }
+        assigneeUserId: { type: integer }
+        dueDate: { type: string, format: date }
+        priority: { type: string, enum: [low, normal, high, urgent] }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/TaskAttachment" }
+    TaskUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 1 }
+        description: { type: string }
+        assigneeUserId: { type: integer }
+        dueDate: { type: string, format: date }
+        priority: { type: string, enum: [low, normal, high, urgent] }
+        status: { type: string, enum: [open, in_progress, done] }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/TaskAttachment" }
+    TaskComment:
+      type: object
+      required: [id, taskId, authorName, body, createdAt]
+      properties:
+        id: { type: integer }
+        taskId: { type: integer }
+        authorUserId: { type: ["integer", "null"] }
+        authorName: { type: string }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+    TaskCommentInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1 }
+
+    CommNote:
+      type: object
+      required: [id, customerId, kind, subject, loggedBy, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: integer }
+        kind: { type: string, enum: [call, meeting] }
+        subject: { type: string }
+        notes: { type: ["string", "null"] }
+        outcome: { type: ["string", "null"] }
+        loggedBy: { type: string }
+        createdAt: { type: string, format: date-time }
+    CommNoteInput:
+      type: object
+      required: [kind, subject]
+      properties:
+        kind: { type: string, enum: [call, meeting] }
+        subject: { type: string, minLength: 1 }
+        notes: { type: string }
+        outcome: { type: string }
+    CustomerCommunications:
+      type: object
+      required: [emails, notes, timeline]
+      properties:
+        emails:
+          type: array
+          items: { $ref: "#/components/schemas/EmailLog" }
+        notes:
+          type: array
+          items: { $ref: "#/components/schemas/CommNote" }
+        timeline:
+          type: array
+          items: { $ref: "#/components/schemas/TimelineEvent" }

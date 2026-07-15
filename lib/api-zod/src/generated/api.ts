@@ -1930,3 +1930,364 @@ export const ListAuditLogsResponseItem = zod.object({
 export const ListAuditLogsResponse = zod.array(ListAuditLogsResponseItem)
 
 
+/**
+ * @summary SMTP configuration status
+ */
+export const GetEmailSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "fromAddress": zod.string().nullable(),
+  "queueDepth": zod.number()
+})
+
+
+/**
+ * @summary Send a test email through the configured SMTP transport
+ */
+export const sendTestEmailBodyToMin = 3;
+
+
+
+export const SendTestEmailBody = zod.object({
+  "to": zod.string().min(sendTestEmailBodyToMin)
+})
+
+export const SendTestEmailResponse = zod.object({
+  "ok": zod.boolean(),
+  "error": zod.string().nullish()
+})
+
+
+/**
+ * @summary List the email trigger catalog
+ */
+export const ListEmailTemplatesResponseItem = zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "description": zod.string()
+})
+export const ListEmailTemplatesResponse = zod.array(ListEmailTemplatesResponseItem)
+
+
+/**
+ * @summary Rendered HTML preview of a template with sample data
+ */
+export const PreviewEmailTemplateParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const PreviewEmailTemplateResponse = zod.object({
+  "key": zod.string(),
+  "subject": zod.string(),
+  "html": zod.string()
+})
+
+
+/**
+ * @summary Enqueue a templated email (manual trigger)
+ */
+export const enqueueEmailBodyToMin = 3;
+
+
+
+export const EnqueueEmailBody = zod.object({
+  "template": zod.string(),
+  "to": zod.string().min(enqueueEmailBodyToMin),
+  "customerId": zod.number().optional(),
+  "data": zod.record(zod.string(), zod.string()).optional()
+})
+
+export const EnqueueEmailResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "recipient": zod.string(),
+  "subject": zod.string(),
+  "template": zod.string(),
+  "channel": zod.enum(['email', 'sms', 'whatsapp']),
+  "status": zod.enum(['queued', 'sending', 'sent', 'failed']),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "sentAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delivery log of every email
+ */
+export const ListEmailLogsQueryParams = zod.object({
+  "customerId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional()
+})
+
+export const ListEmailLogsResponseItem = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "recipient": zod.string(),
+  "subject": zod.string(),
+  "template": zod.string(),
+  "channel": zod.enum(['email', 'sms', 'whatsapp']),
+  "status": zod.enum(['queued', 'sending', 'sent', 'failed']),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "sentAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListEmailLogsResponse = zod.array(ListEmailLogsResponseItem)
+
+
+/**
+ * @summary Current user's notifications
+ */
+export const ListNotificationsResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "type": zod.enum(['approval', 'assignment', 'task', 'email', 'system']),
+  "title": zod.string(),
+  "body": zod.string().nullish(),
+  "link": zod.string().nullish(),
+  "read": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const ListNotificationsResponse = zod.array(ListNotificationsResponseItem)
+
+
+/**
+ * @summary Mark notifications as read
+ */
+export const MarkNotificationsReadBody = zod.object({
+  "ids": zod.array(zod.number()).optional(),
+  "all": zod.boolean().optional()
+})
+
+export const MarkNotificationsReadResponse = zod.object({
+  "updated": zod.number()
+})
+
+
+/**
+ * @summary List tasks
+ */
+export const ListTasksQueryParams = zod.object({
+  "status": zod.coerce.string().optional(),
+  "assigneeUserId": zod.coerce.number().optional()
+})
+
+export const ListTasksResponseItem = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "assigneeUserId": zod.number().nullish(),
+  "assigneeName": zod.string().nullish(),
+  "createdByUserId": zod.number().nullish(),
+  "createdByName": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "status": zod.enum(['open', 'in_progress', 'done']),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "url": zod.string()
+})),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListTasksResponse = zod.array(ListTasksResponseItem)
+
+
+
+
+
+export const CreateTaskBody = zod.object({
+  "title": zod.string().min(1),
+  "description": zod.string().optional(),
+  "assigneeUserId": zod.number().optional(),
+  "dueDate": zod.coerce.date().optional(),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "url": zod.string()
+})).optional()
+})
+
+export const CreateTaskResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "assigneeUserId": zod.number().nullish(),
+  "assigneeName": zod.string().nullish(),
+  "createdByUserId": zod.number().nullish(),
+  "createdByName": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "status": zod.enum(['open', 'in_progress', 'done']),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "url": zod.string()
+})),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdateTaskParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateTaskBody = zod.object({
+  "title": zod.string().min(1).optional(),
+  "description": zod.string().optional(),
+  "assigneeUserId": zod.number().optional(),
+  "dueDate": zod.coerce.date().optional(),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']).optional(),
+  "status": zod.enum(['open', 'in_progress', 'done']).optional(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "url": zod.string()
+})).optional()
+})
+
+export const UpdateTaskResponse = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "assigneeUserId": zod.number().nullish(),
+  "assigneeName": zod.string().nullish(),
+  "createdByUserId": zod.number().nullish(),
+  "createdByName": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
+  "status": zod.enum(['open', 'in_progress', 'done']),
+  "attachments": zod.array(zod.object({
+  "name": zod.string(),
+  "url": zod.string()
+})),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeleteTaskParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteTaskResponse = zod.void()
+
+
+export const ListTaskCommentsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListTaskCommentsResponseItem = zod.object({
+  "id": zod.number(),
+  "taskId": zod.number(),
+  "authorUserId": zod.number().nullish(),
+  "authorName": zod.string(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListTaskCommentsResponse = zod.array(ListTaskCommentsResponseItem)
+
+
+export const CreateTaskCommentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const CreateTaskCommentBody = zod.object({
+  "body": zod.string().min(1)
+})
+
+export const CreateTaskCommentResponse = zod.object({
+  "id": zod.number(),
+  "taskId": zod.number(),
+  "authorUserId": zod.number().nullish(),
+  "authorName": zod.string(),
+  "body": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Communication center data for a customer
+ */
+export const GetCustomerCommunicationsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetCustomerCommunicationsResponse = zod.object({
+  "emails": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "recipient": zod.string(),
+  "subject": zod.string(),
+  "template": zod.string(),
+  "channel": zod.enum(['email', 'sms', 'whatsapp']),
+  "status": zod.enum(['queued', 'sending', 'sent', 'failed']),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "sentAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "notes": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "kind": zod.enum(['call', 'meeting']),
+  "subject": zod.string(),
+  "notes": zod.string().nullish(),
+  "outcome": zod.string().nullish(),
+  "loggedBy": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "timeline": zod.array(zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'gate', 'system']),
+  "kind": zod.string(),
+  "title": zod.string(),
+  "detail": zod.string().nullish(),
+  "actor": zod.string(),
+  "isAgent": zod.boolean(),
+  "cause": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Log a call or meeting note against a customer
+ */
+export const CreateCommNoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const CreateCommNoteBody = zod.object({
+  "kind": zod.enum(['call', 'meeting']),
+  "subject": zod.string().min(1),
+  "notes": zod.string().optional(),
+  "outcome": zod.string().optional()
+})
+
+export const CreateCommNoteResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "kind": zod.enum(['call', 'meeting']),
+  "subject": zod.string(),
+  "notes": zod.string().nullish(),
+  "outcome": zod.string().nullish(),
+  "loggedBy": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+

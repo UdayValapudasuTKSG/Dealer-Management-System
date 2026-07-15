@@ -25,7 +25,9 @@ import CustomerDetail from "@/pages/customer-detail";
 import Approvals from "@/pages/approvals";
 import Journey from "@/pages/journey";
 import Gra from "@/pages/gra";
+import Tasks from "@/pages/tasks";
 import SettingsUsers from "@/pages/settings-users";
+import SettingsEmail from "@/pages/settings-email";
 import SettingsRoles from "@/pages/settings-roles";
 import SettingsAudit from "@/pages/settings-audit";
 import NotFound from "@/pages/not-found";
@@ -155,6 +157,7 @@ function AppShell() {
                 <Route path="/customers" component={Customers} />
                 <Route path="/customers/:id" component={CustomerDetail} />
                 <Route path="/journey" component={Journey} />
+                <Route path="/tasks" component={Tasks} />
                 <Route path="/gra" component={Gra} />
                 <Route path="/settings/users">
                   <RequireSettings>
@@ -169,6 +172,11 @@ function AppShell() {
                 <Route path="/settings/audit">
                   <RequireSettings>
                     <SettingsAudit />
+                  </RequireSettings>
+                </Route>
+                <Route path="/settings/email">
+                  <RequireSettings>
+                    <SettingsEmail />
                   </RequireSettings>
                 </Route>
                 <Route path="/settings">

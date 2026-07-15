@@ -1422,6 +1422,271 @@ export interface Customer360 {
   openGates: Gate[];
 }
 
+export interface EmailSettings {
+  configured: boolean;
+  /** @nullable */
+  fromAddress: string | null;
+  queueDepth: number;
+}
+
+export interface TestEmailRequest {
+  /** @minLength 3 */
+  to: string;
+}
+
+export interface TestEmailResult {
+  ok: boolean;
+  /** @nullable */
+  error?: string | null;
+}
+
+export interface EmailTemplateInfo {
+  key: string;
+  label: string;
+  description: string;
+}
+
+export interface EmailTemplatePreview {
+  key: string;
+  subject: string;
+  html: string;
+}
+
+export type EnqueueEmailRequestData = {[key: string]: string};
+
+export interface EnqueueEmailRequest {
+  template: string;
+  /** @minLength 3 */
+  to: string;
+  customerId?: number;
+  data?: EnqueueEmailRequestData;
+}
+
+export type EmailLogChannel = typeof EmailLogChannel[keyof typeof EmailLogChannel];
+
+
+export const EmailLogChannel = {
+  email: 'email',
+  sms: 'sms',
+  whatsapp: 'whatsapp',
+} as const;
+
+export type EmailLogStatus = typeof EmailLogStatus[keyof typeof EmailLogStatus];
+
+
+export const EmailLogStatus = {
+  queued: 'queued',
+  sending: 'sending',
+  sent: 'sent',
+  failed: 'failed',
+} as const;
+
+export interface EmailLog {
+  id: number;
+  /** @nullable */
+  customerId?: number | null;
+  recipient: string;
+  subject: string;
+  template: string;
+  channel: EmailLogChannel;
+  status: EmailLogStatus;
+  attempts: number;
+  /** @nullable */
+  lastError?: string | null;
+  /** @nullable */
+  sentAt?: string | null;
+  createdAt: string;
+}
+
+export type NotificationType = typeof NotificationType[keyof typeof NotificationType];
+
+
+export const NotificationType = {
+  approval: 'approval',
+  assignment: 'assignment',
+  task: 'task',
+  email: 'email',
+  system: 'system',
+} as const;
+
+export interface Notification {
+  id: number;
+  userId: number;
+  type: NotificationType;
+  title: string;
+  /** @nullable */
+  body?: string | null;
+  /** @nullable */
+  link?: string | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface MarkNotificationsReadRequest {
+  ids?: number[];
+  all?: boolean;
+}
+
+export interface MarkNotificationsReadResult {
+  updated: number;
+}
+
+export interface TaskAttachment {
+  name: string;
+  url: string;
+}
+
+export type TaskPriority = typeof TaskPriority[keyof typeof TaskPriority];
+
+
+export const TaskPriority = {
+  low: 'low',
+  normal: 'normal',
+  high: 'high',
+  urgent: 'urgent',
+} as const;
+
+export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];
+
+
+export const TaskStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  done: 'done',
+} as const;
+
+export interface Task {
+  id: number;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  assigneeUserId?: number | null;
+  /** @nullable */
+  assigneeName?: string | null;
+  /** @nullable */
+  createdByUserId?: number | null;
+  /** @nullable */
+  createdByName?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
+  priority: TaskPriority;
+  status: TaskStatus;
+  attachments: TaskAttachment[];
+  /** @nullable */
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TaskInputPriority = typeof TaskInputPriority[keyof typeof TaskInputPriority];
+
+
+export const TaskInputPriority = {
+  low: 'low',
+  normal: 'normal',
+  high: 'high',
+  urgent: 'urgent',
+} as const;
+
+export interface TaskInput {
+  /** @minLength 1 */
+  title: string;
+  description?: string;
+  assigneeUserId?: number;
+  dueDate?: string;
+  priority?: TaskInputPriority;
+  attachments?: TaskAttachment[];
+}
+
+export type TaskUpdatePriority = typeof TaskUpdatePriority[keyof typeof TaskUpdatePriority];
+
+
+export const TaskUpdatePriority = {
+  low: 'low',
+  normal: 'normal',
+  high: 'high',
+  urgent: 'urgent',
+} as const;
+
+export type TaskUpdateStatus = typeof TaskUpdateStatus[keyof typeof TaskUpdateStatus];
+
+
+export const TaskUpdateStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  done: 'done',
+} as const;
+
+export interface TaskUpdate {
+  /** @minLength 1 */
+  title?: string;
+  description?: string;
+  assigneeUserId?: number;
+  dueDate?: string;
+  priority?: TaskUpdatePriority;
+  status?: TaskUpdateStatus;
+  attachments?: TaskAttachment[];
+}
+
+export interface TaskComment {
+  id: number;
+  taskId: number;
+  /** @nullable */
+  authorUserId?: number | null;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface TaskCommentInput {
+  /** @minLength 1 */
+  body: string;
+}
+
+export type CommNoteKind = typeof CommNoteKind[keyof typeof CommNoteKind];
+
+
+export const CommNoteKind = {
+  call: 'call',
+  meeting: 'meeting',
+} as const;
+
+export interface CommNote {
+  id: number;
+  customerId: number;
+  kind: CommNoteKind;
+  subject: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  outcome?: string | null;
+  loggedBy: string;
+  createdAt: string;
+}
+
+export type CommNoteInputKind = typeof CommNoteInputKind[keyof typeof CommNoteInputKind];
+
+
+export const CommNoteInputKind = {
+  call: 'call',
+  meeting: 'meeting',
+} as const;
+
+export interface CommNoteInput {
+  kind: CommNoteInputKind;
+  /** @minLength 1 */
+  subject: string;
+  notes?: string;
+  outcome?: string;
+}
+
+export interface CustomerCommunications {
+  emails: EmailLog[];
+  notes: CommNote[];
+  timeline: TimelineEvent[];
+}
+
 export type ListVehiclesParams = {
 status?: string;
 powertrain?: string;
@@ -1480,5 +1745,15 @@ action?: string;
 module?: string;
 search?: string;
 limit?: number;
+};
+
+export type ListEmailLogsParams = {
+customerId?: number;
+status?: string;
+};
+
+export type ListTasksParams = {
+status?: string;
+assigneeUserId?: number;
 };
 

@@ -229,10 +229,18 @@ const PATH_MODULES: Record<string, RouteRule> = {
     category: () => "admin",
   },
   "audit-logs": { module: "settings" },
+  emails: { module: "settings" },
 };
 
 // Signed-in-only paths that carry no specific permission requirement.
-const AUTH_ONLY_SEGMENTS = new Set(["auth", "anthropic", "copilotkit"]);
+// notifications and tasks are per-user features available to every signed-in user.
+const AUTH_ONLY_SEGMENTS = new Set([
+  "auth",
+  "anthropic",
+  "copilotkit",
+  "notifications",
+  "tasks",
+]);
 
 export function routePermission(
   req: Request,

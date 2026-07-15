@@ -7,6 +7,7 @@ import { recordLogoutEvent } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuthz } from "@/lib/auth";
+import { NotificationBell } from "@/components/notification-bell";
 
 type NavItem = { name: string; href: string; module: string };
 type Cluster = { label: string; icon: string; items: NavItem[] };
@@ -19,6 +20,7 @@ const CLUSTERS: Cluster[] = [
       { name: "Command Center", href: "/command-center", module: "dashboard" },
       { name: "Journey", href: "/journey", module: "dashboard" },
       { name: "Approvals", href: "/approvals", module: "approvals" },
+      { name: "Tasks", href: "/tasks", module: "" },
     ],
   },
   {
@@ -56,6 +58,7 @@ const CLUSTERS: Cluster[] = [
       { name: "Users", href: "/settings/users", module: "settings" },
       { name: "Roles & Permissions", href: "/settings/roles", module: "settings" },
       { name: "Audit Logs", href: "/settings/audit", module: "settings" },
+      { name: "Email Engine", href: "/settings/email", module: "settings" },
     ],
   },
 ];
@@ -180,7 +183,7 @@ export function TopNav() {
 
   const clusters = CLUSTERS.map((c) => ({
     ...c,
-    items: c.items.filter((i) => can(i.module, "view")),
+    items: c.items.filter((i) => !i.module || can(i.module, "view")),
   })).filter((c) => c.items.length > 0);
 
   const activeCluster =
@@ -277,6 +280,7 @@ export function TopNav() {
 
           {/* Right rail */}
           <div className="flex items-center gap-2 shrink-0">
+            <NotificationBell />
             <ThemeToggle />
             <UserMenu />
           </div>

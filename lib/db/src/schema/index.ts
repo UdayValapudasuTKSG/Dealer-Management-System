@@ -17,3 +17,7 @@ export * from "./messages";
 export * from "./roles";
 export * from "./users";
 export * from "./auditLogs";
+export * from "./emailLogs";
+export * from "./notifications";
+export * from "./tasks";
+export * from "./commNotes";

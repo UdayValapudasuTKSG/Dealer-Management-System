@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Timeline } from "@/components/timeline";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
+import { CommunicationCenter } from "@/components/communication-center";
 import { Page } from "@/components/layout/page";
 import { ProfileTab } from "@/components/customer/profile-tab";
 import { PersonaTab } from "@/components/customer/persona-tab";
@@ -284,6 +285,18 @@ export default function CustomerDetail() {
               </CardContent>
             </Card>
           )}
+
+          {/* Communication center — emails, calls, meetings */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold tracking-wide">
+              Communication
+            </h2>
+            <CommunicationCenter
+              customerId={customer.id}
+              customerEmail={customer.email}
+              customerName={customer.name}
+            />
+          </div>
 
           {/* Open gates for this client — actionable in-context */}
           {openGates.length > 0 && (
