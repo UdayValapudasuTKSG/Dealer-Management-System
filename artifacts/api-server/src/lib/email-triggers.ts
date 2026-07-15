@@ -174,6 +174,44 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
   });
 }
 
+/** Finance application status transitions → processing / approved emails. */
+export function onFinanceStatusChanged(
+  app: {
+    customerId: number | null;
+    customerName: string;
+    amount: number;
+    apr: number;
+    lender: string | null;
+  },
+  status: string,
+): void {
+  fire("finance_status_changed", async () => {
+    const c = await customerEmail(app.customerId);
+    if (!c.email) return;
+    const base: TemplateData = {
+      ...(c.name ? { name: c.name } : { name: app.customerName }),
+      amount: money(app.amount),
+      ...(app.lender ? { lender: app.lender } : {}),
+      apr: `${app.apr}%`,
+    };
+    if (status === "submitted" || status === "under_review") {
+      await send({
+        template: "finance_processing",
+        to: c.email,
+        customerId: app.customerId,
+        data: base,
+      });
+    } else if (status === "approved") {
+      await send({
+        template: "finance_approved",
+        to: c.email,
+        customerId: app.customerId,
+        data: base,
+      });
+    }
+  });
+}
+
 /** Service order completed → "vehicle_ready". */
 export function onServiceOrderCompleted(
   before: ServiceOrder,

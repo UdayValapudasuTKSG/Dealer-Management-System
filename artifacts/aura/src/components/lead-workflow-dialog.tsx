@@ -461,7 +461,7 @@ export function LeadWorkflowDialog({
                   </p>
                   {l.purchaseType === "finance" && (
                     <Link
-                      href="/finance"
+                      href={`/finance?lead=${l.id}`}
                       className="text-xs font-bold uppercase tracking-wider text-primary inline-flex items-center gap-1 hover:underline"
                     >
                       Open F&I <ArrowUpRight className="w-3.5 h-3.5" />

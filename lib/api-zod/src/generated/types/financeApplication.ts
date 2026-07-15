@@ -5,21 +5,51 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { FinanceApplicationEmploymentType } from './financeApplicationEmploymentType';
 import type { FinanceApplicationStatus } from './financeApplicationStatus';
+import type { FinanceStatusEvent } from './financeStatusEvent';
 
 export interface FinanceApplication {
   id: number;
   /** @nullable */
   dealId?: number | null;
   /** @nullable */
+  leadId?: number | null;
+  /** @nullable */
   customerId?: number | null;
   customerName: string;
   amount: number;
+  downPayment: number;
   termMonths: number;
   apr: number;
   /** @nullable */
   lender?: string | null;
+  /** @nullable */
+  bankId?: number | null;
+  /** @nullable */
+  employerName?: string | null;
+  /** @nullable */
+  jobTitle?: string | null;
+  /** @nullable */
+  employmentType?: FinanceApplicationEmploymentType;
+  /** @nullable */
+  employmentYears?: number | null;
+  /** @nullable */
+  monthlyIncome?: number | null;
+  /** @nullable */
+  otherIncome?: number | null;
   status: FinanceApplicationStatus;
+  statusHistory: FinanceStatusEvent[];
+  /** @nullable */
+  losConnector?: string | null;
+  /** @nullable */
+  losReference?: string | null;
+  /** @nullable */
+  submittedAt?: Date | null;
+  /** @nullable */
+  decisionAt?: Date | null;
+  /** @nullable */
+  disbursedAt?: Date | null;
   protectionProducts: string[];
   createdAt: Date;
 }

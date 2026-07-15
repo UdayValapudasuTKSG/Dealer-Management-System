@@ -779,6 +779,11 @@ paths:
     get:
       operationId: listFinanceApplications
       tags: [finance]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
           description: List of finance applications
@@ -805,6 +810,28 @@ paths:
               schema:
                 $ref: "#/components/schemas/FinanceApplication"
   /finance-applications/{id}:
+    get:
+      operationId: getFinanceApplication
+      tags: [finance]
+      summary: Application detail with documents and LOS submission history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Application detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceApplicationDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     patch:
       operationId: updateFinanceApplication
       tags: [finance]
@@ -832,6 +859,366 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /finance-applications/{id}/submit:
+    post:
+      operationId: submitFinanceApplication
+      tags: [finance]
+      summary: Submit the application to the lender via the LOS connector
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Submitted application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceApplication"
+        "400":
+          description: Not submittable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: LOS connector failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /finance-applications/{id}/sync:
+    post:
+      operationId: syncFinanceApplication
+      tags: [finance]
+      summary: Poll the LOS for the latest decision status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Application after sync
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceApplication"
+        "400":
+          description: Not submitted yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: LOS connector failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /finance-applications/{id}/documents:
+    get:
+      operationId: listFinanceDocuments
+      tags: [finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FinanceDocument"
+    post:
+      operationId: uploadFinanceDocument
+      tags: [finance]
+      summary: Upload a supporting document (multipart form; consumed via raw fetch, not a generated hook)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "201":
+          description: Uploaded document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceDocument"
+        "400":
+          description: Invalid upload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /finance-applications/{id}/documents/{docId}:
+    delete:
+      operationId: deleteFinanceDocument
+      tags: [finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: docId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+  /finance-applications/{id}/documents/{docId}/download:
+    get:
+      operationId: downloadFinanceDocument
+      tags: [finance]
+      summary: Download / view a finance document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: docId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: File contents
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /finance-connector:
+    get:
+      operationId: getFinanceConnectorStatus
+      tags: [finance]
+      summary: Which LOS connector is active and whether it runs live or sandboxed
+      responses:
+        "200":
+          description: Connector status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceConnectorStatus"
+  /banks:
+    get:
+      operationId: listBanks
+      tags: [finance]
+      responses:
+        "200":
+          description: Bank registry
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bank"
+    post:
+      operationId: createBank
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bank"
+  /banks/{id}:
+    patch:
+      operationId: updateBank
+      tags: [finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bank"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [finance]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invoice"
+    post:
+      operationId: createInvoice
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+  /invoices/{id}:
+    patch:
+      operationId: updateInvoice
+      tags: [finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /payments:
+    get:
+      operationId: listPayments
+      tags: [finance]
+      responses:
+        "200":
+          description: Payments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Payment"
+    post:
+      operationId: createPayment
+      tags: [finance]
+      summary: Record a payment against an invoice — auto-issues a receipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "201":
+          description: Recorded payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "400":
+          description: Invalid payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /receipts:
+    get:
+      operationId: listReceipts
+      tags: [finance]
+      responses:
+        "200":
+          description: Receipts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Receipt"
+  /outstanding-balances:
+    get:
+      operationId: listOutstandingBalances
+      tags: [finance]
+      summary: Open invoices with amounts paid and balances due
+      responses:
+        "200":
+          description: Outstanding balances
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OutstandingBalance"
 
   /service-orders:
     get:
@@ -3085,19 +3472,43 @@ components:
         status: { type: string, enum: [pending, valued, accepted, declined] }
         notes: { type: string }
 
+    FinanceStatusEvent:
+      type: object
+      required: [status, note, at]
+      properties:
+        status: { type: string }
+        note: { type: string }
+        at: { type: string }
     FinanceApplication:
       type: object
-      required: [id, customerName, amount, termMonths, apr, status, protectionProducts, createdAt]
+      required: [id, customerName, amount, downPayment, termMonths, apr, status, statusHistory, protectionProducts, createdAt]
       properties:
         id: { type: integer }
         dealId: { type: ["integer", "null"] }
+        leadId: { type: ["integer", "null"] }
         customerId: { type: ["integer", "null"] }
         customerName: { type: string }
         amount: { type: number }
+        downPayment: { type: number }
         termMonths: { type: integer }
         apr: { type: number }
         lender: { type: ["string", "null"] }
-        status: { type: string, enum: [submitted, under_review, approved, declined, funded] }
+        bankId: { type: ["integer", "null"] }
+        employerName: { type: ["string", "null"] }
+        jobTitle: { type: ["string", "null"] }
+        employmentType: { type: ["string", "null"], enum: [employed, self_employed, contract, retired, other, null] }
+        employmentYears: { type: ["number", "null"] }
+        monthlyIncome: { type: ["number", "null"] }
+        otherIncome: { type: ["number", "null"] }
+        status: { type: string, enum: [pending, submitted, under_review, approved, declined, disbursed] }
+        statusHistory:
+          type: array
+          items: { $ref: "#/components/schemas/FinanceStatusEvent" }
+        losConnector: { type: ["string", "null"] }
+        losReference: { type: ["string", "null"] }
+        submittedAt: { type: ["string", "null"], format: date-time }
+        decisionAt: { type: ["string", "null"], format: date-time }
+        disbursedAt: { type: ["string", "null"], format: date-time }
         protectionProducts:
           type: array
           items: { type: string }
@@ -3107,12 +3518,21 @@ components:
       required: [customerName, amount, termMonths, apr]
       properties:
         dealId: { type: integer }
+        leadId: { type: integer }
+        customerId: { type: integer }
         customerName: { type: string, minLength: 1 }
         amount: { type: number }
+        downPayment: { type: number }
         termMonths: { type: integer }
         apr: { type: number }
         lender: { type: string }
-        status: { type: string, enum: [submitted, under_review, approved, declined, funded] }
+        bankId: { type: integer }
+        employerName: { type: string }
+        jobTitle: { type: string }
+        employmentType: { type: string, enum: [employed, self_employed, contract, retired, other] }
+        employmentYears: { type: number }
+        monthlyIncome: { type: number }
+        otherIncome: { type: number }
         protectionProducts:
           type: array
           items: { type: string }
@@ -3120,13 +3540,182 @@ components:
       type: object
       properties:
         amount: { type: number }
+        downPayment: { type: number }
         termMonths: { type: integer }
         apr: { type: number }
         lender: { type: string }
-        status: { type: string, enum: [submitted, under_review, approved, declined, funded] }
+        bankId: { type: integer }
+        employerName: { type: string }
+        jobTitle: { type: string }
+        employmentType: { type: string, enum: [employed, self_employed, contract, retired, other] }
+        employmentYears: { type: number }
+        monthlyIncome: { type: number }
+        otherIncome: { type: number }
+        status: { type: string, enum: [pending, submitted, under_review, approved, declined, disbursed] }
         protectionProducts:
           type: array
           items: { type: string }
+    FinanceDocument:
+      type: object
+      required: [id, applicationId, type, fileName, mimeType, sizeBytes, createdAt]
+      properties:
+        id: { type: integer }
+        applicationId: { type: integer }
+        type: { type: string, enum: [id_document, payslip, bank_statement, proof_of_address, employment_letter, other] }
+        fileName: { type: string }
+        mimeType: { type: string }
+        sizeBytes: { type: integer }
+        uploadedBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    LosSubmission:
+      type: object
+      required: [id, applicationId, connector, mode, event, status, createdAt]
+      properties:
+        id: { type: integer }
+        applicationId: { type: integer }
+        connector: { type: string }
+        mode: { type: string, enum: [live, mock] }
+        event: { type: string, enum: [submit, sync] }
+        status: { type: string }
+        reference: { type: ["string", "null"] }
+        message: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    FinanceApplicationDetail:
+      type: object
+      required: [application, documents, submissions]
+      properties:
+        application: { $ref: "#/components/schemas/FinanceApplication" }
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/FinanceDocument" }
+        submissions:
+          type: array
+          items: { $ref: "#/components/schemas/LosSubmission" }
+    FinanceConnectorStatus:
+      type: object
+      required: [connector, mode, configured]
+      properties:
+        connector: { type: string }
+        mode: { type: string, enum: [live, mock] }
+        configured: { type: boolean }
+    Bank:
+      type: object
+      required: [id, name, active, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        code: { type: ["string", "null"] }
+        contactEmail: { type: ["string", "null"] }
+        contactPhone: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        baseApr: { type: ["number", "null"] }
+        maxTermMonths: { type: ["integer", "null"] }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    BankInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        code: { type: string }
+        contactEmail: { type: string }
+        contactPhone: { type: string }
+        address: { type: string }
+        baseApr: { type: number }
+        maxTermMonths: { type: integer }
+        active: { type: boolean }
+    BankUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        code: { type: string }
+        contactEmail: { type: string }
+        contactPhone: { type: string }
+        address: { type: string }
+        baseApr: { type: number }
+        maxTermMonths: { type: integer }
+        active: { type: boolean }
+    Invoice:
+      type: object
+      required: [id, invoiceNumber, customerName, amount, status, createdAt]
+      properties:
+        id: { type: integer }
+        invoiceNumber: { type: string }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: string }
+        dealId: { type: ["integer", "null"] }
+        applicationId: { type: ["integer", "null"] }
+        description: { type: ["string", "null"] }
+        amount: { type: number }
+        status: { type: string, enum: [issued, partially_paid, paid, void] }
+        dueDate: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    InvoiceInput:
+      type: object
+      required: [customerName, amount]
+      properties:
+        customerId: { type: integer }
+        customerName: { type: string, minLength: 1 }
+        dealId: { type: integer }
+        applicationId: { type: integer }
+        description: { type: string }
+        amount: { type: number }
+        dueDate: { type: string }
+    InvoiceUpdate:
+      type: object
+      properties:
+        description: { type: string }
+        amount: { type: number }
+        status: { type: string, enum: [issued, partially_paid, paid, void] }
+        dueDate: { type: string }
+    Payment:
+      type: object
+      required: [id, invoiceId, customerName, amount, method, createdAt]
+      properties:
+        id: { type: integer }
+        invoiceId: { type: integer }
+        customerName: { type: string }
+        amount: { type: number }
+        method: { type: string, enum: [cash, card, bank_transfer, cheque, mobile_money, financing] }
+        reference: { type: ["string", "null"] }
+        receivedBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    PaymentInput:
+      type: object
+      required: [invoiceId, amount, method]
+      properties:
+        invoiceId: { type: integer }
+        amount: { type: number }
+        method: { type: string, enum: [cash, card, bank_transfer, cheque, mobile_money, financing] }
+        reference: { type: string }
+    Receipt:
+      type: object
+      required: [id, receiptNumber, paymentId, invoiceId, invoiceNumber, customerName, amount, method, createdAt]
+      properties:
+        id: { type: integer }
+        receiptNumber: { type: string }
+        paymentId: { type: integer }
+        invoiceId: { type: integer }
+        invoiceNumber: { type: string }
+        customerName: { type: string }
+        amount: { type: number }
+        method: { type: string }
+        issuedBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    OutstandingBalance:
+      type: object
+      required: [invoiceId, invoiceNumber, customerName, amount, paidAmount, balance, status, createdAt]
+      properties:
+        invoiceId: { type: integer }
+        invoiceNumber: { type: string }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: string }
+        amount: { type: number }
+        paidAmount: { type: number }
+        balance: { type: number }
+        status: { type: string }
+        dueDate: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
 
     ServiceOrder:
       type: object

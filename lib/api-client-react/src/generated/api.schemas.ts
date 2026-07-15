@@ -1159,15 +1159,36 @@ export interface AppraisalUpdate {
   notes?: string;
 }
 
+export interface FinanceStatusEvent {
+  status: string;
+  note: string;
+  at: string;
+}
+
+/**
+ * @nullable
+ */
+export type FinanceApplicationEmploymentType = typeof FinanceApplicationEmploymentType[keyof typeof FinanceApplicationEmploymentType] | null;
+
+
+export const FinanceApplicationEmploymentType = {
+  employed: 'employed',
+  self_employed: 'self_employed',
+  contract: 'contract',
+  retired: 'retired',
+  other: 'other',
+} as const;
+
 export type FinanceApplicationStatus = typeof FinanceApplicationStatus[keyof typeof FinanceApplicationStatus];
 
 
 export const FinanceApplicationStatus = {
+  pending: 'pending',
   submitted: 'submitted',
   under_review: 'under_review',
   approved: 'approved',
   declined: 'declined',
-  funded: 'funded',
+  disbursed: 'disbursed',
 } as const;
 
 export interface FinanceApplication {
@@ -1175,59 +1196,363 @@ export interface FinanceApplication {
   /** @nullable */
   dealId?: number | null;
   /** @nullable */
+  leadId?: number | null;
+  /** @nullable */
   customerId?: number | null;
   customerName: string;
   amount: number;
+  downPayment: number;
   termMonths: number;
   apr: number;
   /** @nullable */
   lender?: string | null;
+  /** @nullable */
+  bankId?: number | null;
+  /** @nullable */
+  employerName?: string | null;
+  /** @nullable */
+  jobTitle?: string | null;
+  /** @nullable */
+  employmentType?: FinanceApplicationEmploymentType;
+  /** @nullable */
+  employmentYears?: number | null;
+  /** @nullable */
+  monthlyIncome?: number | null;
+  /** @nullable */
+  otherIncome?: number | null;
   status: FinanceApplicationStatus;
+  statusHistory: FinanceStatusEvent[];
+  /** @nullable */
+  losConnector?: string | null;
+  /** @nullable */
+  losReference?: string | null;
+  /** @nullable */
+  submittedAt?: string | null;
+  /** @nullable */
+  decisionAt?: string | null;
+  /** @nullable */
+  disbursedAt?: string | null;
   protectionProducts: string[];
   createdAt: string;
 }
 
-export type FinanceApplicationInputStatus = typeof FinanceApplicationInputStatus[keyof typeof FinanceApplicationInputStatus];
+export type FinanceApplicationInputEmploymentType = typeof FinanceApplicationInputEmploymentType[keyof typeof FinanceApplicationInputEmploymentType];
 
 
-export const FinanceApplicationInputStatus = {
-  submitted: 'submitted',
-  under_review: 'under_review',
-  approved: 'approved',
-  declined: 'declined',
-  funded: 'funded',
+export const FinanceApplicationInputEmploymentType = {
+  employed: 'employed',
+  self_employed: 'self_employed',
+  contract: 'contract',
+  retired: 'retired',
+  other: 'other',
 } as const;
 
 export interface FinanceApplicationInput {
   dealId?: number;
+  leadId?: number;
+  customerId?: number;
   /** @minLength 1 */
   customerName: string;
   amount: number;
+  downPayment?: number;
   termMonths: number;
   apr: number;
   lender?: string;
-  status?: FinanceApplicationInputStatus;
+  bankId?: number;
+  employerName?: string;
+  jobTitle?: string;
+  employmentType?: FinanceApplicationInputEmploymentType;
+  employmentYears?: number;
+  monthlyIncome?: number;
+  otherIncome?: number;
   protectionProducts?: string[];
 }
+
+export type FinanceApplicationUpdateEmploymentType = typeof FinanceApplicationUpdateEmploymentType[keyof typeof FinanceApplicationUpdateEmploymentType];
+
+
+export const FinanceApplicationUpdateEmploymentType = {
+  employed: 'employed',
+  self_employed: 'self_employed',
+  contract: 'contract',
+  retired: 'retired',
+  other: 'other',
+} as const;
 
 export type FinanceApplicationUpdateStatus = typeof FinanceApplicationUpdateStatus[keyof typeof FinanceApplicationUpdateStatus];
 
 
 export const FinanceApplicationUpdateStatus = {
+  pending: 'pending',
   submitted: 'submitted',
   under_review: 'under_review',
   approved: 'approved',
   declined: 'declined',
-  funded: 'funded',
+  disbursed: 'disbursed',
 } as const;
 
 export interface FinanceApplicationUpdate {
   amount?: number;
+  downPayment?: number;
   termMonths?: number;
   apr?: number;
   lender?: string;
+  bankId?: number;
+  employerName?: string;
+  jobTitle?: string;
+  employmentType?: FinanceApplicationUpdateEmploymentType;
+  employmentYears?: number;
+  monthlyIncome?: number;
+  otherIncome?: number;
   status?: FinanceApplicationUpdateStatus;
   protectionProducts?: string[];
+}
+
+export type FinanceDocumentType = typeof FinanceDocumentType[keyof typeof FinanceDocumentType];
+
+
+export const FinanceDocumentType = {
+  id_document: 'id_document',
+  payslip: 'payslip',
+  bank_statement: 'bank_statement',
+  proof_of_address: 'proof_of_address',
+  employment_letter: 'employment_letter',
+  other: 'other',
+} as const;
+
+export interface FinanceDocument {
+  id: number;
+  applicationId: number;
+  type: FinanceDocumentType;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  /** @nullable */
+  uploadedBy?: string | null;
+  createdAt: string;
+}
+
+export type LosSubmissionMode = typeof LosSubmissionMode[keyof typeof LosSubmissionMode];
+
+
+export const LosSubmissionMode = {
+  live: 'live',
+  mock: 'mock',
+} as const;
+
+export type LosSubmissionEvent = typeof LosSubmissionEvent[keyof typeof LosSubmissionEvent];
+
+
+export const LosSubmissionEvent = {
+  submit: 'submit',
+  sync: 'sync',
+} as const;
+
+export interface LosSubmission {
+  id: number;
+  applicationId: number;
+  connector: string;
+  mode: LosSubmissionMode;
+  event: LosSubmissionEvent;
+  status: string;
+  /** @nullable */
+  reference?: string | null;
+  /** @nullable */
+  message?: string | null;
+  createdAt: string;
+}
+
+export interface FinanceApplicationDetail {
+  application: FinanceApplication;
+  documents: FinanceDocument[];
+  submissions: LosSubmission[];
+}
+
+export type FinanceConnectorStatusMode = typeof FinanceConnectorStatusMode[keyof typeof FinanceConnectorStatusMode];
+
+
+export const FinanceConnectorStatusMode = {
+  live: 'live',
+  mock: 'mock',
+} as const;
+
+export interface FinanceConnectorStatus {
+  connector: string;
+  mode: FinanceConnectorStatusMode;
+  configured: boolean;
+}
+
+export interface Bank {
+  id: number;
+  name: string;
+  /** @nullable */
+  code?: string | null;
+  /** @nullable */
+  contactEmail?: string | null;
+  /** @nullable */
+  contactPhone?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  baseApr?: number | null;
+  /** @nullable */
+  maxTermMonths?: number | null;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface BankInput {
+  /** @minLength 1 */
+  name: string;
+  code?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address?: string;
+  baseApr?: number;
+  maxTermMonths?: number;
+  active?: boolean;
+}
+
+export interface BankUpdate {
+  /** @minLength 1 */
+  name?: string;
+  code?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address?: string;
+  baseApr?: number;
+  maxTermMonths?: number;
+  active?: boolean;
+}
+
+export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus];
+
+
+export const InvoiceStatus = {
+  issued: 'issued',
+  partially_paid: 'partially_paid',
+  paid: 'paid',
+  void: 'void',
+} as const;
+
+export interface Invoice {
+  id: number;
+  invoiceNumber: string;
+  /** @nullable */
+  customerId?: number | null;
+  customerName: string;
+  /** @nullable */
+  dealId?: number | null;
+  /** @nullable */
+  applicationId?: number | null;
+  /** @nullable */
+  description?: string | null;
+  amount: number;
+  status: InvoiceStatus;
+  /** @nullable */
+  dueDate?: string | null;
+  createdAt: string;
+}
+
+export interface InvoiceInput {
+  customerId?: number;
+  /** @minLength 1 */
+  customerName: string;
+  dealId?: number;
+  applicationId?: number;
+  description?: string;
+  amount: number;
+  dueDate?: string;
+}
+
+export type InvoiceUpdateStatus = typeof InvoiceUpdateStatus[keyof typeof InvoiceUpdateStatus];
+
+
+export const InvoiceUpdateStatus = {
+  issued: 'issued',
+  partially_paid: 'partially_paid',
+  paid: 'paid',
+  void: 'void',
+} as const;
+
+export interface InvoiceUpdate {
+  description?: string;
+  amount?: number;
+  status?: InvoiceUpdateStatus;
+  dueDate?: string;
+}
+
+export type PaymentMethod = typeof PaymentMethod[keyof typeof PaymentMethod];
+
+
+export const PaymentMethod = {
+  cash: 'cash',
+  card: 'card',
+  bank_transfer: 'bank_transfer',
+  cheque: 'cheque',
+  mobile_money: 'mobile_money',
+  financing: 'financing',
+} as const;
+
+export interface Payment {
+  id: number;
+  invoiceId: number;
+  customerName: string;
+  amount: number;
+  method: PaymentMethod;
+  /** @nullable */
+  reference?: string | null;
+  /** @nullable */
+  receivedBy?: string | null;
+  createdAt: string;
+}
+
+export type PaymentInputMethod = typeof PaymentInputMethod[keyof typeof PaymentInputMethod];
+
+
+export const PaymentInputMethod = {
+  cash: 'cash',
+  card: 'card',
+  bank_transfer: 'bank_transfer',
+  cheque: 'cheque',
+  mobile_money: 'mobile_money',
+  financing: 'financing',
+} as const;
+
+export interface PaymentInput {
+  invoiceId: number;
+  amount: number;
+  method: PaymentInputMethod;
+  reference?: string;
+}
+
+export interface Receipt {
+  id: number;
+  receiptNumber: string;
+  paymentId: number;
+  invoiceId: number;
+  invoiceNumber: string;
+  customerName: string;
+  amount: number;
+  method: string;
+  /** @nullable */
+  issuedBy?: string | null;
+  createdAt: string;
+}
+
+export interface OutstandingBalance {
+  invoiceId: number;
+  invoiceNumber: string;
+  /** @nullable */
+  customerId?: number | null;
+  customerName: string;
+  amount: number;
+  paidAmount: number;
+  balance: number;
+  status: string;
+  /** @nullable */
+  dueDate?: string | null;
+  createdAt: string;
 }
 
 export type ServiceOrderType = typeof ServiceOrderType[keyof typeof ServiceOrderType];
@@ -2204,6 +2529,14 @@ status?: string;
 
 export type ListDealsParams = {
 stage?: string;
+};
+
+export type ListFinanceApplicationsParams = {
+status?: string;
+};
+
+export type ListInvoicesParams = {
+status?: string;
 };
 
 export type ListServiceOrdersParams = {

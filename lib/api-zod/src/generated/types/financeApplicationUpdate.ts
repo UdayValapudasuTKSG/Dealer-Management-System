@@ -5,13 +5,22 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { FinanceApplicationUpdateEmploymentType } from './financeApplicationUpdateEmploymentType';
 import type { FinanceApplicationUpdateStatus } from './financeApplicationUpdateStatus';
 
 export interface FinanceApplicationUpdate {
   amount?: number;
+  downPayment?: number;
   termMonths?: number;
   apr?: number;
   lender?: string;
+  bankId?: number;
+  employerName?: string;
+  jobTitle?: string;
+  employmentType?: FinanceApplicationUpdateEmploymentType;
+  employmentYears?: number;
+  monthlyIncome?: number;
+  otherIncome?: number;
   status?: FinanceApplicationUpdateStatus;
   protectionProducts?: string[];
 }

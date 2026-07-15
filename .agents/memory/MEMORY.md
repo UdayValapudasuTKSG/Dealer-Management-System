@@ -6,4 +6,5 @@
 - [Anthropic SSE chat](anthropic-sse-chat.md) — correctness rules for the streaming AI chat (server SSE + client fetch stream, persist-on-abort).
 - [Drizzle date + Zod coercion](drizzle-date-zod.md) — `date({mode:"string"})` columns break inserts when Orval Zod coerces to Date; convert to YYYY-MM-DD before insert/update.
 - [AURA dashboard conventions](aura-dashboard.md) — non-obvious KPI semantics (percentages pre-scaled 0–100, monthlyRevenue, server-side aggregates).
+- [RBAC roles seed can get wiped](rbac-seed-wipe.md) — blanket 403s for everyone usually means the roles table is empty (drizzle push wiped seed, FK nulled role_ids); re-seed + restore roles.
 - [Clerk + RBAC testing](clerk-rbac-testing.md) — use testClerkAuth with SHORT test plans (long ones hit the 600s timeout); headless harnesses need a dev-only AUTH_BYPASS after global auth.

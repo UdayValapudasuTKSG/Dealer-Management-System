@@ -1078,16 +1078,39 @@ export const UpdateAppraisalResponse = zod.object({
 })
 
 
+export const ListFinanceApplicationsQueryParams = zod.object({
+  "status": zod.coerce.string().optional()
+})
+
 export const ListFinanceApplicationsResponseItem = zod.object({
   "id": zod.number(),
   "dealId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string(),
   "amount": zod.number(),
+  "downPayment": zod.number(),
   "termMonths": zod.number(),
   "apr": zod.number(),
   "lender": zod.string().nullish(),
-  "status": zod.enum(['submitted', 'under_review', 'approved', 'declined', 'funded']),
+  "bankId": zod.number().nullish(),
+  "employerName": zod.string().nullish(),
+  "jobTitle": zod.string().nullish(),
+  "employmentType": zod.union([zod.literal('employed'),zod.literal('self_employed'),zod.literal('contract'),zod.literal('retired'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "employmentYears": zod.number().nullish(),
+  "monthlyIncome": zod.number().nullish(),
+  "otherIncome": zod.number().nullish(),
+  "status": zod.enum(['pending', 'submitted', 'under_review', 'approved', 'declined', 'disbursed']),
+  "statusHistory": zod.array(zod.object({
+  "status": zod.string(),
+  "note": zod.string(),
+  "at": zod.string()
+})),
+  "losConnector": zod.string().nullish(),
+  "losReference": zod.string().nullish(),
+  "submittedAt": zod.coerce.date().nullish(),
+  "decisionAt": zod.coerce.date().nullish(),
+  "disbursedAt": zod.coerce.date().nullish(),
   "protectionProducts": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })
@@ -1099,27 +1122,119 @@ export const ListFinanceApplicationsResponse = zod.array(ListFinanceApplications
 
 export const CreateFinanceApplicationBody = zod.object({
   "dealId": zod.number().optional(),
+  "leadId": zod.number().optional(),
+  "customerId": zod.number().optional(),
   "customerName": zod.string().min(1),
   "amount": zod.number(),
+  "downPayment": zod.number().optional(),
   "termMonths": zod.number(),
   "apr": zod.number(),
   "lender": zod.string().optional(),
-  "status": zod.enum(['submitted', 'under_review', 'approved', 'declined', 'funded']).optional(),
+  "bankId": zod.number().optional(),
+  "employerName": zod.string().optional(),
+  "jobTitle": zod.string().optional(),
+  "employmentType": zod.enum(['employed', 'self_employed', 'contract', 'retired', 'other']).optional(),
+  "employmentYears": zod.number().optional(),
+  "monthlyIncome": zod.number().optional(),
+  "otherIncome": zod.number().optional(),
   "protectionProducts": zod.array(zod.string()).optional()
 })
 
 export const CreateFinanceApplicationResponse = zod.object({
   "id": zod.number(),
   "dealId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string(),
   "amount": zod.number(),
+  "downPayment": zod.number(),
   "termMonths": zod.number(),
   "apr": zod.number(),
   "lender": zod.string().nullish(),
-  "status": zod.enum(['submitted', 'under_review', 'approved', 'declined', 'funded']),
+  "bankId": zod.number().nullish(),
+  "employerName": zod.string().nullish(),
+  "jobTitle": zod.string().nullish(),
+  "employmentType": zod.union([zod.literal('employed'),zod.literal('self_employed'),zod.literal('contract'),zod.literal('retired'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "employmentYears": zod.number().nullish(),
+  "monthlyIncome": zod.number().nullish(),
+  "otherIncome": zod.number().nullish(),
+  "status": zod.enum(['pending', 'submitted', 'under_review', 'approved', 'declined', 'disbursed']),
+  "statusHistory": zod.array(zod.object({
+  "status": zod.string(),
+  "note": zod.string(),
+  "at": zod.string()
+})),
+  "losConnector": zod.string().nullish(),
+  "losReference": zod.string().nullish(),
+  "submittedAt": zod.coerce.date().nullish(),
+  "decisionAt": zod.coerce.date().nullish(),
+  "disbursedAt": zod.coerce.date().nullish(),
   "protectionProducts": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Application detail with documents and LOS submission history
+ */
+export const GetFinanceApplicationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetFinanceApplicationResponse = zod.object({
+  "application": zod.object({
+  "id": zod.number(),
+  "dealId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "amount": zod.number(),
+  "downPayment": zod.number(),
+  "termMonths": zod.number(),
+  "apr": zod.number(),
+  "lender": zod.string().nullish(),
+  "bankId": zod.number().nullish(),
+  "employerName": zod.string().nullish(),
+  "jobTitle": zod.string().nullish(),
+  "employmentType": zod.union([zod.literal('employed'),zod.literal('self_employed'),zod.literal('contract'),zod.literal('retired'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "employmentYears": zod.number().nullish(),
+  "monthlyIncome": zod.number().nullish(),
+  "otherIncome": zod.number().nullish(),
+  "status": zod.enum(['pending', 'submitted', 'under_review', 'approved', 'declined', 'disbursed']),
+  "statusHistory": zod.array(zod.object({
+  "status": zod.string(),
+  "note": zod.string(),
+  "at": zod.string()
+})),
+  "losConnector": zod.string().nullish(),
+  "losReference": zod.string().nullish(),
+  "submittedAt": zod.coerce.date().nullish(),
+  "decisionAt": zod.coerce.date().nullish(),
+  "disbursedAt": zod.coerce.date().nullish(),
+  "protectionProducts": zod.array(zod.string()),
+  "createdAt": zod.coerce.date()
+}),
+  "documents": zod.array(zod.object({
+  "id": zod.number(),
+  "applicationId": zod.number(),
+  "type": zod.enum(['id_document', 'payslip', 'bank_statement', 'proof_of_address', 'employment_letter', 'other']),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "uploadedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "submissions": zod.array(zod.object({
+  "id": zod.number(),
+  "applicationId": zod.number(),
+  "connector": zod.string(),
+  "mode": zod.enum(['live', 'mock']),
+  "event": zod.enum(['submit', 'sync']),
+  "status": zod.string(),
+  "reference": zod.string().nullish(),
+  "message": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+}))
 })
 
 
@@ -1129,26 +1244,417 @@ export const UpdateFinanceApplicationParams = zod.object({
 
 export const UpdateFinanceApplicationBody = zod.object({
   "amount": zod.number().optional(),
+  "downPayment": zod.number().optional(),
   "termMonths": zod.number().optional(),
   "apr": zod.number().optional(),
   "lender": zod.string().optional(),
-  "status": zod.enum(['submitted', 'under_review', 'approved', 'declined', 'funded']).optional(),
+  "bankId": zod.number().optional(),
+  "employerName": zod.string().optional(),
+  "jobTitle": zod.string().optional(),
+  "employmentType": zod.enum(['employed', 'self_employed', 'contract', 'retired', 'other']).optional(),
+  "employmentYears": zod.number().optional(),
+  "monthlyIncome": zod.number().optional(),
+  "otherIncome": zod.number().optional(),
+  "status": zod.enum(['pending', 'submitted', 'under_review', 'approved', 'declined', 'disbursed']).optional(),
   "protectionProducts": zod.array(zod.string()).optional()
 })
 
 export const UpdateFinanceApplicationResponse = zod.object({
   "id": zod.number(),
   "dealId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string(),
   "amount": zod.number(),
+  "downPayment": zod.number(),
   "termMonths": zod.number(),
   "apr": zod.number(),
   "lender": zod.string().nullish(),
-  "status": zod.enum(['submitted', 'under_review', 'approved', 'declined', 'funded']),
+  "bankId": zod.number().nullish(),
+  "employerName": zod.string().nullish(),
+  "jobTitle": zod.string().nullish(),
+  "employmentType": zod.union([zod.literal('employed'),zod.literal('self_employed'),zod.literal('contract'),zod.literal('retired'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "employmentYears": zod.number().nullish(),
+  "monthlyIncome": zod.number().nullish(),
+  "otherIncome": zod.number().nullish(),
+  "status": zod.enum(['pending', 'submitted', 'under_review', 'approved', 'declined', 'disbursed']),
+  "statusHistory": zod.array(zod.object({
+  "status": zod.string(),
+  "note": zod.string(),
+  "at": zod.string()
+})),
+  "losConnector": zod.string().nullish(),
+  "losReference": zod.string().nullish(),
+  "submittedAt": zod.coerce.date().nullish(),
+  "decisionAt": zod.coerce.date().nullish(),
+  "disbursedAt": zod.coerce.date().nullish(),
   "protectionProducts": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Submit the application to the lender via the LOS connector
+ */
+export const SubmitFinanceApplicationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SubmitFinanceApplicationResponse = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "amount": zod.number(),
+  "downPayment": zod.number(),
+  "termMonths": zod.number(),
+  "apr": zod.number(),
+  "lender": zod.string().nullish(),
+  "bankId": zod.number().nullish(),
+  "employerName": zod.string().nullish(),
+  "jobTitle": zod.string().nullish(),
+  "employmentType": zod.union([zod.literal('employed'),zod.literal('self_employed'),zod.literal('contract'),zod.literal('retired'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "employmentYears": zod.number().nullish(),
+  "monthlyIncome": zod.number().nullish(),
+  "otherIncome": zod.number().nullish(),
+  "status": zod.enum(['pending', 'submitted', 'under_review', 'approved', 'declined', 'disbursed']),
+  "statusHistory": zod.array(zod.object({
+  "status": zod.string(),
+  "note": zod.string(),
+  "at": zod.string()
+})),
+  "losConnector": zod.string().nullish(),
+  "losReference": zod.string().nullish(),
+  "submittedAt": zod.coerce.date().nullish(),
+  "decisionAt": zod.coerce.date().nullish(),
+  "disbursedAt": zod.coerce.date().nullish(),
+  "protectionProducts": zod.array(zod.string()),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Poll the LOS for the latest decision status
+ */
+export const SyncFinanceApplicationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SyncFinanceApplicationResponse = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "amount": zod.number(),
+  "downPayment": zod.number(),
+  "termMonths": zod.number(),
+  "apr": zod.number(),
+  "lender": zod.string().nullish(),
+  "bankId": zod.number().nullish(),
+  "employerName": zod.string().nullish(),
+  "jobTitle": zod.string().nullish(),
+  "employmentType": zod.union([zod.literal('employed'),zod.literal('self_employed'),zod.literal('contract'),zod.literal('retired'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "employmentYears": zod.number().nullish(),
+  "monthlyIncome": zod.number().nullish(),
+  "otherIncome": zod.number().nullish(),
+  "status": zod.enum(['pending', 'submitted', 'under_review', 'approved', 'declined', 'disbursed']),
+  "statusHistory": zod.array(zod.object({
+  "status": zod.string(),
+  "note": zod.string(),
+  "at": zod.string()
+})),
+  "losConnector": zod.string().nullish(),
+  "losReference": zod.string().nullish(),
+  "submittedAt": zod.coerce.date().nullish(),
+  "decisionAt": zod.coerce.date().nullish(),
+  "disbursedAt": zod.coerce.date().nullish(),
+  "protectionProducts": zod.array(zod.string()),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const ListFinanceDocumentsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListFinanceDocumentsResponseItem = zod.object({
+  "id": zod.number(),
+  "applicationId": zod.number(),
+  "type": zod.enum(['id_document', 'payslip', 'bank_statement', 'proof_of_address', 'employment_letter', 'other']),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "uploadedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListFinanceDocumentsResponse = zod.array(ListFinanceDocumentsResponseItem)
+
+
+/**
+ * @summary Upload a supporting document (multipart form; consumed via raw fetch, not a generated hook)
+ */
+export const UploadFinanceDocumentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UploadFinanceDocumentResponse = zod.object({
+  "id": zod.number(),
+  "applicationId": zod.number(),
+  "type": zod.enum(['id_document', 'payslip', 'bank_statement', 'proof_of_address', 'employment_letter', 'other']),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "uploadedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const DeleteFinanceDocumentParams = zod.object({
+  "id": zod.coerce.number(),
+  "docId": zod.coerce.number()
+})
+
+export const DeleteFinanceDocumentResponse = zod.void()
+
+
+/**
+ * @summary Download / view a finance document
+ */
+export const DownloadFinanceDocumentParams = zod.object({
+  "id": zod.coerce.number(),
+  "docId": zod.coerce.number()
+})
+
+export const DownloadFinanceDocumentResponse = zod.unknown()
+
+
+/**
+ * @summary Which LOS connector is active and whether it runs live or sandboxed
+ */
+export const GetFinanceConnectorStatusResponse = zod.object({
+  "connector": zod.string(),
+  "mode": zod.enum(['live', 'mock']),
+  "configured": zod.boolean()
+})
+
+
+export const ListBanksResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "code": zod.string().nullish(),
+  "contactEmail": zod.string().nullish(),
+  "contactPhone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "baseApr": zod.number().nullish(),
+  "maxTermMonths": zod.number().nullish(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const ListBanksResponse = zod.array(ListBanksResponseItem)
+
+
+
+
+
+export const CreateBankBody = zod.object({
+  "name": zod.string().min(1),
+  "code": zod.string().optional(),
+  "contactEmail": zod.string().optional(),
+  "contactPhone": zod.string().optional(),
+  "address": zod.string().optional(),
+  "baseApr": zod.number().optional(),
+  "maxTermMonths": zod.number().optional(),
+  "active": zod.boolean().optional()
+})
+
+export const CreateBankResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "code": zod.string().nullish(),
+  "contactEmail": zod.string().nullish(),
+  "contactPhone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "baseApr": zod.number().nullish(),
+  "maxTermMonths": zod.number().nullish(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const UpdateBankParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateBankBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "code": zod.string().optional(),
+  "contactEmail": zod.string().optional(),
+  "contactPhone": zod.string().optional(),
+  "address": zod.string().optional(),
+  "baseApr": zod.number().optional(),
+  "maxTermMonths": zod.number().optional(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdateBankResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "code": zod.string().nullish(),
+  "contactEmail": zod.string().nullish(),
+  "contactPhone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "baseApr": zod.number().nullish(),
+  "maxTermMonths": zod.number().nullish(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const ListInvoicesQueryParams = zod.object({
+  "status": zod.coerce.string().optional()
+})
+
+export const ListInvoicesResponseItem = zod.object({
+  "id": zod.number(),
+  "invoiceNumber": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "dealId": zod.number().nullish(),
+  "applicationId": zod.number().nullish(),
+  "description": zod.string().nullish(),
+  "amount": zod.number(),
+  "status": zod.enum(['issued', 'partially_paid', 'paid', 'void']),
+  "dueDate": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem)
+
+
+
+
+
+export const CreateInvoiceBody = zod.object({
+  "customerId": zod.number().optional(),
+  "customerName": zod.string().min(1),
+  "dealId": zod.number().optional(),
+  "applicationId": zod.number().optional(),
+  "description": zod.string().optional(),
+  "amount": zod.number(),
+  "dueDate": zod.string().optional()
+})
+
+export const CreateInvoiceResponse = zod.object({
+  "id": zod.number(),
+  "invoiceNumber": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "dealId": zod.number().nullish(),
+  "applicationId": zod.number().nullish(),
+  "description": zod.string().nullish(),
+  "amount": zod.number(),
+  "status": zod.enum(['issued', 'partially_paid', 'paid', 'void']),
+  "dueDate": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const UpdateInvoiceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateInvoiceBody = zod.object({
+  "description": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "status": zod.enum(['issued', 'partially_paid', 'paid', 'void']).optional(),
+  "dueDate": zod.string().optional()
+})
+
+export const UpdateInvoiceResponse = zod.object({
+  "id": zod.number(),
+  "invoiceNumber": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "dealId": zod.number().nullish(),
+  "applicationId": zod.number().nullish(),
+  "description": zod.string().nullish(),
+  "amount": zod.number(),
+  "status": zod.enum(['issued', 'partially_paid', 'paid', 'void']),
+  "dueDate": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const ListPaymentsResponseItem = zod.object({
+  "id": zod.number(),
+  "invoiceId": zod.number(),
+  "customerName": zod.string(),
+  "amount": zod.number(),
+  "method": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'financing']),
+  "reference": zod.string().nullish(),
+  "receivedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListPaymentsResponse = zod.array(ListPaymentsResponseItem)
+
+
+/**
+ * @summary Record a payment against an invoice — auto-issues a receipt
+ */
+export const CreatePaymentBody = zod.object({
+  "invoiceId": zod.number(),
+  "amount": zod.number(),
+  "method": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'financing']),
+  "reference": zod.string().optional()
+})
+
+export const CreatePaymentResponse = zod.object({
+  "id": zod.number(),
+  "invoiceId": zod.number(),
+  "customerName": zod.string(),
+  "amount": zod.number(),
+  "method": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'financing']),
+  "reference": zod.string().nullish(),
+  "receivedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const ListReceiptsResponseItem = zod.object({
+  "id": zod.number(),
+  "receiptNumber": zod.string(),
+  "paymentId": zod.number(),
+  "invoiceId": zod.number(),
+  "invoiceNumber": zod.string(),
+  "customerName": zod.string(),
+  "amount": zod.number(),
+  "method": zod.string(),
+  "issuedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListReceiptsResponse = zod.array(ListReceiptsResponseItem)
+
+
+/**
+ * @summary Open invoices with amounts paid and balances due
+ */
+export const ListOutstandingBalancesResponseItem = zod.object({
+  "invoiceId": zod.number(),
+  "invoiceNumber": zod.string(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "amount": zod.number(),
+  "paidAmount": zod.number(),
+  "balance": zod.number(),
+  "status": zod.string(),
+  "dueDate": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListOutstandingBalancesResponse = zod.array(ListOutstandingBalancesResponseItem)
 
 
 export const ListServiceOrdersQueryParams = zod.object({
@@ -2019,13 +2525,32 @@ export const GetCustomerOverviewResponse = zod.object({
   "financeApplications": zod.array(zod.object({
   "id": zod.number(),
   "dealId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string(),
   "amount": zod.number(),
+  "downPayment": zod.number(),
   "termMonths": zod.number(),
   "apr": zod.number(),
   "lender": zod.string().nullish(),
-  "status": zod.enum(['submitted', 'under_review', 'approved', 'declined', 'funded']),
+  "bankId": zod.number().nullish(),
+  "employerName": zod.string().nullish(),
+  "jobTitle": zod.string().nullish(),
+  "employmentType": zod.union([zod.literal('employed'),zod.literal('self_employed'),zod.literal('contract'),zod.literal('retired'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "employmentYears": zod.number().nullish(),
+  "monthlyIncome": zod.number().nullish(),
+  "otherIncome": zod.number().nullish(),
+  "status": zod.enum(['pending', 'submitted', 'under_review', 'approved', 'declined', 'disbursed']),
+  "statusHistory": zod.array(zod.object({
+  "status": zod.string(),
+  "note": zod.string(),
+  "at": zod.string()
+})),
+  "losConnector": zod.string().nullish(),
+  "losReference": zod.string().nullish(),
+  "submittedAt": zod.coerce.date().nullish(),
+  "decisionAt": zod.coerce.date().nullish(),
+  "disbursedAt": zod.coerce.date().nullish(),
   "protectionProducts": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })),

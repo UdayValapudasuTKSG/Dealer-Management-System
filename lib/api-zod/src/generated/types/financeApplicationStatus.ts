@@ -10,9 +10,10 @@ export type FinanceApplicationStatus = typeof FinanceApplicationStatus[keyof typ
 
 
 export const FinanceApplicationStatus = {
+  pending: 'pending',
   submitted: 'submitted',
   under_review: 'under_review',
   approved: 'approved',
   declined: 'declined',
-  funded: 'funded',
+  disbursed: 'disbursed',
 } as const;
