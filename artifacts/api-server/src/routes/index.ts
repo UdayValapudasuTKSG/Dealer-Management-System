@@ -29,13 +29,16 @@ import communicationsRouter from "./communications";
 import reportsRouter from "./reports";
 import searchRouter from "./search";
 import enquiriesRouter from "./enquiries";
+import webhooksRouter from "./webhooks";
 import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
-// Public: health check and website enquiry intake
+// Public: health check, website enquiry intake and inbound lead webhooks
+// (Meta Lead Ads + Twilio WhatsApp — signature-verified, not session-authed).
 router.use(healthRouter);
 router.use(enquiriesRouter);
+router.use(webhooksRouter);
 
 // Everything below requires a signed-in user, then a role permission
 // matching the route (see middlewares/rbac.ts), and mutations are audited.

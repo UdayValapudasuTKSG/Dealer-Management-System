@@ -54,6 +54,8 @@ tags:
     description: In-app notification center
   - name: tasks
     description: Task management
+  - name: webhooks
+    description: Public signature-verified inbound webhooks (Meta Lead Ads, Twilio WhatsApp)
 paths:
   /anthropic/conversations:
     get:
@@ -183,6 +185,104 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /webhooks/meta:
+    get:
+      operationId: verifyMetaWebhook
+      tags: [webhooks]
+      summary: Meta webhook verification handshake (hub.challenge echo)
+      description: "Public. Echoes hub.challenge when hub.verify_token matches META_VERIFY_TOKEN."
+      parameters:
+        - name: hub.mode
+          in: query
+          required: false
+          schema: { type: string }
+        - name: hub.verify_token
+          in: query
+          required: false
+          schema: { type: string }
+        - name: hub.challenge
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Challenge echoed
+          content:
+            text/plain:
+              schema: { type: string }
+        "403":
+          description: Verification failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Webhook not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: receiveMetaWebhook
+      tags: [webhooks]
+      summary: Receive Meta Lead Ads leadgen events (signature-verified)
+      description: "Public. Validates X-Hub-Signature-256 over the raw body, then fetches lead field data from the Graph API and creates pipeline leads."
+      requestBody:
+        required: true
+        description: "Meta leadgen webhook payload (verified over the raw bytes)"
+        content:
+          application/json: {}
+      responses:
+        "200":
+          description: Events acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received: { type: integer }
+                required: [received]
+        "403":
+          description: Invalid signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Webhook not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /webhooks/twilio/whatsapp:
+    post:
+      operationId: receiveTwilioWhatsappWebhook
+      tags: [webhooks]
+      summary: Receive an inbound Twilio WhatsApp message (signature-verified)
+      description: "Public. Validates X-Twilio-Signature; creates a whatsapp-source lead (or appends to an open lead's timeline) and replies with a TwiML acknowledgment."
+      requestBody:
+        required: true
+        description: "Twilio's standard form-encoded inbound-message payload"
+        content:
+          application/x-www-form-urlencoded: {}
+      responses:
+        "200":
+          description: TwiML acknowledgment reply
+          content:
+            text/xml: {}
+        "403":
+          description: Invalid signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Webhook not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /vehicles:
     get:

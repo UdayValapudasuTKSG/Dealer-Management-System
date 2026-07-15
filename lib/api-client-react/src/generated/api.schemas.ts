@@ -2909,6 +2909,16 @@ export interface CustomerCommunications {
   timeline: TimelineEvent[];
 }
 
+export type VerifyMetaWebhookParams = {
+'hub.mode'?: string;
+'hub.verify_token'?: string;
+'hub.challenge'?: string;
+};
+
+export type ReceiveMetaWebhook200 = {
+  received: number;
+};
+
 export type ListVehiclesParams = {
 status?: string;
 powertrain?: string;

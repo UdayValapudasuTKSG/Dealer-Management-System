@@ -105,6 +105,35 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * Public. Echoes hub.challenge when hub.verify_token matches META_VERIFY_TOKEN.
+ * @summary Meta webhook verification handshake (hub.challenge echo)
+ */
+export const VerifyMetaWebhookQueryParams = zod.object({
+  "hub.mode": zod.coerce.string().optional(),
+  "hub.verify_token": zod.coerce.string().optional(),
+  "hub.challenge": zod.coerce.string().optional()
+})
+
+export const VerifyMetaWebhookResponse = zod.string()
+
+
+/**
+ * Public. Validates X-Hub-Signature-256 over the raw body, then fetches lead field data from the Graph API and creates pipeline leads.
+ * @summary Receive Meta Lead Ads leadgen events (signature-verified)
+ */
+export const ReceiveMetaWebhookResponse = zod.object({
+  "received": zod.number()
+})
+
+
+/**
+ * Public. Validates X-Twilio-Signature; creates a whatsapp-source lead (or appends to an open lead's timeline) and replies with a TwiML acknowledgment.
+ * @summary Receive an inbound Twilio WhatsApp message (signature-verified)
+ */
+export const ReceiveTwilioWhatsappWebhookResponse = zod.unknown()
+
+
+/**
  * @summary List inventory vehicles
  */
 export const ListVehiclesQueryParams = zod.object({

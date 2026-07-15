@@ -44,13 +44,19 @@ const jsonParser = express.json();
 const urlencodedParser = express.urlencoded({ extended: true });
 const isCopilotKit = (url: string): boolean =>
   url.startsWith("/api/copilotkit");
+// Meta webhook signature is HMAC over the exact raw bytes — keep the raw body.
+const isMetaWebhook = (url: string): boolean =>
+  url.startsWith("/api/webhooks/meta");
+const rawParser = express.raw({ type: "*/*", limit: "1mb" });
 
 app.use((req, res, next) => {
   if (isCopilotKit(req.originalUrl)) return next();
+  if (isMetaWebhook(req.originalUrl)) return rawParser(req, res, next);
   jsonParser(req, res, next);
 });
 app.use((req, res, next) => {
-  if (isCopilotKit(req.originalUrl)) return next();
+  if (isCopilotKit(req.originalUrl) || isMetaWebhook(req.originalUrl))
+    return next();
   urlencodedParser(req, res, next);
 });
 

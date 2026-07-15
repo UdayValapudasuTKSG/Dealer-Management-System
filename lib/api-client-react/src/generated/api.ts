@@ -139,6 +139,7 @@ import type {
   PipelineStage,
   PipelineSuggestions,
   Receipt,
+  ReceiveMetaWebhook200,
   RemindAck,
   Report,
   RoleInput,
@@ -166,7 +167,8 @@ import type {
   Vehicle,
   VehicleImportResult,
   VehicleInput,
-  VehicleUpdate
+  VehicleUpdate,
+  VerifyMetaWebhookParams
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -718,6 +720,235 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+
+export const getVerifyMetaWebhookUrl = (params?: VerifyMetaWebhookParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/webhooks/meta?${stringifiedParams}` : `/api/webhooks/meta`
+}
+
+/**
+ * Public. Echoes hub.challenge when hub.verify_token matches META_VERIFY_TOKEN.
+ * @summary Meta webhook verification handshake (hub.challenge echo)
+ */
+export const verifyMetaWebhook = async (params?: VerifyMetaWebhookParams, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getVerifyMetaWebhookUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getVerifyMetaWebhookQueryKey = (params?: VerifyMetaWebhookParams,) => {
+    return [
+    `/api/webhooks/meta`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getVerifyMetaWebhookQueryOptions = <TData = Awaited<ReturnType<typeof verifyMetaWebhook>>, TError = ErrorType<Error>>(params?: VerifyMetaWebhookParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof verifyMetaWebhook>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getVerifyMetaWebhookQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof verifyMetaWebhook>>> = ({ signal }) => verifyMetaWebhook(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof verifyMetaWebhook>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type VerifyMetaWebhookQueryResult = NonNullable<Awaited<ReturnType<typeof verifyMetaWebhook>>>
+export type VerifyMetaWebhookQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Meta webhook verification handshake (hub.challenge echo)
+ */
+
+export function useVerifyMetaWebhook<TData = Awaited<ReturnType<typeof verifyMetaWebhook>>, TError = ErrorType<Error>>(
+ params?: VerifyMetaWebhookParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof verifyMetaWebhook>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getVerifyMetaWebhookQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReceiveMetaWebhookUrl = () => {
+
+
+
+
+  return `/api/webhooks/meta`
+}
+
+/**
+ * Public. Validates X-Hub-Signature-256 over the raw body, then fetches lead field data from the Graph API and creates pipeline leads.
+ * @summary Receive Meta Lead Ads leadgen events (signature-verified)
+ */
+export const receiveMetaWebhook = async ( options?: RequestInit): Promise<ReceiveMetaWebhook200> => {
+
+  return customFetch<ReceiveMetaWebhook200>(getReceiveMetaWebhookUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getReceiveMetaWebhookMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receiveMetaWebhook>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof receiveMetaWebhook>>, TError,void, TContext> => {
+
+const mutationKey = ['receiveMetaWebhook'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof receiveMetaWebhook>>, void> = () => {
+
+
+          return  receiveMetaWebhook(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReceiveMetaWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof receiveMetaWebhook>>>
+
+    export type ReceiveMetaWebhookMutationError = ErrorType<Error>
+
+    /**
+ * @summary Receive Meta Lead Ads leadgen events (signature-verified)
+ */
+export const useReceiveMetaWebhook = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receiveMetaWebhook>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof receiveMetaWebhook>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getReceiveMetaWebhookMutationOptions(options));
+    }
+
+export const getReceiveTwilioWhatsappWebhookUrl = () => {
+
+
+
+
+  return `/api/webhooks/twilio/whatsapp`
+}
+
+/**
+ * Public. Validates X-Twilio-Signature; creates a whatsapp-source lead (or appends to an open lead's timeline) and replies with a TwiML acknowledgment.
+ * @summary Receive an inbound Twilio WhatsApp message (signature-verified)
+ */
+export const receiveTwilioWhatsappWebhook = async ( options?: RequestInit): Promise<unknown> => {
+
+  return customFetch<unknown>(getReceiveTwilioWhatsappWebhookUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getReceiveTwilioWhatsappWebhookMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receiveTwilioWhatsappWebhook>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof receiveTwilioWhatsappWebhook>>, TError,void, TContext> => {
+
+const mutationKey = ['receiveTwilioWhatsappWebhook'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof receiveTwilioWhatsappWebhook>>, void> = () => {
+
+
+          return  receiveTwilioWhatsappWebhook(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReceiveTwilioWhatsappWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof receiveTwilioWhatsappWebhook>>>
+
+    export type ReceiveTwilioWhatsappWebhookMutationError = ErrorType<Error>
+
+    /**
+ * @summary Receive an inbound Twilio WhatsApp message (signature-verified)
+ */
+export const useReceiveTwilioWhatsappWebhook = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receiveTwilioWhatsappWebhook>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof receiveTwilioWhatsappWebhook>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getReceiveTwilioWhatsappWebhookMutationOptions(options));
+    }
 
 export const getListVehiclesUrl = (params?: ListVehiclesParams,) => {
   const normalizedParams = new URLSearchParams();
