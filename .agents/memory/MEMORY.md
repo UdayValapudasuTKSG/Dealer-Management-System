@@ -1,3 +1,4 @@
+- [OpenAPI multipart codegen](openapi-multipart-codegen.md) — typed binary upload bodies break api-zod codegen (File/Blob in Node); declare empty multipart body + raw fetch/FormData instead.
 - [Tailwind v4 theme tokens](tailwind-v4-theme-tokens.md) — `bg-*/text-*/border-*` utilities only work if the matching `--color-*` token is declared in `@theme inline`; unregistered = silent no-op (transparent).
 - [Verify UI computed styles](verify-ui-computed-styles.md) — the screenshot tool's persistent browser can serve stale images; verify theme/DOM via getComputedStyle or a workflow restart, not screenshots alone.
 - [Orval query-hook options](orval-query-hooks.md) — generated `useGet*` `options.query` is the FULL `UseQueryOptions` (needs `queryKey`); passing only `retry`/`enabled` fails typecheck — omit options or supply queryKey.

@@ -163,6 +163,7 @@ import type {
   TestEmailResult,
   TimelineEvent,
   Vehicle,
+  VehicleImportResult,
   VehicleInput,
   VehicleUpdate
 } from './api.schemas';
@@ -1073,6 +1074,154 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getDeleteVehicleMutationOptions(options));
     }
+
+export const getImportVehiclesUrl = () => {
+
+
+
+
+  return `/api/vehicles/import`
+}
+
+/**
+ * @summary Bulk import vehicles from an Excel (.xlsx) file
+ */
+export const importVehicles = async ( options?: RequestInit): Promise<VehicleImportResult> => {
+
+  return customFetch<VehicleImportResult>(getImportVehiclesUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getImportVehiclesMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importVehicles>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importVehicles>>, TError,void, TContext> => {
+
+const mutationKey = ['importVehicles'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importVehicles>>, void> = () => {
+
+
+          return  importVehicles(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportVehiclesMutationResult = NonNullable<Awaited<ReturnType<typeof importVehicles>>>
+
+    export type ImportVehiclesMutationError = ErrorType<Error>
+
+    /**
+ * @summary Bulk import vehicles from an Excel (.xlsx) file
+ */
+export const useImportVehicles = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importVehicles>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importVehicles>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getImportVehiclesMutationOptions(options));
+    }
+
+export const getDownloadVehicleImportTemplateUrl = () => {
+
+
+
+
+  return `/api/vehicles/import/template`
+}
+
+/**
+ * @summary Download the Excel import template
+ */
+export const downloadVehicleImportTemplate = async ( options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadVehicleImportTemplateUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadVehicleImportTemplateQueryKey = () => {
+    return [
+    `/api/vehicles/import/template`
+    ] as const;
+    }
+
+
+export const getDownloadVehicleImportTemplateQueryOptions = <TData = Awaited<ReturnType<typeof downloadVehicleImportTemplate>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadVehicleImportTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadVehicleImportTemplateQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadVehicleImportTemplate>>> = ({ signal }) => downloadVehicleImportTemplate({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadVehicleImportTemplate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadVehicleImportTemplateQueryResult = NonNullable<Awaited<ReturnType<typeof downloadVehicleImportTemplate>>>
+export type DownloadVehicleImportTemplateQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Download the Excel import template
+ */
+
+export function useDownloadVehicleImportTemplate<TData = Awaited<ReturnType<typeof downloadVehicleImportTemplate>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadVehicleImportTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadVehicleImportTemplateQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListBookingsUrl = (params?: ListBookingsParams,) => {
   const normalizedParams = new URLSearchParams();

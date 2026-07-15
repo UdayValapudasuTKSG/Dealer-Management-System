@@ -288,6 +288,48 @@ paths:
       responses:
         "204":
           description: Deleted
+  /vehicles/import:
+    post:
+      operationId: importVehicles
+      tags: [vehicles]
+      summary: Bulk import vehicles from an Excel (.xlsx) file
+      requestBody:
+        required: true
+        description: "multipart/form-data with a single `file` field containing the .xlsx"
+        content:
+          multipart/form-data: {}
+      responses:
+        "200":
+          description: Import summary (per-row results)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleImportResult"
+        "400":
+          description: Missing or unreadable file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Spreadsheet has no recognizable vehicle columns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /vehicles/import/template:
+    get:
+      operationId: downloadVehicleImportTemplate
+      tags: [vehicles]
+      summary: Download the Excel import template
+      responses:
+        "200":
+          description: XLSX template file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
 
   /bookings:
     get:
@@ -3541,6 +3583,23 @@ components:
             $ref: "#/components/schemas/VehicleDocument"
         description: { type: string }
         featured: { type: boolean }
+    VehicleImportError:
+      type: object
+      required: [row, message]
+      properties:
+        row: { type: integer, description: "Spreadsheet row number (1-based, including header)" }
+        message: { type: string }
+    VehicleImportResult:
+      type: object
+      required: [total, created, failed, errors]
+      properties:
+        total: { type: integer, description: "Data rows found in the sheet" }
+        created: { type: integer }
+        failed: { type: integer }
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/VehicleImportError"
     Booking:
       type: object
       required: [id, vehicleId, customerName, bookingAmount, amountPaid, paymentStatus, status, expiresAt, createdAt]

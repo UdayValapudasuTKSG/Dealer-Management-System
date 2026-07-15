@@ -335,6 +335,26 @@ export const DeleteVehicleResponse = zod.void()
 
 
 /**
+ * @summary Bulk import vehicles from an Excel (.xlsx) file
+ */
+export const ImportVehiclesResponse = zod.object({
+  "total": zod.number().describe('Data rows found in the sheet'),
+  "created": zod.number(),
+  "failed": zod.number(),
+  "errors": zod.array(zod.object({
+  "row": zod.number().describe('Spreadsheet row number (1-based, including header)'),
+  "message": zod.string()
+}))
+})
+
+
+/**
+ * @summary Download the Excel import template
+ */
+export const DownloadVehicleImportTemplateResponse = zod.unknown()
+
+
+/**
  * @summary List vehicle bookings (auto-expires lapsed reservations)
  */
 export const ListBookingsQueryParams = zod.object({

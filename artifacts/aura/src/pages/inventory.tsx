@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Vehicle } from "@workspace/api-client-react";
 import { CreateRecordDialog, type FieldDef } from "@/components/create-record-dialog";
+import { ImportVehiclesDialog } from "@/components/inventory/import-vehicles-dialog";
 import { Button } from "@/components/ui/button";
 import { useAuthz } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,7 @@ import {
   Settings2,
   Layers,
   Package,
+  FileSpreadsheet,
   FileText,
   KeyRound,
   Loader2,
@@ -274,6 +276,18 @@ export default function Inventory() {
             </p>
           </div>
           {can("inventory", "create") && (
+            <div className="flex flex-wrap items-center gap-3">
+            <ImportVehiclesDialog
+              trigger={
+                <Button
+                  variant="outline"
+                  className="rounded-full px-6 h-12 gap-2 font-medium tracking-wide border-white/15 bg-foreground/[0.03] hover:bg-foreground/[0.07]"
+                >
+                  <FileSpreadsheet className="w-5 h-5 text-primary" />
+                  Import Excel
+                </Button>
+              }
+            />
             <CreateRecordDialog
               title="Add Vehicle"
               description="Add a new car to the showroom inventory."
@@ -308,6 +322,7 @@ export default function Inventory() {
                 }
               }}
             />
+            </div>
           )}
         </div>
 

@@ -359,6 +359,20 @@ export interface VehicleUpdate {
   featured?: boolean;
 }
 
+export interface VehicleImportError {
+  /** Spreadsheet row number (1-based, including header) */
+  row: number;
+  message: string;
+}
+
+export interface VehicleImportResult {
+  /** Data rows found in the sheet */
+  total: number;
+  created: number;
+  failed: number;
+  errors: VehicleImportError[];
+}
+
 export type BookingPaymentStatus = typeof BookingPaymentStatus[keyof typeof BookingPaymentStatus];
 
 

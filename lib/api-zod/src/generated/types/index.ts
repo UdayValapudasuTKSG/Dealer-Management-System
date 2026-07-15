@@ -270,6 +270,8 @@ export * from './timelineEvent';
 export * from './timelineEventDomain';
 export * from './vehicle';
 export * from './vehicleDocument';
+export * from './vehicleImportError';
+export * from './vehicleImportResult';
 export * from './vehicleInput';
 export * from './vehicleInputPowertrain';
 export * from './vehicleInputStatus';
