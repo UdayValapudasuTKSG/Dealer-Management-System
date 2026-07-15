@@ -256,6 +256,10 @@ const AUTH_ONLY_SEGMENTS = new Set([
   "copilotkit",
   "notifications",
   "tasks",
+  // reports enforce a per-report-type module check inside the route;
+  // search filters result groups by the caller's view permissions.
+  "reports",
+  "search",
 ]);
 
 export function routePermission(

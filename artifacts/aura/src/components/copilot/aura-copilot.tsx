@@ -3,7 +3,7 @@ import { useCopilotReadable, useCopilotAction } from "@copilotkit/react-core";
 import { useGetDashboardSummary, useListGates } from "@workspace/api-client-react";
 
 const ROUTE_MAP: Record<string, string> = {
-  home: "/pipeline",
+  home: "/command-center",
   "command center": "/command-center",
   dashboard: "/command-center",
   journey: "/journey",

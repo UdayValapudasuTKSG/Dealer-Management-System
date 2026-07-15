@@ -16,6 +16,8 @@ export const PermissionGrantModule = {
   appraisals: 'appraisals',
   finance: 'finance',
   service: 'service',
+  parts: 'parts',
+  deliveries: 'deliveries',
   customers: 'customers',
   approvals: 'approvals',
   gra: 'gra',
@@ -2338,6 +2340,74 @@ export interface InventoryBreakdownItem {
   count: number;
 }
 
+export interface ReportKpi {
+  label: string;
+  value: string;
+  /** @nullable */
+  sub?: string | null;
+}
+
+export interface ReportChartPoint {
+  label: string;
+  value: number;
+  /** @nullable */
+  secondary?: number | null;
+}
+
+export type ReportChartKind = typeof ReportChartKind[keyof typeof ReportChartKind];
+
+
+export const ReportChartKind = {
+  bar: 'bar',
+  area: 'area',
+  pie: 'pie',
+} as const;
+
+export interface ReportChart {
+  kind: ReportChartKind;
+  valueLabel: string;
+  /** @nullable */
+  secondaryLabel?: string | null;
+  currency?: boolean;
+  points: ReportChartPoint[];
+}
+
+export interface ReportTable {
+  columns: string[];
+  rows: string[][];
+}
+
+export interface Report {
+  type: string;
+  label: string;
+  from: string;
+  to: string;
+  kpis: ReportKpi[];
+  chart: ReportChart;
+  table: ReportTable;
+}
+
+export interface SearchItem {
+  id: number;
+  title: string;
+  /** @nullable */
+  subtitle?: string | null;
+  /** @nullable */
+  meta?: string | null;
+  href: string;
+}
+
+export interface SearchGroup {
+  key: string;
+  label: string;
+  items: SearchItem[];
+}
+
+export interface SearchResults {
+  query: string;
+  groups: SearchGroup[];
+}
+
 export type PipelineSuggestionActionPriority = typeof PipelineSuggestionActionPriority[keyof typeof PipelineSuggestionActionPriority];
 
 
@@ -2867,6 +2937,32 @@ lowStock?: string;
 
 export type ListActivityParams = {
 limit?: number;
+};
+
+export type GetReportParams = {
+type: GetReportType;
+from?: string;
+to?: string;
+};
+
+export type GetReportType = typeof GetReportType[keyof typeof GetReportType];
+
+
+export const GetReportType = {
+  'lead-conversion': 'lead-conversion',
+  sales: 'sales',
+  revenue: 'revenue',
+  inventory: 'inventory',
+  finance: 'finance',
+  delivery: 'delivery',
+  service: 'service',
+  'employee-performance': 'employee-performance',
+  marketing: 'marketing',
+  'customer-retention': 'customer-retention',
+} as const;
+
+export type GlobalSearchParams = {
+q: string;
 };
 
 export type GetPipelineSuggestionsParams = {

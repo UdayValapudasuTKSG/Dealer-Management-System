@@ -26,6 +26,8 @@ import emailsRouter from "./emails";
 import notificationsRouter from "./notifications";
 import tasksRouter from "./tasks";
 import communicationsRouter from "./communications";
+import reportsRouter from "./reports";
+import searchRouter from "./search";
 import enquiriesRouter from "./enquiries";
 import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
 
@@ -67,5 +69,7 @@ router.use(emailsRouter);
 router.use(notificationsRouter);
 router.use(tasksRouter);
 router.use(communicationsRouter);
+router.use(reportsRouter);
+router.use(searchRouter);
 
 export default router;

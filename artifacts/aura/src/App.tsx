@@ -13,7 +13,8 @@ import { AuthProvider, useAuthz } from "@/lib/auth";
 import { SignInPage, SignUpPage } from "@/pages/auth-pages";
 
 import Landing from "@/pages/landing";
-import Dashboard from "@/pages/dashboard";
+import RoleDashboard from "@/pages/role-dashboard";
+import Reports from "@/pages/reports";
 import Inventory from "@/pages/inventory";
 import Leads from "@/pages/leads";
 import Deals from "@/pages/deals";
@@ -150,7 +151,8 @@ function AppShell() {
               <Switch>
                 <Route path="/pipeline" component={Leads} />
                 <Route path="/leads" component={Leads} />
-                <Route path="/command-center" component={Dashboard} />
+                <Route path="/command-center" component={RoleDashboard} />
+                <Route path="/reports" component={Reports} />
                 <Route path="/inventory" component={Inventory} />
                 <Route path="/deals" component={Deals} />
                 <Route path="/appraisals" component={Appraisals} />

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuthz } from "@/lib/auth";
 import { NotificationBell } from "@/components/notification-bell";
+import { GlobalSearchButton } from "@/components/global-search";
 
 type NavItem = { name: string; href: string; module: string };
 type Cluster = { label: string; icon: string; items: NavItem[] };
@@ -17,8 +18,9 @@ const CLUSTERS: Cluster[] = [
     label: "Intelligence",
     icon: "nav/intelligence.png",
     items: [
-      { name: "Command Center", href: "/command-center", module: "dashboard" },
+      { name: "Command Center", href: "/command-center", module: "" },
       { name: "Journey", href: "/journey", module: "dashboard" },
+      { name: "Reports", href: "/reports", module: "" },
       { name: "Approvals", href: "/approvals", module: "approvals" },
       { name: "Tasks", href: "/tasks", module: "" },
     ],
@@ -283,6 +285,7 @@ export function TopNav() {
 
           {/* Right rail */}
           <div className="flex items-center gap-2 shrink-0">
+            <GlobalSearchButton />
             <NotificationBell />
             <ThemeToggle />
             <UserMenu />

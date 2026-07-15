@@ -2880,6 +2880,66 @@ export const GetInventoryBreakdownResponse = zod.array(GetInventoryBreakdownResp
 
 
 /**
+ * @summary Aggregated report over live data for a date range
+ */
+export const GetReportQueryParams = zod.object({
+  "type": zod.enum(['lead-conversion', 'sales', 'revenue', 'inventory', 'finance', 'delivery', 'service', 'employee-performance', 'marketing', 'customer-retention']),
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional()
+})
+
+export const GetReportResponse = zod.object({
+  "type": zod.string(),
+  "label": zod.string(),
+  "from": zod.string(),
+  "to": zod.string(),
+  "kpis": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string(),
+  "sub": zod.string().nullish()
+})),
+  "chart": zod.object({
+  "kind": zod.enum(['bar', 'area', 'pie']),
+  "valueLabel": zod.string(),
+  "secondaryLabel": zod.string().nullish(),
+  "currency": zod.boolean().optional(),
+  "points": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.number(),
+  "secondary": zod.number().nullish()
+}))
+}),
+  "table": zod.object({
+  "columns": zod.array(zod.string()),
+  "rows": zod.array(zod.array(zod.string()))
+})
+})
+
+
+/**
+ * @summary Cross-entity search across the dealership
+ */
+export const GlobalSearchQueryParams = zod.object({
+  "q": zod.coerce.string()
+})
+
+export const GlobalSearchResponse = zod.object({
+  "query": zod.string(),
+  "groups": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "subtitle": zod.string().nullish(),
+  "meta": zod.string().nullish(),
+  "href": zod.string()
+}))
+}))
+})
+
+
+/**
  * @summary AI-generated next actions for a pipeline stage
  */
 export const GetPipelineSuggestionsQueryParams = zod.object({
@@ -3714,7 +3774,7 @@ export const GetCurrentUserResponse = zod.object({
   "roleName": zod.string().nullable(),
   "status": zod.string(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 }))
 })
@@ -3780,7 +3840,7 @@ export const ListAdminRolesResponseItem = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "createdAt": zod.coerce.date()
@@ -3803,7 +3863,7 @@ export const CreateAdminRoleResponse = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "createdAt": zod.coerce.date()
@@ -3829,7 +3889,7 @@ export const UpdateAdminRoleResponse = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "createdAt": zod.coerce.date()
@@ -3852,7 +3912,7 @@ export const SetRolePermissionsParams = zod.object({
 
 export const SetRolePermissionsBody = zod.object({
   "grants": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 }))
 })
@@ -3864,7 +3924,7 @@ export const SetRolePermissionsResponse = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "createdAt": zod.coerce.date()

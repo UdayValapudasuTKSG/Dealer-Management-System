@@ -17,6 +17,8 @@ export const PermissionGrantModule = {
   appraisals: 'appraisals',
   finance: 'finance',
   service: 'service',
+  parts: 'parts',
+  deliveries: 'deliveries',
   customers: 'customers',
   approvals: 'approvals',
   gra: 'gra',

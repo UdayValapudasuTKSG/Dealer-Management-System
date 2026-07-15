@@ -21,6 +21,7 @@ export function SignInPage() {
         routing="path"
         path={`${basePath}/sign-in`}
         signUpUrl={`${basePath}/sign-up`}
+        fallbackRedirectUrl={`${basePath}/command-center`}
       />
     </AuthShell>
   );
@@ -33,6 +34,7 @@ export function SignUpPage() {
         routing="path"
         path={`${basePath}/sign-up`}
         signInUrl={`${basePath}/sign-in`}
+        fallbackRedirectUrl={`${basePath}/command-center`}
       />
     </AuthShell>
   );
