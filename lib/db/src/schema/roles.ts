@@ -18,6 +18,7 @@ export const PERMISSION_MODULES = [
   "appraisals",
   "finance",
   "service",
+  "parts",
   "customers",
   "approvals",
   "gra",

@@ -24,6 +24,8 @@ tags:
     description: Finance applications
   - name: service
     description: Service and repair orders
+  - name: parts
+    description: Parts inventory, suppliers and purchases
   - name: agents
     description: AI agents
   - name: activity
@@ -889,6 +891,476 @@ paths:
                 $ref: "#/components/schemas/ServiceOrder"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /service-orders/{id}/remind:
+    post:
+      operationId: sendServiceReminder
+      tags: [service]
+      summary: Send a service reminder email to the customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Reminder queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemindAck"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Customer has no email on file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /service-technicians:
+    get:
+      operationId: listServiceTechnicians
+      tags: [service]
+      summary: List users holding the Technician role
+      responses:
+        "200":
+          description: Technicians
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TechnicianRef"
+
+  /job-cards:
+    get:
+      operationId: listJobCards
+      tags: [service]
+      parameters:
+        - name: serviceOrderId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: mine
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of job cards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JobCard"
+    post:
+      operationId: createJobCard
+      tags: [service]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCardInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCard"
+  /job-cards/{id}:
+    patch:
+      operationId: updateJobCard
+      tags: [service]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCardUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCard"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /job-cards/{id}/parts:
+    get:
+      operationId: listJobCardParts
+      tags: [service]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Part lines on the job card
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JobCardPart"
+    post:
+      operationId: addJobCardPart
+      tags: [service]
+      summary: Issue or return a part on a job card (adjusts stock)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCardPartInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCardPart"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Insufficient stock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /job-cards/{id}/invoice:
+    post:
+      operationId: createJobCardInvoice
+      tags: [service]
+      summary: Roll a job card's parts and labour into a service invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "201":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceInvoice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Invoice already exists for this job card
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /service-invoices:
+    get:
+      operationId: listServiceInvoices
+      tags: [service]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: List of service invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceInvoice"
+  /service-invoices/{id}:
+    patch:
+      operationId: updateServiceInvoice
+      tags: [service]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceInvoiceUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceInvoice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /coverage:
+    get:
+      operationId: listCoveragePlans
+      tags: [service]
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Warranty / AMC coverage plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CoveragePlan"
+    post:
+      operationId: createCoveragePlan
+      tags: [service]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CoveragePlanInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoveragePlan"
+  /coverage/{id}:
+    patch:
+      operationId: updateCoveragePlan
+      tags: [service]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CoveragePlanUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoveragePlan"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /coverage/{id}/remind:
+    post:
+      operationId: sendCoverageReminder
+      tags: [service]
+      summary: Send a warranty / AMC expiry reminder email
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Reminder queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemindAck"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Customer has no email on file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /parts:
+    get:
+      operationId: listParts
+      tags: [parts]
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+        - name: lowStock
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Parts inventory
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Part"
+    post:
+      operationId: createPart
+      tags: [parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Part"
+  /parts/{id}:
+    patch:
+      operationId: updatePart
+      tags: [parts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Part"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /suppliers:
+    get:
+      operationId: listSuppliers
+      tags: [parts]
+      responses:
+        "200":
+          description: Suppliers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supplier"
+    post:
+      operationId: createSupplier
+      tags: [parts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplierInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+
+  /part-purchases:
+    get:
+      operationId: listPartPurchases
+      tags: [parts]
+      responses:
+        "200":
+          description: Purchase records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PartPurchase"
+    post:
+      operationId: createPartPurchase
+      tags: [parts]
+      summary: Record a parts purchase (receiving increments stock)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartPurchaseInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartPurchase"
+        "404":
+          description: Part not found
           content:
             application/json:
               schema:
@@ -2667,6 +3139,8 @@ components:
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
         status: { type: string, enum: [scheduled, checked_in, in_progress, awaiting_approval, completed, delivered] }
         scheduledDate: { type: string, format: date }
+        complaint: { type: ["string", "null"] }
+        odometer: { type: ["integer", "null"] }
         technician: { type: ["string", "null"] }
         estimatedCost: { type: number }
         jobs:
@@ -2683,6 +3157,8 @@ components:
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
         status: { type: string, enum: [scheduled, checked_in, in_progress, awaiting_approval, completed, delivered] }
         scheduledDate: { type: string, format: date }
+        complaint: { type: string }
+        odometer: { type: integer }
         technician: { type: string }
         estimatedCost: { type: number }
         jobs:
@@ -2694,11 +3170,241 @@ components:
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
         status: { type: string, enum: [scheduled, checked_in, in_progress, awaiting_approval, completed, delivered] }
         scheduledDate: { type: string, format: date }
+        complaint: { type: string }
+        odometer: { type: integer }
         technician: { type: string }
         estimatedCost: { type: number }
         jobs:
           type: array
           items: { type: string }
+
+    RemindAck:
+      type: object
+      required: [status, recipient]
+      properties:
+        status: { type: string }
+        recipient: { type: string }
+
+    TechnicianRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+
+    ChecklistItem:
+      type: object
+      required: [label, done]
+      properties:
+        label: { type: string }
+        done: { type: boolean }
+
+    JobCard:
+      type: object
+      required: [id, serviceOrderId, title, status, checklist, laborHours, laborRate, createdAt]
+      properties:
+        id: { type: integer }
+        serviceOrderId: { type: integer }
+        title: { type: string }
+        status: { type: string, enum: [open, in_progress, quality_check, completed] }
+        technicianUserId: { type: ["integer", "null"] }
+        technicianName: { type: ["string", "null"] }
+        checklist:
+          type: array
+          items: { $ref: "#/components/schemas/ChecklistItem" }
+        laborHours: { type: number }
+        laborRate: { type: number }
+        notes: { type: ["string", "null"] }
+        startedAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    JobCardInput:
+      type: object
+      required: [serviceOrderId, title]
+      properties:
+        serviceOrderId: { type: integer }
+        title: { type: string, minLength: 1 }
+        technicianUserId: { type: integer }
+        technicianName: { type: string }
+        checklist:
+          type: array
+          items: { $ref: "#/components/schemas/ChecklistItem" }
+        laborHours: { type: number }
+        laborRate: { type: number }
+        notes: { type: string }
+    JobCardUpdate:
+      type: object
+      properties:
+        title: { type: string }
+        status: { type: string, enum: [open, in_progress, quality_check, completed] }
+        technicianUserId: { type: integer }
+        technicianName: { type: string }
+        checklist:
+          type: array
+          items: { $ref: "#/components/schemas/ChecklistItem" }
+        laborHours: { type: number }
+        laborRate: { type: number }
+        notes: { type: string }
+
+    JobCardPart:
+      type: object
+      required: [id, jobCardId, partId, partName, kind, quantity, unitPrice, createdAt]
+      properties:
+        id: { type: integer }
+        jobCardId: { type: integer }
+        partId: { type: integer }
+        partName: { type: string }
+        kind: { type: string, enum: [issue, return] }
+        quantity: { type: integer }
+        unitPrice: { type: number }
+        createdAt: { type: string, format: date-time }
+    JobCardPartInput:
+      type: object
+      required: [partId, quantity]
+      properties:
+        partId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
+        kind: { type: string, enum: [issue, return] }
+
+    ServiceInvoice:
+      type: object
+      required: [id, serviceOrderId, jobCardId, vehicleInfo, partsTotal, laborTotal, tax, total, status, createdAt]
+      properties:
+        id: { type: integer }
+        serviceOrderId: { type: integer }
+        jobCardId: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        vehicleInfo: { type: string }
+        partsTotal: { type: number }
+        laborTotal: { type: number }
+        tax: { type: number }
+        total: { type: number }
+        status: { type: string, enum: [issued, paid, void] }
+        createdAt: { type: string, format: date-time }
+    ServiceInvoiceUpdate:
+      type: object
+      properties:
+        status: { type: string, enum: [issued, paid, void] }
+
+    CoveragePlan:
+      type: object
+      required: [id, vehicleInfo, type, startDate, endDate, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        vehicleInfo: { type: string }
+        type: { type: string, enum: [warranty, amc] }
+        provider: { type: ["string", "null"] }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    CoveragePlanInput:
+      type: object
+      required: [vehicleInfo, type, startDate, endDate]
+      properties:
+        customerId: { type: integer }
+        customerName: { type: string }
+        vehicleInfo: { type: string, minLength: 1 }
+        type: { type: string, enum: [warranty, amc] }
+        provider: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        notes: { type: string }
+    CoveragePlanUpdate:
+      type: object
+      properties:
+        customerId: { type: integer }
+        customerName: { type: string }
+        vehicleInfo: { type: string }
+        type: { type: string, enum: [warranty, amc] }
+        provider: { type: string }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        notes: { type: string }
+
+    Part:
+      type: object
+      required: [id, sku, name, category, unitCost, unitPrice, stock, reorderLevel, createdAt]
+      properties:
+        id: { type: integer }
+        sku: { type: string }
+        name: { type: string }
+        category: { type: string }
+        supplierId: { type: ["integer", "null"] }
+        unitCost: { type: number }
+        unitPrice: { type: number }
+        stock: { type: integer }
+        reorderLevel: { type: integer }
+        location: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    PartInput:
+      type: object
+      required: [sku, name]
+      properties:
+        sku: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        category: { type: string }
+        supplierId: { type: integer }
+        unitCost: { type: number }
+        unitPrice: { type: number }
+        stock: { type: integer }
+        reorderLevel: { type: integer }
+        location: { type: string }
+    PartUpdate:
+      type: object
+      properties:
+        sku: { type: string }
+        name: { type: string }
+        category: { type: string }
+        supplierId: { type: integer }
+        unitCost: { type: number }
+        unitPrice: { type: number }
+        stock: { type: integer }
+        reorderLevel: { type: integer }
+        location: { type: string }
+
+    Supplier:
+      type: object
+      required: [id, name, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        contactName: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    SupplierInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        contactName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+
+    PartPurchase:
+      type: object
+      required: [id, partId, quantity, unitCost, createdAt]
+      properties:
+        id: { type: integer }
+        partId: { type: integer }
+        supplierId: { type: ["integer", "null"] }
+        quantity: { type: integer }
+        unitCost: { type: number }
+        reference: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    PartPurchaseInput:
+      type: object
+      required: [partId, quantity]
+      properties:
+        partId: { type: integer }
+        supplierId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
+        unitCost: { type: number }
+        reference: { type: string }
 
     Agent:
       type: object

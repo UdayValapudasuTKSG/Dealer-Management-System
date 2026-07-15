@@ -39,6 +39,8 @@ const CLUSTERS: Cluster[] = [
     items: [
       { name: "Inventory", href: "/inventory", module: "inventory" },
       { name: "Service", href: "/service", module: "service" },
+      { name: "Parts", href: "/parts", module: "parts" },
+      { name: "Workshop", href: "/workshop", module: "service" },
     ],
   },
   {

@@ -1264,6 +1264,10 @@ export interface ServiceOrder {
   status: ServiceOrderStatus;
   scheduledDate: string;
   /** @nullable */
+  complaint?: string | null;
+  /** @nullable */
+  odometer?: number | null;
+  /** @nullable */
   technician?: string | null;
   estimatedCost: number;
   jobs: string[];
@@ -1301,6 +1305,8 @@ export interface ServiceOrderInput {
   type: ServiceOrderInputType;
   status?: ServiceOrderInputStatus;
   scheduledDate: string;
+  complaint?: string;
+  odometer?: number;
   technician?: string;
   estimatedCost?: number;
   jobs?: string[];
@@ -1333,9 +1339,310 @@ export interface ServiceOrderUpdate {
   type?: ServiceOrderUpdateType;
   status?: ServiceOrderUpdateStatus;
   scheduledDate?: string;
+  complaint?: string;
+  odometer?: number;
   technician?: string;
   estimatedCost?: number;
   jobs?: string[];
+}
+
+export interface RemindAck {
+  status: string;
+  recipient: string;
+}
+
+export interface TechnicianRef {
+  id: number;
+  name: string;
+}
+
+export interface ChecklistItem {
+  label: string;
+  done: boolean;
+}
+
+export type JobCardStatus = typeof JobCardStatus[keyof typeof JobCardStatus];
+
+
+export const JobCardStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  quality_check: 'quality_check',
+  completed: 'completed',
+} as const;
+
+export interface JobCard {
+  id: number;
+  serviceOrderId: number;
+  title: string;
+  status: JobCardStatus;
+  /** @nullable */
+  technicianUserId?: number | null;
+  /** @nullable */
+  technicianName?: string | null;
+  checklist: ChecklistItem[];
+  laborHours: number;
+  laborRate: number;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  startedAt?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  createdAt: string;
+}
+
+export interface JobCardInput {
+  serviceOrderId: number;
+  /** @minLength 1 */
+  title: string;
+  technicianUserId?: number;
+  technicianName?: string;
+  checklist?: ChecklistItem[];
+  laborHours?: number;
+  laborRate?: number;
+  notes?: string;
+}
+
+export type JobCardUpdateStatus = typeof JobCardUpdateStatus[keyof typeof JobCardUpdateStatus];
+
+
+export const JobCardUpdateStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  quality_check: 'quality_check',
+  completed: 'completed',
+} as const;
+
+export interface JobCardUpdate {
+  title?: string;
+  status?: JobCardUpdateStatus;
+  technicianUserId?: number;
+  technicianName?: string;
+  checklist?: ChecklistItem[];
+  laborHours?: number;
+  laborRate?: number;
+  notes?: string;
+}
+
+export type JobCardPartKind = typeof JobCardPartKind[keyof typeof JobCardPartKind];
+
+
+export const JobCardPartKind = {
+  issue: 'issue',
+  return: 'return',
+} as const;
+
+export interface JobCardPart {
+  id: number;
+  jobCardId: number;
+  partId: number;
+  partName: string;
+  kind: JobCardPartKind;
+  quantity: number;
+  unitPrice: number;
+  createdAt: string;
+}
+
+export type JobCardPartInputKind = typeof JobCardPartInputKind[keyof typeof JobCardPartInputKind];
+
+
+export const JobCardPartInputKind = {
+  issue: 'issue',
+  return: 'return',
+} as const;
+
+export interface JobCardPartInput {
+  partId: number;
+  /** @minimum 1 */
+  quantity: number;
+  kind?: JobCardPartInputKind;
+}
+
+export type ServiceInvoiceStatus = typeof ServiceInvoiceStatus[keyof typeof ServiceInvoiceStatus];
+
+
+export const ServiceInvoiceStatus = {
+  issued: 'issued',
+  paid: 'paid',
+  void: 'void',
+} as const;
+
+export interface ServiceInvoice {
+  id: number;
+  serviceOrderId: number;
+  jobCardId: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  vehicleInfo: string;
+  partsTotal: number;
+  laborTotal: number;
+  tax: number;
+  total: number;
+  status: ServiceInvoiceStatus;
+  createdAt: string;
+}
+
+export type ServiceInvoiceUpdateStatus = typeof ServiceInvoiceUpdateStatus[keyof typeof ServiceInvoiceUpdateStatus];
+
+
+export const ServiceInvoiceUpdateStatus = {
+  issued: 'issued',
+  paid: 'paid',
+  void: 'void',
+} as const;
+
+export interface ServiceInvoiceUpdate {
+  status?: ServiceInvoiceUpdateStatus;
+}
+
+export type CoveragePlanType = typeof CoveragePlanType[keyof typeof CoveragePlanType];
+
+
+export const CoveragePlanType = {
+  warranty: 'warranty',
+  amc: 'amc',
+} as const;
+
+export interface CoveragePlan {
+  id: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  vehicleInfo: string;
+  type: CoveragePlanType;
+  /** @nullable */
+  provider?: string | null;
+  startDate: string;
+  endDate: string;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+}
+
+export type CoveragePlanInputType = typeof CoveragePlanInputType[keyof typeof CoveragePlanInputType];
+
+
+export const CoveragePlanInputType = {
+  warranty: 'warranty',
+  amc: 'amc',
+} as const;
+
+export interface CoveragePlanInput {
+  customerId?: number;
+  customerName?: string;
+  /** @minLength 1 */
+  vehicleInfo: string;
+  type: CoveragePlanInputType;
+  provider?: string;
+  startDate: string;
+  endDate: string;
+  notes?: string;
+}
+
+export type CoveragePlanUpdateType = typeof CoveragePlanUpdateType[keyof typeof CoveragePlanUpdateType];
+
+
+export const CoveragePlanUpdateType = {
+  warranty: 'warranty',
+  amc: 'amc',
+} as const;
+
+export interface CoveragePlanUpdate {
+  customerId?: number;
+  customerName?: string;
+  vehicleInfo?: string;
+  type?: CoveragePlanUpdateType;
+  provider?: string;
+  startDate?: string;
+  endDate?: string;
+  notes?: string;
+}
+
+export interface Part {
+  id: number;
+  sku: string;
+  name: string;
+  category: string;
+  /** @nullable */
+  supplierId?: number | null;
+  unitCost: number;
+  unitPrice: number;
+  stock: number;
+  reorderLevel: number;
+  /** @nullable */
+  location?: string | null;
+  createdAt: string;
+}
+
+export interface PartInput {
+  /** @minLength 1 */
+  sku: string;
+  /** @minLength 1 */
+  name: string;
+  category?: string;
+  supplierId?: number;
+  unitCost?: number;
+  unitPrice?: number;
+  stock?: number;
+  reorderLevel?: number;
+  location?: string;
+}
+
+export interface PartUpdate {
+  sku?: string;
+  name?: string;
+  category?: string;
+  supplierId?: number;
+  unitCost?: number;
+  unitPrice?: number;
+  stock?: number;
+  reorderLevel?: number;
+  location?: string;
+}
+
+export interface Supplier {
+  id: number;
+  name: string;
+  /** @nullable */
+  contactName?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  createdAt: string;
+}
+
+export interface SupplierInput {
+  /** @minLength 1 */
+  name: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface PartPurchase {
+  id: number;
+  partId: number;
+  /** @nullable */
+  supplierId?: number | null;
+  quantity: number;
+  unitCost: number;
+  /** @nullable */
+  reference?: string | null;
+  createdAt: string;
+}
+
+export interface PartPurchaseInput {
+  partId: number;
+  supplierId?: number;
+  /** @minimum 1 */
+  quantity: number;
+  unitCost?: number;
+  reference?: string;
 }
 
 export type AgentStatus = typeof AgentStatus[keyof typeof AgentStatus];
@@ -1901,6 +2208,25 @@ stage?: string;
 
 export type ListServiceOrdersParams = {
 status?: string;
+};
+
+export type ListJobCardsParams = {
+serviceOrderId?: number;
+status?: string;
+mine?: string;
+};
+
+export type ListServiceInvoicesParams = {
+status?: string;
+};
+
+export type ListCoveragePlansParams = {
+type?: string;
+};
+
+export type ListPartsParams = {
+search?: string;
+lowStock?: string;
 };
 
 export type ListActivityParams = {

@@ -19,6 +19,10 @@ export interface ServiceOrder {
   status: ServiceOrderStatus;
   scheduledDate: Date;
   /** @nullable */
+  complaint?: string | null;
+  /** @nullable */
+  odometer?: number | null;
+  /** @nullable */
   technician?: string | null;
   estimatedCost: number;
   jobs: string[];

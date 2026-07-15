@@ -47,6 +47,7 @@ const ROLE_DEFAULTS: {
       dashboard: ["view"],
       inventory: ["view"],
       service: ["view", "create", "edit", "delete", "approve", "reject", "assign", "export"],
+      parts: ["view", "create", "edit"],
       customers: ["view", "edit"],
       approvals: ["view", "approve", "reject"],
     },
@@ -102,6 +103,7 @@ const ROLE_DEFAULTS: {
       dashboard: ["view"],
       inventory: ["view"],
       service: ["view", "create", "edit", "assign"],
+      parts: ["view"],
       customers: ["view", "create", "edit"],
     },
   },
@@ -112,6 +114,7 @@ const ROLE_DEFAULTS: {
       dashboard: ["view"],
       inventory: ["view", "create", "edit"],
       service: ["view", "edit"],
+      parts: ["view", "create", "edit", "delete", "export"],
     },
   },
   {
@@ -119,6 +122,7 @@ const ROLE_DEFAULTS: {
     description: "Executes repair orders in the workshop.",
     grants: {
       service: ["view", "edit"],
+      parts: ["view"],
     },
   },
   {

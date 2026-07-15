@@ -8,6 +8,7 @@ export * from "./deals";
 export * from "./appraisals";
 export * from "./financeApplications";
 export * from "./serviceOrders";
+export * from "./workshop";
 export * from "./agents";
 export * from "./activity";
 export * from "./timelineEvents";

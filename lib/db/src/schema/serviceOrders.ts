@@ -18,6 +18,8 @@ export const serviceOrdersTable = pgTable("service_orders", {
   type: text("type").notNull().default("maintenance"),
   status: text("status").notNull().default("scheduled"),
   scheduledDate: date("scheduled_date", { mode: "string" }).notNull(),
+  complaint: text("complaint"),
+  odometer: integer("odometer"),
   technician: text("technician"),
   estimatedCost: doublePrecision("estimated_cost").notNull().default(0),
   jobs: text("jobs").array().notNull().default([]),

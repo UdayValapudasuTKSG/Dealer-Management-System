@@ -12,6 +12,8 @@ export interface ServiceOrderUpdate {
   type?: ServiceOrderUpdateType;
   status?: ServiceOrderUpdateStatus;
   scheduledDate?: Date;
+  complaint?: string;
+  odometer?: number;
   technician?: string;
   estimatedCost?: number;
   jobs?: string[];

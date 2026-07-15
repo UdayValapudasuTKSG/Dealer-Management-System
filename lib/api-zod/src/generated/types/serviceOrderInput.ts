@@ -16,6 +16,8 @@ export interface ServiceOrderInput {
   type: ServiceOrderInputType;
   status?: ServiceOrderInputStatus;
   scheduledDate: Date;
+  complaint?: string;
+  odometer?: number;
   technician?: string;
   estimatedCost?: number;
   jobs?: string[];

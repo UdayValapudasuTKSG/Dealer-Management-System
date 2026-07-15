@@ -211,6 +211,13 @@ const PATH_MODULES: Record<string, RouteRule> = {
   appraisals: { module: "appraisals" },
   "finance-applications": { module: "finance" },
   "service-orders": { module: "service" },
+  "service-technicians": { module: "service" },
+  "job-cards": { module: "service" },
+  "service-invoices": { module: "service" },
+  coverage: { module: "service" },
+  parts: { module: "parts" },
+  suppliers: { module: "parts" },
+  "part-purchases": { module: "parts" },
   gates: {
     module: "approvals",
     category: (req) => {
