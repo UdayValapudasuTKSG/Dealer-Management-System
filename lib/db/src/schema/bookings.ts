@@ -1,0 +1,51 @@
+import {
+  pgTable,
+  serial,
+  text,
+  integer,
+  doublePrecision,
+  timestamp,
+} from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+export const BOOKING_STATUSES = [
+  "active",
+  "converted",
+  "expired",
+  "cancelled",
+] as const;
+export type BookingStatus = (typeof BOOKING_STATUSES)[number];
+
+export const BOOKING_PAYMENT_STATUSES = [
+  "pending",
+  "partial",
+  "paid",
+  "refunded",
+] as const;
+export type BookingPaymentStatus = (typeof BOOKING_PAYMENT_STATUSES)[number];
+
+export const bookingsTable = pgTable("bookings", {
+  id: serial("id").primaryKey(),
+  vehicleId: integer("vehicle_id").notNull(),
+  customerId: integer("customer_id"),
+  customerName: text("customer_name").notNull(),
+  dealId: integer("deal_id"),
+  bookingAmount: doublePrecision("booking_amount").notNull(),
+  amountPaid: doublePrecision("amount_paid").notNull().default(0),
+  paymentStatus: text("payment_status").notNull().default("pending"),
+  status: text("status").notNull().default("active"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertBookingSchema = createInsertSchema(bookingsTable, {
+  status: z.enum(BOOKING_STATUSES),
+  paymentStatus: z.enum(BOOKING_PAYMENT_STATUSES),
+}).omit({ id: true, createdAt: true });
+export type InsertBooking = z.infer<typeof insertBookingSchema>;
+export type Booking = typeof bookingsTable.$inferSelect;

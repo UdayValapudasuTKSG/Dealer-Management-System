@@ -1,6 +1,12 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { useListVehicles } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useListVehicles,
+  useCreateBooking,
+  getListVehiclesQueryKey,
+  getListBookingsQueryKey,
+} from "@workspace/api-client-react";
 import type { Vehicle } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -8,6 +14,8 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import {
   CarFront,
   Zap,
@@ -22,6 +30,14 @@ import {
   Calendar,
   Boxes,
   BadgeCheck,
+  Fingerprint,
+  Cog,
+  Settings2,
+  Layers,
+  Package,
+  FileText,
+  KeyRound,
+  Loader2,
   X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -351,6 +367,7 @@ function VehicleDetail({
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<"photo" | "spin">("photo");
+  const [reserving, setReserving] = useState(false);
   const [, navigate] = useLocation();
 
   return (
@@ -471,18 +488,75 @@ function VehicleDetail({
                 <Spec icon={<Calendar className="w-4 h-4" />} label="Model Year" value={String(vehicle.year)} />
                 <Spec icon={<Boxes className="w-4 h-4" />} label="Body" value={vehicle.bodyType} />
                 <Spec icon={<BadgeCheck className="w-4 h-4" />} label="Status" value={vehicle.status.replace("_", " ")} />
+                {vehicle.vin && (
+                  <Spec icon={<Fingerprint className="w-4 h-4" />} label="VIN" value={vehicle.vin} mono />
+                )}
+                {vehicle.variant && (
+                  <Spec icon={<Layers className="w-4 h-4" />} label="Variant" value={vehicle.variant} />
+                )}
+                {vehicle.engine && (
+                  <Spec icon={<Cog className="w-4 h-4" />} label="Engine" value={vehicle.engine} />
+                )}
+                {vehicle.transmission && (
+                  <Spec icon={<Settings2 className="w-4 h-4" />} label="Transmission" value={vehicle.transmission} />
+                )}
               </div>
 
-              <div className="flex items-center gap-3 mt-8">
+              {(vehicle.accessories ?? []).length > 0 && (
+                <div className="mt-6">
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                    <Package className="w-4 h-4" /> Fitted accessories
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(vehicle.accessories ?? []).map((a) => (
+                      <span
+                        key={a}
+                        className="px-3 py-1 rounded-full bg-white/[0.05] border border-white/10 text-xs"
+                      >
+                        {a}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(vehicle.documents ?? []).length > 0 && (
+                <div className="mt-5">
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                    <FileText className="w-4 h-4" /> Documents
+                  </div>
+                  <div className="space-y-1.5">
+                    {(vehicle.documents ?? []).map((d) => (
+                      <div
+                        key={d.name}
+                        className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm"
+                      >
+                        <FileText className="w-4 h-4 text-muted-foreground" />
+                        <span className="flex-1 truncate">{d.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3 mt-8">
                 <button
                   onClick={() => {
                     onClose();
                     navigate(`/deals?vehicle=${vehicle.id}`);
                   }}
-                  className="flex-1 h-12 rounded-full bg-primary text-white text-sm font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-colors"
+                  className="flex-1 min-w-40 h-12 rounded-full bg-primary text-white text-sm font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-colors"
                 >
                   Structure a deal
                 </button>
+                {vehicle.status === "available" && (
+                  <button
+                    onClick={() => setReserving(true)}
+                    className="h-12 px-5 rounded-full border border-primary/40 text-primary text-sm font-medium hover:bg-primary/10 transition-colors inline-flex items-center gap-2"
+                  >
+                    <KeyRound className="w-4 h-4" /> Reserve
+                  </button>
+                )}
                 <button
                   onClick={() => setMode(mode === "spin" ? "photo" : "spin")}
                   className="h-12 px-5 rounded-full border border-white/15 text-sm font-medium hover:bg-white/[0.05] transition-colors inline-flex items-center gap-2"
@@ -491,6 +565,13 @@ function VehicleDetail({
                   {mode === "spin" ? "Photo" : "360°"}
                 </button>
               </div>
+
+              <ReserveDialog
+                vehicle={vehicle}
+                open={reserving}
+                onClose={() => setReserving(false)}
+                onReserved={onClose}
+              />
             </div>
           </div>
         )}
@@ -527,10 +608,12 @@ function Spec({
   icon,
   label,
   value,
+  mono,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
+  mono?: boolean;
 }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -538,7 +621,152 @@ function Spec({
         {icon}
         {label}
       </div>
-      <div className="text-sm font-medium capitalize">{value}</div>
+      <div
+        className={`text-sm font-medium ${mono ? "font-mono tracking-tight break-all" : "capitalize"}`}
+      >
+        {value}
+      </div>
     </div>
+  );
+}
+
+function ReserveDialog({
+  vehicle,
+  open,
+  onClose,
+  onReserved,
+}: {
+  vehicle: Vehicle;
+  open: boolean;
+  onClose: () => void;
+  onReserved: () => void;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const createBooking = useCreateBooking();
+  const [customerName, setCustomerName] = useState("");
+  const [bookingAmount, setBookingAmount] = useState("1000");
+  const [amountPaid, setAmountPaid] = useState("0");
+  const defaultExpiry = new Date(Date.now() + 7 * 24 * 3600 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  const [expiresAt, setExpiresAt] = useState(defaultExpiry);
+
+  const submit = () => {
+    if (!customerName.trim()) {
+      toast({ title: "Customer name is required", variant: "destructive" });
+      return;
+    }
+    createBooking.mutate(
+      {
+        data: {
+          vehicleId: vehicle.id,
+          customerName: customerName.trim(),
+          bookingAmount: Number(bookingAmount) || 0,
+          amountPaid: Number(amountPaid) || 0,
+          expiresAt: new Date(`${expiresAt}T23:59:59`).toISOString(),
+        },
+      },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
+          qc.invalidateQueries({ queryKey: getListBookingsQueryKey() });
+          toast({
+            title: "Vehicle reserved",
+            description: `${vehicle.year} ${vehicle.make} ${vehicle.model} is on hold for ${customerName.trim()}.`,
+          });
+          onClose();
+          onReserved();
+        },
+        onError: (err: unknown) =>
+          toast({
+            title: "Could not reserve",
+            description:
+              (err as { response?: { data?: { error?: string } } })?.response
+                ?.data?.error ?? "Something went wrong.",
+            variant: "destructive",
+          }),
+      },
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md border-white/10 bg-[#0d0d0d]">
+        <DialogTitle className="text-2xl font-semibold tracking-tight">
+          Reserve this vehicle
+        </DialogTitle>
+        <p className="text-sm text-muted-foreground -mt-1">
+          {vehicle.year} {vehicle.make} {vehicle.model}
+          {vehicle.vin ? ` · ${vehicle.vin}` : ""}
+        </p>
+        <div className="space-y-3 mt-2">
+          <div>
+            <label className="text-xs uppercase tracking-widest text-muted-foreground">
+              Customer name
+            </label>
+            <Input
+              className="mt-1.5"
+              placeholder="Full name"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs uppercase tracking-widest text-muted-foreground">
+                Booking amount ($)
+              </label>
+              <Input
+                className="mt-1.5"
+                type="number"
+                min={0}
+                value={bookingAmount}
+                onChange={(e) => setBookingAmount(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-widest text-muted-foreground">
+                Paid now ($)
+              </label>
+              <Input
+                className="mt-1.5"
+                type="number"
+                min={0}
+                value={amountPaid}
+                onChange={(e) => setAmountPaid(e.target.value)}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs uppercase tracking-widest text-muted-foreground">
+              Hold until
+            </label>
+            <Input
+              className="mt-1.5"
+              type="date"
+              value={expiresAt}
+              onChange={(e) => setExpiresAt(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={submit}
+            disabled={createBooking.isPending}
+            className="w-full h-12 rounded-full bg-primary text-white text-sm font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-colors disabled:opacity-50 inline-flex items-center justify-center gap-2"
+          >
+            {createBooking.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <KeyRound className="w-4 h-4" />
+            )}
+            Confirm reservation
+          </button>
+          <p className="text-xs text-muted-foreground text-center">
+            The vehicle is held until the expiry date, then auto-released if
+            unpaid.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

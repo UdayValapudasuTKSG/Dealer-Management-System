@@ -211,10 +211,19 @@ export type VehicleStatus = typeof VehicleStatus[keyof typeof VehicleStatus];
 export const VehicleStatus = {
   available: 'available',
   reserved: 'reserved',
+  booked: 'booked',
+  delivered: 'delivered',
   in_transit: 'in_transit',
   sold: 'sold',
   service: 'service',
 } as const;
+
+export interface VehicleDocument {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  url: string;
+}
 
 export interface Vehicle {
   id: number;
@@ -225,6 +234,12 @@ export interface Vehicle {
   year: number;
   /** @nullable */
   vin?: string | null;
+  /** @nullable */
+  variant?: string | null;
+  /** @nullable */
+  engine?: string | null;
+  /** @nullable */
+  transmission?: string | null;
   price: number;
   powertrain: VehiclePowertrain;
   /** @nullable */
@@ -235,6 +250,9 @@ export interface Vehicle {
   status: VehicleStatus;
   /** @nullable */
   imageUrl?: string | null;
+  images?: string[];
+  accessories?: string[];
+  documents?: VehicleDocument[];
   /** @nullable */
   description?: string | null;
   featured: boolean;
@@ -257,6 +275,8 @@ export type VehicleInputStatus = typeof VehicleInputStatus[keyof typeof VehicleI
 export const VehicleInputStatus = {
   available: 'available',
   reserved: 'reserved',
+  booked: 'booked',
+  delivered: 'delivered',
   in_transit: 'in_transit',
   sold: 'sold',
   service: 'service',
@@ -270,6 +290,9 @@ export interface VehicleInput {
   trim?: string;
   year: number;
   vin?: string;
+  variant?: string;
+  engine?: string;
+  transmission?: string;
   price: number;
   powertrain: VehicleInputPowertrain;
   rangeKm?: number;
@@ -278,6 +301,9 @@ export interface VehicleInput {
   bodyType: string;
   status?: VehicleInputStatus;
   imageUrl?: string;
+  images?: string[];
+  accessories?: string[];
+  documents?: VehicleDocument[];
   description?: string;
   featured?: boolean;
 }
@@ -298,6 +324,8 @@ export type VehicleUpdateStatus = typeof VehicleUpdateStatus[keyof typeof Vehicl
 export const VehicleUpdateStatus = {
   available: 'available',
   reserved: 'reserved',
+  booked: 'booked',
+  delivered: 'delivered',
   in_transit: 'in_transit',
   sold: 'sold',
   service: 'service',
@@ -311,6 +339,9 @@ export interface VehicleUpdate {
   trim?: string;
   year?: number;
   vin?: string;
+  variant?: string;
+  engine?: string;
+  transmission?: string;
   price?: number;
   powertrain?: VehicleUpdatePowertrain;
   rangeKm?: number;
@@ -319,8 +350,269 @@ export interface VehicleUpdate {
   bodyType?: string;
   status?: VehicleUpdateStatus;
   imageUrl?: string;
+  images?: string[];
+  accessories?: string[];
+  documents?: VehicleDocument[];
   description?: string;
   featured?: boolean;
+}
+
+export type BookingPaymentStatus = typeof BookingPaymentStatus[keyof typeof BookingPaymentStatus];
+
+
+export const BookingPaymentStatus = {
+  pending: 'pending',
+  partial: 'partial',
+  paid: 'paid',
+  refunded: 'refunded',
+} as const;
+
+export type BookingStatus = typeof BookingStatus[keyof typeof BookingStatus];
+
+
+export const BookingStatus = {
+  active: 'active',
+  converted: 'converted',
+  expired: 'expired',
+  cancelled: 'cancelled',
+} as const;
+
+export interface Booking {
+  id: number;
+  vehicleId: number;
+  /** @nullable */
+  customerId?: number | null;
+  customerName: string;
+  /** @nullable */
+  dealId?: number | null;
+  bookingAmount: number;
+  amountPaid: number;
+  paymentStatus: BookingPaymentStatus;
+  status: BookingStatus;
+  expiresAt: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
+  createdAt: string;
+}
+
+export type BookingInputPaymentStatus = typeof BookingInputPaymentStatus[keyof typeof BookingInputPaymentStatus];
+
+
+export const BookingInputPaymentStatus = {
+  pending: 'pending',
+  partial: 'partial',
+  paid: 'paid',
+} as const;
+
+export interface BookingInput {
+  vehicleId: number;
+  customerId?: number;
+  /** @minLength 1 */
+  customerName: string;
+  dealId?: number;
+  /** @minimum 0 */
+  bookingAmount: number;
+  /** @minimum 0 */
+  amountPaid?: number;
+  paymentStatus?: BookingInputPaymentStatus;
+  expiresAt: string;
+  notes?: string;
+}
+
+export type BookingUpdatePaymentStatus = typeof BookingUpdatePaymentStatus[keyof typeof BookingUpdatePaymentStatus];
+
+
+export const BookingUpdatePaymentStatus = {
+  pending: 'pending',
+  partial: 'partial',
+  paid: 'paid',
+  refunded: 'refunded',
+} as const;
+
+export type BookingUpdateStatus = typeof BookingUpdateStatus[keyof typeof BookingUpdateStatus];
+
+
+export const BookingUpdateStatus = {
+  active: 'active',
+  converted: 'converted',
+  expired: 'expired',
+  cancelled: 'cancelled',
+} as const;
+
+export interface BookingUpdate {
+  /** @minimum 0 */
+  amountPaid?: number;
+  paymentStatus?: BookingUpdatePaymentStatus;
+  status?: BookingUpdateStatus;
+  expiresAt?: string;
+  notes?: string;
+}
+
+export type DeliveryStepStateKey = typeof DeliveryStepStateKey[keyof typeof DeliveryStepStateKey];
+
+
+export const DeliveryStepStateKey = {
+  sales_order: 'sales_order',
+  vehicle_prep: 'vehicle_prep',
+  accessory_installation: 'accessory_installation',
+  pdi_checklist: 'pdi_checklist',
+  registration: 'registration',
+  insurance: 'insurance',
+  invoice: 'invoice',
+  delivery_appointment: 'delivery_appointment',
+  vehicle_delivery: 'vehicle_delivery',
+  customer_signature: 'customer_signature',
+  feedback: 'feedback',
+} as const;
+
+export type DeliveryStepStateStatus = typeof DeliveryStepStateStatus[keyof typeof DeliveryStepStateStatus];
+
+
+export const DeliveryStepStateStatus = {
+  pending: 'pending',
+  completed: 'completed',
+} as const;
+
+export interface DeliveryStepState {
+  key: DeliveryStepStateKey;
+  label: string;
+  status: DeliveryStepStateStatus;
+  /** @nullable */
+  note?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  /** @nullable */
+  completedBy?: string | null;
+}
+
+export interface PdiItem {
+  label: string;
+  checked: boolean;
+}
+
+export type DeliveryStatus = typeof DeliveryStatus[keyof typeof DeliveryStatus];
+
+
+export const DeliveryStatus = {
+  in_progress: 'in_progress',
+  completed: 'completed',
+} as const;
+
+export type DeliveryCurrentStep = typeof DeliveryCurrentStep[keyof typeof DeliveryCurrentStep];
+
+
+export const DeliveryCurrentStep = {
+  sales_order: 'sales_order',
+  vehicle_prep: 'vehicle_prep',
+  accessory_installation: 'accessory_installation',
+  pdi_checklist: 'pdi_checklist',
+  registration: 'registration',
+  insurance: 'insurance',
+  invoice: 'invoice',
+  delivery_appointment: 'delivery_appointment',
+  vehicle_delivery: 'vehicle_delivery',
+  customer_signature: 'customer_signature',
+  feedback: 'feedback',
+} as const;
+
+export interface Delivery {
+  id: number;
+  dealId: number;
+  /** @nullable */
+  bookingId?: number | null;
+  vehicleId: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  /** @nullable */
+  advisorUserId?: number | null;
+  /** @nullable */
+  advisorName?: string | null;
+  /** @nullable */
+  vehicleLabel?: string | null;
+  status: DeliveryStatus;
+  currentStep: DeliveryCurrentStep;
+  steps: DeliveryStepState[];
+  pdiItems: PdiItem[];
+  /** @nullable */
+  appointmentAt?: string | null;
+  /** @nullable */
+  invoiceId?: number | null;
+  /** @nullable */
+  signatureName?: string | null;
+  /** @nullable */
+  signatureData?: string | null;
+  /** @nullable */
+  feedbackRating?: number | null;
+  /** @nullable */
+  feedbackComment?: string | null;
+  /** @nullable */
+  registrationNumber?: string | null;
+  /** @nullable */
+  insurancePolicy?: string | null;
+  /** @nullable */
+  insuranceProvider?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  createdAt: string;
+}
+
+export interface DeliveryInput {
+  dealId: number;
+  advisorUserId?: number;
+}
+
+export interface DeliveryUpdate {
+  /** @nullable */
+  advisorUserId?: number | null;
+}
+
+export type DeliveryAdvanceInputStep = typeof DeliveryAdvanceInputStep[keyof typeof DeliveryAdvanceInputStep];
+
+
+export const DeliveryAdvanceInputStep = {
+  sales_order: 'sales_order',
+  vehicle_prep: 'vehicle_prep',
+  accessory_installation: 'accessory_installation',
+  pdi_checklist: 'pdi_checklist',
+  registration: 'registration',
+  insurance: 'insurance',
+  invoice: 'invoice',
+  delivery_appointment: 'delivery_appointment',
+  vehicle_delivery: 'vehicle_delivery',
+  customer_signature: 'customer_signature',
+  feedback: 'feedback',
+} as const;
+
+export interface DeliveryAdvanceInput {
+  step: DeliveryAdvanceInputStep;
+  note?: string;
+  appointmentAt?: string;
+  registrationNumber?: string;
+  insurancePolicy?: string;
+  insuranceProvider?: string;
+  signatureName?: string;
+  signatureData?: string;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  feedbackRating?: number;
+  feedbackComment?: string;
+}
+
+export interface DeliveryPdiInput {
+  items: PdiItem[];
+}
+
+export interface DeliveryAdvisor {
+  id: number;
+  name: string;
+  /** @nullable */
+  email?: string | null;
 }
 
 export interface LeadAttachment {
@@ -2081,6 +2373,7 @@ export const TimelineEventDomain = {
   appraisals: 'appraisals',
   service: 'service',
   vehicles: 'vehicles',
+  delivery: 'delivery',
   gate: 'gate',
   system: 'system',
 } as const;
@@ -2520,6 +2813,16 @@ export type ListVehiclesParams = {
 status?: string;
 powertrain?: string;
 search?: string;
+};
+
+export type ListBookingsParams = {
+status?: string;
+vehicleId?: number;
+};
+
+export type ListDeliveriesParams = {
+status?: string;
+mine?: number;
 };
 
 export type ListLeadsParams = {

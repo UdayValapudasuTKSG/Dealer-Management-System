@@ -17,6 +17,10 @@ const ROUTE_MAP: Record<string, string> = {
   appraisals: "/appraisals",
   finance: "/finance",
   service: "/service",
+  deliveries: "/deliveries",
+  delivery: "/deliveries",
+  bookings: "/deliveries",
+  handover: "/deliveries",
   customers: "/customers",
   gra: "/gra",
   "gra filing": "/gra",
@@ -34,6 +38,7 @@ const ROUTE_LABEL: Record<string, string> = {
   "/appraisals": "Appraisals",
   "/finance": "Finance",
   "/service": "Service",
+  "/deliveries": "Deliveries",
   "/customers": "Customers",
   "/gra": "GRA Filing",
 };

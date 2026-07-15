@@ -1,0 +1,324 @@
+import { Router, type IRouter } from "express";
+import { and, desc, eq, lt } from "drizzle-orm";
+import {
+  db,
+  bookingsTable,
+  vehiclesTable,
+  customersTable,
+  type Booking,
+} from "@workspace/db";
+import {
+  ListBookingsQueryParams,
+  ListBookingsResponse,
+  CreateBookingBody,
+  CreateBookingResponse,
+  GetBookingParams,
+  GetBookingResponse,
+  UpdateBookingParams,
+  UpdateBookingBody,
+  UpdateBookingResponse,
+  SendBookingPaymentReminderParams,
+  SendBookingPaymentReminderResponse,
+} from "@workspace/api-zod";
+import { enqueueEmail } from "../lib/email";
+import { logger } from "../lib/logger";
+
+const router: IRouter = Router();
+
+const money = (n: number) =>
+  `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+
+async function vehicleLabel(vehicleId: number): Promise<string> {
+  const [v] = await db
+    .select({
+      year: vehiclesTable.year,
+      make: vehiclesTable.make,
+      model: vehiclesTable.model,
+    })
+    .from(vehiclesTable)
+    .where(eq(vehiclesTable.id, vehicleId));
+  return v ? `${v.year} ${v.make} ${v.model}` : `Vehicle #${vehicleId}`;
+}
+
+/** Releases the vehicle back to available if no other active booking holds it. */
+async function releaseVehicle(vehicleId: number): Promise<void> {
+  const [other] = await db
+    .select({ id: bookingsTable.id })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.vehicleId, vehicleId),
+        eq(bookingsTable.status, "active"),
+      ),
+    );
+  if (other) return;
+  const [v] = await db
+    .select({ status: vehiclesTable.status })
+    .from(vehiclesTable)
+    .where(eq(vehiclesTable.id, vehicleId));
+  if (v && (v.status === "reserved" || v.status === "booked")) {
+    await db
+      .update(vehiclesTable)
+      .set({ status: "available" })
+      .where(eq(vehiclesTable.id, vehicleId));
+  }
+}
+
+/** Lazily expires lapsed active bookings and releases their vehicles. */
+export async function expireLapsedBookings(): Promise<void> {
+  const lapsed = await db
+    .update(bookingsTable)
+    .set({ status: "expired" })
+    .where(
+      and(
+        eq(bookingsTable.status, "active"),
+        lt(bookingsTable.expiresAt, new Date()),
+      ),
+    )
+    .returning();
+  for (const b of lapsed) {
+    logger.info({ bookingId: b.id }, "booking expired, releasing vehicle");
+    await releaseVehicle(b.vehicleId);
+  }
+}
+
+async function bookingRecipient(
+  booking: Booking,
+): Promise<{ email: string | null; name: string }> {
+  if (!booking.customerId) return { email: null, name: booking.customerName };
+  const [c] = await db
+    .select({ email: customersTable.email, name: customersTable.name })
+    .from(customersTable)
+    .where(eq(customersTable.id, booking.customerId));
+  return {
+    email: c?.email ?? null,
+    name: c?.name ?? booking.customerName,
+  };
+}
+
+router.get("/bookings", async (req, res): Promise<void> => {
+  const query = ListBookingsQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
+  await expireLapsedBookings();
+
+  const filters = [];
+  if (query.data.status)
+    filters.push(eq(bookingsTable.status, query.data.status));
+  if (query.data.vehicleId !== undefined)
+    filters.push(eq(bookingsTable.vehicleId, query.data.vehicleId));
+
+  const rows = await db
+    .select()
+    .from(bookingsTable)
+    .where(filters.length ? and(...filters) : undefined)
+    .orderBy(desc(bookingsTable.createdAt));
+
+  res.json(ListBookingsResponse.parse(rows));
+});
+
+router.post("/bookings", async (req, res): Promise<void> => {
+  const parsed = CreateBookingBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  await expireLapsedBookings();
+
+  const [vehicle] = await db
+    .select()
+    .from(vehiclesTable)
+    .where(eq(vehiclesTable.id, parsed.data.vehicleId));
+  if (!vehicle) {
+    res.status(404).json({ error: "Vehicle not found" });
+    return;
+  }
+  if (vehicle.status !== "available") {
+    res.status(409).json({
+      error: `Vehicle is ${vehicle.status} and cannot be booked`,
+    });
+    return;
+  }
+
+  const paid = parsed.data.amountPaid ?? 0;
+  const paymentStatus =
+    parsed.data.paymentStatus ??
+    (paid >= parsed.data.bookingAmount && parsed.data.bookingAmount > 0
+      ? "paid"
+      : paid > 0
+        ? "partial"
+        : "pending");
+
+  const [booking] = await db
+    .insert(bookingsTable)
+    .values({
+      vehicleId: parsed.data.vehicleId,
+      customerId: parsed.data.customerId ?? null,
+      customerName: parsed.data.customerName,
+      dealId: parsed.data.dealId ?? null,
+      bookingAmount: parsed.data.bookingAmount,
+      amountPaid: paid,
+      paymentStatus,
+      status: "active",
+      expiresAt: parsed.data.expiresAt,
+      notes: parsed.data.notes ?? null,
+      createdBy: res.locals.user?.name ?? res.locals.user?.email ?? null,
+    })
+    .returning();
+
+  await db
+    .update(vehiclesTable)
+    .set({ status: paymentStatus === "paid" ? "booked" : "reserved" })
+    .where(eq(vehiclesTable.id, parsed.data.vehicleId));
+
+  void (async () => {
+    const { email, name } = await bookingRecipient(booking!);
+    if (!email) return;
+    await enqueueEmail({
+      template: "vehicle_booking",
+      to: email,
+      customerId: booking!.customerId,
+      data: {
+        name,
+        vehicle: await vehicleLabel(booking!.vehicleId),
+        amount: money(booking!.bookingAmount),
+      },
+    });
+  })().catch((err) =>
+    logger.error({ err, bookingId: booking!.id }, "booking email failed"),
+  );
+
+  res.status(201).json(CreateBookingResponse.parse(booking));
+});
+
+router.get("/bookings/:id", async (req, res): Promise<void> => {
+  const params = GetBookingParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [booking] = await db
+    .select()
+    .from(bookingsTable)
+    .where(eq(bookingsTable.id, params.data.id));
+  if (!booking) {
+    res.status(404).json({ error: "Booking not found" });
+    return;
+  }
+  res.json(GetBookingResponse.parse(booking));
+});
+
+router.patch("/bookings/:id", async (req, res): Promise<void> => {
+  const params = UpdateBookingParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = UpdateBookingBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [before] = await db
+    .select()
+    .from(bookingsTable)
+    .where(eq(bookingsTable.id, params.data.id));
+  if (!before) {
+    res.status(404).json({ error: "Booking not found" });
+    return;
+  }
+  if (before.status !== "active" && parsed.data.status === "active") {
+    res.status(422).json({
+      error: `Cannot reactivate a ${before.status} booking`,
+    });
+    return;
+  }
+
+  const next: Record<string, unknown> = { ...parsed.data };
+  // Recompute payment status when a payment is recorded without one.
+  if (
+    parsed.data.amountPaid !== undefined &&
+    parsed.data.paymentStatus === undefined
+  ) {
+    next.paymentStatus =
+      parsed.data.amountPaid >= before.bookingAmount && before.bookingAmount > 0
+        ? "paid"
+        : parsed.data.amountPaid > 0
+          ? "partial"
+          : "pending";
+  }
+
+  const [booking] = await db
+    .update(bookingsTable)
+    .set(next)
+    .where(eq(bookingsTable.id, params.data.id))
+    .returning();
+
+  // Vehicle side effects: fully paid → booked; cancelled/expired → release.
+  if (booking!.status === "active" && booking!.paymentStatus === "paid") {
+    await db
+      .update(vehiclesTable)
+      .set({ status: "booked" })
+      .where(
+        and(
+          eq(vehiclesTable.id, booking!.vehicleId),
+          eq(vehiclesTable.status, "reserved"),
+        ),
+      );
+  }
+  if (
+    (booking!.status === "cancelled" || booking!.status === "expired") &&
+    before.status === "active"
+  ) {
+    await releaseVehicle(booking!.vehicleId);
+  }
+
+  res.json(UpdateBookingResponse.parse(booking));
+});
+
+router.post("/bookings/:id/remind", async (req, res): Promise<void> => {
+  const params = SendBookingPaymentReminderParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [booking] = await db
+    .select()
+    .from(bookingsTable)
+    .where(eq(bookingsTable.id, params.data.id));
+  if (!booking) {
+    res.status(404).json({ error: "Booking not found" });
+    return;
+  }
+  const outstanding = booking.bookingAmount - booking.amountPaid;
+  if (outstanding <= 0) {
+    res.status(422).json({ error: "Nothing outstanding on this booking" });
+    return;
+  }
+  const { email, name } = await bookingRecipient(booking);
+  if (!email) {
+    res.status(422).json({ error: "Customer has no email on file" });
+    return;
+  }
+  await enqueueEmail({
+    template: "payment_reminder",
+    to: email,
+    customerId: booking.customerId,
+    data: {
+      name,
+      vehicle: await vehicleLabel(booking.vehicleId),
+      amount: money(outstanding),
+      due: booking.expiresAt.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }),
+    },
+  });
+  res.json(SendBookingPaymentReminderResponse.parse(booking));
+});
+
+export default router;

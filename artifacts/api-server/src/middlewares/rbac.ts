@@ -204,6 +204,9 @@ const METHOD_CATEGORY: Record<string, string> = {
 // Maps the first path segment after /api to a permission module.
 const PATH_MODULES: Record<string, RouteRule> = {
   vehicles: { module: "inventory" },
+  bookings: { module: "inventory" },
+  deliveries: { module: "deliveries" },
+  "delivery-advisors": { module: "deliveries" },
   leads: { module: "leads" },
   pipeline: { module: "leads" },
   customers: { module: "customers" },

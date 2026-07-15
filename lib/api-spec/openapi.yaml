@@ -12,6 +12,10 @@ tags:
     description: Health operations
   - name: vehicles
     description: Inventory of vehicles
+  - name: bookings
+    description: Vehicle reservations and bookings
+  - name: deliveries
+    description: Vehicle delivery workflow
   - name: leads
     description: Sales leads and demand
   - name: customers
@@ -284,6 +288,340 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /bookings:
+    get:
+      operationId: listBookings
+      tags: [bookings]
+      summary: List vehicle bookings (auto-expires lapsed reservations)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: vehicleId
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: List of bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+    post:
+      operationId: createBooking
+      tags: [bookings]
+      summary: Reserve a vehicle with a booking amount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookingInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "409":
+          description: Vehicle is not available for booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /bookings/{id}:
+    get:
+      operationId: getBooking
+      tags: [bookings]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateBooking
+      tags: [bookings]
+      summary: Update payment status, expiry or cancel/release a booking
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookingUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /bookings/{id}/remind:
+    post:
+      operationId: sendBookingPaymentReminder
+      tags: [bookings]
+      summary: Send a payment reminder for the outstanding booking balance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Reminder queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: No customer email or nothing outstanding
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /deliveries:
+    get:
+      operationId: listDeliveries
+      tags: [deliveries]
+      summary: List delivery workflows
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: mine
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: List of deliveries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Delivery"
+    post:
+      operationId: createDelivery
+      tags: [deliveries]
+      summary: Start the delivery workflow for a deal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "409":
+          description: Delivery already exists for this deal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Deal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /deliveries/{id}:
+    get:
+      operationId: getDelivery
+      tags: [deliveries]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateDelivery
+      tags: [deliveries]
+      summary: Assign a delivery advisor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /deliveries/{id}/advance:
+    post:
+      operationId: advanceDelivery
+      tags: [deliveries]
+      summary: Complete the current delivery step (in strict order)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryAdvanceInput"
+      responses:
+        "200":
+          description: Step completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Step out of order or requirements not met
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /deliveries/{id}/pdi:
+    patch:
+      operationId: updateDeliveryPdi
+      tags: [deliveries]
+      summary: Update the PDI checklist items
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryPdiInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /deliveries/{id}/invoice.pdf:
+    get:
+      operationId: getDeliveryInvoicePdf
+      tags: [deliveries]
+      summary: Download the delivery invoice as a PDF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Invoice PDF
+          content:
+            application/pdf: {}
+        "404":
+          description: Not found or invoice not generated yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /delivery-advisors:
+    get:
+      operationId: listDeliveryAdvisors
+      tags: [deliveries]
+      summary: List users assignable as delivery advisors
+      responses:
+        "200":
+          description: Assignable delivery advisors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DeliveryAdvisor"
 
   /leads:
     get:
@@ -3049,17 +3387,36 @@ components:
         trim: { type: ["string", "null"] }
         year: { type: integer }
         vin: { type: ["string", "null"] }
+        variant: { type: ["string", "null"] }
+        engine: { type: ["string", "null"] }
+        transmission: { type: ["string", "null"] }
         price: { type: number }
         powertrain: { type: string, enum: [EV, Hybrid, Petrol, Diesel] }
         rangeKm: { type: ["integer", "null"] }
         mileageKm: { type: integer }
         exteriorColor: { type: string }
         bodyType: { type: string }
-        status: { type: string, enum: [available, reserved, in_transit, sold, service] }
+        status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service] }
         imageUrl: { type: ["string", "null"] }
+        images:
+          type: array
+          items: { type: string }
+        accessories:
+          type: array
+          items: { type: string }
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/VehicleDocument"
         description: { type: ["string", "null"] }
         featured: { type: boolean }
         createdAt: { type: string, format: date-time }
+    VehicleDocument:
+      type: object
+      required: [name, url]
+      properties:
+        name: { type: string, minLength: 1 }
+        url: { type: string, minLength: 1 }
     VehicleInput:
       type: object
       required: [make, model, year, price, powertrain, mileageKm, exteriorColor, bodyType]
@@ -3069,14 +3426,27 @@ components:
         trim: { type: string }
         year: { type: integer }
         vin: { type: string }
+        variant: { type: string }
+        engine: { type: string }
+        transmission: { type: string }
         price: { type: number }
         powertrain: { type: string, enum: [EV, Hybrid, Petrol, Diesel] }
         rangeKm: { type: integer }
         mileageKm: { type: integer }
         exteriorColor: { type: string }
         bodyType: { type: string }
-        status: { type: string, enum: [available, reserved, in_transit, sold, service] }
+        status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service] }
         imageUrl: { type: string }
+        images:
+          type: array
+          items: { type: string }
+        accessories:
+          type: array
+          items: { type: string }
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/VehicleDocument"
         description: { type: string }
         featured: { type: boolean }
     VehicleUpdate:
@@ -3087,16 +3457,156 @@ components:
         trim: { type: string }
         year: { type: integer }
         vin: { type: string }
+        variant: { type: string }
+        engine: { type: string }
+        transmission: { type: string }
         price: { type: number }
         powertrain: { type: string, enum: [EV, Hybrid, Petrol, Diesel] }
         rangeKm: { type: integer }
         mileageKm: { type: integer }
         exteriorColor: { type: string }
         bodyType: { type: string }
-        status: { type: string, enum: [available, reserved, in_transit, sold, service] }
+        status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service] }
         imageUrl: { type: string }
+        images:
+          type: array
+          items: { type: string }
+        accessories:
+          type: array
+          items: { type: string }
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/VehicleDocument"
         description: { type: string }
         featured: { type: boolean }
+    Booking:
+      type: object
+      required: [id, vehicleId, customerName, bookingAmount, amountPaid, paymentStatus, status, expiresAt, createdAt]
+      properties:
+        id: { type: integer }
+        vehicleId: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: string }
+        dealId: { type: ["integer", "null"] }
+        bookingAmount: { type: number }
+        amountPaid: { type: number }
+        paymentStatus: { type: string, enum: [pending, partial, paid, refunded] }
+        status: { type: string, enum: [active, converted, expired, cancelled] }
+        expiresAt: { type: string, format: date-time }
+        notes: { type: ["string", "null"] }
+        createdBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    BookingInput:
+      type: object
+      required: [vehicleId, customerName, bookingAmount, expiresAt]
+      properties:
+        vehicleId: { type: integer }
+        customerId: { type: integer }
+        customerName: { type: string, minLength: 1 }
+        dealId: { type: integer }
+        bookingAmount: { type: number, minimum: 0 }
+        amountPaid: { type: number, minimum: 0 }
+        paymentStatus: { type: string, enum: [pending, partial, paid] }
+        expiresAt: { type: string, format: date-time }
+        notes: { type: string }
+    BookingUpdate:
+      type: object
+      properties:
+        amountPaid: { type: number, minimum: 0 }
+        paymentStatus: { type: string, enum: [pending, partial, paid, refunded] }
+        status: { type: string, enum: [active, converted, expired, cancelled] }
+        expiresAt: { type: string, format: date-time }
+        notes: { type: string }
+    DeliveryStepState:
+      type: object
+      required: [key, label, status]
+      properties:
+        key: { type: string, enum: [sales_order, vehicle_prep, accessory_installation, pdi_checklist, registration, insurance, invoice, delivery_appointment, vehicle_delivery, customer_signature, feedback] }
+        label: { type: string }
+        status: { type: string, enum: [pending, completed] }
+        note: { type: ["string", "null"] }
+        completedAt: { type: ["string", "null"] }
+        completedBy: { type: ["string", "null"] }
+    PdiItem:
+      type: object
+      required: [label, checked]
+      properties:
+        label: { type: string }
+        checked: { type: boolean }
+    Delivery:
+      type: object
+      required: [id, dealId, vehicleId, status, currentStep, steps, pdiItems, createdAt]
+      properties:
+        id: { type: integer }
+        dealId: { type: integer }
+        bookingId: { type: ["integer", "null"] }
+        vehicleId: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        advisorUserId: { type: ["integer", "null"] }
+        advisorName: { type: ["string", "null"] }
+        vehicleLabel: { type: ["string", "null"] }
+        status: { type: string, enum: [in_progress, completed] }
+        currentStep: { type: string, enum: [sales_order, vehicle_prep, accessory_installation, pdi_checklist, registration, insurance, invoice, delivery_appointment, vehicle_delivery, customer_signature, feedback] }
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeliveryStepState"
+        pdiItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/PdiItem"
+        appointmentAt: { type: ["string", "null"], format: date-time }
+        invoiceId: { type: ["integer", "null"] }
+        signatureName: { type: ["string", "null"] }
+        signatureData: { type: ["string", "null"] }
+        feedbackRating: { type: ["integer", "null"] }
+        feedbackComment: { type: ["string", "null"] }
+        registrationNumber: { type: ["string", "null"] }
+        insurancePolicy: { type: ["string", "null"] }
+        insuranceProvider: { type: ["string", "null"] }
+        completedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    DeliveryInput:
+      type: object
+      required: [dealId]
+      properties:
+        dealId: { type: integer }
+        advisorUserId: { type: integer }
+    DeliveryUpdate:
+      type: object
+      properties:
+        advisorUserId: { type: ["integer", "null"] }
+    DeliveryAdvanceInput:
+      type: object
+      required: [step]
+      properties:
+        step: { type: string, enum: [sales_order, vehicle_prep, accessory_installation, pdi_checklist, registration, insurance, invoice, delivery_appointment, vehicle_delivery, customer_signature, feedback] }
+        note: { type: string }
+        appointmentAt: { type: string, format: date-time }
+        registrationNumber: { type: string }
+        insurancePolicy: { type: string }
+        insuranceProvider: { type: string }
+        signatureName: { type: string }
+        signatureData: { type: string }
+        feedbackRating: { type: integer, minimum: 1, maximum: 5 }
+        feedbackComment: { type: string }
+    DeliveryPdiInput:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PdiItem"
+    DeliveryAdvisor:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: ["string", "null"] }
 
     LeadAttachment:
       type: object
@@ -4086,7 +4596,7 @@ components:
       properties:
         id: { type: integer }
         customerId: { type: ["integer", "null"] }
-        domain: { type: string, enum: [leads, deals, finance, appraisals, service, vehicles, gate, system] }
+        domain: { type: string, enum: [leads, deals, finance, appraisals, service, vehicles, delivery, gate, system] }
         kind: { type: string }
         title: { type: string }
         detail: { type: ["string", "null"] }

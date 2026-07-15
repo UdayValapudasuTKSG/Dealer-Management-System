@@ -1,6 +1,11 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and, ilike, or, type SQL } from "drizzle-orm";
-import { db, vehiclesTable } from "@workspace/db";
+import {
+  db,
+  vehiclesTable,
+  VEHICLE_STATUS_TRANSITIONS,
+  type VehicleStatus,
+} from "@workspace/db";
 import {
   CreateVehicleBody,
   UpdateVehicleBody,
@@ -91,6 +96,27 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
+  }
+
+  const [before] = await db
+    .select({ status: vehiclesTable.status })
+    .from(vehiclesTable)
+    .where(eq(vehiclesTable.id, params.data.id));
+  if (!before) {
+    res.status(404).json({ error: "Vehicle not found" });
+    return;
+  }
+
+  // Enforce the stock-status lifecycle (Available→Reserved→Booked→Delivered).
+  if (parsed.data.status && parsed.data.status !== before.status) {
+    const allowed =
+      VEHICLE_STATUS_TRANSITIONS[before.status as VehicleStatus] ?? [];
+    if (!allowed.includes(parsed.data.status as VehicleStatus)) {
+      res.status(422).json({
+        error: `Invalid status transition: ${before.status} → ${parsed.data.status}`,
+      });
+      return;
+    }
   }
 
   const [vehicle] = await db

@@ -12,6 +12,7 @@ import {
   UpdateDealResponse,
 } from "@workspace/api-zod";
 import { onDealStageChanged } from "../lib/email-triggers";
+import { ensureDeliveryForDeal } from "../lib/delivery";
 
 const router: IRouter = Router();
 
@@ -93,6 +94,13 @@ router.patch("/deals/:id", async (req, res): Promise<void> => {
   }
 
   if (before) onDealStageChanged(before, deal);
+
+  // Cash decision / commitment → kick off the delivery workflow.
+  if (before && before.stage !== "committed" && deal.stage === "committed") {
+    void ensureDeliveryForDeal(deal.id, {
+      cause: `Deal #${deal.id} committed`,
+    }).catch(() => undefined);
+  }
 
   res.json(UpdateDealResponse.parse(deal));
 });

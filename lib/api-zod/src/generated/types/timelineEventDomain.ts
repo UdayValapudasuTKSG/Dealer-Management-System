@@ -16,6 +16,7 @@ export const TimelineEventDomain = {
   appraisals: 'appraisals',
   service: 'service',
   vehicles: 'vehicles',
+  delivery: 'delivery',
   gate: 'gate',
   system: 'system',
 } as const;

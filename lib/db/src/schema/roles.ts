@@ -19,6 +19,7 @@ export const PERMISSION_MODULES = [
   "finance",
   "service",
   "parts",
+  "deliveries",
   "customers",
   "approvals",
   "gra",

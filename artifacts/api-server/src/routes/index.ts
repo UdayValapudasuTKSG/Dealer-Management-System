@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import vehiclesRouter from "./vehicles";
+import bookingsRouter from "./bookings";
+import deliveriesRouter from "./deliveries";
 import leadsRouter from "./leads";
 import customersRouter from "./customers";
 import dealsRouter from "./deals";
@@ -43,6 +45,8 @@ router.use(authRouter);
 router.use(adminRouter);
 router.use(auditRouter);
 router.use(vehiclesRouter);
+router.use(bookingsRouter);
+router.use(deliveriesRouter);
 router.use(leadsRouter);
 router.use(customersRouter);
 router.use(dealsRouter);

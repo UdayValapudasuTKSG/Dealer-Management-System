@@ -27,3 +27,5 @@ export * from "./emailLogs";
 export * from "./notifications";
 export * from "./tasks";
 export * from "./commNotes";
+export * from "./bookings";
+export * from "./deliveries";

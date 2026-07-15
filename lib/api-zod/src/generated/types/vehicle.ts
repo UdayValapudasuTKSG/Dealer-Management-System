@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { VehicleDocument } from './vehicleDocument';
 import type { VehiclePowertrain } from './vehiclePowertrain';
 import type { VehicleStatus } from './vehicleStatus';
 
@@ -17,6 +18,12 @@ export interface Vehicle {
   year: number;
   /** @nullable */
   vin?: string | null;
+  /** @nullable */
+  variant?: string | null;
+  /** @nullable */
+  engine?: string | null;
+  /** @nullable */
+  transmission?: string | null;
   price: number;
   powertrain: VehiclePowertrain;
   /** @nullable */
@@ -27,6 +34,9 @@ export interface Vehicle {
   status: VehicleStatus;
   /** @nullable */
   imageUrl?: string | null;
+  images?: string[];
+  accessories?: string[];
+  documents?: VehicleDocument[];
   /** @nullable */
   description?: string | null;
   featured: boolean;

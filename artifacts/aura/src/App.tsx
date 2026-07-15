@@ -22,6 +22,7 @@ import Finance from "@/pages/finance";
 import Service from "@/pages/service";
 import Parts from "@/pages/parts";
 import Workshop from "@/pages/workshop";
+import Deliveries from "@/pages/deliveries";
 import Customers from "@/pages/customers";
 import CustomerDetail from "@/pages/customer-detail";
 import Approvals from "@/pages/approvals";
@@ -157,6 +158,7 @@ function AppShell() {
                 <Route path="/service" component={Service} />
                 <Route path="/parts" component={Parts} />
                 <Route path="/workshop" component={Workshop} />
+                <Route path="/deliveries" component={Deliveries} />
                 <Route path="/approvals" component={Approvals} />
                 <Route path="/customers" component={Customers} />
                 <Route path="/customers/:id" component={CustomerDetail} />

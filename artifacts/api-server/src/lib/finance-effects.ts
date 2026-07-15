@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 import { onFinanceStatusChanged, onDealStageChanged } from "./email-triggers";
 import { notifyUsers } from "./email";
+import { ensureDeliveryForDeal } from "./delivery";
 import { logger } from "./logger";
 
 const money = (n: number) =>
@@ -142,6 +143,15 @@ export async function applyFinanceStatusEffects(
       });
     } catch (err) {
       logger.error({ err, appId: app.id }, "delivery trigger receipt failed");
+    }
+    if (app.dealId) {
+      try {
+        await ensureDeliveryForDeal(app.dealId, {
+          cause: `Finance application #${app.id} approved`,
+        });
+      } catch (err) {
+        logger.error({ err, appId: app.id }, "delivery workflow start failed");
+      }
     }
   }
 

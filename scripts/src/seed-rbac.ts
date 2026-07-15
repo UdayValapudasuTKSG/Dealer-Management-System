@@ -35,6 +35,7 @@ const ROLE_DEFAULTS: {
       deals: ["view", "create", "edit", "delete", "approve", "reject", "assign", "export"],
       appraisals: ["view", "create", "edit", "approve", "reject"],
       finance: ["view"],
+      deliveries: ["view", "create", "edit", "assign", "export"],
       customers: ["view", "create", "edit", "assign", "export"],
       approvals: ["view", "approve", "reject"],
       gra: ["view"],
@@ -82,6 +83,7 @@ const ROLE_DEFAULTS: {
       leads: ["view", "create", "edit", "assign"],
       deals: ["view", "create", "edit"],
       appraisals: ["view", "create"],
+      deliveries: ["view", "create"],
       customers: ["view", "create", "edit"],
     },
   },
@@ -92,6 +94,7 @@ const ROLE_DEFAULTS: {
       dashboard: ["view"],
       inventory: ["view"],
       deals: ["view", "edit"],
+      deliveries: ["view", "create", "edit", "assign"],
       service: ["view"],
       customers: ["view"],
     },
@@ -146,7 +149,37 @@ async function main() {
     let roleId: number;
     if (existing.length > 0) {
       roleId = existing[0]!.id;
-      console.log(`Role exists, skipping grants: ${role.name}`);
+      // Backfill grants only for modules the role has no rows for yet, so
+      // custom per-role permission edits are preserved.
+      const currentModules = new Set(
+        (
+          await db
+            .select({ module: rolePermissionsTable.module })
+            .from(rolePermissionsTable)
+            .where(eq(rolePermissionsTable.roleId, roleId))
+        ).map((r) => r.module),
+      );
+      const missing = Object.entries(role.grants).flatMap(
+        ([module, categories]) =>
+          currentModules.has(module)
+            ? []
+            : (categories ?? []).map((category) => ({
+                roleId,
+                module,
+                category,
+              })),
+      );
+      if (missing.length > 0) {
+        await db
+          .insert(rolePermissionsTable)
+          .values(missing)
+          .onConflictDoNothing();
+        console.log(
+          `Role exists, backfilled ${missing.length} grants: ${role.name}`,
+        );
+      } else {
+        console.log(`Role exists, up to date: ${role.name}`);
+      }
       continue;
     } else {
       const [created] = await db

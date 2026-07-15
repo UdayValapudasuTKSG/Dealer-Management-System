@@ -113,6 +113,10 @@ export const ListVehiclesQueryParams = zod.object({
   "search": zod.coerce.string().optional()
 })
 
+
+
+
+
 export const ListVehiclesResponseItem = zod.object({
   "id": zod.number(),
   "make": zod.string(),
@@ -120,14 +124,23 @@ export const ListVehiclesResponseItem = zod.object({
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "transmission": zod.string().nullish(),
   "price": zod.number(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
   "imageUrl": zod.string().nullish(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
   "createdAt": zod.coerce.date()
@@ -142,23 +155,38 @@ export const ListVehiclesResponse = zod.array(ListVehiclesResponseItem)
 
 
 
+
+
 export const CreateVehicleBody = zod.object({
   "make": zod.string().min(1),
   "model": zod.string().min(1),
   "trim": zod.string().optional(),
   "year": zod.number(),
   "vin": zod.string().optional(),
+  "variant": zod.string().optional(),
+  "engine": zod.string().optional(),
+  "transmission": zod.string().optional(),
   "price": zod.number(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().optional(),
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']).optional(),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']).optional(),
   "imageUrl": zod.string().optional(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "description": zod.string().optional(),
   "featured": zod.boolean().optional()
 })
+
+
+
+
 
 export const CreateVehicleResponse = zod.object({
   "id": zod.number(),
@@ -167,14 +195,23 @@ export const CreateVehicleResponse = zod.object({
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "transmission": zod.string().nullish(),
   "price": zod.number(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
   "imageUrl": zod.string().nullish(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
   "createdAt": zod.coerce.date()
@@ -185,6 +222,10 @@ export const GetVehicleParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
+
 export const GetVehicleResponse = zod.object({
   "id": zod.number(),
   "make": zod.string(),
@@ -192,14 +233,23 @@ export const GetVehicleResponse = zod.object({
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "transmission": zod.string().nullish(),
   "price": zod.number(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
   "imageUrl": zod.string().nullish(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
   "createdAt": zod.coerce.date()
@@ -214,23 +264,38 @@ export const UpdateVehicleParams = zod.object({
 
 
 
+
+
 export const UpdateVehicleBody = zod.object({
   "make": zod.string().min(1).optional(),
   "model": zod.string().min(1).optional(),
   "trim": zod.string().optional(),
   "year": zod.number().optional(),
   "vin": zod.string().optional(),
+  "variant": zod.string().optional(),
+  "engine": zod.string().optional(),
+  "transmission": zod.string().optional(),
   "price": zod.number().optional(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']).optional(),
   "rangeKm": zod.number().optional(),
   "mileageKm": zod.number().optional(),
   "exteriorColor": zod.string().optional(),
   "bodyType": zod.string().optional(),
-  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']).optional(),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']).optional(),
   "imageUrl": zod.string().optional(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "description": zod.string().optional(),
   "featured": zod.boolean().optional()
 })
+
+
+
+
 
 export const UpdateVehicleResponse = zod.object({
   "id": zod.number(),
@@ -239,14 +304,23 @@ export const UpdateVehicleResponse = zod.object({
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "transmission": zod.string().nullish(),
   "price": zod.number(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
   "imageUrl": zod.string().nullish(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
   "createdAt": zod.coerce.date()
@@ -258,6 +332,471 @@ export const DeleteVehicleParams = zod.object({
 })
 
 export const DeleteVehicleResponse = zod.void()
+
+
+/**
+ * @summary List vehicle bookings (auto-expires lapsed reservations)
+ */
+export const ListBookingsQueryParams = zod.object({
+  "status": zod.coerce.string().optional(),
+  "vehicleId": zod.coerce.number().optional()
+})
+
+export const ListBookingsResponseItem = zod.object({
+  "id": zod.number(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "dealId": zod.number().nullish(),
+  "bookingAmount": zod.number(),
+  "amountPaid": zod.number(),
+  "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
+  "status": zod.enum(['active', 'converted', 'expired', 'cancelled']),
+  "expiresAt": zod.coerce.date(),
+  "notes": zod.string().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListBookingsResponse = zod.array(ListBookingsResponseItem)
+
+
+/**
+ * @summary Reserve a vehicle with a booking amount
+ */
+
+export const createBookingBodyBookingAmountMin = 0;
+
+export const createBookingBodyAmountPaidMin = 0;
+
+
+
+export const CreateBookingBody = zod.object({
+  "vehicleId": zod.number(),
+  "customerId": zod.number().optional(),
+  "customerName": zod.string().min(1),
+  "dealId": zod.number().optional(),
+  "bookingAmount": zod.number().min(createBookingBodyBookingAmountMin),
+  "amountPaid": zod.number().min(createBookingBodyAmountPaidMin).optional(),
+  "paymentStatus": zod.enum(['pending', 'partial', 'paid']).optional(),
+  "expiresAt": zod.coerce.date(),
+  "notes": zod.string().optional()
+})
+
+export const CreateBookingResponse = zod.object({
+  "id": zod.number(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "dealId": zod.number().nullish(),
+  "bookingAmount": zod.number(),
+  "amountPaid": zod.number(),
+  "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
+  "status": zod.enum(['active', 'converted', 'expired', 'cancelled']),
+  "expiresAt": zod.coerce.date(),
+  "notes": zod.string().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const GetBookingParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetBookingResponse = zod.object({
+  "id": zod.number(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "dealId": zod.number().nullish(),
+  "bookingAmount": zod.number(),
+  "amountPaid": zod.number(),
+  "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
+  "status": zod.enum(['active', 'converted', 'expired', 'cancelled']),
+  "expiresAt": zod.coerce.date(),
+  "notes": zod.string().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update payment status, expiry or cancel/release a booking
+ */
+export const UpdateBookingParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateBookingBodyAmountPaidMin = 0;
+
+
+
+export const UpdateBookingBody = zod.object({
+  "amountPaid": zod.number().min(updateBookingBodyAmountPaidMin).optional(),
+  "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']).optional(),
+  "status": zod.enum(['active', 'converted', 'expired', 'cancelled']).optional(),
+  "expiresAt": zod.coerce.date().optional(),
+  "notes": zod.string().optional()
+})
+
+export const UpdateBookingResponse = zod.object({
+  "id": zod.number(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "dealId": zod.number().nullish(),
+  "bookingAmount": zod.number(),
+  "amountPaid": zod.number(),
+  "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
+  "status": zod.enum(['active', 'converted', 'expired', 'cancelled']),
+  "expiresAt": zod.coerce.date(),
+  "notes": zod.string().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Send a payment reminder for the outstanding booking balance
+ */
+export const SendBookingPaymentReminderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendBookingPaymentReminderResponse = zod.object({
+  "id": zod.number(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "dealId": zod.number().nullish(),
+  "bookingAmount": zod.number(),
+  "amountPaid": zod.number(),
+  "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
+  "status": zod.enum(['active', 'converted', 'expired', 'cancelled']),
+  "expiresAt": zod.coerce.date(),
+  "notes": zod.string().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List delivery workflows
+ */
+export const ListDeliveriesQueryParams = zod.object({
+  "status": zod.coerce.string().optional(),
+  "mine": zod.coerce.number().optional()
+})
+
+export const ListDeliveriesResponseItem = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "bookingId": zod.number().nullish(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "advisorUserId": zod.number().nullish(),
+  "advisorName": zod.string().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "status": zod.enum(['in_progress', 'completed']),
+  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "steps": zod.array(zod.object({
+  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "label": zod.string(),
+  "status": zod.enum(['pending', 'completed']),
+  "note": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
+  "completedBy": zod.string().nullish()
+})),
+  "pdiItems": zod.array(zod.object({
+  "label": zod.string(),
+  "checked": zod.boolean()
+})),
+  "appointmentAt": zod.coerce.date().nullish(),
+  "invoiceId": zod.number().nullish(),
+  "signatureName": zod.string().nullish(),
+  "signatureData": zod.string().nullish(),
+  "feedbackRating": zod.number().nullish(),
+  "feedbackComment": zod.string().nullish(),
+  "registrationNumber": zod.string().nullish(),
+  "insurancePolicy": zod.string().nullish(),
+  "insuranceProvider": zod.string().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListDeliveriesResponse = zod.array(ListDeliveriesResponseItem)
+
+
+/**
+ * @summary Start the delivery workflow for a deal
+ */
+export const CreateDeliveryBody = zod.object({
+  "dealId": zod.number(),
+  "advisorUserId": zod.number().optional()
+})
+
+export const CreateDeliveryResponse = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "bookingId": zod.number().nullish(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "advisorUserId": zod.number().nullish(),
+  "advisorName": zod.string().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "status": zod.enum(['in_progress', 'completed']),
+  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "steps": zod.array(zod.object({
+  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "label": zod.string(),
+  "status": zod.enum(['pending', 'completed']),
+  "note": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
+  "completedBy": zod.string().nullish()
+})),
+  "pdiItems": zod.array(zod.object({
+  "label": zod.string(),
+  "checked": zod.boolean()
+})),
+  "appointmentAt": zod.coerce.date().nullish(),
+  "invoiceId": zod.number().nullish(),
+  "signatureName": zod.string().nullish(),
+  "signatureData": zod.string().nullish(),
+  "feedbackRating": zod.number().nullish(),
+  "feedbackComment": zod.string().nullish(),
+  "registrationNumber": zod.string().nullish(),
+  "insurancePolicy": zod.string().nullish(),
+  "insuranceProvider": zod.string().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const GetDeliveryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetDeliveryResponse = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "bookingId": zod.number().nullish(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "advisorUserId": zod.number().nullish(),
+  "advisorName": zod.string().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "status": zod.enum(['in_progress', 'completed']),
+  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "steps": zod.array(zod.object({
+  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "label": zod.string(),
+  "status": zod.enum(['pending', 'completed']),
+  "note": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
+  "completedBy": zod.string().nullish()
+})),
+  "pdiItems": zod.array(zod.object({
+  "label": zod.string(),
+  "checked": zod.boolean()
+})),
+  "appointmentAt": zod.coerce.date().nullish(),
+  "invoiceId": zod.number().nullish(),
+  "signatureName": zod.string().nullish(),
+  "signatureData": zod.string().nullish(),
+  "feedbackRating": zod.number().nullish(),
+  "feedbackComment": zod.string().nullish(),
+  "registrationNumber": zod.string().nullish(),
+  "insurancePolicy": zod.string().nullish(),
+  "insuranceProvider": zod.string().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Assign a delivery advisor
+ */
+export const UpdateDeliveryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateDeliveryBody = zod.object({
+  "advisorUserId": zod.number().nullish()
+})
+
+export const UpdateDeliveryResponse = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "bookingId": zod.number().nullish(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "advisorUserId": zod.number().nullish(),
+  "advisorName": zod.string().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "status": zod.enum(['in_progress', 'completed']),
+  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "steps": zod.array(zod.object({
+  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "label": zod.string(),
+  "status": zod.enum(['pending', 'completed']),
+  "note": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
+  "completedBy": zod.string().nullish()
+})),
+  "pdiItems": zod.array(zod.object({
+  "label": zod.string(),
+  "checked": zod.boolean()
+})),
+  "appointmentAt": zod.coerce.date().nullish(),
+  "invoiceId": zod.number().nullish(),
+  "signatureName": zod.string().nullish(),
+  "signatureData": zod.string().nullish(),
+  "feedbackRating": zod.number().nullish(),
+  "feedbackComment": zod.string().nullish(),
+  "registrationNumber": zod.string().nullish(),
+  "insurancePolicy": zod.string().nullish(),
+  "insuranceProvider": zod.string().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Complete the current delivery step (in strict order)
+ */
+export const AdvanceDeliveryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const advanceDeliveryBodyFeedbackRatingMax = 5;
+
+
+
+export const AdvanceDeliveryBody = zod.object({
+  "step": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "note": zod.string().optional(),
+  "appointmentAt": zod.coerce.date().optional(),
+  "registrationNumber": zod.string().optional(),
+  "insurancePolicy": zod.string().optional(),
+  "insuranceProvider": zod.string().optional(),
+  "signatureName": zod.string().optional(),
+  "signatureData": zod.string().optional(),
+  "feedbackRating": zod.number().min(1).max(advanceDeliveryBodyFeedbackRatingMax).optional(),
+  "feedbackComment": zod.string().optional()
+})
+
+export const AdvanceDeliveryResponse = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "bookingId": zod.number().nullish(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "advisorUserId": zod.number().nullish(),
+  "advisorName": zod.string().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "status": zod.enum(['in_progress', 'completed']),
+  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "steps": zod.array(zod.object({
+  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "label": zod.string(),
+  "status": zod.enum(['pending', 'completed']),
+  "note": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
+  "completedBy": zod.string().nullish()
+})),
+  "pdiItems": zod.array(zod.object({
+  "label": zod.string(),
+  "checked": zod.boolean()
+})),
+  "appointmentAt": zod.coerce.date().nullish(),
+  "invoiceId": zod.number().nullish(),
+  "signatureName": zod.string().nullish(),
+  "signatureData": zod.string().nullish(),
+  "feedbackRating": zod.number().nullish(),
+  "feedbackComment": zod.string().nullish(),
+  "registrationNumber": zod.string().nullish(),
+  "insurancePolicy": zod.string().nullish(),
+  "insuranceProvider": zod.string().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update the PDI checklist items
+ */
+export const UpdateDeliveryPdiParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateDeliveryPdiBody = zod.object({
+  "items": zod.array(zod.object({
+  "label": zod.string(),
+  "checked": zod.boolean()
+}))
+})
+
+export const UpdateDeliveryPdiResponse = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "bookingId": zod.number().nullish(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "advisorUserId": zod.number().nullish(),
+  "advisorName": zod.string().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "status": zod.enum(['in_progress', 'completed']),
+  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "steps": zod.array(zod.object({
+  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "label": zod.string(),
+  "status": zod.enum(['pending', 'completed']),
+  "note": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
+  "completedBy": zod.string().nullish()
+})),
+  "pdiItems": zod.array(zod.object({
+  "label": zod.string(),
+  "checked": zod.boolean()
+})),
+  "appointmentAt": zod.coerce.date().nullish(),
+  "invoiceId": zod.number().nullish(),
+  "signatureName": zod.string().nullish(),
+  "signatureData": zod.string().nullish(),
+  "feedbackRating": zod.number().nullish(),
+  "feedbackComment": zod.string().nullish(),
+  "registrationNumber": zod.string().nullish(),
+  "insurancePolicy": zod.string().nullish(),
+  "insuranceProvider": zod.string().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Download the delivery invoice as a PDF
+ */
+export const GetDeliveryInvoicePdfParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetDeliveryInvoicePdfResponse = zod.unknown()
+
+
+/**
+ * @summary List users assignable as delivery advisors
+ */
+export const ListDeliveryAdvisorsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish()
+})
+export const ListDeliveryAdvisorsResponse = zod.array(ListDeliveryAdvisorsResponseItem)
 
 
 /**
@@ -714,7 +1253,7 @@ export const GetLeadTimelineParams = zod.object({
 export const GetLeadTimelineResponseItem = zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
-  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'gate', 'system']),
+  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'delivery', 'gate', 'system']),
   "kind": zod.string(),
   "title": zod.string(),
   "detail": zod.string().nullish(),
@@ -2372,6 +2911,10 @@ export const GetCustomerOverviewParams = zod.object({
 
 
 
+
+
+
+
 export const GetCustomerOverviewResponse = zod.object({
   "customer": zod.object({
   "id": zod.number(),
@@ -2422,14 +2965,23 @@ export const GetCustomerOverviewResponse = zod.object({
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "transmission": zod.string().nullish(),
   "price": zod.number(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
   "imageUrl": zod.string().nullish(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
   "createdAt": zod.coerce.date()
@@ -2461,14 +3013,23 @@ export const GetCustomerOverviewResponse = zod.object({
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "transmission": zod.string().nullish(),
   "price": zod.number(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
   "imageUrl": zod.string().nullish(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
   "createdAt": zod.coerce.date()
@@ -2601,7 +3162,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "timeline": zod.array(zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
-  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'gate', 'system']),
+  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'delivery', 'gate', 'system']),
   "kind": zod.string(),
   "title": zod.string(),
   "detail": zod.string().nullish(),
@@ -2645,6 +3206,10 @@ export const GetCustomerPersonaParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
+
 export const GetCustomerPersonaResponse = zod.object({
   "id": zod.number().nullish(),
   "customerId": zod.number(),
@@ -2673,14 +3238,23 @@ export const GetCustomerPersonaResponse = zod.object({
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "transmission": zod.string().nullish(),
   "price": zod.number(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
   "imageUrl": zod.string().nullish(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
   "createdAt": zod.coerce.date()
@@ -2716,6 +3290,10 @@ export const UpsertCustomerPersonaBody = zod.object({
   "marketingConsent": zod.boolean().nullish()
 })
 
+
+
+
+
 export const UpsertCustomerPersonaResponse = zod.object({
   "id": zod.number().nullish(),
   "customerId": zod.number(),
@@ -2744,14 +3322,23 @@ export const UpsertCustomerPersonaResponse = zod.object({
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "transmission": zod.string().nullish(),
   "price": zod.number(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
   "imageUrl": zod.string().nullish(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
   "createdAt": zod.coerce.date()
@@ -2767,6 +3354,10 @@ export const UpsertCustomerPersonaResponse = zod.object({
 export const RecommendCustomerVehicleParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
+
+
 
 export const RecommendCustomerVehicleResponse = zod.object({
   "id": zod.number().nullish(),
@@ -2796,14 +3387,23 @@ export const RecommendCustomerVehicleResponse = zod.object({
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "transmission": zod.string().nullish(),
   "price": zod.number(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
   "imageUrl": zod.string().nullish(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
   "createdAt": zod.coerce.date()
@@ -2936,7 +3536,7 @@ export const ListTimelineQueryParams = zod.object({
 export const ListTimelineResponseItem = zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
-  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'gate', 'system']),
+  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'delivery', 'gate', 'system']),
   "kind": zod.string(),
   "title": zod.string(),
   "detail": zod.string().nullish(),
@@ -3625,7 +4225,7 @@ export const GetCustomerCommunicationsResponse = zod.object({
   "timeline": zod.array(zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
-  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'gate', 'system']),
+  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'delivery', 'gate', 'system']),
   "kind": zod.string(),
   "title": zod.string(),
   "detail": zod.string().nullish(),

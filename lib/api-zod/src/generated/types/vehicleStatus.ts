@@ -12,6 +12,8 @@ export type VehicleStatus = typeof VehicleStatus[keyof typeof VehicleStatus];
 export const VehicleStatus = {
   available: 'available',
   reserved: 'reserved',
+  booked: 'booked',
+  delivered: 'delivered',
   in_transit: 'in_transit',
   sold: 'sold',
   service: 'service',
