@@ -4,10 +4,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useListVehicles,
   useCreateBooking,
+  useCreateVehicle,
+  useUpdateVehicle,
   getListVehiclesQueryKey,
   getListBookingsQueryKey,
 } from "@workspace/api-client-react";
 import type { Vehicle } from "@workspace/api-client-react";
+import { CreateRecordDialog, type FieldDef } from "@/components/create-record-dialog";
+import { Button } from "@/components/ui/button";
+import { useAuthz } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -38,6 +43,8 @@ import {
   FileText,
   KeyRound,
   Loader2,
+  Pencil,
+  Plus,
   X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -57,8 +64,104 @@ function powertrainIcon(pt: string) {
   return <Fuel className="w-4 h-4" />;
 }
 
+const BODY_TYPES = [
+  "SUV",
+  "Sedan",
+  "Coupe",
+  "Hatchback",
+  "Convertible",
+  "Wagon",
+  "Pickup",
+  "Van",
+];
+
+const STATUS_LABELS: Record<string, string> = {
+  available: "Available",
+  reserved: "Reserved",
+  booked: "Booked",
+  delivered: "Delivered",
+  in_transit: "In transit",
+  sold: "Sold",
+  service: "In service",
+};
+
+/** Mirrors the server's stock lifecycle (VEHICLE_STATUS_TRANSITIONS in @workspace/db). */
+const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
+  available: ["reserved", "booked", "in_transit", "service", "sold"],
+  reserved: ["booked", "available"],
+  booked: ["delivered", "available"],
+  delivered: [],
+  in_transit: ["available"],
+  service: ["available"],
+  sold: [],
+};
+
+function vehicleFields(existing?: Vehicle): FieldDef[] {
+  const bodyOptions = Array.from(
+    new Set([...BODY_TYPES, ...(existing?.bodyType ? [existing.bodyType] : [])]),
+  ).map((b) => ({ value: b, label: b }));
+
+  const statusValues = existing
+    ? [existing.status, ...(STATUS_TRANSITIONS[existing.status] ?? [])]
+    : ["available", "in_transit", "service"];
+  const statusOptions = statusValues.map((s) => ({
+    value: s,
+    label: STATUS_LABELS[s] ?? s,
+  }));
+
+  return [
+    { name: "make", label: "Make", type: "text", required: true, span: "half", placeholder: "BMW", defaultValue: existing?.make },
+    { name: "model", label: "Model", type: "text", required: true, span: "half", placeholder: "i7", defaultValue: existing?.model },
+    { name: "trim", label: "Trim", type: "text", span: "half", placeholder: "xDrive60 M Sport", defaultValue: existing?.trim ?? undefined },
+    { name: "year", label: "Year", type: "number", required: true, span: "half", placeholder: "2026", defaultValue: existing ? String(existing.year) : undefined },
+    { name: "vin", label: "VIN", type: "text", span: "half", placeholder: "WBY73AW0XPCK00000", defaultValue: existing?.vin ?? undefined },
+    { name: "price", label: "Price ($)", type: "number", required: true, span: "half", placeholder: "125000", defaultValue: existing ? String(existing.price) : undefined },
+    {
+      name: "powertrain",
+      label: "Powertrain",
+      type: "select",
+      required: true,
+      span: "half",
+      defaultValue: existing?.powertrain ?? "Petrol",
+      options: [
+        { value: "EV", label: "Electric" },
+        { value: "Hybrid", label: "Hybrid" },
+        { value: "Petrol", label: "Petrol" },
+        { value: "Diesel", label: "Diesel" },
+      ],
+    },
+    { name: "rangeKm", label: "Range (km)", type: "number", span: "half", placeholder: "610", defaultValue: existing?.rangeKm != null ? String(existing.rangeKm) : undefined },
+    { name: "mileageKm", label: "Mileage (km)", type: "number", required: true, span: "half", placeholder: "0", defaultValue: existing ? String(existing.mileageKm) : "0" },
+    { name: "exteriorColor", label: "Exterior color", type: "text", required: true, span: "half", placeholder: "Obsidian Black", defaultValue: existing?.exteriorColor },
+    {
+      name: "bodyType",
+      label: "Body type",
+      type: "select",
+      required: true,
+      span: "half",
+      defaultValue: existing?.bodyType,
+      options: bodyOptions,
+    },
+    { name: "engine", label: "Engine", type: "text", span: "half", placeholder: "4.4L V8 TwinPower", defaultValue: existing?.engine ?? undefined },
+    { name: "transmission", label: "Transmission", type: "text", span: "half", placeholder: "8-speed automatic", defaultValue: existing?.transmission ?? undefined },
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
+      span: "half",
+      defaultValue: existing?.status ?? "available",
+      options: statusOptions,
+    },
+    { name: "imageUrl", label: "Image URL", type: "text", span: "full", placeholder: "/vehicles/bmw-i7.png", defaultValue: existing?.imageUrl ?? undefined },
+  ];
+}
+
 export default function Inventory() {
   const { data: vehicles, isLoading } = useListVehicles();
+  const { can } = useAuthz();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const createVehicle = useCreateVehicle();
   const [body, setBody] = useState<string>("all");
   const [powertrain, setPowertrain] = useState<string>("all");
   const [selected, setSelected] = useState<Vehicle | null>(null);
@@ -160,14 +263,52 @@ export default function Inventory() {
 
       <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-14 py-12 space-y-10">
         {/* Intro */}
-        <div>
-          <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
-            Discover the range
-          </h2>
-          <p className="text-muted-foreground mt-2 font-light max-w-2xl">
-            Explore the full lineup ready for delivery and find the vehicle that
-            fits perfectly.
-          </p>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
+              Discover the range
+            </h2>
+            <p className="text-muted-foreground mt-2 font-light max-w-2xl">
+              Explore the full lineup ready for delivery and find the vehicle that
+              fits perfectly.
+            </p>
+          </div>
+          {can("inventory", "create") && (
+            <CreateRecordDialog
+              title="Add Vehicle"
+              description="Add a new car to the showroom inventory."
+              pending={createVehicle.isPending}
+              submitLabel="Add to inventory"
+              trigger={
+                <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
+                  <Plus className="w-5 h-5" />
+                  Add Vehicle
+                </Button>
+              }
+              fields={vehicleFields()}
+              onSubmit={async (values) => {
+                try {
+                  const created = await createVehicle.mutateAsync({
+                    data: values as never,
+                  });
+                  qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
+                  toast({
+                    title: "Vehicle added",
+                    description: `${created.year} ${created.make} ${created.model} is now in the showroom.`,
+                  });
+                } catch (err) {
+                  toast({
+                    title: "Could not add vehicle",
+                    description:
+                      (err as { response?: { data?: { error?: string } } })
+                        ?.response?.data?.error ?? "Something went wrong.",
+                    variant: "destructive",
+                  });
+                  throw err;
+                }
+              }}
+            />
+          )}
         </div>
 
         {/* Filter bar (BMW-style) */}
@@ -226,7 +367,12 @@ export default function Inventory() {
         )}
       </div>
 
-      <VehicleDetail vehicle={selected} onClose={() => setSelected(null)} />
+      <VehicleDetail
+        vehicle={selected}
+        onClose={() => setSelected(null)}
+        canEdit={can("inventory", "update")}
+        onUpdated={(v) => setSelected(v)}
+      />
     </div>
   );
 }
@@ -362,13 +508,20 @@ function VehicleCard({
 function VehicleDetail({
   vehicle,
   onClose,
+  canEdit,
+  onUpdated,
 }: {
   vehicle: Vehicle | null;
   onClose: () => void;
+  canEdit: boolean;
+  onUpdated: (v: Vehicle) => void;
 }) {
   const [mode, setMode] = useState<"photo" | "spin">("photo");
   const [reserving, setReserving] = useState(false);
   const [, navigate] = useLocation();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const updateVehicle = useUpdateVehicle();
 
   return (
     <Dialog open={!!vehicle} onOpenChange={(o) => !o && onClose()}>
@@ -564,6 +717,45 @@ function VehicleDetail({
                   <Rotate3d className="w-4 h-4" />
                   {mode === "spin" ? "Photo" : "360°"}
                 </button>
+                {canEdit && (
+                  <CreateRecordDialog
+                    title="Edit Vehicle"
+                    description={`Update details for the ${vehicle.year} ${vehicle.make} ${vehicle.model}.`}
+                    pending={updateVehicle.isPending}
+                    submitLabel="Save changes"
+                    trigger={
+                      <button className="h-12 px-5 rounded-full border border-white/15 text-sm font-medium hover:bg-white/[0.05] transition-colors inline-flex items-center gap-2">
+                        <Pencil className="w-4 h-4" /> Edit
+                      </button>
+                    }
+                    fields={vehicleFields(vehicle)}
+                    onSubmit={async (values) => {
+                      try {
+                        const updated = await updateVehicle.mutateAsync({
+                          id: vehicle.id,
+                          data: values as never,
+                        });
+                        qc.invalidateQueries({
+                          queryKey: getListVehiclesQueryKey(),
+                        });
+                        onUpdated(updated);
+                        toast({
+                          title: "Vehicle updated",
+                          description: `${updated.year} ${updated.make} ${updated.model} has been saved.`,
+                        });
+                      } catch (err) {
+                        toast({
+                          title: "Could not update vehicle",
+                          description:
+                            (err as { response?: { data?: { error?: string } } })
+                              ?.response?.data?.error ?? "Something went wrong.",
+                          variant: "destructive",
+                        });
+                        throw err;
+                      }
+                    }}
+                  />
+                )}
               </div>
 
               <ReserveDialog
