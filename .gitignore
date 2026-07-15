@@ -48,3 +48,5 @@ Thumbs.db
 .cache/
 .local/
 artifacts/api-server/uploads/
+
+uploads/
