@@ -12,6 +12,7 @@ import {
   useListParts,
   useGetPipeline,
   useGetReport,
+  useListVehicles,
 } from "@workspace/api-client-react";
 import { useAuthz } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,6 +37,9 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
+  LineChart,
+  Line,
 } from "recharts";
 import Dashboard from "./dashboard";
 
@@ -225,6 +229,29 @@ function Empty({ text }: { text: string }) {
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 
+const SERIES_COLORS = [
+  "hsl(var(--primary))",
+  "hsl(0 0% 62%)",
+  "hsl(0 60% 62%)",
+  "hsl(0 0% 42%)",
+  "hsl(0 30% 50%)",
+  "hsl(0 0% 75%)",
+];
+
+const AXIS_TICK = { fontSize: 12, fill: "hsl(var(--muted-foreground))" } as const;
+const LEGEND_STYLE = { fontSize: 12, color: "hsl(var(--muted-foreground))" } as const;
+
+function weekKey(dateStr: string) {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - ((day + 6) % 7));
+  return monday.toISOString().slice(0, 10);
+}
+
+const weekLabel = (key: string) =>
+  new Date(key).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
 /* ---------- role dashboards ---------- */
 
 function SalesManagerDashboard() {
@@ -232,6 +259,7 @@ function SalesManagerDashboard() {
   const { data: pipeline } = useGetPipeline();
   const { data: deals } = useListDeals();
   const { data: leads } = useListLeads();
+  const { data: vehicles } = useListVehicles();
 
   const open = (deals ?? []).filter((d) =>
     ["desking", "negotiation", "finance", "committed"].includes(d.stage),
@@ -245,6 +273,38 @@ function SalesManagerDashboard() {
     label: PHASE_LABEL[p.phase] ?? p.label,
     value: p.count,
   }));
+
+  const advisorPerf = Object.values(
+    (deals ?? []).reduce<Record<string, { advisor: string; open: number; delivered: number }>>(
+      (acc, d) => {
+        const key = d.salesAdvisor ?? "Unassigned";
+        acc[key] ??= { advisor: key, open: 0, delivered: 0 };
+        if (d.stage === "delivered") acc[key].delivered += 1;
+        else if (d.stage !== "lost") acc[key].open += 1;
+        return acc;
+      },
+      {},
+    ),
+  )
+    .sort((a, b) => b.delivered + b.open - (a.delivered + a.open))
+    .slice(0, 6);
+
+  const modelName = new Map(
+    (vehicles ?? []).map((v) => [v.id, `${v.make} ${v.model}`]),
+  );
+  const salesByModel = Object.values(
+    (deals ?? [])
+      .filter((d) => d.stage !== "lost")
+      .reduce<Record<string, { model: string; value: number; units: number }>>((acc, d) => {
+        const key = modelName.get(d.vehicleId) ?? `Vehicle #${d.vehicleId}`;
+        acc[key] ??= { model: key, value: 0, units: 0 };
+        acc[key].value += d.otdPrice || 0;
+        acc[key].units += 1;
+        return acc;
+      }, {}),
+  )
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
 
   return (
     <FocusShell
@@ -287,6 +347,44 @@ function SalesManagerDashboard() {
           )}
         </Panel>
       </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Panel title="Advisor Performance" href="/deals" linkLabel="All deals">
+          {advisorPerf.length === 0 ? (
+            <Empty text="No deals recorded yet." />
+          ) : (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={advisorPerf} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} />
+                  <YAxis type="category" dataKey="advisor" axisLine={false} tickLine={false} tick={AXIS_TICK} width={110} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} />
+                  <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} />
+                  <Bar dataKey="delivered" name="Delivered" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} maxBarSize={18} />
+                  <Bar dataKey="open" name="Open" stackId="a" fill="hsl(0 0% 55%)" radius={[0, 4, 4, 0]} maxBarSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Panel>
+        <Panel title="Sales by Model" href="/inventory" linkLabel="Inventory">
+          {salesByModel.length === 0 ? (
+            <Empty text="No deal value to chart yet." />
+          ) : (
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={salesByModel} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`} />
+                  <YAxis type="category" dataKey="model" axisLine={false} tickLine={false} tick={AXIS_TICK} width={130} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} formatter={(v: number, name: string) => (name === "Deal Value" ? money(v) : v)} />
+                  <Bar dataKey="value" name="Deal Value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} maxBarSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Panel>
+      </div>
     </FocusShell>
   );
 }
@@ -303,6 +401,16 @@ function FinanceManagerDashboard() {
     (a) => a.status === "approved" || a.status === "disbursed",
   );
   const financed = approved.reduce((s, a) => s + a.amount, 0);
+
+  const APP_STAGES = ["pending", "submitted", "under_review", "approved", "declined", "disbursed"] as const;
+  const appFunnel = APP_STAGES.map((stage) => {
+    const rows = (apps ?? []).filter((a) => a.status === stage);
+    return {
+      label: stage.replace(/_/g, " "),
+      count: rows.length,
+      amount: rows.reduce((s, a) => s + a.amount, 0),
+    };
+  });
 
   return (
     <FocusShell
@@ -341,6 +449,22 @@ function FinanceManagerDashboard() {
           )}
         </Panel>
       </div>
+      <Panel title="Application Pipeline" href="/finance" linkLabel="Open F&I">
+        <div className="h-[240px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={appFunnel} margin={{ top: 12, right: 12, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={AXIS_TICK} />
+              <YAxis yAxisId="count" axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} width={32} />
+              <YAxis yAxisId="amount" orientation="right" axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`} width={48} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} formatter={(v: number, name: string) => (name === "Amount" ? money(v) : v)} />
+              <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} />
+              <Bar yAxisId="count" dataKey="count" name="Applications" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} maxBarSize={40} />
+              <Bar yAxisId="amount" dataKey="amount" name="Amount" fill="hsl(0 0% 55%)" radius={[6, 6, 0, 0]} maxBarSize={40} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Panel>
     </FocusShell>
   );
 }
@@ -353,6 +477,34 @@ function MarketingDashboard() {
     .slice()
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 7);
+
+  const sourceCounts = (leads ?? []).reduce<Record<string, number>>((acc, l) => {
+    acc[l.source] = (acc[l.source] ?? 0) + 1;
+    return acc;
+  }, {});
+  const topSources = Object.entries(sourceCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([s]) => s);
+  const weeks: string[] = [];
+  {
+    const start = new Date(weekKey(new Date().toISOString()));
+    for (let i = 7; i >= 0; i--) {
+      const w = new Date(start);
+      w.setDate(start.getDate() - i * 7);
+      weeks.push(w.toISOString().slice(0, 10));
+    }
+  }
+  const leadsOverTime = weeks.map((w) => {
+    const row: Record<string, string | number> = { week: weekLabel(w) };
+    for (const s of topSources) row[s] = 0;
+    for (const l of leads ?? []) {
+      if (weekKey(l.createdAt) === w && topSources.includes(l.source)) {
+        row[l.source] = (row[l.source] as number) + 1;
+      }
+    }
+    return row;
+  });
 
   return (
     <FocusShell
@@ -396,6 +548,30 @@ function MarketingDashboard() {
               )}
             </Panel>
           </div>
+          <Panel title="Leads Created Over Time" href="/pipeline" linkLabel="Pipeline">
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={leadsOverTime} margin={{ top: 12, right: 12, left: 0, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="week" axisLine={false} tickLine={false} tick={AXIS_TICK} />
+                  <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} width={32} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} cursor={{ stroke: "hsl(var(--foreground) / 0.15)" }} />
+                  <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} />
+                  {topSources.map((s, i) => (
+                    <Line
+                      key={s}
+                      type="monotone"
+                      dataKey={s}
+                      name={s.replace(/_/g, " ")}
+                      stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                      strokeWidth={2}
+                      dot={{ r: 3, strokeWidth: 0, fill: SERIES_COLORS[i % SERIES_COLORS.length] }}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </Panel>
         </>
       )}
     </FocusShell>
@@ -413,6 +589,22 @@ function ServiceDashboard() {
   const today = new Date().toISOString().slice(0, 10);
   const todays = (orders ?? []).filter((o) => o.scheduledDate === today);
   const activeCards = (cards ?? []).filter((c) => c.status !== "completed");
+
+  const laneLoad = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    return {
+      label: d.toLocaleDateString("en-US", { weekday: "short", day: "numeric" }),
+      bookings: (orders ?? []).filter((o) => o.scheduledDate === key).length,
+    };
+  });
+
+  const CARD_STAGES = ["open", "in_progress", "quality_check", "completed"] as const;
+  const cardFlow = CARD_STAGES.map((s) => ({
+    label: s.replace(/_/g, " "),
+    count: (cards ?? []).filter((c) => c.status === s).length,
+  }));
 
   return (
     <FocusShell
@@ -449,6 +641,34 @@ function ServiceDashboard() {
               <Row key={c.id} title={c.title} subtitle={c.technicianName ?? "Unassigned"} badge={c.status} />
             ))
           )}
+        </Panel>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Panel title="Lane Load — Next 7 Days" href="/service" linkLabel="Bookings">
+          <div className="h-[240px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={laneLoad} margin={{ top: 12, right: 12, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={AXIS_TICK} />
+                <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} width={32} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} />
+                <Bar dataKey="bookings" name="Bookings" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} maxBarSize={36} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+        <Panel title="Job Card Flow" href="/service?tab=jobs" linkLabel="Job cards">
+          <div className="h-[240px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={cardFlow} margin={{ top: 12, right: 12, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={AXIS_TICK} />
+                <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} width={32} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} />
+                <Bar dataKey="count" name="Job Cards" fill="hsl(0 0% 55%)" radius={[6, 6, 0, 0]} maxBarSize={36} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </Panel>
       </div>
     </FocusShell>
@@ -506,6 +726,12 @@ function SalesAdvisorDashboard() {
   const openDeals = myDeals.filter((d) => d.stage !== "delivered" && d.stage !== "lost");
   const hot = activeLeads.filter((l) => l.aiScore >= 75);
 
+  const FUNNEL_PHASES = ["aware", "consider", "engage", "negotiate", "won"] as const;
+  const myFunnel = FUNNEL_PHASES.map((p) => ({
+    label: PHASE_LABEL[p],
+    count: mine.filter((l) => l.phase === p).length,
+  }));
+
   return (
     <FocusShell
       icon={Target}
@@ -542,6 +768,19 @@ function SalesAdvisorDashboard() {
           )}
         </Panel>
       </div>
+      <Panel title="My Conversion Funnel" href="/pipeline" linkLabel="Pipeline">
+        <div className="h-[240px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={myFunnel} margin={{ top: 12, right: 12, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={AXIS_TICK} />
+              <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} width={32} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} />
+              <Bar dataKey="count" name="My Leads" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} maxBarSize={48} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Panel>
     </FocusShell>
   );
 }
@@ -605,6 +844,12 @@ function PartsAdvisorDashboard() {
   const low = all.filter((p) => p.stock <= p.reorderLevel);
   const stockValue = all.reduce((s, p) => s + p.stock * p.unitCost, 0);
 
+  const tightest = all
+    .slice()
+    .sort((a, b) => a.stock - a.reorderLevel - (b.stock - b.reorderLevel))
+    .slice(0, 8)
+    .map((p) => ({ name: p.name, stock: p.stock, reorder: p.reorderLevel }));
+
   return (
     <FocusShell
       icon={Boxes}
@@ -629,6 +874,25 @@ function PartsAdvisorDashboard() {
               badge="low stock"
             />
           ))
+        )}
+      </Panel>
+      <Panel title="Stock vs Reorder Level" href="/parts" linkLabel="Parts desk">
+        {tightest.length === 0 ? (
+          <Empty text="No parts in the catalogue yet." />
+        ) : (
+          <div className="h-[280px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={tightest} layout="vertical" margin={{ top: 4, right: 12, left: 8, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                <XAxis type="number" axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} />
+                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={AXIS_TICK} width={150} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} />
+                <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} />
+                <Bar dataKey="stock" name="In Stock" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} maxBarSize={12} />
+                <Bar dataKey="reorder" name="Reorder Level" fill="hsl(0 0% 55%)" radius={[0, 4, 4, 0]} maxBarSize={12} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </Panel>
     </FocusShell>
