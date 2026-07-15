@@ -1121,6 +1121,85 @@ paths:
                 items:
                   $ref: "#/components/schemas/TimelineEvent"
 
+  /leads/{id}/notes:
+    post:
+      operationId: createLeadNote
+      tags: [leads]
+      summary: Post a note to the lead's activity feed
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadNoteInput"
+      responses:
+        "201":
+          description: Note posted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimelineEvent"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /leads/{id}/quote:
+    get:
+      operationId: getLeadQuote
+      tags: [leads]
+      summary: Quotation metadata for this lead (derived from inventory + email log)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Quote availability and metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadQuoteInfo"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /leads/{id}/quote.pdf:
+    get:
+      operationId: downloadLeadQuotePdf
+      tags: [leads]
+      summary: Download the branded PDF quotation for this lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Quotation PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Lead not found or no vehicle of interest on file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /customers:
     get:
       operationId: listCustomers
@@ -3991,6 +4070,21 @@ components:
           items: { $ref: "#/components/schemas/LeadAttachment" }
         aiScore: { type: integer }
         notes: { type: string }
+    LeadNoteInput:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 2000 }
+    LeadQuoteInfo:
+      type: object
+      required: [available]
+      properties:
+        available: { type: boolean }
+        quoteRef: { type: ["string", "null"] }
+        fileName: { type: ["string", "null"] }
+        vehicle: { type: ["string", "null"] }
+        issuedOn: { type: ["string", "null"] }
+        sentAt: { type: ["string", "null"], format: date-time }
     EnquiryInput:
       type: object
       required: [name]

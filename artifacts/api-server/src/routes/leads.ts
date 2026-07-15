@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, isNotNull, ne, type SQL } from "drizzle-orm";
+import { eq, desc, and, isNotNull, ne, sql, type SQL } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -7,6 +7,7 @@ import {
   usersTable,
   rolesTable,
   timelineEventsTable,
+  emailLogsTable,
   type Lead,
 } from "@workspace/db";
 import {
@@ -29,9 +30,16 @@ import {
   RecordLeadDecisionBody,
   GetLeadTimelineParams,
   GetLeadTimelineResponse,
+  CreateLeadNoteParams,
+  CreateLeadNoteBody,
+  CreateLeadNoteResponse,
+  GetLeadQuoteParams,
+  GetLeadQuoteResponse,
+  DownloadLeadQuotePdfParams,
 } from "@workspace/api-zod";
 import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
+import { buildQuotePdf } from "../lib/quote-pdf";
 
 const router: IRouter = Router();
 
@@ -191,6 +199,194 @@ router.get("/leads/:id/timeline", async (req, res): Promise<void> => {
     .limit(60);
 
   res.json(GetLeadTimelineResponse.parse(rows));
+});
+
+router.post("/leads/:id/notes", async (req, res): Promise<void> => {
+  const params = CreateLeadNoteParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = CreateLeadNoteBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(eq(leadsTable.id, params.data.id));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const actor = res.locals.user?.name || res.locals.user?.email || "Staff";
+  const [event] = await db
+    .insert(timelineEventsTable)
+    .values({
+      customerId: lead.customerId,
+      domain: "leads",
+      kind: "note",
+      title: "Note added",
+      detail: body.data.text,
+      actor,
+      isAgent: false,
+      refType: "lead",
+      refId: lead.id,
+    })
+    .returning();
+
+  res.status(201).json(CreateLeadNoteResponse.parse(event));
+});
+
+/** Quote metadata shared by the info + PDF routes. */
+async function leadQuoteContext(leadId: number): Promise<{
+  lead: Lead;
+  vehicle: typeof vehiclesTable.$inferSelect | null;
+  quoteRef: string;
+  sentPayload: Record<string, string> | null;
+  sentAt: Date | null;
+} | null> {
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(eq(leadsTable.id, leadId));
+  if (!lead) return null;
+
+  const [vehicle] = lead.interestedVehicleId
+    ? await db
+        .select()
+        .from(vehiclesTable)
+        .where(eq(vehiclesTable.id, lead.interestedVehicleId))
+    : [];
+
+  // The emailed quote (if any) — its payload lets us regenerate the exact PDF.
+  const [log] = await db
+    .select()
+    .from(emailLogsTable)
+    .where(
+      and(
+        eq(emailLogsTable.template, "vehicle_quote"),
+        sql`${emailLogsTable.payload} ->> 'quoteRef' LIKE ${`Q-${leadId}-%`}`,
+      ),
+    )
+    .orderBy(desc(emailLogsTable.id))
+    .limit(1);
+
+  // Fresh (never-emailed) quotes are dated today so validity isn't already expired.
+  const today = new Date();
+  const fallbackRef = `Q-${lead.id}-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+
+  return {
+    lead,
+    vehicle: vehicle ?? null,
+    quoteRef: log?.payload?.quoteRef || fallbackRef,
+    sentPayload: log?.payload ?? null,
+    sentAt: log?.sentAt ?? null,
+  };
+}
+
+const quoteMoney = (n: number) =>
+  `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+
+const quoteLongDate = (d: Date) =>
+  d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+/** Build a fresh quote payload from inventory when no emailed quote exists. */
+function freshQuotePayload(
+  lead: Lead,
+  vehicle: typeof vehiclesTable.$inferSelect,
+  quoteRef: string,
+): Record<string, string> {
+  const issued = new Date();
+  const validUntil = new Date(issued.getTime() + 14 * 24 * 60 * 60 * 1000);
+  return {
+    name: lead.name,
+    vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+    model: vehicle.model,
+    version:
+      vehicle.trim || vehicle.variant || lead.variant || "Standard specification",
+    color: vehicle.exteriorColor || lead.color || "",
+    quantity: "1",
+    unitPrice: quoteMoney(vehicle.price),
+    total: quoteMoney(vehicle.price),
+    quoteRef,
+    issuedOn: quoteLongDate(issued),
+    validUntil: quoteLongDate(validUntil),
+  };
+}
+
+router.get("/leads/:id/quote", async (req, res): Promise<void> => {
+  const params = GetLeadQuoteParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const ctx = await leadQuoteContext(params.data.id);
+  if (!ctx) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  if (!ctx.vehicle && !ctx.sentPayload) {
+    res.json(GetLeadQuoteResponse.parse({ available: false }));
+    return;
+  }
+
+  const payload =
+    ctx.sentPayload ??
+    (ctx.vehicle ? freshQuotePayload(ctx.lead, ctx.vehicle, ctx.quoteRef) : {});
+  res.json(
+    GetLeadQuoteResponse.parse({
+      available: true,
+      quoteRef: ctx.quoteRef,
+      fileName: `${ctx.lead.name} - ${ctx.quoteRef}.pdf`,
+      vehicle: payload.vehicle ?? null,
+      issuedOn: payload.issuedOn ?? null,
+      sentAt: ctx.sentAt?.toISOString() ?? null,
+    }),
+  );
+});
+
+router.get("/leads/:id/quote.pdf", async (req, res): Promise<void> => {
+  const params = DownloadLeadQuotePdfParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const ctx = await leadQuoteContext(params.data.id);
+  if (!ctx) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const payload =
+    ctx.sentPayload ??
+    (ctx.vehicle
+      ? freshQuotePayload(ctx.lead, ctx.vehicle, ctx.quoteRef)
+      : null);
+  if (!payload) {
+    res
+      .status(404)
+      .json({ error: "No vehicle of interest on file — no quote available" });
+    return;
+  }
+
+  const pdf = await buildQuotePdf(payload);
+  const safeName = `${ctx.lead.name} - ${ctx.quoteRef}.pdf`.replace(
+    /[^\w .-]+/g,
+    "",
+  );
+  res
+    .setHeader("Content-Type", "application/pdf")
+    .setHeader("Content-Disposition", `inline; filename="${safeName}"`)
+    .send(pdf);
 });
 
 router.post("/leads/:id/assign", async (req, res): Promise<void> => {

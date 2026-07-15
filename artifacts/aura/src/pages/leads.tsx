@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   useListLeads,
   useListVehicles,
@@ -28,7 +28,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Page, PageHeader } from "@/components/layout/page";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { VehicleCascade } from "@/components/vehicle-cascade";
-import { LeadWorkflowDialog } from "@/components/lead-workflow-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -103,7 +102,7 @@ export default function Leads() {
   const [selectedPhase, setSelectedPhase] = useState<Phase>("engage");
   const activeIndex = PHASES.indexOf(selectedPhase);
   const [view, setView] = useState<"pipeline" | "test-drives">("pipeline");
-  const [openLeadId, setOpenLeadId] = useState<number | null>(null);
+  const [, navigate] = useLocation();
 
   const phaseLeads = (leads ?? []).filter((l) => l.phase === selectedPhase);
 
@@ -299,7 +298,7 @@ export default function Leads() {
                     return (
                       <button
                         key={lead.id}
-                        onClick={() => setOpenLeadId(lead.id)}
+                        onClick={() => navigate(`/lead/${lead.id}`)}
                         className="group text-left rounded-2xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:border-primary/30 transition-all duration-300 overflow-hidden"
                       >
                         <div className="h-28 bg-foreground/[0.04] overflow-hidden">
@@ -497,7 +496,7 @@ export default function Leads() {
                       initial={{ opacity: 0, x: -12 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.04 }}
-                      onClick={() => setOpenLeadId(lead.id)}
+                      onClick={() => navigate(`/lead/${lead.id}`)}
                       className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:border-primary/30 transition-all duration-300 p-3 pr-4 cursor-pointer"
                     >
                       <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-foreground/[0.04] flex items-center justify-center">
@@ -673,13 +672,6 @@ export default function Leads() {
         </>
       )}
 
-      <LeadWorkflowDialog
-        leadId={openLeadId}
-        open={openLeadId != null}
-        onOpenChange={(o) => {
-          if (!o) setOpenLeadId(null);
-        }}
-      />
     </Page>
   );
 }

@@ -27,6 +27,7 @@ import Workshop from "@/pages/workshop";
 import Deliveries from "@/pages/deliveries";
 import Customers from "@/pages/customers";
 import CustomerDetail from "@/pages/customer-detail";
+import LeadDetail from "@/pages/lead-detail";
 import Approvals from "@/pages/approvals";
 import Journey from "@/pages/journey";
 import Gra from "@/pages/gra";
@@ -165,6 +166,7 @@ function AppShell() {
                 <Route path="/approvals" component={Approvals} />
                 <Route path="/customers" component={Customers} />
                 <Route path="/customers/:id" component={CustomerDetail} />
+                <Route path="/lead/:id" component={LeadDetail} />
                 <Route path="/journey" component={Journey} />
                 <Route path="/tasks" component={Tasks} />
                 <Route path="/gra" component={Gra} />

@@ -1391,6 +1391,64 @@ export const GetLeadTimelineResponseItem = zod.object({
 export const GetLeadTimelineResponse = zod.array(GetLeadTimelineResponseItem)
 
 
+/**
+ * @summary Post a note to the lead's activity feed
+ */
+export const CreateLeadNoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createLeadNoteBodyTextMax = 2000;
+
+
+
+export const CreateLeadNoteBody = zod.object({
+  "text": zod.string().min(1).max(createLeadNoteBodyTextMax)
+})
+
+export const CreateLeadNoteResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'delivery', 'gate', 'system']),
+  "kind": zod.string(),
+  "title": zod.string(),
+  "detail": zod.string().nullish(),
+  "actor": zod.string(),
+  "isAgent": zod.boolean(),
+  "cause": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Quotation metadata for this lead (derived from inventory + email log)
+ */
+export const GetLeadQuoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLeadQuoteResponse = zod.object({
+  "available": zod.boolean(),
+  "quoteRef": zod.string().nullish(),
+  "fileName": zod.string().nullish(),
+  "vehicle": zod.string().nullish(),
+  "issuedOn": zod.string().nullish(),
+  "sentAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Download the branded PDF quotation for this lead
+ */
+export const DownloadLeadQuotePdfParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DownloadLeadQuotePdfResponse = zod.unknown()
+
+
 export const ListCustomersResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),

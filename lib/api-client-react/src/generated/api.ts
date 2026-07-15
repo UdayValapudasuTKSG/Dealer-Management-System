@@ -106,6 +106,8 @@ import type {
   LeadAdvisor,
   LeadDecisionInput,
   LeadInput,
+  LeadNoteInput,
+  LeadQuoteInfo,
   LeadTestDriveInput,
   LeadUpdate,
   ListActivityParams,
@@ -3469,6 +3471,232 @@ export function useGetLeadTimeline<TData = Awaited<ReturnType<typeof getLeadTime
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetLeadTimelineQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateLeadNoteUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/notes`
+}
+
+/**
+ * @summary Post a note to the lead's activity feed
+ */
+export const createLeadNote = async (id: number,
+    leadNoteInput: LeadNoteInput, options?: RequestInit): Promise<TimelineEvent> => {
+
+  return customFetch<TimelineEvent>(getCreateLeadNoteUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(leadNoteInput)
+  }
+);}
+
+
+
+
+
+export const getCreateLeadNoteMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLeadNote>>, TError,{id: number;data: BodyType<LeadNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLeadNote>>, TError,{id: number;data: BodyType<LeadNoteInput>}, TContext> => {
+
+const mutationKey = ['createLeadNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLeadNote>>, {id: number;data: BodyType<LeadNoteInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createLeadNote(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLeadNoteMutationResult = NonNullable<Awaited<ReturnType<typeof createLeadNote>>>
+    export type CreateLeadNoteMutationBody = BodyType<LeadNoteInput>
+    export type CreateLeadNoteMutationError = ErrorType<Error>
+
+    /**
+ * @summary Post a note to the lead's activity feed
+ */
+export const useCreateLeadNote = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLeadNote>>, TError,{id: number;data: BodyType<LeadNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createLeadNote>>,
+        TError,
+        {id: number;data: BodyType<LeadNoteInput>},
+        TContext
+      > => {
+      return useMutation(getCreateLeadNoteMutationOptions(options));
+    }
+
+export const getGetLeadQuoteUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/quote`
+}
+
+/**
+ * @summary Quotation metadata for this lead (derived from inventory + email log)
+ */
+export const getLeadQuote = async (id: number, options?: RequestInit): Promise<LeadQuoteInfo> => {
+
+  return customFetch<LeadQuoteInfo>(getGetLeadQuoteUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLeadQuoteQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/quote`
+    ] as const;
+    }
+
+
+export const getGetLeadQuoteQueryOptions = <TData = Awaited<ReturnType<typeof getLeadQuote>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadQuote>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLeadQuoteQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLeadQuote>>> = ({ signal }) => getLeadQuote(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLeadQuote>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLeadQuoteQueryResult = NonNullable<Awaited<ReturnType<typeof getLeadQuote>>>
+export type GetLeadQuoteQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Quotation metadata for this lead (derived from inventory + email log)
+ */
+
+export function useGetLeadQuote<TData = Awaited<ReturnType<typeof getLeadQuote>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadQuote>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLeadQuoteQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDownloadLeadQuotePdfUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/quote.pdf`
+}
+
+/**
+ * @summary Download the branded PDF quotation for this lead
+ */
+export const downloadLeadQuotePdf = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadLeadQuotePdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadLeadQuotePdfQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/quote.pdf`
+    ] as const;
+    }
+
+
+export const getDownloadLeadQuotePdfQueryOptions = <TData = Awaited<ReturnType<typeof downloadLeadQuotePdf>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadLeadQuotePdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadLeadQuotePdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadLeadQuotePdf>>> = ({ signal }) => downloadLeadQuotePdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadLeadQuotePdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadLeadQuotePdfQueryResult = NonNullable<Awaited<ReturnType<typeof downloadLeadQuotePdf>>>
+export type DownloadLeadQuotePdfQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Download the branded PDF quotation for this lead
+ */
+
+export function useDownloadLeadQuotePdf<TData = Awaited<ReturnType<typeof downloadLeadQuotePdf>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadLeadQuotePdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadLeadQuotePdfQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

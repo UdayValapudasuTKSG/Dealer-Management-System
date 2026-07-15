@@ -920,6 +920,28 @@ export interface LeadUpdate {
   notes?: string;
 }
 
+export interface LeadNoteInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  text: string;
+}
+
+export interface LeadQuoteInfo {
+  available: boolean;
+  /** @nullable */
+  quoteRef?: string | null;
+  /** @nullable */
+  fileName?: string | null;
+  /** @nullable */
+  vehicle?: string | null;
+  /** @nullable */
+  issuedOn?: string | null;
+  /** @nullable */
+  sentAt?: string | null;
+}
+
 export type EnquiryInputSource = typeof EnquiryInputSource[keyof typeof EnquiryInputSource];
 
 
