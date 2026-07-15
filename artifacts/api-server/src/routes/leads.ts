@@ -12,6 +12,7 @@ import {
   GetLeadResponse,
   UpdateLeadResponse,
 } from "@workspace/api-zod";
+import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
 
 const router: IRouter = Router();
 
@@ -43,6 +44,8 @@ router.post("/leads", async (req, res): Promise<void> => {
   }
 
   const [lead] = await db.insert(leadsTable).values(parsed.data).returning();
+
+  if (lead) onLeadCreated(lead);
 
   res.status(201).json(GetLeadResponse.parse(lead));
 });
@@ -80,6 +83,11 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const [before] = await db
+    .select()
+    .from(leadsTable)
+    .where(eq(leadsTable.id, params.data.id));
+
   const [lead] = await db
     .update(leadsTable)
     .set(parsed.data)
@@ -90,6 +98,8 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Lead not found" });
     return;
   }
+
+  if (before) onLeadUpdated(before, lead);
 
   res.json(UpdateLeadResponse.parse(lead));
 });

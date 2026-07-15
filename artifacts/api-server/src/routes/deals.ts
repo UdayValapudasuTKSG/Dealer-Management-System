@@ -11,6 +11,7 @@ import {
   GetDealResponse,
   UpdateDealResponse,
 } from "@workspace/api-zod";
+import { onDealStageChanged } from "../lib/email-triggers";
 
 const router: IRouter = Router();
 
@@ -75,6 +76,11 @@ router.patch("/deals/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const [before] = await db
+    .select()
+    .from(dealsTable)
+    .where(eq(dealsTable.id, params.data.id));
+
   const [deal] = await db
     .update(dealsTable)
     .set(parsed.data)
@@ -85,6 +91,8 @@ router.patch("/deals/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Deal not found" });
     return;
   }
+
+  if (before) onDealStageChanged(before, deal);
 
   res.json(UpdateDealResponse.parse(deal));
 });

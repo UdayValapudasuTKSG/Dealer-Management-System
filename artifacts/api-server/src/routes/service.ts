@@ -10,6 +10,7 @@ import {
   CreateServiceOrderResponse,
   UpdateServiceOrderResponse,
 } from "@workspace/api-zod";
+import { onServiceOrderCompleted } from "../lib/email-triggers";
 
 const router: IRouter = Router();
 
@@ -71,6 +72,11 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
   const { scheduledDate, ...rest } = parsed.data;
   const dateStr = toDateString(scheduledDate);
 
+  const [before] = await db
+    .select()
+    .from(serviceOrdersTable)
+    .where(eq(serviceOrdersTable.id, params.data.id));
+
   const [order] = await db
     .update(serviceOrdersTable)
     .set(dateStr ? { ...rest, scheduledDate: dateStr } : rest)
@@ -81,6 +87,8 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Service order not found" });
     return;
   }
+
+  if (before) onServiceOrderCompleted(before, order);
 
   res.json(UpdateServiceOrderResponse.parse(order));
 });

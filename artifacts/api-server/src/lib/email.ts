@@ -122,6 +122,16 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       `This is a courtesy reminder that a payment of <strong>${d(x, "amount", "your scheduled amount")}</strong> is due on <strong>${d(x, "dueDate", "the scheduled date")}</strong>. If it's already on its way, please disregard this note.`,
     sample: { amount: "$2,150", dueDate: "July 25, 2026" },
   },
+  vehicle_ready: {
+    label: "Vehicle Ready",
+    description: "Tells the customer their vehicle is ready for pickup after service.",
+    subject: (x) => `Your ${d(x, "vehicle", "vehicle")} is ready`,
+    heading: () => "Your vehicle is ready",
+    body: (x) =>
+      `Great news — the <strong>${d(x, "service", "requested work")}</strong> on your <strong>${d(x, "vehicle", "vehicle")}</strong> is complete. It has been washed, quality-checked and is waiting for you at the service reception. Collect it at your convenience, or reply and we'll arrange drop-off.`,
+    cta: () => ({ label: "Ready when you are" }),
+    sample: { vehicle: "2025 BMW X7", service: "20,000 km service" },
+  },
   delivery_schedule: {
     label: "Delivery Schedule",
     description: "Shares the planned delivery date and details.",

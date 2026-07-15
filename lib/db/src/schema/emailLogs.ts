@@ -17,6 +17,7 @@ export const EMAIL_TEMPLATES = [
   "finance_approved",
   "vehicle_booking",
   "payment_reminder",
+  "vehicle_ready",
   "delivery_schedule",
   "delivery_confirmation",
   "service_reminder",
