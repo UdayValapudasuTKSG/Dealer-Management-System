@@ -75,16 +75,64 @@ async function leadRecipient(
   return { to: c.email, name: c.name ?? lead.name };
 }
 
-/** New lead created → "lead_received" welcome. */
-export function onLeadCreated(lead: Lead): void {
+const longDate = (d: Date) =>
+  d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+/**
+ * New lead created → personalised PDF quote when a vehicle of interest is on
+ * file (details pulled from inventory), otherwise the "lead_received" welcome.
+ */
+export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
   fire("lead_created", async () => {
     const { to, name } = await leadRecipient(lead);
-    const vehicle = await vehicleName(lead.interestedVehicleId);
+    if (!to) return;
+
+    const vehicleId = lead.interestedVehicleId;
+    const [v] = vehicleId
+      ? await db
+          .select()
+          .from(vehiclesTable)
+          .where(eq(vehiclesTable.id, vehicleId))
+      : [];
+
+    if (!v) {
+      await send({
+        template: "lead_received",
+        to,
+        customerId: lead.customerId,
+        data: {
+          name,
+          ...(fallbackVehicleName ? { vehicle: fallbackVehicleName } : {}),
+        },
+      });
+      return;
+    }
+
+    const label = `${v.year} ${v.make} ${v.model}`;
+    const version =
+      v.trim || v.variant || lead.variant || "Standard specification";
+    const color = v.exteriorColor || lead.color || "";
+    const quantity = 1;
+    const now = new Date();
+    const validUntil = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
     await send({
-      template: "lead_received",
+      template: "vehicle_quote",
       to,
       customerId: lead.customerId,
-      data: { name, ...(vehicle ? { vehicle } : {}) },
+      data: {
+        name,
+        vehicle: label,
+        model: v.model,
+        version,
+        color,
+        quantity: String(quantity),
+        unitPrice: money(v.price),
+        total: money(v.price * quantity),
+        quoteRef: `Q-${lead.id}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`,
+        issuedOn: longDate(now),
+        validUntil: longDate(validUntil),
+      },
     });
   });
 }

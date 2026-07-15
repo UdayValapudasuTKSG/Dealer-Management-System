@@ -9,7 +9,8 @@ import {
   timelineEventsTable,
 } from "@workspace/db";
 import { CreateEnquiryBody, CreateEnquiryResponse } from "@workspace/api-zod";
-import { enqueueEmail, notifyUsers } from "../lib/email";
+import { notifyUsers } from "../lib/email";
+import { onLeadCreated } from "../lib/email-triggers";
 
 const router: IRouter = Router();
 
@@ -92,16 +93,8 @@ router.post("/enquiries", async (req, res): Promise<void> => {
     refId: lead!.id,
   });
 
-  if (email) {
-    await enqueueEmail({
-      template: "lead_received",
-      to: email,
-      data: {
-        name,
-        vehicle: matchedVehicleLabel ?? vehicleName ?? "",
-      },
-    });
-  }
+  // Quote (when a vehicle was matched to inventory) or welcome email.
+  if (lead) onLeadCreated(lead, vehicleName?.trim() || undefined);
 
   // Alert Marketing Coordinators (and managers) that a new enquiry landed.
   try {

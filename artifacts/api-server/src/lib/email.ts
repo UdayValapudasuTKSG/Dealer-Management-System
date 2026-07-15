@@ -11,6 +11,7 @@ import {
   type EmailLog,
 } from "@workspace/db";
 import { logger } from "./logger";
+import { buildQuotePdf } from "./quote-pdf";
 
 // ---------------------------------------------------------------------------
 // Transport
@@ -65,6 +66,22 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       `Thank you for your interest in the <strong>${d(x, "vehicle", "vehicle of your choice")}</strong>. Your personal concierge has been assigned and will reach out shortly with availability, pricing and a tailored walk-through.`,
     cta: () => ({ label: "Your concierge is on it" }),
     sample: { name: "Alex Mensah", vehicle: "2026 Aston Martin DB12" },
+  },
+  vehicle_quote: {
+    label: "Vehicle Quote",
+    description: "Sends a branded PDF quotation for the vehicle of interest.",
+    subject: (x) => `Your personalised quote — ${d(x, "vehicle", "your vehicle")}`,
+    heading: (x) => `Your quote is ready, ${d(x, "name", "there")}`,
+    body: (x) =>
+      `Thank you for your interest in the <strong>${d(x, "vehicle", "vehicle of your choice")}</strong>. Your personalised quotation is attached as a PDF — it covers the ${d(x, "color", "selected")} finish at <strong>${d(x, "total", "the current showroom price")}</strong> and is valid until <strong>${d(x, "validUntil", "the date shown on the quote")}</strong>. Your concierge will follow up shortly to arrange a viewing or test drive.`,
+    cta: () => ({ label: "Your quotation is attached" }),
+    sample: {
+      name: "Alex Mensah",
+      vehicle: "2026 BMW i7 xDrive60",
+      color: "Obsidian Black",
+      total: "$125,000",
+      validUntil: "July 29, 2026",
+    },
   },
   test_drive_confirmation: {
     label: "Test Drive Confirmation",
@@ -330,11 +347,29 @@ export async function processQueue(): Promise<void> {
           item.template as EmailTemplate,
           item.payload ?? {},
         );
+        let attachments:
+          | { filename: string; content: Buffer; contentType: string }[]
+          | undefined;
+        if (item.template === "vehicle_quote") {
+          const pdf = await buildQuotePdf(item.payload ?? {});
+          const ref = (item.payload?.quoteRef ?? `Q-${item.id}`).replace(
+            /[^A-Za-z0-9-]/g,
+            "",
+          );
+          attachments = [
+            {
+              filename: `AURA-Quote-${ref}.pdf`,
+              content: pdf,
+              contentType: "application/pdf",
+            },
+          ];
+        }
         await transport.sendMail({
           from: `"AURA Dealership" <${process.env.GMAIL_USER}>`,
           to: item.recipient,
           subject,
           html,
+          ...(attachments ? { attachments } : {}),
         });
         await db
           .update(emailLogsTable)
