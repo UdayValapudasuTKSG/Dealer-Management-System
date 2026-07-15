@@ -1,6 +1,18 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, Loader2, CircleCheck } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 const QUICK_LINKS = [
   { name: "Showroom", href: "/inventory" },
@@ -9,7 +21,146 @@ const QUICK_LINKS = [
   { name: "Service", href: "/service" },
 ];
 
+function EnquiryDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    vehicleName: "",
+    variant: "",
+    color: "",
+    preferredBranch: "",
+    comments: "",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const body: Record<string, string> = { source: "website" };
+      for (const [k, v] of Object.entries(form)) {
+        if (v.trim()) body[k] = v.trim();
+      }
+      const res = await fetch(`${import.meta.env.BASE_URL}api/enquiries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Request failed");
+      setDone(true);
+    } catch {
+      setError("Something went wrong — please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) {
+          setDone(false);
+          setError(null);
+        }
+      }}
+    >
+      <DialogContent className="max-w-lg">
+        {done ? (
+          <div className="py-10 text-center space-y-4">
+            <CircleCheck className="w-12 h-12 text-primary mx-auto" />
+            <DialogTitle className="text-2xl font-light tracking-tight">
+              Enquiry received
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto leading-relaxed">
+              Thank you — a confirmation email is on its way, and one of our
+              advisors will be in touch shortly.
+            </p>
+            <Button onClick={() => onOpenChange(false)} className="rounded-full px-8">
+              Done
+            </Button>
+          </div>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-light tracking-tight">
+                Enquire about a vehicle
+              </DialogTitle>
+              <DialogDescription>
+                Tell us what you're looking for and our team will reach out.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={submit} className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 space-y-1.5">
+                <Label>Full name *</Label>
+                <Input required value={form.name} onChange={set("name")} placeholder="Ama Mensah" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email</Label>
+                <Input type="email" value={form.email} onChange={set("email")} placeholder="ama@email.com" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input value={form.phone} onChange={set("phone")} placeholder="+233 …" />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Vehicle of interest</Label>
+                <Input value={form.vehicleName} onChange={set("vehicleName")} placeholder="e.g. Porsche Taycan" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Variant / trim</Label>
+                <Input value={form.variant} onChange={set("variant")} placeholder="Optional" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Preferred color</Label>
+                <Input value={form.color} onChange={set("color")} placeholder="Optional" />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Preferred branch</Label>
+                <Input value={form.preferredBranch} onChange={set("preferredBranch")} placeholder="e.g. Accra Showroom" />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Comments</Label>
+                <Textarea value={form.comments} onChange={set("comments")} placeholder="Anything else we should know?" rows={3} />
+              </div>
+              {error && (
+                <p className="col-span-2 text-sm text-destructive">{error}</p>
+              )}
+              <Button
+                type="submit"
+                disabled={submitting || !form.name.trim()}
+                className="col-span-2 rounded-full h-12"
+              >
+                {submitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  "Send enquiry"
+                )}
+              </Button>
+            </form>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Landing() {
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
   return (
     <div className="relative h-screen w-full overflow-hidden bg-black">
       <video
@@ -108,9 +259,17 @@ export default function Landing() {
             >
               Explore the Showroom
             </Link>
+            <button
+              onClick={() => setEnquiryOpen(true)}
+              className="inline-flex items-center gap-2 h-14 px-8 rounded-full border border-primary/50 text-white text-base font-medium backdrop-blur-sm hover:bg-primary/15 hover:border-primary transition-all duration-300"
+            >
+              Enquire about a vehicle
+            </button>
           </motion.div>
         </div>
       </div>
+
+      <EnquiryDialog open={enquiryOpen} onOpenChange={setEnquiryOpen} />
     </div>
   );
 }

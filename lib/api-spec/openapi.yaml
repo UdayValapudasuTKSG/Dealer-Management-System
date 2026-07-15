@@ -383,6 +383,175 @@ paths:
         "204":
           description: Deleted
 
+  /enquiries:
+    post:
+      operationId: createEnquiry
+      tags: [leads]
+      summary: Public website enquiry — auto-creates a lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnquiryInput"
+      responses:
+        "201":
+          description: Lead created from enquiry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+
+  /leads/advisors:
+    get:
+      operationId: listLeadAdvisors
+      tags: [leads]
+      summary: List users assignable as lead owners
+      responses:
+        "200":
+          description: Assignable advisors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeadAdvisor"
+
+  /leads/{id}/assign:
+    post:
+      operationId: assignLead
+      tags: [leads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignLeadInput"
+      responses:
+        "200":
+          description: Lead assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /leads/{id}/test-drive:
+    post:
+      operationId: scheduleTestDrive
+      tags: [leads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadTestDriveInput"
+      responses:
+        "200":
+          description: Test drive scheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /leads/{id}/availability-check:
+    post:
+      operationId: checkLeadAvailability
+      tags: [leads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Availability evaluated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: No interested vehicle on the lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /leads/{id}/decision:
+    post:
+      operationId: recordLeadDecision
+      tags: [leads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadDecisionInput"
+      responses:
+        "200":
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /leads/{id}/timeline:
+    get:
+      operationId: getLeadTimeline
+      tags: [leads]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Timeline events for this lead
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimelineEvent"
+
   /customers:
     get:
       operationId: listCustomers
@@ -2070,20 +2239,39 @@ components:
         description: { type: string }
         featured: { type: boolean }
 
+    LeadAttachment:
+      type: object
+      required: [name, url]
+      properties:
+        name: { type: string, minLength: 1 }
+        url: { type: string, minLength: 1 }
     Lead:
       type: object
-      required: [id, name, channel, phase, status, aiScore, createdAt]
+      required: [id, name, channel, source, priority, phase, status, attachments, aiScore, createdAt]
       properties:
         id: { type: integer }
         name: { type: string }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
         channel: { type: string, enum: [web, social, mobile, walkin] }
+        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral] }
+        priority: { type: string, enum: [high, medium, low] }
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
-        status: { type: string, enum: [new, qualified, engaged, converted, lost] }
+        status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         customerId: { type: ["integer", "null"] }
         interestedVehicleId: { type: ["integer", "null"] }
+        variant: { type: ["string", "null"] }
+        color: { type: ["string", "null"] }
+        preferredBranch: { type: ["string", "null"] }
         assignedTo: { type: ["string", "null"] }
+        ownerUserId: { type: ["integer", "null"] }
+        testDriveAt: { type: ["string", "null"], format: date-time }
+        testDriveBranch: { type: ["string", "null"] }
+        availability: { type: ["string", "null"], enum: [available, back_order, null] }
+        purchaseType: { type: ["string", "null"], enum: [cash, finance, null] }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/LeadAttachment" }
         aiScore: { type: integer }
         notes: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
@@ -2095,9 +2283,14 @@ components:
         email: { type: string }
         phone: { type: string }
         channel: { type: string, enum: [web, social, mobile, walkin] }
+        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral] }
+        priority: { type: string, enum: [high, medium, low] }
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
-        status: { type: string, enum: [new, qualified, engaged, converted, lost] }
+        status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         interestedVehicleId: { type: integer }
+        variant: { type: string }
+        color: { type: string }
+        preferredBranch: { type: string }
         assignedTo: { type: string }
         aiScore: { type: integer }
         notes: { type: string }
@@ -2108,12 +2301,58 @@ components:
         email: { type: string }
         phone: { type: string }
         channel: { type: string, enum: [web, social, mobile, walkin] }
+        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral] }
+        priority: { type: string, enum: [high, medium, low] }
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
-        status: { type: string, enum: [new, qualified, engaged, converted, lost] }
+        status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         interestedVehicleId: { type: integer }
+        variant: { type: string }
+        color: { type: string }
+        preferredBranch: { type: string }
         assignedTo: { type: string }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/LeadAttachment" }
         aiScore: { type: integer }
         notes: { type: string }
+    EnquiryInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        email: { type: string }
+        phone: { type: string }
+        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral] }
+        vehicleName: { type: string }
+        variant: { type: string }
+        color: { type: string }
+        preferredBranch: { type: string }
+        comments: { type: string }
+    AssignLeadInput:
+      type: object
+      required: [userId]
+      properties:
+        userId: { type: integer }
+    LeadTestDriveInput:
+      type: object
+      required: [scheduledAt]
+      properties:
+        scheduledAt: { type: string, format: date-time }
+        branch: { type: string }
+        vehicleId: { type: integer }
+    LeadDecisionInput:
+      type: object
+      required: [choice]
+      properties:
+        choice: { type: string, enum: [cash, finance] }
+    LeadAdvisor:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: ["string", "null"] }
+        roleName: { type: ["string", "null"] }
 
     Customer:
       type: object

@@ -5,8 +5,13 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { LeadAttachment } from './leadAttachment';
+import type { LeadAvailability } from './leadAvailability';
 import type { LeadChannel } from './leadChannel';
 import type { LeadPhase } from './leadPhase';
+import type { LeadPriority } from './leadPriority';
+import type { LeadPurchaseType } from './leadPurchaseType';
+import type { LeadSource } from './leadSource';
 import type { LeadStatus } from './leadStatus';
 
 export interface Lead {
@@ -17,6 +22,8 @@ export interface Lead {
   /** @nullable */
   phone?: string | null;
   channel: LeadChannel;
+  source: LeadSource;
+  priority: LeadPriority;
   phase: LeadPhase;
   status: LeadStatus;
   /** @nullable */
@@ -24,7 +31,24 @@ export interface Lead {
   /** @nullable */
   interestedVehicleId?: number | null;
   /** @nullable */
+  variant?: string | null;
+  /** @nullable */
+  color?: string | null;
+  /** @nullable */
+  preferredBranch?: string | null;
+  /** @nullable */
   assignedTo?: string | null;
+  /** @nullable */
+  ownerUserId?: number | null;
+  /** @nullable */
+  testDriveAt?: Date | null;
+  /** @nullable */
+  testDriveBranch?: string | null;
+  /** @nullable */
+  availability?: LeadAvailability;
+  /** @nullable */
+  purchaseType?: LeadPurchaseType;
+  attachments: LeadAttachment[];
   aiScore: number;
   /** @nullable */
   notes?: string | null;

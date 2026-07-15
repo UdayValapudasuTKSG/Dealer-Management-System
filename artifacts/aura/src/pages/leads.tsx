@@ -26,6 +26,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Page, PageHeader } from "@/components/layout/page";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
+import { LeadWorkflowDialog } from "@/components/lead-workflow-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +56,29 @@ const PRIORITY_STYLE: Record<string, string> = {
   low: "bg-emerald-500/15 text-emerald-400 ring-emerald-500/30",
 };
 
+const SOURCE_LABEL: Record<string, string> = {
+  website: "Website",
+  walk_in: "Walk-in",
+  phone: "Phone",
+  facebook: "Facebook",
+  instagram: "Instagram",
+  whatsapp: "WhatsApp",
+  referral: "Referral",
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  new: "New",
+  assigned: "Assigned",
+  contacted: "Contacted",
+  qualified: "Qualified",
+  test_drive: "Test Drive",
+  back_order: "Back Order",
+  decision: "Decision",
+  engaged: "Engaged",
+  converted: "Converted",
+  lost: "Lost",
+};
+
 const withBase = (url: string) =>
   `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`;
 
@@ -76,8 +100,30 @@ export default function Leads() {
 
   const [selectedPhase, setSelectedPhase] = useState<Phase>("engage");
   const activeIndex = PHASES.indexOf(selectedPhase);
+  const [view, setView] = useState<"pipeline" | "test-drives">("pipeline");
+  const [openLeadId, setOpenLeadId] = useState<number | null>(null);
 
   const phaseLeads = (leads ?? []).filter((l) => l.phase === selectedPhase);
+
+  const testDrives = useMemo(
+    () =>
+      (leads ?? [])
+        .filter((l) => l.testDriveAt)
+        .sort(
+          (a, b) =>
+            new Date(a.testDriveAt!).getTime() -
+            new Date(b.testDriveAt!).getTime(),
+        ),
+    [leads],
+  );
+  const testDrivesByDay = useMemo(() => {
+    const map = new Map<string, typeof testDrives>();
+    for (const l of testDrives) {
+      const key = new Date(l.testDriveAt!).toDateString();
+      map.set(key, [...(map.get(key) ?? []), l]);
+    }
+    return [...map.entries()];
+  }, [testDrives]);
 
   const suggestions = useGetPipelineSuggestions({
     phase: selectedPhase as GetPipelineSuggestionsPhase,
@@ -128,6 +174,32 @@ export default function Leads() {
                   label: `${v.make} ${v.model}`,
                 })),
               },
+              {
+                name: "source",
+                label: "Source",
+                type: "select",
+                span: "half",
+                defaultValue: "website",
+                options: Object.entries(SOURCE_LABEL).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              },
+              {
+                name: "priority",
+                label: "Priority",
+                type: "select",
+                span: "half",
+                defaultValue: "medium",
+                options: [
+                  { value: "high", label: "High" },
+                  { value: "medium", label: "Medium" },
+                  { value: "low", label: "Low" },
+                ],
+              },
+              { name: "variant", label: "Variant / trim", type: "text", span: "half", placeholder: "Optional" },
+              { name: "color", label: "Preferred color", type: "text", span: "half", placeholder: "Optional" },
+              { name: "preferredBranch", label: "Preferred branch", type: "text", span: "half", placeholder: "Optional" },
               { name: "email", label: "Email", type: "text", span: "half", placeholder: "kojo@email.com" },
               { name: "phone", label: "Phone", type: "text", span: "half", placeholder: "+233 …" },
               { name: "notes", label: "Notes", type: "textarea", span: "full", placeholder: "What are they looking for?" },
@@ -144,6 +216,126 @@ export default function Leads() {
         }
       />
 
+      {/* View toggle */}
+      <div className="flex items-center gap-1 rounded-full bg-foreground/[0.04] border border-white/10 p-1 w-fit">
+        {(
+          [
+            { key: "pipeline", label: "Pipeline" },
+            { key: "test-drives", label: `Test Drives${testDrives.length ? ` (${testDrives.length})` : ""}` },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setView(t.key)}
+            className={cn(
+              "relative px-5 h-9 rounded-full text-xs font-semibold uppercase tracking-widest transition-colors",
+              view === t.key
+                ? "text-white"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {view === t.key && (
+              <motion.span
+                layoutId="pipeline-view-toggle"
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                className="absolute inset-0 rounded-full bg-primary shadow-lg shadow-primary/30"
+              />
+            )}
+            <span className="relative z-10">{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {view === "test-drives" ? (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-8"
+        >
+          {testDrivesByDay.length === 0 ? (
+            <div className="flex items-center justify-center h-40 rounded-3xl border-2 border-dashed border-border/60 text-muted-foreground/60 text-sm uppercase tracking-widest font-semibold">
+              No test drives scheduled yet
+            </div>
+          ) : (
+            testDrivesByDay.map(([day, dayLeads]) => (
+              <div key={day} className="space-y-3">
+                <div className="flex items-baseline gap-3">
+                  <h2 className="text-xl font-light tracking-tight">
+                    {new Date(day).toLocaleDateString(undefined, {
+                      weekday: "long",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </h2>
+                  <span className="text-xs font-semibold text-primary uppercase tracking-widest">
+                    {dayLeads.length} drive{dayLeads.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {dayLeads.map((lead) => {
+                    const vehicle = vehicles?.find(
+                      (v) => v.id === lead.interestedVehicleId,
+                    );
+                    return (
+                      <button
+                        key={lead.id}
+                        onClick={() => setOpenLeadId(lead.id)}
+                        className="group text-left rounded-2xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:border-primary/30 transition-all duration-300 overflow-hidden"
+                      >
+                        <div className="h-28 bg-foreground/[0.04] overflow-hidden">
+                          {vehicle?.imageUrl ? (
+                            <img
+                              src={withBase(vehicle.imageUrl)}
+                              alt={`${vehicle.make} ${vehicle.model}`}
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Car className="w-8 h-8 text-muted-foreground/30" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold truncate group-hover:text-primary transition-colors">
+                              {lead.name}
+                            </span>
+                            <span className="text-lg font-light text-primary shrink-0">
+                              {new Date(lead.testDriveAt!).toLocaleTimeString(
+                                undefined,
+                                { hour: "numeric", minute: "2-digit" },
+                              )}
+                            </span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1 truncate">
+                            {vehicle
+                              ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+                              : "Vehicle to be confirmed"}
+                            {lead.testDriveBranch
+                              ? ` — ${lead.testDriveBranch}`
+                              : ""}
+                          </div>
+                          <div className="flex items-center gap-2 mt-3">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                              {STATUS_LABEL[lead.status] ?? lead.status}
+                            </span>
+                            {lead.assignedTo && (
+                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground truncate">
+                                {lead.assignedTo}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </motion.div>
+      ) : (
+        <>
       {/* Stage rail — the navigation animation */}
       <div className="relative rounded-3xl bg-foreground/[0.03] border border-white/10 shadow-[0_18px_48px_-28px_rgba(0,0,0,0.6)] px-4 md:px-8 py-8">
         <div className="relative flex items-start justify-between gap-2">
@@ -258,7 +450,8 @@ export default function Leads() {
                       initial={{ opacity: 0, x: -12 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.04 }}
-                      className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:border-primary/30 transition-all duration-300 p-3 pr-4"
+                      onClick={() => setOpenLeadId(lead.id)}
+                      className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:border-primary/30 transition-all duration-300 p-3 pr-4 cursor-pointer"
                     >
                       <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-foreground/[0.04] flex items-center justify-center">
                         {vehicle?.imageUrl ? (
@@ -280,10 +473,26 @@ export default function Leads() {
                             {vehicle.make} {vehicle.model}
                           </div>
                         )}
-                        <div className="flex items-center gap-2 mt-2">
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                            {lead.channel}
+                            {SOURCE_LABEL[lead.source] ?? lead.source}
                           </span>
+                          <span
+                            className={cn(
+                              "inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ring-1",
+                              PRIORITY_STYLE[lead.priority] ?? PRIORITY_STYLE.low,
+                            )}
+                          >
+                            {lead.priority}
+                          </span>
+                          <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-foreground/70 bg-foreground/[0.06] px-2 py-0.5 rounded-full">
+                            {STATUS_LABEL[lead.status] ?? lead.status}
+                          </span>
+                          {!lead.ownerUserId && (
+                            <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                              Needs advisor
+                            </span>
+                          )}
                           {lead.email && (
                             <Mail className="w-3.5 h-3.5 text-muted-foreground/70" />
                           )}
@@ -414,6 +623,16 @@ export default function Leads() {
           </div>
         </motion.div>
       </AnimatePresence>
+        </>
+      )}
+
+      <LeadWorkflowDialog
+        leadId={openLeadId}
+        open={openLeadId != null}
+        onOpenChange={(o) => {
+          if (!o) setOpenLeadId(null);
+        }}
+      />
     </Page>
   );
 }

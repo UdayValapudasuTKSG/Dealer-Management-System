@@ -7,6 +7,8 @@
  */
 import type { LeadInputChannel } from './leadInputChannel';
 import type { LeadInputPhase } from './leadInputPhase';
+import type { LeadInputPriority } from './leadInputPriority';
+import type { LeadInputSource } from './leadInputSource';
 import type { LeadInputStatus } from './leadInputStatus';
 
 export interface LeadInput {
@@ -15,9 +17,14 @@ export interface LeadInput {
   email?: string;
   phone?: string;
   channel: LeadInputChannel;
+  source?: LeadInputSource;
+  priority?: LeadInputPriority;
   phase?: LeadInputPhase;
   status?: LeadInputStatus;
   interestedVehicleId?: number;
+  variant?: string;
+  color?: string;
+  preferredBranch?: string;
   assignedTo?: string;
   aiScore?: number;
   notes?: string;

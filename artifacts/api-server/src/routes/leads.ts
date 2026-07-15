@@ -1,6 +1,14 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, type SQL } from "drizzle-orm";
-import { db, leadsTable } from "@workspace/db";
+import { eq, desc, and, isNotNull, type SQL } from "drizzle-orm";
+import {
+  db,
+  leadsTable,
+  vehiclesTable,
+  usersTable,
+  rolesTable,
+  timelineEventsTable,
+  type Lead,
+} from "@workspace/db";
 import {
   CreateLeadBody,
   UpdateLeadBody,
@@ -11,10 +19,57 @@ import {
   ListLeadsResponse,
   GetLeadResponse,
   UpdateLeadResponse,
+  ListLeadAdvisorsResponse,
+  AssignLeadParams,
+  AssignLeadBody,
+  ScheduleTestDriveParams,
+  ScheduleTestDriveBody,
+  CheckLeadAvailabilityParams,
+  RecordLeadDecisionParams,
+  RecordLeadDecisionBody,
+  GetLeadTimelineParams,
+  GetLeadTimelineResponse,
 } from "@workspace/api-zod";
 import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
+import { enqueueEmail, notifyUser } from "../lib/email";
 
 const router: IRouter = Router();
+
+async function logLeadEvent(
+  lead: Lead,
+  kind: string,
+  title: string,
+  detail: string | null,
+  actor: string,
+  isAgent = false,
+): Promise<void> {
+  await db.insert(timelineEventsTable).values({
+    customerId: lead.customerId,
+    domain: "leads",
+    kind,
+    title,
+    detail,
+    actor,
+    isAgent,
+    refType: "lead",
+    refId: lead.id,
+  });
+}
+
+async function vehicleLabel(id: number | null): Promise<string | null> {
+  if (!id) return null;
+  const [v] = await db
+    .select()
+    .from(vehiclesTable)
+    .where(eq(vehiclesTable.id, id));
+  return v ? `${v.year} ${v.make} ${v.model}` : null;
+}
+
+function actorName(res: {
+  locals: { user?: { name: string | null; email: string | null } };
+}): string {
+  return res.locals.user?.name ?? res.locals.user?.email ?? "Staff";
+}
 
 router.get("/leads", async (req, res): Promise<void> => {
   const query = ListLeadsQueryParams.safeParse(req.query);
@@ -27,6 +82,13 @@ router.get("/leads", async (req, res): Promise<void> => {
   if (query.data.phase) filters.push(eq(leadsTable.phase, query.data.phase));
   if (query.data.status) filters.push(eq(leadsTable.status, query.data.status));
 
+  // RBAC visibility: Sales Advisors see only leads they own; every other
+  // role (managers, coordinators, GM) sees the full pipeline.
+  const user = res.locals.user;
+  if (user && user.roleName === "Sales Advisor") {
+    filters.push(eq(leadsTable.ownerUserId, user.id));
+  }
+
   const rows = await db
     .select()
     .from(leadsTable)
@@ -34,6 +96,36 @@ router.get("/leads", async (req, res): Promise<void> => {
     .orderBy(desc(leadsTable.aiScore), desc(leadsTable.createdAt));
 
   res.json(ListLeadsResponse.parse(rows));
+});
+
+// NOTE: must be declared before /leads/:id so "advisors" isn't parsed as an id.
+router.get("/leads/advisors", async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+      email: usersTable.email,
+      roleName: rolesTable.name,
+    })
+    .from(usersTable)
+    .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
+    .where(eq(usersTable.status, "active"));
+
+  const assignable = rows
+    .filter(
+      (r) =>
+        r.roleName === "Sales Advisor" ||
+        r.roleName === "Sales Manager" ||
+        r.roleName === "General Manager",
+    )
+    .map((r) => ({
+      id: r.id,
+      name: r.name ?? r.email ?? `User #${r.id}`,
+      email: r.email,
+      roleName: r.roleName,
+    }));
+
+  res.json(ListLeadAdvisorsResponse.parse(assignable));
 });
 
 router.post("/leads", async (req, res): Promise<void> => {
@@ -46,6 +138,14 @@ router.post("/leads", async (req, res): Promise<void> => {
   const [lead] = await db.insert(leadsTable).values(parsed.data).returning();
 
   if (lead) onLeadCreated(lead);
+
+  await logLeadEvent(
+    lead!,
+    "lead_created",
+    `Lead created: ${lead!.name}`,
+    `Captured via ${lead!.source.replace("_", " ")} and added to the pipeline.`,
+    actorName(res),
+  );
 
   res.status(201).json(GetLeadResponse.parse(lead));
 });
@@ -70,6 +170,301 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
   res.json(GetLeadResponse.parse(lead));
 });
 
+router.get("/leads/:id/timeline", async (req, res): Promise<void> => {
+  const params = GetLeadTimelineParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const rows = await db
+    .select()
+    .from(timelineEventsTable)
+    .where(
+      and(
+        eq(timelineEventsTable.refType, "lead"),
+        eq(timelineEventsTable.refId, params.data.id),
+        isNotNull(timelineEventsTable.refId),
+      ),
+    )
+    .orderBy(desc(timelineEventsTable.createdAt))
+    .limit(60);
+
+  res.json(GetLeadTimelineResponse.parse(rows));
+});
+
+router.post("/leads/:id/assign", async (req, res): Promise<void> => {
+  const params = AssignLeadParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = AssignLeadBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(leadsTable)
+    .where(eq(leadsTable.id, params.data.id));
+  if (!existing) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const [advisor] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, parsed.data.userId));
+  if (!advisor) {
+    res.status(404).json({ error: "Advisor not found" });
+    return;
+  }
+  const advisorName = advisor.name ?? advisor.email ?? `User #${advisor.id}`;
+
+  const [lead] = await db
+    .update(leadsTable)
+    .set({
+      ownerUserId: advisor.id,
+      assignedTo: advisorName,
+      status:
+        existing.status === "new" || existing.status === "assigned"
+          ? "assigned"
+          : existing.status,
+      phase: existing.phase === "aware" ? "consider" : existing.phase,
+    })
+    .where(eq(leadsTable.id, params.data.id))
+    .returning();
+
+  await logLeadEvent(
+    lead!,
+    "advisor_assigned",
+    `Assigned to ${advisorName}`,
+    `${actorName(res)} assigned this lead to ${advisorName}.`,
+    actorName(res),
+  );
+
+  await notifyUser({
+    userId: advisor.id,
+    type: "assignment",
+    title: `Lead assigned: ${lead!.name}`,
+    body: "A new lead is now yours — make first contact and update the status.",
+    link: "/pipeline",
+  });
+
+  if (lead!.email) {
+    const vehicle = await vehicleLabel(lead!.interestedVehicleId);
+    await enqueueEmail({
+      template: "lead_assignment",
+      to: lead!.email,
+      customerId: lead!.customerId,
+      data: { advisor: advisorName, vehicle: vehicle ?? "" },
+    });
+  }
+
+  res.json(GetLeadResponse.parse(lead));
+});
+
+router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
+  const params = ScheduleTestDriveParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = ScheduleTestDriveBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(leadsTable)
+    .where(eq(leadsTable.id, params.data.id));
+  if (!existing) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const when = new Date(parsed.data.scheduledAt);
+  const [lead] = await db
+    .update(leadsTable)
+    .set({
+      testDriveAt: when,
+      testDriveBranch:
+        parsed.data.branch ?? existing.preferredBranch ?? null,
+      interestedVehicleId:
+        parsed.data.vehicleId ?? existing.interestedVehicleId,
+      status: "test_drive",
+      phase:
+        existing.phase === "aware" || existing.phase === "consider"
+          ? "engage"
+          : existing.phase,
+    })
+    .where(eq(leadsTable.id, params.data.id))
+    .returning();
+
+  const vehicle = await vehicleLabel(lead!.interestedVehicleId);
+  const dateStr = when.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+  const timeStr = when.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  await logLeadEvent(
+    lead!,
+    "test_drive_scheduled",
+    `Test drive booked for ${dateStr}`,
+    `${vehicle ?? "Vehicle"} at ${timeStr}${lead!.testDriveBranch ? ` — ${lead!.testDriveBranch} branch` : ""}.`,
+    actorName(res),
+  );
+
+  if (lead!.email) {
+    await enqueueEmail({
+      template: "test_drive_confirmation",
+      to: lead!.email,
+      customerId: lead!.customerId,
+      data: { vehicle: vehicle ?? "", date: dateStr, time: timeStr },
+    });
+  }
+
+  if (lead!.ownerUserId) {
+    await notifyUser({
+      userId: lead!.ownerUserId,
+      type: "task",
+      title: `Test drive: ${lead!.name} — ${dateStr}`,
+      body: `${vehicle ?? "Vehicle"} at ${timeStr}. Have it detailed and ready.`,
+      link: "/pipeline",
+    });
+  }
+
+  res.json(GetLeadResponse.parse(lead));
+});
+
+router.post(
+  "/leads/:id/availability-check",
+  async (req, res): Promise<void> => {
+    const params = CheckLeadAvailabilityParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const [existing] = await db
+      .select()
+      .from(leadsTable)
+      .where(eq(leadsTable.id, params.data.id));
+    if (!existing) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    if (!existing.interestedVehicleId) {
+      res
+        .status(409)
+        .json({ error: "This lead has no interested vehicle to check" });
+      return;
+    }
+
+    const [vehicle] = await db
+      .select()
+      .from(vehiclesTable)
+      .where(eq(vehiclesTable.id, existing.interestedVehicleId));
+    if (!vehicle) {
+      res.status(409).json({ error: "Interested vehicle no longer exists" });
+      return;
+    }
+
+    const isAvailable = vehicle.status === "available";
+    const [lead] = await db
+      .update(leadsTable)
+      .set({
+        availability: isAvailable ? "available" : "back_order",
+        status: isAvailable ? "decision" : "back_order",
+      })
+      .where(eq(leadsTable.id, params.data.id))
+      .returning();
+
+    const label = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+    await logLeadEvent(
+      lead!,
+      isAvailable ? "vehicle_available" : "back_order_created",
+      isAvailable
+        ? `${label} is available`
+        : `${label} unavailable — back order raised`,
+      isAvailable
+        ? "Inventory confirmed the vehicle is in stock. Proceed to the payment decision."
+        : `Vehicle is currently ${vehicle.status.replace("_", " ")}. The lead is held on back order until stock lands.`,
+      "Inventory Check",
+      true,
+    );
+
+    if (!isAvailable && lead!.ownerUserId) {
+      await notifyUser({
+        userId: lead!.ownerUserId,
+        type: "system",
+        title: `Back order: ${lead!.name}`,
+        body: `${label} is ${vehicle.status.replace("_", " ")}. Keep the client warm until stock arrives.`,
+        link: "/pipeline",
+      });
+    }
+
+    res.json(GetLeadResponse.parse(lead));
+  },
+);
+
+router.post("/leads/:id/decision", async (req, res): Promise<void> => {
+  const params = RecordLeadDecisionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = RecordLeadDecisionBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const [existing] = await db
+    .select()
+    .from(leadsTable)
+    .where(eq(leadsTable.id, params.data.id));
+  if (!existing) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const choice = parsed.data.choice;
+  const [lead] = await db
+    .update(leadsTable)
+    .set({
+      purchaseType: choice,
+      status: "converted",
+      phase: "negotiate",
+    })
+    .where(eq(leadsTable.id, params.data.id))
+    .returning();
+
+  await logLeadEvent(
+    lead!,
+    "purchase_decision",
+    choice === "cash"
+      ? "Client chose to pay cash"
+      : "Client chose financing",
+    choice === "cash"
+      ? "Routing to vehicle booking with a cash structure."
+      : "Handing off to the finance workflow for an application.",
+    actorName(res),
+  );
+
+  res.json(GetLeadResponse.parse(lead));
+});
+
 router.patch("/leads/:id", async (req, res): Promise<void> => {
   const params = UpdateLeadParams.safeParse(req.params);
   if (!params.success) {
@@ -87,6 +482,10 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     .select()
     .from(leadsTable)
     .where(eq(leadsTable.id, params.data.id));
+  if (!before) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
 
   const [lead] = await db
     .update(leadsTable)
@@ -94,9 +493,23 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     .where(eq(leadsTable.id, params.data.id))
     .returning();
 
-  if (!lead) {
-    res.status(404).json({ error: "Lead not found" });
-    return;
+  if (parsed.data.status && parsed.data.status !== before.status) {
+    await logLeadEvent(
+      lead!,
+      "status_updated",
+      `Status moved to ${parsed.data.status.replace("_", " ")}`,
+      `${actorName(res)} updated the lead status from ${before.status.replace("_", " ")}.`,
+      actorName(res),
+    );
+  }
+  if (parsed.data.phase && parsed.data.phase !== before.phase) {
+    await logLeadEvent(
+      lead!,
+      "phase_updated",
+      `Stage advanced`,
+      `${actorName(res)} moved the lead from ${before.phase} to ${parsed.data.phase}.`,
+      actorName(res),
+    );
   }
 
   if (before) onLeadUpdated(before, lead);

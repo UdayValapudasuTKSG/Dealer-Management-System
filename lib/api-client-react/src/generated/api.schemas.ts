@@ -323,6 +323,13 @@ export interface VehicleUpdate {
   featured?: boolean;
 }
 
+export interface LeadAttachment {
+  /** @minLength 1 */
+  name: string;
+  /** @minLength 1 */
+  url: string;
+}
+
 export type LeadChannel = typeof LeadChannel[keyof typeof LeadChannel];
 
 
@@ -331,6 +338,28 @@ export const LeadChannel = {
   social: 'social',
   mobile: 'mobile',
   walkin: 'walkin',
+} as const;
+
+export type LeadSource = typeof LeadSource[keyof typeof LeadSource];
+
+
+export const LeadSource = {
+  website: 'website',
+  walk_in: 'walk_in',
+  phone: 'phone',
+  facebook: 'facebook',
+  instagram: 'instagram',
+  whatsapp: 'whatsapp',
+  referral: 'referral',
+} as const;
+
+export type LeadPriority = typeof LeadPriority[keyof typeof LeadPriority];
+
+
+export const LeadPriority = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
 } as const;
 
 export type LeadPhase = typeof LeadPhase[keyof typeof LeadPhase];
@@ -350,10 +379,37 @@ export type LeadStatus = typeof LeadStatus[keyof typeof LeadStatus];
 
 export const LeadStatus = {
   new: 'new',
+  assigned: 'assigned',
+  contacted: 'contacted',
   qualified: 'qualified',
+  test_drive: 'test_drive',
+  back_order: 'back_order',
+  decision: 'decision',
   engaged: 'engaged',
   converted: 'converted',
   lost: 'lost',
+} as const;
+
+/**
+ * @nullable
+ */
+export type LeadAvailability = typeof LeadAvailability[keyof typeof LeadAvailability] | null;
+
+
+export const LeadAvailability = {
+  available: 'available',
+  back_order: 'back_order',
+} as const;
+
+/**
+ * @nullable
+ */
+export type LeadPurchaseType = typeof LeadPurchaseType[keyof typeof LeadPurchaseType] | null;
+
+
+export const LeadPurchaseType = {
+  cash: 'cash',
+  finance: 'finance',
 } as const;
 
 export interface Lead {
@@ -364,6 +420,8 @@ export interface Lead {
   /** @nullable */
   phone?: string | null;
   channel: LeadChannel;
+  source: LeadSource;
+  priority: LeadPriority;
   phase: LeadPhase;
   status: LeadStatus;
   /** @nullable */
@@ -371,7 +429,24 @@ export interface Lead {
   /** @nullable */
   interestedVehicleId?: number | null;
   /** @nullable */
+  variant?: string | null;
+  /** @nullable */
+  color?: string | null;
+  /** @nullable */
+  preferredBranch?: string | null;
+  /** @nullable */
   assignedTo?: string | null;
+  /** @nullable */
+  ownerUserId?: number | null;
+  /** @nullable */
+  testDriveAt?: string | null;
+  /** @nullable */
+  testDriveBranch?: string | null;
+  /** @nullable */
+  availability?: LeadAvailability;
+  /** @nullable */
+  purchaseType?: LeadPurchaseType;
+  attachments: LeadAttachment[];
   aiScore: number;
   /** @nullable */
   notes?: string | null;
@@ -386,6 +461,28 @@ export const LeadInputChannel = {
   social: 'social',
   mobile: 'mobile',
   walkin: 'walkin',
+} as const;
+
+export type LeadInputSource = typeof LeadInputSource[keyof typeof LeadInputSource];
+
+
+export const LeadInputSource = {
+  website: 'website',
+  walk_in: 'walk_in',
+  phone: 'phone',
+  facebook: 'facebook',
+  instagram: 'instagram',
+  whatsapp: 'whatsapp',
+  referral: 'referral',
+} as const;
+
+export type LeadInputPriority = typeof LeadInputPriority[keyof typeof LeadInputPriority];
+
+
+export const LeadInputPriority = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
 } as const;
 
 export type LeadInputPhase = typeof LeadInputPhase[keyof typeof LeadInputPhase];
@@ -405,7 +502,12 @@ export type LeadInputStatus = typeof LeadInputStatus[keyof typeof LeadInputStatu
 
 export const LeadInputStatus = {
   new: 'new',
+  assigned: 'assigned',
+  contacted: 'contacted',
   qualified: 'qualified',
+  test_drive: 'test_drive',
+  back_order: 'back_order',
+  decision: 'decision',
   engaged: 'engaged',
   converted: 'converted',
   lost: 'lost',
@@ -417,9 +519,14 @@ export interface LeadInput {
   email?: string;
   phone?: string;
   channel: LeadInputChannel;
+  source?: LeadInputSource;
+  priority?: LeadInputPriority;
   phase?: LeadInputPhase;
   status?: LeadInputStatus;
   interestedVehicleId?: number;
+  variant?: string;
+  color?: string;
+  preferredBranch?: string;
   assignedTo?: string;
   aiScore?: number;
   notes?: string;
@@ -433,6 +540,28 @@ export const LeadUpdateChannel = {
   social: 'social',
   mobile: 'mobile',
   walkin: 'walkin',
+} as const;
+
+export type LeadUpdateSource = typeof LeadUpdateSource[keyof typeof LeadUpdateSource];
+
+
+export const LeadUpdateSource = {
+  website: 'website',
+  walk_in: 'walk_in',
+  phone: 'phone',
+  facebook: 'facebook',
+  instagram: 'instagram',
+  whatsapp: 'whatsapp',
+  referral: 'referral',
+} as const;
+
+export type LeadUpdatePriority = typeof LeadUpdatePriority[keyof typeof LeadUpdatePriority];
+
+
+export const LeadUpdatePriority = {
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
 } as const;
 
 export type LeadUpdatePhase = typeof LeadUpdatePhase[keyof typeof LeadUpdatePhase];
@@ -452,7 +581,12 @@ export type LeadUpdateStatus = typeof LeadUpdateStatus[keyof typeof LeadUpdateSt
 
 export const LeadUpdateStatus = {
   new: 'new',
+  assigned: 'assigned',
+  contacted: 'contacted',
   qualified: 'qualified',
+  test_drive: 'test_drive',
+  back_order: 'back_order',
+  decision: 'decision',
   engaged: 'engaged',
   converted: 'converted',
   lost: 'lost',
@@ -464,12 +598,75 @@ export interface LeadUpdate {
   email?: string;
   phone?: string;
   channel?: LeadUpdateChannel;
+  source?: LeadUpdateSource;
+  priority?: LeadUpdatePriority;
   phase?: LeadUpdatePhase;
   status?: LeadUpdateStatus;
   interestedVehicleId?: number;
+  variant?: string;
+  color?: string;
+  preferredBranch?: string;
   assignedTo?: string;
+  attachments?: LeadAttachment[];
   aiScore?: number;
   notes?: string;
+}
+
+export type EnquiryInputSource = typeof EnquiryInputSource[keyof typeof EnquiryInputSource];
+
+
+export const EnquiryInputSource = {
+  website: 'website',
+  walk_in: 'walk_in',
+  phone: 'phone',
+  facebook: 'facebook',
+  instagram: 'instagram',
+  whatsapp: 'whatsapp',
+  referral: 'referral',
+} as const;
+
+export interface EnquiryInput {
+  /** @minLength 1 */
+  name: string;
+  email?: string;
+  phone?: string;
+  source?: EnquiryInputSource;
+  vehicleName?: string;
+  variant?: string;
+  color?: string;
+  preferredBranch?: string;
+  comments?: string;
+}
+
+export interface AssignLeadInput {
+  userId: number;
+}
+
+export interface LeadTestDriveInput {
+  scheduledAt: string;
+  branch?: string;
+  vehicleId?: number;
+}
+
+export type LeadDecisionInputChoice = typeof LeadDecisionInputChoice[keyof typeof LeadDecisionInputChoice];
+
+
+export const LeadDecisionInputChoice = {
+  cash: 'cash',
+  finance: 'finance',
+} as const;
+
+export interface LeadDecisionInput {
+  choice: LeadDecisionInputChoice;
+}
+
+export interface LeadAdvisor {
+  id: number;
+  name: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  roleName?: string | null;
 }
 
 export type CustomerLoyaltyTier = typeof CustomerLoyaltyTier[keyof typeof CustomerLoyaltyTier];

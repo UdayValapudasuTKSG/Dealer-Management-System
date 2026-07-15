@@ -268,17 +268,35 @@ export const ListLeadsQueryParams = zod.object({
   "status": zod.coerce.string().optional()
 })
 
+
+
+
+
 export const ListLeadsResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']),
+  "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
-  "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date()
@@ -294,13 +312,22 @@ export const CreateLeadBody = zod.object({
   "email": zod.string().optional(),
   "phone": zod.string().optional(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']).optional(),
+  "priority": zod.enum(['high', 'medium', 'low']).optional(),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']).optional(),
-  "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']).optional(),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']).optional(),
   "interestedVehicleId": zod.number().optional(),
+  "variant": zod.string().optional(),
+  "color": zod.string().optional(),
+  "preferredBranch": zod.string().optional(),
   "assignedTo": zod.string().optional(),
   "aiScore": zod.number().optional(),
   "notes": zod.string().optional()
 })
+
+
+
+
 
 export const CreateLeadResponse = zod.object({
   "id": zod.number(),
@@ -308,11 +335,25 @@ export const CreateLeadResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']),
+  "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
-  "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date()
@@ -323,17 +364,35 @@ export const GetLeadParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
+
 export const GetLeadResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']),
+  "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
-  "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date()
@@ -347,18 +406,33 @@ export const UpdateLeadParams = zod.object({
 
 
 
+
+
 export const UpdateLeadBody = zod.object({
   "name": zod.string().min(1).optional(),
   "email": zod.string().optional(),
   "phone": zod.string().optional(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin']).optional(),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']).optional(),
+  "priority": zod.enum(['high', 'medium', 'low']).optional(),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']).optional(),
-  "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']).optional(),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']).optional(),
   "interestedVehicleId": zod.number().optional(),
+  "variant": zod.string().optional(),
+  "color": zod.string().optional(),
+  "preferredBranch": zod.string().optional(),
   "assignedTo": zod.string().optional(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
   "aiScore": zod.number().optional(),
   "notes": zod.string().optional()
 })
+
+
+
+
 
 export const UpdateLeadResponse = zod.object({
   "id": zod.number(),
@@ -366,11 +440,25 @@ export const UpdateLeadResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']),
+  "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
-  "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date()
@@ -382,6 +470,262 @@ export const DeleteLeadParams = zod.object({
 })
 
 export const DeleteLeadResponse = zod.void()
+
+
+/**
+ * @summary Public website enquiry — auto-creates a lead
+ */
+
+
+
+export const CreateEnquiryBody = zod.object({
+  "name": zod.string().min(1),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']).optional(),
+  "vehicleName": zod.string().optional(),
+  "variant": zod.string().optional(),
+  "color": zod.string().optional(),
+  "preferredBranch": zod.string().optional(),
+  "comments": zod.string().optional()
+})
+
+
+
+
+
+export const CreateEnquiryResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
+  "interestedVehicleId": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
+  "aiScore": zod.number(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List users assignable as lead owners
+ */
+export const ListLeadAdvisorsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "roleName": zod.string().nullish()
+})
+export const ListLeadAdvisorsResponse = zod.array(ListLeadAdvisorsResponseItem)
+
+
+export const AssignLeadParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AssignLeadBody = zod.object({
+  "userId": zod.number()
+})
+
+
+
+
+
+export const AssignLeadResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
+  "interestedVehicleId": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
+  "aiScore": zod.number(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const ScheduleTestDriveParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ScheduleTestDriveBody = zod.object({
+  "scheduledAt": zod.coerce.date(),
+  "branch": zod.string().optional(),
+  "vehicleId": zod.number().optional()
+})
+
+
+
+
+
+export const ScheduleTestDriveResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
+  "interestedVehicleId": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
+  "aiScore": zod.number(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const CheckLeadAvailabilityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+
+export const CheckLeadAvailabilityResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
+  "interestedVehicleId": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
+  "aiScore": zod.number(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const RecordLeadDecisionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RecordLeadDecisionBody = zod.object({
+  "choice": zod.enum(['cash', 'finance'])
+})
+
+
+
+
+
+export const RecordLeadDecisionResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
+  "interestedVehicleId": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
+  "aiScore": zod.number(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const GetLeadTimelineParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLeadTimelineResponseItem = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "domain": zod.enum(['leads', 'deals', 'finance', 'appraisals', 'service', 'vehicles', 'gate', 'system']),
+  "kind": zod.string(),
+  "title": zod.string(),
+  "detail": zod.string().nullish(),
+  "actor": zod.string(),
+  "isAgent": zod.boolean(),
+  "cause": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const GetLeadTimelineResponse = zod.array(GetLeadTimelineResponseItem)
 
 
 export const ListCustomersResponseItem = zod.object({
@@ -1030,6 +1374,10 @@ export const GetCustomerOverviewParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
+
 export const GetCustomerOverviewResponse = zod.object({
   "customer": zod.object({
   "id": zod.number(),
@@ -1212,11 +1560,25 @@ export const GetCustomerOverviewResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral']),
+  "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
-  "status": zod.enum(['new', 'qualified', 'engaged', 'converted', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
   "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date()

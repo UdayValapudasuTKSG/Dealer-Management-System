@@ -23,12 +23,14 @@ import emailsRouter from "./emails";
 import notificationsRouter from "./notifications";
 import tasksRouter from "./tasks";
 import communicationsRouter from "./communications";
+import enquiriesRouter from "./enquiries";
 import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
-// Public: health check only
+// Public: health check and website enquiry intake
 router.use(healthRouter);
+router.use(enquiriesRouter);
 
 // Everything below requires a signed-in user, then a role permission
 // matching the route (see middlewares/rbac.ts), and mutations are audited.

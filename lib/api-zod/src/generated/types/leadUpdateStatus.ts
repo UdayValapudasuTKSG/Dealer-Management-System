@@ -11,7 +11,12 @@ export type LeadUpdateStatus = typeof LeadUpdateStatus[keyof typeof LeadUpdateSt
 
 export const LeadUpdateStatus = {
   new: 'new',
+  assigned: 'assigned',
+  contacted: 'contacted',
   qualified: 'qualified',
+  test_drive: 'test_drive',
+  back_order: 'back_order',
+  decision: 'decision',
   engaged: 'engaged',
   converted: 'converted',
   lost: 'lost',
