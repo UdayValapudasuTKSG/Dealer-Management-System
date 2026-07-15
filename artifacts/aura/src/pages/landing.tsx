@@ -13,13 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
+import { VehicleCascade } from "@/components/vehicle-cascade";
 import { useListEnquiryVehicles } from "@workspace/api-client-react";
 
 const QUICK_LINKS = [
@@ -135,27 +129,23 @@ function EnquiryDialog({
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Vehicle of interest *</Label>
-                <Select
-                  value={form.vehicleId}
-                  onValueChange={(v) => setForm((f) => ({ ...f, vehicleId: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        vehiclesLoading
-                          ? "Loading showroom…"
-                          : "Select from our showroom"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(vehicles ?? []).map((v) => (
-                      <SelectItem key={v.id} value={String(v.id)}>
-                        {v.name} {v.version !== "Standard specification" ? `· ${v.version}` : ""} — {v.color}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <VehicleCascade
+                  vehicles={(vehicles ?? []).map((v) => ({
+                    id: v.id,
+                    brand: v.make,
+                    model: v.model,
+                    version: v.version,
+                    color: v.color,
+                    year: v.year,
+                    vin: v.vin ?? null,
+                    price: v.price,
+                  }))}
+                  loading={vehiclesLoading}
+                  showSummary={false}
+                  onResolve={(v) =>
+                    setForm((f) => ({ ...f, vehicleId: v ? String(v.id) : "" }))
+                  }
+                />
               </div>
               {selected && (
                 <div className="col-span-2 grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm">

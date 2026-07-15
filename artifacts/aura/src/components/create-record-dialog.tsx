@@ -24,12 +24,13 @@ import { Loader2, Sparkles } from "lucide-react";
 export type FieldDef = {
   name: string;
   label: string;
-  type: "text" | "number" | "select" | "date" | "textarea";
+  type: "text" | "number" | "select" | "date" | "textarea" | "custom";
   required?: boolean;
   placeholder?: string;
   options?: { value: string; label: string }[];
   defaultValue?: string;
   span?: "full" | "half";
+  render?: (value: string, set: (value: string) => void) => ReactNode;
 };
 
 type CreateRecordDialogProps = {
@@ -116,7 +117,9 @@ export function CreateRecordDialog({
                 {f.label}
                 {f.required && <span className="text-primary"> *</span>}
               </Label>
-              {f.type === "select" ? (
+              {f.type === "custom" ? (
+                f.render?.(values[f.name], (v) => set(f.name, v))
+              ) : f.type === "select" ? (
                 <Select value={values[f.name]} onValueChange={(v) => set(f.name, v)}>
                   <SelectTrigger className="bg-white/[0.04] border-white/10">
                     <SelectValue placeholder={f.placeholder ?? "Select"} />

@@ -27,6 +27,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Page, PageHeader } from "@/components/layout/page";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
+import { VehicleCascade } from "@/components/vehicle-cascade";
 import { LeadWorkflowDialog } from "@/components/lead-workflow-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -167,14 +168,24 @@ export default function Leads() {
               {
                 name: "interestedVehicleId",
                 label: "Interested vehicle",
-                type: "select",
+                type: "custom",
                 required: true,
-                span: "half",
-                placeholder: "Select from inventory",
-                options: (vehicles ?? []).map((v) => ({
-                  value: String(v.id),
-                  label: `${v.year} ${v.make} ${v.model}${v.trim ? ` ${v.trim}` : v.variant ? ` ${v.variant}` : ""} — ${v.exteriorColor}${v.vin ? ` · VIN ${v.vin}` : ""}`,
-                })),
+                span: "full",
+                render: (_value, set) => (
+                  <VehicleCascade
+                    vehicles={(vehicles ?? []).map((v) => ({
+                      id: v.id,
+                      brand: v.make,
+                      model: v.model,
+                      version: v.trim || v.variant || "Standard specification",
+                      color: v.exteriorColor,
+                      year: v.year,
+                      vin: v.vin ?? null,
+                      price: v.price,
+                    }))}
+                    onResolve={(v) => set(v ? String(v.id) : "")}
+                  />
+                ),
               },
               {
                 name: "source",
