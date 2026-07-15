@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "MVf7Q5EOsJeA6pZuNPNME"
@@ -78,3 +77,9 @@ id = "ZYSi-egZU_TKqhG00ZMcl"
 uri = "file://artifacts/aura/public/nav/compliance.png"
 type = "image"
 title = "compliance shield icon"
+
+[[outputs]]
+id = "OVThM-BLvdGYiJWriQ3Qm"
+uri = "file://docs/AURA_WALKTHROUGH.md"
+type = "text"
+title = "AURA End-to-End Walkthrough"
