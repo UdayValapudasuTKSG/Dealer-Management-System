@@ -80,6 +80,8 @@ Cinematic landing/welcome page (`/`, full-bleed showroom video hero, Aston-Marti
 ## Gotchas
 
 - After adding/changing API routes, restart the `artifacts/api-server` workflow — new routes 404 until restart.
+- Drizzle schema pushes have wiped the `roles`/`role_permissions` tables more than once (all users end up with NULL role_id → blanket 403s). Fix: `pnpm --filter @workspace/scripts run seed-rbac`, then `pnpm --filter @workspace/scripts run seed-persona-users` (idempotent; also restores user 1 → General Manager and re-creates the 11 demo persona logins, one per role, at `*@aura-demo.com` — credentials defined in `scripts/src/seed-persona-users.ts`).
+- Clerk dev vs production user stores are separate: the persona accounts exist in the DEV instance only; re-run the seeder against production after publishing if demo logins are needed there.
 - Percentages (`conversionRate`, `successRate`) are already scaled to 0–100; never `* 100` in the UI.
 - Access services through the shared proxy at `localhost:80` (e.g. `localhost:80/api/...`), never service ports directly.
 - The AI chat send endpoint (`POST /anthropic/conversations/{id}/messages`) is an SSE stream with NO usable generated hook — the client consumes it via `fetch` + `ReadableStream` (buffer partial frames across chunks), not `useSendAnthropicMessage`. The server persists the assistant message in a `finally`/abort path so partials survive client disconnect. (Legacy; the concierge now runs on CopilotKit.)
