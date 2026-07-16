@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { notifyUsers } from "./email";
 import { onLeadCreated } from "./email-triggers";
+import { autoAssignLead } from "./lead-assignment";
 import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -97,6 +98,9 @@ export async function createInboundLead(opts: {
   // Quote (when a vehicle was matched to inventory) or welcome email.
   onLeadCreated(lead!);
 
+  // Sales agent routes the lead to the least-loaded advisor automatically.
+  const assigned = await autoAssignLead(lead!);
+
   try {
     const coordinators = await db
       .select({ id: usersTable.id })
@@ -105,14 +109,17 @@ export async function createInboundLead(opts: {
       .where(
         sql`${rolesTable.name} in ('Marketing Coordinator', 'Sales Manager', 'General Manager') and ${usersTable.status} = 'active'`,
       );
+    const routing = assigned?.assignedTo
+      ? `AURA routed it to ${assigned.assignedTo}.`
+      : "Awaiting advisor assignment.";
     await notifyUsers(
       coordinators.map((c) => c.id),
       {
         type: "assignment",
         title: `New ${opts.channelLabel} lead: ${opts.name}`,
         body: opts.vehicle
-          ? `Interested in the ${opts.vehicle.label}. Review and assign an advisor.`
-          : `New ${opts.channelLabel} enquiry awaiting review and advisor assignment.`,
+          ? `Interested in the ${opts.vehicle.label}. ${routing}`
+          : `New ${opts.channelLabel} enquiry captured. ${routing}`,
         link: "/pipeline",
       },
     );
@@ -120,5 +127,5 @@ export async function createInboundLead(opts: {
     logger.error({ err }, "Failed to notify coordinators of inbound lead");
   }
 
-  return lead!;
+  return assigned ?? lead!;
 }

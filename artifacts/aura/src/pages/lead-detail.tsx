@@ -6,8 +6,13 @@ import {
   useGetLeadTimeline,
   useGetLeadQuote,
   useCreateLeadNote,
+  useUpdateLead,
+  useListVehicles,
+  getGetLeadQueryKey,
   getGetLeadTimelineQueryKey,
+  getListLeadsQueryKey,
 } from "@workspace/api-client-react";
+import type { Lead, Vehicle } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +29,7 @@ import {
   Mail,
   MessageSquare,
   Paperclip,
+  Pencil,
   Phone,
   Send,
   User,
@@ -32,6 +38,11 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Page } from "@/components/layout/page";
 import { LeadWorkflowDialog } from "@/components/lead-workflow-dialog";
+import {
+  CreateRecordDialog,
+  type FieldDef,
+} from "@/components/create-record-dialog";
+import { useAuthz } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -207,6 +218,96 @@ const TABS = [
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
+function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
+  return [
+    {
+      name: "name",
+      label: "Name",
+      type: "text",
+      required: true,
+      span: "full",
+      defaultValue: lead.name,
+    },
+    {
+      name: "channel",
+      label: "Channel",
+      type: "select",
+      span: "half",
+      defaultValue: lead.channel,
+      options: [
+        { value: "web", label: "Web" },
+        { value: "social", label: "Social" },
+        { value: "mobile", label: "Mobile" },
+        { value: "walkin", label: "Walk-in" },
+      ],
+    },
+    {
+      name: "source",
+      label: "Source",
+      type: "select",
+      span: "half",
+      defaultValue: lead.source,
+      options: Object.entries(SOURCE_LABEL).map(([value, label]) => ({
+        value,
+        label,
+      })),
+    },
+    {
+      name: "interestedVehicleId",
+      label: "Interested vehicle",
+      type: "select",
+      span: "full",
+      defaultValue: lead.interestedVehicleId
+        ? String(lead.interestedVehicleId)
+        : undefined,
+      options: vehicles.map((v) => ({
+        value: String(v.id),
+        label: `${v.year} ${v.make} ${v.model} ${v.trim || v.variant || ""} — ${v.exteriorColor}${v.vin ? ` · ${v.vin}` : ""}`,
+      })),
+    },
+    {
+      name: "priority",
+      label: "Priority",
+      type: "select",
+      span: "half",
+      defaultValue: lead.priority,
+      options: [
+        { value: "high", label: "High" },
+        { value: "medium", label: "Medium" },
+        { value: "low", label: "Low" },
+      ],
+    },
+    {
+      name: "preferredBranch",
+      label: "Preferred branch",
+      type: "text",
+      span: "half",
+      defaultValue: lead.preferredBranch ?? undefined,
+    },
+    {
+      name: "email",
+      label: "Email",
+      type: "text",
+      span: "half",
+      defaultValue: lead.email ?? undefined,
+    },
+    {
+      name: "phone",
+      label: "Phone",
+      type: "text",
+      span: "half",
+      defaultValue: lead.phone ?? undefined,
+    },
+    {
+      name: "notes",
+      label: "Notes",
+      type: "textarea",
+      span: "full",
+      defaultValue: lead.notes ?? undefined,
+    },
+  ];
+}
+
 export default function LeadDetail() {
   const [, params] = useRoute("/lead/:id");
   const id = params ? Number(params.id) : NaN;
@@ -225,7 +326,29 @@ export default function LeadDetail() {
 
   const [tab, setTab] = useState<Tab>("details");
   const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
+
+  const { can } = useAuthz();
+  const canEdit = can("leads", "edit");
+  const { data: vehicles } = useListVehicles(undefined, {
+    query: {
+      queryKey: ["lead-edit-vehicles"],
+      enabled: canEdit,
+    },
+  });
+  const updateLead = useUpdateLead({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+        toast({ title: "Lead updated" });
+      },
+      onError: () =>
+        toast({ title: "Could not update lead", variant: "destructive" }),
+    },
+  });
 
   const createNote = useCreateLeadNote({
     mutation: {
@@ -318,6 +441,16 @@ export default function LeadDetail() {
                   <ArrowUpRight className="w-3.5 h-3.5" />
                 </Button>
               </Link>
+            )}
+            {canEdit && (
+              <Button
+                variant="outline"
+                onClick={() => setEditOpen(true)}
+                className="gap-1.5"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Edit
+              </Button>
             )}
             <Button
               onClick={() => setWorkflowOpen(true)}
@@ -726,6 +859,34 @@ export default function LeadDetail() {
         open={workflowOpen}
         onOpenChange={setWorkflowOpen}
       />
+
+      {canEdit && editOpen && (
+        <CreateRecordDialog
+          title="Edit Lead"
+          description="Update the record — changes apply immediately."
+          trigger={<span />}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          submitLabel="Save changes"
+          pending={updateLead.isPending}
+          fields={editLeadFields(lead, vehicles ?? [])}
+          onSubmit={async (values) => {
+            const payload = { ...values };
+            if (payload.interestedVehicleId != null) {
+              payload.interestedVehicleId = Number(payload.interestedVehicleId);
+              const v = (vehicles ?? []).find(
+                (x) => x.id === payload.interestedVehicleId,
+              );
+              if (v) {
+                const version = v.trim || v.variant;
+                if (version) payload.variant = version;
+                if (v.exteriorColor) payload.color = v.exteriorColor;
+              }
+            }
+            await updateLead.mutateAsync({ id: lead.id, data: payload as never });
+          }}
+        />
+      )}
     </Page>
   );
 }

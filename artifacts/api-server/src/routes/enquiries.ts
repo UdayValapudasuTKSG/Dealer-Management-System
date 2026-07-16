@@ -15,6 +15,7 @@ import {
 } from "@workspace/api-zod";
 import { notifyUsers } from "../lib/email";
 import { onLeadCreated } from "../lib/email-triggers";
+import { autoAssignLead } from "../lib/lead-assignment";
 
 const router: IRouter = Router();
 
@@ -141,6 +142,9 @@ router.post("/enquiries", async (req, res): Promise<void> => {
   // Quote (when a vehicle was matched to inventory) or welcome email.
   if (lead) onLeadCreated(lead, vehicleName?.trim() || undefined);
 
+  // Sales agent routes the enquiry to the least-loaded advisor automatically.
+  const assigned = lead ? await autoAssignLead(lead) : null;
+
   // Alert Marketing Coordinators (and managers) that a new enquiry landed.
   try {
     const coordinators = await db
@@ -150,14 +154,17 @@ router.post("/enquiries", async (req, res): Promise<void> => {
       .where(
         sql`${rolesTable.name} in ('Marketing Coordinator', 'Sales Manager', 'General Manager') and ${usersTable.status} = 'active'`,
       );
+    const routing = assigned?.assignedTo
+      ? `AURA routed it to ${assigned.assignedTo}.`
+      : "Awaiting advisor assignment.";
     await notifyUsers(
       coordinators.map((c) => c.id),
       {
         type: "assignment",
         title: `New enquiry: ${name}`,
         body: matchedVehicleLabel
-          ? `Interested in the ${matchedVehicleLabel}. Review and assign an advisor.`
-          : "New website enquiry awaiting review and advisor assignment.",
+          ? `Interested in the ${matchedVehicleLabel}. ${routing}`
+          : `New website enquiry captured. ${routing}`,
         link: "/pipeline",
       },
     );
@@ -165,7 +172,7 @@ router.post("/enquiries", async (req, res): Promise<void> => {
     req.log.error({ err }, "Failed to notify coordinators of enquiry");
   }
 
-  res.status(201).json(CreateEnquiryResponse.parse(lead));
+  res.status(201).json(CreateEnquiryResponse.parse(assigned ?? lead));
 });
 
 export default router;

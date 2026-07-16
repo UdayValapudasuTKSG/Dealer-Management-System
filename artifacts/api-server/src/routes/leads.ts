@@ -38,6 +38,7 @@ import {
   DownloadLeadQuotePdfParams,
 } from "@workspace/api-zod";
 import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
+import { autoAssignLead } from "../lib/lead-assignment";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
 import {
@@ -160,7 +161,10 @@ router.post("/leads", async (req, res): Promise<void> => {
     actorName(res),
   );
 
-  res.status(201).json(GetLeadResponse.parse(lead));
+  // Sales agent routes unowned leads to the least-loaded advisor.
+  const assigned = await autoAssignLead(lead!);
+
+  res.status(201).json(GetLeadResponse.parse(assigned ?? lead));
 });
 
 router.get("/leads/:id", async (req, res): Promise<void> => {
