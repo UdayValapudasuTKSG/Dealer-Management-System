@@ -56,7 +56,7 @@ export default function Deals() {
   const stages = ["desking", "negotiation", "finance", "committed", "delivered"];
 
   return (
-    <Page width="full" fill>
+    <Page fill>
       <PageHeader
         title="Deal"
         accent="Structuring"

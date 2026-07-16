@@ -121,7 +121,7 @@ export default function SettingsRoles() {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-6">
+    <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">

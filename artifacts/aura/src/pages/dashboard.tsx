@@ -244,7 +244,7 @@ export default function Dashboard() {
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-black/40 z-10" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-transparent z-10" />
 
-        <div className="relative z-20 h-full max-w-7xl mx-auto px-6 md:px-10 lg:px-14 flex flex-col justify-center">
+        <div className="relative z-20 h-full w-full px-5 md:px-8 flex flex-col justify-center">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -261,7 +261,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="px-6 md:px-10 lg:px-14 pb-14 -mt-12 relative z-30 max-w-7xl mx-auto space-y-6">
+      <div className="w-full px-5 md:px-8 pb-14 -mt-12 relative z-30 space-y-6">
         {/* KPI Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           <KPICard
@@ -610,6 +610,338 @@ export default function Dashboard() {
         </div>
       </div>
     </div>
+  );
+}
+
+function fmtMetric(unit: MetricPrediction["unit"], value: number): string {
+  if (unit === "currency") {
+    return value >= 1000
+      ? `$${(value / 1000).toFixed(1)}k`
+      : `$${Math.round(value).toLocaleString()}`;
+  }
+  if (unit === "percent") return `${value}%`;
+  return `${value}`;
+}
+
+const TREND_META: Record<
+  MetricPrediction["trend"],
+  { icon: typeof ArrowRight; className: string }
+> = {
+  up: { icon: ArrowUpRight, className: "text-emerald-400" },
+  down: { icon: ArrowDownRight, className: "text-red-400" },
+  flat: { icon: ArrowRight, className: "text-muted-foreground" },
+};
+
+function PredictiveSection() {
+  const { data, isLoading } = useGetPredictiveAnalytics();
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Card className="lg:col-span-2 glass-panel border-none shadow-xl overflow-hidden">
+        <ChartHeader
+          icon={Brain}
+          title="Predictive Intelligence"
+          sub="Delivered revenue, projected three months ahead"
+        />
+        <CardContent className="p-0 h-[280px]">
+          {isLoading || !data ? (
+            <ChartLoader />
+          ) : (
+            <ForecastChart data={data.forecast} />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="glass-panel border-none shadow-xl flex flex-col">
+        <ChartHeader
+          icon={Sparkles}
+          title="Projected Metrics"
+          sub="Next-month outlook with model confidence"
+        />
+        <CardContent className="px-6 pb-6 pt-0 flex-1">
+          {isLoading || !data ? (
+            <div className="space-y-3 pt-1">
+              {[0, 1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-14 rounded-xl bg-white/[0.04] animate-pulse"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-3 pt-1">
+              {data.metrics.map((m) => (
+                <PredictionTile key={m.key} m={m} />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ForecastChart({ data }: { data: ForecastPoint[] }) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={data} margin={{ top: 16, right: 24, left: 8, bottom: 16 }}>
+        <defs>
+          <linearGradient id="forecastActual" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id="forecastProjected" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.12} />
+            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} dy={10} />
+        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(val) => `$${val / 1000}k`} width={44} />
+        <Tooltip
+          contentStyle={TOOLTIP_STYLE}
+          itemStyle={{ color: "hsl(var(--foreground))" }}
+          labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+          formatter={(val: number, name: string) => [
+            `$${Math.round(val).toLocaleString()}`,
+            name === "projectedRevenue" ? "Forecast" : "Revenue",
+          ]}
+        />
+        <Area
+          type="monotone"
+          dataKey="revenue"
+          stroke="hsl(var(--primary))"
+          strokeWidth={3}
+          fillOpacity={1}
+          fill="url(#forecastActual)"
+          connectNulls={false}
+        />
+        <Area
+          type="monotone"
+          dataKey="projectedRevenue"
+          stroke="hsl(var(--primary))"
+          strokeWidth={2.5}
+          strokeDasharray="7 5"
+          strokeOpacity={0.75}
+          fillOpacity={1}
+          fill="url(#forecastProjected)"
+          connectNulls={false}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+function PredictionTile({ m }: { m: MetricPrediction }) {
+  const meta = TREND_META[m.trend];
+  const TrendIcon = meta.icon;
+  return (
+    <div className="rounded-xl border border-border/60 bg-white/[0.04] px-4 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground truncate">
+          {m.label}
+        </span>
+        <TrendIcon className={`w-4 h-4 shrink-0 ${meta.className}`} />
+      </div>
+      <div className="flex items-baseline gap-2 mt-1.5">
+        <span className="text-sm text-muted-foreground tabular-nums">
+          {fmtMetric(m.unit, m.current)}
+        </span>
+        <ArrowRight className="w-3 h-3 text-muted-foreground/50" />
+        <span className="text-lg font-bold tabular-nums">
+          {fmtMetric(m.unit, m.predicted)}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 mt-2">
+        <div className="h-1 flex-1 rounded-full bg-foreground/[0.08] overflow-hidden">
+          <div
+            className="h-full rounded-full bg-primary"
+            style={{ width: `${m.confidence}%` }}
+          />
+        </div>
+        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+          {m.confidence}% confidence
+        </span>
+      </div>
+    </div>
+  );
+}
+
+const SENTIMENT_COLOR: Record<string, string> = {
+  positive: "bg-emerald-400",
+  neutral: "bg-slate-400",
+  negative: "bg-red-400",
+};
+const SENTIMENT_TEXT: Record<string, string> = {
+  positive: "text-emerald-400",
+  neutral: "text-slate-300",
+  negative: "text-red-400",
+};
+
+function SentimentSection() {
+  const { data, isLoading, isError, refetch, isFetching } =
+    useGetSentimentAnalysis(undefined, {
+      query: {
+        queryKey: getGetSentimentAnalysisQueryKey(),
+        retry: 1,
+        staleTime: 10 * 60 * 1000,
+        refetchOnWindowFocus: false,
+      },
+    });
+
+  return (
+    <Card className="glass-panel border-none shadow-xl">
+      <ChartHeader
+        icon={HeartPulse}
+        title="Customer Sentiment"
+        sub="AI-read mood across recent conversations and notes"
+      />
+      <CardContent className="px-6 pb-6 pt-0">
+        {isLoading ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="h-40 rounded-xl bg-white/[0.04] animate-pulse"
+              />
+            ))}
+          </div>
+        ) : isError || !data ? (
+          <div className="py-10 flex flex-col items-center text-center">
+            <p className="text-sm text-muted-foreground max-w-sm">
+              The sentiment engine could not analyse recent conversations.
+            </p>
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="mt-4 inline-flex items-center gap-2 rounded-full border border-border/60 bg-white/[0.04] px-4 py-2 text-sm font-medium hover:border-primary/40 hover:text-primary transition-colors disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`}
+              />
+              Try again
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div>
+              <div className="flex items-end gap-3">
+                <span className="text-5xl font-bold tabular-nums leading-none">
+                  {Math.round(data.overallScore)}
+                </span>
+                <span
+                  className={`text-[11px] font-bold uppercase tracking-widest rounded-full px-2.5 py-1 bg-foreground/[0.06] ${SENTIMENT_TEXT[data.overallLabel]}`}
+                >
+                  {data.overallLabel}
+                </span>
+              </div>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-2">
+                Sentiment score · {data.sampleSize} interactions analysed
+              </p>
+              <p className="text-sm text-muted-foreground mt-4 leading-relaxed">
+                {data.summary}
+              </p>
+              <div className="space-y-2.5 mt-5">
+                {(
+                  [
+                    ["positive", data.distribution.positive],
+                    ["neutral", data.distribution.neutral],
+                    ["negative", data.distribution.negative],
+                  ] as const
+                ).map(([label, pct]) => (
+                  <div key={label} className="flex items-center gap-3">
+                    <span className="w-16 text-xs text-muted-foreground capitalize shrink-0">
+                      {label}
+                    </span>
+                    <div className="h-2 flex-1 rounded-full bg-foreground/[0.06] overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.6 }}
+                        className={`h-full rounded-full ${SENTIMENT_COLOR[label]}`}
+                      />
+                    </div>
+                    <span className="w-10 text-right text-xs tabular-nums text-muted-foreground shrink-0">
+                      {Math.round(pct)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
+                What customers talk about
+              </p>
+              {data.themes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No recurring themes yet.
+                </p>
+              ) : (
+                <div className="space-y-2.5">
+                  {data.themes.map((t: SentimentTheme) => (
+                    <div
+                      key={t.theme}
+                      className="flex items-center justify-between rounded-xl border border-border/60 bg-white/[0.04] px-4 py-2.5"
+                    >
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className={`w-2 h-2 rounded-full shrink-0 ${SENTIMENT_COLOR[t.sentiment]}`}
+                        />
+                        <span className="text-sm font-medium truncate">
+                          {t.theme}
+                        </span>
+                      </span>
+                      <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                        {t.mentions} {t.mentions === 1 ? "mention" : "mentions"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
+                Representative voices
+              </p>
+              {data.highlights.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No highlights yet.
+                </p>
+              ) : (
+                <div className="space-y-2.5">
+                  {data.highlights.map((h: SentimentHighlight, i: number) => {
+                    const body = (
+                      <div className="rounded-xl border border-border/60 bg-white/[0.04] px-4 py-3 hover:border-primary/30 transition-colors">
+                        <p className="text-sm leading-snug">
+                          &ldquo;{h.snippet}&rdquo;
+                        </p>
+                        <p
+                          className={`text-xs mt-1.5 flex items-center gap-1.5 ${SENTIMENT_TEXT[h.sentiment]}`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${SENTIMENT_COLOR[h.sentiment]}`}
+                          />
+                          {h.leadName}
+                        </p>
+                      </div>
+                    );
+                    return h.leadId != null ? (
+                      <Link key={i} href={`/lead/${h.leadId}`}>
+                        {body}
+                      </Link>
+                    ) : (
+                      <div key={i}>{body}</div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

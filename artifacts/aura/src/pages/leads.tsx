@@ -123,7 +123,7 @@ export default function Leads() {
   });
 
   return (
-    <Page width="wide" className="space-y-10">
+    <Page className="space-y-10">
       <PageHeader
         title="Pipeline"
         accent="Orchestration"

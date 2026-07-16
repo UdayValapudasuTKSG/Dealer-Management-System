@@ -649,7 +649,7 @@ export default function LeadDetail() {
   };
 
   return (
-    <Page width="wide">
+    <Page>
       {/* Header */}
       <div className="mb-8">
         <Link

@@ -108,7 +108,7 @@ function FocusShell({
 }) {
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-7xl mx-auto px-6 md:px-10 py-10 space-y-6">
+      <div className="w-full px-5 md:px-8 py-10 space-y-6">
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}

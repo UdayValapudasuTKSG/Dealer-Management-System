@@ -22,7 +22,9 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
     res.status(400).json({ error: query.error.message });
     return;
   }
-  const refresh = query.data.refresh === true;
+  // zod coerce.boolean would turn "false" into true — only the literal
+  // string "true" should bust the cache.
+  const refresh = req.query.refresh === "true";
 
   if (!refresh && cache && Date.now() - cache.at < CACHE_TTL_MS) {
     res.json(cache.data);

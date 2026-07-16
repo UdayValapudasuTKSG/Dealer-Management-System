@@ -85,7 +85,7 @@ export default function Deliveries() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-6xl mx-auto px-6 md:px-10 py-10 space-y-8">
+      <div className="w-full px-5 md:px-8 py-10 space-y-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="text-xs font-bold uppercase tracking-[0.25em] text-primary mb-2">

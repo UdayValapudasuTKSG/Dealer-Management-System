@@ -211,7 +211,7 @@ export default function Inventory() {
         <div className="absolute inset-0 bg-gradient-to-t from-background via-black/40 to-black/20 z-10" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/20 to-transparent z-10" />
 
-        <div className="relative z-20 h-full max-w-7xl mx-auto px-6 md:px-10 lg:px-14 flex flex-col justify-end pb-16">
+        <div className="relative z-20 h-full w-full px-5 md:px-8 flex flex-col justify-end pb-16">
           {featured && (
             <motion.div
               initial={{ opacity: 0, y: 24 }}
@@ -263,7 +263,7 @@ export default function Inventory() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-14 py-12 space-y-10">
+      <div className="w-full px-5 md:px-8 py-12 space-y-10">
         {/* Intro */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

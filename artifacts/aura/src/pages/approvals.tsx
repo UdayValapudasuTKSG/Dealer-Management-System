@@ -12,7 +12,7 @@ export default function Approvals() {
   const highCount = gates?.filter((g) => g.priority === "high").length ?? 0;
 
   return (
-    <Page width="narrow">
+    <Page>
       <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between mb-10">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 text-primary px-3 py-1 text-[11px] font-bold uppercase tracking-widest mb-4">

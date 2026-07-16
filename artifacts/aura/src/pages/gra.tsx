@@ -155,7 +155,7 @@ export default function Gra() {
   };
 
   return (
-    <div className="p-6 md:p-10 max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="w-full px-5 md:px-8 py-10 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div>
         <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary mb-2">
           <Sparkles className="w-4 h-4" />

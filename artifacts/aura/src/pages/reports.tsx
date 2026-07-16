@@ -180,7 +180,7 @@ export default function Reports() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="max-w-7xl mx-auto px-6 md:px-10 py-8 space-y-6">
+      <div className="w-full px-5 md:px-8 py-8 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground mb-2">

@@ -104,7 +104,7 @@ export default function VehicleDetailPage() {
     );
 
   return (
-    <Page width="wide">
+    <Page>
       <Link
         href="/inventory"
         className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors mb-5"

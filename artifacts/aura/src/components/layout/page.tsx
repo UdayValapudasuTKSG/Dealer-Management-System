@@ -1,35 +1,23 @@
 import { cn } from "@/lib/utils";
 
-type PageWidth = "narrow" | "default" | "wide" | "full";
-
-const WIDTH_CLASS: Record<PageWidth, string> = {
-  narrow: "max-w-5xl",
-  default: "max-w-7xl",
-  wide: "max-w-[1600px]",
-  full: "max-w-none",
-};
-
 /**
- * Shared page container. Gives every standard page consistent outer padding,
- * a sensible max content width, and uniform vertical rhythm so nothing hugs
- * the window edges. Use `fill` for full-height layouts (e.g. kanban boards).
+ * Shared page container. Gives every standard page the same outer gutter as
+ * the top navigation (px-5 md:px-8) at full width, plus uniform vertical
+ * rhythm. Use `fill` for full-height layouts (e.g. kanban boards).
  */
 export function Page({
   children,
   className,
-  width = "default",
   fill = false,
 }: {
   children: React.ReactNode;
   className?: string;
-  width?: PageWidth;
   fill?: boolean;
 }) {
   return (
     <div
       className={cn(
-        "mx-auto w-full px-6 md:px-10 lg:px-14",
-        WIDTH_CLASS[width],
+        "w-full px-5 md:px-8",
         fill
           ? "h-full flex flex-col py-8 md:py-10"
           : "py-10 md:py-14",

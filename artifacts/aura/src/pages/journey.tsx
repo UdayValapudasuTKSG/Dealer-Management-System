@@ -64,7 +64,7 @@ export default function Journey() {
         <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/80 to-background" />
       </div>
 
-      <div className="relative z-10 px-6 md:px-10 lg:px-14 py-10 md:py-14 flex-1 flex flex-col">
+      <div className="relative z-10 px-5 md:px-8 py-10 md:py-14 flex-1 flex flex-col">
         <div className="mb-12 text-center">
           <motion.h1 
             initial={{ opacity: 0, y: -20 }}
