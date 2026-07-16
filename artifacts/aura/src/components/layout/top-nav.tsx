@@ -15,7 +15,7 @@ type Cluster = { label: string; icon: string; items: NavItem[] };
 
 const CLUSTERS: Cluster[] = [
   {
-    label: "Intelligence",
+    label: "Insights & Actions",
     icon: "nav/intelligence.png",
     items: [
       { name: "Command Center", href: "/command-center", module: "" },
@@ -31,7 +31,6 @@ const CLUSTERS: Cluster[] = [
     items: [
       { name: "Pipeline", href: "/pipeline", module: "leads" },
       { name: "Deals", href: "/deals", module: "deals" },
-      { name: "Appraisals", href: "/appraisals", module: "appraisals" },
       { name: "F&I", href: "/finance", module: "finance" },
     ],
   },

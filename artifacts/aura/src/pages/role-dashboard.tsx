@@ -59,10 +59,10 @@ function greeting() {
 
 const PHASE_LABEL: Record<string, string> = {
   aware: "New Lead",
-  consider: "Working",
-  engage: "Appointment",
+  consider: "Qualified",
+  engage: "Test Drive",
   negotiate: "Desking",
-  won: "Delivered",
+  won: "Sold",
   lost: "Lost",
 };
 

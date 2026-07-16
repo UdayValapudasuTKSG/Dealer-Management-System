@@ -10,10 +10,10 @@ const PHASES = ["aware", "consider", "engage", "negotiate", "won", "lost"] as co
 
 const PHASE_LABEL: Record<string, string> = {
   aware: "New Lead",
-  consider: "Working",
-  engage: "Appointment",
+  consider: "Qualified",
+  engage: "Test Drive",
   negotiate: "Desking",
-  won: "Delivered",
+  won: "Sold",
   lost: "Lost",
 };
 

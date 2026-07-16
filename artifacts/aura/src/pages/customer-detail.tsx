@@ -76,8 +76,8 @@ export default function CustomerDetail() {
   const JOURNEY_PHASES = ["aware", "consider", "engage", "negotiate", "won"] as const;
   const JOURNEY_LABEL: Record<string, string> = {
     aware: "New Lead",
-    consider: "Working",
-    engage: "Appointment",
+    consider: "Qualified",
+    engage: "Test Drive",
     negotiate: "Desking",
     won: "Delivered",
   };

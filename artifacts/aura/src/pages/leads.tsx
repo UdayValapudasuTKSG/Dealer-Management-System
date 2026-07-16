@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
+  useListDeals,
   useListLeads,
   useListVehicles,
   useCreateLead,
@@ -32,24 +33,46 @@ import { VehicleCascade } from "@/components/vehicle-cascade";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-const PHASES = ["aware", "consider", "engage", "negotiate", "won"] as const;
-type Phase = (typeof PHASES)[number];
+const STAGES = [
+  "new_lead",
+  "qualified",
+  "test_drive",
+  "desking",
+  "sold",
+  "in_prep",
+  "delivered",
+] as const;
+type Stage = (typeof STAGES)[number];
 
-const PHASE_LABEL: Record<string, string> = {
-  aware: "New Lead",
-  consider: "Working",
-  engage: "Appointment",
-  negotiate: "Desking",
-  won: "Delivered",
-  lost: "Lost",
+const STAGE_LABEL: Record<Stage, string> = {
+  new_lead: "New Lead",
+  qualified: "Qualified",
+  test_drive: "Test Drive",
+  desking: "Desking",
+  sold: "Sold",
+  in_prep: "In Prep",
+  delivered: "Delivered",
 };
 
-const PHASE_CAPTION: Record<string, string> = {
-  aware: "Fresh interest, awaiting first contact",
-  consider: "Nurturing and matching inventory",
-  engage: "Test drives and showroom visits",
-  negotiate: "Structuring terms and desking",
-  won: "Delivered and onboarding retention",
+const STAGE_CAPTION: Record<Stage, string> = {
+  new_lead: "Fresh interest, awaiting first contact",
+  qualified: "Vetted buyers, matching inventory",
+  test_drive: "Test drives and showroom visits",
+  desking: "Structuring terms and desking",
+  sold: "Deal agreed, paperwork in motion",
+  in_prep: "Vehicle in prep and pre-delivery",
+  delivered: "Keys handed over, onboarding retention",
+};
+
+// Rail stage → underlying lead phase (drives AURA suggestions)
+const STAGE_PHASE: Record<Stage, GetPipelineSuggestionsPhase> = {
+  new_lead: "aware",
+  qualified: "consider",
+  test_drive: "engage",
+  desking: "negotiate",
+  sold: "won",
+  in_prep: "won",
+  delivered: "won",
 };
 
 const PRIORITY_STYLE: Record<string, string> = {
@@ -91,21 +114,69 @@ export default function Leads() {
   const { toast } = useToast();
   const createLead = useCreateLead();
 
+  const { data: deals } = useListDeals();
+
+  // Derive the rail stage for a lead: pre-sale stages map 1:1 from the lead
+  // phase; won leads split into Sold / In Prep / Delivered by their deal stage.
+  const stageOf = useMemo(() => {
+    // Deterministic precedence across multiple deals: the furthest-along deal
+    // wins (delivered > committed > everything else), independent of row order.
+    const rank = (stage: string) =>
+      stage === "delivered" ? 2 : stage === "committed" ? 1 : 0;
+    const dealByLead = new Map<number, string>();
+    const dealByCustomer = new Map<number, string>();
+    for (const d of deals ?? []) {
+      if (d.leadId != null) {
+        const prev = dealByLead.get(d.leadId);
+        if (prev === undefined || rank(d.stage) > rank(prev))
+          dealByLead.set(d.leadId, d.stage);
+      }
+      if (d.customerId != null) {
+        const prev = dealByCustomer.get(d.customerId);
+        if (prev === undefined || rank(d.stage) > rank(prev))
+          dealByCustomer.set(d.customerId, d.stage);
+      }
+    }
+    return (l: { id: number; phase: string; customerId?: number | null }): Stage | null => {
+      switch (l.phase) {
+        case "aware":
+          return "new_lead";
+        case "consider":
+          return "qualified";
+        case "engage":
+          return "test_drive";
+        case "negotiate":
+          return "desking";
+        case "won": {
+          const dealStage =
+            dealByLead.get(l.id) ??
+            (l.customerId != null ? dealByCustomer.get(l.customerId) : undefined);
+          if (dealStage === "delivered") return "delivered";
+          if (dealStage === "committed") return "in_prep";
+          return "sold";
+        }
+        default:
+          return null; // lost — not shown on the rail
+      }
+    };
+  }, [deals]);
+
   const counts = useMemo(() => {
     const map: Record<string, number> = {};
-    for (const p of PHASES) map[p] = 0;
+    for (const s of STAGES) map[s] = 0;
     for (const l of leads ?? []) {
-      if (l.phase in map) map[l.phase] += 1;
+      const s = stageOf(l);
+      if (s) map[s] += 1;
     }
     return map;
-  }, [leads]);
+  }, [leads, stageOf]);
 
-  const [selectedPhase, setSelectedPhase] = useState<Phase>("engage");
-  const activeIndex = PHASES.indexOf(selectedPhase);
+  const [selectedStage, setSelectedStage] = useState<Stage>("test_drive");
+  const activeIndex = STAGES.indexOf(selectedStage);
   const [view, setView] = useState<"pipeline" | "test-drives">("pipeline");
   const [, navigate] = useLocation();
 
-  const phaseLeads = (leads ?? []).filter((l) => l.phase === selectedPhase);
+  const stageLeads = (leads ?? []).filter((l) => stageOf(l) === selectedStage);
 
   const testDrives = useMemo(
     () =>
@@ -119,7 +190,7 @@ export default function Leads() {
     [leads],
   );
   const suggestions = useGetPipelineSuggestions({
-    phase: selectedPhase as GetPipelineSuggestionsPhase,
+    phase: STAGE_PHASE[selectedStage],
   });
 
   return (
@@ -269,20 +340,20 @@ export default function Leads() {
             className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary/40 via-primary to-primary shadow-[0_0_16px_hsl(var(--primary)/0.6)]"
             initial={false}
             animate={{
-              width: `${((activeIndex + 1) / PHASES.length) * 100}%`,
+              width: `${((activeIndex + 1) / STAGES.length) * 100}%`,
             }}
             transition={{ type: "spring", stiffness: 200, damping: 30 }}
           />
         </div>
 
-        <div className="grid grid-cols-5 gap-2 md:gap-3">
-          {PHASES.map((phase, i) => {
-            const isActive = phase === selectedPhase;
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 md:gap-3">
+          {STAGES.map((stage, i) => {
+            const isActive = stage === selectedStage;
             const isPast = i < activeIndex;
             return (
               <button
-                key={phase}
-                onClick={() => setSelectedPhase(phase)}
+                key={stage}
+                onClick={() => setSelectedStage(stage)}
                 className={cn(
                   "relative rounded-2xl px-3 py-3 md:px-4 md:py-4 text-left transition-colors group overflow-hidden",
                   !isActive && "hover:bg-foreground/[0.05]",
@@ -319,7 +390,7 @@ export default function Leads() {
                             : "text-muted-foreground group-hover:text-foreground",
                       )}
                     >
-                      {counts[phase] ?? 0}
+                      {counts[stage] ?? 0}
                     </span>
                   </span>
                   <span className="flex items-baseline justify-between gap-2 min-w-0">
@@ -331,7 +402,7 @@ export default function Leads() {
                           : "text-muted-foreground group-hover:text-foreground",
                       )}
                     >
-                      {PHASE_LABEL[phase]}
+                      {STAGE_LABEL[stage]}
                     </span>
                     <span
                       className={cn(
@@ -356,7 +427,7 @@ export default function Leads() {
       {/* Detail — animated per stage */}
       <AnimatePresence mode="wait">
         <motion.div
-          key={selectedPhase}
+          key={selectedStage}
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
@@ -368,14 +439,14 @@ export default function Leads() {
             <div className="flex items-baseline justify-between">
               <div>
                 <h2 className="text-2xl font-light tracking-tight">
-                  {PHASE_LABEL[selectedPhase]}
+                  {STAGE_LABEL[selectedStage]}
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {PHASE_CAPTION[selectedPhase]}
+                  {STAGE_CAPTION[selectedStage]}
                 </p>
               </div>
               <span className="text-sm font-semibold text-primary shrink-0">
-                {phaseLeads.length} client{phaseLeads.length === 1 ? "" : "s"}
+                {stageLeads.length} client{stageLeads.length === 1 ? "" : "s"}
               </span>
             </div>
 
@@ -387,12 +458,12 @@ export default function Leads() {
                     className="h-20 rounded-2xl bg-foreground/[0.04] animate-pulse"
                   />
                 ))
-              ) : phaseLeads.length === 0 ? (
+              ) : stageLeads.length === 0 ? (
                 <div className="flex items-center justify-center h-32 rounded-2xl border-2 border-dashed border-border/60 text-muted-foreground/60 text-sm uppercase tracking-widest font-semibold">
                   No clients in this stage
                 </div>
               ) : (
-                phaseLeads.map((lead, i) => {
+                stageLeads.map((lead, i) => {
                   const vehicle = vehicles?.find(
                     (v) => v.id === lead.interestedVehicleId,
                   );
@@ -503,7 +574,7 @@ export default function Leads() {
                 {suggestions.isLoading ? (
                   <div className="flex items-center gap-3 text-muted-foreground text-sm py-8 justify-center">
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                    Thinking through {PHASE_LABEL[selectedPhase].toLowerCase()}…
+                    Thinking through {STAGE_LABEL[selectedStage].toLowerCase()}…
                   </div>
                 ) : suggestions.isError ? (
                   <div className="text-center py-8 space-y-3">
