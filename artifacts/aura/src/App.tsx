@@ -28,6 +28,8 @@ import Deliveries from "@/pages/deliveries";
 import Customers from "@/pages/customers";
 import CustomerDetail from "@/pages/customer-detail";
 import LeadDetail from "@/pages/lead-detail";
+import VehicleDetailPage from "@/pages/vehicle-detail";
+import TeamProfile from "@/pages/team-profile";
 import Approvals from "@/pages/approvals";
 import Journey from "@/pages/journey";
 import Gra from "@/pages/gra";
@@ -167,6 +169,8 @@ function AppShell() {
                 <Route path="/customers" component={Customers} />
                 <Route path="/customers/:id" component={CustomerDetail} />
                 <Route path="/lead/:id" component={LeadDetail} />
+                <Route path="/vehicle/:id" component={VehicleDetailPage} />
+                <Route path="/team/:id" component={TeamProfile} />
                 <Route path="/journey" component={Journey} />
                 <Route path="/tasks" component={Tasks} />
                 <Route path="/gra" component={Gra} />

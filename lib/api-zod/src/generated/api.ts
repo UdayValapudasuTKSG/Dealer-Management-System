@@ -887,6 +887,21 @@ export const ListLeadsResponseItem = zod.object({
 })),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListLeadsResponse = zod.array(ListLeadsResponseItem)
@@ -910,7 +925,12 @@ export const CreateLeadBody = zod.object({
   "preferredBranch": zod.string().optional(),
   "assignedTo": zod.string().optional(),
   "aiScore": zod.number().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "company": zod.string().optional(),
+  "title": zod.string().optional(),
+  "isRetailCustomer": zod.boolean().optional(),
+  "address": zod.string().optional(),
+  "description": zod.string().optional()
 })
 
 
@@ -944,6 +964,21 @@ export const CreateLeadResponse = zod.object({
 })),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -983,6 +1018,21 @@ export const GetLeadResponse = zod.object({
 })),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1008,6 +1058,8 @@ export const UpdateLeadBody = zod.object({
   "interestedVehicleId": zod.number().optional(),
   "variant": zod.string().optional(),
   "color": zod.string().optional(),
+  "availability": zod.enum(['available', 'back_order']).optional(),
+  "purchaseType": zod.enum(['cash', 'finance']).optional(),
   "preferredBranch": zod.string().optional(),
   "assignedTo": zod.string().optional(),
   "attachments": zod.array(zod.object({
@@ -1015,7 +1067,22 @@ export const UpdateLeadBody = zod.object({
   "url": zod.string().min(1)
 })).optional(),
   "aiScore": zod.number().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean().optional(),
+  "quotationSent": zod.boolean().optional(),
+  "reservationFeePaid": zod.boolean().optional(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean().optional(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean().optional(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish()
 })
 
 
@@ -1049,6 +1116,21 @@ export const UpdateLeadResponse = zod.object({
 })),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1110,6 +1192,21 @@ export const CreateEnquiryResponse = zod.object({
 })),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1239,6 +1336,21 @@ export const AssignLeadResponse = zod.object({
 })),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1284,6 +1396,21 @@ export const ScheduleTestDriveResponse = zod.object({
 })),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1323,6 +1450,21 @@ export const CheckLeadAvailabilityResponse = zod.object({
 })),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1366,6 +1508,21 @@ export const RecordLeadDecisionResponse = zod.object({
 })),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -3399,6 +3556,21 @@ export const GetCustomerOverviewResponse = zod.object({
 })),
   "aiScore": zod.number(),
   "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "timeline": zod.array(zod.object({
@@ -3966,6 +4138,33 @@ export const GetCurrentUserResponse = zod.object({
  * @summary Record a logout audit event before the client signs out
  */
 export const RecordLogoutEventResponse = zod.void()
+
+
+export const GetTeamMemberParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetTeamMemberResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "roleName": zod.string().nullish(),
+  "status": zod.string(),
+  "memberSince": zod.coerce.date(),
+  "lastLoginAt": zod.coerce.date().nullish(),
+  "openLeads": zod.number(),
+  "totalLeads": zod.number(),
+  "wonLeads": zod.number(),
+  "upcomingTestDrives": zod.number(),
+  "recentLeads": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "status": zod.string(),
+  "phase": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
 
 
 /**

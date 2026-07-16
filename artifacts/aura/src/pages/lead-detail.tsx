@@ -12,15 +12,19 @@ import {
   getGetLeadTimelineQueryKey,
   getListLeadsQueryKey,
 } from "@workspace/api-client-react";
-import type { Lead, Vehicle } from "@workspace/api-client-react";
+import type { Lead, LeadUpdate, Vehicle } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   ArrowLeft,
   ArrowUpRight,
   Bot,
   Car,
+  Check,
+  ChevronDown,
   CircleCheck,
   Compass,
   FileText,
@@ -34,6 +38,7 @@ import {
   Send,
   User,
   Workflow,
+  X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Page } from "@/components/layout/page";
@@ -76,6 +81,13 @@ const SOURCE_LABEL: Record<string, string> = {
   instagram: "Instagram",
   whatsapp: "WhatsApp",
   referral: "Referral",
+};
+
+const CHANNEL_LABEL: Record<string, string> = {
+  web: "Web",
+  social: "Social",
+  mobile: "Mobile",
+  walkin: "Walk-in",
 };
 
 const PRIORITY_STYLE: Record<string, string> = {
@@ -207,6 +219,202 @@ function Field({
       <div className="text-sm text-foreground break-words">
         {children ?? <span className="text-muted-foreground/60">—</span>}
       </div>
+    </div>
+  );
+}
+
+type EditorSpec =
+  | { kind: "text"; value: string; placeholder?: string }
+  | { kind: "textarea"; value: string }
+  | { kind: "date"; value: string }
+  | { kind: "checkbox"; value: boolean }
+  | {
+      kind: "select";
+      value: string;
+      options: { value: string; label: string }[];
+      allowEmpty?: boolean;
+    };
+
+function InlineField({
+  label,
+  children,
+  canEdit,
+  editor,
+  onSave,
+  full,
+}: {
+  label: string;
+  children: React.ReactNode;
+  canEdit?: boolean;
+  editor?: EditorSpec;
+  onSave?: (value: string | boolean) => Promise<void>;
+  full?: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string | boolean>("");
+  const [saving, setSaving] = useState(false);
+
+  const editable = !!canEdit && !!editor && !!onSave;
+
+  const begin = () => {
+    if (!editor) return;
+    setDraft(editor.value);
+    setEditing(true);
+  };
+
+  const save = async () => {
+    if (!onSave) return;
+    setSaving(true);
+    try {
+      await onSave(draft);
+      setEditing(false);
+    } catch {
+      // toast handled by the mutation's onError
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className={cn(
+        "group py-3 border-b border-white/5 last:border-0",
+        full && "md:col-span-2",
+      )}
+    >
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+        {label}
+      </div>
+      {!editing ? (
+        <div className="flex items-start justify-between gap-2">
+          <div className="text-sm text-foreground break-words min-w-0 flex-1">
+            {children ?? <span className="text-muted-foreground/60">—</span>}
+          </div>
+          {editable && (
+            <button
+              onClick={begin}
+              aria-label={`Edit ${label}`}
+              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-primary shrink-0 mt-0.5"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            {editor!.kind === "text" && (
+              <Input
+                autoFocus
+                value={draft as string}
+                placeholder={editor!.placeholder}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void save();
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                className="h-9 bg-background/60 border-white/15"
+              />
+            )}
+            {editor!.kind === "date" && (
+              <Input
+                autoFocus
+                type="date"
+                value={draft as string}
+                onChange={(e) => setDraft(e.target.value)}
+                className="h-9 bg-background/60 border-white/15"
+              />
+            )}
+            {editor!.kind === "textarea" && (
+              <Textarea
+                autoFocus
+                value={draft as string}
+                onChange={(e) => setDraft(e.target.value)}
+                className="bg-background/60 border-white/15 resize-none min-h-[72px]"
+              />
+            )}
+            {editor!.kind === "checkbox" && (
+              <label className="inline-flex items-center gap-2 h-9 cursor-pointer text-sm">
+                <Checkbox
+                  checked={draft as boolean}
+                  onCheckedChange={(c) => setDraft(c === true)}
+                />
+                {(draft as boolean) ? "True" : "False"}
+              </label>
+            )}
+            {editor!.kind === "select" && (
+              <select
+                autoFocus
+                value={draft as string}
+                onChange={(e) => setDraft(e.target.value)}
+                className="h-9 w-full rounded-md border border-white/15 bg-background/60 px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                {editor!.allowEmpty && <option value="">—</option>}
+                {editor!.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0 mt-1">
+            <button
+              onClick={() => void save()}
+              disabled={saving}
+              aria-label="Save"
+              className="w-7 h-7 rounded-md bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-60"
+            >
+              {saving ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Check className="w-3.5 h-3.5" />
+              )}
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              disabled={saving}
+              aria-label="Cancel"
+              className="w-7 h-7 rounded-md border border-white/15 text-muted-foreground flex items-center justify-center hover:text-foreground transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Section({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-2xl border border-white/10 overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 px-5 py-3 bg-foreground/[0.04] text-left hover:bg-foreground/[0.06] transition-colors"
+      >
+        <ChevronDown
+          className={cn(
+            "w-4 h-4 text-primary transition-transform",
+            !open && "-rotate-90",
+          )}
+        />
+        <span className="text-sm font-semibold tracking-tight">{title}</span>
+      </button>
+      {open && (
+        <div className="px-5 pb-2 grid grid-cols-1 md:grid-cols-2 gap-x-10">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -389,6 +597,57 @@ export default function LeadDetail() {
   const quotePdfUrl = `${import.meta.env.BASE_URL}api/leads/${lead.id}/quote.pdf`;
   const testDriveScheduled = !!lead.testDriveAt;
 
+  const patchField = async (patch: LeadUpdate) => {
+    await updateLead.mutateAsync({ id: lead.id, data: patch });
+  };
+
+  const text = (v: string | boolean) => (v as string).trim();
+  const textOrNull = (v: string | boolean) => text(v) || null;
+
+  const ownerDisplay = lead.ownerUserId ? (
+    <Link
+      href={`/team/${lead.ownerUserId}`}
+      className="inline-flex items-center gap-1.5 text-primary hover:underline"
+    >
+      <User className="w-3.5 h-3.5" />
+      {lead.assignedTo || `Advisor #${lead.ownerUserId}`}
+      <ArrowUpRight className="w-3 h-3" />
+    </Link>
+  ) : lead.assignedTo ? (
+    <>{lead.assignedTo}</>
+  ) : (
+    <span className="text-amber-400">Unassigned</span>
+  );
+
+  const vehicleLink = vehicle ? (
+    <Link
+      href={`/vehicle/${vehicle.id}`}
+      className="inline-flex items-center gap-1.5 text-primary hover:underline"
+    >
+      <Car className="w-3.5 h-3.5" />
+      {vehicle.year} {vehicle.make} {vehicle.model}
+      <ArrowUpRight className="w-3 h-3" />
+    </Link>
+  ) : null;
+
+  const vehicleOptions = (vehicles ?? []).map((v) => ({
+    value: String(v.id),
+    label: `${v.year} ${v.make} ${v.model} ${v.trim || v.variant || ""} — ${v.exteriorColor}${v.vin ? ` · ${v.vin}` : ""}`,
+  }));
+
+  const saveVehicle = async (v: string | boolean) => {
+    const vehicleId = Number(v);
+    if (!vehicleId) return;
+    const patch: LeadUpdate = { interestedVehicleId: vehicleId };
+    const veh = (vehicles ?? []).find((x) => x.id === vehicleId);
+    if (veh) {
+      const version = veh.trim || veh.variant;
+      if (version) patch.variant = version;
+      if (veh.exteriorColor) patch.color = veh.exteriorColor;
+    }
+    await patchField(patch);
+  };
+
   return (
     <Page width="wide">
       {/* Header */}
@@ -478,11 +737,7 @@ export default function LeadDetail() {
             <Field label="Lead Source">
               {SOURCE_LABEL[lead.source] ?? lead.source}
             </Field>
-            <Field label="Lead Owner">
-              {lead.assignedTo || (
-                <span className="text-amber-400">Unassigned</span>
-              )}
-            </Field>
+            <Field label="Lead Owner">{ownerDisplay}</Field>
             <Field label="Phone">
               {lead.phone ? (
                 <a
@@ -533,7 +788,10 @@ export default function LeadDetail() {
           </div>
 
           {vehicle && (
-            <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] overflow-hidden">
+            <Link
+              href={`/vehicle/${vehicle.id}`}
+              className="block rounded-2xl border border-white/10 bg-foreground/[0.03] overflow-hidden hover:border-primary/40 transition-colors group"
+            >
               <div className="h-36 bg-foreground/[0.04]">
                 {vehicle.imageUrl ? (
                   <img
@@ -543,7 +801,7 @@ export default function LeadDetail() {
                         : `${import.meta.env.BASE_URL}${vehicle.imageUrl.replace(/^\//, "")}`
                     }
                     alt={`${vehicle.make} ${vehicle.model}`}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
@@ -552,8 +810,9 @@ export default function LeadDetail() {
                 )}
               </div>
               <div className="p-4">
-                <div className="font-semibold">
+                <div className="font-semibold flex items-center gap-1.5">
                   {vehicle.year} {vehicle.make} {vehicle.model}
+                  <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {vehicle.trim || vehicle.variant || "Standard specification"}
@@ -563,7 +822,7 @@ export default function LeadDetail() {
                   ${vehicle.price.toLocaleString()}
                 </div>
               </div>
-            </div>
+            </Link>
           )}
         </div>
 
@@ -607,85 +866,453 @@ export default function LeadDetail() {
               className="p-6"
             >
               {tab === "details" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
-                  <Field label="Name">{lead.name}</Field>
-                  <Field label="Retail Customer">
-                    <Bool value={!!lead.customerId} />
-                  </Field>
-                  <Field label="Phone">{lead.phone}</Field>
-                  <Field label="Email">{lead.email}</Field>
-                  <Field label="Lead Source">
-                    {SOURCE_LABEL[lead.source] ?? lead.source}
-                  </Field>
-                  <Field label="Lead Status">
-                    {STATUS_LABEL[lead.status] ?? lead.status}
-                  </Field>
-                  <Field label="Pipeline Stage">
-                    {PHASE_LABEL[lead.phase] ?? lead.phase}
-                  </Field>
-                  <Field label="Priority">{lead.priority}</Field>
-                  <Field label="Advisor / Lead Owner">
-                    {lead.assignedTo || "Unassigned"}
-                  </Field>
-                  <Field label="Channel">{lead.channel}</Field>
-                  <Field label="Vehicle Model">
-                    {vehicle
-                      ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-                      : null}
-                  </Field>
-                  <Field label="Vehicle Version">
-                    {vehicle?.trim || vehicle?.variant || lead.variant}
-                  </Field>
-                  <Field label="Vehicle Color">
-                    {vehicle?.exteriorColor || lead.color}
-                  </Field>
-                  <Field label="VIN">{vehicle?.vin}</Field>
-                  <Field label="Unit Price">
-                    {vehicle ? `$${vehicle.price.toLocaleString()}` : null}
-                  </Field>
-                  <Field label="Quotation Sent">
-                    <Bool value={!!quote?.sentAt} />
-                  </Field>
-                  <Field label="Test Drive Scheduled">
-                    <Bool value={testDriveScheduled} />
-                  </Field>
-                  <Field label="Test Drive Date">
-                    {lead.testDriveAt
-                      ? new Date(lead.testDriveAt).toLocaleString(undefined, {
-                          dateStyle: "medium",
-                          timeStyle: "short",
+                <div className="space-y-4">
+                  <Section title="Lead Information">
+                    <InlineField
+                      label="Name"
+                      canEdit={canEdit}
+                      editor={{ kind: "text", value: lead.name }}
+                      onSave={async (v) => {
+                        if (!text(v)) return;
+                        await patchField({ name: text(v) });
+                      }}
+                    >
+                      {lead.name}
+                    </InlineField>
+                    <InlineField
+                      label="Company"
+                      canEdit={canEdit}
+                      editor={{ kind: "text", value: lead.company ?? "" }}
+                      onSave={(v) => patchField({ company: textOrNull(v) })}
+                    >
+                      {lead.company}
+                    </InlineField>
+                    <InlineField
+                      label="Title"
+                      canEdit={canEdit}
+                      editor={{ kind: "text", value: lead.title ?? "" }}
+                      onSave={(v) => patchField({ title: textOrNull(v) })}
+                    >
+                      {lead.title}
+                    </InlineField>
+                    <InlineField
+                      label="Is Retail Customer"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "checkbox",
+                        value: lead.isRetailCustomer || !!lead.customerId,
+                      }}
+                      onSave={(v) => patchField({ isRetailCustomer: !!v })}
+                    >
+                      <Bool value={lead.isRetailCustomer || !!lead.customerId} />
+                    </InlineField>
+                    <InlineField
+                      label="Phone"
+                      canEdit={canEdit}
+                      editor={{ kind: "text", value: lead.phone ?? "" }}
+                      onSave={(v) => patchField({ phone: text(v) })}
+                    >
+                      {lead.phone ? (
+                        <a
+                          href={`tel:${lead.phone}`}
+                          className="hover:text-primary transition-colors"
+                        >
+                          {lead.phone}
+                        </a>
+                      ) : null}
+                    </InlineField>
+                    <InlineField
+                      label="Email"
+                      canEdit={canEdit}
+                      editor={{ kind: "text", value: lead.email ?? "" }}
+                      onSave={(v) => patchField({ email: text(v) })}
+                    >
+                      {lead.email ? (
+                        <a
+                          href={`mailto:${lead.email}`}
+                          className="hover:text-primary transition-colors break-all"
+                        >
+                          {lead.email}
+                        </a>
+                      ) : null}
+                    </InlineField>
+                    <InlineField
+                      label="Lead Source"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "select",
+                        value: lead.source,
+                        options: Object.entries(SOURCE_LABEL).map(
+                          ([value, label]) => ({ value, label }),
+                        ),
+                      }}
+                      onSave={(v) =>
+                        patchField({ source: v as LeadUpdate["source"] })
+                      }
+                    >
+                      {SOURCE_LABEL[lead.source] ?? lead.source}
+                    </InlineField>
+                    <InlineField
+                      label="Channel"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "select",
+                        value: lead.channel,
+                        options: Object.entries(CHANNEL_LABEL).map(
+                          ([value, label]) => ({ value, label }),
+                        ),
+                      }}
+                      onSave={(v) =>
+                        patchField({ channel: v as LeadUpdate["channel"] })
+                      }
+                    >
+                      {CHANNEL_LABEL[lead.channel] ?? lead.channel}
+                    </InlineField>
+                    <InlineField label="Lead Status">
+                      <span className="inline-flex items-center gap-2">
+                        {STATUS_LABEL[lead.status] ?? lead.status}
+                        <button
+                          onClick={() => setWorkflowOpen(true)}
+                          className="text-[11px] text-primary hover:underline"
+                        >
+                          Change via Workflow
+                        </button>
+                      </span>
+                    </InlineField>
+                    <InlineField label="Pipeline Stage">
+                      {PHASE_LABEL[lead.phase] ?? lead.phase}
+                    </InlineField>
+                    <InlineField
+                      label="Priority"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "select",
+                        value: lead.priority,
+                        options: [
+                          { value: "high", label: "High" },
+                          { value: "medium", label: "Medium" },
+                          { value: "low", label: "Low" },
+                        ],
+                      }}
+                      onSave={(v) =>
+                        patchField({ priority: v as LeadUpdate["priority"] })
+                      }
+                    >
+                      <span className="capitalize">{lead.priority}</span>
+                    </InlineField>
+                    <InlineField label="Lead Owner">{ownerDisplay}</InlineField>
+                  </Section>
+
+                  <Section title="Product Interest">
+                    <InlineField
+                      label="Interested Model"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "select",
+                        value: lead.interestedVehicleId
+                          ? String(lead.interestedVehicleId)
+                          : "",
+                        options: vehicleOptions,
+                        allowEmpty: !lead.interestedVehicleId,
+                      }}
+                      onSave={saveVehicle}
+                    >
+                      {vehicleLink}
+                    </InlineField>
+                    <InlineField label="Vehicle Version">
+                      {vehicle?.trim || vehicle?.variant || lead.variant}
+                    </InlineField>
+                    <InlineField label="Vehicle Color">
+                      {vehicle?.exteriorColor || lead.color}
+                    </InlineField>
+                    <InlineField label="VIN">
+                      {vehicle?.vin ? (
+                        <Link
+                          href={`/vehicle/${vehicle.id}`}
+                          className="font-mono text-xs tracking-wide text-primary hover:underline"
+                        >
+                          {vehicle.vin}
+                        </Link>
+                      ) : null}
+                    </InlineField>
+                    <InlineField label="Unit Price">
+                      {vehicle ? `$${vehicle.price.toLocaleString()}` : null}
+                    </InlineField>
+                    <InlineField
+                      label="Availability"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "select",
+                        value: lead.availability ?? "",
+                        options: [
+                          { value: "available", label: "Available" },
+                          { value: "back_order", label: "Back Order" },
+                        ],
+                        allowEmpty: !lead.availability,
+                      }}
+                      onSave={async (v) => {
+                        if (!v) return;
+                        await patchField({
+                          availability: v as LeadUpdate["availability"],
+                        });
+                      }}
+                    >
+                      {lead.availability === "back_order"
+                        ? "Back Order"
+                        : lead.availability === "available"
+                          ? "Available"
+                          : null}
+                    </InlineField>
+                    <InlineField
+                      label="Purchase Type"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "select",
+                        value: lead.purchaseType ?? "",
+                        options: [
+                          { value: "cash", label: "Cash" },
+                          { value: "finance", label: "Financing" },
+                        ],
+                        allowEmpty: !lead.purchaseType,
+                      }}
+                      onSave={async (v) => {
+                        if (!v) return;
+                        await patchField({
+                          purchaseType: v as LeadUpdate["purchaseType"],
+                        });
+                      }}
+                    >
+                      {lead.purchaseType === "finance"
+                        ? "Financing"
+                        : lead.purchaseType === "cash"
+                          ? "Cash"
+                          : null}
+                    </InlineField>
+                    <InlineField
+                      label="Preferred Branch"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "text",
+                        value: lead.preferredBranch ?? "",
+                      }}
+                      onSave={(v) => patchField({ preferredBranch: text(v) })}
+                    >
+                      {lead.preferredBranch}
+                    </InlineField>
+                  </Section>
+
+                  <Section title="Sales Progress">
+                    <InlineField
+                      label="Quotation Sent"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "checkbox",
+                        value: lead.quotationSent || !!quote?.sentAt,
+                      }}
+                      onSave={(v) => patchField({ quotationSent: !!v })}
+                    >
+                      <Bool value={lead.quotationSent || !!quote?.sentAt} />
+                    </InlineField>
+                    <InlineField
+                      label="Contacted Date"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "date",
+                        value: lead.contactedDate
+                          ? new Date(lead.contactedDate)
+                              .toISOString()
+                              .slice(0, 10)
+                          : "",
+                      }}
+                      onSave={(v) =>
+                        patchField({
+                          contactedDate: v
+                            ? new Date(`${v}T12:00:00`).toISOString()
+                            : null,
                         })
-                      : null}
-                  </Field>
-                  <Field label="Test Drive Branch">
-                    {lead.testDriveBranch}
-                  </Field>
-                  <Field label="Purchase Type">
-                    {lead.purchaseType === "finance"
-                      ? "Financing"
-                      : lead.purchaseType === "cash"
-                        ? "Cash"
+                      }
+                    >
+                      {lead.contactedDate
+                        ? new Date(lead.contactedDate).toLocaleDateString(
+                            undefined,
+                            { dateStyle: "medium" },
+                          )
                         : null}
-                  </Field>
-                  <Field label="Availability">
-                    {lead.availability === "back_order"
-                      ? "Back Order"
-                      : lead.availability === "available"
-                        ? "Available"
+                    </InlineField>
+                    <InlineField
+                      label="Reservation Fee Paid"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "checkbox",
+                        value: lead.reservationFeePaid,
+                      }}
+                      onSave={(v) => patchField({ reservationFeePaid: !!v })}
+                    >
+                      <Bool value={lead.reservationFeePaid} />
+                    </InlineField>
+                    <InlineField
+                      label="Financing Qualified"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "checkbox",
+                        value: lead.financingQualified,
+                      }}
+                      onSave={(v) => patchField({ financingQualified: !!v })}
+                    >
+                      <Bool value={lead.financingQualified} />
+                    </InlineField>
+                    <InlineField
+                      label="Reservation Comments"
+                      canEdit={canEdit}
+                      full
+                      editor={{
+                        kind: "textarea",
+                        value: lead.reservationComments ?? "",
+                      }}
+                      onSave={(v) =>
+                        patchField({ reservationComments: textOrNull(v) })
+                      }
+                    >
+                      {lead.reservationComments}
+                    </InlineField>
+                  </Section>
+
+                  <Section title="Test Drive">
+                    <InlineField label="Test Drive Scheduled">
+                      <Bool value={testDriveScheduled} />
+                    </InlineField>
+                    <InlineField label="Test Drive Date">
+                      {lead.testDriveAt
+                        ? new Date(lead.testDriveAt).toLocaleString(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })
                         : null}
-                  </Field>
-                  <Field label="Preferred Branch">
-                    {lead.preferredBranch}
-                  </Field>
-                  <Field label="Created">
-                    {new Date(lead.createdAt).toLocaleString(undefined, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </Field>
-                  <div className="md:col-span-2">
-                    <Field label="Description / Notes">{lead.notes}</Field>
-                  </div>
+                    </InlineField>
+                    <InlineField label="Test Drive Branch">
+                      {lead.testDriveBranch}
+                    </InlineField>
+                  </Section>
+
+                  <Section title="Qualification Details">
+                    <InlineField
+                      label="Purchase Intent"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "text",
+                        value: lead.purchaseIntent ?? "",
+                        placeholder: "e.g. Buying within 30 days",
+                      }}
+                      onSave={(v) =>
+                        patchField({ purchaseIntent: textOrNull(v) })
+                      }
+                    >
+                      {lead.purchaseIntent}
+                    </InlineField>
+                    <InlineField
+                      label="Key Interest Driver"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "text",
+                        value: lead.keyInterestDriver ?? "",
+                        placeholder: "e.g. Fuel economy, brand, styling",
+                      }}
+                      onSave={(v) =>
+                        patchField({ keyInterestDriver: textOrNull(v) })
+                      }
+                    >
+                      {lead.keyInterestDriver}
+                    </InlineField>
+                    <InlineField
+                      label="Budget / Financing"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "text",
+                        value: lead.budgetFinancing ?? "",
+                        placeholder: "e.g. $60k cash, pre-approved",
+                      }}
+                      onSave={(v) =>
+                        patchField({ budgetFinancing: textOrNull(v) })
+                      }
+                    >
+                      {lead.budgetFinancing}
+                    </InlineField>
+                  </Section>
+
+                  <Section title="Follow-up & Closure">
+                    <InlineField
+                      label="Revisit in 3 Months"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "checkbox",
+                        value: lead.revisitIn3Months,
+                      }}
+                      onSave={(v) => patchField({ revisitIn3Months: !!v })}
+                    >
+                      <Bool value={lead.revisitIn3Months} />
+                    </InlineField>
+                    <InlineField
+                      label="Closure Reason"
+                      canEdit={canEdit}
+                      full
+                      editor={{
+                        kind: "textarea",
+                        value: lead.closureReason ?? "",
+                      }}
+                      onSave={(v) =>
+                        patchField({ closureReason: textOrNull(v) })
+                      }
+                    >
+                      {lead.closureReason}
+                    </InlineField>
+                  </Section>
+
+                  <Section title="Additional Information">
+                    <InlineField
+                      label="Description"
+                      canEdit={canEdit}
+                      full
+                      editor={{
+                        kind: "textarea",
+                        value: lead.description ?? "",
+                      }}
+                      onSave={(v) => patchField({ description: textOrNull(v) })}
+                    >
+                      {lead.description}
+                    </InlineField>
+                    <InlineField
+                      label="Notes"
+                      canEdit={canEdit}
+                      full
+                      editor={{ kind: "textarea", value: lead.notes ?? "" }}
+                      onSave={(v) => patchField({ notes: textOrNull(v) })}
+                    >
+                      {lead.notes}
+                    </InlineField>
+                    <InlineField
+                      label="Address"
+                      canEdit={canEdit}
+                      full
+                      editor={{ kind: "textarea", value: lead.address ?? "" }}
+                      onSave={(v) => patchField({ address: textOrNull(v) })}
+                    >
+                      {lead.address}
+                    </InlineField>
+                  </Section>
+
+                  <Section title="System Information">
+                    <InlineField label="Created">
+                      {new Date(lead.createdAt).toLocaleString(undefined, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </InlineField>
+                    <InlineField label="AI Score">
+                      <span className="text-primary font-medium">
+                        {lead.aiScore}
+                      </span>
+                    </InlineField>
+                  </Section>
                 </div>
               )}
 

@@ -260,6 +260,8 @@ const AUTH_ONLY_SEGMENTS = new Set([
   // search filters result groups by the caller's view permissions.
   "reports",
   "search",
+  // team member profiles are viewable by every signed-in staff member
+  "team",
 ]);
 
 export function routePermission(

@@ -1,7 +1,8 @@
 - [OpenAPI multipart codegen](openapi-multipart-codegen.md) — typed binary upload bodies break api-zod codegen (File/Blob in Node); declare empty multipart body + raw fetch/FormData instead.
 - [Tailwind v4 theme tokens](tailwind-v4-theme-tokens.md) — `bg-*/text-*/border-*` utilities only work if the matching `--color-*` token is declared in `@theme inline`; unregistered = silent no-op (transparent).
 - [Verify UI computed styles](verify-ui-computed-styles.md) — the screenshot tool's persistent browser can serve stale images; verify theme/DOM via getComputedStyle or a workflow restart, not screenshots alone.
-- [Orval query-hook options](orval-query-hooks.md) — generated `useGet*` `options.query` is the FULL `UseQueryOptions` (needs `queryKey`); passing only `retry`/`enabled` fails typecheck — omit options or supply queryKey.
+- [Orval query-hook options](orval-query-hooks.md) — generated `useGet*` `options.query` is the full `UseQueryOptions`; partial options fail typecheck — omit options or supply `queryKey`.
+- [Generated payload casts](generated-payload-casts.md) — never `as never`/`as any` a generated mutation payload; it hides fields missing from the OpenAPI schema (Zod strips them → empty update → 500).
 - [Server output Zod validation](server-output-validation.md) — list endpoints validate EVERY returned row against Zod; one bad seed row 500s the whole endpoint (invalid_enum_value).
 - [CopilotKit runtime](copilotkit-runtime.md) — non-obvious constraints for CopilotKit runtime behind the Replit reverse proxy (headers, body-parsing exclusion, req.url).
 - [Anthropic SSE chat](anthropic-sse-chat.md) — correctness rules for the streaming AI chat (server SSE + client fetch stream, persist-on-abort).

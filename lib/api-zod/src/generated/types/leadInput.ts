@@ -28,4 +28,9 @@ export interface LeadInput {
   assignedTo?: string;
   aiScore?: number;
   notes?: string;
+  company?: string;
+  title?: string;
+  isRetailCustomer?: boolean;
+  address?: string;
+  description?: string;
 }

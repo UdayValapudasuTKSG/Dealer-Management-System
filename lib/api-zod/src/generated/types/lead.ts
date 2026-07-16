@@ -52,5 +52,30 @@ export interface Lead {
   aiScore: number;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  title?: string | null;
+  isRetailCustomer: boolean;
+  quotationSent: boolean;
+  reservationFeePaid: boolean;
+  /** @nullable */
+  reservationComments?: string | null;
+  financingQualified: boolean;
+  /** @nullable */
+  contactedDate?: Date | null;
+  revisitIn3Months: boolean;
+  /** @nullable */
+  closureReason?: string | null;
+  /** @nullable */
+  purchaseIntent?: string | null;
+  /** @nullable */
+  keyInterestDriver?: string | null;
+  /** @nullable */
+  budgetFinancing?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  address?: string | null;
   createdAt: Date;
 }

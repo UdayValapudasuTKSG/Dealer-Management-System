@@ -3034,6 +3034,23 @@ paths:
         "204":
           description: Recorded
 
+  /team/{id}:
+    get:
+      operationId: getTeamMember
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Staff member profile with lead workload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMemberProfile"
+        "404":
+          description: Not found
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -3588,6 +3605,34 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PermissionGrant"
+    TeamMemberLead:
+      type: object
+      required: [id, name, status, phase, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        status: { type: string }
+        phase: { type: string }
+        createdAt: { type: string, format: date-time }
+    TeamMemberProfile:
+      type: object
+      required: [id, name, status, openLeads, totalLeads, wonLeads, upcomingTestDrives, recentLeads, memberSince]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: ["string", "null"] }
+        imageUrl: { type: ["string", "null"] }
+        roleName: { type: ["string", "null"] }
+        status: { type: string }
+        memberSince: { type: string, format: date-time }
+        lastLoginAt: { type: ["string", "null"], format: date-time }
+        openLeads: { type: integer }
+        totalLeads: { type: integer }
+        wonLeads: { type: integer }
+        upcomingTestDrives: { type: integer }
+        recentLeads:
+          type: array
+          items: { $ref: "#/components/schemas/TeamMemberLead" }
     AdminUser:
       type: object
       required: [id, clerkId, status, createdAt]
@@ -4002,7 +4047,7 @@ components:
         url: { type: string, minLength: 1 }
     Lead:
       type: object
-      required: [id, name, channel, source, priority, phase, status, attachments, aiScore, createdAt]
+      required: [id, name, channel, source, priority, phase, status, attachments, aiScore, createdAt, isRetailCustomer, quotationSent, reservationFeePaid, financingQualified, revisitIn3Months]
       properties:
         id: { type: integer }
         name: { type: string }
@@ -4029,6 +4074,21 @@ components:
           items: { $ref: "#/components/schemas/LeadAttachment" }
         aiScore: { type: integer }
         notes: { type: ["string", "null"] }
+        company: { type: ["string", "null"] }
+        title: { type: ["string", "null"] }
+        isRetailCustomer: { type: boolean }
+        quotationSent: { type: boolean }
+        reservationFeePaid: { type: boolean }
+        reservationComments: { type: ["string", "null"] }
+        financingQualified: { type: boolean }
+        contactedDate: { type: ["string", "null"], format: date-time }
+        revisitIn3Months: { type: boolean }
+        closureReason: { type: ["string", "null"] }
+        purchaseIntent: { type: ["string", "null"] }
+        keyInterestDriver: { type: ["string", "null"] }
+        budgetFinancing: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
     LeadInput:
       type: object
@@ -4049,6 +4109,11 @@ components:
         assignedTo: { type: string }
         aiScore: { type: integer }
         notes: { type: string }
+        company: { type: string }
+        title: { type: string }
+        isRetailCustomer: { type: boolean }
+        address: { type: string }
+        description: { type: string }
     LeadUpdate:
       type: object
       properties:
@@ -4063,13 +4128,30 @@ components:
         interestedVehicleId: { type: integer }
         variant: { type: string }
         color: { type: string }
+        availability: { type: string, enum: [available, back_order] }
+        purchaseType: { type: string, enum: [cash, finance] }
         preferredBranch: { type: string }
         assignedTo: { type: string }
         attachments:
           type: array
           items: { $ref: "#/components/schemas/LeadAttachment" }
         aiScore: { type: integer }
-        notes: { type: string }
+        notes: { type: ["string", "null"] }
+        company: { type: ["string", "null"] }
+        title: { type: ["string", "null"] }
+        isRetailCustomer: { type: boolean }
+        quotationSent: { type: boolean }
+        reservationFeePaid: { type: boolean }
+        reservationComments: { type: ["string", "null"] }
+        financingQualified: { type: boolean }
+        contactedDate: { type: ["string", "null"], format: date-time }
+        revisitIn3Months: { type: boolean }
+        closureReason: { type: ["string", "null"] }
+        purchaseIntent: { type: ["string", "null"] }
+        keyInterestDriver: { type: ["string", "null"] }
+        budgetFinancing: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
     LeadNoteInput:
       type: object
       required: [text]

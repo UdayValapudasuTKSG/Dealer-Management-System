@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LeadAttachment } from './leadAttachment';
+import type { LeadUpdateAvailability } from './leadUpdateAvailability';
 import type { LeadUpdateChannel } from './leadUpdateChannel';
 import type { LeadUpdatePhase } from './leadUpdatePhase';
 import type { LeadUpdatePriority } from './leadUpdatePriority';
+import type { LeadUpdatePurchaseType } from './leadUpdatePurchaseType';
 import type { LeadUpdateSource } from './leadUpdateSource';
 import type { LeadUpdateStatus } from './leadUpdateStatus';
 
@@ -25,9 +27,37 @@ export interface LeadUpdate {
   interestedVehicleId?: number;
   variant?: string;
   color?: string;
+  availability?: LeadUpdateAvailability;
+  purchaseType?: LeadUpdatePurchaseType;
   preferredBranch?: string;
   assignedTo?: string;
   attachments?: LeadAttachment[];
   aiScore?: number;
-  notes?: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  title?: string | null;
+  isRetailCustomer?: boolean;
+  quotationSent?: boolean;
+  reservationFeePaid?: boolean;
+  /** @nullable */
+  reservationComments?: string | null;
+  financingQualified?: boolean;
+  /** @nullable */
+  contactedDate?: Date | null;
+  revisitIn3Months?: boolean;
+  /** @nullable */
+  closureReason?: string | null;
+  /** @nullable */
+  purchaseIntent?: string | null;
+  /** @nullable */
+  keyInterestDriver?: string | null;
+  /** @nullable */
+  budgetFinancing?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  address?: string | null;
 }

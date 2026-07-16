@@ -6,6 +6,7 @@ import {
   integer,
   timestamp,
   jsonb,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -58,6 +59,22 @@ export const leadsTable = pgTable("leads", {
     .default([]),
   aiScore: integer("ai_score").notNull().default(50),
   notes: text("notes"),
+  // Salesforce-parity record fields
+  company: text("company"),
+  title: text("title"),
+  isRetailCustomer: boolean("is_retail_customer").notNull().default(false),
+  quotationSent: boolean("quotation_sent").notNull().default(false),
+  reservationFeePaid: boolean("reservation_fee_paid").notNull().default(false),
+  reservationComments: text("reservation_comments"),
+  financingQualified: boolean("financing_qualified").notNull().default(false),
+  contactedDate: timestamp("contacted_date", { withTimezone: true }),
+  revisitIn3Months: boolean("revisit_in_3_months").notNull().default(false),
+  closureReason: text("closure_reason"),
+  purchaseIntent: text("purchase_intent"),
+  keyInterestDriver: text("key_interest_driver"),
+  budgetFinancing: text("budget_financing"),
+  description: text("description"),
+  address: text("address"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

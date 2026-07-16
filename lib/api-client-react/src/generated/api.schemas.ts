@@ -61,6 +61,34 @@ export interface CurrentUser {
   permissions: PermissionGrant[];
 }
 
+export interface TeamMemberLead {
+  id: number;
+  name: string;
+  status: string;
+  phase: string;
+  createdAt: string;
+}
+
+export interface TeamMemberProfile {
+  id: number;
+  name: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  /** @nullable */
+  roleName?: string | null;
+  status: string;
+  memberSince: string;
+  /** @nullable */
+  lastLoginAt?: string | null;
+  openLeads: number;
+  totalLeads: number;
+  wonLeads: number;
+  upcomingTestDrives: number;
+  recentLeads: TeamMemberLead[];
+}
+
 export type AdminUserStatus = typeof AdminUserStatus[keyof typeof AdminUserStatus];
 
 
@@ -758,6 +786,31 @@ export interface Lead {
   aiScore: number;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  title?: string | null;
+  isRetailCustomer: boolean;
+  quotationSent: boolean;
+  reservationFeePaid: boolean;
+  /** @nullable */
+  reservationComments?: string | null;
+  financingQualified: boolean;
+  /** @nullable */
+  contactedDate?: string | null;
+  revisitIn3Months: boolean;
+  /** @nullable */
+  closureReason?: string | null;
+  /** @nullable */
+  purchaseIntent?: string | null;
+  /** @nullable */
+  keyInterestDriver?: string | null;
+  /** @nullable */
+  budgetFinancing?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  address?: string | null;
   createdAt: string;
 }
 
@@ -838,6 +891,11 @@ export interface LeadInput {
   assignedTo?: string;
   aiScore?: number;
   notes?: string;
+  company?: string;
+  title?: string;
+  isRetailCustomer?: boolean;
+  address?: string;
+  description?: string;
 }
 
 export type LeadUpdateChannel = typeof LeadUpdateChannel[keyof typeof LeadUpdateChannel];
@@ -900,6 +958,22 @@ export const LeadUpdateStatus = {
   lost: 'lost',
 } as const;
 
+export type LeadUpdateAvailability = typeof LeadUpdateAvailability[keyof typeof LeadUpdateAvailability];
+
+
+export const LeadUpdateAvailability = {
+  available: 'available',
+  back_order: 'back_order',
+} as const;
+
+export type LeadUpdatePurchaseType = typeof LeadUpdatePurchaseType[keyof typeof LeadUpdatePurchaseType];
+
+
+export const LeadUpdatePurchaseType = {
+  cash: 'cash',
+  finance: 'finance',
+} as const;
+
 export interface LeadUpdate {
   /** @minLength 1 */
   name?: string;
@@ -913,11 +987,39 @@ export interface LeadUpdate {
   interestedVehicleId?: number;
   variant?: string;
   color?: string;
+  availability?: LeadUpdateAvailability;
+  purchaseType?: LeadUpdatePurchaseType;
   preferredBranch?: string;
   assignedTo?: string;
   attachments?: LeadAttachment[];
   aiScore?: number;
-  notes?: string;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  company?: string | null;
+  /** @nullable */
+  title?: string | null;
+  isRetailCustomer?: boolean;
+  quotationSent?: boolean;
+  reservationFeePaid?: boolean;
+  /** @nullable */
+  reservationComments?: string | null;
+  financingQualified?: boolean;
+  /** @nullable */
+  contactedDate?: string | null;
+  revisitIn3Months?: boolean;
+  /** @nullable */
+  closureReason?: string | null;
+  /** @nullable */
+  purchaseIntent?: string | null;
+  /** @nullable */
+  keyInterestDriver?: string | null;
+  /** @nullable */
+  budgetFinancing?: string | null;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  address?: string | null;
 }
 
 export interface LeadNoteInput {

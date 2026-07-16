@@ -163,6 +163,7 @@ import type {
   TaskCommentInput,
   TaskInput,
   TaskUpdate,
+  TeamMemberProfile,
   TechnicianRef,
   TestDriveInvite,
   TestEmailRequest,
@@ -9855,6 +9856,77 @@ export const useRecordLogoutEvent = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getRecordLogoutEventMutationOptions(options));
     }
+
+export const getGetTeamMemberUrl = (id: number,) => {
+
+
+
+
+  return `/api/team/${id}`
+}
+
+export const getTeamMember = async (id: number, options?: RequestInit): Promise<TeamMemberProfile> => {
+
+  return customFetch<TeamMemberProfile>(getGetTeamMemberUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTeamMemberQueryKey = (id: number,) => {
+    return [
+    `/api/team/${id}`
+    ] as const;
+    }
+
+
+export const getGetTeamMemberQueryOptions = <TData = Awaited<ReturnType<typeof getTeamMember>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTeamMember>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTeamMemberQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTeamMember>>> = ({ signal }) => getTeamMember(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTeamMember>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTeamMemberQueryResult = NonNullable<Awaited<ReturnType<typeof getTeamMember>>>
+export type GetTeamMemberQueryError = ErrorType<void>
+
+
+
+export function useGetTeamMember<TData = Awaited<ReturnType<typeof getTeamMember>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTeamMember>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTeamMemberQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListAdminUsersUrl = () => {
 
