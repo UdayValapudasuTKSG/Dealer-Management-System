@@ -127,6 +127,11 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
       const quantity = 1;
       const now = new Date();
       const validUntil = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+      // Booking CTA rides along inside the quote email too, so the customer
+      // can reserve a slot even if the separate invite email is missed.
+      const bookingLink = lead.testDriveAt
+        ? null
+        : testDriveBookingUrl(lead.testDriveToken);
 
       await send({
         template: "vehicle_quote",
@@ -144,6 +149,7 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
           quoteRef: `Q-${lead.id}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`,
           issuedOn: longDate(now),
           validUntil: longDate(validUntil),
+          ...(bookingLink ? { link: bookingLink } : {}),
         },
       });
     }

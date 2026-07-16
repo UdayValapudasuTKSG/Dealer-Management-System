@@ -42,7 +42,7 @@ export default function CustomerDetail() {
   if (isError || !data) {
     return (
       <div className="text-center py-32 text-muted-foreground font-light">
-        Client not found.
+        Account not found.
         <div className="mt-4">
           <Link
             href="/customers"
@@ -105,7 +105,7 @@ export default function CustomerDetail() {
         href="/customers"
         className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
       >
-        <ArrowLeft className="w-4 h-4" /> Client Portfolio
+        <ArrowLeft className="w-4 h-4" /> Account Portfolio
       </Link>
 
       {/* Identity header */}

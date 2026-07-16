@@ -47,9 +47,9 @@ const CLUSTERS: Cluster[] = [
     ],
   },
   {
-    label: "Clients",
+    label: "Accounts",
     icon: "nav/clients.png",
-    items: [{ name: "Customers", href: "/customers", module: "customers" }],
+    items: [{ name: "Accounts", href: "/customers", module: "customers" }],
   },
   {
     label: "Compliance",

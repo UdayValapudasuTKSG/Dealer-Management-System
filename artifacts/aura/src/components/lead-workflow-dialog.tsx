@@ -451,7 +451,7 @@ export function LeadWorkflowDialog({
               {l.purchaseType ? (
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <p className="text-sm text-muted-foreground">
-                    Client chose{" "}
+                    Customer chose{" "}
                     <span className="text-foreground font-semibold uppercase">
                       {l.purchaseType}
                     </span>

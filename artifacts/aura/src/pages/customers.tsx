@@ -31,19 +31,19 @@ export default function Customers() {
   return (
     <Page className="space-y-10">
       <PageHeader
-        title="Client"
+        title="Account"
         accent="Portfolio"
         subtitle="Lifetime relationships and loyalty."
         action={
           <CreateRecordDialog
-            title="Add Client"
+            title="Add Account"
             description="Create a new relationship in the portfolio."
             pending={createCustomer.isPending}
-            submitLabel="Add Client"
+            submitLabel="Add Account"
             trigger={
               <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
                 <Plus className="w-5 h-5" />
-                Add Client
+                Add Account
               </Button>
             }
             fields={[
@@ -74,7 +74,7 @@ export default function Customers() {
             onSubmit={async (values) => {
               await createCustomer.mutateAsync({ data: values as never });
               queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
-              toast({ title: "Client added", description: "AURA is enriching the new profile." });
+              toast({ title: "Account added", description: "AURA is enriching the new profile." });
             }}
           />
         }

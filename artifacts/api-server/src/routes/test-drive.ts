@@ -17,6 +17,7 @@ import {
   BookTestDriveSlotResponse,
 } from "@workspace/api-zod";
 import { enqueueEmail, notifyUser, notifyUsers } from "../lib/email";
+import { ensureAccountForLead } from "../lib/accounts";
 
 // ---------------------------------------------------------------------------
 // PUBLIC self-service test-drive booking — reached from the unique link
@@ -208,6 +209,9 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
     })
     .where(eq(leadsTable.id, lead.id))
     .returning();
+
+  // A booked test drive promotes the lead to an account.
+  updated!.customerId = await ensureAccountForLead(updated!);
 
   const [v] = updated!.interestedVehicleId
     ? await db

@@ -95,7 +95,7 @@ export default function Appraisals() {
                             href={`/customers/${appraisal.customerId}`}
                             className="flex items-center gap-1 text-primary hover:underline"
                           >
-                            {appraisal.customerName || 'Client'}
+                            {appraisal.customerName || 'Account'}
                             <ChevronRight className="w-3.5 h-3.5" />
                           </Link>
                         ) : (

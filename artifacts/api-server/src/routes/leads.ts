@@ -39,6 +39,7 @@ import {
 } from "@workspace/api-zod";
 import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
+import { ensureAccountForLead } from "../lib/accounts";
 import { buildQuotePdf } from "../lib/quote-pdf";
 
 const router: IRouter = Router();
@@ -517,6 +518,9 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
     })
     .where(eq(leadsTable.id, params.data.id))
     .returning();
+
+  // A booked test drive promotes the lead to an account.
+  lead!.customerId = await ensureAccountForLead(lead!);
 
   const vehicle = await vehicleLabel(lead!.interestedVehicleId);
   const dateStr = when.toLocaleDateString("en-US", {

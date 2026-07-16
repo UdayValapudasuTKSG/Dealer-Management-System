@@ -314,7 +314,7 @@ export default function LeadDetail() {
             {lead.customerId && (
               <Link href={`/customers/${lead.customerId}`}>
                 <Button variant="outline" className="gap-1.5">
-                  Client
+                  Account
                   <ArrowUpRight className="w-3.5 h-3.5" />
                 </Button>
               </Link>

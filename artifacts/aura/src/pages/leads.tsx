@@ -561,7 +561,7 @@ export default function Leads() {
                             href={`/customers/${lead.customerId}`}
                             className="text-[10px] font-bold uppercase tracking-wider text-primary inline-flex items-center gap-0.5 hover:underline"
                           >
-                            Client
+                            Account
                             <ArrowUpRight className="w-3 h-3" />
                           </Link>
                         )}
