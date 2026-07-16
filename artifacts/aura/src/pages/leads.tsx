@@ -27,6 +27,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Page, PageHeader } from "@/components/layout/page";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
+import { TestDriveBoard } from "@/components/pipeline/test-drive-board";
 import { VehicleCascade } from "@/components/vehicle-cascade";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -117,15 +118,6 @@ export default function Leads() {
         ),
     [leads],
   );
-  const testDrivesByDay = useMemo(() => {
-    const map = new Map<string, typeof testDrives>();
-    for (const l of testDrives) {
-      const key = new Date(l.testDriveAt!).toDateString();
-      map.set(key, [...(map.get(key) ?? []), l]);
-    }
-    return [...map.entries()];
-  }, [testDrives]);
-
   const suggestions = useGetPipelineSuggestions({
     phase: selectedPhase as GetPipelineSuggestionsPhase,
   });
@@ -266,93 +258,7 @@ export default function Leads() {
       </div>
 
       {view === "test-drives" ? (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-8"
-        >
-          {testDrivesByDay.length === 0 ? (
-            <div className="flex items-center justify-center h-40 rounded-3xl border-2 border-dashed border-border/60 text-muted-foreground/60 text-sm uppercase tracking-widest font-semibold">
-              No test drives scheduled yet
-            </div>
-          ) : (
-            testDrivesByDay.map(([day, dayLeads]) => (
-              <div key={day} className="space-y-3">
-                <div className="flex items-baseline gap-3">
-                  <h2 className="text-xl font-light tracking-tight">
-                    {new Date(day).toLocaleDateString(undefined, {
-                      weekday: "long",
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </h2>
-                  <span className="text-xs font-semibold text-primary uppercase tracking-widest">
-                    {dayLeads.length} drive{dayLeads.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {dayLeads.map((lead) => {
-                    const vehicle = vehicles?.find(
-                      (v) => v.id === lead.interestedVehicleId,
-                    );
-                    return (
-                      <button
-                        key={lead.id}
-                        onClick={() => navigate(`/lead/${lead.id}`)}
-                        className="group text-left rounded-2xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:border-primary/30 transition-all duration-300 overflow-hidden"
-                      >
-                        <div className="h-28 bg-foreground/[0.04] overflow-hidden">
-                          {vehicle?.imageUrl ? (
-                            <img
-                              src={withBase(vehicle.imageUrl)}
-                              alt={`${vehicle.make} ${vehicle.model}`}
-                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Car className="w-8 h-8 text-muted-foreground/30" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="p-4">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold truncate group-hover:text-primary transition-colors">
-                              {lead.name}
-                            </span>
-                            <span className="text-lg font-light text-primary shrink-0">
-                              {new Date(lead.testDriveAt!).toLocaleTimeString(
-                                undefined,
-                                { hour: "numeric", minute: "2-digit" },
-                              )}
-                            </span>
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1 truncate">
-                            {vehicle
-                              ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-                              : "Vehicle to be confirmed"}
-                            {lead.testDriveBranch
-                              ? ` — ${lead.testDriveBranch}`
-                              : ""}
-                          </div>
-                          <div className="flex items-center gap-2 mt-3">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                              {STATUS_LABEL[lead.status] ?? lead.status}
-                            </span>
-                            {lead.assignedTo && (
-                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground truncate">
-                                {lead.assignedTo}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))
-          )}
-        </motion.div>
+        <TestDriveBoard drives={testDrives} vehicles={vehicles ?? []} />
       ) : (
         <>
       {/* Stage rail — segmented stepper */}
