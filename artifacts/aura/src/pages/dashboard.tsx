@@ -9,12 +9,19 @@ import {
   useListLeads,
   useListDeals,
   useListVehicles,
+  useGetPredictiveAnalytics,
+  useGetSentimentAnalysis,
+  getGetSentimentAnalysisQueryKey,
 } from "@workspace/api-client-react";
 import type {
   Gate,
   TimelineEvent,
   PipelineStage,
   InventoryBreakdownItem,
+  ForecastPoint,
+  MetricPrediction,
+  SentimentHighlight,
+  SentimentTheme,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -28,6 +35,10 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   ArrowRight,
+  Brain,
+  Sparkles,
+  HeartPulse,
+  RefreshCw,
   CheckCircle2,
   Clock,
   Layers,
@@ -340,6 +351,12 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Predictive intelligence */}
+        <PredictiveSection />
+
+        {/* Customer sentiment */}
+        <SentimentSection />
 
         {/* Pipeline + Units delivered */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

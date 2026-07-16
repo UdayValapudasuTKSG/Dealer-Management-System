@@ -3219,6 +3219,63 @@ export const GetInventoryBreakdownResponse = zod.array(GetInventoryBreakdownResp
 
 
 /**
+ * @summary Sales and metric forecasts computed from historical dealership data
+ */
+export const GetPredictiveAnalyticsResponse = zod.object({
+  "forecast": zod.array(zod.object({
+  "month": zod.string(),
+  "revenue": zod.number().nullish(),
+  "units": zod.number().nullish(),
+  "projectedRevenue": zod.number().nullish(),
+  "projectedUnits": zod.number().nullish(),
+  "isProjection": zod.boolean()
+})),
+  "metrics": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "current": zod.number(),
+  "predicted": zod.number(),
+  "unit": zod.enum(['currency', 'count', 'percent']),
+  "trend": zod.enum(['up', 'down', 'flat']),
+  "confidence": zod.number()
+})),
+  "generatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary AI sentiment analysis over recent lead notes and conversations
+ */
+export const GetSentimentAnalysisQueryParams = zod.object({
+  "refresh": zod.coerce.boolean().optional()
+})
+
+export const GetSentimentAnalysisResponse = zod.object({
+  "overallScore": zod.number(),
+  "overallLabel": zod.enum(['positive', 'neutral', 'negative']),
+  "summary": zod.string(),
+  "distribution": zod.object({
+  "positive": zod.number(),
+  "neutral": zod.number(),
+  "negative": zod.number()
+}),
+  "themes": zod.array(zod.object({
+  "theme": zod.string(),
+  "sentiment": zod.enum(['positive', 'neutral', 'negative']),
+  "mentions": zod.number()
+})),
+  "highlights": zod.array(zod.object({
+  "leadId": zod.number().nullable(),
+  "leadName": zod.string(),
+  "sentiment": zod.enum(['positive', 'neutral', 'negative']),
+  "snippet": zod.string()
+})),
+  "sampleSize": zod.number(),
+  "generatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Aggregated report over live data for a date range
  */
 export const GetReportQueryParams = zod.object({

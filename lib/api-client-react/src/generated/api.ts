@@ -88,6 +88,7 @@ import type {
   GetPermissionMeta200,
   GetPipelineSuggestionsParams,
   GetReportParams,
+  GetSentimentAnalysisParams,
   GlobalSearchParams,
   GraExtractRequest,
   GraFilingDraft,
@@ -141,6 +142,7 @@ import type {
   PaymentInput,
   PipelineStage,
   PipelineSuggestions,
+  PredictiveAnalytics,
   Receipt,
   ReceiveMetaWebhook200,
   RemindAck,
@@ -151,6 +153,7 @@ import type {
   RoleWithPermissions,
   SalesPoint,
   SearchResults,
+  SentimentAnalysis,
   ServiceInvoice,
   ServiceInvoiceUpdate,
   ServiceOrder,
@@ -8241,6 +8244,167 @@ export function useGetInventoryBreakdown<TData = Awaited<ReturnType<typeof getIn
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetInventoryBreakdownQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPredictiveAnalyticsUrl = () => {
+
+
+
+
+  return `/api/dashboard/predictions`
+}
+
+/**
+ * @summary Sales and metric forecasts computed from historical dealership data
+ */
+export const getPredictiveAnalytics = async ( options?: RequestInit): Promise<PredictiveAnalytics> => {
+
+  return customFetch<PredictiveAnalytics>(getGetPredictiveAnalyticsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPredictiveAnalyticsQueryKey = () => {
+    return [
+    `/api/dashboard/predictions`
+    ] as const;
+    }
+
+
+export const getGetPredictiveAnalyticsQueryOptions = <TData = Awaited<ReturnType<typeof getPredictiveAnalytics>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPredictiveAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPredictiveAnalyticsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPredictiveAnalytics>>> = ({ signal }) => getPredictiveAnalytics({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPredictiveAnalytics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPredictiveAnalyticsQueryResult = NonNullable<Awaited<ReturnType<typeof getPredictiveAnalytics>>>
+export type GetPredictiveAnalyticsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Sales and metric forecasts computed from historical dealership data
+ */
+
+export function useGetPredictiveAnalytics<TData = Awaited<ReturnType<typeof getPredictiveAnalytics>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPredictiveAnalytics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPredictiveAnalyticsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSentimentAnalysisUrl = (params?: GetSentimentAnalysisParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/dashboard/sentiment?${stringifiedParams}` : `/api/dashboard/sentiment`
+}
+
+/**
+ * @summary AI sentiment analysis over recent lead notes and conversations
+ */
+export const getSentimentAnalysis = async (params?: GetSentimentAnalysisParams, options?: RequestInit): Promise<SentimentAnalysis> => {
+
+  return customFetch<SentimentAnalysis>(getGetSentimentAnalysisUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSentimentAnalysisQueryKey = (params?: GetSentimentAnalysisParams,) => {
+    return [
+    `/api/dashboard/sentiment`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSentimentAnalysisQueryOptions = <TData = Awaited<ReturnType<typeof getSentimentAnalysis>>, TError = ErrorType<void>>(params?: GetSentimentAnalysisParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSentimentAnalysis>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSentimentAnalysisQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSentimentAnalysis>>> = ({ signal }) => getSentimentAnalysis(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSentimentAnalysis>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSentimentAnalysisQueryResult = NonNullable<Awaited<ReturnType<typeof getSentimentAnalysis>>>
+export type GetSentimentAnalysisQueryError = ErrorType<void>
+
+
+/**
+ * @summary AI sentiment analysis over recent lead notes and conversations
+ */
+
+export function useGetSentimentAnalysis<TData = Awaited<ReturnType<typeof getSentimentAnalysis>>, TError = ErrorType<void>>(
+ params?: GetSentimentAnalysisParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSentimentAnalysis>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSentimentAnalysisQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -2525,6 +2525,111 @@ export interface InventoryBreakdownItem {
   count: number;
 }
 
+export interface ForecastPoint {
+  month: string;
+  /** @nullable */
+  revenue?: number | null;
+  /** @nullable */
+  units?: number | null;
+  /** @nullable */
+  projectedRevenue?: number | null;
+  /** @nullable */
+  projectedUnits?: number | null;
+  isProjection: boolean;
+}
+
+export type MetricPredictionUnit = typeof MetricPredictionUnit[keyof typeof MetricPredictionUnit];
+
+
+export const MetricPredictionUnit = {
+  currency: 'currency',
+  count: 'count',
+  percent: 'percent',
+} as const;
+
+export type MetricPredictionTrend = typeof MetricPredictionTrend[keyof typeof MetricPredictionTrend];
+
+
+export const MetricPredictionTrend = {
+  up: 'up',
+  down: 'down',
+  flat: 'flat',
+} as const;
+
+export interface MetricPrediction {
+  key: string;
+  label: string;
+  current: number;
+  predicted: number;
+  unit: MetricPredictionUnit;
+  trend: MetricPredictionTrend;
+  confidence: number;
+}
+
+export interface PredictiveAnalytics {
+  forecast: ForecastPoint[];
+  metrics: MetricPrediction[];
+  generatedAt: string;
+}
+
+export interface SentimentDistribution {
+  positive: number;
+  neutral: number;
+  negative: number;
+}
+
+export type SentimentThemeSentiment = typeof SentimentThemeSentiment[keyof typeof SentimentThemeSentiment];
+
+
+export const SentimentThemeSentiment = {
+  positive: 'positive',
+  neutral: 'neutral',
+  negative: 'negative',
+} as const;
+
+export interface SentimentTheme {
+  theme: string;
+  sentiment: SentimentThemeSentiment;
+  mentions: number;
+}
+
+export type SentimentHighlightSentiment = typeof SentimentHighlightSentiment[keyof typeof SentimentHighlightSentiment];
+
+
+export const SentimentHighlightSentiment = {
+  positive: 'positive',
+  neutral: 'neutral',
+  negative: 'negative',
+} as const;
+
+export interface SentimentHighlight {
+  /** @nullable */
+  leadId: number | null;
+  leadName: string;
+  sentiment: SentimentHighlightSentiment;
+  snippet: string;
+}
+
+export type SentimentAnalysisOverallLabel = typeof SentimentAnalysisOverallLabel[keyof typeof SentimentAnalysisOverallLabel];
+
+
+export const SentimentAnalysisOverallLabel = {
+  positive: 'positive',
+  neutral: 'neutral',
+  negative: 'negative',
+} as const;
+
+export interface SentimentAnalysis {
+  overallScore: number;
+  overallLabel: SentimentAnalysisOverallLabel;
+  summary: string;
+  distribution: SentimentDistribution;
+  themes: SentimentTheme[];
+  highlights: SentimentHighlight[];
+  sampleSize: number;
+  generatedAt: string;
+}
+
 export interface ReportKpi {
   label: string;
   value: string;
@@ -3132,6 +3237,10 @@ lowStock?: string;
 
 export type ListActivityParams = {
 limit?: number;
+};
+
+export type GetSentimentAnalysisParams = {
+refresh?: boolean;
 };
 
 export type GetReportParams = {

@@ -2536,6 +2536,38 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/InventoryBreakdownItem"
+  /dashboard/predictions:
+    get:
+      operationId: getPredictiveAnalytics
+      tags: [dashboard]
+      summary: Sales and metric forecasts computed from historical dealership data
+      responses:
+        "200":
+          description: Predictive analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictiveAnalytics"
+  /dashboard/sentiment:
+    get:
+      operationId: getSentimentAnalysis
+      tags: [dashboard]
+      summary: AI sentiment analysis over recent lead notes and conversations
+      parameters:
+        - name: refresh
+          in: query
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Sentiment analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SentimentAnalysis"
+        "502":
+          description: Sentiment engine unavailable
 
   /reports:
     get:
@@ -5102,6 +5134,76 @@ components:
       properties:
         powertrain: { type: string }
         count: { type: integer }
+    ForecastPoint:
+      type: object
+      required: [month, isProjection]
+      properties:
+        month: { type: string }
+        revenue: { type: ["number", "null"] }
+        units: { type: ["integer", "null"] }
+        projectedRevenue: { type: ["number", "null"] }
+        projectedUnits: { type: ["number", "null"] }
+        isProjection: { type: boolean }
+    MetricPrediction:
+      type: object
+      required: [key, label, current, predicted, unit, trend, confidence]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        current: { type: number }
+        predicted: { type: number }
+        unit: { type: string, enum: [currency, count, percent] }
+        trend: { type: string, enum: [up, down, flat] }
+        confidence: { type: number }
+    PredictiveAnalytics:
+      type: object
+      required: [forecast, metrics, generatedAt]
+      properties:
+        forecast:
+          type: array
+          items: { $ref: "#/components/schemas/ForecastPoint" }
+        metrics:
+          type: array
+          items: { $ref: "#/components/schemas/MetricPrediction" }
+        generatedAt: { type: string, format: date-time }
+    SentimentDistribution:
+      type: object
+      required: [positive, neutral, negative]
+      properties:
+        positive: { type: number }
+        neutral: { type: number }
+        negative: { type: number }
+    SentimentTheme:
+      type: object
+      required: [theme, sentiment, mentions]
+      properties:
+        theme: { type: string }
+        sentiment: { type: string, enum: [positive, neutral, negative] }
+        mentions: { type: integer }
+    SentimentHighlight:
+      type: object
+      required: [leadId, leadName, sentiment, snippet]
+      properties:
+        leadId: { type: ["integer", "null"] }
+        leadName: { type: string }
+        sentiment: { type: string, enum: [positive, neutral, negative] }
+        snippet: { type: string }
+    SentimentAnalysis:
+      type: object
+      required: [overallScore, overallLabel, summary, distribution, themes, highlights, sampleSize, generatedAt]
+      properties:
+        overallScore: { type: number }
+        overallLabel: { type: string, enum: [positive, neutral, negative] }
+        summary: { type: string }
+        distribution: { $ref: "#/components/schemas/SentimentDistribution" }
+        themes:
+          type: array
+          items: { $ref: "#/components/schemas/SentimentTheme" }
+        highlights:
+          type: array
+          items: { $ref: "#/components/schemas/SentimentHighlight" }
+        sampleSize: { type: integer }
+        generatedAt: { type: string, format: date-time }
 
     ReportKpi:
       type: object
