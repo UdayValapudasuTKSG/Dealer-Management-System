@@ -8,6 +8,7 @@ import {
   type ServiceOrder,
 } from "@workspace/db";
 import { enqueueEmail, type TemplateData } from "./email";
+import { ownerCalendarContact, testDriveCalendarFields } from "./calendar";
 import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -195,13 +196,33 @@ export function onLeadUpdated(before: Lead, after: Lead): void {
         },
       });
     }
-    // "engage" is the Appointment phase — confirm the test drive.
+    // "engage" is the Appointment phase — confirm the test drive (with a
+    // calendar invite when a drive time is already on file).
     if (after.phase === "engage" && before.phase !== "engage") {
+      const owner = after.testDriveAt
+        ? await ownerCalendarContact(after.ownerUserId)
+        : null;
       await send({
         template: "test_drive_confirmation",
         to,
         customerId: after.customerId,
-        data: vehicle ? { vehicle } : {},
+        data: {
+          ...(vehicle ? { vehicle } : {}),
+          ...(after.testDriveAt
+            ? {
+                date: after.testDriveAt.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                }),
+                time: after.testDriveAt.toLocaleTimeString("en-US", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                }),
+              }
+            : {}),
+          ...testDriveCalendarFields(after, vehicle ?? null, owner),
+        },
       });
     }
   });

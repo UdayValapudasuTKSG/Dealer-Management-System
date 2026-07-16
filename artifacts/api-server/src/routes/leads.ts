@@ -40,6 +40,10 @@ import {
 import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
+import {
+  ownerCalendarContact,
+  testDriveCalendarFields,
+} from "../lib/calendar";
 import { buildQuotePdf } from "../lib/quote-pdf";
 
 const router: IRouter = Router();
@@ -541,12 +545,37 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
     actorName(res),
   );
 
+  // Calendar invite lands on both the customer's and the owner's calendar.
+  const owner = await ownerCalendarContact(lead!.ownerUserId);
+  const calendarFields = testDriveCalendarFields(lead!, vehicle, owner);
+
   if (lead!.email) {
     await enqueueEmail({
       template: "test_drive_confirmation",
       to: lead!.email,
       customerId: lead!.customerId,
-      data: { vehicle: vehicle ?? "", date: dateStr, time: timeStr },
+      data: {
+        vehicle: vehicle ?? "",
+        date: dateStr,
+        time: timeStr,
+        ...calendarFields,
+      },
+    });
+  }
+
+  if (owner) {
+    await enqueueEmail({
+      template: "test_drive_owner_invite",
+      to: owner.email,
+      customerId: lead!.customerId,
+      data: {
+        leadName: lead!.name,
+        vehicle: vehicle ?? "",
+        date: dateStr,
+        time: timeStr,
+        branch: lead!.testDriveBranch ?? "Main Showroom",
+        ...calendarFields,
+      },
     });
   }
 

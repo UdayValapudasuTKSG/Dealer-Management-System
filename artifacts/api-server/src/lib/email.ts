@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 import { logger } from "./logger";
 import { buildQuotePdf } from "./quote-pdf";
+import { testDriveIcsFromPayload } from "./calendar";
 
 // ---------------------------------------------------------------------------
 // Transport
@@ -117,6 +118,24 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       `We look forward to hosting you on <strong>${d(x, "date", "your scheduled date")}</strong> at ${d(x, "time", "the agreed time")}. The <strong>${d(x, "vehicle", "vehicle")}</strong> will be detailed, charged/fuelled and waiting at the showroom entrance.`,
     cta: () => ({ label: "Showroom concierge will greet you" }),
     sample: { vehicle: "2026 BMW i7", date: "Friday, July 18", time: "10:30 AM" },
+  },
+  test_drive_owner_invite: {
+    label: "Test Drive — Owner Calendar Invite",
+    description:
+      "Puts a booked test drive on the lead owner's calendar with an .ics invite.",
+    subject: (x) =>
+      `Test drive booked — ${d(x, "leadName", "your lead")}, ${d(x, "date", "upcoming")}`,
+    heading: (x) => `Test drive: ${d(x, "leadName", "your lead")}`,
+    body: (x) =>
+      `<strong>${d(x, "leadName", "Your lead")}</strong> has a test drive booked for <strong>${d(x, "date", "the scheduled date")}</strong> at ${d(x, "time", "the agreed time")} — ${d(x, "vehicle", "the vehicle of interest")}${x.branch ? `, ${x.branch} branch` : ""}. The attached invite adds it straight to your calendar. Have the car detailed, charged/fuelled and ready fifteen minutes ahead.`,
+    cta: () => ({ label: "Calendar invite attached" }),
+    sample: {
+      leadName: "Alex Mensah",
+      vehicle: "2026 BMW i7 xDrive60",
+      date: "Friday, July 18",
+      time: "10:30 AM",
+      branch: "Main Showroom",
+    },
   },
   lead_assignment: {
     label: "Lead Assignment",
@@ -393,12 +412,38 @@ export async function processQueue(): Promise<void> {
             },
           ];
         }
+        // Calendar invite — booked test drives land on the customer's and
+        // the lead owner's calendars (rebuilt from the payload each attempt).
+        let icalEvent:
+          | { filename: string; method: string; content: string }
+          | undefined;
+        if (
+          item.template === "test_drive_confirmation" ||
+          item.template === "test_drive_owner_invite"
+        ) {
+          try {
+            const ics = testDriveIcsFromPayload(item.payload ?? {});
+            if (ics) {
+              icalEvent = {
+                filename: "test-drive.ics",
+                method: "REQUEST",
+                content: ics,
+              };
+            }
+          } catch (err) {
+            logger.warn(
+              { err, emailId: item.id },
+              "calendar invite build failed — sending without it",
+            );
+          }
+        }
         await transport.sendMail({
           from: `"AURA Dealership" <${process.env.GMAIL_USER}>`,
           to: item.recipient,
           subject,
           html,
           ...(attachments ? { attachments } : {}),
+          ...(icalEvent ? { icalEvent } : {}),
         });
         await db
           .update(emailLogsTable)

@@ -18,6 +18,10 @@ import {
 } from "@workspace/api-zod";
 import { enqueueEmail, notifyUser, notifyUsers } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
+import {
+  ownerCalendarContact,
+  testDriveCalendarFields,
+} from "../lib/calendar";
 
 // ---------------------------------------------------------------------------
 // PUBLIC self-service test-drive booking — reached from the unique link
@@ -242,12 +246,37 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
     refId: updated!.id,
   });
 
+  // Calendar invite lands on both the customer's and the owner's calendar.
+  const owner = await ownerCalendarContact(updated!.ownerUserId);
+  const calendarFields = testDriveCalendarFields(updated!, vehicle, owner);
+
   if (updated!.email) {
     await enqueueEmail({
       template: "test_drive_confirmation",
       to: updated!.email,
       customerId: updated!.customerId,
-      data: { vehicle: vehicle ?? "", date: dateStr, time: timeStr },
+      data: {
+        vehicle: vehicle ?? "",
+        date: dateStr,
+        time: timeStr,
+        ...calendarFields,
+      },
+    });
+  }
+
+  if (owner) {
+    await enqueueEmail({
+      template: "test_drive_owner_invite",
+      to: owner.email,
+      customerId: updated!.customerId,
+      data: {
+        leadName: updated!.name,
+        vehicle: vehicle ?? "",
+        date: dateStr,
+        time: timeStr,
+        branch: updated!.testDriveBranch ?? "Main Showroom",
+        ...calendarFields,
+      },
     });
   }
 

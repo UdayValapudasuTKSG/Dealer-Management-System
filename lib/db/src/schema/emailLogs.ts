@@ -14,6 +14,7 @@ export const EMAIL_TEMPLATES = [
   "vehicle_quote",
   "test_drive_invite",
   "test_drive_confirmation",
+  "test_drive_owner_invite",
   "lead_assignment",
   "finance_processing",
   "finance_approved",
