@@ -76,7 +76,7 @@ export default function SettingsEmail() {
   };
 
   return (
-    <Page className="space-y-8">
+    <Page className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Mail className="h-6 w-6 text-primary" /> Email Engine

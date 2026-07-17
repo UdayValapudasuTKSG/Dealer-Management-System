@@ -128,7 +128,7 @@ export default function Tasks() {
     : null;
 
   return (
-    <Page className="space-y-6">
+    <Page className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">

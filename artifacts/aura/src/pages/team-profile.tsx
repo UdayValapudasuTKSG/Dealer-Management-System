@@ -112,7 +112,7 @@ export default function TeamProfile() {
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <h1 className="text-3xl font-bold tracking-tight truncate">
+          <h1 className="text-2xl font-bold tracking-tight truncate">
             {member.name}
           </h1>
           <div className="flex items-center gap-2 mt-2 flex-wrap">

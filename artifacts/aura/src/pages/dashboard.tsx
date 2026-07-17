@@ -228,7 +228,7 @@ export default function Dashboard() {
   return (
     <div className="h-full overflow-y-auto">
       {/* Compact cinematic briefing band */}
-      <div className="relative h-[220px] w-full overflow-hidden bg-black">
+      <div className="relative h-[160px] w-full overflow-hidden bg-black">
         <video
           autoPlay
           muted
@@ -250,11 +250,11 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground mb-3">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground mb-2">
               <Bot className="w-4 h-4" />
               AURA Concierge · Command Center
             </div>
-            <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground max-w-3xl leading-tight">
+            <h1 className="text-2xl md:text-[1.75rem] font-semibold tracking-tight text-foreground max-w-3xl leading-tight">
               {greeting()}. {briefingLine(summary, sortedGates.length)}
             </h1>
           </motion.div>

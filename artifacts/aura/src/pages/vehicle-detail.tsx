@@ -188,7 +188,7 @@ export default function VehicleDetailPage() {
           <div className="text-[11px] font-bold uppercase tracking-widest text-primary mb-2">
             {vehicle.bodyType} · {vehicle.year}
           </div>
-          <h1 className="text-4xl md:text-5xl font-semibold tracking-tight leading-none">
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight leading-none">
             {vehicle.make} <span className="font-light">{vehicle.model}</span>
           </h1>
           {vehicle.trim && (

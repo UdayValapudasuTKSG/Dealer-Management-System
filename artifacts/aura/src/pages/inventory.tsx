@@ -267,7 +267,7 @@ export default function Inventory() {
         {/* Intro */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
+            <h2 className="text-2xl md:text-[1.75rem] font-semibold tracking-tight">
               Discover the range
             </h2>
             <p className="text-muted-foreground mt-2 font-light max-w-2xl">

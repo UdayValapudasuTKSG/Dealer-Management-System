@@ -100,7 +100,7 @@ export default function CustomerDetail() {
   const tags = customer.tags ?? [];
 
   return (
-    <Page className="space-y-8">
+    <Page className="space-y-5">
       <Link
         href="/customers"
         className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
