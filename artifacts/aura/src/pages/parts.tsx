@@ -41,7 +41,7 @@ export default function Parts() {
   const [tab, setTab] = useState<TabKey>("parts");
 
   return (
-    <Page className="space-y-8">
+    <Page className="space-y-5">
       <PageHeader
         title="Parts"
         accent="Operations"

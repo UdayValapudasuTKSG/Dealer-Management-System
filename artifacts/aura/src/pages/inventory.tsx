@@ -263,7 +263,7 @@ export default function Inventory() {
         </div>
       </div>
 
-      <div className="w-full px-5 md:px-8 py-12 space-y-10">
+      <div className="w-full px-5 md:px-8 py-8 space-y-8">
         {/* Intro */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

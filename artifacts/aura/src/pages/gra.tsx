@@ -155,19 +155,14 @@ export default function Gra() {
   };
 
   return (
-    <div className="w-full px-5 md:px-8 py-10 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div>
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary mb-2">
-          <Sparkles className="w-4 h-4" />
-          Concierge Workflow
-        </div>
-        <h1 className="text-4xl font-light tracking-tight mb-2">
+        <h1 className="text-2xl md:text-[1.75rem] font-light tracking-tight leading-tight">
           GRA Duty <span className="font-semibold">Filing</span>
         </h1>
-        <p className="text-muted-foreground text-lg max-w-2xl">
-          Upload an import document. The concierge reads it, prepares the Ghana
-          Revenue Authority vehicle-duty pack, and routes it to a human decision
-          gate for approval.
+        <p className="text-muted-foreground text-sm mt-1 font-light max-w-2xl">
+          Upload an import document — the concierge prepares the duty pack and
+          routes it for approval.
         </p>
       </div>
 

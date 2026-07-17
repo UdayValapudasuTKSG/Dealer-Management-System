@@ -19,8 +19,8 @@ export function Page({
       className={cn(
         "w-full px-5 md:px-8",
         fill
-          ? "h-full flex flex-col py-8 md:py-10"
-          : "py-10 md:py-14",
+          ? "h-full flex flex-col py-5 md:py-6"
+          : "py-6 md:py-8",
         !fill && "animate-in fade-in slide-in-from-bottom-4 duration-500",
         className,
       )}
@@ -50,17 +50,17 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        "flex flex-col gap-5 md:flex-row md:items-end md:justify-between",
+        "flex flex-col gap-3 md:flex-row md:items-end md:justify-between",
         className,
       )}
     >
       <div>
-        <h1 className="text-4xl md:text-5xl font-light tracking-tight leading-[1.05]">
+        <h1 className="text-2xl md:text-[1.75rem] font-light tracking-tight leading-tight">
           {title}
           {accent && <span className="font-semibold"> {accent}</span>}
         </h1>
         {subtitle && (
-          <p className="text-muted-foreground text-lg mt-3 font-light">
+          <p className="text-muted-foreground text-sm mt-1 font-light">
             {subtitle}
           </p>
         )}

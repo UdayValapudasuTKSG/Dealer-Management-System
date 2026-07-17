@@ -21,7 +21,7 @@ export default function Appraisals() {
   const createAppraisal = useCreateAppraisal();
 
   return (
-    <Page className="space-y-10">
+    <Page className="space-y-5">
       <PageHeader
         title="Trade"
         accent="Valuations"

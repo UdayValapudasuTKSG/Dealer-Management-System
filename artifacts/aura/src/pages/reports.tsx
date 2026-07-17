@@ -183,11 +183,9 @@ export default function Reports() {
       <div className="w-full px-5 md:px-8 py-8 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground mb-2">
-              <FileText className="w-4 h-4" />
-              Insights & Actions · Reports
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight">Reports</h1>
+            <h1 className="text-2xl md:text-[1.75rem] font-semibold tracking-tight">
+              Reports
+            </h1>
           </div>
           <div className="flex items-end gap-3">
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">

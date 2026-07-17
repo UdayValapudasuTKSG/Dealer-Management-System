@@ -12,7 +12,7 @@ export default function Workshop() {
   const hours = cards?.reduce((s, c) => s + c.laborHours, 0) ?? 0;
 
   return (
-    <Page className="space-y-8">
+    <Page className="space-y-5">
       <PageHeader
         title="Workshop"
         accent="Operations"

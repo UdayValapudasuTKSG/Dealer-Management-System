@@ -64,12 +64,12 @@ export default function Journey() {
         <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/80 to-background" />
       </div>
 
-      <div className="relative z-10 px-5 md:px-8 py-10 md:py-14 flex-1 flex flex-col">
-        <div className="mb-12 text-center">
+      <div className="relative z-10 px-5 md:px-8 py-6 md:py-8 flex-1 flex flex-col">
+        <div className="mb-6 text-center">
           <motion.h1 
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-4xl font-light tracking-tight mb-3"
+            className="text-2xl md:text-[1.75rem] font-light tracking-tight mb-1.5"
           >
             The <span className="font-semibold text-primary">Journey</span>
           </motion.h1>
@@ -83,7 +83,7 @@ export default function Journey() {
           </motion.p>
         </div>
 
-        <div className="flex justify-center mb-12">
+        <div className="flex justify-center mb-6">
           <div className="flex items-center glass-panel rounded-full p-2 max-w-4xl w-full mx-auto overflow-x-auto">
             {PHASES.map((phase, i) => (
               <button

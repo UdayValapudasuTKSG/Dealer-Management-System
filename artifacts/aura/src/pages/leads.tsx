@@ -26,7 +26,7 @@ import {
   Check,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page } from "@/components/layout/page";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { TestDriveBoard } from "@/components/pipeline/test-drive-board";
 import { VehicleCascade } from "@/components/vehicle-cascade";
@@ -194,12 +194,38 @@ export default function Leads() {
   });
 
   return (
-    <Page className="space-y-10">
-      <PageHeader
-        title="Pipeline"
-        accent="Orchestration"
-        subtitle="Move through each stage — AURA reads the room and tells you what to do next."
-        action={
+    <Page className="space-y-5">
+      {/* Compact command row: view toggle + primary action. The top nav already
+          says where we are — no repeated page title eating vertical space. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1 rounded-full bg-foreground/[0.04] border border-white/10 p-1 w-fit">
+          {(
+            [
+              { key: "pipeline", label: "Pipeline" },
+              { key: "test-drives", label: `Test Drives${testDrives.length ? ` (${testDrives.length})` : ""}` },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setView(t.key)}
+              className={cn(
+                "relative px-5 h-9 rounded-full text-xs font-semibold uppercase tracking-widest transition-colors",
+                view === t.key
+                  ? "text-white"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {view === t.key && (
+                <motion.span
+                  layoutId="pipeline-view-toggle"
+                  transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                  className="absolute inset-0 rounded-full bg-primary shadow-lg shadow-primary/30"
+                />
+              )}
+              <span className="relative z-10">{t.label}</span>
+            </button>
+          ))}
+        </div>
           <CreateRecordDialog
             title="New Lead"
             description="Capture a prospect — AURA scores and routes it instantly."
@@ -295,37 +321,6 @@ export default function Leads() {
               toast({ title: "Lead captured", description: "AURA is scoring and routing this prospect." });
             }}
           />
-        }
-      />
-
-      {/* View toggle */}
-      <div className="flex items-center gap-1 rounded-full bg-foreground/[0.04] border border-white/10 p-1 w-fit">
-        {(
-          [
-            { key: "pipeline", label: "Pipeline" },
-            { key: "test-drives", label: `Test Drives${testDrives.length ? ` (${testDrives.length})` : ""}` },
-          ] as const
-        ).map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setView(t.key)}
-            className={cn(
-              "relative px-5 h-9 rounded-full text-xs font-semibold uppercase tracking-widest transition-colors",
-              view === t.key
-                ? "text-white"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {view === t.key && (
-              <motion.span
-                layoutId="pipeline-view-toggle"
-                transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                className="absolute inset-0 rounded-full bg-primary shadow-lg shadow-primary/30"
-              />
-            )}
-            <span className="relative z-10">{t.label}</span>
-          </button>
-        ))}
       </div>
 
       {view === "test-drives" ? (

@@ -661,7 +661,7 @@ export default function LeadDetail() {
         </Link>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight truncate">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight truncate">
               {lead.name}
             </h1>
             <div className="flex items-center gap-2 mt-3 flex-wrap">

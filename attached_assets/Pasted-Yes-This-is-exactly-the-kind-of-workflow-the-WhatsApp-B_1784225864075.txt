@@ -1,0 +1,344 @@
+Yes. **This is exactly the kind of workflow the WhatsApp Business Platform supports.** However, there is one important distinction: **the "template" is not a conversational form**. You'll typically use a combination of **template messages**, **interactive messages**, and **your backend** to collect the information.
+
+## Your desired flow
+
+```text
+Customer
+    │
+    ▼
+WhatsApp Business
+    │
+    ▼
+"Welcome to ABC Motors"
+
+Please choose:
+
+[New Vehicle]
+[Service]
+[Finance]
+
+        │
+        ▼
+Customer clicks "New Vehicle"
+
+Bot:
+May I know your name?
+
+        ▼
+John
+
+Bot:
+Please enter your mobile number.
+
+        ▼
+9876543210
+
+Bot:
+Which model are you interested in?
+
+[Creta]
+[Venue]
+[Verna]
+[Other]
+
+        ▼
+
+Bot:
+Thank you.
+
+Creating your lead...
+
+        ▼
+
+POST /api/leads
+
+{
+  "name":"John",
+  "mobile":"9876543210",
+  "model":"Creta"
+}
+
+        ▼
+
+Lead Created in DMS
+```
+
+This is a very common CRM/automotive use case.
+
+---
+
+# How it works technically
+
+## Step 1: Customer sends a message
+
+For example:
+
+```
+Hi
+```
+
+Meta sends a webhook to your backend.
+
+```json
+{
+  "from":"919876543210",
+  "text":{
+      "body":"Hi"
+  }
+}
+```
+
+---
+
+## Step 2: Your backend manages the conversation
+
+Store a conversation state.
+
+```text
+Customer
+
+Phone
+
+Current Step
+
+Collected Data
+```
+
+Example:
+
+```text
+919876543210
+
+ASK_NAME
+
+{}
+```
+
+---
+
+## Step 3: Ask for the customer's name
+
+Send a message:
+
+```
+Welcome to ABC Motors.
+
+May I know your name?
+```
+
+Customer replies:
+
+```
+John
+```
+
+Update the state:
+
+```text
+ASK_MOBILE
+
+{
+  "name":"John"
+}
+```
+
+---
+
+## Step 4: Ask for the mobile number
+
+```
+Please enter your mobile number.
+```
+
+Customer replies:
+
+```
+9876543210
+```
+
+Store it.
+
+---
+
+## Step 5: Ask for the interested model
+
+Instead of free text, you can send an **interactive list** or **reply buttons**.
+
+Example:
+
+```
+Select the vehicle you're interested in:
+
+• Creta
+• Venue
+• Verna
+• Tucson
+• Other
+```
+
+The customer taps one option.
+
+---
+
+## Step 6: Create the lead
+
+Once all required fields are collected:
+
+```json
+{
+    "name":"John",
+    "mobile":"9876543210",
+    "vehicle":"Creta",
+    "source":"WhatsApp"
+}
+```
+
+Your backend calls your DMS API:
+
+```http
+POST /api/leads
+```
+
+The lead is now created automatically.
+
+---
+
+# Can Meta ask questions automatically?
+
+**Yes**, but **Meta itself does not maintain the conversation logic**.
+
+Meta provides the messaging channel:
+
+* Send messages
+* Receive replies
+* Interactive buttons
+* Interactive lists
+* Templates
+* Media
+* Webhooks
+
+Your application is responsible for deciding:
+
+* What question to ask next
+* Validating responses
+* Storing answers
+* Creating the lead
+
+Think of Meta as the "transport layer" and your backend as the "conversation engine."
+
+---
+
+# Better user experience
+
+Instead of asking customers to type everything, use interactive messages where possible.
+
+```
+Welcome to ABC Motors
+
+How can we help you today?
+
+🟢 Buy a New Car
+🔵 Book a Service
+🟠 Finance
+```
+
+After selecting "Buy a New Car":
+
+```
+Which brand?
+
+Hyundai
+Toyota
+Honda
+```
+
+Then:
+
+```
+Which model?
+
+Creta
+Venue
+Verna
+```
+
+Only ask for free text when necessary, such as the customer's name.
+
+---
+
+# Conversation state example
+
+| Phone     | Step      | Name | Mobile     | Model |
+| --------- | --------- | ---- | ---------- | ----- |
+| 91987XXXX | ASK_MODEL | John | 9876543210 | NULL  |
+
+After the customer selects "Creta":
+
+```text
+Step = COMPLETED
+```
+
+Then your system creates the lead.
+
+---
+
+# AI-enhanced version (optional)
+
+Instead of fixed steps, you can let an AI interpret the conversation.
+
+Customer:
+
+> I'm Rahul, my number is 9876543210, and I'm interested in the Hyundai Creta.
+
+The AI extracts:
+
+```json
+{
+  "name":"Rahul",
+  "mobile":"9876543210",
+  "model":"Hyundai Creta"
+}
+```
+
+If something is missing, the AI asks only for the missing information:
+
+> Thanks, Rahul! Which dealership location would you prefer?
+
+This feels much more natural than a rigid form.
+
+---
+
+## Recommended architecture for your DMS
+
+```text
+WhatsApp Customer
+        │
+        ▼
+Meta WhatsApp Cloud API
+        │
+        ▼
+Webhook (/webhooks/whatsapp)
+        │
+        ▼
+Conversation Engine
+(State Machine / AI Assistant)
+        │
+        ├── Save conversation
+        ├── Ask next question
+        ├── Validate responses
+        └── Generate lead
+                │
+                ▼
+Dealer Management System API
+                │
+                ▼
+Lead Created
+                │
+                ▼
+Assign Sales Advisor
+                │
+                ▼
+Send confirmation to customer
+```
+
+This architecture is scalable and widely used by dealerships, insurance companies, banks, and e-commerce platforms. It allows you to capture leads automatically from WhatsApp while keeping your DMS as the single source of truth for customer and lead management.

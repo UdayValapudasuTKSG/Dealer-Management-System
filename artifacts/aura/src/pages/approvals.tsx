@@ -1,7 +1,7 @@
 import { useListGates } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { AnimatePresence } from "framer-motion";
-import { Loader2, Check, ShieldCheck, Layers, Flame } from "lucide-react";
+import { Loader2, Check, Layers, Flame } from "lucide-react";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page } from "@/components/layout/page";
 
@@ -13,18 +13,13 @@ export default function Approvals() {
 
   return (
     <Page>
-      <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between mb-10">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between mb-5">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 text-primary px-3 py-1 text-[11px] font-bold uppercase tracking-widest mb-4">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            The never-list
-          </div>
-          <h1 className="text-4xl md:text-5xl font-light tracking-tight leading-[1.05]">
+          <h1 className="text-2xl md:text-[1.75rem] font-light tracking-tight leading-tight">
             Decision <span className="font-semibold">Gates</span>
           </h1>
-          <p className="text-muted-foreground text-lg mt-3 font-light max-w-xl">
-            The concierge runs everything else. These are the moments that need a
-            human.
+          <p className="text-muted-foreground text-sm mt-1 font-light max-w-xl">
+            The moments that need a human — everything else runs itself.
           </p>
         </div>
 

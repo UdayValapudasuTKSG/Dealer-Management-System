@@ -29,7 +29,7 @@ export default function Customers() {
   };
 
   return (
-    <Page className="space-y-10">
+    <Page className="space-y-5">
       <PageHeader
         title="Account"
         accent="Portfolio"

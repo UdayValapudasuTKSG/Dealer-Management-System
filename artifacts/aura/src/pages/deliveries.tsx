@@ -85,16 +85,13 @@ export default function Deliveries() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="w-full px-5 md:px-8 py-10 space-y-8">
+      <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <div className="text-xs font-bold uppercase tracking-[0.25em] text-primary mb-2">
-              Handover Suite
-            </div>
-            <h1 className="text-4xl font-semibold tracking-tight">
-              Deliveries
+            <h1 className="text-2xl md:text-[1.75rem] font-light tracking-tight leading-tight">
+              <span className="font-semibold">Deliveries</span>
             </h1>
-            <p className="text-muted-foreground mt-2 font-light">
+            <p className="text-muted-foreground text-sm mt-1 font-light">
               Bookings, pre-delivery workflow and customer handover — end to
               end.
             </p>

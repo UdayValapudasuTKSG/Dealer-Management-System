@@ -108,17 +108,17 @@ function FocusShell({
 }) {
   return (
     <div className="h-full overflow-y-auto">
-      <div className="w-full px-5 md:px-8 py-10 space-y-6">
+      <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground mb-2">
-            <Icon className="w-4 h-4" />
+          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-1">
+            <Icon className="w-3.5 h-3.5" />
             {kicker}
           </div>
-          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
+          <h1 className="text-2xl md:text-[1.75rem] font-semibold tracking-tight">
             {title}
           </h1>
         </motion.div>

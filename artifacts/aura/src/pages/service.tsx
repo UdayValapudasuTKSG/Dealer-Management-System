@@ -71,7 +71,7 @@ export default function Service() {
   const [tab, setTab] = useState<TabKey>("bookings");
 
   return (
-    <Page className="space-y-8">
+    <Page className="space-y-5">
       <PageHeader
         title="Service"
         accent="Operations"
