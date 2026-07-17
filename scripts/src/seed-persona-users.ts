@@ -1,5 +1,11 @@
 import { eq, isNull } from "drizzle-orm";
-import { db, rolesTable, usersTable } from "@workspace/db";
+import {
+  db,
+  rolesTable,
+  usersTable,
+  dealersTable,
+  dealerUsersTable,
+} from "@workspace/db";
 
 const CLERK_API = "https://api.clerk.com/v1";
 const SECRET = process.env.CLERK_SECRET_KEY;
@@ -113,9 +119,39 @@ async function roleIdByName(name: string): Promise<number> {
   return row.id;
 }
 
+async function dealerIdByName(name: string): Promise<number> {
+  const [row] = await db
+    .select({ id: dealersTable.id })
+    .from(dealersTable)
+    .where(eq(dealersTable.name, name));
+  if (!row)
+    throw new Error(`Dealer not found in DB: ${name} — run migrate-dealers first`);
+  return row.id;
+}
+
+async function ensureMembership(
+  dealerId: number,
+  userId: number,
+  roleId: number,
+  isGeneralManager: boolean,
+) {
+  await db
+    .insert(dealerUsersTable)
+    .values({ dealerId, userId, roleId, isGeneralManager })
+    .onConflictDoUpdate({
+      target: [dealerUsersTable.dealerId, dealerUsersTable.userId],
+      set: { roleId, isGeneralManager },
+    });
+}
+
 async function main() {
-  // Restore any users whose role was wiped by a schema push: user 1 is the
-  // original owner (General Manager); anyone else defaults to Sales Advisor.
+  // Personas (and legacy role-less users) all belong to CAM Motors — the
+  // dealer that inherited the original single-tenant data.
+  const camId = await dealerIdByName("CAM Motors");
+
+  // Restore any users whose role/membership was wiped by a schema push:
+  // user 1 is the original owner (General Manager of CAM Motors); anyone
+  // else defaults to Sales Advisor at CAM Motors.
   const gmId = await roleIdByName("General Manager");
   const saId = await roleIdByName("Sales Advisor");
   const orphans = await db
@@ -123,10 +159,18 @@ async function main() {
     .from(usersTable)
     .where(isNull(usersTable.roleId));
   for (const o of orphans) {
+    const roleId = o.id === 1 ? gmId : saId;
     await db
       .update(usersTable)
-      .set({ roleId: o.id === 1 ? gmId : saId, updatedBy: "seed-persona-users" })
+      .set({ roleId, updatedBy: "seed-persona-users" })
       .where(eq(usersTable.id, o.id));
+    const [member] = await db
+      .select({ id: dealerUsersTable.id })
+      .from(dealerUsersTable)
+      .where(eq(dealerUsersTable.userId, o.id));
+    if (!member) {
+      await ensureMembership(camId, o.id, roleId, o.id === 1);
+    }
     console.log(
       `restored role for user ${o.id} -> ${o.id === 1 ? "General Manager" : "Sales Advisor"}`,
     );
@@ -141,20 +185,27 @@ async function main() {
       .select()
       .from(usersTable)
       .where(eq(usersTable.clerkId, cu.id));
+    let userId: number;
     if (existing) {
       await db
         .update(usersTable)
         .set({ email: p.email, name, roleId, updatedBy: "seed-persona-users" })
         .where(eq(usersTable.id, existing.id));
+      userId = existing.id;
     } else {
-      await db.insert(usersTable).values({
-        clerkId: cu.id,
-        email: p.email,
-        name,
-        roleId,
-        createdBy: "seed-persona-users",
-      });
+      const [created] = await db
+        .insert(usersTable)
+        .values({
+          clerkId: cu.id,
+          email: p.email,
+          name,
+          roleId,
+          createdBy: "seed-persona-users",
+        })
+        .returning({ id: usersTable.id });
+      userId = created!.id;
     }
+    await ensureMembership(camId, userId, roleId, p.role === "General Manager");
     console.log(`ok: ${p.role.padEnd(22)} ${p.email}`);
   }
 

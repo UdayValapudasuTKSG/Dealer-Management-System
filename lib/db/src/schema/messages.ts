@@ -6,6 +6,7 @@ import { conversations } from "./conversations";
 
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   conversationId: integer("conversation_id")
     .notNull()
     .references(() => conversations.id, { onDelete: "cascade" }),
@@ -14,7 +15,7 @@ export const messages = pgTable("messages", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const insertMessageSchema = createInsertSchema(messages).omit({
+export const insertMessageSchema = createInsertSchema(messages).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });

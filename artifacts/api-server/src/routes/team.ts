@@ -1,10 +1,17 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and, notInArray, gt, count } from "drizzle-orm";
-import { db, leadsTable, usersTable, rolesTable } from "@workspace/db";
+import {
+  db,
+  leadsTable,
+  usersTable,
+  rolesTable,
+  dealerUsersTable,
+} from "@workspace/db";
 import {
   GetTeamMemberParams,
   GetTeamMemberResponse,
 } from "@workspace/api-zod";
+import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
@@ -19,6 +26,10 @@ router.get("/team/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
+
+  // Only expose a profile if the user is a member of the active dealer, and
+  // surface the role they hold *at this dealer* (not any global default).
   const [row] = await db
     .select({
       id: usersTable.id,
@@ -30,9 +41,15 @@ router.get("/team/:id", async (req, res): Promise<void> => {
       lastLoginAt: usersTable.lastLoginAt,
       roleName: rolesTable.name,
     })
-    .from(usersTable)
-    .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
-    .where(eq(usersTable.id, params.data.id));
+    .from(dealerUsersTable)
+    .innerJoin(usersTable, eq(dealerUsersTable.userId, usersTable.id))
+    .leftJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
+    .where(
+      and(
+        eq(dealerUsersTable.userId, params.data.id),
+        eq(dealerUsersTable.dealerId, dealerId),
+      ),
+    );
 
   if (!row) {
     res.status(404).json({ error: "Team member not found" });
@@ -45,6 +62,7 @@ router.get("/team/:id", async (req, res): Promise<void> => {
       .from(leadsTable)
       .where(
         and(
+          eq(leadsTable.dealerId, dealerId),
           eq(leadsTable.ownerUserId, row.id),
           notInArray(leadsTable.status, CLOSED_STATUSES),
         ),
@@ -52,12 +70,18 @@ router.get("/team/:id", async (req, res): Promise<void> => {
     db
       .select({ n: count() })
       .from(leadsTable)
-      .where(eq(leadsTable.ownerUserId, row.id)),
+      .where(
+        and(
+          eq(leadsTable.dealerId, dealerId),
+          eq(leadsTable.ownerUserId, row.id),
+        ),
+      ),
     db
       .select({ n: count() })
       .from(leadsTable)
       .where(
         and(
+          eq(leadsTable.dealerId, dealerId),
           eq(leadsTable.ownerUserId, row.id),
           eq(leadsTable.status, "converted"),
         ),
@@ -67,6 +91,7 @@ router.get("/team/:id", async (req, res): Promise<void> => {
       .from(leadsTable)
       .where(
         and(
+          eq(leadsTable.dealerId, dealerId),
           eq(leadsTable.ownerUserId, row.id),
           gt(leadsTable.testDriveAt, new Date()),
         ),
@@ -80,7 +105,12 @@ router.get("/team/:id", async (req, res): Promise<void> => {
         createdAt: leadsTable.createdAt,
       })
       .from(leadsTable)
-      .where(eq(leadsTable.ownerUserId, row.id))
+      .where(
+        and(
+          eq(leadsTable.dealerId, dealerId),
+          eq(leadsTable.ownerUserId, row.id),
+        ),
+      )
       .orderBy(desc(leadsTable.createdAt))
       .limit(8),
   ]);

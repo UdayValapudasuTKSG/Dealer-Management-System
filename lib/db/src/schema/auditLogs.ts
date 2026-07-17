@@ -27,6 +27,7 @@ export const auditLogsTable = pgTable(
   "audit_logs",
   {
     id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id"),
     actorUserId: integer("actor_user_id"),
     actorClerkId: text("actor_clerk_id"),
     actorName: text("actor_name"),
@@ -51,7 +52,7 @@ export const auditLogsTable = pgTable(
 
 export const insertAuditLogSchema = createInsertSchema(auditLogsTable, {
   action: z.enum(AUDIT_ACTIONS),
-}).omit({ id: true, createdAt: true });
+}).omit({ dealerId: true, id: true, createdAt: true });
 
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type AuditLog = typeof auditLogsTable.$inferSelect;

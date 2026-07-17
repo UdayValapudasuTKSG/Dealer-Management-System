@@ -17,6 +17,8 @@ import {
   type GateEvidenceItem,
 } from "@workspace/db";
 
+const DEALER_ID = 2; // CAM Motors
+
 const GYD = 209; // approx GY$ per US$ for dual-currency evidence
 const g = (usd: number) =>
   `G$${Math.round(usd * GYD).toLocaleString("en-US")}`;
@@ -58,7 +60,7 @@ async function ensureCustomer(
   }
   const [created] = await db
     .insert(customersTable)
-    .values(row)
+    .values({ ...row, dealerId: DEALER_ID })
     .returning();
   return created.id;
 }
@@ -200,6 +202,7 @@ async function main() {
     } = {},
   ) => {
     events.push({
+      dealerId: DEALER_ID,
       customerId,
       domain,
       kind,
@@ -274,6 +277,7 @@ async function main() {
   });
 
   gates.push({
+    dealerId: DEALER_ID,
     type: "below_floor_price",
     status: "pending",
     priority: "high",
@@ -299,6 +303,7 @@ async function main() {
   });
 
   gates.push({
+    dealerId: DEALER_ID,
     type: "credit_decline",
     status: "pending",
     priority: "high",
@@ -323,6 +328,7 @@ async function main() {
   });
 
   gates.push({
+    dealerId: DEALER_ID,
     type: "capital_order",
     status: "pending",
     priority: "normal",
@@ -348,6 +354,7 @@ async function main() {
   });
 
   gates.push({
+    dealerId: DEALER_ID,
     type: "gra_filing",
     status: "pending",
     priority: "normal",
@@ -371,6 +378,7 @@ async function main() {
   });
 
   gates.push({
+    dealerId: DEALER_ID,
     type: "refund_release",
     status: "pending",
     priority: "low",

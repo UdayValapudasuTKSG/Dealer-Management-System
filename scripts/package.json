@@ -7,6 +7,7 @@
     "hello": "tsx ./src/hello.ts",
     "seed-connectivity": "tsx ./src/seed-connectivity.ts",
     "seed-rbac": "tsx ./src/seed-rbac.ts",
+    "migrate-dealers": "tsx ./src/migrate-dealers.ts",
     "seed-persona-users": "tsx ./src/seed-persona-users.ts",
     "verify-gate-cascades": "tsx ./src/verify-gate-cascades.ts",
     "check-gate-cascades": "bash ./run-gate-cascade-check.sh",

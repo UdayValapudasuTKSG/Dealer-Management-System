@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
-import { desc, eq, ilike, or, sql } from "drizzle-orm";
+import { activeDealerId } from "../middlewares/rbac";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import {
   db,
   partsTable,
@@ -30,11 +31,11 @@ router.get("/parts", async (req, res): Promise<void> => {
     res.status(400).json({ error: query.error.message });
     return;
   }
-  const filters = [];
+  const filters = [eq(partsTable.dealerId, activeDealerId(res))];
   if (query.data.search) {
     const term = `%${query.data.search}%`;
     filters.push(
-      or(ilike(partsTable.name, term), ilike(partsTable.sku, term)),
+      or(ilike(partsTable.name, term), ilike(partsTable.sku, term))!,
     );
   }
   if (query.data.lowStock === "1") {
@@ -43,7 +44,7 @@ router.get("/parts", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(partsTable)
-    .where(filters.length > 0 ? sql.join(filters, sql` and `) : undefined)
+    .where(sql.join(filters, sql` and `))
     .orderBy(partsTable.name);
   res.json(ListPartsResponse.parse(rows));
 });
@@ -54,7 +55,10 @@ router.post("/parts", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [part] = await db.insert(partsTable).values(parsed.data).returning();
+  const [part] = await db
+    .insert(partsTable)
+    .values({ ...parsed.data, dealerId: activeDealerId(res) })
+    .returning();
   res.status(201).json(CreatePartResponse.parse(part));
 });
 
@@ -70,7 +74,12 @@ router.patch("/parts/:id", async (req, res): Promise<void> => {
   const [part] = await db
     .update(partsTable)
     .set(parsed.data)
-    .where(eq(partsTable.id, params.data.id))
+    .where(
+      and(
+        eq(partsTable.id, params.data.id),
+        eq(partsTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
   if (!part) {
     res.status(404).json({ error: "Part not found" });
@@ -83,6 +92,7 @@ router.get("/suppliers", async (_req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(suppliersTable)
+    .where(eq(suppliersTable.dealerId, activeDealerId(res)))
     .orderBy(suppliersTable.name);
   res.json(ListSuppliersResponse.parse(rows));
 });
@@ -95,7 +105,7 @@ router.post("/suppliers", async (req, res): Promise<void> => {
   }
   const [supplier] = await db
     .insert(suppliersTable)
-    .values(parsed.data)
+    .values({ ...parsed.data, dealerId: activeDealerId(res) })
     .returning();
   res.status(201).json(CreateSupplierResponse.parse(supplier));
 });
@@ -104,6 +114,7 @@ router.get("/part-purchases", async (_req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(partPurchasesTable)
+    .where(eq(partPurchasesTable.dealerId, activeDealerId(res)))
     .orderBy(desc(partPurchasesTable.createdAt));
   res.json(ListPartPurchasesResponse.parse(rows));
 });
@@ -117,7 +128,12 @@ router.post("/part-purchases", async (req, res): Promise<void> => {
   const [part] = await db
     .select()
     .from(partsTable)
-    .where(eq(partsTable.id, parsed.data.partId));
+    .where(
+      and(
+        eq(partsTable.id, parsed.data.partId),
+        eq(partsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!part) {
     res.status(404).json({ error: "Part not found" });
     return;
@@ -125,7 +141,7 @@ router.post("/part-purchases", async (req, res): Promise<void> => {
   const [purchase] = await db.transaction(async (tx) => {
     const inserted = await tx
       .insert(partPurchasesTable)
-      .values(parsed.data)
+      .values({ ...parsed.data, dealerId: part.dealerId })
       .returning();
     await tx
       .update(partsTable)

@@ -53,6 +53,7 @@ import {
 } from "@workspace/api-zod";
 import { storage } from "../lib/storage";
 import { getLosConnector } from "../lib/los";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   applyFinanceStatusEffects,
   transitionFinanceStatus,
@@ -80,9 +81,12 @@ router.get("/finance-applications", async (req, res): Promise<void> => {
     .select()
     .from(financeApplicationsTable)
     .where(
-      query.data.status
-        ? eq(financeApplicationsTable.status, query.data.status)
-        : undefined,
+      and(
+        eq(financeApplicationsTable.dealerId, activeDealerId(res)),
+        ...(query.data.status
+          ? [eq(financeApplicationsTable.status, query.data.status)]
+          : []),
+      ),
     )
     .orderBy(desc(financeApplicationsTable.createdAt));
   res.json(ListFinanceApplicationsResponse.parse(rows));
@@ -99,6 +103,7 @@ router.post("/finance-applications", async (req, res): Promise<void> => {
     .insert(financeApplicationsTable)
     .values({
       ...parsed.data,
+      dealerId: activeDealerId(res),
       status: "pending",
       statusHistory: [
         statusEvent(
@@ -121,7 +126,12 @@ router.get("/finance-applications/:id", async (req, res): Promise<void> => {
   const [application] = await db
     .select()
     .from(financeApplicationsTable)
-    .where(eq(financeApplicationsTable.id, params.data.id));
+    .where(
+      and(
+        eq(financeApplicationsTable.id, params.data.id),
+        eq(financeApplicationsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!application) {
     res.status(404).json({ error: "Finance application not found" });
     return;
@@ -163,7 +173,12 @@ router.patch("/finance-applications/:id", async (req, res): Promise<void> => {
   const [before] = await db
     .select()
     .from(financeApplicationsTable)
-    .where(eq(financeApplicationsTable.id, params.data.id));
+    .where(
+      and(
+        eq(financeApplicationsTable.id, params.data.id),
+        eq(financeApplicationsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!before) {
     res.status(404).json({ error: "Finance application not found" });
     return;
@@ -190,7 +205,12 @@ router.patch("/finance-applications/:id", async (req, res): Promise<void> => {
           }
         : {}),
     })
-    .where(eq(financeApplicationsTable.id, params.data.id))
+    .where(
+      and(
+        eq(financeApplicationsTable.id, params.data.id),
+        eq(financeApplicationsTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
 
   if (!application) {
@@ -229,6 +249,7 @@ async function recordSubmission(
 ): Promise<void> {
   const connector = getLosConnector();
   await db.insert(losSubmissionsTable).values({
+    dealerId: app.dealerId,
     applicationId: app.id,
     connector: connector.name,
     mode: connector.mode,
@@ -251,7 +272,12 @@ router.post(
     const [app] = await db
       .select()
       .from(financeApplicationsTable)
-      .where(eq(financeApplicationsTable.id, params.data.id));
+      .where(
+        and(
+          eq(financeApplicationsTable.id, params.data.id),
+          eq(financeApplicationsTable.dealerId, activeDealerId(res)),
+        ),
+      );
     if (!app) {
       res.status(404).json({ error: "Finance application not found" });
       return;
@@ -314,7 +340,12 @@ router.post(
     const [app] = await db
       .select()
       .from(financeApplicationsTable)
-      .where(eq(financeApplicationsTable.id, params.data.id));
+      .where(
+        and(
+          eq(financeApplicationsTable.id, params.data.id),
+          eq(financeApplicationsTable.dealerId, activeDealerId(res)),
+        ),
+      );
     if (!app) {
       res.status(404).json({ error: "Finance application not found" });
       return;
@@ -371,7 +402,12 @@ router.get(
     const rows = await db
       .select()
       .from(financeDocumentsTable)
-      .where(eq(financeDocumentsTable.applicationId, params.data.id))
+      .where(
+        and(
+          eq(financeDocumentsTable.applicationId, params.data.id),
+          eq(financeDocumentsTable.dealerId, activeDealerId(res)),
+        ),
+      )
       .orderBy(desc(financeDocumentsTable.createdAt));
     res.json(ListFinanceDocumentsResponse.parse(rows));
   },
@@ -400,7 +436,12 @@ router.post(
     const [app] = await db
       .select()
       .from(financeApplicationsTable)
-      .where(eq(financeApplicationsTable.id, params.data.id));
+      .where(
+        and(
+          eq(financeApplicationsTable.id, params.data.id),
+          eq(financeApplicationsTable.dealerId, activeDealerId(res)),
+        ),
+      );
     if (!app) {
       res.status(404).json({ error: "Finance application not found" });
       return;
@@ -411,6 +452,7 @@ router.post(
     const [doc] = await db
       .insert(financeDocumentsTable)
       .values({
+        dealerId: app.dealerId,
         applicationId: params.data.id,
         type: docType.data,
         fileName: req.file.originalname,
@@ -439,6 +481,7 @@ router.get(
         and(
           eq(financeDocumentsTable.id, params.data.docId),
           eq(financeDocumentsTable.applicationId, params.data.id),
+          eq(financeDocumentsTable.dealerId, activeDealerId(res)),
         ),
       );
     if (!doc) {
@@ -475,6 +518,7 @@ router.delete(
         and(
           eq(financeDocumentsTable.id, params.data.docId),
           eq(financeDocumentsTable.applicationId, params.data.id),
+          eq(financeDocumentsTable.dealerId, activeDealerId(res)),
         ),
       );
     if (doc) {
@@ -495,6 +539,7 @@ router.get("/banks", async (_req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(banksTable)
+    .where(eq(banksTable.dealerId, activeDealerId(res)))
     .orderBy(banksTable.name);
   res.json(ListBanksResponse.parse(rows));
 });
@@ -505,7 +550,10 @@ router.post("/banks", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [bank] = await db.insert(banksTable).values(parsed.data).returning();
+  const [bank] = await db
+    .insert(banksTable)
+    .values({ ...parsed.data, dealerId: activeDealerId(res) })
+    .returning();
   res.status(201).json(CreateBankResponse.parse(bank));
 });
 
@@ -523,7 +571,12 @@ router.patch("/banks/:id", async (req, res): Promise<void> => {
   const [bank] = await db
     .update(banksTable)
     .set(parsed.data)
-    .where(eq(banksTable.id, params.data.id))
+    .where(
+      and(
+        eq(banksTable.id, params.data.id),
+        eq(banksTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
   if (!bank) {
     res.status(404).json({ error: "Bank not found" });
@@ -546,9 +599,12 @@ router.get("/invoices", async (req, res): Promise<void> => {
     .select()
     .from(invoicesTable)
     .where(
-      query.data.status
-        ? eq(invoicesTable.status, query.data.status)
-        : undefined,
+      and(
+        eq(invoicesTable.dealerId, activeDealerId(res)),
+        ...(query.data.status
+          ? [eq(invoicesTable.status, query.data.status)]
+          : []),
+      ),
     )
     .orderBy(desc(invoicesTable.createdAt));
   res.json(ListInvoicesResponse.parse(rows));
@@ -563,7 +619,7 @@ router.post("/invoices", async (req, res): Promise<void> => {
   const invoice = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(invoicesTable)
-      .values({ ...parsed.data, invoiceNumber: "PENDING" })
+      .values({ ...parsed.data, dealerId: activeDealerId(res), invoiceNumber: "PENDING" })
       .returning();
     const [numbered] = await tx
       .update(invoicesTable)
@@ -591,7 +647,12 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
   const [invoice] = await db
     .update(invoicesTable)
     .set(parsed.data)
-    .where(eq(invoicesTable.id, params.data.id))
+    .where(
+      and(
+        eq(invoicesTable.id, params.data.id),
+        eq(invoicesTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
   if (!invoice) {
     res.status(404).json({ error: "Invoice not found" });
@@ -604,6 +665,7 @@ router.get("/payments", async (_req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(paymentsTable)
+    .where(eq(paymentsTable.dealerId, activeDealerId(res)))
     .orderBy(desc(paymentsTable.createdAt));
   res.json(ListPaymentsResponse.parse(rows));
 });
@@ -621,7 +683,12 @@ router.post("/payments", async (req, res): Promise<void> => {
   const [invoice] = await db
     .select()
     .from(invoicesTable)
-    .where(eq(invoicesTable.id, parsed.data.invoiceId));
+    .where(
+      and(
+        eq(invoicesTable.id, parsed.data.invoiceId),
+        eq(invoicesTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!invoice) {
     res.status(404).json({ error: "Invoice not found" });
     return;
@@ -641,6 +708,7 @@ router.post("/payments", async (req, res): Promise<void> => {
     const [row] = await tx
       .insert(paymentsTable)
       .values({
+        dealerId: invoice.dealerId,
         invoiceId: invoice.id,
         customerName: invoice.customerName,
         amount: parsed.data.amount,
@@ -665,6 +733,7 @@ router.post("/payments", async (req, res): Promise<void> => {
       .where(eq(invoicesTable.id, invoice.id));
 
     await tx.insert(receiptsTable).values({
+      dealerId: invoice.dealerId,
       receiptNumber: `RCT-${new Date().getFullYear()}-${String(row!.id).padStart(4, "0")}`,
       paymentId: row!.id,
       invoiceId: invoice.id,
@@ -685,6 +754,7 @@ router.get("/receipts", async (_req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(receiptsTable)
+    .where(eq(receiptsTable.dealerId, activeDealerId(res)))
     .orderBy(desc(receiptsTable.createdAt));
   res.json(ListReceiptsResponse.parse(rows));
 });
@@ -693,7 +763,12 @@ router.get("/outstanding-balances", async (_req, res): Promise<void> => {
   const invoices = await db
     .select()
     .from(invoicesTable)
-    .where(inArray(invoicesTable.status, ["issued", "partially_paid"]))
+    .where(
+      and(
+        eq(invoicesTable.dealerId, activeDealerId(res)),
+        inArray(invoicesTable.status, ["issued", "partially_paid"]),
+      ),
+    )
     .orderBy(desc(invoicesTable.createdAt));
   const sums = invoices.length
     ? await db

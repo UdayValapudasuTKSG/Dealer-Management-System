@@ -22,6 +22,7 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const paymentsTable = pgTable("payments", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   invoiceId: integer("invoice_id")
     .notNull()
     .references(() => invoicesTable.id, { onDelete: "cascade" }),
@@ -37,12 +38,13 @@ export const paymentsTable = pgTable("payments", {
 
 export const insertPaymentSchema = createInsertSchema(paymentsTable, {
   method: z.enum(PAYMENT_METHODS),
-}).omit({ id: true, createdAt: true });
+}).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof paymentsTable.$inferSelect;
 
 export const receiptsTable = pgTable("receipts", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   receiptNumber: text("receipt_number").notNull(),
   paymentId: integer("payment_id")
     .notNull()

@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { notifyUser } from "./email";
 import { createInboundLead, matchVehicleByText } from "./lead-intake";
+import { defaultDealerId } from "./tenancy";
 import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -161,12 +162,13 @@ Respond with ONLY a JSON object, no markdown fences:
 
 const OPEN_EXCLUDED_PHASES = ["won", "lost"];
 
-async function findOpenLeadByEmail(email: string) {
+async function findOpenLeadByEmail(dealerId: number, email: string) {
   const candidates = await db
     .select()
     .from(leadsTable)
     .where(
       and(
+        eq(leadsTable.dealerId, dealerId),
         isNotNull(leadsTable.email),
         notInArray(leadsTable.phase, OPEN_EXCLUDED_PHASES),
       ),
@@ -182,9 +184,11 @@ async function handleEnquiry(opts: {
   body: string;
   extraction: Extraction;
 }): Promise<number | null> {
-  const existing = await findOpenLeadByEmail(opts.fromEmail);
+  const dealerId = await defaultDealerId();
+  const existing = await findOpenLeadByEmail(dealerId, opts.fromEmail);
   if (existing) {
     await db.insert(timelineEventsTable).values({
+      dealerId: existing.dealerId,
       customerId: existing.customerId,
       domain: "leads",
       kind: "email_message",
@@ -198,6 +202,7 @@ async function handleEnquiry(opts: {
     if (existing.ownerUserId) {
       await notifyUser({
         userId: existing.ownerUserId,
+        dealerId: existing.dealerId,
         type: "system",
         title: `Email: ${existing.name}`,
         body: (opts.extraction.summary || opts.subject || "New email received.").slice(0, 180),
@@ -207,7 +212,7 @@ async function handleEnquiry(opts: {
     return existing.id;
   }
 
-  const vehicle = await matchVehicleByText(opts.extraction.vehicle);
+  const vehicle = await matchVehicleByText(opts.extraction.vehicle, dealerId);
   const noteParts: string[] = [];
   if (opts.extraction.summary) noteParts.push(opts.extraction.summary);
   if (opts.extraction.vehicle && !vehicle)
@@ -218,6 +223,7 @@ async function handleEnquiry(opts: {
   );
 
   const lead = await createInboundLead({
+    dealerId,
     name: opts.extraction.name || opts.fromName || opts.fromEmail,
     email: opts.fromEmail,
     phone: opts.extraction.phone,

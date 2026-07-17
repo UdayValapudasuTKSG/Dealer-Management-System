@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DealerMembershipInfo } from './dealerMembershipInfo';
 import type { PermissionGrant } from './permissionGrant';
 
 export interface CurrentUser {
@@ -21,5 +22,9 @@ export interface CurrentUser {
   /** @nullable */
   roleName: string | null;
   status: string;
+  isSuperAdmin: boolean;
+  /** @nullable */
+  activeDealerId?: number | null;
+  dealers: DealerMembershipInfo[];
   permissions: PermissionGrant[];
 }

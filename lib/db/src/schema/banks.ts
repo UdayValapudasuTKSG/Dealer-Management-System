@@ -12,6 +12,7 @@ import { z } from "zod/v4";
 
 export const banksTable = pgTable("banks", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   name: text("name").notNull(),
   code: text("code"),
   contactEmail: text("contact_email"),
@@ -25,7 +26,7 @@ export const banksTable = pgTable("banks", {
     .defaultNow(),
 });
 
-export const insertBankSchema = createInsertSchema(banksTable).omit({
+export const insertBankSchema = createInsertSchema(banksTable).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });

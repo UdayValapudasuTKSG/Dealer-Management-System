@@ -9,6 +9,8 @@ import {
   timelineEventsTable,
 } from "@workspace/db";
 
+const DEALER_ID = 2; // CAM Motors
+
 // End-to-end verification that every never-list gate cascade advances the
 // correct downstream record AND writes a matching timeline receipt when
 // resolved through the real HTTP endpoint (POST /api/gates/:id/resolve).
@@ -81,6 +83,7 @@ async function makeVehicle(status = "available"): Promise<number> {
   const [v] = await db
     .insert(vehiclesTable)
     .values({
+      dealerId: DEALER_ID,
       make: "TEST",
       model: "Cascade",
       year: 2026,
@@ -129,6 +132,7 @@ async function testBelowFloorPrice(action: "approve" | "adjust") {
   const [deal] = await db
     .insert(dealsTable)
     .values({
+      dealerId: DEALER_ID,
       vehicleId,
       customerName: "Cascade Test",
       stage: "negotiation",
@@ -145,6 +149,7 @@ async function testBelowFloorPrice(action: "approve" | "adjust") {
   const [gate] = await db
     .insert(gatesTable)
     .values({
+      dealerId: DEALER_ID,
       type: "below_floor_price",
       status: "pending",
       priority: "high",
@@ -208,6 +213,7 @@ async function testCreditDecline(action: "approve" | "adjust") {
   const [fin] = await db
     .insert(financeApplicationsTable)
     .values({
+      dealerId: DEALER_ID,
       customerName: "Cascade Test",
       amount: 56990,
       termMonths: 60,
@@ -219,6 +225,7 @@ async function testCreditDecline(action: "approve" | "adjust") {
   const [gate] = await db
     .insert(gatesTable)
     .values({
+      dealerId: DEALER_ID,
       type: "credit_decline",
       status: "pending",
       priority: "high",
@@ -272,6 +279,7 @@ async function testCapitalOrder(action: "approve" | "adjust") {
   const [gate] = await db
     .insert(gatesTable)
     .values({
+      dealerId: DEALER_ID,
       type: "capital_order",
       status: "pending",
       priority: "normal",
@@ -327,6 +335,7 @@ async function testGraFiling() {
   const [deal] = await db
     .insert(dealsTable)
     .values({
+      dealerId: DEALER_ID,
       vehicleId,
       customerName: "Cascade Test",
       stage: "delivered",
@@ -338,6 +347,7 @@ async function testGraFiling() {
   const [gate] = await db
     .insert(gatesTable)
     .values({
+      dealerId: DEALER_ID,
       type: "gra_filing",
       status: "pending",
       priority: "normal",
@@ -387,6 +397,7 @@ async function testRefundReleaseVehicle() {
   const [gate] = await db
     .insert(gatesTable)
     .values({
+      dealerId: DEALER_ID,
       type: "refund_release",
       status: "pending",
       priority: "low",
@@ -439,6 +450,7 @@ async function testRefundReleaseDeal() {
   const [deal] = await db
     .insert(dealsTable)
     .values({
+      dealerId: DEALER_ID,
       vehicleId,
       customerName: "Cascade Test",
       stage: "reserved",
@@ -451,6 +463,7 @@ async function testRefundReleaseDeal() {
   const [gate] = await db
     .insert(gatesTable)
     .values({
+      dealerId: DEALER_ID,
       type: "refund_release",
       status: "pending",
       priority: "low",

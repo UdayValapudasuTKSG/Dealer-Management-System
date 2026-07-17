@@ -11,6 +11,7 @@ import { customersTable } from "./customers";
 
 export const customerNotesTable = pgTable("customer_notes", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   customerId: integer("customer_id")
     .notNull()
     .references(() => customersTable.id, { onDelete: "cascade" }),
@@ -23,6 +24,6 @@ export const customerNotesTable = pgTable("customer_notes", {
 
 export const insertCustomerNoteSchema = createInsertSchema(
   customerNotesTable,
-).omit({ id: true, createdAt: true });
+).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertCustomerNote = z.infer<typeof insertCustomerNoteSchema>;
 export type CustomerNote = typeof customerNotesTable.$inferSelect;

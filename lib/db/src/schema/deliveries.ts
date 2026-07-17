@@ -81,6 +81,7 @@ export function defaultDeliverySteps(): DeliveryStepState[] {
 
 export const deliveriesTable = pgTable("deliveries", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   dealId: integer("deal_id").notNull(),
   bookingId: integer("booking_id"),
   vehicleId: integer("vehicle_id").notNull(),
@@ -114,6 +115,6 @@ export const insertDeliverySchema = createInsertSchema(deliveriesTable, {
   currentStep: z.enum(DELIVERY_STEPS),
   steps: z.array(deliveryStepStateSchema),
   pdiItems: z.array(pdiItemSchema),
-}).omit({ id: true, createdAt: true });
+}).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertDelivery = z.infer<typeof insertDeliverySchema>;
 export type Delivery = typeof deliveriesTable.$inferSelect;

@@ -44,6 +44,14 @@ export interface PermissionGrant {
   category: PermissionGrantCategory;
 }
 
+export interface DealerMembershipInfo {
+  dealerId: number;
+  dealerName: string;
+  /** @nullable */
+  roleName?: string | null;
+  isGeneralManager?: boolean;
+}
+
 export interface CurrentUser {
   id: number;
   clerkId: string;
@@ -58,7 +66,89 @@ export interface CurrentUser {
   /** @nullable */
   roleName: string | null;
   status: string;
+  isSuperAdmin: boolean;
+  /** @nullable */
+  activeDealerId?: number | null;
+  dealers: DealerMembershipInfo[];
   permissions: PermissionGrant[];
+}
+
+export type DealerStatus = typeof DealerStatus[keyof typeof DealerStatus];
+
+
+export const DealerStatus = {
+  active: 'active',
+  inactive: 'inactive',
+} as const;
+
+export interface Dealer {
+  id: number;
+  name: string;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  country?: string | null;
+  status: DealerStatus;
+  userCount?: number;
+  createdAt: string;
+}
+
+export type DealerInputStatus = typeof DealerInputStatus[keyof typeof DealerInputStatus];
+
+
+export const DealerInputStatus = {
+  active: 'active',
+  inactive: 'inactive',
+} as const;
+
+export interface DealerInput {
+  /** @minLength 1 */
+  name: string;
+  /** @nullable */
+  city?: string | null;
+  /** @nullable */
+  country?: string | null;
+  status?: DealerInputStatus;
+}
+
+export interface DealerMember {
+  id: number;
+  userId: number;
+  dealerId: number;
+  roleId: number;
+  /** @nullable */
+  roleName?: string | null;
+  isGeneralManager: boolean;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  userStatus?: string;
+}
+
+export interface DealerMemberInput {
+  /** @nullable */
+  userId?: number | null;
+  /** @nullable */
+  email?: string | null;
+  roleId: number;
+  isGeneralManager?: boolean;
+}
+
+export interface PlatformUser {
+  id: number;
+  clerkId: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
+  status: string;
+  dealerCount: number;
+  createdAt: string;
 }
 
 export interface TeamMemberLead {
@@ -128,6 +218,11 @@ export interface AdminUserUpdate {
   /** @nullable */
   roleId?: number | null;
   status?: AdminUserUpdateStatus;
+}
+
+export interface AdminUserAdd {
+  email: string;
+  roleId: number;
 }
 
 export interface RoleWithPermissions {

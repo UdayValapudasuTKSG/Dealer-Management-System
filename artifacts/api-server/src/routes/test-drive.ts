@@ -1,11 +1,9 @@
 import { Router, type IRouter } from "express";
-import { and, eq, gte, isNotNull, lte, ne, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, lte, ne } from "drizzle-orm";
 import {
   db,
   leadsTable,
   vehiclesTable,
-  usersTable,
-  rolesTable,
   timelineEventsTable,
   type Lead,
 } from "@workspace/db";
@@ -18,6 +16,7 @@ import {
 } from "@workspace/api-zod";
 import { enqueueEmail, notifyUser, notifyUsers } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
+import { dealerStaffIdsByRole } from "../lib/tenancy";
 import {
   ownerCalendarContact,
   testDriveCalendarFields,
@@ -65,7 +64,10 @@ async function findLeadByToken(token: string): Promise<Lead | null> {
   return lead ?? null;
 }
 
-async function takenSlotTimes(excludeLeadId: number): Promise<Set<number>> {
+async function takenSlotTimes(
+  dealerId: number,
+  excludeLeadId: number,
+): Promise<Set<number>> {
   const days = windowDays();
   const start = days[0]!;
   const end = new Date(
@@ -81,6 +83,7 @@ async function takenSlotTimes(excludeLeadId: number): Promise<Set<number>> {
     .from(leadsTable)
     .where(
       and(
+        eq(leadsTable.dealerId, dealerId),
         isNotNull(leadsTable.testDriveAt),
         ne(leadsTable.id, excludeLeadId),
         gte(leadsTable.testDriveAt, start),
@@ -95,9 +98,14 @@ async function buildInvite(lead: Lead) {
     ? await db
         .select()
         .from(vehiclesTable)
-        .where(eq(vehiclesTable.id, lead.interestedVehicleId))
+        .where(
+          and(
+            eq(vehiclesTable.id, lead.interestedVehicleId),
+            eq(vehiclesTable.dealerId, lead.dealerId),
+          ),
+        )
     : [];
-  const taken = await takenSlotTimes(lead.id);
+  const taken = await takenSlotTimes(lead.dealerId, lead.id);
 
   const days = windowDays().map((day) => ({
     date: localDateKey(day),
@@ -191,7 +199,7 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
     return;
   }
 
-  const taken = await takenSlotTimes(lead.id);
+  const taken = await takenSlotTimes(lead.dealerId, lead.id);
   if (taken.has(when.getTime())) {
     res
       .status(409)
@@ -211,7 +219,7 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
           ? "engage"
           : lead.phase,
     })
-    .where(eq(leadsTable.id, lead.id))
+    .where(and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)))
     .returning();
 
   // A booked test drive promotes the lead to an account.
@@ -221,7 +229,12 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
     ? await db
         .select()
         .from(vehiclesTable)
-        .where(eq(vehiclesTable.id, updated!.interestedVehicleId))
+        .where(
+          and(
+            eq(vehiclesTable.id, updated!.interestedVehicleId),
+            eq(vehiclesTable.dealerId, updated!.dealerId),
+          ),
+        )
     : [];
   const vehicle = v ? `${v.year} ${v.make} ${v.model}` : null;
   const dateStr = when.toLocaleDateString("en-US", {
@@ -233,6 +246,7 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
   const rescheduled = Boolean(lead.testDriveAt);
 
   await db.insert(timelineEventsTable).values({
+    dealerId: updated!.dealerId,
     customerId: updated!.customerId,
     domain: "leads",
     kind: "test_drive_scheduled",
@@ -252,6 +266,7 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
 
   if (updated!.email) {
     await enqueueEmail({
+      dealerId: updated!.dealerId,
       template: "test_drive_confirmation",
       to: updated!.email,
       customerId: updated!.customerId,
@@ -266,6 +281,7 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
 
   if (owner) {
     await enqueueEmail({
+      dealerId: updated!.dealerId,
       template: "test_drive_owner_invite",
       to: owner.email,
       customerId: updated!.customerId,
@@ -284,22 +300,22 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
     if (updated!.ownerUserId) {
       await notifyUser({
         userId: updated!.ownerUserId,
+        dealerId: updated!.dealerId,
         type: "task",
         title: `Test drive: ${updated!.name} — ${dateStr}`,
         body: `${vehicle ?? "Vehicle"} at ${timeStr}, self-booked by the customer. Have it detailed and ready.`,
         link: "/pipeline",
       });
     } else {
-      const coordinators = await db
-        .select({ id: usersTable.id })
-        .from(usersTable)
-        .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
-        .where(
-          sql`${rolesTable.name} in ('Marketing Coordinator', 'Sales Manager', 'General Manager') and ${usersTable.status} = 'active'`,
-        );
+      const coordinators = await dealerStaffIdsByRole(updated!.dealerId, [
+        "Marketing Coordinator",
+        "Sales Manager",
+        "General Manager",
+      ]);
       await notifyUsers(
-        coordinators.map((c) => c.id),
+        coordinators,
         {
+          dealerId: updated!.dealerId,
           type: "task",
           title: `Test drive: ${updated!.name} — ${dateStr}`,
           body: `${vehicle ?? "Vehicle"} at ${timeStr}, self-booked by the customer via their invite link.`,

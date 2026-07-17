@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import {
   db,
   customersTable,
@@ -10,7 +10,7 @@ import {
   serviceOrdersTable,
 } from "@workspace/db";
 import { GlobalSearchResponse } from "@workspace/api-zod";
-import { hasPermission } from "../middlewares/rbac";
+import { activeDealerId, hasPermission } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
@@ -27,6 +27,7 @@ router.get("/search", async (req, res): Promise<void> => {
     res.json(GlobalSearchResponse.parse({ query: q, groups: [] }));
     return;
   }
+  const dealerId = activeDealerId(res);
   const like = `%${q}%`;
   const isNum = /^\d+$/.test(q);
   const idMatch = (col: SQL | unknown) =>
@@ -46,11 +47,14 @@ router.get("/search", async (req, res): Promise<void> => {
         .select()
         .from(customersTable)
         .where(
-          or(
-            ilike(customersTable.name, like),
-            ilike(customersTable.email, like),
-            ilike(customersTable.phone, like),
-            idMatch(customersTable.id),
+          and(
+            eq(customersTable.dealerId, dealerId),
+            or(
+              ilike(customersTable.name, like),
+              ilike(customersTable.email, like),
+              ilike(customersTable.phone, like),
+              idMatch(customersTable.id),
+            ),
           ),
         )
         .limit(LIMIT)
@@ -77,11 +81,14 @@ router.get("/search", async (req, res): Promise<void> => {
         .select()
         .from(vehiclesTable)
         .where(
-          or(
-            ilike(vehiclesTable.make, like),
-            ilike(vehiclesTable.model, like),
-            ilike(vehiclesTable.vin, like),
-            idMatch(vehiclesTable.id),
+          and(
+            eq(vehiclesTable.dealerId, dealerId),
+            or(
+              ilike(vehiclesTable.make, like),
+              ilike(vehiclesTable.model, like),
+              ilike(vehiclesTable.vin, like),
+              idMatch(vehiclesTable.id),
+            ),
           ),
         )
         .limit(LIMIT)
@@ -106,7 +113,13 @@ router.get("/search", async (req, res): Promise<void> => {
         .select()
         .from(bookingsTable)
         .where(
-          or(ilike(bookingsTable.customerName, like), idMatch(bookingsTable.id)),
+          and(
+            eq(bookingsTable.dealerId, dealerId),
+            or(
+              ilike(bookingsTable.customerName, like),
+              idMatch(bookingsTable.id),
+            ),
+          ),
         )
         .limit(LIMIT)
         .then((rows) => {
@@ -132,11 +145,14 @@ router.get("/search", async (req, res): Promise<void> => {
         .select()
         .from(leadsTable)
         .where(
-          or(
-            ilike(leadsTable.name, like),
-            ilike(leadsTable.email, like),
-            ilike(leadsTable.phone, like),
-            idMatch(leadsTable.id),
+          and(
+            eq(leadsTable.dealerId, dealerId),
+            or(
+              ilike(leadsTable.name, like),
+              ilike(leadsTable.email, like),
+              ilike(leadsTable.phone, like),
+              idMatch(leadsTable.id),
+            ),
           ),
         )
         .limit(LIMIT)
@@ -163,10 +179,13 @@ router.get("/search", async (req, res): Promise<void> => {
         .select()
         .from(invoicesTable)
         .where(
-          or(
-            ilike(invoicesTable.invoiceNumber, like),
-            ilike(invoicesTable.customerName, like),
-            idMatch(invoicesTable.id),
+          and(
+            eq(invoicesTable.dealerId, dealerId),
+            or(
+              ilike(invoicesTable.invoiceNumber, like),
+              ilike(invoicesTable.customerName, like),
+              idMatch(invoicesTable.id),
+            ),
           ),
         )
         .limit(LIMIT)
@@ -193,10 +212,13 @@ router.get("/search", async (req, res): Promise<void> => {
         .select()
         .from(serviceOrdersTable)
         .where(
-          or(
-            ilike(serviceOrdersTable.customerName, like),
-            ilike(serviceOrdersTable.vehicleInfo, like),
-            idMatch(serviceOrdersTable.id),
+          and(
+            eq(serviceOrdersTable.dealerId, dealerId),
+            or(
+              ilike(serviceOrdersTable.customerName, like),
+              ilike(serviceOrdersTable.vehicleInfo, like),
+              idMatch(serviceOrdersTable.id),
+            ),
           ),
         )
         .limit(LIMIT)

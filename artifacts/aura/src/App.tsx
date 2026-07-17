@@ -39,6 +39,8 @@ import SettingsEmail from "@/pages/settings-email";
 import SettingsRoles from "@/pages/settings-roles";
 import SettingsAudit from "@/pages/settings-audit";
 import NotFound from "@/pages/not-found";
+import AdminPage from "@/pages/admin";
+import NoDealership from "@/pages/no-dealership";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -150,9 +152,15 @@ function AppShell() {
     <>
       <Show when="signed-in">
         <AuthProvider>
+          <DealershipGate>
           <CopilotKit runtimeUrl={`${import.meta.env.BASE_URL}api/copilotkit`}>
             <Shell>
               <Switch>
+                <Route path="/admin">
+                  <RequireSuperAdmin>
+                    <AdminPage />
+                  </RequireSuperAdmin>
+                </Route>
                 <Route path="/pipeline" component={Leads} />
                 <Route path="/leads" component={Leads} />
                 <Route path="/command-center" component={RoleDashboard} />
@@ -201,6 +209,7 @@ function AppShell() {
               </Switch>
             </Shell>
           </CopilotKit>
+          </DealershipGate>
         </AuthProvider>
       </Show>
       <Show when="signed-out">
@@ -208,6 +217,33 @@ function AppShell() {
       </Show>
     </>
   );
+}
+
+// Signed-in users without any dealership membership see a dedicated screen
+// (the first-user-becomes-GM rule is retired). Super admins always pass.
+function DealershipGate({ children }: { children: React.ReactNode }) {
+  const { me, isLoading } = useAuthz();
+  if (!isLoading && me && !me.isSuperAdmin && me.activeDealerId == null) {
+    return <NoDealership />;
+  }
+  return <>{children}</>;
+}
+
+function RequireSuperAdmin({ children }: { children: React.ReactNode }) {
+  const { me } = useAuthz();
+  if (me && !me.isSuperAdmin) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[50vh] text-center">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-8 py-10 max-w-md">
+          <h2 className="text-xl font-bold tracking-tight">Access denied</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Platform administration is restricted to the super admin.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return <>{children}</>;
 }
 
 function RequireSettings({ children }: { children: React.ReactNode }) {

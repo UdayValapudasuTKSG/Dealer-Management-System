@@ -5,6 +5,7 @@ import {
   gatesTable,
   timelineEventsTable,
   usersTable,
+  dealerUsersTable,
   rolePermissionsTable,
   financeApplicationsTable,
   type FinanceApplication,
@@ -31,16 +32,18 @@ export function statusEvent(status: string, note: string): FinanceStatusEvent {
   return { status, note, at: new Date().toISOString() };
 }
 
-async function financeUserIds(): Promise<number[]> {
+async function financeUserIds(dealerId: number): Promise<number[]> {
   const rows = await db
     .select({ id: usersTable.id })
     .from(usersTable)
+    .innerJoin(dealerUsersTable, eq(dealerUsersTable.userId, usersTable.id))
     .innerJoin(
       rolePermissionsTable,
-      eq(rolePermissionsTable.roleId, usersTable.roleId),
+      eq(rolePermissionsTable.roleId, dealerUsersTable.roleId),
     )
     .where(
       and(
+        eq(dealerUsersTable.dealerId, dealerId),
         eq(rolePermissionsTable.module, "finance"),
         inArray(rolePermissionsTable.category, ["view", "admin"]),
         eq(usersTable.status, "active"),
@@ -66,6 +69,7 @@ export async function applyFinanceStatusEffects(
 
   try {
     await db.insert(timelineEventsTable).values({
+      dealerId: app.dealerId,
       customerId: app.customerId ?? null,
       domain: "finance",
       kind: `finance_${app.status}`,
@@ -84,8 +88,9 @@ export async function applyFinanceStatusEffects(
   onFinanceStatusChanged(app, app.status);
 
   try {
-    const ids = await financeUserIds();
+    const ids = await financeUserIds(app.dealerId);
     await notifyUsers(ids, {
+      dealerId: app.dealerId,
       type: "system",
       title: `Finance application #${app.id} ${label.toLowerCase()}`,
       body: `${app.customerName} — ${money(app.amount)} / ${app.termMonths} mo. ${note}`,
@@ -98,6 +103,7 @@ export async function applyFinanceStatusEffects(
   if (app.status === "declined") {
     try {
       await db.insert(gatesTable).values({
+        dealerId: app.dealerId,
         type: "credit_decline",
         status: "pending",
         priority: "high",
@@ -129,6 +135,7 @@ export async function applyFinanceStatusEffects(
   if (app.status === "approved") {
     try {
       await db.insert(timelineEventsTable).values({
+        dealerId: app.dealerId,
         customerId: app.customerId ?? null,
         domain: "finance",
         kind: "delivery_workflow_unlocked",
@@ -170,6 +177,7 @@ export async function applyFinanceStatusEffects(
         if (updated) {
           onDealStageChanged(deal, updated);
           await db.insert(timelineEventsTable).values({
+            dealerId: app.dealerId,
             customerId: app.customerId ?? null,
             domain: "deals",
             kind: "deal_auto_advanced",

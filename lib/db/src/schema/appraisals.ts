@@ -11,6 +11,7 @@ import { z } from "zod/v4";
 
 export const appraisalsTable = pgTable("appraisals", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   customerId: integer("customer_id"),
   customerName: text("customer_name"),
   year: integer("year").notNull(),
@@ -27,7 +28,7 @@ export const appraisalsTable = pgTable("appraisals", {
     .defaultNow(),
 });
 
-export const insertAppraisalSchema = createInsertSchema(appraisalsTable).omit({
+export const insertAppraisalSchema = createInsertSchema(appraisalsTable).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });

@@ -12,6 +12,7 @@ import { financeApplicationsTable } from "./financeApplications";
 
 export const losSubmissionsTable = pgTable("los_submissions", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   applicationId: integer("application_id")
     .notNull()
     .references(() => financeApplicationsTable.id, { onDelete: "cascade" }),
@@ -33,6 +34,6 @@ export const insertLosSubmissionSchema = createInsertSchema(
     mode: z.enum(["live", "mock"]),
     event: z.enum(["submit", "sync"]),
   },
-).omit({ id: true, createdAt: true });
+).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertLosSubmission = z.infer<typeof insertLosSubmissionSchema>;
 export type LosSubmission = typeof losSubmissionsTable.$inferSelect;

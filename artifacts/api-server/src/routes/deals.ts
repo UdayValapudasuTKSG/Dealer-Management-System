@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { db, dealsTable } from "@workspace/db";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   CreateDealBody,
   UpdateDealBody,
@@ -23,10 +24,18 @@ router.get("/deals", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const rows = await db
     .select()
     .from(dealsTable)
-    .where(query.data.stage ? eq(dealsTable.stage, query.data.stage) : undefined)
+    .where(
+      query.data.stage
+        ? and(
+            eq(dealsTable.dealerId, dealerId),
+            eq(dealsTable.stage, query.data.stage),
+          )
+        : eq(dealsTable.dealerId, dealerId),
+    )
     .orderBy(desc(dealsTable.createdAt));
 
   res.json(ListDealsResponse.parse(rows));
@@ -39,7 +48,10 @@ router.post("/deals", async (req, res): Promise<void> => {
     return;
   }
 
-  const [deal] = await db.insert(dealsTable).values(parsed.data).returning();
+  const [deal] = await db
+    .insert(dealsTable)
+    .values({ ...parsed.data, dealerId: activeDealerId(res) })
+    .returning();
 
   res.status(201).json(GetDealResponse.parse(deal));
 });
@@ -54,7 +66,12 @@ router.get("/deals/:id", async (req, res): Promise<void> => {
   const [deal] = await db
     .select()
     .from(dealsTable)
-    .where(eq(dealsTable.id, params.data.id));
+    .where(
+      and(
+        eq(dealsTable.id, params.data.id),
+        eq(dealsTable.dealerId, activeDealerId(res)),
+      ),
+    );
 
   if (!deal) {
     res.status(404).json({ error: "Deal not found" });
@@ -77,15 +94,16 @@ router.patch("/deals/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const [before] = await db
     .select()
     .from(dealsTable)
-    .where(eq(dealsTable.id, params.data.id));
+    .where(and(eq(dealsTable.id, params.data.id), eq(dealsTable.dealerId, dealerId)));
 
   const [deal] = await db
     .update(dealsTable)
     .set(parsed.data)
-    .where(eq(dealsTable.id, params.data.id))
+    .where(and(eq(dealsTable.id, params.data.id), eq(dealsTable.dealerId, dealerId)))
     .returning();
 
   if (!deal) {

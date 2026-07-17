@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListAdminUsers,
   useListAdminRoles,
   useUpdateAdminUser,
+  useAddAdminUser,
   getListAdminUsersQueryKey,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -14,9 +16,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, ShieldCheck, UserX, UserCheck } from "lucide-react";
+import { Loader2, ShieldCheck, UserX, UserCheck, UserPlus } from "lucide-react";
 
 export default function SettingsUsers() {
   const { me } = useAuthz();
@@ -24,6 +36,27 @@ export default function SettingsUsers() {
   const qc = useQueryClient();
   const { data: users, isLoading } = useListAdminUsers();
   const { data: roles } = useListAdminRoles();
+  const [addOpen, setAddOpen] = useState(false);
+  const [addEmail, setAddEmail] = useState("");
+  const [addRoleId, setAddRoleId] = useState<string | undefined>(undefined);
+
+  const addMember = useAddAdminUser({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
+        toast({ title: "Member added" });
+        setAddOpen(false);
+        setAddEmail("");
+        setAddRoleId(undefined);
+      },
+      onError: (err) =>
+        toast({
+          title: "Could not add member",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        }),
+    },
+  });
 
   const update = useUpdateAdminUser({
     mutation: {
@@ -42,14 +75,78 @@ export default function SettingsUsers() {
 
   return (
     <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <ShieldCheck className="h-6 w-6 text-primary" /> Team Members
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Assign roles and manage account access.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <ShieldCheck className="h-6 w-6 text-primary" /> Team Members
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Assign roles and manage account access for this dealership.
+          </p>
+        </div>
+        <Button onClick={() => setAddOpen(true)}>
+          <UserPlus className="h-4 w-4 mr-2" /> Add Member
+        </Button>
       </div>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add a team member</DialogTitle>
+            <DialogDescription>
+              Add someone who already has an account to this dealership and give
+              them a role. They must sign up first if they haven't yet.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="add-member-email">Email</Label>
+              <Input
+                id="add-member-email"
+                type="email"
+                placeholder="name@example.com"
+                value={addEmail}
+                onChange={(e) => setAddEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={addRoleId} onValueChange={setAddRoleId}>
+                <SelectTrigger className="bg-white/[0.03] border-white/10">
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(roles ?? []).map((r) => (
+                    <SelectItem key={r.id} value={String(r.id)}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                !addEmail.trim() || !addRoleId || addMember.isPending
+              }
+              onClick={() =>
+                addMember.mutate({
+                  data: { email: addEmail.trim(), roleId: Number(addRoleId) },
+                })
+              }
+            >
+              {addMember.isPending && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              Add Member
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-muted-foreground">

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, timelineEventsTable } from "@workspace/db";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   ListTimelineQueryParams,
   ListTimelineResponse,
@@ -16,14 +17,18 @@ router.get("/timeline", async (req, res): Promise<void> => {
   }
 
   const { customerId, limit } = query.data;
+  const dealerId = activeDealerId(res);
 
   const rows = await db
     .select()
     .from(timelineEventsTable)
     .where(
       customerId !== undefined
-        ? eq(timelineEventsTable.customerId, customerId)
-        : undefined,
+        ? and(
+            eq(timelineEventsTable.dealerId, dealerId),
+            eq(timelineEventsTable.customerId, customerId),
+          )
+        : eq(timelineEventsTable.dealerId, dealerId),
     )
     .orderBy(desc(timelineEventsTable.createdAt))
     .limit(limit ?? 40);

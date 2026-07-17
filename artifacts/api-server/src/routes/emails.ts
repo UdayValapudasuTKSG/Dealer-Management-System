@@ -21,14 +21,21 @@ import {
   isKnownTemplate,
   TEMPLATE_DEFS,
 } from "../lib/email";
+import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
 router.get("/emails/settings", async (_req, res): Promise<void> => {
+  const dealerId = activeDealerId(res);
   const [row] = await db
     .select({ n: count() })
     .from(emailLogsTable)
-    .where(eq(emailLogsTable.status, "queued"));
+    .where(
+      and(
+        eq(emailLogsTable.status, "queued"),
+        eq(emailLogsTable.dealerId, dealerId),
+      ),
+    );
   res.json(
     GetEmailSettingsResponse.parse({
       configured: smtpConfigured(),
@@ -53,7 +60,11 @@ router.post("/emails/test-send", async (req, res): Promise<void> => {
     );
     return;
   }
-  await enqueueEmail({ template: "smtp_test", to: parsed.data.to });
+  await enqueueEmail({
+    template: "smtp_test",
+    to: parsed.data.to,
+    dealerId: activeDealerId(res),
+  });
   res.json(SendTestEmailResponse.parse({ ok: true, error: null }));
 });
 
@@ -94,6 +105,7 @@ router.post("/emails/send", async (req, res): Promise<void> => {
   const row = await enqueueEmail({
     template: parsed.data.template,
     to: parsed.data.to,
+    dealerId: activeDealerId(res),
     customerId: parsed.data.customerId ?? null,
     data: parsed.data.data ?? {},
   });
@@ -106,7 +118,9 @@ router.get("/emails/logs", async (req, res): Promise<void> => {
     res.status(400).json({ error: query.error.message });
     return;
   }
+  const dealerId = activeDealerId(res);
   const filters = [
+    eq(emailLogsTable.dealerId, dealerId),
     query.data.customerId !== undefined
       ? eq(emailLogsTable.customerId, query.data.customerId)
       : undefined,
@@ -117,7 +131,7 @@ router.get("/emails/logs", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(emailLogsTable)
-    .where(filters.length > 0 ? and(...filters) : undefined)
+    .where(and(...filters))
     .orderBy(desc(emailLogsTable.createdAt))
     .limit(200);
   res.json(ListEmailLogsResponse.parse(rows));

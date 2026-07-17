@@ -11,6 +11,7 @@ import { customersTable } from "./customers";
 
 export const customerDocumentsTable = pgTable("customer_documents", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   customerId: integer("customer_id")
     .notNull()
     .references(() => customersTable.id, { onDelete: "cascade" }),
@@ -30,7 +31,7 @@ export const insertCustomerDocumentSchema = createInsertSchema(
   {
     type: z.enum(["driver_license", "passport", "tax_document", "other"]),
   },
-).omit({ id: true, createdAt: true });
+).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertCustomerDocument = z.infer<
   typeof insertCustomerDocumentSchema
 >;

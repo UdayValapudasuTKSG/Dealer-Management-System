@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { db, leadsTable, timelineEventsTable } from "@workspace/db";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   GetSentimentAnalysisQueryParams,
   GetSentimentAnalysisResponse,
@@ -12,7 +13,8 @@ const router: IRouter = Router();
 type SentimentPayload = ReturnType<typeof GetSentimentAnalysisResponse.parse>;
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
-let cache: { data: SentimentPayload; at: number } | null = null;
+// Cache is per-dealer — the corpus differs by active dealership.
+const cache = new Map<number, { data: SentimentPayload; at: number }>();
 
 const MAX_ITEMS = 40;
 
@@ -25,9 +27,11 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
   // zod coerce.boolean would turn "false" into true — only the literal
   // string "true" should bust the cache.
   const refresh = req.query.refresh === "true";
+  const dealerId = activeDealerId(res);
 
-  if (!refresh && cache && Date.now() - cache.at < CACHE_TTL_MS) {
-    res.json(cache.data);
+  const cached = cache.get(dealerId);
+  if (!refresh && cached && Date.now() - cached.at < CACHE_TTL_MS) {
+    res.json(cached.data);
     return;
   }
 
@@ -35,12 +39,18 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
     db
       .select()
       .from(leadsTable)
+      .where(eq(leadsTable.dealerId, dealerId))
       .orderBy(desc(leadsTable.createdAt))
       .limit(120),
     db
       .select()
       .from(timelineEventsTable)
-      .where(eq(timelineEventsTable.domain, "leads"))
+      .where(
+        and(
+          eq(timelineEventsTable.dealerId, dealerId),
+          eq(timelineEventsTable.domain, "leads"),
+        ),
+      )
       .orderBy(desc(timelineEventsTable.createdAt))
       .limit(200),
   ]);
@@ -62,7 +72,12 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
     const extra = await db
       .select({ id: leadsTable.id, name: leadsTable.name })
       .from(leadsTable)
-      .where(inArray(leadsTable.id, missingIds));
+      .where(
+        and(
+          eq(leadsTable.dealerId, dealerId),
+          inArray(leadsTable.id, missingIds),
+        ),
+      );
     for (const l of extra) leadName.set(l.id, l.name);
   }
 
@@ -104,7 +119,7 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
       sampleSize: 0,
       generatedAt: new Date().toISOString(),
     });
-    cache = { data: empty, at: Date.now() };
+    cache.set(dealerId, { data: empty, at: Date.now() });
     res.json(empty);
     return;
   }
@@ -174,7 +189,7 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
       return;
     }
 
-    cache = { data: result.data, at: Date.now() };
+    cache.set(dealerId, { data: result.data, at: Date.now() });
     res.json(result.data);
   } catch (err) {
     req.log.error({ err }, "Sentiment analysis request failed");

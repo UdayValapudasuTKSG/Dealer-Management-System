@@ -12,6 +12,7 @@ import { usersTable } from "./users";
 
 export const notificationsTable = pgTable("notifications", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   userId: integer("user_id")
     .notNull()
     .references(() => usersTable.id, { onDelete: "cascade" }),
@@ -27,6 +28,6 @@ export const notificationsTable = pgTable("notifications", {
 
 export const insertNotificationSchema = createInsertSchema(notificationsTable, {
   type: z.enum(["approval", "assignment", "task", "email", "system"]),
-}).omit({ id: true, createdAt: true });
+}).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notificationsTable.$inferSelect;

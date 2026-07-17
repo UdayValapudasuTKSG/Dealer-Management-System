@@ -13,6 +13,7 @@ import { customersTable } from "./customers";
 
 export const customerPersonasTable = pgTable("customer_personas", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   customerId: integer("customer_id")
     .notNull()
     .unique()
@@ -56,6 +57,6 @@ export const insertCustomerPersonaSchema = createInsertSchema(
       .nullable()
       .optional(),
   },
-).omit({ id: true, updatedAt: true });
+).omit({ dealerId: true, id: true, updatedAt: true });
 export type InsertCustomerPersona = z.infer<typeof insertCustomerPersonaSchema>;
 export type CustomerPersona = typeof customerPersonasTable.$inferSelect;

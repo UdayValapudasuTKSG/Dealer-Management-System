@@ -30,3 +30,4 @@ export * from "./commNotes";
 export * from "./bookings";
 export * from "./webhookEvents";
 export * from "./deliveries";
+export * from "./dealers";

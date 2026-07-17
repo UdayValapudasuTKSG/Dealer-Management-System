@@ -20,6 +20,7 @@ import {
   UpdateVehicleResponse,
   ImportVehiclesResponse,
 } from "@workspace/api-zod";
+import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
@@ -35,7 +36,7 @@ router.get("/vehicles", async (req, res): Promise<void> => {
     return;
   }
 
-  const filters: SQL[] = [];
+  const filters: SQL[] = [eq(vehiclesTable.dealerId, activeDealerId(res))];
   if (query.data.status) filters.push(eq(vehiclesTable.status, query.data.status));
   if (query.data.powertrain)
     filters.push(eq(vehiclesTable.powertrain, query.data.powertrain));
@@ -67,7 +68,7 @@ router.post("/vehicles", async (req, res): Promise<void> => {
 
   const [vehicle] = await db
     .insert(vehiclesTable)
-    .values(parsed.data)
+    .values({ ...parsed.data, dealerId: activeDealerId(res) })
     .returning();
 
   res.status(201).json(GetVehicleResponse.parse(vehicle));
@@ -177,6 +178,7 @@ router.post(
       res.status(400).json({ error: "No file provided (field name: file)" });
       return;
     }
+    const dealerId = activeDealerId(res);
 
     const workbook = new ExcelJS.Workbook();
     try {
@@ -289,7 +291,12 @@ router.post(
       const existing = await db
         .select({ vin: vehiclesTable.vin })
         .from(vehiclesTable)
-        .where(inArray(vehiclesTable.vin, [...seenVins.keys()]));
+        .where(
+          and(
+            eq(vehiclesTable.dealerId, dealerId),
+            inArray(vehiclesTable.vin, [...seenVins.keys()]),
+          ),
+        );
       const existingVins = new Set(
         existing.map((r) => r.vin?.trim().toUpperCase()).filter(Boolean),
       );
@@ -311,7 +318,7 @@ router.post(
     let created = 0;
     for (const { row, data } of validRows) {
       try {
-        await db.insert(vehiclesTable).values(data);
+        await db.insert(vehiclesTable).values({ ...data, dealerId });
         created += 1;
       } catch (err) {
         req.log.error({ err, row }, "vehicle import row insert failed");
@@ -391,7 +398,12 @@ router.get("/vehicles/:id", async (req, res): Promise<void> => {
   const [vehicle] = await db
     .select()
     .from(vehiclesTable)
-    .where(eq(vehiclesTable.id, params.data.id));
+    .where(
+      and(
+        eq(vehiclesTable.id, params.data.id),
+        eq(vehiclesTable.dealerId, activeDealerId(res)),
+      ),
+    );
 
   if (!vehicle) {
     res.status(404).json({ error: "Vehicle not found" });
@@ -414,10 +426,16 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const [before] = await db
     .select({ status: vehiclesTable.status })
     .from(vehiclesTable)
-    .where(eq(vehiclesTable.id, params.data.id));
+    .where(
+      and(
+        eq(vehiclesTable.id, params.data.id),
+        eq(vehiclesTable.dealerId, dealerId),
+      ),
+    );
   if (!before) {
     res.status(404).json({ error: "Vehicle not found" });
     return;
@@ -438,7 +456,12 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
   const [vehicle] = await db
     .update(vehiclesTable)
     .set(parsed.data)
-    .where(eq(vehiclesTable.id, params.data.id))
+    .where(
+      and(
+        eq(vehiclesTable.id, params.data.id),
+        eq(vehiclesTable.dealerId, dealerId),
+      ),
+    )
     .returning();
 
   if (!vehicle) {
@@ -458,7 +481,12 @@ router.delete("/vehicles/:id", async (req, res): Promise<void> => {
 
   const [vehicle] = await db
     .delete(vehiclesTable)
-    .where(eq(vehiclesTable.id, params.data.id))
+    .where(
+      and(
+        eq(vehiclesTable.id, params.data.id),
+        eq(vehiclesTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
 
   if (!vehicle) {

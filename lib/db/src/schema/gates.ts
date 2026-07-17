@@ -14,6 +14,7 @@ export type GateEvidenceItem = { label: string; value: string };
 
 export const gatesTable = pgTable("gates", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   type: text("type").notNull(),
   status: text("status").notNull().default("pending"),
   priority: text("priority").notNull().default("normal"),
@@ -48,7 +49,7 @@ export const insertGateSchema = createInsertSchema(gatesTable, {
   ]),
   status: z.enum(["pending", "approved", "adjusted", "dismissed"]),
   priority: z.enum(["high", "normal", "low"]),
-}).omit({
+}).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });

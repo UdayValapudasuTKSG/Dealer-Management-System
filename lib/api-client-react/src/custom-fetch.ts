@@ -349,6 +349,20 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
+  // Attach the active dealer header for multi-tenant scoping (web only —
+  // localStorage is absent in React Native / SSR contexts).
+  if (!headers.has("x-dealer-id")) {
+    try {
+      const dealerId =
+        typeof localStorage !== "undefined"
+          ? localStorage.getItem("aura-dealer-id")
+          : null;
+      if (dealerId) headers.set("x-dealer-id", dealerId);
+    } catch {
+      // localStorage unavailable (private mode / non-browser) — skip.
+    }
+  }
+
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
   if (_authTokenGetter && !headers.has("authorization")) {

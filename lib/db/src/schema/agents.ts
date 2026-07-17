@@ -10,6 +10,7 @@ import { z } from "zod/v4";
 
 export const agentsTable = pgTable("agents", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   key: text("key").notNull(),
   name: text("name").notNull(),
   domain: text("domain").notNull(),
@@ -19,7 +20,7 @@ export const agentsTable = pgTable("agents", {
   successRate: doublePrecision("success_rate").notNull().default(0),
 });
 
-export const insertAgentSchema = createInsertSchema(agentsTable).omit({
+export const insertAgentSchema = createInsertSchema(agentsTable).omit({ dealerId: true,
   id: true,
 });
 export type InsertAgent = z.infer<typeof insertAgentSchema>;

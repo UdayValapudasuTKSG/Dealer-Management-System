@@ -7,6 +7,8 @@ import {
   rolesTable,
   rolePermissionsTable,
   auditLogsTable,
+  dealersTable,
+  dealerUsersTable,
   PERMISSION_MODULES,
   PERMISSION_CATEGORIES,
   type User,
@@ -15,21 +17,38 @@ import {
 } from "@workspace/db";
 import { logger } from "../lib/logger";
 
+export type DealerMembership = {
+  dealerId: number;
+  dealerName: string;
+  roleId: number;
+  roleName: string | null;
+  isGeneralManager: boolean;
+};
+
 export type AuthedUser = User & {
   roleName: string | null;
   permissions: { module: string; category: string }[];
+  isSuperAdmin: boolean;
+  dealerId: number | null;
+  dealers: DealerMembership[];
 };
 
 declare global {
   namespace Express {
     interface Locals {
       user?: AuthedUser;
+      dealerId?: number;
     }
   }
 }
 
-const FIRST_USER_ROLE = "General Manager";
-const DEFAULT_ROLE = "Sales Advisor";
+export const SUPER_ADMIN_EMAIL = (
+  process.env.SUPER_ADMIN_EMAIL ?? "uday.valapudasu@theksquaregroup.com"
+).toLowerCase();
+
+export function isSuperAdminEmail(email: string | null | undefined): boolean {
+  return !!email && email.toLowerCase() === SUPER_ADMIN_EMAIL;
+}
 
 // Short-lived cache of role permissions to avoid a query on every request.
 const permCache = new Map<
@@ -88,15 +107,11 @@ async function provisionUser(clerkId: string): Promise<User> {
     logger.warn({ err, clerkId }, "Failed to fetch Clerk profile");
   }
 
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(usersTable);
-  const roleName = count === 0 ? FIRST_USER_ROLE : DEFAULT_ROLE;
-  const roleId = await roleIdByName(roleName);
-
+  // Multi-dealer: new users get NO global role and NO membership; the super
+  // admin (matched by email) or a dealer GM assigns them to a dealer later.
   const [created] = await db
     .insert(usersTable)
-    .values({ clerkId, email, name, imageUrl, roleId, createdBy: "system" })
+    .values({ clerkId, email, name, imageUrl, roleId: null, createdBy: "system" })
     .onConflictDoNothing({ target: usersTable.clerkId })
     .returning();
   if (created) {
@@ -109,7 +124,7 @@ async function provisionUser(clerkId: string): Promise<User> {
       module: "settings",
       entityType: "user",
       entityId: String(created.id),
-      summary: `User ${name ?? email ?? clerkId} provisioned with role ${roleName}`,
+      summary: `User ${name ?? email ?? clerkId} provisioned (awaiting dealer assignment)`,
     });
     return created;
   }
@@ -125,9 +140,52 @@ async function provisionUser(clerkId: string): Promise<User> {
 const AUTH_BYPASS =
   process.env.NODE_ENV !== "production" && process.env.AUTH_BYPASS === "1";
 
+const FULL_PERMISSIONS = PERMISSION_MODULES.flatMap((m) =>
+  PERMISSION_CATEGORIES.map((c) => ({ module: m, category: c })),
+);
+
+async function loadMemberships(userId: number): Promise<DealerMembership[]> {
+  const rows = await db
+    .select({
+      dealerId: dealerUsersTable.dealerId,
+      dealerName: dealersTable.name,
+      roleId: dealerUsersTable.roleId,
+      roleName: rolesTable.name,
+      isGeneralManager: dealerUsersTable.isGeneralManager,
+    })
+    .from(dealerUsersTable)
+    .innerJoin(dealersTable, eq(dealerUsersTable.dealerId, dealersTable.id))
+    .leftJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
+    .where(eq(dealerUsersTable.userId, userId))
+    .orderBy(dealerUsersTable.dealerId);
+  return rows;
+}
+
+async function listAllDealers(): Promise<DealerMembership[]> {
+  const rows = await db
+    .select({ id: dealersTable.id, name: dealersTable.name })
+    .from(dealersTable)
+    .orderBy(dealersTable.id);
+  return rows.map((d) => ({
+    dealerId: d.id,
+    dealerName: d.name,
+    roleId: 0,
+    roleName: "Super Admin",
+    isGeneralManager: false,
+  }));
+}
+
+function requestedDealerId(req: Request): number | null {
+  const raw = req.header("x-dealer-id");
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export const requireAuth: RequestHandler = async (req, res, next) => {
   try {
     if (AUTH_BYPASS) {
+      const dealerId = requestedDealerId(req) ?? 2;
       res.locals.user = {
         id: 0,
         clerkId: "test-bypass",
@@ -142,10 +200,12 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
         createdBy: null,
         updatedBy: null,
         roleName: "Test",
-        permissions: PERMISSION_MODULES.flatMap((m) =>
-          PERMISSION_CATEGORIES.map((c) => ({ module: m, category: c })),
-        ),
+        permissions: FULL_PERMISSIONS,
+        isSuperAdmin: true,
+        dealerId,
+        dealers: [],
       } as AuthedUser;
+      res.locals.dealerId = dealerId;
       next();
       return;
     }
@@ -160,20 +220,63 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
       res.status(403).json({ error: "Account suspended" });
       return;
     }
-    let roleName: string | null = null;
-    if (user.roleId != null) {
-      const [role] = await db
-        .select({ name: rolesTable.name })
-        .from(rolesTable)
-        .where(eq(rolesTable.id, user.roleId));
-      roleName = role?.name ?? null;
+
+    const isSuperAdmin = isSuperAdminEmail(user.email);
+    const dealers = isSuperAdmin
+      ? await listAllDealers()
+      : await loadMemberships(user.id);
+
+    // Resolve the active dealer: requested header if valid, else the first
+    // dealer the user belongs to (or the first dealer overall for super admin).
+    const requested = requestedDealerId(req);
+    let active: DealerMembership | null = null;
+    if (requested != null) {
+      active = dealers.find((d) => d.dealerId === requested) ?? null;
+      if (!active) {
+        res.status(403).json({ error: "Not a member of this dealership" });
+        return;
+      }
+    } else {
+      active = dealers[0] ?? null;
     }
-    const permissions = await loadPermissions(user.roleId);
-    res.locals.user = { ...user, roleName, permissions };
+
+    const permissions = isSuperAdmin
+      ? FULL_PERMISSIONS
+      : await loadPermissions(active?.roleId ?? null);
+    const roleName = isSuperAdmin
+      ? "Super Admin"
+      : (active?.roleName ?? null);
+
+    res.locals.user = {
+      ...user,
+      roleName,
+      permissions,
+      isSuperAdmin,
+      dealerId: active?.dealerId ?? null,
+      dealers,
+    };
+    if (active) res.locals.dealerId = active.dealerId;
     next();
   } catch (err) {
     next(err);
   }
+};
+
+/** Active dealer for the request. Routes behind `authorize` can rely on it. */
+export function activeDealerId(res: Response): number {
+  const id = res.locals.dealerId;
+  if (id == null) throw new Error("No active dealer resolved for request");
+  return id;
+}
+
+/** Gate for the super-admin-only platform administration endpoints. */
+export const requireSuperAdmin: RequestHandler = (_req, res, next) => {
+  const user = res.locals.user;
+  if (!user?.isSuperAdmin) {
+    res.status(403).json({ error: "Super admin only" });
+    return;
+  }
+  next();
 };
 
 export function hasPermission(
@@ -283,6 +386,21 @@ export const authorize: RequestHandler = (req, res, next) => {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+  const segment = req.path.replace(/^\/+/, "").split("/")[0] ?? "";
+  // Platform administration is gated separately (super admin only).
+  if (segment === "platform") {
+    if (!user.isSuperAdmin) {
+      res.status(403).json({ error: "Super admin only" });
+      return;
+    }
+    return next();
+  }
+  // Without a dealership, only the auth endpoints are reachable — the client
+  // shows the "no dealership assigned" screen off /auth/me.
+  if (user.dealerId == null && segment !== "auth") {
+    res.status(403).json({ error: "No dealership assigned" });
+    return;
+  }
   const required = routePermission(req);
   if (!required) return next();
   if (!hasPermission(user, required.module, required.category)) {
@@ -333,6 +451,7 @@ export const auditTrail: RequestHandler = (req, res, next) => {
 
     db.insert(auditLogsTable)
       .values({
+        dealerId: res.locals.dealerId ?? null,
         actorUserId: user?.id ?? null,
         actorClerkId: user?.clerkId ?? null,
         actorName: user?.name ?? null,

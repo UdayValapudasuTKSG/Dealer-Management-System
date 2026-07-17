@@ -21,6 +21,7 @@ export type FinanceDocType = (typeof FINANCE_DOC_TYPES)[number];
 
 export const financeDocumentsTable = pgTable("finance_documents", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   applicationId: integer("application_id")
     .notNull()
     .references(() => financeApplicationsTable.id, { onDelete: "cascade" }),
@@ -40,7 +41,7 @@ export const insertFinanceDocumentSchema = createInsertSchema(
   {
     type: z.enum(FINANCE_DOC_TYPES),
   },
-).omit({ id: true, createdAt: true });
+).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertFinanceDocument = z.infer<
   typeof insertFinanceDocumentSchema
 >;

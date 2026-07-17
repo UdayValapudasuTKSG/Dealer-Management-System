@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   db,
   customersTable,
@@ -14,6 +14,7 @@ import {
   CreateCommNoteBody,
   CreateCommNoteResponse,
 } from "@workspace/api-zod";
+import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
@@ -26,10 +27,16 @@ router.get(
       return;
     }
     const customerId = params.data.id;
+    const dealerId = activeDealerId(res);
     const [customer] = await db
       .select()
       .from(customersTable)
-      .where(eq(customersTable.id, customerId));
+      .where(
+        and(
+          eq(customersTable.id, customerId),
+          eq(customersTable.dealerId, dealerId),
+        ),
+      );
     if (!customer) {
       res.status(404).json({ error: "Customer not found" });
       return;
@@ -38,17 +45,32 @@ router.get(
       db
         .select()
         .from(emailLogsTable)
-        .where(eq(emailLogsTable.customerId, customerId))
+        .where(
+          and(
+            eq(emailLogsTable.customerId, customerId),
+            eq(emailLogsTable.dealerId, dealerId),
+          ),
+        )
         .orderBy(desc(emailLogsTable.createdAt)),
       db
         .select()
         .from(commNotesTable)
-        .where(eq(commNotesTable.customerId, customerId))
+        .where(
+          and(
+            eq(commNotesTable.customerId, customerId),
+            eq(commNotesTable.dealerId, dealerId),
+          ),
+        )
         .orderBy(desc(commNotesTable.createdAt)),
       db
         .select()
         .from(timelineEventsTable)
-        .where(eq(timelineEventsTable.customerId, customerId))
+        .where(
+          and(
+            eq(timelineEventsTable.customerId, customerId),
+            eq(timelineEventsTable.dealerId, dealerId),
+          ),
+        )
         .orderBy(desc(timelineEventsTable.createdAt)),
     ]);
     res.json(
@@ -70,10 +92,16 @@ router.post("/customers/:id/comm-notes", async (req, res): Promise<void> => {
     return;
   }
   const customerId = params.data.id;
+  const dealerId = activeDealerId(res);
   const [customer] = await db
     .select()
     .from(customersTable)
-    .where(eq(customersTable.id, customerId));
+    .where(
+      and(
+        eq(customersTable.id, customerId),
+        eq(customersTable.dealerId, dealerId),
+      ),
+    );
   if (!customer) {
     res.status(404).json({ error: "Customer not found" });
     return;
@@ -82,6 +110,7 @@ router.post("/customers/:id/comm-notes", async (req, res): Promise<void> => {
   const [note] = await db
     .insert(commNotesTable)
     .values({
+      dealerId,
       customerId,
       kind: parsed.data.kind,
       subject: parsed.data.subject,
@@ -92,6 +121,7 @@ router.post("/customers/:id/comm-notes", async (req, res): Promise<void> => {
     .returning();
 
   await db.insert(timelineEventsTable).values({
+    dealerId,
     customerId,
     domain: "system",
     kind: parsed.data.kind === "call" ? "call_logged" : "meeting_logged",

@@ -11,6 +11,7 @@ import { z } from "zod/v4";
 
 export const timelineEventsTable = pgTable("timeline_events", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   customerId: integer("customer_id"),
   domain: text("domain").notNull(),
   kind: text("kind").notNull(),
@@ -38,6 +39,6 @@ export const insertTimelineEventSchema = createInsertSchema(timelineEventsTable,
     "gate",
     "system",
   ]),
-}).omit({ id: true, createdAt: true });
+}).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;
 export type TimelineEvent = typeof timelineEventsTable.$inferSelect;

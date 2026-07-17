@@ -52,6 +52,7 @@ import {
   DownloadCustomerDocumentParams,
 } from "@workspace/api-zod";
 import { storage } from "../lib/storage";
+import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
@@ -114,27 +115,54 @@ function computeLeadScore(
   return Math.max(0, Math.min(100, score));
 }
 
-async function loadPersonaBundle(customerId: number) {
+async function loadPersonaBundle(customerId: number, dealerId: number) {
   const [[persona], leads, deals, [customer]] = await Promise.all([
     db
       .select()
       .from(customerPersonasTable)
-      .where(eq(customerPersonasTable.customerId, customerId)),
-    db.select().from(leadsTable).where(eq(leadsTable.customerId, customerId)),
-    db.select().from(dealsTable).where(eq(dealsTable.customerId, customerId)),
+      .where(
+        and(
+          eq(customerPersonasTable.customerId, customerId),
+          eq(customerPersonasTable.dealerId, dealerId),
+        ),
+      ),
+    db
+      .select()
+      .from(leadsTable)
+      .where(
+        and(
+          eq(leadsTable.customerId, customerId),
+          eq(leadsTable.dealerId, dealerId),
+        ),
+      ),
+    db
+      .select()
+      .from(dealsTable)
+      .where(
+        and(
+          eq(dealsTable.customerId, customerId),
+          eq(dealsTable.dealerId, dealerId),
+        ),
+      ),
     db
       .select()
       .from(customersTable)
-      .where(eq(customersTable.id, customerId)),
+      .where(
+        and(
+          eq(customersTable.id, customerId),
+          eq(customersTable.dealerId, dealerId),
+        ),
+      ),
   ]);
   return { persona: persona ?? null, leads, deals, customer: customer ?? null };
 }
 
 async function personaPayload(
   customerId: number,
+  dealerId: number,
   bundle?: Awaited<ReturnType<typeof loadPersonaBundle>>,
 ) {
-  const b = bundle ?? (await loadPersonaBundle(customerId));
+  const b = bundle ?? (await loadPersonaBundle(customerId, dealerId));
   if (!b.customer) return null;
 
   let aiRecommendedVehicle: Vehicle | null = null;
@@ -142,7 +170,12 @@ async function personaPayload(
     const [v] = await db
       .select()
       .from(vehiclesTable)
-      .where(eq(vehiclesTable.id, b.persona.aiRecommendedVehicleId));
+      .where(
+        and(
+          eq(vehiclesTable.id, b.persona.aiRecommendedVehicleId),
+          eq(vehiclesTable.dealerId, dealerId),
+        ),
+      );
     aiRecommendedVehicle = v ?? null;
   }
 
@@ -169,6 +202,7 @@ router.get("/customers", async (_req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(customersTable)
+    .where(eq(customersTable.dealerId, activeDealerId(res)))
     .orderBy(desc(customersTable.lifetimeValue));
   res.json(ListCustomersResponse.parse(rows));
 });
@@ -182,7 +216,7 @@ router.post("/customers", async (req, res): Promise<void> => {
 
   const [customer] = await db
     .insert(customersTable)
-    .values(parsed.data)
+    .values({ ...parsed.data, dealerId: activeDealerId(res) })
     .returning();
 
   res.status(201).json(GetCustomerResponse.parse(customer));
@@ -198,7 +232,12 @@ router.get("/customers/:id", async (req, res): Promise<void> => {
   const [customer] = await db
     .select()
     .from(customersTable)
-    .where(eq(customersTable.id, params.data.id));
+    .where(
+      and(
+        eq(customersTable.id, params.data.id),
+        eq(customersTable.dealerId, activeDealerId(res)),
+      ),
+    );
 
   if (!customer) {
     res.status(404).json({ error: "Customer not found" });
@@ -224,7 +263,12 @@ router.patch("/customers/:id", async (req, res): Promise<void> => {
   const [customer] = await db
     .update(customersTable)
     .set(parsed.data)
-    .where(eq(customersTable.id, params.data.id))
+    .where(
+      and(
+        eq(customersTable.id, params.data.id),
+        eq(customersTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
 
   if (!customer) {
@@ -244,7 +288,7 @@ router.get("/customers/:id/persona", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const payload = await personaPayload(params.data.id);
+  const payload = await personaPayload(params.data.id, activeDealerId(res));
   if (!payload) {
     res.status(404).json({ error: "Customer not found" });
     return;
@@ -263,11 +307,17 @@ router.put("/customers/:id/persona", async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error.message });
     return;
   }
+  const dealerId = activeDealerId(res);
   const customerId = params.data.id;
   const [customer] = await db
     .select()
     .from(customersTable)
-    .where(eq(customersTable.id, customerId));
+    .where(
+      and(
+        eq(customersTable.id, customerId),
+        eq(customersTable.dealerId, dealerId),
+      ),
+    );
   if (!customer) {
     res.status(404).json({ error: "Customer not found" });
     return;
@@ -275,13 +325,13 @@ router.put("/customers/:id/persona", async (req, res): Promise<void> => {
 
   await db
     .insert(customerPersonasTable)
-    .values({ ...body.data, customerId, updatedAt: new Date() })
+    .values({ ...body.data, customerId, dealerId, updatedAt: new Date() })
     .onConflictDoUpdate({
       target: customerPersonasTable.customerId,
       set: { ...body.data, updatedAt: new Date() },
     });
 
-  const payload = await personaPayload(customerId);
+  const payload = await personaPayload(customerId, dealerId);
   res.json(UpsertCustomerPersonaResponse.parse(payload));
 });
 
@@ -293,8 +343,9 @@ router.post(
       res.status(400).json({ error: params.error.message });
       return;
     }
+    const dealerId = activeDealerId(res);
     const customerId = params.data.id;
-    const bundle = await loadPersonaBundle(customerId);
+    const bundle = await loadPersonaBundle(customerId, dealerId);
     if (!bundle.customer) {
       res.status(404).json({ error: "Customer not found" });
       return;
@@ -302,7 +353,12 @@ router.post(
     const vehicles = await db
       .select()
       .from(vehiclesTable)
-      .where(eq(vehiclesTable.status, "available"));
+      .where(
+        and(
+          eq(vehiclesTable.status, "available"),
+          eq(vehiclesTable.dealerId, dealerId),
+        ),
+      );
 
     if (vehicles.length === 0) {
       res.status(502).json({ error: "No available inventory to recommend from" });
@@ -390,6 +446,7 @@ router.post(
         .insert(customerPersonasTable)
         .values({
           customerId,
+          dealerId,
           aiRecommendedVehicleId: vehicleId,
           aiRecommendationReason: reason,
           updatedAt: new Date(),
@@ -403,7 +460,7 @@ router.post(
           },
         });
 
-      const payload = await personaPayload(customerId);
+      const payload = await personaPayload(customerId, dealerId);
       res.json(RecommendCustomerVehicleResponse.parse(payload));
     } catch (err) {
       req.log.error({ err }, "Vehicle recommendation request failed");
@@ -424,7 +481,12 @@ router.get("/customers/:id/notes", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(customerNotesTable)
-    .where(eq(customerNotesTable.customerId, params.data.id))
+    .where(
+      and(
+        eq(customerNotesTable.customerId, params.data.id),
+        eq(customerNotesTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .orderBy(desc(customerNotesTable.createdAt));
   res.json(ListCustomerNotesResponse.parse(rows));
 });
@@ -440,10 +502,16 @@ router.post("/customers/:id/notes", async (req, res): Promise<void> => {
     res.status(400).json({ error: body.error.message });
     return;
   }
+  const dealerId = activeDealerId(res);
   const [customer] = await db
     .select()
     .from(customersTable)
-    .where(eq(customersTable.id, params.data.id));
+    .where(
+      and(
+        eq(customersTable.id, params.data.id),
+        eq(customersTable.dealerId, dealerId),
+      ),
+    );
   if (!customer) {
     res.status(404).json({ error: "Customer not found" });
     return;
@@ -452,7 +520,7 @@ router.post("/customers/:id/notes", async (req, res): Promise<void> => {
     res.locals.user?.name ?? res.locals.user?.email ?? null;
   const [note] = await db
     .insert(customerNotesTable)
-    .values({ customerId: params.data.id, body: body.data.body, author })
+    .values({ customerId: params.data.id, dealerId, body: body.data.body, author })
     .returning();
   res.status(201).json(CreateCustomerNoteResponse.parse(note));
 });
@@ -471,6 +539,7 @@ router.delete(
         and(
           eq(customerNotesTable.id, params.data.noteId),
           eq(customerNotesTable.customerId, params.data.id),
+          eq(customerNotesTable.dealerId, activeDealerId(res)),
         ),
       );
     res.status(204).end();
@@ -489,7 +558,12 @@ router.get("/customers/:id/documents", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(customerDocumentsTable)
-    .where(eq(customerDocumentsTable.customerId, params.data.id))
+    .where(
+      and(
+        eq(customerDocumentsTable.customerId, params.data.id),
+        eq(customerDocumentsTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .orderBy(desc(customerDocumentsTable.createdAt));
   res.json(ListCustomerDocumentsResponse.parse(rows));
 });
@@ -514,10 +588,16 @@ router.post(
       res.status(400).json({ error: "Invalid document type" });
       return;
     }
+    const dealerId = activeDealerId(res);
     const [customer] = await db
       .select()
       .from(customersTable)
-      .where(eq(customersTable.id, params.data.id));
+      .where(
+        and(
+          eq(customersTable.id, params.data.id),
+          eq(customersTable.dealerId, dealerId),
+        ),
+      );
     if (!customer) {
       res.status(404).json({ error: "Customer not found" });
       return;
@@ -530,6 +610,7 @@ router.post(
       .insert(customerDocumentsTable)
       .values({
         customerId: params.data.id,
+        dealerId,
         type: docType.data,
         fileName: req.file.originalname,
         storageKey: key,
@@ -557,6 +638,7 @@ router.get(
         and(
           eq(customerDocumentsTable.id, params.data.docId),
           eq(customerDocumentsTable.customerId, params.data.id),
+          eq(customerDocumentsTable.dealerId, activeDealerId(res)),
         ),
       );
     if (!doc) {
@@ -593,6 +675,7 @@ router.delete(
         and(
           eq(customerDocumentsTable.id, params.data.docId),
           eq(customerDocumentsTable.customerId, params.data.id),
+          eq(customerDocumentsTable.dealerId, activeDealerId(res)),
         ),
       );
     if (doc) {
@@ -615,11 +698,17 @@ router.get("/customers/:id/overview", async (req, res): Promise<void> => {
     return;
   }
   const customerId = params.data.id;
+  const dealerId = activeDealerId(res);
 
   const [customer] = await db
     .select()
     .from(customersTable)
-    .where(eq(customersTable.id, customerId));
+    .where(
+      and(
+        eq(customersTable.id, customerId),
+        eq(customersTable.dealerId, dealerId),
+      ),
+    );
 
   if (!customer) {
     res.status(404).json({ error: "Customer not found" });
@@ -639,41 +728,100 @@ router.get("/customers/:id/overview", async (req, res): Promise<void> => {
     documents,
     [personaRow],
   ] = await Promise.all([
-    db.select().from(dealsTable).where(eq(dealsTable.customerId, customerId)),
+    db
+      .select()
+      .from(dealsTable)
+      .where(
+        and(
+          eq(dealsTable.customerId, customerId),
+          eq(dealsTable.dealerId, dealerId),
+        ),
+      ),
     db
       .select()
       .from(appraisalsTable)
-      .where(eq(appraisalsTable.customerId, customerId)),
+      .where(
+        and(
+          eq(appraisalsTable.customerId, customerId),
+          eq(appraisalsTable.dealerId, dealerId),
+        ),
+      ),
     db
       .select()
       .from(financeApplicationsTable)
-      .where(eq(financeApplicationsTable.customerId, customerId)),
+      .where(
+        and(
+          eq(financeApplicationsTable.customerId, customerId),
+          eq(financeApplicationsTable.dealerId, dealerId),
+        ),
+      ),
     db
       .select()
       .from(serviceOrdersTable)
-      .where(eq(serviceOrdersTable.customerId, customerId)),
-    db.select().from(leadsTable).where(eq(leadsTable.customerId, customerId)),
+      .where(
+        and(
+          eq(serviceOrdersTable.customerId, customerId),
+          eq(serviceOrdersTable.dealerId, dealerId),
+        ),
+      ),
+    db
+      .select()
+      .from(leadsTable)
+      .where(
+        and(
+          eq(leadsTable.customerId, customerId),
+          eq(leadsTable.dealerId, dealerId),
+        ),
+      ),
     db
       .select()
       .from(timelineEventsTable)
-      .where(eq(timelineEventsTable.customerId, customerId))
+      .where(
+        and(
+          eq(timelineEventsTable.customerId, customerId),
+          eq(timelineEventsTable.dealerId, dealerId),
+        ),
+      )
       .orderBy(desc(timelineEventsTable.createdAt)),
-    db.select().from(gatesTable).where(eq(gatesTable.customerId, customerId)),
-    db.select().from(vehiclesTable),
+    db
+      .select()
+      .from(gatesTable)
+      .where(
+        and(
+          eq(gatesTable.customerId, customerId),
+          eq(gatesTable.dealerId, dealerId),
+        ),
+      ),
+    db.select().from(vehiclesTable).where(eq(vehiclesTable.dealerId, dealerId)),
     db
       .select()
       .from(customerNotesTable)
-      .where(eq(customerNotesTable.customerId, customerId))
+      .where(
+        and(
+          eq(customerNotesTable.customerId, customerId),
+          eq(customerNotesTable.dealerId, dealerId),
+        ),
+      )
       .orderBy(desc(customerNotesTable.createdAt)),
     db
       .select()
       .from(customerDocumentsTable)
-      .where(eq(customerDocumentsTable.customerId, customerId))
+      .where(
+        and(
+          eq(customerDocumentsTable.customerId, customerId),
+          eq(customerDocumentsTable.dealerId, dealerId),
+        ),
+      )
       .orderBy(desc(customerDocumentsTable.createdAt)),
     db
       .select()
       .from(customerPersonasTable)
-      .where(eq(customerPersonasTable.customerId, customerId)),
+      .where(
+        and(
+          eq(customerPersonasTable.customerId, customerId),
+          eq(customerPersonasTable.dealerId, dealerId),
+        ),
+      ),
   ]);
 
   const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
@@ -692,7 +840,7 @@ router.get("/customers/:id/overview", async (req, res): Promise<void> => {
 
   const openGates = gates.filter((g) => g.status === "pending");
 
-  const persona = await personaPayload(customerId, {
+  const persona = await personaPayload(customerId, dealerId, {
     persona: personaRow ?? null,
     leads,
     deals,

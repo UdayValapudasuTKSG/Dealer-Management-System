@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   db,
   gatesTable,
@@ -9,6 +9,7 @@ import {
   timelineEventsTable,
   type Gate,
 } from "@workspace/db";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   ListGatesQueryParams,
   ListGatesResponse,
@@ -28,13 +29,17 @@ router.get("/gates", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const rows = await db
     .select()
     .from(gatesTable)
     .where(
       query.data.status
-        ? eq(gatesTable.status, query.data.status)
-        : undefined,
+        ? and(
+            eq(gatesTable.dealerId, dealerId),
+            eq(gatesTable.status, query.data.status),
+          )
+        : eq(gatesTable.dealerId, dealerId),
     )
     .orderBy(desc(gatesTable.createdAt));
 
@@ -48,6 +53,7 @@ async function writeReceipt(
   detail: string,
 ) {
   await tx.insert(timelineEventsTable).values({
+    dealerId: gate.dealerId,
     customerId: gate.customerId ?? null,
     domain: "gate",
     kind: `gate_${gate.type}`,
@@ -79,7 +85,12 @@ async function applyCascade(
         const [deal] = await tx
           .select()
           .from(dealsTable)
-          .where(eq(dealsTable.id, gate.refId));
+          .where(
+            and(
+              eq(dealsTable.id, gate.refId),
+              eq(dealsTable.dealerId, gate.dealerId),
+            ),
+          );
         if (deal) {
           const otd =
             deal.vehiclePrice -
@@ -89,7 +100,12 @@ async function applyCascade(
           await tx
             .update(dealsTable)
             .set({ discount: effectiveAmount, otdPrice: otd })
-            .where(eq(dealsTable.id, gate.refId));
+            .where(
+              and(
+                eq(dealsTable.id, gate.refId),
+                eq(dealsTable.dealerId, gate.dealerId),
+              ),
+            );
         }
       }
       return {
@@ -105,7 +121,12 @@ async function applyCascade(
         await tx
           .update(financeApplicationsTable)
           .set({ status: action === "adjust" ? "under_review" : "declined" })
-          .where(eq(financeApplicationsTable.id, gate.refId));
+          .where(
+            and(
+              eq(financeApplicationsTable.id, gate.refId),
+              eq(financeApplicationsTable.dealerId, gate.dealerId),
+            ),
+          );
       }
       return action === "adjust"
         ? {
@@ -124,7 +145,12 @@ async function applyCascade(
         await tx
           .update(vehiclesTable)
           .set({ status: "in_transit" })
-          .where(eq(vehiclesTable.id, gate.refId));
+          .where(
+            and(
+              eq(vehiclesTable.id, gate.refId),
+              eq(vehiclesTable.dealerId, gate.dealerId),
+            ),
+          );
       }
       return {
         title: "Capital order approved",
@@ -145,13 +171,23 @@ async function applyCascade(
           await tx
             .update(vehiclesTable)
             .set({ status: "available" })
-            .where(eq(vehiclesTable.id, gate.refId));
+            .where(
+              and(
+                eq(vehiclesTable.id, gate.refId),
+                eq(vehiclesTable.dealerId, gate.dealerId),
+              ),
+            );
           vinReturned = true;
         } else if (gate.refType === "deal") {
           await tx
             .update(dealsTable)
             .set({ depositPaid: false })
-            .where(eq(dealsTable.id, gate.refId));
+            .where(
+              and(
+                eq(dealsTable.id, gate.refId),
+                eq(dealsTable.dealerId, gate.dealerId),
+              ),
+            );
         }
       }
       return {
@@ -178,10 +214,13 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const [gate] = await db
     .select()
     .from(gatesTable)
-    .where(eq(gatesTable.id, params.data.id));
+    .where(
+      and(eq(gatesTable.id, params.data.id), eq(gatesTable.dealerId, dealerId)),
+    );
 
   if (!gate) {
     res.status(404).json({ error: "Gate not found" });

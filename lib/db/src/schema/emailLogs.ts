@@ -34,6 +34,7 @@ export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 // channel leaves room for future SMS / WhatsApp providers
 export const emailLogsTable = pgTable("email_logs", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   customerId: integer("customer_id"),
   recipient: text("recipient").notNull(),
   subject: text("subject").notNull(),
@@ -53,6 +54,6 @@ export const insertEmailLogSchema = createInsertSchema(emailLogsTable, {
   template: z.enum(EMAIL_TEMPLATES),
   channel: z.enum(["email", "sms", "whatsapp"]),
   status: z.enum(["queued", "sending", "sent", "failed"]),
-}).omit({ id: true, createdAt: true });
+}).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertEmailLog = z.infer<typeof insertEmailLogSchema>;
 export type EmailLog = typeof emailLogsTable.$inferSelect;

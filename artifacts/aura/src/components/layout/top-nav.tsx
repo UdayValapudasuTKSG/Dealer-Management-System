@@ -1,7 +1,16 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sun, Moon, Sparkles, LogOut, Settings } from "lucide-react";
+import {
+  Sun,
+  Moon,
+  Sparkles,
+  LogOut,
+  Settings,
+  Building2,
+  Check,
+  ChevronsUpDown,
+} from "lucide-react";
 import { useClerk } from "@clerk/react";
 import { recordLogoutEvent } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
@@ -111,6 +120,87 @@ function ThemeToggle() {
   );
 }
 
+function DealerSwitcher() {
+  const { me, dealers, activeDealer, switchDealer } = useAuthz();
+  const [open, setOpen] = useState(false);
+
+  if (!me || dealers.length === 0) return null;
+
+  if (dealers.length === 1) {
+    return (
+      <div className="hidden sm:flex items-center gap-2 rounded-full border border-white/10 bg-foreground/[0.04] px-3 py-1.5">
+        <Building2 className="h-4 w-4 text-primary" />
+        <span className="text-xs font-semibold max-w-[140px] truncate">
+          {dealers[0].dealerName}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 rounded-full border border-white/10 bg-foreground/[0.04] hover:bg-foreground/[0.08] px-3 py-1.5 transition-colors"
+        aria-label="Switch dealership"
+      >
+        <Building2 className="h-4 w-4 text-primary" />
+        <span className="hidden sm:inline text-xs font-semibold max-w-[140px] truncate">
+          {activeDealer?.dealerName ?? "Select dealership"}
+        </span>
+        <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.15 }}
+              className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-white/10 bg-popover shadow-2xl p-1.5"
+            >
+              <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                Dealerships
+              </div>
+              {dealers.map((d) => {
+                const active = d.dealerId === activeDealer?.dealerId;
+                return (
+                  <button
+                    key={d.dealerId}
+                    onClick={() => {
+                      setOpen(false);
+                      if (!active) switchDealer(d.dealerId);
+                    }}
+                    className={cn(
+                      "w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
+                      active
+                        ? "bg-primary/10 text-foreground"
+                        : "hover:bg-foreground/[0.05] text-muted-foreground",
+                    )}
+                  >
+                    <Building2 className="h-4 w-4 shrink-0 text-primary/70" />
+                    <span className="flex-1 text-left truncate">
+                      {d.dealerName}
+                    </span>
+                    {d.roleName && (
+                      <span className="text-[9px] uppercase tracking-wider text-muted-foreground shrink-0">
+                        {d.roleName}
+                      </span>
+                    )}
+                    {active && <Check className="h-4 w-4 text-primary shrink-0" />}
+                  </button>
+                );
+              })}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function UserMenu() {
   const { me } = useAuthz();
   const { signOut } = useClerk();
@@ -183,12 +273,20 @@ function UserMenu() {
 
 export function TopNav() {
   const [location, navigate] = useLocation();
-  const { can } = useAuthz();
+  const { can, me } = useAuthz();
 
   const clusters = CLUSTERS.map((c) => ({
     ...c,
     items: c.items.filter((i) => !i.module || can(i.module, "view")),
   })).filter((c) => c.items.length > 0);
+
+  if (me?.isSuperAdmin) {
+    clusters.push({
+      label: "Admin",
+      icon: "",
+      items: [{ name: "Platform Admin", href: "/admin", module: "" }],
+    });
+  }
 
   const activeCluster =
     clusters.find((c) => c.items.some((i) => isItemActive(location, i.href))) ??
@@ -284,6 +382,7 @@ export function TopNav() {
 
           {/* Right rail */}
           <div className="flex items-center gap-2 shrink-0">
+            <DealerSwitcher />
             <GlobalSearchButton />
             <NotificationBell />
             <ThemeToggle />

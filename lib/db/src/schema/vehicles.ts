@@ -41,6 +41,7 @@ export type VehicleDocument = z.infer<typeof vehicleDocumentSchema>;
 
 export const vehiclesTable = pgTable("vehicles", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   make: text("make").notNull(),
   model: text("model").notNull(),
   trim: text("trim"),
@@ -75,7 +76,7 @@ export const insertVehicleSchema = createInsertSchema(vehiclesTable, {
   images: z.array(z.string()),
   accessories: z.array(z.string()),
   documents: z.array(vehicleDocumentSchema),
-}).omit({
+}).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });

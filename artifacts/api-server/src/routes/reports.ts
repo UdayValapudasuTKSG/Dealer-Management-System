@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { and, eq } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -14,9 +15,10 @@ import {
   jobCardsTable,
   usersTable,
   rolesTable,
+  dealerUsersTable,
 } from "@workspace/db";
 import { GetReportResponse } from "@workspace/api-zod";
-import { hasPermission } from "../middlewares/rbac";
+import { activeDealerId, hasPermission } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
@@ -91,13 +93,20 @@ type ReportPayload = {
   table: { columns: string[]; rows: string[][] };
 };
 
-type Builder = (from: Date, to: Date) => Promise<Omit<ReportPayload, "type" | "from" | "to">>;
+type Builder = (
+  from: Date,
+  to: Date,
+  dealerId: number,
+) => Promise<Omit<ReportPayload, "type" | "from" | "to">>;
 
 const builders: Record<string, Builder> = {
-  "lead-conversion": async (from, to) => {
-    const leads = (await db.select().from(leadsTable)).filter((l) =>
-      inRange(l.createdAt, from, to),
-    );
+  "lead-conversion": async (from, to, dealerId) => {
+    const leads = (
+      await db
+        .select()
+        .from(leadsTable)
+        .where(eq(leadsTable.dealerId, dealerId))
+    ).filter((l) => inRange(l.createdAt, from, to));
     const converted = leads.filter(
       (l) => l.phase === "won" || l.status === "converted",
     );
@@ -142,10 +151,13 @@ const builders: Record<string, Builder> = {
     };
   },
 
-  sales: async (from, to) => {
-    const deals = (await db.select().from(dealsTable)).filter((d) =>
-      inRange(d.createdAt, from, to),
-    );
+  sales: async (from, to, dealerId) => {
+    const deals = (
+      await db
+        .select()
+        .from(dealsTable)
+        .where(eq(dealsTable.dealerId, dealerId))
+    ).filter((d) => inRange(d.createdAt, from, to));
     const delivered = deals.filter((d) => d.stage === "delivered");
     const buckets = monthBuckets(from, to);
     const byAdvisor = new Map<string, { deals: number; delivered: number; revenue: number }>();
@@ -200,11 +212,11 @@ const builders: Record<string, Builder> = {
     };
   },
 
-  revenue: async (from, to) => {
+  revenue: async (from, to, dealerId) => {
     const [deals, payments, invoices] = await Promise.all([
-      db.select().from(dealsTable),
-      db.select().from(paymentsTable),
-      db.select().from(invoicesTable),
+      db.select().from(dealsTable).where(eq(dealsTable.dealerId, dealerId)),
+      db.select().from(paymentsTable).where(eq(paymentsTable.dealerId, dealerId)),
+      db.select().from(invoicesTable).where(eq(invoicesTable.dealerId, dealerId)),
     ]);
     const delivered = deals.filter(
       (d) => d.stage === "delivered" && inRange(d.createdAt, from, to),
@@ -264,8 +276,11 @@ const builders: Record<string, Builder> = {
     };
   },
 
-  inventory: async () => {
-    const vehicles = await db.select().from(vehiclesTable);
+  inventory: async (_from, _to, dealerId) => {
+    const vehicles = await db
+      .select()
+      .from(vehiclesTable)
+      .where(eq(vehiclesTable.dealerId, dealerId));
     const available = vehicles.filter((v) => v.status === "available");
     const byPowertrain = new Map<string, number>();
     const byMake = new Map<string, { count: number; value: number }>();
@@ -316,10 +331,13 @@ const builders: Record<string, Builder> = {
     };
   },
 
-  finance: async (from, to) => {
-    const apps = (await db.select().from(financeApplicationsTable)).filter((a) =>
-      inRange(a.createdAt, from, to),
-    );
+  finance: async (from, to, dealerId) => {
+    const apps = (
+      await db
+        .select()
+        .from(financeApplicationsTable)
+        .where(eq(financeApplicationsTable.dealerId, dealerId))
+    ).filter((a) => inRange(a.createdAt, from, to));
     const approved = apps.filter(
       (a) => a.status === "approved" || a.status === "disbursed",
     );
@@ -371,10 +389,13 @@ const builders: Record<string, Builder> = {
     };
   },
 
-  delivery: async (from, to) => {
-    const deliveries = (await db.select().from(deliveriesTable)).filter((d) =>
-      inRange(d.createdAt, from, to),
-    );
+  delivery: async (from, to, dealerId) => {
+    const deliveries = (
+      await db
+        .select()
+        .from(deliveriesTable)
+        .where(eq(deliveriesTable.dealerId, dealerId))
+    ).filter((d) => inRange(d.createdAt, from, to));
     const completed = deliveries.filter((d) => d.status === "completed");
     const byStep = new Map<string, number>();
     for (const d of deliveries)
@@ -421,10 +442,13 @@ const builders: Record<string, Builder> = {
     };
   },
 
-  service: async (from, to) => {
-    const orders = (await db.select().from(serviceOrdersTable)).filter((o) =>
-      inRange(o.createdAt, from, to),
-    );
+  service: async (from, to, dealerId) => {
+    const orders = (
+      await db
+        .select()
+        .from(serviceOrdersTable)
+        .where(eq(serviceOrdersTable.dealerId, dealerId))
+    ).filter((o) => inRange(o.createdAt, from, to));
     const completed = orders.filter(
       (o) => o.status === "completed" || o.status === "delivered",
     );
@@ -464,14 +488,24 @@ const builders: Record<string, Builder> = {
     };
   },
 
-  "employee-performance": async (from, to) => {
-    const [users, roles, deals, jobCards, leads] = await Promise.all([
-      db.select().from(usersTable),
+  "employee-performance": async (from, to, dealerId) => {
+    const [members, roles, deals, jobCards, leads] = await Promise.all([
+      db
+        .select({
+          id: usersTable.id,
+          name: usersTable.name,
+          email: usersTable.email,
+          roleId: dealerUsersTable.roleId,
+        })
+        .from(dealerUsersTable)
+        .innerJoin(usersTable, eq(dealerUsersTable.userId, usersTable.id))
+        .where(eq(dealerUsersTable.dealerId, dealerId)),
       db.select().from(rolesTable),
-      db.select().from(dealsTable),
-      db.select().from(jobCardsTable),
-      db.select().from(leadsTable),
+      db.select().from(dealsTable).where(eq(dealsTable.dealerId, dealerId)),
+      db.select().from(jobCardsTable).where(eq(jobCardsTable.dealerId, dealerId)),
+      db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
     ]);
+    const users = members;
     const roleName = new Map(roles.map((r) => [r.id, r.name]));
     const dealsIn = deals.filter((d) => inRange(d.createdAt, from, to));
     const cardsIn = jobCards.filter((c) => inRange(c.createdAt, from, to));
@@ -541,10 +575,10 @@ const builders: Record<string, Builder> = {
     };
   },
 
-  marketing: async (from, to) => {
+  marketing: async (from, to, dealerId) => {
     const [emails, leads] = await Promise.all([
-      db.select().from(emailLogsTable),
-      db.select().from(leadsTable),
+      db.select().from(emailLogsTable).where(eq(emailLogsTable.dealerId, dealerId)),
+      db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
     ]);
     const emailsIn = emails.filter((e) => inRange(e.createdAt, from, to));
     const leadsIn = leads.filter((l) => inRange(l.createdAt, from, to));
@@ -599,8 +633,11 @@ const builders: Record<string, Builder> = {
     };
   },
 
-  "customer-retention": async (from, to) => {
-    const customers = await db.select().from(customersTable);
+  "customer-retention": async (from, to, dealerId) => {
+    const customers = await db
+      .select()
+      .from(customersTable)
+      .where(eq(customersTable.dealerId, dealerId));
     const newCustomers = customers.filter((c) => inRange(c.createdAt, from, to));
     const repeat = customers.filter((c) => c.vehiclesOwned > 1);
     const byTier = new Map<string, number>();
@@ -670,7 +707,7 @@ router.get("/reports", async (req, res): Promise<void> => {
     typeof req.query.from === "string" ? req.query.from : undefined,
     typeof req.query.to === "string" ? req.query.to : undefined,
   );
-  const body = await builder(from, to);
+  const body = await builder(from, to, activeDealerId(res));
   res.json(
     GetReportResponse.parse({
       type,

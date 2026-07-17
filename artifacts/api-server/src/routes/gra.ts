@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { db, gatesTable } from "@workspace/db";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   ExtractGraFilingBody,
   ExtractGraFilingResponse,
@@ -112,10 +113,12 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
   }
 
   const d = parsed.data.draft;
+  const dealerId = activeDealerId(res);
 
   const [gate] = await db
     .insert(gatesTable)
     .values({
+      dealerId,
       type: "gra_filing",
       status: "pending",
       priority: "high",

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { activeDealerId } from "../../middlewares/rbac";
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   db,
@@ -90,7 +91,7 @@ router.post("/anthropic/conversations", async (req, res): Promise<void> => {
   }
   const [row] = await db
     .insert(conversations)
-    .values({ title: parsed.data.title })
+    .values({ title: parsed.data.title, dealerId: activeDealerId(res) })
     .returning();
   res.status(201).json(row);
 });
@@ -175,9 +176,12 @@ router.post(
       return;
     }
 
-    await db
-      .insert(messages)
-      .values({ conversationId: id, role: "user", content: parsed.data.content });
+    await db.insert(messages).values({
+      conversationId: id,
+      dealerId: conversation.dealerId,
+      role: "user",
+      content: parsed.data.content,
+    });
 
     const history = await db
       .select()
@@ -210,6 +214,7 @@ router.post(
       try {
         await db.insert(messages).values({
           conversationId: id,
+          dealerId: conversation.dealerId,
           role: "assistant",
           content: fullResponse,
         });

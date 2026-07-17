@@ -4,6 +4,7 @@ import {
   leadsTable,
   usersTable,
   rolesTable,
+  dealerUsersTable,
   agentsTable,
   activityTable,
   timelineEventsTable,
@@ -34,7 +35,7 @@ type Candidate = {
   roleName: string | null;
 };
 
-async function candidateAdvisors(): Promise<Candidate[]> {
+async function candidateAdvisors(dealerId: number): Promise<Candidate[]> {
   const rows = await db
     .select({
       id: usersTable.id,
@@ -42,10 +43,12 @@ async function candidateAdvisors(): Promise<Candidate[]> {
       email: usersTable.email,
       roleName: rolesTable.name,
     })
-    .from(usersTable)
-    .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
+    .from(dealerUsersTable)
+    .innerJoin(usersTable, eq(dealerUsersTable.userId, usersTable.id))
+    .innerJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
     .where(
       and(
+        eq(dealerUsersTable.dealerId, dealerId),
         eq(usersTable.status, "active"),
         inArray(rolesTable.name, ["Sales Advisor", "Sales Manager"]),
       ),
@@ -55,7 +58,10 @@ async function candidateAdvisors(): Promise<Candidate[]> {
 }
 
 /** Open-lead count per owner (won/lost excluded) for workload balancing. */
-async function openLeadCounts(userIds: number[]): Promise<Map<number, number>> {
+async function openLeadCounts(
+  dealerId: number,
+  userIds: number[],
+): Promise<Map<number, number>> {
   const counts = new Map<number, number>(userIds.map((id) => [id, 0]));
   if (userIds.length === 0) return counts;
   const rows = await db
@@ -66,6 +72,7 @@ async function openLeadCounts(userIds: number[]): Promise<Map<number, number>> {
     .from(leadsTable)
     .where(
       and(
+        eq(leadsTable.dealerId, dealerId),
         isNotNull(leadsTable.ownerUserId),
         inArray(leadsTable.ownerUserId, userIds),
         notInArray(leadsTable.phase, ["won", "lost"]),
@@ -99,7 +106,7 @@ async function vehicleLabelFor(lead: Lead): Promise<string> {
 export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
   if (lead.ownerUserId != null) return null;
   try {
-    const candidates = await candidateAdvisors();
+    const candidates = await candidateAdvisors(lead.dealerId);
     if (candidates.length === 0) {
       logger.warn(
         { leadId: lead.id },
@@ -108,7 +115,10 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
       return null;
     }
 
-    const counts = await openLeadCounts(candidates.map((c) => c.id));
+    const counts = await openLeadCounts(
+      lead.dealerId,
+      candidates.map((c) => c.id),
+    );
     const ranked = [...candidates].sort((a, b) => {
       const load = (counts.get(a.id) ?? 0) - (counts.get(b.id) ?? 0);
       return load !== 0 ? load : a.id - b.id;
@@ -135,6 +145,7 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
     const reasoning = `Routed by workload balance — ${advisorName} has ${load} active lead${load === 1 ? "" : "s"} (lowest on the team).`;
 
     await db.insert(timelineEventsTable).values({
+      dealerId: updated.dealerId,
       customerId: updated.customerId,
       domain: "leads",
       kind: "advisor_assigned",
@@ -147,6 +158,7 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
     });
 
     await db.insert(activityTable).values({
+      dealerId: updated.dealerId,
       agentKey: AGENT_KEY,
       actor: AGENT_ACTOR,
       isAi: true,
@@ -157,10 +169,16 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
     await db
       .update(agentsTable)
       .set({ tasksToday: sql`${agentsTable.tasksToday} + 1` })
-      .where(eq(agentsTable.key, AGENT_KEY));
+      .where(
+        and(
+          eq(agentsTable.key, AGENT_KEY),
+          eq(agentsTable.dealerId, updated.dealerId),
+        ),
+      );
 
     await notifyUser({
       userId: advisor.id,
+      dealerId: updated.dealerId,
       type: "assignment",
       title: `Lead assigned: ${updated.name}`,
       body: "AURA routed this lead to you — make first contact and update the status.",
@@ -171,6 +189,7 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
       await enqueueEmail({
         template: "lead_assignment",
         to: updated.email,
+        dealerId: updated.dealerId,
         customerId: updated.customerId,
         data: {
           advisor: advisorName,

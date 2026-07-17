@@ -19,6 +19,7 @@ export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
 export const invoicesTable = pgTable("invoices", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   invoiceNumber: text("invoice_number").notNull(),
   customerId: integer("customer_id"),
   customerName: text("customer_name").notNull(),
@@ -35,6 +36,6 @@ export const invoicesTable = pgTable("invoices", {
 
 export const insertInvoiceSchema = createInsertSchema(invoicesTable, {
   status: z.enum(INVOICE_STATUSES),
-}).omit({ id: true, createdAt: true, invoiceNumber: true });
+}).omit({ dealerId: true, id: true, createdAt: true, invoiceNumber: true });
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type Invoice = typeof invoicesTable.$inferSelect;

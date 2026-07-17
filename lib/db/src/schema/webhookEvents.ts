@@ -13,6 +13,7 @@ export const webhookEventsTable = pgTable(
   "webhook_events",
   {
     id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id"),
     channel: text("channel").notNull(), // "meta_leadgen" | "twilio_whatsapp"
     externalId: text("external_id").notNull(),
     leadId: integer("lead_id"),

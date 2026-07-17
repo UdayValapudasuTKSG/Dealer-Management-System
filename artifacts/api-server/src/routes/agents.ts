@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, asc } from "drizzle-orm";
+import { and, eq, asc } from "drizzle-orm";
 import { db, agentsTable } from "@workspace/db";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   UpdateAgentBody,
   GetAgentParams,
@@ -13,7 +14,12 @@ import {
 const router: IRouter = Router();
 
 router.get("/agents", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(agentsTable).orderBy(asc(agentsTable.id));
+  const dealerId = activeDealerId(res);
+  const rows = await db
+    .select()
+    .from(agentsTable)
+    .where(eq(agentsTable.dealerId, dealerId))
+    .orderBy(asc(agentsTable.id));
   res.json(ListAgentsResponse.parse(rows));
 });
 
@@ -24,10 +30,13 @@ router.get("/agents/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const [agent] = await db
     .select()
     .from(agentsTable)
-    .where(eq(agentsTable.id, params.data.id));
+    .where(
+      and(eq(agentsTable.id, params.data.id), eq(agentsTable.dealerId, dealerId)),
+    );
 
   if (!agent) {
     res.status(404).json({ error: "Agent not found" });
@@ -50,10 +59,13 @@ router.patch("/agents/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const [agent] = await db
     .update(agentsTable)
     .set(parsed.data)
-    .where(eq(agentsTable.id, params.data.id))
+    .where(
+      and(eq(agentsTable.id, params.data.id), eq(agentsTable.dealerId, dealerId)),
+    )
     .returning();
 
   if (!agent) {

@@ -1,11 +1,9 @@
 import { Router, type IRouter } from "express";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   db,
   leadsTable,
   vehiclesTable,
-  usersTable,
-  rolesTable,
   timelineEventsTable,
 } from "@workspace/db";
 import {
@@ -16,6 +14,7 @@ import {
 import { notifyUsers } from "../lib/email";
 import { onLeadCreated } from "../lib/email-triggers";
 import { autoAssignLead } from "../lib/lead-assignment";
+import { defaultDealerId, dealerStaffIdsByRole } from "../lib/tenancy";
 
 const router: IRouter = Router();
 
@@ -63,6 +62,11 @@ router.post("/enquiries", async (req, res): Promise<void> => {
     comments,
   } = parsed.data;
 
+  // Public showroom is cross-dealer; the enquiry's dealer is derived from the
+  // selected/matched vehicle. When no vehicle resolves, fall back to the
+  // default dealer.
+  let dealerId: number | null = null;
+
   // Preferred path: an explicit inventory selection from the dropdown.
   let interestedVehicleId: number | null = null;
   let matchedVehicleLabel: string | null = null;
@@ -78,6 +82,7 @@ router.post("/enquiries", async (req, res): Promise<void> => {
       return;
     }
     interestedVehicleId = v.id;
+    dealerId = v.dealerId;
     matchedVehicleLabel = `${v.year} ${v.make} ${v.model}`;
     matchedVariant = v.trim || v.variant || null;
     matchedColor = v.exteriorColor || null;
@@ -97,9 +102,12 @@ router.post("/enquiries", async (req, res): Promise<void> => {
     });
     if (match) {
       interestedVehicleId = match.id;
+      dealerId = match.dealerId;
       matchedVehicleLabel = `${match.year} ${match.make} ${match.model}`;
     }
   }
+
+  if (dealerId === null) dealerId = await defaultDealerId();
 
   const noteParts: string[] = [];
   if (comments && comments.trim()) noteParts.push(comments.trim());
@@ -109,6 +117,7 @@ router.post("/enquiries", async (req, res): Promise<void> => {
   const [lead] = await db
     .insert(leadsTable)
     .values({
+      dealerId,
       name,
       email: email ?? null,
       phone: phone ?? null,
@@ -126,6 +135,7 @@ router.post("/enquiries", async (req, res): Promise<void> => {
     .returning();
 
   await db.insert(timelineEventsTable).values({
+    dealerId: lead!.dealerId,
     customerId: lead!.customerId,
     domain: "leads",
     kind: "enquiry_received",
@@ -147,19 +157,18 @@ router.post("/enquiries", async (req, res): Promise<void> => {
 
   // Alert Marketing Coordinators (and managers) that a new enquiry landed.
   try {
-    const coordinators = await db
-      .select({ id: usersTable.id })
-      .from(usersTable)
-      .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
-      .where(
-        sql`${rolesTable.name} in ('Marketing Coordinator', 'Sales Manager', 'General Manager') and ${usersTable.status} = 'active'`,
-      );
+    const coordinators = await dealerStaffIdsByRole(lead!.dealerId, [
+      "Marketing Coordinator",
+      "Sales Manager",
+      "General Manager",
+    ]);
     const routing = assigned?.assignedTo
       ? `AURA routed it to ${assigned.assignedTo}.`
       : "Awaiting advisor assignment.";
     await notifyUsers(
-      coordinators.map((c) => c.id),
+      coordinators,
       {
+        dealerId: lead!.dealerId,
         type: "assignment",
         title: `New enquiry: ${name}`,
         body: matchedVehicleLabel

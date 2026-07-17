@@ -1,16 +1,15 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   db,
   leadsTable,
   vehiclesTable,
-  usersTable,
-  rolesTable,
   timelineEventsTable,
   type Lead,
 } from "@workspace/db";
 import { notifyUsers } from "./email";
 import { onLeadCreated } from "./email-triggers";
 import { autoAssignLead } from "./lead-assignment";
+import { dealerStaffIdsByRole } from "./tenancy";
 import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -30,9 +29,13 @@ export type MatchedVehicle = {
  * the website enquiry fallback). */
 export async function matchVehicleByText(
   text: string | null | undefined,
+  dealerId: number,
 ): Promise<MatchedVehicle | null> {
   if (!text || !text.trim()) return null;
-  const vehicles = await db.select().from(vehiclesTable);
+  const vehicles = await db
+    .select()
+    .from(vehiclesTable)
+    .where(eq(vehiclesTable.dealerId, dealerId));
   const needle = text.trim().toLowerCase();
   const match = vehicles.find((v) => {
     const full = `${v.year} ${v.make} ${v.model}`.toLowerCase();
@@ -51,6 +54,7 @@ export async function matchVehicleByText(
 }
 
 export async function createInboundLead(opts: {
+  dealerId: number;
   name: string;
   email?: string | null;
   phone?: string | null;
@@ -66,6 +70,7 @@ export async function createInboundLead(opts: {
   const [lead] = await db
     .insert(leadsTable)
     .values({
+      dealerId: opts.dealerId,
       name: opts.name,
       email: opts.email ?? null,
       phone: opts.phone ?? null,
@@ -82,6 +87,7 @@ export async function createInboundLead(opts: {
     .returning();
 
   await db.insert(timelineEventsTable).values({
+    dealerId: opts.dealerId,
     customerId: lead!.customerId,
     domain: "leads",
     kind: "enquiry_received",
@@ -102,19 +108,18 @@ export async function createInboundLead(opts: {
   const assigned = await autoAssignLead(lead!);
 
   try {
-    const coordinators = await db
-      .select({ id: usersTable.id })
-      .from(usersTable)
-      .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
-      .where(
-        sql`${rolesTable.name} in ('Marketing Coordinator', 'Sales Manager', 'General Manager') and ${usersTable.status} = 'active'`,
-      );
+    const coordinatorIds = await dealerStaffIdsByRole(opts.dealerId, [
+      "Marketing Coordinator",
+      "Sales Manager",
+      "General Manager",
+    ]);
     const routing = assigned?.assignedTo
       ? `AURA routed it to ${assigned.assignedTo}.`
       : "Awaiting advisor assignment.";
     await notifyUsers(
-      coordinators.map((c) => c.id),
+      coordinatorIds,
       {
+        dealerId: opts.dealerId,
         type: "assignment",
         title: `New ${opts.channelLabel} lead: ${opts.name}`,
         body: opts.vehicle

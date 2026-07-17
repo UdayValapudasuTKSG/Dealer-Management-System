@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, notificationsTable } from "@workspace/db";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   ListNotificationsResponse,
   MarkNotificationsReadBody,
@@ -15,10 +16,16 @@ router.get("/notifications", async (_req, res): Promise<void> => {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
+  const dealerId = activeDealerId(res);
   const rows = await db
     .select()
     .from(notificationsTable)
-    .where(eq(notificationsTable.userId, user.id))
+    .where(
+      and(
+        eq(notificationsTable.userId, user.id),
+        eq(notificationsTable.dealerId, dealerId),
+      ),
+    )
     .orderBy(desc(notificationsTable.createdAt))
     .limit(100);
   res.json(ListNotificationsResponse.parse(rows));
@@ -35,11 +42,16 @@ router.post("/notifications/read", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const dealerId = activeDealerId(res);
   const { ids, all } = parsed.data;
   const where = all
-    ? eq(notificationsTable.userId, user.id)
+    ? and(
+        eq(notificationsTable.userId, user.id),
+        eq(notificationsTable.dealerId, dealerId),
+      )
     : and(
         eq(notificationsTable.userId, user.id),
+        eq(notificationsTable.dealerId, dealerId),
         inArray(notificationsTable.id, ids ?? []),
       );
   if (!all && (!ids || ids.length === 0)) {

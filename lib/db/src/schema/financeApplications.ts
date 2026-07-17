@@ -37,6 +37,7 @@ export type FinanceStatusEvent = {
 
 export const financeApplicationsTable = pgTable("finance_applications", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   dealId: integer("deal_id"),
   leadId: integer("lead_id"),
   customerId: integer("customer_id"),
@@ -75,7 +76,7 @@ export const insertFinanceApplicationSchema = createInsertSchema(
     status: z.enum(FINANCE_STATUSES),
     employmentType: z.enum(EMPLOYMENT_TYPES).nullable().optional(),
   },
-).omit({ id: true, createdAt: true, statusHistory: true });
+).omit({ dealerId: true, id: true, createdAt: true, statusHistory: true });
 export type InsertFinanceApplication = z.infer<
   typeof insertFinanceApplicationSchema
 >;

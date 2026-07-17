@@ -22,6 +22,7 @@ import pipelineRouter from "./pipeline";
 import sentimentRouter from "./sentiment";
 import authRouter from "./auth";
 import adminRouter from "./admin";
+import platformRouter from "./platform";
 import auditRouter from "./audit";
 import emailsRouter from "./emails";
 import notificationsRouter from "./notifications";
@@ -52,6 +53,7 @@ router.use(authorize);
 router.use(auditTrail);
 
 router.use(authRouter);
+router.use(platformRouter);
 router.use(adminRouter);
 router.use(auditRouter);
 router.use(vehiclesRouter);

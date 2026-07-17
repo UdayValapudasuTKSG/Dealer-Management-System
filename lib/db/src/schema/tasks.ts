@@ -15,6 +15,7 @@ export type TaskAttachment = { name: string; url: string };
 
 export const tasksTable = pgTable("tasks", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   title: text("title").notNull(),
   description: text("description"),
   assigneeUserId: integer("assignee_user_id").references(() => usersTable.id, {
@@ -44,6 +45,7 @@ export const tasksTable = pgTable("tasks", {
 
 export const taskCommentsTable = pgTable("task_comments", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   taskId: integer("task_id")
     .notNull()
     .references(() => tasksTable.id, { onDelete: "cascade" }),
@@ -60,7 +62,7 @@ export const taskCommentsTable = pgTable("task_comments", {
 export const insertTaskSchema = createInsertSchema(tasksTable, {
   priority: z.enum(["low", "normal", "high", "urgent"]),
   status: z.enum(["open", "in_progress", "done"]),
-}).omit({
+}).omit({ dealerId: true,
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -70,7 +72,7 @@ export const insertTaskSchema = createInsertSchema(tasksTable, {
 });
 export const insertTaskCommentSchema = createInsertSchema(
   taskCommentsTable,
-).omit({ id: true, createdAt: true });
+).omit({ dealerId: true, id: true, createdAt: true });
 
 export type InsertTask = z.infer<typeof insertTaskSchema>;
 export type Task = typeof tasksTable.$inferSelect;

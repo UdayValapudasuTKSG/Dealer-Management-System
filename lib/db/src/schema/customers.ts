@@ -12,6 +12,7 @@ import { z } from "zod/v4";
 
 export const customersTable = pgTable("customers", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
@@ -39,7 +40,7 @@ export const customersTable = pgTable("customers", {
 
 export const insertCustomerSchema = createInsertSchema(customersTable, {
   loyaltyTier: z.enum(["new", "silver", "gold", "platinum"]),
-}).omit({
+}).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });

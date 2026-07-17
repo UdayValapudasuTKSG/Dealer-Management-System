@@ -48,6 +48,9 @@ router.get("/auth/me", async (_req, res): Promise<void> => {
       roleId: user.roleId,
       roleName: user.roleName,
       status: user.status,
+      isSuperAdmin: user.isSuperAdmin,
+      activeDealerId: user.dealerId,
+      dealers: user.dealers,
       permissions: user.permissions,
     }),
   );

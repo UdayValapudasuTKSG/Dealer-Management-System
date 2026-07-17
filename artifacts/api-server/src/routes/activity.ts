@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db, activityTable } from "@workspace/db";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   ListActivityQueryParams,
   ListActivityResponse,
@@ -15,9 +16,11 @@ router.get("/activity", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const rows = await db
     .select()
     .from(activityTable)
+    .where(eq(activityTable.dealerId, dealerId))
     .orderBy(desc(activityTable.createdAt))
     .limit(query.data.limit ?? 30);
 

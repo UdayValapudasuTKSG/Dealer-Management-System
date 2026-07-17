@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   db,
   customersTable,
@@ -19,17 +19,24 @@ const money = (n: number) =>
   `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
 async function customerEmail(
+  dealerId: number,
   customerId: number | null | undefined,
 ): Promise<{ email: string | null; name: string | null }> {
   if (!customerId) return { email: null, name: null };
   const [c] = await db
     .select({ email: customersTable.email, name: customersTable.name })
     .from(customersTable)
-    .where(eq(customersTable.id, customerId));
+    .where(
+      and(
+        eq(customersTable.id, customerId),
+        eq(customersTable.dealerId, dealerId),
+      ),
+    );
   return { email: c?.email ?? null, name: c?.name ?? null };
 }
 
 async function vehicleName(
+  dealerId: number,
   vehicleId: number | null | undefined,
 ): Promise<string | null> {
   if (!vehicleId) return null;
@@ -40,7 +47,12 @@ async function vehicleName(
       model: vehiclesTable.model,
     })
     .from(vehiclesTable)
-    .where(eq(vehiclesTable.id, vehicleId));
+    .where(
+      and(
+        eq(vehiclesTable.id, vehicleId),
+        eq(vehiclesTable.dealerId, dealerId),
+      ),
+    );
   return v ? `${v.year} ${v.make} ${v.model}` : null;
 }
 
@@ -54,6 +66,7 @@ function fire(
 }
 
 async function send(opts: {
+  dealerId: number;
   template: Parameters<typeof enqueueEmail>[0]["template"];
   to: string | null | undefined;
   customerId?: number | null;
@@ -61,6 +74,7 @@ async function send(opts: {
 }): Promise<void> {
   if (!opts.to) return;
   await enqueueEmail({
+    dealerId: opts.dealerId,
     template: opts.template,
     to: opts.to,
     customerId: opts.customerId ?? null,
@@ -72,7 +86,7 @@ async function leadRecipient(
   lead: Lead,
 ): Promise<{ to: string | null; name: string }> {
   if (lead.email) return { to: lead.email, name: lead.name };
-  const c = await customerEmail(lead.customerId);
+  const c = await customerEmail(lead.dealerId, lead.customerId);
   return { to: c.email, name: c.name ?? lead.name };
 }
 
@@ -107,11 +121,17 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
       ? await db
           .select()
           .from(vehiclesTable)
-          .where(eq(vehiclesTable.id, vehicleId))
+          .where(
+            and(
+              eq(vehiclesTable.id, vehicleId),
+              eq(vehiclesTable.dealerId, lead.dealerId),
+            ),
+          )
       : [];
 
     if (!v) {
       await send({
+        dealerId: lead.dealerId,
         template: "lead_received",
         to,
         customerId: lead.customerId,
@@ -135,6 +155,7 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
         : testDriveBookingUrl(lead.testDriveToken);
 
       await send({
+        dealerId: lead.dealerId,
         template: "vehicle_quote",
         to,
         customerId: lead.customerId,
@@ -164,6 +185,7 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
         : fallbackVehicleName;
       if (link) {
         await send({
+          dealerId: lead.dealerId,
           template: "test_drive_invite",
           to,
           customerId: lead.customerId,
@@ -183,10 +205,11 @@ export function onLeadUpdated(before: Lead, after: Lead): void {
   fire("lead_updated", async () => {
     const { to } = await leadRecipient(after);
     if (!to) return;
-    const vehicle = await vehicleName(after.interestedVehicleId);
+    const vehicle = await vehicleName(after.dealerId, after.interestedVehicleId);
 
     if (after.assignedTo && after.assignedTo !== before.assignedTo) {
       await send({
+        dealerId: after.dealerId,
         template: "lead_assignment",
         to,
         customerId: after.customerId,
@@ -203,6 +226,7 @@ export function onLeadUpdated(before: Lead, after: Lead): void {
         ? await ownerCalendarContact(after.ownerUserId)
         : null;
       await send({
+        dealerId: after.dealerId,
         template: "test_drive_confirmation",
         to,
         customerId: after.customerId,
@@ -231,7 +255,7 @@ export function onLeadUpdated(before: Lead, after: Lead): void {
 async function dealRecipient(
   deal: Deal,
 ): Promise<{ to: string | null; name: string | null }> {
-  const c = await customerEmail(deal.customerId);
+  const c = await customerEmail(deal.dealerId, deal.customerId);
   return { to: c.email, name: c.name ?? deal.customerName };
 }
 
@@ -241,7 +265,7 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
   fire("deal_stage_changed", async () => {
     const { to, name } = await dealRecipient(after);
     if (!to) return;
-    const vehicle = await vehicleName(after.vehicleId);
+    const vehicle = await vehicleName(after.dealerId, after.vehicleId);
     const base: TemplateData = {
       ...(name ? { name } : {}),
       ...(vehicle ? { vehicle } : {}),
@@ -251,6 +275,7 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
     switch (after.stage) {
       case "finance":
         await send({
+          dealerId: after.dealerId,
           template: "finance_processing",
           to,
           customerId: after.customerId,
@@ -259,12 +284,14 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
         break;
       case "committed":
         await send({
+          dealerId: after.dealerId,
           template: "finance_approved",
           to,
           customerId: after.customerId,
           data: base,
         });
         await send({
+          dealerId: after.dealerId,
           template: "vehicle_booking",
           to,
           customerId: after.customerId,
@@ -273,6 +300,7 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
         break;
       case "delivered":
         await send({
+          dealerId: after.dealerId,
           template: "delivery_confirmation",
           to,
           customerId: after.customerId,
@@ -286,6 +314,7 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
 /** Finance application status transitions → processing / approved emails. */
 export function onFinanceStatusChanged(
   app: {
+    dealerId: number;
     customerId: number | null;
     customerName: string;
     amount: number;
@@ -295,7 +324,7 @@ export function onFinanceStatusChanged(
   status: string,
 ): void {
   fire("finance_status_changed", async () => {
-    const c = await customerEmail(app.customerId);
+    const c = await customerEmail(app.dealerId, app.customerId);
     if (!c.email) return;
     const base: TemplateData = {
       ...(c.name ? { name: c.name } : { name: app.customerName }),
@@ -305,6 +334,7 @@ export function onFinanceStatusChanged(
     };
     if (status === "submitted" || status === "under_review") {
       await send({
+        dealerId: app.dealerId,
         template: "finance_processing",
         to: c.email,
         customerId: app.customerId,
@@ -312,6 +342,7 @@ export function onFinanceStatusChanged(
       });
     } else if (status === "approved") {
       await send({
+        dealerId: app.dealerId,
         template: "finance_approved",
         to: c.email,
         customerId: app.customerId,
@@ -328,9 +359,10 @@ export function onServiceOrderCompleted(
 ): void {
   if (after.status !== "completed" || before.status === "completed") return;
   fire("service_order_completed", async () => {
-    const c = await customerEmail(after.customerId);
+    const c = await customerEmail(after.dealerId, after.customerId);
     if (!c.email) return;
     await send({
+      dealerId: after.dealerId,
       template: "vehicle_ready",
       to: c.email,
       customerId: after.customerId,

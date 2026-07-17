@@ -27,6 +27,7 @@ export type BookingPaymentStatus = (typeof BOOKING_PAYMENT_STATUSES)[number];
 
 export const bookingsTable = pgTable("bookings", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   vehicleId: integer("vehicle_id").notNull(),
   customerId: integer("customer_id"),
   customerName: text("customer_name").notNull(),
@@ -46,6 +47,6 @@ export const bookingsTable = pgTable("bookings", {
 export const insertBookingSchema = createInsertSchema(bookingsTable, {
   status: z.enum(BOOKING_STATUSES),
   paymentStatus: z.enum(BOOKING_PAYMENT_STATUSES),
-}).omit({ id: true, createdAt: true });
+}).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertBooking = z.infer<typeof insertBookingSchema>;
 export type Booking = typeof bookingsTable.$inferSelect;

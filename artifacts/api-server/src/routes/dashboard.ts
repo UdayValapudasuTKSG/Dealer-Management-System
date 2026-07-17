@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
+import { eq } from "drizzle-orm";
 import { db, leadsTable, dealsTable, vehiclesTable, serviceOrdersTable, agentsTable } from "@workspace/db";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   GetDashboardSummaryResponse,
   GetPipelineResponse,
@@ -22,12 +24,16 @@ const ACTIVE_DEAL_STAGES = ["desking", "negotiation", "finance", "committed"];
 const CLOSED_SERVICE = ["completed", "delivered"];
 
 router.get("/dashboard/summary", async (_req, res): Promise<void> => {
+  const dealerId = activeDealerId(res);
   const [leads, deals, vehicles, serviceOrders, agents] = await Promise.all([
-    db.select().from(leadsTable),
-    db.select().from(dealsTable),
-    db.select().from(vehiclesTable),
-    db.select().from(serviceOrdersTable),
-    db.select().from(agentsTable),
+    db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
+    db.select().from(dealsTable).where(eq(dealsTable.dealerId, dealerId)),
+    db.select().from(vehiclesTable).where(eq(vehiclesTable.dealerId, dealerId)),
+    db
+      .select()
+      .from(serviceOrdersTable)
+      .where(eq(serviceOrdersTable.dealerId, dealerId)),
+    db.select().from(agentsTable).where(eq(agentsTable.dealerId, dealerId)),
   ]);
 
   const totalLeads = leads.length;
@@ -68,9 +74,10 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
 });
 
 router.get("/dashboard/pipeline", async (_req, res): Promise<void> => {
+  const dealerId = activeDealerId(res);
   const [leads, vehicles] = await Promise.all([
-    db.select().from(leadsTable),
-    db.select().from(vehiclesTable),
+    db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
+    db.select().from(vehiclesTable).where(eq(vehiclesTable.dealerId, dealerId)),
   ]);
   const priceById = new Map(vehicles.map((v) => [v.id, v.price]));
 
@@ -88,7 +95,11 @@ router.get("/dashboard/pipeline", async (_req, res): Promise<void> => {
 });
 
 router.get("/dashboard/sales-performance", async (_req, res): Promise<void> => {
-  const deals = await db.select().from(dealsTable);
+  const dealerId = activeDealerId(res);
+  const deals = await db
+    .select()
+    .from(dealsTable)
+    .where(eq(dealsTable.dealerId, dealerId));
   const closed = deals.filter(
     (d) => d.stage === "delivered" || d.stage === "committed",
   );
@@ -158,9 +169,10 @@ const HISTORY_MONTHS = 6;
 const PROJECTION_MONTHS = 3;
 
 router.get("/dashboard/predictions", async (_req, res): Promise<void> => {
+  const dealerId = activeDealerId(res);
   const [deals, leads] = await Promise.all([
-    db.select().from(dealsTable),
-    db.select().from(leadsTable),
+    db.select().from(dealsTable).where(eq(dealsTable.dealerId, dealerId)),
+    db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
   ]);
   const closed = deals.filter(
     (d) => d.stage === "delivered" || d.stage === "committed",
@@ -291,7 +303,11 @@ router.get("/dashboard/predictions", async (_req, res): Promise<void> => {
 });
 
 router.get("/dashboard/inventory-breakdown", async (_req, res): Promise<void> => {
-  const vehicles = await db.select().from(vehiclesTable);
+  const dealerId = activeDealerId(res);
+  const vehicles = await db
+    .select()
+    .from(vehiclesTable)
+    .where(eq(vehiclesTable.dealerId, dealerId));
   const counts = new Map<string, number>();
   for (const v of vehicles) {
     counts.set(v.powertrain, (counts.get(v.powertrain) ?? 0) + 1);

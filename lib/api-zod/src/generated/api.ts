@@ -4184,6 +4184,14 @@ export const GetCurrentUserResponse = zod.object({
   "roleId": zod.number().nullish(),
   "roleName": zod.string().nullable(),
   "status": zod.string(),
+  "isSuperAdmin": zod.boolean(),
+  "activeDealerId": zod.number().nullish(),
+  "dealers": zod.array(zod.object({
+  "dealerId": zod.number(),
+  "dealerName": zod.string(),
+  "roleName": zod.string().nullish(),
+  "isGeneralManager": zod.boolean().optional()
+})),
   "permissions": zod.array(zod.object({
   "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
@@ -4225,6 +4233,179 @@ export const GetTeamMemberResponse = zod.object({
 
 
 /**
+ * @summary List all dealers (super admin only)
+ */
+export const ListDealersResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive']),
+  "userCount": zod.number().optional(),
+  "createdAt": zod.coerce.date()
+})
+export const ListDealersResponse = zod.array(ListDealersResponseItem)
+
+
+/**
+ * @summary Create a dealer (super admin only)
+ */
+
+
+
+export const CreateDealerBody = zod.object({
+  "name": zod.string().min(1),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive']).optional()
+})
+
+export const CreateDealerResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive']),
+  "userCount": zod.number().optional(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a dealer (super admin only)
+ */
+export const UpdateDealerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateDealerBody = zod.object({
+  "name": zod.string().min(1),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive']).optional()
+})
+
+export const UpdateDealerResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.enum(['active', 'inactive']),
+  "userCount": zod.number().optional(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List a dealer's members (super admin only)
+ */
+export const ListDealerMembersParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListDealerMembersResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "dealerId": zod.number(),
+  "roleId": zod.number(),
+  "roleName": zod.string().nullish(),
+  "isGeneralManager": zod.boolean(),
+  "email": zod.string().nullish(),
+  "name": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "userStatus": zod.string().optional()
+})
+export const ListDealerMembersResponse = zod.array(ListDealerMembersResponseItem)
+
+
+/**
+ * @summary Add a user to a dealer with a role (super admin only)
+ */
+export const AddDealerMemberParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AddDealerMemberBody = zod.object({
+  "userId": zod.number().nullish(),
+  "email": zod.string().nullish(),
+  "roleId": zod.number(),
+  "isGeneralManager": zod.boolean().optional()
+})
+
+export const AddDealerMemberResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "dealerId": zod.number(),
+  "roleId": zod.number(),
+  "roleName": zod.string().nullish(),
+  "isGeneralManager": zod.boolean(),
+  "email": zod.string().nullish(),
+  "name": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "userStatus": zod.string().optional()
+})
+
+
+/**
+ * @summary Change a member's role or GM flag (super admin only)
+ */
+export const UpdateDealerMemberParams = zod.object({
+  "id": zod.coerce.number(),
+  "userId": zod.coerce.number()
+})
+
+export const UpdateDealerMemberBody = zod.object({
+  "userId": zod.number().nullish(),
+  "email": zod.string().nullish(),
+  "roleId": zod.number(),
+  "isGeneralManager": zod.boolean().optional()
+})
+
+export const UpdateDealerMemberResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "dealerId": zod.number(),
+  "roleId": zod.number(),
+  "roleName": zod.string().nullish(),
+  "isGeneralManager": zod.boolean(),
+  "email": zod.string().nullish(),
+  "name": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "userStatus": zod.string().optional()
+})
+
+
+/**
+ * @summary Remove a user from a dealer (super admin only)
+ */
+export const RemoveDealerMemberParams = zod.object({
+  "id": zod.coerce.number(),
+  "userId": zod.coerce.number()
+})
+
+export const RemoveDealerMemberResponse = zod.void()
+
+
+/**
+ * @summary List every user account on the platform (super admin only)
+ */
+export const ListPlatformUsersResponseItem = zod.object({
+  "id": zod.number(),
+  "clerkId": zod.string(),
+  "email": zod.string().nullish(),
+  "name": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "status": zod.string(),
+  "dealerCount": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+export const ListPlatformUsersResponse = zod.array(ListPlatformUsersResponseItem)
+
+
+/**
  * @summary List all users with their role
  */
 export const ListAdminUsersResponseItem = zod.object({
@@ -4240,6 +4421,28 @@ export const ListAdminUsersResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem)
+
+
+/**
+ * @summary Add an existing user to the active dealer by email
+ */
+export const AddAdminUserBody = zod.object({
+  "email": zod.string(),
+  "roleId": zod.number()
+})
+
+export const AddAdminUserResponse = zod.object({
+  "id": zod.number(),
+  "clerkId": zod.string(),
+  "email": zod.string().nullish(),
+  "name": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "roleId": zod.number().nullish(),
+  "roleName": zod.string().nullish(),
+  "status": zod.enum(['active', 'suspended']),
+  "lastLoginAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**

@@ -12,6 +12,7 @@ import { z } from "zod/v4";
 
 export const serviceOrdersTable = pgTable("service_orders", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   customerId: integer("customer_id"),
   customerName: text("customer_name"),
   vehicleInfo: text("vehicle_info").notNull(),
@@ -30,6 +31,6 @@ export const serviceOrdersTable = pgTable("service_orders", {
 
 export const insertServiceOrderSchema = createInsertSchema(
   serviceOrdersTable,
-).omit({ id: true, createdAt: true });
+).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertServiceOrder = z.infer<typeof insertServiceOrderSchema>;
 export type ServiceOrder = typeof serviceOrdersTable.$inferSelect;

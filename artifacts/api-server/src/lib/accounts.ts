@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   db,
   customersTable,
@@ -30,7 +30,12 @@ export async function ensureAccountForLead(lead: Lead): Promise<number | null> {
       [customer] = await db
         .select()
         .from(customersTable)
-        .where(sql`lower(${customersTable.email}) = ${email}`)
+        .where(
+          and(
+            eq(customersTable.dealerId, lead.dealerId),
+            sql`lower(${customersTable.email}) = ${email}`,
+          ),
+        )
         .limit(1);
     }
     if (!customer && phoneDigits) {
@@ -38,7 +43,10 @@ export async function ensureAccountForLead(lead: Lead): Promise<number | null> {
         .select()
         .from(customersTable)
         .where(
-          sql`regexp_replace(coalesce(${customersTable.phone}, ''), '\\D', '', 'g') = ${phoneDigits}`,
+          and(
+            eq(customersTable.dealerId, lead.dealerId),
+            sql`regexp_replace(coalesce(${customersTable.phone}, ''), '\\D', '', 'g') = ${phoneDigits}`,
+          ),
         )
         .limit(1);
     }
@@ -48,6 +56,7 @@ export async function ensureAccountForLead(lead: Lead): Promise<number | null> {
       [customer] = await db
         .insert(customersTable)
         .values({
+          dealerId: lead.dealerId,
           name: lead.name,
           email: lead.email ?? null,
           phone: lead.phone ?? null,
@@ -65,6 +74,7 @@ export async function ensureAccountForLead(lead: Lead): Promise<number | null> {
       .where(eq(leadsTable.id, lead.id));
 
     await db.insert(timelineEventsTable).values({
+      dealerId: lead.dealerId,
       customerId: customer.id,
       domain: "leads",
       kind: created ? "account_created" : "account_linked",

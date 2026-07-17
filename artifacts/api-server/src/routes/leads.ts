@@ -6,6 +6,7 @@ import {
   vehiclesTable,
   usersTable,
   rolesTable,
+  dealerUsersTable,
   timelineEventsTable,
   emailLogsTable,
   type Lead,
@@ -41,6 +42,7 @@ import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
 import { autoAssignLead } from "../lib/lead-assignment";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   ownerCalendarContact,
   testDriveCalendarFields,
@@ -58,6 +60,7 @@ async function logLeadEvent(
   isAgent = false,
 ): Promise<void> {
   await db.insert(timelineEventsTable).values({
+    dealerId: lead.dealerId,
     customerId: lead.customerId,
     domain: "leads",
     kind,
@@ -70,12 +73,15 @@ async function logLeadEvent(
   });
 }
 
-async function vehicleLabel(id: number | null): Promise<string | null> {
+async function vehicleLabel(
+  dealerId: number,
+  id: number | null,
+): Promise<string | null> {
   if (!id) return null;
   const [v] = await db
     .select()
     .from(vehiclesTable)
-    .where(eq(vehiclesTable.id, id));
+    .where(and(eq(vehiclesTable.id, id), eq(vehiclesTable.dealerId, dealerId)));
   return v ? `${v.year} ${v.make} ${v.model}` : null;
 }
 
@@ -92,7 +98,7 @@ router.get("/leads", async (req, res): Promise<void> => {
     return;
   }
 
-  const filters: SQL[] = [];
+  const filters: SQL[] = [eq(leadsTable.dealerId, activeDealerId(res))];
   if (query.data.phase) filters.push(eq(leadsTable.phase, query.data.phase));
   if (query.data.status) filters.push(eq(leadsTable.status, query.data.status));
 
@@ -121,9 +127,15 @@ router.get("/leads/advisors", async (_req, res): Promise<void> => {
       email: usersTable.email,
       roleName: rolesTable.name,
     })
-    .from(usersTable)
-    .leftJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
-    .where(eq(usersTable.status, "active"));
+    .from(dealerUsersTable)
+    .innerJoin(usersTable, eq(dealerUsersTable.userId, usersTable.id))
+    .leftJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
+    .where(
+      and(
+        eq(dealerUsersTable.dealerId, activeDealerId(res)),
+        eq(usersTable.status, "active"),
+      ),
+    );
 
   const assignable = rows
     .filter(
@@ -149,7 +161,10 @@ router.post("/leads", async (req, res): Promise<void> => {
     return;
   }
 
-  const [lead] = await db.insert(leadsTable).values(parsed.data).returning();
+  const [lead] = await db
+    .insert(leadsTable)
+    .values({ ...parsed.data, dealerId: activeDealerId(res) })
+    .returning();
 
   if (lead) onLeadCreated(lead);
 
@@ -177,7 +192,12 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
   const [lead] = await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, params.data.id));
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    );
 
   if (!lead) {
     res.status(404).json({ error: "Lead not found" });
@@ -199,6 +219,7 @@ router.get("/leads/:id/timeline", async (req, res): Promise<void> => {
     .from(timelineEventsTable)
     .where(
       and(
+        eq(timelineEventsTable.dealerId, activeDealerId(res)),
         eq(timelineEventsTable.refType, "lead"),
         eq(timelineEventsTable.refId, params.data.id),
         isNotNull(timelineEventsTable.refId),
@@ -225,7 +246,12 @@ router.post("/leads/:id/notes", async (req, res): Promise<void> => {
   const [lead] = await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, params.data.id));
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!lead) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -235,6 +261,7 @@ router.post("/leads/:id/notes", async (req, res): Promise<void> => {
   const [event] = await db
     .insert(timelineEventsTable)
     .values({
+      dealerId: lead.dealerId,
       customerId: lead.customerId,
       domain: "leads",
       kind: "note",
@@ -251,7 +278,10 @@ router.post("/leads/:id/notes", async (req, res): Promise<void> => {
 });
 
 /** Quote metadata shared by the info + PDF routes. */
-async function leadQuoteContext(leadId: number): Promise<{
+async function leadQuoteContext(
+  leadId: number,
+  dealerId: number,
+): Promise<{
   lead: Lead;
   vehicle: typeof vehiclesTable.$inferSelect | null;
   quoteRef: string;
@@ -261,14 +291,19 @@ async function leadQuoteContext(leadId: number): Promise<{
   const [lead] = await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, leadId));
+    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.dealerId, dealerId)));
   if (!lead) return null;
 
   const [vehicle] = lead.interestedVehicleId
     ? await db
         .select()
         .from(vehiclesTable)
-        .where(eq(vehiclesTable.id, lead.interestedVehicleId))
+        .where(
+          and(
+            eq(vehiclesTable.id, lead.interestedVehicleId),
+            eq(vehiclesTable.dealerId, dealerId),
+          ),
+        )
     : [];
 
   // The emailed quote (if any) — its payload lets us regenerate the exact PDF.
@@ -277,6 +312,7 @@ async function leadQuoteContext(leadId: number): Promise<{
     .from(emailLogsTable)
     .where(
       and(
+        eq(emailLogsTable.dealerId, dealerId),
         eq(emailLogsTable.template, "vehicle_quote"),
         sql`${emailLogsTable.payload} ->> 'quoteRef' LIKE ${`Q-${leadId}-%`}`,
       ),
@@ -337,7 +373,7 @@ router.get("/leads/:id/quote", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const ctx = await leadQuoteContext(params.data.id);
+  const ctx = await leadQuoteContext(params.data.id, activeDealerId(res));
   if (!ctx) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -369,7 +405,7 @@ router.get("/leads/:id/quote.pdf", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const ctx = await leadQuoteContext(params.data.id);
+  const ctx = await leadQuoteContext(params.data.id, activeDealerId(res));
   if (!ctx) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -413,16 +449,28 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
   const [existing] = await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, params.data.id));
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!existing) {
     res.status(404).json({ error: "Lead not found" });
     return;
   }
 
   const [advisor] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, parsed.data.userId));
+    .select({ user: usersTable })
+    .from(dealerUsersTable)
+    .innerJoin(usersTable, eq(dealerUsersTable.userId, usersTable.id))
+    .where(
+      and(
+        eq(dealerUsersTable.dealerId, activeDealerId(res)),
+        eq(dealerUsersTable.userId, parsed.data.userId),
+      ),
+    )
+    .then((rows) => rows.map((r) => r.user));
   if (!advisor) {
     res.status(404).json({ error: "Advisor not found" });
     return;
@@ -440,7 +488,12 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
           : existing.status,
       phase: existing.phase === "aware" ? "consider" : existing.phase,
     })
-    .where(eq(leadsTable.id, params.data.id))
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
 
   await logLeadEvent(
@@ -453,6 +506,7 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
 
   await notifyUser({
     userId: advisor.id,
+    dealerId: lead!.dealerId,
     type: "assignment",
     title: `Lead assigned: ${lead!.name}`,
     body: "A new lead is now yours — make first contact and update the status.",
@@ -460,10 +514,11 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
   });
 
   if (lead!.email) {
-    const vehicle = await vehicleLabel(lead!.interestedVehicleId);
+    const vehicle = await vehicleLabel(lead!.dealerId, lead!.interestedVehicleId);
     await enqueueEmail({
       template: "lead_assignment",
       to: lead!.email,
+      dealerId: lead!.dealerId,
       customerId: lead!.customerId,
       data: { advisor: advisorName, vehicle: vehicle ?? "" },
     });
@@ -487,7 +542,12 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
   const [existing] = await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, params.data.id));
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!existing) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -524,13 +584,18 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
           ? "engage"
           : existing.phase,
     })
-    .where(eq(leadsTable.id, params.data.id))
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
 
   // A booked test drive promotes the lead to an account.
   lead!.customerId = await ensureAccountForLead(lead!);
 
-  const vehicle = await vehicleLabel(lead!.interestedVehicleId);
+  const vehicle = await vehicleLabel(lead!.dealerId, lead!.interestedVehicleId);
   const dateStr = when.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
@@ -557,6 +622,7 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
     await enqueueEmail({
       template: "test_drive_confirmation",
       to: lead!.email,
+      dealerId: lead!.dealerId,
       customerId: lead!.customerId,
       data: {
         vehicle: vehicle ?? "",
@@ -571,6 +637,7 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
     await enqueueEmail({
       template: "test_drive_owner_invite",
       to: owner.email,
+      dealerId: lead!.dealerId,
       customerId: lead!.customerId,
       data: {
         leadName: lead!.name,
@@ -586,6 +653,7 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
   if (lead!.ownerUserId) {
     await notifyUser({
       userId: lead!.ownerUserId,
+      dealerId: lead!.dealerId,
       type: "task",
       title: `Test drive: ${lead!.name} — ${dateStr}`,
       body: `${vehicle ?? "Vehicle"} at ${timeStr}. Have it detailed and ready.`,
@@ -608,7 +676,12 @@ router.post(
     const [existing] = await db
       .select()
       .from(leadsTable)
-      .where(eq(leadsTable.id, params.data.id));
+      .where(
+        and(
+          eq(leadsTable.id, params.data.id),
+          eq(leadsTable.dealerId, activeDealerId(res)),
+        ),
+      );
     if (!existing) {
       res.status(404).json({ error: "Lead not found" });
       return;
@@ -623,7 +696,12 @@ router.post(
     const [vehicle] = await db
       .select()
       .from(vehiclesTable)
-      .where(eq(vehiclesTable.id, existing.interestedVehicleId));
+      .where(
+        and(
+          eq(vehiclesTable.id, existing.interestedVehicleId),
+          eq(vehiclesTable.dealerId, activeDealerId(res)),
+        ),
+      );
     if (!vehicle) {
       res.status(409).json({ error: "Interested vehicle no longer exists" });
       return;
@@ -636,7 +714,12 @@ router.post(
         availability: isAvailable ? "available" : "back_order",
         status: isAvailable ? "decision" : "back_order",
       })
-      .where(eq(leadsTable.id, params.data.id))
+      .where(
+        and(
+          eq(leadsTable.id, params.data.id),
+          eq(leadsTable.dealerId, activeDealerId(res)),
+        ),
+      )
       .returning();
 
     const label = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
@@ -656,6 +739,7 @@ router.post(
     if (!isAvailable && lead!.ownerUserId) {
       await notifyUser({
         userId: lead!.ownerUserId,
+        dealerId: lead!.dealerId,
         type: "system",
         title: `Back order: ${lead!.name}`,
         body: `${label} is ${vehicle.status.replace("_", " ")}. Keep the client warm until stock arrives.`,
@@ -682,7 +766,12 @@ router.post("/leads/:id/decision", async (req, res): Promise<void> => {
   const [existing] = await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, params.data.id));
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!existing) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -696,7 +785,12 @@ router.post("/leads/:id/decision", async (req, res): Promise<void> => {
       status: "converted",
       phase: "negotiate",
     })
-    .where(eq(leadsTable.id, params.data.id))
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
 
   await logLeadEvent(
@@ -730,7 +824,12 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
   const [before] = await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, params.data.id));
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!before) {
     res.status(404).json({ error: "Lead not found" });
     return;
@@ -739,7 +838,12 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
   const [lead] = await db
     .update(leadsTable)
     .set(parsed.data)
-    .where(eq(leadsTable.id, params.data.id))
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
 
   if (parsed.data.status && parsed.data.status !== before.status) {
@@ -775,7 +879,12 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
 
   const [lead] = await db
     .delete(leadsTable)
-    .where(eq(leadsTable.id, params.data.id))
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
 
   if (!lead) {

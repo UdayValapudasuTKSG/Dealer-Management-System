@@ -17,6 +17,7 @@ import {
   CreateTaskCommentResponse,
 } from "@workspace/api-zod";
 import { notifyUser } from "../lib/email";
+import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
@@ -59,7 +60,9 @@ router.get("/tasks", async (req, res): Promise<void> => {
     res.status(400).json({ error: query.error.message });
     return;
   }
+  const dealerId = activeDealerId(res);
   const filters = [
+    eq(tasksTable.dealerId, dealerId),
     query.data.status !== undefined
       ? eq(tasksTable.status, query.data.status)
       : undefined,
@@ -71,7 +74,7 @@ router.get("/tasks", async (req, res): Promise<void> => {
     db
       .select()
       .from(tasksTable)
-      .where(filters.length > 0 ? and(...filters) : undefined)
+      .where(and(...filters))
       .orderBy(desc(tasksTable.createdAt)),
     userNames(),
   ]);
@@ -88,6 +91,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
   const dueDate = parsed.data.dueDate
     ? new Date(parsed.data.dueDate).toISOString().slice(0, 10)
     : null;
+  const dealerId = activeDealerId(res);
   const [creatorId, assigneeId] = await Promise.all([
     existingUserId(user?.id),
     existingUserId(parsed.data.assigneeUserId),
@@ -95,6 +99,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
   const [task] = await db
     .insert(tasksTable)
     .values({
+      dealerId,
       title: parsed.data.title,
       description: parsed.data.description ?? null,
       assigneeUserId: assigneeId,
@@ -108,6 +113,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
   if (task?.assigneeUserId && task.assigneeUserId !== user?.id) {
     await notifyUser({
       userId: task.assigneeUserId,
+      dealerId,
       type: "task",
       title: `New task assigned: ${task.title}`,
       body: `${user?.name ?? user?.email ?? "A teammate"} assigned you a ${task.priority}-priority task${task.dueDate ? ` due ${task.dueDate}` : ""}.`,
@@ -132,10 +138,11 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const [existing] = await db
     .select()
     .from(tasksTable)
-    .where(eq(tasksTable.id, params.data.id));
+    .where(and(eq(tasksTable.id, params.data.id), eq(tasksTable.dealerId, dealerId)));
   if (!existing) {
     res.status(404).json({ error: "Task not found" });
     return;
@@ -162,7 +169,7 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
   const [task] = await db
     .update(tasksTable)
     .set(patch)
-    .where(eq(tasksTable.id, params.data.id))
+    .where(and(eq(tasksTable.id, params.data.id), eq(tasksTable.dealerId, dealerId)))
     .returning();
 
   if (
@@ -172,6 +179,7 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
   ) {
     await notifyUser({
       userId: parsed.data.assigneeUserId,
+      dealerId,
       type: "task",
       title: `Task reassigned to you: ${task!.title}`,
       body: `${user?.name ?? user?.email ?? "A teammate"} assigned this task to you.`,
@@ -186,6 +194,7 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
   ) {
     await notifyUser({
       userId: existing.createdByUserId,
+      dealerId,
       type: "task",
       title: `Task completed: ${task!.title}`,
       body: `${user?.name ?? user?.email ?? "A teammate"} marked this task as done.`,
@@ -203,7 +212,10 @@ router.delete("/tasks/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  await db.delete(tasksTable).where(eq(tasksTable.id, params.data.id));
+  const dealerId = activeDealerId(res);
+  await db
+    .delete(tasksTable)
+    .where(and(eq(tasksTable.id, params.data.id), eq(tasksTable.dealerId, dealerId)));
   res.status(204).end();
 });
 
@@ -213,10 +225,16 @@ router.get("/tasks/:id/comments", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+  const dealerId = activeDealerId(res);
   const rows = await db
     .select()
     .from(taskCommentsTable)
-    .where(eq(taskCommentsTable.taskId, params.data.id))
+    .where(
+      and(
+        eq(taskCommentsTable.taskId, params.data.id),
+        eq(taskCommentsTable.dealerId, dealerId),
+      ),
+    )
     .orderBy(taskCommentsTable.createdAt);
   res.json(ListTaskCommentsResponse.parse(rows));
 });
@@ -233,10 +251,11 @@ router.post("/tasks/:id/comments", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const dealerId = activeDealerId(res);
   const [task] = await db
     .select()
     .from(tasksTable)
-    .where(eq(tasksTable.id, params.data.id));
+    .where(and(eq(tasksTable.id, params.data.id), eq(tasksTable.dealerId, dealerId)));
   if (!task) {
     res.status(404).json({ error: "Task not found" });
     return;
@@ -244,6 +263,7 @@ router.post("/tasks/:id/comments", async (req, res): Promise<void> => {
   const [comment] = await db
     .insert(taskCommentsTable)
     .values({
+      dealerId,
       taskId: task.id,
       authorUserId: await existingUserId(user?.id),
       authorName: user?.name ?? user?.email ?? "Unknown",
@@ -258,6 +278,7 @@ router.post("/tasks/:id/comments", async (req, res): Promise<void> => {
   for (const userId of Array.from(new Set(toNotify))) {
     await notifyUser({
       userId,
+      dealerId,
       type: "task",
       title: `New comment on: ${task.title}`,
       body: `${user?.name ?? user?.email ?? "A teammate"}: ${parsed.data.body.slice(0, 120)}`,

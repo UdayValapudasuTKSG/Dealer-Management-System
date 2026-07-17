@@ -3083,6 +3083,169 @@ paths:
                 $ref: "#/components/schemas/TeamMemberProfile"
         "404":
           description: Not found
+  /platform/dealers:
+    get:
+      operationId: listDealers
+      tags: [platform]
+      summary: List all dealers (super admin only)
+      responses:
+        "200":
+          description: Dealers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Dealer"
+    post:
+      operationId: createDealer
+      tags: [platform]
+      summary: Create a dealer (super admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealerInput"
+      responses:
+        "201":
+          description: Created dealer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dealer"
+  /platform/dealers/{id}:
+    patch:
+      operationId: updateDealer
+      tags: [platform]
+      summary: Update a dealer (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealerInput"
+      responses:
+        "200":
+          description: Updated dealer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dealer"
+        "404":
+          description: Not found
+  /platform/dealers/{id}/members:
+    get:
+      operationId: listDealerMembers
+      tags: [platform]
+      summary: List a dealer's members (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DealerMember"
+    post:
+      operationId: addDealerMember
+      tags: [platform]
+      summary: Add a user to a dealer with a role (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealerMemberInput"
+      responses:
+        "201":
+          description: Membership created or updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealerMember"
+        "404":
+          description: Dealer or user not found
+        "422":
+          description: Invalid input
+  /platform/dealers/{id}/members/{userId}:
+    patch:
+      operationId: updateDealerMember
+      tags: [platform]
+      summary: Change a member's role or GM flag (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: userId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealerMemberInput"
+      responses:
+        "200":
+          description: Updated membership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealerMember"
+        "404":
+          description: Not found
+    delete:
+      operationId: removeDealerMember
+      tags: [platform]
+      summary: Remove a user from a dealer (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: userId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Removed
+        "404":
+          description: Not found
+  /platform/users:
+    get:
+      operationId: listPlatformUsers
+      tags: [platform]
+      summary: List every user account on the platform (super admin only)
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlatformUser"
+
   /admin/users:
     get:
       operationId: listAdminUsers
@@ -3097,6 +3260,35 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AdminUser"
+    post:
+      operationId: addAdminUser
+      tags: [admin]
+      summary: Add an existing user to the active dealer by email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserAdd"
+      responses:
+        "201":
+          description: Added member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "404":
+          description: No user with that email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Already a member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/users/{id}:
     patch:
       operationId: updateAdminUser
@@ -3623,7 +3815,7 @@ components:
           enum: [view, create, edit, delete, approve, reject, export, assign, admin]
     CurrentUser:
       type: object
-      required: [id, clerkId, roleName, permissions, status]
+      required: [id, clerkId, roleName, permissions, status, isSuperAdmin, dealers]
       properties:
         id: { type: integer }
         clerkId: { type: string }
@@ -3633,10 +3825,77 @@ components:
         roleId: { type: ["integer", "null"] }
         roleName: { type: ["string", "null"] }
         status: { type: string }
+        isSuperAdmin: { type: boolean }
+        activeDealerId: { type: ["integer", "null"] }
+        dealers:
+          type: array
+          items:
+            $ref: "#/components/schemas/DealerMembershipInfo"
         permissions:
           type: array
           items:
             $ref: "#/components/schemas/PermissionGrant"
+    DealerMembershipInfo:
+      type: object
+      required: [dealerId, dealerName]
+      properties:
+        dealerId: { type: integer }
+        dealerName: { type: string }
+        roleName: { type: ["string", "null"] }
+        isGeneralManager: { type: boolean }
+    Dealer:
+      type: object
+      required: [id, name, status, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        city: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        status: { type: string, enum: [active, inactive] }
+        userCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+    DealerInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        city: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        status: { type: string, enum: [active, inactive] }
+    DealerMember:
+      type: object
+      required: [id, userId, dealerId, roleId, isGeneralManager]
+      properties:
+        id: { type: integer }
+        userId: { type: integer }
+        dealerId: { type: integer }
+        roleId: { type: integer }
+        roleName: { type: ["string", "null"] }
+        isGeneralManager: { type: boolean }
+        email: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        imageUrl: { type: ["string", "null"] }
+        userStatus: { type: string }
+    DealerMemberInput:
+      type: object
+      required: [roleId]
+      properties:
+        userId: { type: ["integer", "null"] }
+        email: { type: ["string", "null"] }
+        roleId: { type: integer }
+        isGeneralManager: { type: boolean }
+    PlatformUser:
+      type: object
+      required: [id, clerkId, status, createdAt, dealerCount]
+      properties:
+        id: { type: integer }
+        clerkId: { type: string }
+        email: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        imageUrl: { type: ["string", "null"] }
+        status: { type: string }
+        dealerCount: { type: integer }
+        createdAt: { type: string, format: date-time }
     TeamMemberLead:
       type: object
       required: [id, name, status, phase, createdAt]
@@ -3684,6 +3943,12 @@ components:
       properties:
         roleId: { type: ["integer", "null"] }
         status: { type: string, enum: [active, suspended] }
+    AdminUserAdd:
+      type: object
+      required: [email, roleId]
+      properties:
+        email: { type: string }
+        roleId: { type: integer }
     RoleWithPermissions:
       type: object
       required: [id, name, isSystem, userCount, permissions, createdAt]

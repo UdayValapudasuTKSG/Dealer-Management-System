@@ -11,6 +11,7 @@ import {
   customersTable,
   usersTable,
   rolesTable,
+  dealerUsersTable,
 } from "@workspace/db";
 import {
   CreateServiceOrderBody,
@@ -54,6 +55,7 @@ import {
 } from "@workspace/api-zod";
 import { onServiceOrderCompleted } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
+import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
@@ -68,12 +70,15 @@ function toDateString(value: unknown): string | undefined {
 
 async function customerEmail(
   customerId: number | null | undefined,
+  dealerId: number,
 ): Promise<{ email: string | null; name: string | null }> {
   if (customerId == null) return { email: null, name: null };
   const [row] = await db
     .select({ email: customersTable.email, name: customersTable.name })
     .from(customersTable)
-    .where(eq(customersTable.id, customerId));
+    .where(
+      and(eq(customersTable.id, customerId), eq(customersTable.dealerId, dealerId)),
+    );
   return { email: row?.email ?? null, name: row?.name ?? null };
 }
 
@@ -92,9 +97,12 @@ router.get("/service-orders", async (req, res): Promise<void> => {
     .select()
     .from(serviceOrdersTable)
     .where(
-      query.data.status
-        ? eq(serviceOrdersTable.status, query.data.status)
-        : undefined,
+      and(
+        eq(serviceOrdersTable.dealerId, activeDealerId(res)),
+        query.data.status
+          ? eq(serviceOrdersTable.status, query.data.status)
+          : undefined,
+      ),
     )
     .orderBy(desc(serviceOrdersTable.scheduledDate));
 
@@ -112,17 +120,19 @@ router.post("/service-orders", async (req, res): Promise<void> => {
     .insert(serviceOrdersTable)
     .values({
       ...parsed.data,
+      dealerId: activeDealerId(res),
       scheduledDate: toDateString(parsed.data.scheduledDate)!,
     })
     .returning();
 
   // Best-effort booking confirmation / reminder email
   if (order && order.customerId != null) {
-    const { email } = await customerEmail(order.customerId);
+    const { email } = await customerEmail(order.customerId, order.dealerId);
     if (email) {
       void enqueueEmail({
         template: "service_reminder",
         to: email,
+        dealerId: order.dealerId,
         customerId: order.customerId,
         data: {
           vehicle: order.vehicleInfo,
@@ -152,15 +162,26 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
   const { scheduledDate, ...rest } = parsed.data;
   const dateStr = toDateString(scheduledDate);
 
+  const dealerId = activeDealerId(res);
   const [before] = await db
     .select()
     .from(serviceOrdersTable)
-    .where(eq(serviceOrdersTable.id, params.data.id));
+    .where(
+      and(
+        eq(serviceOrdersTable.id, params.data.id),
+        eq(serviceOrdersTable.dealerId, dealerId),
+      ),
+    );
 
   const [order] = await db
     .update(serviceOrdersTable)
     .set(dateStr ? { ...rest, scheduledDate: dateStr } : rest)
-    .where(eq(serviceOrdersTable.id, params.data.id))
+    .where(
+      and(
+        eq(serviceOrdersTable.id, params.data.id),
+        eq(serviceOrdersTable.dealerId, dealerId),
+      ),
+    )
     .returning();
 
   if (!order) {
@@ -182,12 +203,17 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
   const [order] = await db
     .select()
     .from(serviceOrdersTable)
-    .where(eq(serviceOrdersTable.id, params.data.id));
+    .where(
+      and(
+        eq(serviceOrdersTable.id, params.data.id),
+        eq(serviceOrdersTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!order) {
     res.status(404).json({ error: "Service order not found" });
     return;
   }
-  const { email } = await customerEmail(order.customerId);
+  const { email } = await customerEmail(order.customerId, order.dealerId);
   if (!email) {
     res.status(422).json({ error: "Customer has no email on file" });
     return;
@@ -195,6 +221,7 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
   await enqueueEmail({
     template: "service_reminder",
     to: email,
+    dealerId: order.dealerId,
     customerId: order.customerId,
     data: {
       vehicle: order.vehicleInfo,
@@ -219,8 +246,14 @@ router.get("/service-technicians", async (_req, res): Promise<void> => {
       email: usersTable.email,
     })
     .from(usersTable)
-    .innerJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
-    .where(eq(rolesTable.name, "Technician"));
+    .innerJoin(dealerUsersTable, eq(dealerUsersTable.userId, usersTable.id))
+    .innerJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
+    .where(
+      and(
+        eq(dealerUsersTable.dealerId, activeDealerId(res)),
+        eq(rolesTable.name, "Technician"),
+      ),
+    );
   res.json(
     ListServiceTechniciansResponse.parse(
       rows.map((r) => ({ id: r.id, name: r.name ?? r.email ?? `User #${r.id}` })),
@@ -240,6 +273,7 @@ router.get("/job-cards", async (req, res): Promise<void> => {
   }
   const me = res.locals.user;
   const filters = [
+    eq(jobCardsTable.dealerId, activeDealerId(res)),
     query.data.serviceOrderId !== undefined
       ? eq(jobCardsTable.serviceOrderId, query.data.serviceOrderId)
       : undefined,
@@ -254,7 +288,7 @@ router.get("/job-cards", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(jobCardsTable)
-    .where(filters.length > 0 ? and(...filters) : undefined)
+    .where(and(...filters))
     .orderBy(desc(jobCardsTable.createdAt));
   res.json(ListJobCardsResponse.parse(rows));
 });
@@ -268,19 +302,25 @@ router.post("/job-cards", async (req, res): Promise<void> => {
   const [order] = await db
     .select()
     .from(serviceOrdersTable)
-    .where(eq(serviceOrdersTable.id, parsed.data.serviceOrderId));
+    .where(
+      and(
+        eq(serviceOrdersTable.id, parsed.data.serviceOrderId),
+        eq(serviceOrdersTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!order) {
     res.status(404).json({ error: "Service order not found" });
     return;
   }
   const [card] = await db
     .insert(jobCardsTable)
-    .values(parsed.data)
+    .values({ ...parsed.data, dealerId: order.dealerId })
     .returning();
 
   if (card?.technicianUserId != null) {
     void notifyUser({
       userId: card.technicianUserId,
+      dealerId: card.dealerId,
       type: "assignment",
       title: `Job card #${card.id} assigned to you`,
       body: `${card.title} — ${order.vehicleInfo}`,
@@ -303,7 +343,12 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   const [existing] = await db
     .select()
     .from(jobCardsTable)
-    .where(eq(jobCardsTable.id, params.data.id));
+    .where(
+      and(
+        eq(jobCardsTable.id, params.data.id),
+        eq(jobCardsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!existing) {
     res.status(404).json({ error: "Job card not found" });
     return;
@@ -324,7 +369,12 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   const [card] = await db
     .update(jobCardsTable)
     .set(patch)
-    .where(eq(jobCardsTable.id, params.data.id))
+    .where(
+      and(
+        eq(jobCardsTable.id, params.data.id),
+        eq(jobCardsTable.dealerId, existing.dealerId),
+      ),
+    )
     .returning();
 
   if (
@@ -334,6 +384,7 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   ) {
     void notifyUser({
       userId: parsed.data.technicianUserId,
+      dealerId: card.dealerId,
       type: "assignment",
       title: `Job card #${card.id} assigned to you`,
       body: card.title,
@@ -357,7 +408,12 @@ router.get("/job-cards/:id/parts", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(jobCardPartsTable)
-    .where(eq(jobCardPartsTable.jobCardId, params.data.id))
+    .where(
+      and(
+        eq(jobCardPartsTable.jobCardId, params.data.id),
+        eq(jobCardPartsTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .orderBy(desc(jobCardPartsTable.createdAt));
   res.json(ListJobCardPartsResponse.parse(rows));
 });
@@ -376,7 +432,12 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
   const [card] = await db
     .select()
     .from(jobCardsTable)
-    .where(eq(jobCardsTable.id, params.data.id));
+    .where(
+      and(
+        eq(jobCardsTable.id, params.data.id),
+        eq(jobCardsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!card) {
     res.status(404).json({ error: "Job card not found" });
     return;
@@ -384,7 +445,12 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
   const [part] = await db
     .select()
     .from(partsTable)
-    .where(eq(partsTable.id, parsed.data.partId));
+    .where(
+      and(
+        eq(partsTable.id, parsed.data.partId),
+        eq(partsTable.dealerId, card.dealerId),
+      ),
+    );
   if (!part) {
     res.status(404).json({ error: "Part not found" });
     return;
@@ -400,6 +466,7 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
     const inserted = await tx
       .insert(jobCardPartsTable)
       .values({
+        dealerId: card.dealerId,
         jobCardId: card.id,
         partId: part.id,
         partName: part.name,
@@ -413,7 +480,9 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
     await tx
       .update(partsTable)
       .set({ stock: sql`${partsTable.stock} + ${delta}` })
-      .where(eq(partsTable.id, part.id));
+      .where(
+        and(eq(partsTable.id, part.id), eq(partsTable.dealerId, card.dealerId)),
+      );
     return inserted;
   });
 
@@ -433,7 +502,12 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
   const [card] = await db
     .select()
     .from(jobCardsTable)
-    .where(eq(jobCardsTable.id, params.data.id));
+    .where(
+      and(
+        eq(jobCardsTable.id, params.data.id),
+        eq(jobCardsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!card) {
     res.status(404).json({ error: "Job card not found" });
     return;
@@ -441,7 +515,12 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
   const [existing] = await db
     .select()
     .from(serviceInvoicesTable)
-    .where(eq(serviceInvoicesTable.jobCardId, card.id));
+    .where(
+      and(
+        eq(serviceInvoicesTable.jobCardId, card.id),
+        eq(serviceInvoicesTable.dealerId, card.dealerId),
+      ),
+    );
   if (existing) {
     res
       .status(409)
@@ -451,7 +530,12 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
   const [order] = await db
     .select()
     .from(serviceOrdersTable)
-    .where(eq(serviceOrdersTable.id, card.serviceOrderId));
+    .where(
+      and(
+        eq(serviceOrdersTable.id, card.serviceOrderId),
+        eq(serviceOrdersTable.dealerId, card.dealerId),
+      ),
+    );
   if (!order) {
     res.status(404).json({ error: "Service order not found" });
     return;
@@ -460,7 +544,12 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
   const lines = await db
     .select()
     .from(jobCardPartsTable)
-    .where(eq(jobCardPartsTable.jobCardId, card.id));
+    .where(
+      and(
+        eq(jobCardPartsTable.jobCardId, card.id),
+        eq(jobCardPartsTable.dealerId, card.dealerId),
+      ),
+    );
   const partsTotal = lines.reduce(
     (sum, l) =>
       sum + l.unitPrice * l.quantity * (l.kind === "return" ? -1 : 1),
@@ -473,6 +562,7 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
   const [invoice] = await db
     .insert(serviceInvoicesTable)
     .values({
+      dealerId: order.dealerId,
       serviceOrderId: order.id,
       jobCardId: card.id,
       customerId: order.customerId,
@@ -499,9 +589,12 @@ router.get("/service-invoices", async (req, res): Promise<void> => {
     .select()
     .from(serviceInvoicesTable)
     .where(
-      query.data.status
-        ? eq(serviceInvoicesTable.status, query.data.status)
-        : undefined,
+      and(
+        eq(serviceInvoicesTable.dealerId, activeDealerId(res)),
+        query.data.status
+          ? eq(serviceInvoicesTable.status, query.data.status)
+          : undefined,
+      ),
     )
     .orderBy(desc(serviceInvoicesTable.createdAt));
   res.json(ListServiceInvoicesResponse.parse(rows));
@@ -519,7 +612,12 @@ router.patch("/service-invoices/:id", async (req, res): Promise<void> => {
   const [invoice] = await db
     .update(serviceInvoicesTable)
     .set(parsed.data)
-    .where(eq(serviceInvoicesTable.id, params.data.id))
+    .where(
+      and(
+        eq(serviceInvoicesTable.id, params.data.id),
+        eq(serviceInvoicesTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
   if (!invoice) {
     res.status(404).json({ error: "Invoice not found" });
@@ -542,9 +640,12 @@ router.get("/coverage", async (req, res): Promise<void> => {
     .select()
     .from(coveragePlansTable)
     .where(
-      query.data.type
-        ? eq(coveragePlansTable.type, query.data.type)
-        : undefined,
+      and(
+        eq(coveragePlansTable.dealerId, activeDealerId(res)),
+        query.data.type
+          ? eq(coveragePlansTable.type, query.data.type)
+          : undefined,
+      ),
     )
     .orderBy(coveragePlansTable.endDate);
   res.json(ListCoveragePlansResponse.parse(rows));
@@ -560,6 +661,7 @@ router.post("/coverage", async (req, res): Promise<void> => {
     .insert(coveragePlansTable)
     .values({
       ...parsed.data,
+      dealerId: activeDealerId(res),
       startDate: toDateString(parsed.data.startDate)!,
       endDate: toDateString(parsed.data.endDate)!,
     })
@@ -586,7 +688,12 @@ router.patch("/coverage/:id", async (req, res): Promise<void> => {
   const [plan] = await db
     .update(coveragePlansTable)
     .set(patch)
-    .where(eq(coveragePlansTable.id, params.data.id))
+    .where(
+      and(
+        eq(coveragePlansTable.id, params.data.id),
+        eq(coveragePlansTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
   if (!plan) {
     res.status(404).json({ error: "Coverage plan not found" });
@@ -604,12 +711,17 @@ router.post("/coverage/:id/remind", async (req, res): Promise<void> => {
   const [plan] = await db
     .select()
     .from(coveragePlansTable)
-    .where(eq(coveragePlansTable.id, params.data.id));
+    .where(
+      and(
+        eq(coveragePlansTable.id, params.data.id),
+        eq(coveragePlansTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!plan) {
     res.status(404).json({ error: "Coverage plan not found" });
     return;
   }
-  const { email } = await customerEmail(plan.customerId);
+  const { email } = await customerEmail(plan.customerId, plan.dealerId);
   if (!email) {
     res.status(422).json({ error: "Customer has no email on file" });
     return;
@@ -617,6 +729,7 @@ router.post("/coverage/:id/remind", async (req, res): Promise<void> => {
   await enqueueEmail({
     template: "warranty_reminder",
     to: email,
+    dealerId: plan.dealerId,
     customerId: plan.customerId,
     data: { vehicle: plan.vehicleInfo, expiry: plan.endDate },
   });

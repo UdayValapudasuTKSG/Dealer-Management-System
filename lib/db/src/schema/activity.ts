@@ -1,4 +1,5 @@
 import {
+  integer,
   pgTable,
   serial,
   text,
@@ -10,6 +11,7 @@ import { z } from "zod/v4";
 
 export const activityTable = pgTable("activity", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   agentKey: text("agent_key"),
   actor: text("actor").notNull(),
   isAi: boolean("is_ai").notNull().default(false),
@@ -21,7 +23,7 @@ export const activityTable = pgTable("activity", {
     .defaultNow(),
 });
 
-export const insertActivitySchema = createInsertSchema(activityTable).omit({
+export const insertActivitySchema = createInsertSchema(activityTable).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });

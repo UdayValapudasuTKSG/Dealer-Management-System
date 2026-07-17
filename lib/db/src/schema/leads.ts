@@ -29,6 +29,7 @@ export type LeadAttachment = { name: string; url: string };
 
 export const leadsTable = pgTable("leads", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
@@ -80,7 +81,7 @@ export const leadsTable = pgTable("leads", {
     .defaultNow(),
 });
 
-export const insertLeadSchema = createInsertSchema(leadsTable).omit({
+export const insertLeadSchema = createInsertSchema(leadsTable).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });

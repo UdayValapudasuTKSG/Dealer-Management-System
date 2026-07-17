@@ -329,6 +329,7 @@ const MAX_ATTEMPTS = 3;
 export type EnqueueOptions = {
   template: EmailTemplate;
   to: string;
+  dealerId: number;
   customerId?: number | null;
   data?: TemplateData;
 };
@@ -342,6 +343,7 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
   const [row] = await db
     .insert(emailLogsTable)
     .values({
+      dealerId: opts.dealerId,
       customerId: opts.customerId ?? null,
       recipient: opts.to,
       subject,
@@ -451,6 +453,7 @@ export async function processQueue(): Promise<void> {
           .where(eq(emailLogsTable.id, item.id));
         if (item.customerId) {
           await db.insert(timelineEventsTable).values({
+            dealerId: item.dealerId,
             customerId: item.customerId,
             domain: "system",
             kind: "email_sent",
@@ -516,6 +519,7 @@ export async function processTaskReminders(): Promise<void> {
       if (dueDate < today && !task.overdueNotifiedAt) {
         await notifyUser({
           userId: assigneeId,
+          dealerId: task.dealerId,
           type: "task",
           title: `Task overdue: ${task.title}`,
           body: `This ${task.priority}-priority task was due ${dueDate} and is still ${task.status === "in_progress" ? "in progress" : "open"}.`,
@@ -534,6 +538,7 @@ export async function processTaskReminders(): Promise<void> {
       } else if (dueDate >= today && !task.dueSoonNotifiedAt) {
         await notifyUser({
           userId: assigneeId,
+          dealerId: task.dealerId,
           type: "task",
           title: `Task due ${dueDate === today ? "today" : "tomorrow"}: ${task.title}`,
           body: `This ${task.priority}-priority task is due ${dueDate}. Wrap it up or update its due date.`,
@@ -569,6 +574,7 @@ export function startEmailWorker(): void {
 
 export async function notifyUser(opts: {
   userId: number;
+  dealerId: number;
   type: "approval" | "assignment" | "task" | "email" | "system";
   title: string;
   body?: string;
@@ -576,6 +582,7 @@ export async function notifyUser(opts: {
 }): Promise<void> {
   await db.insert(notificationsTable).values({
     userId: opts.userId,
+    dealerId: opts.dealerId,
     type: opts.type,
     title: opts.title,
     body: opts.body ?? null,
@@ -591,6 +598,7 @@ export async function notifyUsers(
   await db.insert(notificationsTable).values(
     userIds.map((userId) => ({
       userId,
+      dealerId: opts.dealerId,
       type: opts.type,
       title: opts.title,
       body: opts.body ?? null,

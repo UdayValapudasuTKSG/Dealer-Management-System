@@ -7,6 +7,7 @@ import {
   deliveriesTable,
   timelineEventsTable,
   usersTable,
+  dealerUsersTable,
   rolePermissionsTable,
   defaultDeliverySteps,
   DEFAULT_PDI_ITEMS,
@@ -15,16 +16,18 @@ import {
 import { notifyUsers } from "./email";
 import { logger } from "./logger";
 
-async function deliveryUserIds(): Promise<number[]> {
+async function deliveryUserIds(dealerId: number): Promise<number[]> {
   const rows = await db
     .select({ id: usersTable.id })
     .from(usersTable)
+    .innerJoin(dealerUsersTable, eq(dealerUsersTable.userId, usersTable.id))
     .innerJoin(
       rolePermissionsTable,
-      eq(rolePermissionsTable.roleId, usersTable.roleId),
+      eq(rolePermissionsTable.roleId, dealerUsersTable.roleId),
     )
     .where(
       and(
+        eq(dealerUsersTable.dealerId, dealerId),
         eq(rolePermissionsTable.module, "deliveries"),
         inArray(rolePermissionsTable.category, ["view", "admin"]),
         eq(usersTable.status, "active"),
@@ -64,6 +67,7 @@ export async function ensureDeliveryForDeal(
   const [delivery] = await db
     .insert(deliveriesTable)
     .values({
+      dealerId: deal.dealerId,
       dealId,
       bookingId: booking?.id ?? null,
       vehicleId: deal.vehicleId,
@@ -80,6 +84,7 @@ export async function ensureDeliveryForDeal(
 
   try {
     await db.insert(timelineEventsTable).values({
+      dealerId: deal.dealerId,
       customerId: deal.customerId ?? null,
       domain: "delivery",
       kind: "delivery_started",
@@ -96,8 +101,9 @@ export async function ensureDeliveryForDeal(
   }
 
   try {
-    const ids = await deliveryUserIds();
+    const ids = await deliveryUserIds(deal.dealerId);
     await notifyUsers(ids, {
+      dealerId: deal.dealerId,
       type: "system",
       title: `Delivery workflow started for ${deal.customerName}`,
       body: opts.cause ?? `Deal #${dealId} is ready for delivery preparation.`,

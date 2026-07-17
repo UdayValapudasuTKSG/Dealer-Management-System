@@ -22,6 +22,7 @@ import type {
 import type {
   Activity,
   AdminUser,
+  AdminUserAdd,
   AdminUserUpdate,
   Agent,
   AgentUpdate,
@@ -63,6 +64,10 @@ import type {
   Deal,
   DealInput,
   DealUpdate,
+  Dealer,
+  DealerInput,
+  DealerMember,
+  DealerMemberInput,
   Delivery,
   DeliveryAdvanceInput,
   DeliveryAdvisor,
@@ -142,6 +147,7 @@ import type {
   PaymentInput,
   PipelineStage,
   PipelineSuggestions,
+  PlatformUser,
   PredictiveAnalytics,
   Receipt,
   ReceiveMetaWebhook200,
@@ -10092,6 +10098,599 @@ export function useGetTeamMember<TData = Awaited<ReturnType<typeof getTeamMember
 
 
 
+export const getListDealersUrl = () => {
+
+
+
+
+  return `/api/platform/dealers`
+}
+
+/**
+ * @summary List all dealers (super admin only)
+ */
+export const listDealers = async ( options?: RequestInit): Promise<Dealer[]> => {
+
+  return customFetch<Dealer[]>(getListDealersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDealersQueryKey = () => {
+    return [
+    `/api/platform/dealers`
+    ] as const;
+    }
+
+
+export const getListDealersQueryOptions = <TData = Awaited<ReturnType<typeof listDealers>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDealersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDealers>>> = ({ signal }) => listDealers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDealers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDealersQueryResult = NonNullable<Awaited<ReturnType<typeof listDealers>>>
+export type ListDealersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all dealers (super admin only)
+ */
+
+export function useListDealers<TData = Awaited<ReturnType<typeof listDealers>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDealersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateDealerUrl = () => {
+
+
+
+
+  return `/api/platform/dealers`
+}
+
+/**
+ * @summary Create a dealer (super admin only)
+ */
+export const createDealer = async (dealerInput: DealerInput, options?: RequestInit): Promise<Dealer> => {
+
+  return customFetch<Dealer>(getCreateDealerUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dealerInput)
+  }
+);}
+
+
+
+
+
+export const getCreateDealerMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDealer>>, TError,{data: BodyType<DealerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDealer>>, TError,{data: BodyType<DealerInput>}, TContext> => {
+
+const mutationKey = ['createDealer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDealer>>, {data: BodyType<DealerInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createDealer(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDealerMutationResult = NonNullable<Awaited<ReturnType<typeof createDealer>>>
+    export type CreateDealerMutationBody = BodyType<DealerInput>
+    export type CreateDealerMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a dealer (super admin only)
+ */
+export const useCreateDealer = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDealer>>, TError,{data: BodyType<DealerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDealer>>,
+        TError,
+        {data: BodyType<DealerInput>},
+        TContext
+      > => {
+      return useMutation(getCreateDealerMutationOptions(options));
+    }
+
+export const getUpdateDealerUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}`
+}
+
+/**
+ * @summary Update a dealer (super admin only)
+ */
+export const updateDealer = async (id: number,
+    dealerInput: DealerInput, options?: RequestInit): Promise<Dealer> => {
+
+  return customFetch<Dealer>(getUpdateDealerUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dealerInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateDealerMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealer>>, TError,{id: number;data: BodyType<DealerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateDealer>>, TError,{id: number;data: BodyType<DealerInput>}, TContext> => {
+
+const mutationKey = ['updateDealer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateDealer>>, {id: number;data: BodyType<DealerInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateDealer(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateDealerMutationResult = NonNullable<Awaited<ReturnType<typeof updateDealer>>>
+    export type UpdateDealerMutationBody = BodyType<DealerInput>
+    export type UpdateDealerMutationError = ErrorType<void>
+
+    /**
+ * @summary Update a dealer (super admin only)
+ */
+export const useUpdateDealer = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealer>>, TError,{id: number;data: BodyType<DealerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateDealer>>,
+        TError,
+        {id: number;data: BodyType<DealerInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateDealerMutationOptions(options));
+    }
+
+export const getListDealerMembersUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/members`
+}
+
+/**
+ * @summary List a dealer's members (super admin only)
+ */
+export const listDealerMembers = async (id: number, options?: RequestInit): Promise<DealerMember[]> => {
+
+  return customFetch<DealerMember[]>(getListDealerMembersUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDealerMembersQueryKey = (id: number,) => {
+    return [
+    `/api/platform/dealers/${id}/members`
+    ] as const;
+    }
+
+
+export const getListDealerMembersQueryOptions = <TData = Awaited<ReturnType<typeof listDealerMembers>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealerMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDealerMembersQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDealerMembers>>> = ({ signal }) => listDealerMembers(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDealerMembers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDealerMembersQueryResult = NonNullable<Awaited<ReturnType<typeof listDealerMembers>>>
+export type ListDealerMembersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List a dealer's members (super admin only)
+ */
+
+export function useListDealerMembers<TData = Awaited<ReturnType<typeof listDealerMembers>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealerMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDealerMembersQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAddDealerMemberUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/members`
+}
+
+/**
+ * @summary Add a user to a dealer with a role (super admin only)
+ */
+export const addDealerMember = async (id: number,
+    dealerMemberInput: DealerMemberInput, options?: RequestInit): Promise<DealerMember> => {
+
+  return customFetch<DealerMember>(getAddDealerMemberUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dealerMemberInput)
+  }
+);}
+
+
+
+
+
+export const getAddDealerMemberMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addDealerMember>>, TError,{id: number;data: BodyType<DealerMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addDealerMember>>, TError,{id: number;data: BodyType<DealerMemberInput>}, TContext> => {
+
+const mutationKey = ['addDealerMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addDealerMember>>, {id: number;data: BodyType<DealerMemberInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  addDealerMember(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddDealerMemberMutationResult = NonNullable<Awaited<ReturnType<typeof addDealerMember>>>
+    export type AddDealerMemberMutationBody = BodyType<DealerMemberInput>
+    export type AddDealerMemberMutationError = ErrorType<void>
+
+    /**
+ * @summary Add a user to a dealer with a role (super admin only)
+ */
+export const useAddDealerMember = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addDealerMember>>, TError,{id: number;data: BodyType<DealerMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addDealerMember>>,
+        TError,
+        {id: number;data: BodyType<DealerMemberInput>},
+        TContext
+      > => {
+      return useMutation(getAddDealerMemberMutationOptions(options));
+    }
+
+export const getUpdateDealerMemberUrl = (id: number,
+    userId: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/members/${userId}`
+}
+
+/**
+ * @summary Change a member's role or GM flag (super admin only)
+ */
+export const updateDealerMember = async (id: number,
+    userId: number,
+    dealerMemberInput: DealerMemberInput, options?: RequestInit): Promise<DealerMember> => {
+
+  return customFetch<DealerMember>(getUpdateDealerMemberUrl(id,userId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dealerMemberInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateDealerMemberMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerMember>>, TError,{id: number;userId: number;data: BodyType<DealerMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateDealerMember>>, TError,{id: number;userId: number;data: BodyType<DealerMemberInput>}, TContext> => {
+
+const mutationKey = ['updateDealerMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateDealerMember>>, {id: number;userId: number;data: BodyType<DealerMemberInput>}> = (props) => {
+          const {id,userId,data} = props ?? {};
+
+          return  updateDealerMember(id,userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateDealerMemberMutationResult = NonNullable<Awaited<ReturnType<typeof updateDealerMember>>>
+    export type UpdateDealerMemberMutationBody = BodyType<DealerMemberInput>
+    export type UpdateDealerMemberMutationError = ErrorType<void>
+
+    /**
+ * @summary Change a member's role or GM flag (super admin only)
+ */
+export const useUpdateDealerMember = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerMember>>, TError,{id: number;userId: number;data: BodyType<DealerMemberInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateDealerMember>>,
+        TError,
+        {id: number;userId: number;data: BodyType<DealerMemberInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateDealerMemberMutationOptions(options));
+    }
+
+export const getRemoveDealerMemberUrl = (id: number,
+    userId: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/members/${userId}`
+}
+
+/**
+ * @summary Remove a user from a dealer (super admin only)
+ */
+export const removeDealerMember = async (id: number,
+    userId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRemoveDealerMemberUrl(id,userId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRemoveDealerMemberMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeDealerMember>>, TError,{id: number;userId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeDealerMember>>, TError,{id: number;userId: number}, TContext> => {
+
+const mutationKey = ['removeDealerMember'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeDealerMember>>, {id: number;userId: number}> = (props) => {
+          const {id,userId} = props ?? {};
+
+          return  removeDealerMember(id,userId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveDealerMemberMutationResult = NonNullable<Awaited<ReturnType<typeof removeDealerMember>>>
+
+    export type RemoveDealerMemberMutationError = ErrorType<void>
+
+    /**
+ * @summary Remove a user from a dealer (super admin only)
+ */
+export const useRemoveDealerMember = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeDealerMember>>, TError,{id: number;userId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof removeDealerMember>>,
+        TError,
+        {id: number;userId: number},
+        TContext
+      > => {
+      return useMutation(getRemoveDealerMemberMutationOptions(options));
+    }
+
+export const getListPlatformUsersUrl = () => {
+
+
+
+
+  return `/api/platform/users`
+}
+
+/**
+ * @summary List every user account on the platform (super admin only)
+ */
+export const listPlatformUsers = async ( options?: RequestInit): Promise<PlatformUser[]> => {
+
+  return customFetch<PlatformUser[]>(getListPlatformUsersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPlatformUsersQueryKey = () => {
+    return [
+    `/api/platform/users`
+    ] as const;
+    }
+
+
+export const getListPlatformUsersQueryOptions = <TData = Awaited<ReturnType<typeof listPlatformUsers>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPlatformUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPlatformUsersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPlatformUsers>>> = ({ signal }) => listPlatformUsers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPlatformUsers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPlatformUsersQueryResult = NonNullable<Awaited<ReturnType<typeof listPlatformUsers>>>
+export type ListPlatformUsersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List every user account on the platform (super admin only)
+ */
+
+export function useListPlatformUsers<TData = Awaited<ReturnType<typeof listPlatformUsers>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPlatformUsers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPlatformUsersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListAdminUsersUrl = () => {
 
 
@@ -10168,6 +10767,77 @@ export function useListAdminUsers<TData = Awaited<ReturnType<typeof listAdminUse
 
 
 
+
+export const getAddAdminUserUrl = () => {
+
+
+
+
+  return `/api/admin/users`
+}
+
+/**
+ * @summary Add an existing user to the active dealer by email
+ */
+export const addAdminUser = async (adminUserAdd: AdminUserAdd, options?: RequestInit): Promise<AdminUser> => {
+
+  return customFetch<AdminUser>(getAddAdminUserUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(adminUserAdd)
+  }
+);}
+
+
+
+
+
+export const getAddAdminUserMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addAdminUser>>, TError,{data: BodyType<AdminUserAdd>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addAdminUser>>, TError,{data: BodyType<AdminUserAdd>}, TContext> => {
+
+const mutationKey = ['addAdminUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addAdminUser>>, {data: BodyType<AdminUserAdd>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  addAdminUser(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddAdminUserMutationResult = NonNullable<Awaited<ReturnType<typeof addAdminUser>>>
+    export type AddAdminUserMutationBody = BodyType<AdminUserAdd>
+    export type AddAdminUserMutationError = ErrorType<Error>
+
+    /**
+ * @summary Add an existing user to the active dealer by email
+ */
+export const useAddAdminUser = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addAdminUser>>, TError,{data: BodyType<AdminUserAdd>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addAdminUser>>,
+        TError,
+        {data: BodyType<AdminUserAdd>},
+        TContext
+      > => {
+      return useMutation(getAddAdminUserMutationOptions(options));
+    }
 
 export const getUpdateAdminUserUrl = (id: number,) => {
 

@@ -22,13 +22,17 @@ import {
 } from "@workspace/api-zod";
 import { enqueueEmail } from "../lib/email";
 import { logger } from "../lib/logger";
+import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
 const money = (n: number) =>
   `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
-async function vehicleLabel(vehicleId: number): Promise<string> {
+async function vehicleLabel(
+  vehicleId: number,
+  dealerId: number,
+): Promise<string> {
   const [v] = await db
     .select({
       year: vehiclesTable.year,
@@ -36,12 +40,20 @@ async function vehicleLabel(vehicleId: number): Promise<string> {
       model: vehiclesTable.model,
     })
     .from(vehiclesTable)
-    .where(eq(vehiclesTable.id, vehicleId));
+    .where(
+      and(
+        eq(vehiclesTable.id, vehicleId),
+        eq(vehiclesTable.dealerId, dealerId),
+      ),
+    );
   return v ? `${v.year} ${v.make} ${v.model}` : `Vehicle #${vehicleId}`;
 }
 
 /** Releases the vehicle back to available if no other active booking holds it. */
-async function releaseVehicle(vehicleId: number): Promise<void> {
+async function releaseVehicle(
+  vehicleId: number,
+  dealerId: number,
+): Promise<void> {
   const [other] = await db
     .select({ id: bookingsTable.id })
     .from(bookingsTable)
@@ -49,18 +61,29 @@ async function releaseVehicle(vehicleId: number): Promise<void> {
       and(
         eq(bookingsTable.vehicleId, vehicleId),
         eq(bookingsTable.status, "active"),
+        eq(bookingsTable.dealerId, dealerId),
       ),
     );
   if (other) return;
   const [v] = await db
     .select({ status: vehiclesTable.status })
     .from(vehiclesTable)
-    .where(eq(vehiclesTable.id, vehicleId));
+    .where(
+      and(
+        eq(vehiclesTable.id, vehicleId),
+        eq(vehiclesTable.dealerId, dealerId),
+      ),
+    );
   if (v && (v.status === "reserved" || v.status === "booked")) {
     await db
       .update(vehiclesTable)
       .set({ status: "available" })
-      .where(eq(vehiclesTable.id, vehicleId));
+      .where(
+        and(
+          eq(vehiclesTable.id, vehicleId),
+          eq(vehiclesTable.dealerId, dealerId),
+        ),
+      );
   }
 }
 
@@ -78,7 +101,7 @@ export async function expireLapsedBookings(): Promise<void> {
     .returning();
   for (const b of lapsed) {
     logger.info({ bookingId: b.id }, "booking expired, releasing vehicle");
-    await releaseVehicle(b.vehicleId);
+    await releaseVehicle(b.vehicleId, b.dealerId);
   }
 }
 
@@ -89,7 +112,12 @@ async function bookingRecipient(
   const [c] = await db
     .select({ email: customersTable.email, name: customersTable.name })
     .from(customersTable)
-    .where(eq(customersTable.id, booking.customerId));
+    .where(
+      and(
+        eq(customersTable.id, booking.customerId),
+        eq(customersTable.dealerId, booking.dealerId),
+      ),
+    );
   return {
     email: c?.email ?? null,
     name: c?.name ?? booking.customerName,
@@ -104,7 +132,7 @@ router.get("/bookings", async (req, res): Promise<void> => {
   }
   await expireLapsedBookings();
 
-  const filters = [];
+  const filters = [eq(bookingsTable.dealerId, activeDealerId(res))];
   if (query.data.status)
     filters.push(eq(bookingsTable.status, query.data.status));
   if (query.data.vehicleId !== undefined)
@@ -113,7 +141,7 @@ router.get("/bookings", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(bookingsTable)
-    .where(filters.length ? and(...filters) : undefined)
+    .where(and(...filters))
     .orderBy(desc(bookingsTable.createdAt));
 
   res.json(ListBookingsResponse.parse(rows));
@@ -126,11 +154,17 @@ router.post("/bookings", async (req, res): Promise<void> => {
     return;
   }
   await expireLapsedBookings();
+  const dealerId = activeDealerId(res);
 
   const [vehicle] = await db
     .select()
     .from(vehiclesTable)
-    .where(eq(vehiclesTable.id, parsed.data.vehicleId));
+    .where(
+      and(
+        eq(vehiclesTable.id, parsed.data.vehicleId),
+        eq(vehiclesTable.dealerId, dealerId),
+      ),
+    );
   if (!vehicle) {
     res.status(404).json({ error: "Vehicle not found" });
     return;
@@ -154,6 +188,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const [booking] = await db
     .insert(bookingsTable)
     .values({
+      dealerId,
       vehicleId: parsed.data.vehicleId,
       customerId: parsed.data.customerId ?? null,
       customerName: parsed.data.customerName,
@@ -171,7 +206,12 @@ router.post("/bookings", async (req, res): Promise<void> => {
   await db
     .update(vehiclesTable)
     .set({ status: paymentStatus === "paid" ? "booked" : "reserved" })
-    .where(eq(vehiclesTable.id, parsed.data.vehicleId));
+    .where(
+      and(
+        eq(vehiclesTable.id, parsed.data.vehicleId),
+        eq(vehiclesTable.dealerId, dealerId),
+      ),
+    );
 
   void (async () => {
     const { email, name } = await bookingRecipient(booking!);
@@ -179,10 +219,11 @@ router.post("/bookings", async (req, res): Promise<void> => {
     await enqueueEmail({
       template: "vehicle_booking",
       to: email,
+      dealerId: booking!.dealerId,
       customerId: booking!.customerId,
       data: {
         name,
-        vehicle: await vehicleLabel(booking!.vehicleId),
+        vehicle: await vehicleLabel(booking!.vehicleId, booking!.dealerId),
         amount: money(booking!.bookingAmount),
       },
     });
@@ -202,7 +243,12 @@ router.get("/bookings/:id", async (req, res): Promise<void> => {
   const [booking] = await db
     .select()
     .from(bookingsTable)
-    .where(eq(bookingsTable.id, params.data.id));
+    .where(
+      and(
+        eq(bookingsTable.id, params.data.id),
+        eq(bookingsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!booking) {
     res.status(404).json({ error: "Booking not found" });
     return;
@@ -222,10 +268,16 @@ router.patch("/bookings/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const [before] = await db
     .select()
     .from(bookingsTable)
-    .where(eq(bookingsTable.id, params.data.id));
+    .where(
+      and(
+        eq(bookingsTable.id, params.data.id),
+        eq(bookingsTable.dealerId, dealerId),
+      ),
+    );
   if (!before) {
     res.status(404).json({ error: "Booking not found" });
     return;
@@ -254,7 +306,12 @@ router.patch("/bookings/:id", async (req, res): Promise<void> => {
   const [booking] = await db
     .update(bookingsTable)
     .set(next)
-    .where(eq(bookingsTable.id, params.data.id))
+    .where(
+      and(
+        eq(bookingsTable.id, params.data.id),
+        eq(bookingsTable.dealerId, dealerId),
+      ),
+    )
     .returning();
 
   // Vehicle side effects: fully paid → booked; cancelled/expired → release.
@@ -266,6 +323,7 @@ router.patch("/bookings/:id", async (req, res): Promise<void> => {
         and(
           eq(vehiclesTable.id, booking!.vehicleId),
           eq(vehiclesTable.status, "reserved"),
+          eq(vehiclesTable.dealerId, dealerId),
         ),
       );
   }
@@ -273,7 +331,7 @@ router.patch("/bookings/:id", async (req, res): Promise<void> => {
     (booking!.status === "cancelled" || booking!.status === "expired") &&
     before.status === "active"
   ) {
-    await releaseVehicle(booking!.vehicleId);
+    await releaseVehicle(booking!.vehicleId, dealerId);
   }
 
   res.json(UpdateBookingResponse.parse(booking));
@@ -288,7 +346,12 @@ router.post("/bookings/:id/remind", async (req, res): Promise<void> => {
   const [booking] = await db
     .select()
     .from(bookingsTable)
-    .where(eq(bookingsTable.id, params.data.id));
+    .where(
+      and(
+        eq(bookingsTable.id, params.data.id),
+        eq(bookingsTable.dealerId, activeDealerId(res)),
+      ),
+    );
   if (!booking) {
     res.status(404).json({ error: "Booking not found" });
     return;
@@ -306,10 +369,11 @@ router.post("/bookings/:id/remind", async (req, res): Promise<void> => {
   await enqueueEmail({
     template: "payment_reminder",
     to: email,
+    dealerId: booking.dealerId,
     customerId: booking.customerId,
     data: {
       name,
-      vehicle: await vehicleLabel(booking.vehicleId),
+      vehicle: await vehicleLabel(booking.vehicleId, booking.dealerId),
       amount: money(outstanding),
       due: booking.expiresAt.toLocaleDateString("en-US", {
         month: "long",

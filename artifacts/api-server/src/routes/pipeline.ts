@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { db, leadsTable, vehiclesTable } from "@workspace/db";
+import { activeDealerId } from "../middlewares/rbac";
 import {
   GetPipelineSuggestionsQueryParams,
   GetPipelineSuggestionsResponse,
@@ -37,9 +38,13 @@ router.get("/pipeline/suggestions", async (req, res): Promise<void> => {
   const { phase } = query.data;
   const label = PHASE_LABEL[phase] ?? phase;
 
+  const dealerId = activeDealerId(res);
   const [leads, vehicles] = await Promise.all([
-    db.select().from(leadsTable).where(eq(leadsTable.phase, phase)),
-    db.select().from(vehiclesTable),
+    db
+      .select()
+      .from(leadsTable)
+      .where(and(eq(leadsTable.dealerId, dealerId), eq(leadsTable.phase, phase))),
+    db.select().from(vehiclesTable).where(eq(vehiclesTable.dealerId, dealerId)),
   ]);
 
   const vehicleName = (id: number | null | undefined) => {

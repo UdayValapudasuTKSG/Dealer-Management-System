@@ -17,6 +17,7 @@ import { z } from "zod/v4";
 
 export const suppliersTable = pgTable("suppliers", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   name: text("name").notNull(),
   contactName: text("contact_name"),
   email: text("email"),
@@ -26,7 +27,7 @@ export const suppliersTable = pgTable("suppliers", {
     .defaultNow(),
 });
 
-export const insertSupplierSchema = createInsertSchema(suppliersTable).omit({
+export const insertSupplierSchema = createInsertSchema(suppliersTable).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });
@@ -39,6 +40,7 @@ export type Supplier = typeof suppliersTable.$inferSelect;
 
 export const partsTable = pgTable("parts", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   sku: text("sku").notNull().unique(),
   name: text("name").notNull(),
   category: text("category").notNull().default("general"),
@@ -53,7 +55,7 @@ export const partsTable = pgTable("parts", {
     .defaultNow(),
 });
 
-export const insertPartSchema = createInsertSchema(partsTable).omit({
+export const insertPartSchema = createInsertSchema(partsTable).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });
@@ -66,6 +68,7 @@ export type Part = typeof partsTable.$inferSelect;
 
 export const partPurchasesTable = pgTable("part_purchases", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   partId: integer("part_id")
     .notNull()
     .references(() => partsTable.id),
@@ -80,7 +83,7 @@ export const partPurchasesTable = pgTable("part_purchases", {
 
 export const insertPartPurchaseSchema = createInsertSchema(
   partPurchasesTable,
-).omit({ id: true, createdAt: true });
+).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertPartPurchase = z.infer<typeof insertPartPurchaseSchema>;
 export type PartPurchase = typeof partPurchasesTable.$inferSelect;
 
@@ -92,6 +95,7 @@ export type ChecklistItem = { label: string; done: boolean };
 
 export const jobCardsTable = pgTable("job_cards", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   serviceOrderId: integer("service_order_id").notNull(),
   title: text("title").notNull(),
   status: text("status").notNull().default("open"),
@@ -113,7 +117,7 @@ export const jobCardsTable = pgTable("job_cards", {
 
 export const insertJobCardSchema = createInsertSchema(jobCardsTable, {
   checklist: z.array(z.object({ label: z.string(), done: z.boolean() })),
-}).omit({ id: true, createdAt: true, startedAt: true, completedAt: true });
+}).omit({ dealerId: true, id: true, createdAt: true, startedAt: true, completedAt: true });
 export type InsertJobCard = z.infer<typeof insertJobCardSchema>;
 export type JobCard = typeof jobCardsTable.$inferSelect;
 
@@ -123,6 +127,7 @@ export type JobCard = typeof jobCardsTable.$inferSelect;
 
 export const jobCardPartsTable = pgTable("job_card_parts", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   jobCardId: integer("job_card_id")
     .notNull()
     .references(() => jobCardsTable.id, { onDelete: "cascade" }),
@@ -140,7 +145,7 @@ export const jobCardPartsTable = pgTable("job_card_parts", {
 
 export const insertJobCardPartSchema = createInsertSchema(
   jobCardPartsTable,
-).omit({ id: true, createdAt: true });
+).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertJobCardPart = z.infer<typeof insertJobCardPartSchema>;
 export type JobCardPart = typeof jobCardPartsTable.$inferSelect;
 
@@ -150,6 +155,7 @@ export type JobCardPart = typeof jobCardPartsTable.$inferSelect;
 
 export const coveragePlansTable = pgTable("coverage_plans", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   customerId: integer("customer_id"),
   customerName: text("customer_name"),
   vehicleInfo: text("vehicle_info").notNull(),
@@ -165,7 +171,7 @@ export const coveragePlansTable = pgTable("coverage_plans", {
 
 export const insertCoveragePlanSchema = createInsertSchema(
   coveragePlansTable,
-).omit({ id: true, createdAt: true });
+).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertCoveragePlan = z.infer<typeof insertCoveragePlanSchema>;
 export type CoveragePlan = typeof coveragePlansTable.$inferSelect;
 
@@ -175,6 +181,7 @@ export type CoveragePlan = typeof coveragePlansTable.$inferSelect;
 
 export const serviceInvoicesTable = pgTable("service_invoices", {
   id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
   serviceOrderId: integer("service_order_id").notNull(),
   jobCardId: integer("job_card_id").notNull(),
   customerId: integer("customer_id"),
@@ -192,6 +199,6 @@ export const serviceInvoicesTable = pgTable("service_invoices", {
 
 export const insertServiceInvoiceSchema = createInsertSchema(
   serviceInvoicesTable,
-).omit({ id: true, createdAt: true });
+).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertServiceInvoice = z.infer<typeof insertServiceInvoiceSchema>;
 export type ServiceInvoice = typeof serviceInvoicesTable.$inferSelect;

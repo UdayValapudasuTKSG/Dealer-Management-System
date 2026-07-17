@@ -13,6 +13,7 @@ import {
   createInboundLead,
   matchVehicleByText,
 } from "../lib/lead-intake";
+import { defaultDealerId } from "../lib/tenancy";
 
 const router: IRouter = Router();
 
@@ -128,7 +129,8 @@ async function processLeadgenEvent(
       break;
     }
   }
-  const vehicle = await matchVehicleByText(vehicleAnswer);
+  const dealerId = await defaultDealerId();
+  const vehicle = await matchVehicleByText(vehicleAnswer, dealerId);
 
   const source = data.platform === "ig" ? "instagram" : "facebook";
   const channelLabel = source === "instagram" ? "Instagram Lead Ad" : "Facebook Lead Ad";
@@ -138,6 +140,7 @@ async function processLeadgenEvent(
   noteParts.push(`Captured from a Meta lead form (lead ${leadgenId}).`);
 
   const lead = await createInboundLead({
+    dealerId,
     name: name || "Meta lead",
     email,
     phone,
@@ -306,6 +309,8 @@ router.post("/webhooks/twilio/whatsapp", async (req, res): Promise<void> => {
       }
     }
 
+    const dealerId = await defaultDealerId();
+
     // Dedupe against open leads by phone number (digit-suffix match).
     const needle = digits(phone);
     const candidates = await db
@@ -313,6 +318,7 @@ router.post("/webhooks/twilio/whatsapp", async (req, res): Promise<void> => {
       .from(leadsTable)
       .where(
         and(
+          eq(leadsTable.dealerId, dealerId),
           isNotNull(leadsTable.phone),
           notInArray(leadsTable.phase, OPEN_EXCLUDED_PHASES),
         ),
@@ -329,6 +335,7 @@ router.post("/webhooks/twilio/whatsapp", async (req, res): Promise<void> => {
     if (existing) {
       leadId = existing.id;
       await db.insert(timelineEventsTable).values({
+        dealerId: existing.dealerId,
         customerId: existing.customerId,
         domain: "leads",
         kind: "whatsapp_message",
@@ -342,6 +349,7 @@ router.post("/webhooks/twilio/whatsapp", async (req, res): Promise<void> => {
       if (existing.ownerUserId) {
         await notifyUser({
           userId: existing.ownerUserId,
+          dealerId: existing.dealerId,
           type: "system",
           title: `WhatsApp: ${existing.name}`,
           body: body ? body.slice(0, 180) : "New WhatsApp message received.",
@@ -352,12 +360,13 @@ router.post("/webhooks/twilio/whatsapp", async (req, res): Promise<void> => {
       const noteParts: string[] = [];
       if (body) noteParts.push(`WhatsApp message: ${body}`);
       const lead = await createInboundLead({
+        dealerId,
         name: profileName || `WhatsApp ${phone}`,
         phone,
         channel: "social",
         source: "whatsapp",
         notes: noteParts.length ? noteParts.join("\n") : null,
-        vehicle: await matchVehicleByText(body),
+        vehicle: await matchVehicleByText(body, dealerId),
         channelLabel: "WhatsApp",
         actor: "WhatsApp",
       });

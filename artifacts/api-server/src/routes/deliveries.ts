@@ -11,6 +11,7 @@ import {
   invoicesTable,
   usersTable,
   rolesTable,
+  dealerUsersTable,
   timelineEventsTable,
   DELIVERY_STEPS,
   DELIVERY_STEP_LABELS,
@@ -41,6 +42,7 @@ import { ensureDeliveryForDeal } from "../lib/delivery";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { onDealStageChanged } from "../lib/email-triggers";
 import { logger } from "../lib/logger";
+import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
@@ -52,7 +54,7 @@ type Enriched = Delivery & {
   vehicleLabel: string | null;
 };
 
-async function enrich(rows: Delivery[]): Promise<Enriched[]> {
+async function enrich(rows: Delivery[], dealerId: number): Promise<Enriched[]> {
   const advisorIds = [
     ...new Set(rows.map((r) => r.advisorUserId).filter((x): x is number => !!x)),
   ];
@@ -61,6 +63,13 @@ async function enrich(rows: Delivery[]): Promise<Enriched[]> {
     ? await db
         .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
         .from(usersTable)
+        .innerJoin(
+          dealerUsersTable,
+          and(
+            eq(dealerUsersTable.userId, usersTable.id),
+            eq(dealerUsersTable.dealerId, dealerId),
+          ),
+        )
     : [];
   const vehicles = vehicleIds.length
     ? await db
@@ -72,6 +81,7 @@ async function enrich(rows: Delivery[]): Promise<Enriched[]> {
           vin: vehiclesTable.vin,
         })
         .from(vehiclesTable)
+        .where(eq(vehiclesTable.dealerId, dealerId))
     : [];
   return rows.map((r) => {
     const a = advisors.find((x) => x.id === r.advisorUserId);
@@ -86,11 +96,14 @@ async function enrich(rows: Delivery[]): Promise<Enriched[]> {
   });
 }
 
-async function loadDelivery(id: number): Promise<Delivery | undefined> {
+async function loadDelivery(
+  id: number,
+  dealerId: number,
+): Promise<Delivery | undefined> {
   const [row] = await db
     .select()
     .from(deliveriesTable)
-    .where(eq(deliveriesTable.id, id));
+    .where(and(eq(deliveriesTable.id, id), eq(deliveriesTable.dealerId, dealerId)));
   return row;
 }
 
@@ -100,7 +113,7 @@ router.get("/deliveries", async (req, res): Promise<void> => {
     res.status(400).json({ error: query.error.message });
     return;
   }
-  const filters = [];
+  const filters = [eq(deliveriesTable.dealerId, activeDealerId(res))];
   if (query.data.status)
     filters.push(eq(deliveriesTable.status, query.data.status));
   if (query.data.mine === 1 && res.locals.user?.id)
@@ -109,10 +122,10 @@ router.get("/deliveries", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(deliveriesTable)
-    .where(filters.length ? and(...filters) : undefined)
+    .where(and(...filters))
     .orderBy(desc(deliveriesTable.createdAt));
 
-  res.json(ListDeliveriesResponse.parse(await enrich(rows)));
+  res.json(ListDeliveriesResponse.parse(await enrich(rows, activeDealerId(res))));
 });
 
 router.post("/deliveries", async (req, res): Promise<void> => {
@@ -121,10 +134,24 @@ router.post("/deliveries", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const dealerId = activeDealerId(res);
+  const [deal] = await db
+    .select({ id: dealsTable.id })
+    .from(dealsTable)
+    .where(and(eq(dealsTable.id, parsed.data.dealId), eq(dealsTable.dealerId, dealerId)));
+  if (!deal) {
+    res.status(404).json({ error: "Deal not found or has no vehicle" });
+    return;
+  }
   const [existing] = await db
     .select({ id: deliveriesTable.id })
     .from(deliveriesTable)
-    .where(eq(deliveriesTable.dealId, parsed.data.dealId));
+    .where(
+      and(
+        eq(deliveriesTable.dealId, parsed.data.dealId),
+        eq(deliveriesTable.dealerId, dealerId),
+      ),
+    );
   if (existing) {
     res.status(409).json({ error: "A delivery already exists for this deal" });
     return;
@@ -137,7 +164,7 @@ router.post("/deliveries", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Deal not found or has no vehicle" });
     return;
   }
-  res.status(201).json(CreateDeliveryResponse.parse((await enrich([delivery]))[0]));
+  res.status(201).json(CreateDeliveryResponse.parse((await enrich([delivery], activeDealerId(res)))[0]));
 });
 
 router.get("/deliveries/:id", async (req, res): Promise<void> => {
@@ -146,12 +173,12 @@ router.get("/deliveries/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const row = await loadDelivery(params.data.id);
+  const row = await loadDelivery(params.data.id, activeDealerId(res));
   if (!row) {
     res.status(404).json({ error: "Delivery not found" });
     return;
   }
-  res.json(GetDeliveryResponse.parse((await enrich([row]))[0]));
+  res.json(GetDeliveryResponse.parse((await enrich([row], activeDealerId(res)))[0]));
 });
 
 router.patch("/deliveries/:id", async (req, res): Promise<void> => {
@@ -168,7 +195,12 @@ router.patch("/deliveries/:id", async (req, res): Promise<void> => {
   const [row] = await db
     .update(deliveriesTable)
     .set({ advisorUserId: parsed.data.advisorUserId ?? null })
-    .where(eq(deliveriesTable.id, params.data.id))
+    .where(
+      and(
+        eq(deliveriesTable.id, params.data.id),
+        eq(deliveriesTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
   if (!row) {
     res.status(404).json({ error: "Delivery not found" });
@@ -177,6 +209,7 @@ router.patch("/deliveries/:id", async (req, res): Promise<void> => {
   if (parsed.data.advisorUserId) {
     void notifyUser({
       userId: parsed.data.advisorUserId,
+      dealerId: row.dealerId,
       type: "system",
       title: `Delivery #${row.id} assigned to you`,
       body: `${row.customerName ?? "A customer"} is waiting on the delivery workflow.`,
@@ -185,7 +218,7 @@ router.patch("/deliveries/:id", async (req, res): Promise<void> => {
       logger.error({ err, deliveryId: row.id }, "advisor notification failed"),
     );
   }
-  res.json(UpdateDeliveryResponse.parse((await enrich([row]))[0]));
+  res.json(UpdateDeliveryResponse.parse((await enrich([row], activeDealerId(res)))[0]));
 });
 
 async function customerEmailFor(
@@ -196,14 +229,22 @@ async function customerEmailFor(
   const [c] = await db
     .select({ email: customersTable.email, name: customersTable.name })
     .from(customersTable)
-    .where(eq(customersTable.id, delivery.customerId));
+    .where(
+      and(
+        eq(customersTable.id, delivery.customerId),
+        eq(customersTable.dealerId, delivery.dealerId),
+      ),
+    );
   return {
     email: c?.email ?? null,
     name: c?.name ?? delivery.customerName ?? "there",
   };
 }
 
-async function vehicleLabelFor(vehicleId: number): Promise<string> {
+async function vehicleLabelFor(
+  vehicleId: number,
+  dealerId: number,
+): Promise<string> {
   const [v] = await db
     .select({
       year: vehiclesTable.year,
@@ -211,7 +252,7 @@ async function vehicleLabelFor(vehicleId: number): Promise<string> {
       model: vehiclesTable.model,
     })
     .from(vehiclesTable)
-    .where(eq(vehiclesTable.id, vehicleId));
+    .where(and(eq(vehiclesTable.id, vehicleId), eq(vehiclesTable.dealerId, dealerId)));
   return v ? `${v.year} ${v.make} ${v.model}` : `Vehicle #${vehicleId}`;
 }
 
@@ -226,7 +267,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const delivery = await loadDelivery(params.data.id);
+  const delivery = await loadDelivery(params.data.id, activeDealerId(res));
   if (!delivery) {
     res.status(404).json({ error: "Delivery not found" });
     return;
@@ -272,12 +313,18 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
         const [deal] = await db
           .select()
           .from(dealsTable)
-          .where(eq(dealsTable.id, delivery.dealId));
+          .where(
+            and(
+              eq(dealsTable.id, delivery.dealId),
+              eq(dealsTable.dealerId, delivery.dealerId),
+            ),
+          );
         const amount = deal ? deal.otdPrice || deal.vehiclePrice : 0;
         const invoice = await db.transaction(async (tx) => {
           const [row] = await tx
             .insert(invoicesTable)
             .values({
+              dealerId: delivery.dealerId,
               invoiceNumber: "PENDING",
               customerId: delivery.customerId ?? null,
               customerName: delivery.customerName ?? "Customer",
@@ -317,10 +364,11 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
         await enqueueEmail({
           template: "delivery_schedule",
           to: email,
+          dealerId: delivery.dealerId,
           customerId: delivery.customerId,
           data: {
             name,
-            vehicle: await vehicleLabelFor(delivery.vehicleId),
+            vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
             date: at.toLocaleString("en-US", {
               weekday: "long",
               month: "long",
@@ -381,12 +429,18 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       currentStep: nextStep,
       ...(isLast ? { status: "completed", completedAt: new Date() } : {}),
     })
-    .where(eq(deliveriesTable.id, delivery.id))
+    .where(
+      and(
+        eq(deliveriesTable.id, delivery.id),
+        eq(deliveriesTable.dealerId, delivery.dealerId),
+      ),
+    )
     .returning();
 
   // Timeline receipt for every completed step.
   try {
     await db.insert(timelineEventsTable).values({
+      dealerId: delivery.dealerId,
       customerId: delivery.customerId ?? null,
       domain: "delivery",
       kind: `delivery_${step}`,
@@ -407,22 +461,42 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
     await db
       .update(vehiclesTable)
       .set({ status: "delivered" })
-      .where(eq(vehiclesTable.id, delivery.vehicleId));
+      .where(
+        and(
+          eq(vehiclesTable.id, delivery.vehicleId),
+          eq(vehiclesTable.dealerId, delivery.dealerId),
+        ),
+      );
     if (delivery.bookingId) {
       await db
         .update(bookingsTable)
         .set({ status: "converted" })
-        .where(eq(bookingsTable.id, delivery.bookingId));
+        .where(
+          and(
+            eq(bookingsTable.id, delivery.bookingId),
+            eq(bookingsTable.dealerId, delivery.dealerId),
+          ),
+        );
     }
     const [before] = await db
       .select()
       .from(dealsTable)
-      .where(eq(dealsTable.id, delivery.dealId));
+      .where(
+        and(
+          eq(dealsTable.id, delivery.dealId),
+          eq(dealsTable.dealerId, delivery.dealerId),
+        ),
+      );
     if (before && before.stage !== "delivered") {
       const [after] = await db
         .update(dealsTable)
         .set({ stage: "delivered" })
-        .where(eq(dealsTable.id, delivery.dealId))
+        .where(
+          and(
+            eq(dealsTable.id, delivery.dealId),
+            eq(dealsTable.dealerId, delivery.dealerId),
+          ),
+        )
         .returning();
       if (after) onDealStageChanged(before, after);
     }
@@ -432,13 +506,14 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       await enqueueEmail({
         template: "feedback_request",
         to: email,
+        dealerId: delivery.dealerId,
         customerId: delivery.customerId,
-        data: { name, vehicle: await vehicleLabelFor(delivery.vehicleId) },
+        data: { name, vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId) },
       });
     })().catch((err) => logger.error({ err }, "feedback email failed"));
   }
 
-  res.json(AdvanceDeliveryResponse.parse((await enrich([updated!]))[0]));
+  res.json(AdvanceDeliveryResponse.parse((await enrich([updated!], activeDealerId(res)))[0]));
 });
 
 router.patch("/deliveries/:id/pdi", async (req, res): Promise<void> => {
@@ -455,13 +530,18 @@ router.patch("/deliveries/:id/pdi", async (req, res): Promise<void> => {
   const [row] = await db
     .update(deliveriesTable)
     .set({ pdiItems: parsed.data.items })
-    .where(eq(deliveriesTable.id, params.data.id))
+    .where(
+      and(
+        eq(deliveriesTable.id, params.data.id),
+        eq(deliveriesTable.dealerId, activeDealerId(res)),
+      ),
+    )
     .returning();
   if (!row) {
     res.status(404).json({ error: "Delivery not found" });
     return;
   }
-  res.json(UpdateDeliveryPdiResponse.parse((await enrich([row]))[0]));
+  res.json(UpdateDeliveryPdiResponse.parse((await enrich([row], activeDealerId(res)))[0]));
 });
 
 router.get("/deliveries/:id/invoice.pdf", async (req, res): Promise<void> => {
@@ -470,7 +550,7 @@ router.get("/deliveries/:id/invoice.pdf", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const delivery = await loadDelivery(params.data.id);
+  const delivery = await loadDelivery(params.data.id, activeDealerId(res));
   if (!delivery) {
     res.status(404).json({ error: "Delivery not found" });
     return;
@@ -482,7 +562,12 @@ router.get("/deliveries/:id/invoice.pdf", async (req, res): Promise<void> => {
   const [invoice] = await db
     .select()
     .from(invoicesTable)
-    .where(eq(invoicesTable.id, delivery.invoiceId));
+    .where(
+      and(
+        eq(invoicesTable.id, delivery.invoiceId),
+        eq(invoicesTable.dealerId, delivery.dealerId),
+      ),
+    );
   if (!invoice) {
     res.status(404).json({ error: "Invoice not found" });
     return;
@@ -490,7 +575,12 @@ router.get("/deliveries/:id/invoice.pdf", async (req, res): Promise<void> => {
   const [vehicle] = await db
     .select()
     .from(vehiclesTable)
-    .where(eq(vehiclesTable.id, delivery.vehicleId));
+    .where(
+      and(
+        eq(vehiclesTable.id, delivery.vehicleId),
+        eq(vehiclesTable.dealerId, delivery.dealerId),
+      ),
+    );
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
@@ -588,8 +678,14 @@ router.get("/delivery-advisors", async (_req, res): Promise<void> => {
       email: usersTable.email,
     })
     .from(usersTable)
-    .innerJoin(rolesTable, eq(usersTable.roleId, rolesTable.id))
-    .where(eq(rolesTable.name, "Delivery Advisor"));
+    .innerJoin(dealerUsersTable, eq(dealerUsersTable.userId, usersTable.id))
+    .innerJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
+    .where(
+      and(
+        eq(dealerUsersTable.dealerId, activeDealerId(res)),
+        eq(rolesTable.name, "Delivery Advisor"),
+      ),
+    );
   res.json(
     ListDeliveryAdvisorsResponse.parse(
       rows.map((r) => ({
