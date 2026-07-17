@@ -14,4 +14,5 @@ export const LeadChannel = {
   social: 'social',
   mobile: 'mobile',
   walkin: 'walkin',
+  email: 'email',
 } as const;

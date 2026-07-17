@@ -17,4 +17,5 @@ export const LeadInputSource = {
   instagram: 'instagram',
   whatsapp: 'whatsapp',
   referral: 'referral',
+  gmail: 'gmail',
 } as const;

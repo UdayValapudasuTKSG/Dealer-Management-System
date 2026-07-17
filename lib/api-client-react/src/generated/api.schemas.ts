@@ -674,6 +674,7 @@ export const LeadChannel = {
   social: 'social',
   mobile: 'mobile',
   walkin: 'walkin',
+  email: 'email',
 } as const;
 
 export type LeadSource = typeof LeadSource[keyof typeof LeadSource];
@@ -687,6 +688,7 @@ export const LeadSource = {
   instagram: 'instagram',
   whatsapp: 'whatsapp',
   referral: 'referral',
+  gmail: 'gmail',
 } as const;
 
 export type LeadPriority = typeof LeadPriority[keyof typeof LeadPriority];
@@ -822,6 +824,7 @@ export const LeadInputChannel = {
   social: 'social',
   mobile: 'mobile',
   walkin: 'walkin',
+  email: 'email',
 } as const;
 
 export type LeadInputSource = typeof LeadInputSource[keyof typeof LeadInputSource];
@@ -835,6 +838,7 @@ export const LeadInputSource = {
   instagram: 'instagram',
   whatsapp: 'whatsapp',
   referral: 'referral',
+  gmail: 'gmail',
 } as const;
 
 export type LeadInputPriority = typeof LeadInputPriority[keyof typeof LeadInputPriority];
@@ -906,6 +910,7 @@ export const LeadUpdateChannel = {
   social: 'social',
   mobile: 'mobile',
   walkin: 'walkin',
+  email: 'email',
 } as const;
 
 export type LeadUpdateSource = typeof LeadUpdateSource[keyof typeof LeadUpdateSource];
@@ -919,6 +924,7 @@ export const LeadUpdateSource = {
   instagram: 'instagram',
   whatsapp: 'whatsapp',
   referral: 'referral',
+  gmail: 'gmail',
 } as const;
 
 export type LeadUpdatePriority = typeof LeadUpdatePriority[keyof typeof LeadUpdatePriority];
@@ -1055,6 +1061,7 @@ export const EnquiryInputSource = {
   instagram: 'instagram',
   whatsapp: 'whatsapp',
   referral: 'referral',
+  gmail: 'gmail',
 } as const;
 
 export interface EnquiryInput {

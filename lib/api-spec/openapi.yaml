@@ -4085,8 +4085,8 @@ components:
         name: { type: string }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
-        channel: { type: string, enum: [web, social, mobile, walkin] }
-        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral] }
+        channel: { type: string, enum: [web, social, mobile, walkin, email] }
+        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral, gmail] }
         priority: { type: string, enum: [high, medium, low] }
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
@@ -4129,8 +4129,8 @@ components:
         name: { type: string, minLength: 1 }
         email: { type: string }
         phone: { type: string }
-        channel: { type: string, enum: [web, social, mobile, walkin] }
-        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral] }
+        channel: { type: string, enum: [web, social, mobile, walkin, email] }
+        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral, gmail] }
         priority: { type: string, enum: [high, medium, low] }
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
@@ -4152,8 +4152,8 @@ components:
         name: { type: string, minLength: 1 }
         email: { type: string }
         phone: { type: string }
-        channel: { type: string, enum: [web, social, mobile, walkin] }
-        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral] }
+        channel: { type: string, enum: [web, social, mobile, walkin, email] }
+        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral, gmail] }
         priority: { type: string, enum: [high, medium, low] }
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
@@ -4206,7 +4206,7 @@ components:
         name: { type: string, minLength: 1 }
         email: { type: string }
         phone: { type: string }
-        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral] }
+        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral, gmail] }
         vehicleId: { type: integer }
         vehicleName: { type: string }
         variant: { type: string }
