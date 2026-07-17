@@ -9,6 +9,7 @@ import {
   dealerUsersTable,
   timelineEventsTable,
   emailLogsTable,
+  whatsappMessagesTable,
   type Lead,
 } from "@workspace/db";
 import {
@@ -37,6 +38,11 @@ import {
   GetLeadQuoteParams,
   GetLeadQuoteResponse,
   DownloadLeadQuotePdfParams,
+  GetLeadWhatsappThreadParams,
+  GetLeadWhatsappThreadResponse,
+  SendLeadWhatsappReplyParams,
+  SendLeadWhatsappReplyBody,
+  SendLeadWhatsappReplyResponse,
 } from "@workspace/api-zod";
 import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
 import { autoAssignLead } from "../lib/lead-assignment";
@@ -48,6 +54,7 @@ import {
   testDriveCalendarFields,
 } from "../lib/calendar";
 import { buildQuotePdf } from "../lib/quote-pdf";
+import { sendWhatsappText, whatsappConfig } from "../lib/whatsapp";
 
 const router: IRouter = Router();
 
@@ -275,6 +282,170 @@ router.post("/leads/:id/notes", async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(CreateLeadNoteResponse.parse(event));
+});
+
+const REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+const waDigits = (s: string): string => s.replace(/\D/g, "");
+
+/** Fetch the lead's WhatsApp transcript (by lead id, plus phone fallback). */
+async function leadWhatsappMessages(lead: Lead) {
+  const rows = await db
+    .select()
+    .from(whatsappMessagesTable)
+    .where(eq(whatsappMessagesTable.leadId, lead.id))
+    .orderBy(whatsappMessagesTable.createdAt, whatsappMessagesTable.id);
+  return rows;
+}
+
+function replyWindow(rows: { direction: string; createdAt: Date }[]): {
+  open: boolean;
+  expiresAt: Date | null;
+} {
+  const lastInbound = [...rows]
+    .reverse()
+    .find((r) => r.direction === "in");
+  if (!lastInbound) return { open: false, expiresAt: null };
+  const expiresAt = new Date(lastInbound.createdAt.getTime() + REPLY_WINDOW_MS);
+  return { open: expiresAt.getTime() > Date.now(), expiresAt };
+}
+
+router.get("/leads/:id/whatsapp", async (req, res): Promise<void> => {
+  const params = GetLeadWhatsappThreadParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    );
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const rows = await leadWhatsappMessages(lead);
+  const window = replyWindow(rows);
+  const configured = !!whatsappConfig();
+  let blocked: string | null = null;
+  if (rows.length === 0) blocked = "No WhatsApp conversation on this lead yet.";
+  else if (!configured)
+    blocked = "WhatsApp sending is not configured for this dealership.";
+  else if (!window.open)
+    blocked =
+      "The 24-hour reply window has closed. It reopens when the customer messages again.";
+
+  res.json(
+    GetLeadWhatsappThreadResponse.parse({
+      messages: rows.map((r) => ({
+        id: r.id,
+        direction: r.direction,
+        body: r.body,
+        actor: r.actor,
+        createdAt: r.createdAt,
+      })),
+      canReply: rows.length > 0 && configured && window.open,
+      replyBlockedReason: blocked,
+      windowExpiresAt: window.expiresAt,
+    }),
+  );
+});
+
+router.post("/leads/:id/whatsapp", async (req, res): Promise<void> => {
+  const params = SendLeadWhatsappReplyParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = SendLeadWhatsappReplyBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    );
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const rows = await leadWhatsappMessages(lead);
+  // Reply to the number the customer actually chats from (transcript phone),
+  // falling back to the lead's stored mobile.
+  const to = rows.length > 0 ? rows[rows.length - 1]!.phone : waDigits(lead.phone ?? "");
+  if (!to) {
+    res
+      .status(422)
+      .json({ error: "This lead has no WhatsApp number to reply to." });
+    return;
+  }
+  const cfg = whatsappConfig();
+  if (!cfg) {
+    res.status(422).json({
+      error: "WhatsApp sending is not configured for this dealership.",
+    });
+    return;
+  }
+  const window = replyWindow(rows);
+  if (!window.open) {
+    res.status(422).json({
+      error:
+        "The 24-hour reply window has closed. It reopens when the customer messages again.",
+    });
+    return;
+  }
+
+  const actor = actorName(res);
+  try {
+    await sendWhatsappText(cfg, to, body.data.text);
+  } catch {
+    res
+      .status(502)
+      .json({ error: "WhatsApp could not deliver the message. Try again." });
+    return;
+  }
+
+  const [saved] = await db
+    .insert(whatsappMessagesTable)
+    .values({
+      dealerId: lead.dealerId,
+      leadId: lead.id,
+      phone: to,
+      direction: "out",
+      body: body.data.text,
+      actor,
+    })
+    .returning();
+
+  await logLeadEvent(
+    lead,
+    "whatsapp_message",
+    `WhatsApp reply sent to ${lead.name}`,
+    body.data.text,
+    actor,
+  );
+
+  res.status(201).json(
+    SendLeadWhatsappReplyResponse.parse({
+      id: saved!.id,
+      direction: saved!.direction,
+      body: saved!.body,
+      actor: saved!.actor,
+      createdAt: saved!.createdAt,
+    }),
+  );
 });
 
 /** Quote metadata shared by the info + PDF routes. */

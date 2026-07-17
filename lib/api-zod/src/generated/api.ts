@@ -1580,6 +1580,51 @@ export const CreateLeadNoteResponse = zod.object({
 
 
 /**
+ * @summary WhatsApp conversation transcript for this lead
+ */
+export const GetLeadWhatsappThreadParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLeadWhatsappThreadResponse = zod.object({
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "direction": zod.enum(['in', 'out']),
+  "body": zod.string(),
+  "actor": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "canReply": zod.boolean(),
+  "replyBlockedReason": zod.string().nullish(),
+  "windowExpiresAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Send a staff WhatsApp reply to this lead (24h service window)
+ */
+export const SendLeadWhatsappReplyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const sendLeadWhatsappReplyBodyTextMax = 2000;
+
+
+
+export const SendLeadWhatsappReplyBody = zod.object({
+  "text": zod.string().min(1).max(sendLeadWhatsappReplyBodyTextMax)
+})
+
+export const SendLeadWhatsappReplyResponse = zod.object({
+  "id": zod.number(),
+  "direction": zod.enum(['in', 'out']),
+  "body": zod.string(),
+  "actor": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Quotation metadata for this lead (derived from inventory + email log)
  */
 export const GetLeadQuoteParams = zod.object({

@@ -47,6 +47,7 @@ import {
   CreateRecordDialog,
   type FieldDef,
 } from "@/components/create-record-dialog";
+import { WhatsappPanel } from "@/components/lead/whatsapp-panel";
 import { useAuthz } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -424,7 +425,8 @@ const TABS = [
   { key: "files", label: "Quotes & Files" },
   { key: "activity", label: "Activity" },
 ] as const;
-type Tab = (typeof TABS)[number]["key"];
+const WHATSAPP_TAB = { key: "whatsapp", label: "WhatsApp" } as const;
+type Tab = (typeof TABS)[number]["key"] | typeof WHATSAPP_TAB.key;
 
 function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
   return [
@@ -829,7 +831,10 @@ export default function LeadDetail() {
         {/* Main column */}
         <div className="rounded-2xl border border-white/10 bg-foreground/[0.02]">
           <div className="flex items-center gap-1 border-b border-white/10 px-4 pt-3">
-            {TABS.map((t) => (
+            {(lead.source === "whatsapp"
+              ? [...TABS, WHATSAPP_TAB]
+              : [...TABS]
+            ).map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
@@ -1383,6 +1388,10 @@ export default function LeadDetail() {
                     </div>
                   )}
                 </div>
+              )}
+
+              {tab === "whatsapp" && (
+                <WhatsappPanel leadId={lead.id} canReply={canEdit} />
               )}
 
               {tab === "activity" && (

@@ -1151,6 +1151,70 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /leads/{id}/whatsapp:
+    get:
+      operationId: getLeadWhatsappThread
+      tags: [leads]
+      summary: WhatsApp conversation transcript for this lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Conversation thread
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappThread"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: sendLeadWhatsappReply
+      tags: [leads]
+      summary: Send a staff WhatsApp reply to this lead (24h service window)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WhatsappReplyInput"
+      responses:
+        "201":
+          description: Reply sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappMessage"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Cannot send (no channel config, no phone, or 24h window closed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: WhatsApp send failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /leads/{id}/quote:
     get:
       operationId: getLeadQuote
@@ -4450,6 +4514,31 @@ components:
         description: { type: ["string", "null"] }
         address: { type: ["string", "null"] }
     LeadNoteInput:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 2000 }
+    WhatsappMessage:
+      type: object
+      required: [id, direction, body, createdAt]
+      properties:
+        id: { type: integer }
+        direction: { type: string, enum: [in, out] }
+        body: { type: string }
+        actor: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    WhatsappThread:
+      type: object
+      required: [messages, canReply]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/WhatsappMessage"
+        canReply: { type: boolean }
+        replyBlockedReason: { type: ["string", "null"] }
+        windowExpiresAt: { type: ["string", "null"], format: date-time }
+    WhatsappReplyInput:
       type: object
       required: [text]
       properties:

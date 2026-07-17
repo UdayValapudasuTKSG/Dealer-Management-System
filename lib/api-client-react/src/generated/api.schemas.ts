@@ -1131,6 +1131,40 @@ export interface LeadNoteInput {
   text: string;
 }
 
+export type WhatsappMessageDirection = typeof WhatsappMessageDirection[keyof typeof WhatsappMessageDirection];
+
+
+export const WhatsappMessageDirection = {
+  in: 'in',
+  out: 'out',
+} as const;
+
+export interface WhatsappMessage {
+  id: number;
+  direction: WhatsappMessageDirection;
+  body: string;
+  /** @nullable */
+  actor?: string | null;
+  createdAt: string;
+}
+
+export interface WhatsappThread {
+  messages: WhatsappMessage[];
+  canReply: boolean;
+  /** @nullable */
+  replyBlockedReason?: string | null;
+  /** @nullable */
+  windowExpiresAt?: string | null;
+}
+
+export interface WhatsappReplyInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  text: string;
+}
+
 export interface LeadQuoteInfo {
   available: boolean;
   /** @nullable */

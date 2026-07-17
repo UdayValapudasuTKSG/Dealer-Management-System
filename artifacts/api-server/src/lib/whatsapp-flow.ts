@@ -15,6 +15,11 @@ import {
 } from "./lead-intake";
 import { defaultDealerId } from "./tenancy";
 import type { WhatsappListRow, WhatsappTransport } from "./whatsapp";
+import {
+  linkWhatsappMessagesToLead,
+  recordWhatsappMessage,
+  recordingTransport,
+} from "./whatsapp-log";
 import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -244,7 +249,7 @@ async function completeFlow(
     noteParts.push(`Interested in: ${freeTextAnswer}`);
   noteParts.push("Captured by the AURA WhatsApp concierge bot.");
 
-  await createInboundLead({
+  const lead = await createInboundLead({
     dealerId,
     name,
     phone: mobile,
@@ -264,6 +269,8 @@ async function completeFlow(
       ? `Thanks ${firstName}! We've noted your interest in the ${vehicle.label}. One of our advisors will contact you shortly on ${mobile}.`
       : `Thanks ${firstName}! We've logged your enquiry and one of our advisors will contact you shortly on ${mobile}.`,
   );
+  // Link after the confirmation send so it lands in the transcript too.
+  await linkWhatsappMessagesToLead(convo.phone, lead);
 }
 
 /** Open-lead repeat message: append to the file instead of restarting. */
@@ -304,6 +311,9 @@ async function appendToOpenLead(
     msg.from,
     "Thanks — we've noted your message and added it to your file. Your advisor will follow up shortly.",
   );
+  // Link after the ack send so both the inbound message and the ack land
+  // in the transcript.
+  await linkWhatsappMessagesToLead(msg.from, lead);
 }
 
 /**
@@ -312,12 +322,19 @@ async function appendToOpenLead(
  * logged and the webhook still 200s.
  */
 export async function handleWhatsappMessage(
-  t: WhatsappTransport,
+  rawTransport: WhatsappTransport,
   msg: InboundWhatsappMessage,
 ): Promise<void> {
   const phone = msg.from;
+  const t = recordingTransport(rawTransport);
   try {
     const dealerId = await defaultDealerId();
+    await recordWhatsappMessage({
+      phone,
+      direction: "in",
+      body: msg.text || msg.replyTitle || "",
+      dealerId,
+    });
     const convo = await activeConversation(phone);
 
     if (!convo) {
@@ -441,18 +458,25 @@ export async function handleWhatsappMessage(
  * inventory). Mirrors the original Twilio webhook behavior. Never throws.
  */
 export async function handleWhatsappOneShot(
-  t: WhatsappTransport,
+  rawTransport: WhatsappTransport,
   msg: InboundWhatsappMessage,
 ): Promise<void> {
+  const t = recordingTransport(rawTransport);
   try {
     const dealerId = await defaultDealerId();
+    await recordWhatsappMessage({
+      phone: msg.from,
+      direction: "in",
+      body: msg.text || msg.replyTitle || "",
+      dealerId,
+    });
     const existing = await findOpenLeadByPhone(dealerId, msg.from);
     if (existing) {
       await appendToOpenLead(t, existing, msg);
       return;
     }
     const body = (msg.text ?? msg.replyTitle ?? "").trim();
-    await createInboundLead({
+    const lead = await createInboundLead({
       dealerId,
       name: msg.profileName || `WhatsApp +${digits(msg.from)}`,
       phone: `+${digits(msg.from)}`,
@@ -467,6 +491,8 @@ export async function handleWhatsappOneShot(
       msg.from,
       "Thank you for contacting AURA Motors. We've received your message and one of our advisors will be in touch shortly.",
     );
+    // Link after the ack send so it lands in the transcript too.
+    await linkWhatsappMessagesToLead(msg.from, lead);
   } catch (err) {
     logger.error({ err, phone: msg.from }, "WhatsApp one-shot intake failed");
   }
