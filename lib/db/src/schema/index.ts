@@ -29,5 +29,6 @@ export * from "./tasks";
 export * from "./commNotes";
 export * from "./bookings";
 export * from "./webhookEvents";
+export * from "./whatsappConversations";
 export * from "./deliveries";
 export * from "./dealers";

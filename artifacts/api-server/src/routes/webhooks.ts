@@ -14,6 +14,17 @@ import {
   matchVehicleByText,
 } from "../lib/lead-intake";
 import { defaultDealerId } from "../lib/tenancy";
+import {
+  captureTransport,
+  metaTransport,
+  whatsappConfig,
+  whatsappProvider,
+} from "../lib/whatsapp";
+import {
+  handleWhatsappMessage,
+  handleWhatsappOneShot,
+  type InboundWhatsappMessage,
+} from "../lib/whatsapp-flow";
 
 const router: IRouter = Router();
 
@@ -208,6 +219,139 @@ router.post("/webhooks/meta", async (req, res): Promise<void> => {
 });
 
 // ---------------------------------------------------------------------------
+// Meta WhatsApp Business Platform (Cloud API) webhook — guided lead-capture
+// bot. Parallel first-party channel; the Twilio webhook below stays as-is.
+// ---------------------------------------------------------------------------
+
+// Verification handshake (same contract as the Lead Ads webhook).
+router.get("/webhooks/whatsapp", (req, res): void => {
+  const cfg = whatsappConfig();
+  if (!cfg) {
+    res.status(503).json({ error: "WhatsApp webhook is not configured" });
+    return;
+  }
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+  if (mode === "subscribe" && token === cfg.verifyToken && typeof challenge === "string") {
+    res.status(200).type("text/plain").send(challenge);
+    return;
+  }
+  res.status(403).json({ error: "Verification failed" });
+});
+
+type WhatsappWebhookMessage = {
+  id?: string;
+  from?: string;
+  type?: string;
+  text?: { body?: string };
+  interactive?: {
+    type?: string;
+    button_reply?: { id?: string; title?: string };
+    list_reply?: { id?: string; title?: string };
+  };
+  button?: { text?: string };
+};
+
+// Receiver. Mounted with express.raw() (see app.ts) so the X-Hub-Signature-256
+// can be verified over the exact bytes Meta sent.
+router.post("/webhooks/whatsapp", async (req, res): Promise<void> => {
+  const cfg = whatsappConfig();
+  if (!cfg) {
+    res.status(503).json({ error: "WhatsApp webhook is not configured" });
+    return;
+  }
+  const raw: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+  const signature = req.get("x-hub-signature-256");
+  if (!verifyMetaSignature(raw, signature ?? undefined, cfg.appSecret)) {
+    req.log.warn("WhatsApp webhook rejected: bad signature");
+    res.status(403).json({ error: "Invalid signature" });
+    return;
+  }
+
+  let payload: {
+    object?: string;
+    entry?: {
+      changes?: {
+        field?: string;
+        value?: {
+          messages?: WhatsappWebhookMessage[];
+          contacts?: { wa_id?: string; profile?: { name?: string } }[];
+        };
+      }[];
+    }[];
+  };
+  try {
+    payload = JSON.parse(raw.toString("utf8"));
+  } catch {
+    res.status(400).json({ error: "Invalid JSON" });
+    return;
+  }
+
+  const inbound: InboundWhatsappMessage[] = [];
+  const messageIds: string[] = [];
+  for (const entry of payload.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      if (change.field !== "messages") continue;
+      const contacts = change.value?.contacts ?? [];
+      for (const m of change.value?.messages ?? []) {
+        if (!m.from || !m.id) continue;
+        const profile =
+          contacts.find((c) => c.wa_id === m.from)?.profile?.name ?? "";
+        const buttonReply = m.interactive?.button_reply;
+        const listReply = m.interactive?.list_reply;
+        const reply = listReply ?? buttonReply ?? null;
+        inbound.push({
+          from: m.from,
+          profileName: profile,
+          text: m.type === "text" ? (m.text?.body ?? "").trim() || null : null,
+          replyId: reply?.id ?? null,
+          replyTitle: reply?.title ?? null,
+        });
+        messageIds.push(m.id);
+      }
+    }
+  }
+
+  // Acknowledge fast; Meta retries on non-200.
+  res.status(200).json({ received: inbound.length });
+
+  for (let i = 0; i < inbound.length; i++) {
+    const msg = inbound[i]!;
+    const messageId = messageIds[i]!;
+    try {
+      // Idempotency: Meta redelivers on timeout/retry.
+      const [seen] = await db
+        .select()
+        .from(webhookEventsTable)
+        .where(
+          and(
+            eq(webhookEventsTable.channel, "meta_whatsapp"),
+            eq(webhookEventsTable.externalId, messageId),
+          ),
+        );
+      if (seen) continue;
+      await db.insert(webhookEventsTable).values({
+        channel: "meta_whatsapp",
+        externalId: messageId,
+      });
+      const transport = metaTransport(cfg);
+      if (whatsappProvider() === "meta") {
+        await handleWhatsappMessage(transport, msg);
+      } else {
+        // Twilio is the guided-bot provider; Meta falls back to one-shot intake.
+        await handleWhatsappOneShot(transport, msg);
+      }
+    } catch (err) {
+      logger.error(
+        { err, messageId },
+        "Failed to process WhatsApp Cloud API message",
+      );
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Twilio WhatsApp inbound-message webhook
 // ---------------------------------------------------------------------------
 
@@ -311,6 +455,33 @@ router.post("/webhooks/twilio/whatsapp", async (req, res): Promise<void> => {
 
     const dealerId = await defaultDealerId();
 
+    // Guided-bot mode: when Twilio is the selected WhatsApp provider, the
+    // shared conversation engine drives the reply (numbered text menus in
+    // place of Meta's interactive buttons/lists), returned as TwiML.
+    if (whatsappProvider() === "twilio") {
+      const { transport, messages } = captureTransport();
+      await handleWhatsappMessage(transport, {
+        from: digits(phone),
+        profileName,
+        text: body || null,
+        replyId: null,
+        replyTitle: null,
+      });
+      if (messageSid) {
+        await db.insert(webhookEventsTable).values({
+          channel: "twilio_whatsapp",
+          externalId: messageSid,
+        });
+      }
+      twiml(
+        messages.length
+          ? messages.join("\n\n")
+          : "Thank you for contacting AURA Motors. One of our advisors will be in touch shortly.",
+      );
+      return;
+    }
+
+    // Legacy one-shot intake (Meta is the guided-bot provider).
     // Dedupe against open leads by phone number (digit-suffix match).
     const needle = digits(phone);
     const candidates = await db

@@ -44,9 +44,11 @@ const jsonParser = express.json();
 const urlencodedParser = express.urlencoded({ extended: true });
 const isCopilotKit = (url: string): boolean =>
   url.startsWith("/api/copilotkit");
-// Meta webhook signature is HMAC over the exact raw bytes — keep the raw body.
+// Meta webhook signatures (Lead Ads + WhatsApp Cloud API) are HMAC over the
+// exact raw bytes — keep the raw body for those paths.
 const isMetaWebhook = (url: string): boolean =>
-  url.startsWith("/api/webhooks/meta");
+  url.startsWith("/api/webhooks/meta") ||
+  url.startsWith("/api/webhooks/whatsapp");
 const rawParser = express.raw({ type: "*/*", limit: "1mb" });
 
 app.use((req, res, next) => {

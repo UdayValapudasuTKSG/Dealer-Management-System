@@ -8,3 +8,5 @@ The api-server dev workflow itself runs `node --enable-source-maps ./dist/index.
 **Why:** `pkill -f "dist/index.mjs"` matched and killed the real workflow server (and the invoking bash, exit 143), causing a mystery FAILED workflow + 502s.
 
 **How to apply:** when cleaning up a headless test server, capture its PID at launch (`node dist/index.mjs & echo $!`) and `kill <pid>` — never pattern-kill on `dist/index.mjs`. Expect to restart the workflow if a pattern kill happened anyway.
+
+**/tmp is ephemeral across sessions:** test harness scripts saved to `/tmp` (mock servers, signed-webhook drivers) can vanish between agent sessions — expect to recreate them rather than re-run them; keep the recipe short enough to rewrite from memory/transcript.
