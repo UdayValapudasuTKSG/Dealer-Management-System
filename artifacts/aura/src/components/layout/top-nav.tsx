@@ -28,7 +28,8 @@ const CLUSTERS: Cluster[] = [
     icon: "nav/intelligence.png",
     items: [
       { name: "Command Center", href: "/command-center", module: "" },
-      { name: "Journey", href: "/journey", module: "dashboard" },
+      // Shelved for now (page + route kept):
+      // { name: "Journey", href: "/journey", module: "dashboard" },
       { name: "Reports", href: "/reports", module: "" },
       { name: "Approvals", href: "/approvals", module: "approvals" },
       { name: "Tasks", href: "/tasks", module: "" },
@@ -39,8 +40,9 @@ const CLUSTERS: Cluster[] = [
     icon: "nav/sales.png",
     items: [
       { name: "Pipeline", href: "/pipeline", module: "leads" },
-      { name: "Deals", href: "/deals", module: "deals" },
-      { name: "F&I", href: "/finance", module: "finance" },
+      // Shelved for now (page + route kept):
+      // { name: "Deals", href: "/deals", module: "deals" },
+      { name: "Finance", href: "/finance", module: "finance" },
     ],
   },
   {

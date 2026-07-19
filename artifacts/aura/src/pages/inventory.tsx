@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -48,7 +48,9 @@ import {
   Pencil,
   Plus,
   X,
+  ImagePlus,
 } from "lucide-react";
+import { useUpload } from "@workspace/object-storage-web";
 import { motion, AnimatePresence } from "framer-motion";
 
 function powertrainLabel(pt: string) {
@@ -58,6 +60,14 @@ function powertrainLabel(pt: string) {
 function img(url?: string | null) {
   if (!url) return undefined;
   return `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`;
+}
+
+/** Gallery entries can be uploaded objects (`/objects/...`, served through
+ *  the API's storage route) or regular asset paths (`/vehicles/...`). */
+function galleryImg(url?: string | null) {
+  if (!url) return undefined;
+  if (url.startsWith("/objects/")) return `/api/storage${url}`;
+  return img(url);
 }
 
 function powertrainIcon(pt: string) {
@@ -533,15 +543,84 @@ function VehicleDetail({
 }) {
   const [mode, setMode] = useState<"photo" | "spin">("photo");
   const [reserving, setReserving] = useState(false);
+  const [photoIdx, setPhotoIdx] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { toast } = useToast();
   const updateVehicle = useUpdateVehicle();
+  const { uploadFile } = useUpload();
+
+  const gallery = useMemo(() => {
+    if (!vehicle) return [] as string[];
+    const all = [vehicle.imageUrl, ...(vehicle.images ?? [])].filter(
+      (u): u is string => !!u,
+    );
+    return [...new Set(all)];
+  }, [vehicle]);
+  const currentPhoto =
+    gallery[Math.min(photoIdx, Math.max(gallery.length - 1, 0))];
+
+  useEffect(() => {
+    setPhotoIdx(0);
+  }, [vehicle?.id]);
+
+  async function handleFiles(files: FileList | null) {
+    if (!vehicle || !files || files.length === 0) return;
+    setUploading(true);
+    const prevCount = gallery.length;
+    try {
+      const paths: string[] = [];
+      for (const file of Array.from(files)) {
+        const resp = await uploadFile(file);
+        if (!resp) throw new Error("Upload failed");
+        paths.push(resp.objectPath);
+      }
+      const updated = await updateVehicle.mutateAsync({
+        id: vehicle.id,
+        data: { images: [...(vehicle.images ?? []), ...paths] },
+      });
+      qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
+      onUpdated(updated);
+      setMode("photo");
+      setPhotoIdx(prevCount);
+      toast({
+        title: "Photos added",
+        description: `${paths.length} photo${paths.length > 1 ? "s" : ""} added to the gallery.`,
+      });
+    } catch {
+      toast({
+        title: "Upload failed",
+        description: "Could not upload photos. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function removePhoto(path: string) {
+    if (!vehicle) return;
+    try {
+      const updated = await updateVehicle.mutateAsync({
+        id: vehicle.id,
+        data: { images: (vehicle.images ?? []).filter((p) => p !== path) },
+      });
+      qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
+      onUpdated(updated);
+      setPhotoIdx(0);
+      toast({ title: "Photo removed" });
+    } catch {
+      toast({ title: "Could not remove photo", variant: "destructive" });
+    }
+  }
 
   return (
     <Dialog open={!!vehicle} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="max-w-5xl w-[95vw] p-0 overflow-hidden border-white/10 bg-[#0b0b0b] gap-0"
+        className="max-w-5xl w-[95vw] p-0 overflow-hidden border-white/10 bg-background gap-0"
         onCloseAutoFocus={() => setMode("photo")}
       >
         {vehicle && (
@@ -551,11 +630,11 @@ function VehicleDetail({
               <AnimatePresence mode="wait">
                 {mode === "photo" ? (
                   <motion.img
-                    key="photo"
+                    key={currentPhoto ?? "photo"}
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    src={img(vehicle.imageUrl)}
+                    src={galleryImg(currentPhoto)}
                     alt={`${vehicle.make} ${vehicle.model}`}
                     className="absolute inset-0 w-full h-full object-cover"
                   />
@@ -580,6 +659,65 @@ function VehicleDetail({
                 )}
               </AnimatePresence>
               <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+
+              {/* Gallery thumbnails */}
+              {mode === "photo" && gallery.length > 1 && (
+                <div className="absolute bottom-16 left-4 right-4 flex gap-2 overflow-x-auto pb-1">
+                  {gallery.map((g, i) => (
+                    <div key={g} className="relative shrink-0 group/thumb">
+                      <button
+                        onClick={() => setPhotoIdx(i)}
+                        className={
+                          i === photoIdx
+                            ? "block w-16 h-11 rounded-lg overflow-hidden border border-primary ring-1 ring-primary"
+                            : "block w-16 h-11 rounded-lg overflow-hidden border border-white/20 opacity-70 hover:opacity-100 transition-opacity"
+                        }
+                      >
+                        <img
+                          src={galleryImg(g)}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                      {canEdit && (vehicle.images ?? []).includes(g) && (
+                        <button
+                          onClick={() => removePhoto(g)}
+                          className="absolute -top-1.5 -right-1.5 hidden group-hover/thumb:flex items-center justify-center w-4 h-4 rounded-full bg-black/80 border border-white/20 text-white hover:bg-primary"
+                          aria-label="Remove photo"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add photos (staff with inventory edit permission) */}
+              {canEdit && (
+                <div className="absolute bottom-4 right-4">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleFiles(e.target.files)}
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="flex items-center gap-2 rounded-full bg-black/60 backdrop-blur-md border border-white/10 px-4 h-9 text-xs font-medium text-white hover:bg-black/80 transition-colors disabled:opacity-60"
+                  >
+                    {uploading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ImagePlus className="w-4 h-4" />
+                    )}
+                    {uploading ? "Uploading…" : "Add photos"}
+                  </button>
+                </div>
+              )}
 
               {/* View toggle */}
               <div className="absolute bottom-4 left-4 flex items-center gap-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 p-1">
@@ -899,7 +1037,7 @@ function ReserveDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-md border-white/10 bg-[#0d0d0d]">
+      <DialogContent className="max-w-md border-white/10 bg-background">
         <DialogTitle className="text-2xl font-semibold tracking-tight">
           Reserve this vehicle
         </DialogTitle>

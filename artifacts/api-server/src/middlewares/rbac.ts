@@ -365,6 +365,10 @@ const AUTH_ONLY_SEGMENTS = new Set([
   "search",
   // team member profiles are viewable by every signed-in staff member
   "team",
+  // object storage: presigned upload URLs + object serving for any signed-in
+  // staff member; feature-level gating (e.g. inventory edit) happens in the UI
+  // and on the record mutation that stores the object path.
+  "storage",
 ]);
 
 export function routePermission(

@@ -7,6 +7,7 @@ import {
   whatsappConversationsTable,
   type WhatsappConversation,
 } from "@workspace/db";
+import { ensureAccountForLead } from "./accounts";
 import { notifyUser } from "./email";
 import {
   createInboundLead,
@@ -292,6 +293,9 @@ async function completeFlow(
     channelLabel: "WhatsApp",
     actor: "AURA WhatsApp Bot",
   });
+  // WhatsApp leads become accounts right away (matched by email/phone,
+  // created if none exists). Never throws.
+  lead.customerId = await ensureAccountForLead(lead, "whatsapp");
   await endConversation(convo.phone);
 
   const firstName = name.split(/\s+/)[0];
@@ -539,6 +543,8 @@ export async function handleWhatsappOneShot(
       channelLabel: "WhatsApp",
       actor: "WhatsApp",
     });
+    // WhatsApp leads become accounts right away. Never throws.
+    lead.customerId = await ensureAccountForLead(lead, "whatsapp");
     await t.sendText(
       msg.from,
       "Thank you for contacting AURA Motors. We've received your message and one of our advisors will be in touch shortly.",

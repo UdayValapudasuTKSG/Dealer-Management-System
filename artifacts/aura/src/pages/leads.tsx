@@ -28,7 +28,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Page } from "@/components/layout/page";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
-import { TestDriveBoard } from "@/components/pipeline/test-drive-board";
 import { VehicleCascade } from "@/components/vehicle-cascade";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -173,59 +172,20 @@ export default function Leads() {
 
   const [selectedStage, setSelectedStage] = useState<Stage>("test_drive");
   const activeIndex = STAGES.indexOf(selectedStage);
-  const [view, setView] = useState<"pipeline" | "test-drives">("pipeline");
   const [, navigate] = useLocation();
 
   const stageLeads = (leads ?? []).filter((l) => stageOf(l) === selectedStage);
 
-  const testDrives = useMemo(
-    () =>
-      (leads ?? [])
-        .filter((l) => l.testDriveAt)
-        .sort(
-          (a, b) =>
-            new Date(a.testDriveAt!).getTime() -
-            new Date(b.testDriveAt!).getTime(),
-        ),
-    [leads],
-  );
   const suggestions = useGetPipelineSuggestions({
     phase: STAGE_PHASE[selectedStage],
   });
 
   return (
     <Page className="space-y-5">
-      {/* Compact command row: view toggle + primary action. The top nav already
-          says where we are — no repeated page title eating vertical space. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1 rounded-full bg-foreground/[0.04] border border-white/10 p-1 w-fit">
-          {(
-            [
-              { key: "pipeline", label: "Pipeline" },
-              { key: "test-drives", label: `Test Drives${testDrives.length ? ` (${testDrives.length})` : ""}` },
-            ] as const
-          ).map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setView(t.key)}
-              className={cn(
-                "relative px-5 h-9 rounded-full text-xs font-semibold uppercase tracking-widest transition-colors",
-                view === t.key
-                  ? "text-white"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {view === t.key && (
-                <motion.span
-                  layoutId="pipeline-view-toggle"
-                  transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                  className="absolute inset-0 rounded-full bg-primary shadow-lg shadow-primary/30"
-                />
-              )}
-              <span className="relative z-10">{t.label}</span>
-            </button>
-          ))}
-        </div>
+      {/* Compact command row: primary action only. The top nav already says
+          where we are — no repeated page title eating vertical space. Test
+          drives live on the Test Drive stage of the rail below. */}
+      <div className="flex flex-wrap items-center justify-end gap-3">
           <CreateRecordDialog
             title="New Lead"
             description="Capture a prospect — AURA scores and routes it instantly."
@@ -323,10 +283,6 @@ export default function Leads() {
           />
       </div>
 
-      {view === "test-drives" ? (
-        <TestDriveBoard drives={testDrives} vehicles={vehicles ?? []} />
-      ) : (
-        <>
       {/* Stage rail — segmented stepper */}
       <div className="relative rounded-3xl bg-foreground/[0.03] border border-white/10 shadow-[0_18px_48px_-28px_rgba(0,0,0,0.6)] p-3 md:p-4">
         {/* Progress track */}
@@ -641,9 +597,6 @@ export default function Leads() {
           </div>
         </motion.div>
       </AnimatePresence>
-        </>
-      )}
-
     </Page>
   );
 }

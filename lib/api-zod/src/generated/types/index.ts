@@ -302,6 +302,8 @@ export * from './testEmailRequest';
 export * from './testEmailResult';
 export * from './timelineEvent';
 export * from './timelineEventDomain';
+export * from './uploadUrlRequest';
+export * from './uploadUrlResponse';
 export * from './vehicle';
 export * from './vehicleDocument';
 export * from './vehicleImportError';

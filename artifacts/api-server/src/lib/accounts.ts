@@ -9,16 +9,22 @@ import {
 import { logger } from "./logger";
 
 /**
- * Test-drive booked → the lead becomes an account.
+ * Promote a lead to an account (customer).
  *
  * Finds an existing account (customer) by email (case-insensitive) or phone
  * digits, otherwise creates a new one from the lead's contact details, then
  * links the lead via customerId and drops a timeline note. Never throws —
- * account creation must not fail the booking that triggered it.
+ * account creation must not fail the flow that triggered it.
+ *
+ * `source` controls the tag + timeline copy: "test_drive" (booking promoted
+ * the lead) or "whatsapp" (WhatsApp intake created the lead).
  *
  * Returns the linked customer id (or the existing one / null on failure).
  */
-export async function ensureAccountForLead(lead: Lead): Promise<number | null> {
+export async function ensureAccountForLead(
+  lead: Lead,
+  source: "test_drive" | "whatsapp" = "test_drive",
+): Promise<number | null> {
   if (lead.customerId) return lead.customerId;
 
   try {
@@ -61,7 +67,7 @@ export async function ensureAccountForLead(lead: Lead): Promise<number | null> {
           email: lead.email ?? null,
           phone: lead.phone ?? null,
           location: lead.preferredBranch ?? null,
-          tags: ["test-drive"],
+          tags: [source === "whatsapp" ? "whatsapp" : "test-drive"],
         })
         .returning();
       created = true;
@@ -81,9 +87,14 @@ export async function ensureAccountForLead(lead: Lead): Promise<number | null> {
       title: created
         ? `${lead.name} became an account`
         : `Lead linked to existing account`,
-      detail: created
-        ? "A new account was opened automatically when the test drive was booked."
-        : `Matched to existing account "${customer.name}" by contact details when the test drive was booked.`,
+      detail:
+        source === "whatsapp"
+          ? created
+            ? "A new account was opened automatically from the WhatsApp enquiry."
+            : `Matched to existing account "${customer.name}" by contact details from the WhatsApp enquiry.`
+          : created
+            ? "A new account was opened automatically when the test drive was booked."
+            : `Matched to existing account "${customer.name}" by contact details when the test drive was booked.`,
       actor: "AURA",
       isAgent: true,
       refType: "customer",

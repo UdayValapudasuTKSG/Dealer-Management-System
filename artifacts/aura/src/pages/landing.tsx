@@ -18,7 +18,8 @@ import { useListEnquiryVehicles } from "@workspace/api-client-react";
 
 const QUICK_LINKS = [
   { name: "Showroom", href: "/inventory" },
-  { name: "Deals", href: "/deals" },
+  // Shelved for now (page + route kept):
+  // { name: "Deals", href: "/deals" },
   { name: "Finance", href: "/finance" },
   { name: "Service", href: "/service" },
 ];

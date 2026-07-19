@@ -6,14 +6,14 @@ const ROUTE_MAP: Record<string, string> = {
   home: "/command-center",
   "command center": "/command-center",
   dashboard: "/command-center",
-  journey: "/journey",
+  // journey is shelved from the nav for now
   approvals: "/approvals",
   gates: "/approvals",
   inventory: "/inventory",
   showroom: "/inventory",
   pipeline: "/pipeline",
   leads: "/pipeline",
-  deals: "/deals",
+  // deals is shelved from the nav for now
   finance: "/finance",
   service: "/service",
   deliveries: "/deliveries",
@@ -37,7 +37,7 @@ const ROUTE_LABEL: Record<string, string> = {
   "/finance": "Finance",
   "/service": "Service",
   "/deliveries": "Deliveries",
-  "/customers": "Customers",
+  "/customers": "Accounts",
   "/gra": "GRA Filing",
 };
 

@@ -162,8 +162,7 @@ export default function Finance() {
   return (
     <Page className="space-y-5">
       <PageHeader
-        title="Finance &"
-        accent="Insurance"
+        title="Finance"
         subtitle="Credit applications, lender routing, invoicing and settlements."
         action={tab === "applications" ? newApplicationDialog : undefined}
       />
