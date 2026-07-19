@@ -54,9 +54,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const switchDealer = useCallback(
     (dealerId: number) => {
       localStorage.setItem(DEALER_STORAGE_KEY, String(dealerId));
-      // All cached data belongs to the previous dealer — drop everything.
-      queryClient.clear();
-      queryClient.invalidateQueries();
+      // All cached data belongs to the previous dealer. resetQueries (NOT
+      // clear) drops the data AND refetches every active query so mounted
+      // pages reload with the new X-Dealer-Id header — clear() alone leaves
+      // components showing the old dealer's data until a full page reload.
+      void queryClient.resetQueries();
     },
     [queryClient],
   );
