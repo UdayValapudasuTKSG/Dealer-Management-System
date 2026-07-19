@@ -25,8 +25,9 @@ import { logger } from "./logger";
 // ---------------------------------------------------------------------------
 // WhatsApp guided lead-capture bot — deterministic state machine, shared by
 // both channels (Meta Cloud API and Twilio) via a transport abstraction.
-// greet → name → mobile ("use this number") → vehicle (inventory pick with
-// free-text fallback) → lead created via shared intake.
+// greet → name → mobile ("use this number") → email ("skip" allowed) →
+// vehicle (inventory pick with free-text fallback) → lead created via
+// shared intake.
 //
 // Interactive transports (Meta) get native reply buttons and list messages;
 // text-only transports (Twilio/TwiML) get numbered menus — the presented
@@ -36,7 +37,9 @@ import { logger } from "./logger";
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // half-finished chats expire after 24h
 const USE_THIS_NUMBER_ID = "use_this_number";
+const SKIP_EMAIL_ID = "skip_email";
 const OTHER_VEHICLE_ID = "veh_other";
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const OPEN_EXCLUDED_PHASES = ["won", "lost"];
 
 const digits = (s: string): string => s.replace(/\D/g, "");
@@ -96,6 +99,7 @@ async function upsertConversation(
     step: string;
     name: string | null;
     mobile: string | null;
+    email: string | null;
     profileName: string | null;
     menu: string | null;
   }>,
@@ -190,6 +194,33 @@ async function promptMobile(
   );
 }
 
+async function promptEmail(
+  t: WhatsappTransport,
+  phone: string,
+  firstName: string,
+  retry: boolean,
+): Promise<void> {
+  await upsertConversation(phone, {
+    menu: JSON.stringify([SKIP_EMAIL_ID]),
+  });
+  if (t.interactive) {
+    await t.sendButtons(
+      phone,
+      retry
+        ? "That doesn't look like a valid email address. Type it again, or tap Skip."
+        : `Great, ${firstName}! What's your email address? We'll send your quotation there.\n\nType it below, or tap Skip.`,
+      [{ id: SKIP_EMAIL_ID, title: "Skip" }],
+    );
+    return;
+  }
+  await t.sendText(
+    phone,
+    retry
+      ? "That doesn't look like a valid email address. Type it again, or reply 1 to skip."
+      : `Great, ${firstName}! What's your email address? We'll send your quotation there.\n\nType it below, or reply 1 to skip.`,
+  );
+}
+
 async function promptVehicle(
   t: WhatsappTransport,
   dealerId: number,
@@ -253,6 +284,7 @@ async function completeFlow(
     dealerId,
     name,
     phone: mobile,
+    email: convo.email || null,
     channel: "social",
     source: "whatsapp",
     notes: noteParts.join("\n"),
@@ -388,13 +420,33 @@ export async function handleWhatsappMessage(
         await promptMobile(t, phone, (convo.name || "there").split(/\s+/)[0]!, true);
         return;
       }
-      await upsertConversation(phone, { step: "vehicle", mobile });
-      await promptVehicle(
+      await upsertConversation(phone, { step: "email", mobile });
+      await promptEmail(
         t,
-        dealerId,
         phone,
         (convo.name || "there").split(/\s+/)[0]!,
+        false,
       );
+      return;
+    }
+
+    if (convo.step === "email") {
+      const replyId = resolveMenuReply(convo, msg);
+      const firstName = (convo.name || "there").split(/\s+/)[0]!;
+      const raw = (msg.text ?? "").trim();
+      let email: string | null = null;
+      let skipped = false;
+      if (replyId === SKIP_EMAIL_ID || /^(skip|no|none)$/i.test(raw)) {
+        skipped = true;
+      } else if (EMAIL_RE.test(raw)) {
+        email = raw.toLowerCase();
+      }
+      if (!email && !skipped) {
+        await promptEmail(t, phone, firstName, true);
+        return;
+      }
+      await upsertConversation(phone, { step: "vehicle", email });
+      await promptVehicle(t, dealerId, phone, firstName);
       return;
     }
 
