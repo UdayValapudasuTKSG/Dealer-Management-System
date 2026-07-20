@@ -1011,6 +1011,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /leads/{id}/agent-brief:
+    get:
+      operationId: getLeadAgentBrief
+      tags: [leads]
+      summary: AI agent brief — next best actions and a draft follow-up for a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Agentic brief for the lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadAgentBrief"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: The agent service is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /leads/{id}/advance:
     post:
       operationId: advanceLeadStage
@@ -5833,6 +5863,19 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SearchGroup"
+
+    LeadAgentBrief:
+      type: object
+      required: [headline, riskLevel, stageGoal, actions, draftMessage]
+      properties:
+        headline: { type: string }
+        riskLevel: { type: string, enum: [low, medium, high] }
+        stageGoal: { type: string }
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PipelineSuggestionAction"
+        draftMessage: { type: string }
 
     PipelineSuggestionAction:
       type: object

@@ -112,6 +112,7 @@ import type {
   LeadAdvanceInput,
   LeadAdvanceUnmet,
   LeadAdvisor,
+  LeadAgentBrief,
   LeadDecisionInput,
   LeadInput,
   LeadNoteInput,
@@ -3231,6 +3232,83 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getAssignLeadMutationOptions(options));
     }
+
+export const getGetLeadAgentBriefUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/agent-brief`
+}
+
+/**
+ * @summary AI agent brief — next best actions and a draft follow-up for a lead
+ */
+export const getLeadAgentBrief = async (id: number, options?: RequestInit): Promise<LeadAgentBrief> => {
+
+  return customFetch<LeadAgentBrief>(getGetLeadAgentBriefUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLeadAgentBriefQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/agent-brief`
+    ] as const;
+    }
+
+
+export const getGetLeadAgentBriefQueryOptions = <TData = Awaited<ReturnType<typeof getLeadAgentBrief>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadAgentBrief>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLeadAgentBriefQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLeadAgentBrief>>> = ({ signal }) => getLeadAgentBrief(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLeadAgentBrief>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLeadAgentBriefQueryResult = NonNullable<Awaited<ReturnType<typeof getLeadAgentBrief>>>
+export type GetLeadAgentBriefQueryError = ErrorType<Error>
+
+
+/**
+ * @summary AI agent brief — next best actions and a draft follow-up for a lead
+ */
+
+export function useGetLeadAgentBrief<TData = Awaited<ReturnType<typeof getLeadAgentBrief>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadAgentBrief>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLeadAgentBriefQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getAdvanceLeadStageUrl = (id: number,) => {
 

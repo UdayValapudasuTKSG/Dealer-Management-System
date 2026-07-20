@@ -170,6 +170,8 @@ export * from './leadAdvanceInput';
 export * from './leadAdvanceInputToStage';
 export * from './leadAdvanceUnmet';
 export * from './leadAdvisor';
+export * from './leadAgentBrief';
+export * from './leadAgentBriefRiskLevel';
 export * from './leadAttachment';
 export * from './leadAvailability';
 export * from './leadChannel';

@@ -46,7 +46,10 @@ import {
   SendLeadWhatsappReplyParams,
   SendLeadWhatsappReplyBody,
   SendLeadWhatsappReplyResponse,
+  GetLeadAgentBriefParams,
+  GetLeadAgentBriefResponse,
 } from "@workspace/api-zod";
+import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
 import { autoAssignLead } from "../lib/lead-assignment";
 import { enqueueEmail, notifyUser } from "../lib/email";
@@ -1219,6 +1222,152 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
   }
 
   res.sendStatus(204);
+});
+
+// ---------------------------------------------------------------------------
+// AI agent brief — per-lead next best actions + draft follow-up
+// ---------------------------------------------------------------------------
+const BRIEF_STAGE_GOAL: Record<string, string> = {
+  aware: "make first contact within 24 hours and qualify interest",
+  consider: "log the first call, capture budget and financing preference",
+  engage: "book the test drive, qualify financing, and send the quotation",
+  negotiate: "secure the reservation fee and lock the selected model",
+  won: "allocate the unit, clear payment, and deliver flawlessly",
+  lost: "understand the loss and plan re-engagement",
+};
+
+router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
+  const params = GetLeadAgentBriefParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const dealerId = activeDealerId(res);
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(
+      and(eq(leadsTable.id, params.data.id), eq(leadsTable.dealerId, dealerId)),
+    );
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const [vehicle, deals, timeline] = await Promise.all([
+    lead.interestedVehicleId
+      ? db
+          .select()
+          .from(vehiclesTable)
+          .where(
+            and(
+              eq(vehiclesTable.id, lead.interestedVehicleId),
+              eq(vehiclesTable.dealerId, dealerId),
+            ),
+          )
+          .then((r) => r[0])
+      : Promise.resolve(undefined),
+    db
+      .select()
+      .from(dealsTable)
+      .where(and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, lead.id))),
+    db
+      .select()
+      .from(timelineEventsTable)
+      .where(
+        and(
+          eq(timelineEventsTable.dealerId, dealerId),
+          eq(timelineEventsTable.refType, "lead"),
+          eq(timelineEventsTable.refId, lead.id),
+          isNotNull(timelineEventsTable.refId),
+        ),
+      )
+      .orderBy(desc(timelineEventsTable.createdAt))
+      .limit(8),
+  ]);
+
+  const stageGoal = BRIEF_STAGE_GOAL[lead.phase] ?? "advance the relationship";
+  const facts = [
+    `Name: ${lead.name}; phase: ${lead.phase}; status: ${lead.status}; AI score: ${lead.aiScore}; priority: ${lead.priority}; channel: ${lead.channel}.`,
+    `Assigned to: ${lead.assignedTo ?? "UNASSIGNED"}.`,
+    `First contact logged: ${lead.contactedDate ? "yes" : "NO"}; test drive: ${lead.testDriveAt ? `booked ${lead.testDriveAt.toISOString().slice(0, 10)}` : "not booked"}.`,
+    `Financing qualified: ${lead.financingQualified ? "yes" : "no"}; budget/financing preference: ${lead.budgetFinancing ?? "unknown"}.`,
+    `Quotation sent: ${lead.quotationSent ? "yes" : "no"}; reservation fee paid: ${lead.reservationFeePaid ? "yes" : "no"}.`,
+    vehicle
+      ? `Interested vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} at ${vehicle.price}.`
+      : `No vehicle of interest recorded.`,
+    deals.length
+      ? `Linked deal stage: ${deals.map((d) => d.stage).join(", ")}.`
+      : `No deal opened yet.`,
+    lead.notes ? `Notes: ${lead.notes.slice(0, 300)}` : "",
+    timeline.length
+      ? `Recent activity: ${timeline.map((t) => t.title).join("; ")}.`
+      : "No recorded activity yet.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const prompt = [
+    `You are AURA, the agentic sales intelligence of an ultra-premium automotive dealership.`,
+    `Analyse this single lead. The current stage goal is to ${stageGoal}.`,
+    facts,
+    ``,
+    `Return ONLY a JSON object (no markdown) with exactly these keys:`,
+    `{`,
+    `  "headline": string,                       // one confident sentence on where this lead stands`,
+    `  "riskLevel": "low" | "medium" | "high",   // risk of losing this lead`,
+    `  "actions": [                              // 2 to 4 next best actions, most important first`,
+    `    { "title": string, "detail": string, "priority": "high" | "medium" | "low", "leadName": null }`,
+    `  ],`,
+    `  "draftMessage": string                    // a short, warm, ready-to-send follow-up message to the customer (no placeholders except their first name)`,
+    `}`,
+    `Ground every action in the facts above (missing checklist items first). Luxury-brand tone: warm, confident, concise.`,
+  ].join("\n");
+
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1200,
+      messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
+    });
+    const textBlock = message.content.find((b) => b.type === "text");
+    const raw = textBlock && textBlock.type === "text" ? textBlock.text : "";
+    const jsonStart = raw.indexOf("{");
+    const jsonEnd = raw.lastIndexOf("}");
+    if (jsonStart === -1 || jsonEnd === -1) {
+      req.log.error({ raw }, "Lead agent brief returned no JSON object");
+      res.status(502).json({ error: "The agent could not read this lead" });
+      return;
+    }
+    let candidate: Record<string, unknown>;
+    try {
+      candidate = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+    } catch {
+      req.log.error({ raw }, "Lead agent brief returned invalid JSON");
+      res.status(502).json({ error: "The agent could not read this lead" });
+      return;
+    }
+    const result = GetLeadAgentBriefResponse.safeParse({
+      headline: candidate.headline,
+      riskLevel: candidate.riskLevel,
+      stageGoal,
+      actions: candidate.actions,
+      draftMessage: candidate.draftMessage,
+    });
+    if (!result.success) {
+      req.log.error(
+        { issues: result.error.issues },
+        "Lead agent brief failed validation",
+      );
+      res.status(502).json({ error: "The agent returned an unexpected shape" });
+      return;
+    }
+    res.json(result.data);
+  } catch (err) {
+    req.log.error({ err }, "Lead agent brief LLM call failed");
+    res.status(502).json({ error: "The agent service is unavailable" });
+  }
 });
 
 export default router;

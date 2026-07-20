@@ -16,6 +16,7 @@ import {
 } from "@workspace/api-client-react";
 import type { Lead, LeadUpdate, Vehicle } from "@workspace/api-client-react";
 import { StageNav, type StageNavStage } from "@/components/lead/stage-nav";
+import { AgentBriefPanel } from "@/components/lead/agent-brief";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -850,6 +851,11 @@ export default function LeadDetail() {
         </div>
       </div>
 
+      {/* Journey navigation pane — full width on top */}
+      <div className="mb-6">
+        <StageNav stages={journeyStages} currentIndex={journeyIndex} />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
         {/* Left rail */}
         <div className="space-y-6">
@@ -890,7 +896,7 @@ export default function LeadDetail() {
             </Field>
           </div>
 
-          <StageNav stages={journeyStages} currentIndex={journeyIndex} />
+          <AgentBriefPanel leadId={lead.id} leadPhone={lead.phone} />
 
           <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
             <div className="flex items-center gap-2 mb-3">

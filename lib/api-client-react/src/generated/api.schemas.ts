@@ -2890,6 +2890,15 @@ export interface SearchResults {
   groups: SearchGroup[];
 }
 
+export type LeadAgentBriefRiskLevel = typeof LeadAgentBriefRiskLevel[keyof typeof LeadAgentBriefRiskLevel];
+
+
+export const LeadAgentBriefRiskLevel = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+} as const;
+
 export type PipelineSuggestionActionPriority = typeof PipelineSuggestionActionPriority[keyof typeof PipelineSuggestionActionPriority];
 
 
@@ -2905,6 +2914,14 @@ export interface PipelineSuggestionAction {
   priority: PipelineSuggestionActionPriority;
   /** @nullable */
   leadName?: string | null;
+}
+
+export interface LeadAgentBrief {
+  headline: string;
+  riskLevel: LeadAgentBriefRiskLevel;
+  stageGoal: string;
+  actions: PipelineSuggestionAction[];
+  draftMessage: string;
 }
 
 export interface PipelineSuggestions {

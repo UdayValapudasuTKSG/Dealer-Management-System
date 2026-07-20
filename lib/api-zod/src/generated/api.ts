@@ -1379,6 +1379,27 @@ export const AssignLeadResponse = zod.object({
 
 
 /**
+ * @summary AI agent brief — next best actions and a draft follow-up for a lead
+ */
+export const GetLeadAgentBriefParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLeadAgentBriefResponse = zod.object({
+  "headline": zod.string(),
+  "riskLevel": zod.enum(['low', 'medium', 'high']),
+  "stageGoal": zod.string(),
+  "actions": zod.array(zod.object({
+  "title": zod.string(),
+  "detail": zod.string(),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "leadName": zod.string().nullish()
+})),
+  "draftMessage": zod.string()
+})
+
+
+/**
  * @summary Gated stage advance — validates the target stage's checklist first
  */
 export const AdvanceLeadStageParams = zod.object({
