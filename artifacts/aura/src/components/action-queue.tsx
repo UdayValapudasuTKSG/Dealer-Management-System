@@ -22,7 +22,9 @@ type QueueItem = {
   key: string;
   icon: typeof PhoneCall;
   tone: string;
+  bgTone: string;
   context: string;
+  subContext: string;
   action: string;
   href: string;
   rank: number;
@@ -62,8 +64,10 @@ export function ActionQueue({ compact }: { compact?: boolean }) {
       out.push({
         key: `gate-${g.id}`,
         icon: ShieldCheck,
-        tone: "text-primary",
-        context: `Review needed: ${g.title}`,
+        tone: "text-blue-500",
+        bgTone: "bg-blue-500/10",
+        context: `Review: ${g.title}`,
+        subContext: "Requires manager approval",
         action: "Review",
         href: "/approvals",
         rank: g.priority === "high" ? 0 : 2,
@@ -79,8 +83,10 @@ export function ActionQueue({ compact }: { compact?: boolean }) {
         out.push({
           key: `contact-${l.id}`,
           icon: PhoneCall,
-          tone: "text-emerald-400",
-          context: `${l.name} is awaiting first contact`,
+          tone: "text-emerald-500",
+          bgTone: "bg-emerald-500/10",
+          context: l.name,
+          subContext: "Awaiting first contact",
           action: "Call",
           href: `/lead/${l.id}`,
           rank: 1,
@@ -90,8 +96,10 @@ export function ActionQueue({ compact }: { compact?: boolean }) {
         out.push({
           key: `td-${l.id}`,
           icon: CalendarClock,
-          tone: "text-sky-400",
-          context: `Test drive today — ${l.name}`,
+          tone: "text-sky-500",
+          bgTone: "bg-sky-500/10",
+          context: l.name,
+          subContext: "Test drive scheduled today",
           action: "Open",
           href: `/lead/${l.id}`,
           rank: 0,
@@ -102,8 +110,10 @@ export function ActionQueue({ compact }: { compact?: boolean }) {
         out.push({
           key: `sla-${l.id}`,
           icon: AlarmClock,
-          tone: "text-amber-400",
-          context: `${l.name} has sat ${inStage} days in stage`,
+          tone: "text-amber-500",
+          bgTone: "bg-amber-500/10",
+          context: l.name,
+          subContext: `Stalled for ${inStage} days`,
           action: "Follow up",
           href: `/lead/${l.id}`,
           rank: 3,
@@ -112,8 +122,10 @@ export function ActionQueue({ compact }: { compact?: boolean }) {
         out.push({
           key: `quote-${l.id}`,
           icon: MailQuestion,
-          tone: "text-violet-400",
-          context: `Quote sent to ${l.name}, no reply yet`,
+          tone: "text-violet-500",
+          bgTone: "bg-violet-500/10",
+          context: l.name,
+          subContext: "Quote sent, awaiting reply",
           action: "Nudge",
           href: `/lead/${l.id}`,
           rank: 4,
@@ -129,8 +141,10 @@ export function ActionQueue({ compact }: { compact?: boolean }) {
         out.push({
           key: `deal-${d.id}`,
           icon: Landmark,
-          tone: "text-orange-400",
-          context: `${d.customerName ?? "Deal"} — awaiting deposit`,
+          tone: "text-orange-500",
+          bgTone: "bg-orange-500/10",
+          context: d.customerName ?? "Deal",
+          subContext: "Awaiting deposit",
           action: "Open",
           href: "/deals",
           rank: 2,
@@ -147,48 +161,63 @@ export function ActionQueue({ compact }: { compact?: boolean }) {
   const shown = items.slice(0, 6);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="glass-panel rounded-2xl border border-white/10 overflow-hidden"
-    >
-      <div className="flex items-center justify-between px-5 pt-4 pb-2">
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-primary" />
-          <span className="text-sm font-semibold tracking-tight">Your day</span>
-          <span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-bold tabular-nums">
-            {items.length}
+          <Sparkles className="w-5 h-5 text-primary" />
+          <h2 className="text-xl font-semibold tracking-tight">Your day</h2>
+          <span className="rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-bold tabular-nums">
+            {items.length} tasks
           </span>
         </div>
         {items.length > shown.length && (
           <button
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+            className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
             onClick={() => navigate("/pipeline")}
           >
-            View all <ArrowRight className="w-3 h-3" />
+            View all <ArrowRight className="w-4 h-4" />
           </button>
         )}
       </div>
-      <div className={compact ? "pb-2" : "pb-3"}>
-        {shown.map((item) => (
-          <div
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {shown.map((item, i) => (
+          <motion.div
             key={item.key}
-            className="flex items-center gap-3 px-5 py-2.5 hover:bg-foreground/[0.03] transition-colors"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: i * 0.05 }}
+            className="group relative flex flex-col justify-between p-5 rounded-2xl glass-panel border border-white/10 hover:border-primary/30 transition-all overflow-hidden"
           >
-            <item.icon className={`w-4 h-4 shrink-0 ${item.tone}`} />
-            <span className="text-sm flex-1 truncate">{item.context}</span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-3 text-xs shrink-0"
-              onClick={() => navigate(item.href)}
-            >
-              {item.action}
-            </Button>
-          </div>
+            {/* Accent border left */}
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.bgTone} opacity-50`} />
+            
+            <div className="flex items-start gap-3.5 mb-4">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${item.bgTone}`}>
+                <item.icon className={`w-5 h-5 ${item.tone}`} />
+              </div>
+              <div className="flex-1 min-w-0 pt-0.5">
+                <h3 className="font-semibold text-base truncate">{item.context}</h3>
+                <p className="text-sm text-muted-foreground mt-0.5 truncate">{item.subContext}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-between mt-auto pt-2">
+              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                {item.rank === 0 ? "High Priority" : item.rank === 1 ? "Priority" : "Standard"}
+              </div>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-8 px-4 rounded-full bg-foreground/[0.05] hover:bg-primary hover:text-white transition-all shadow-none group-hover:shadow-lg group-hover:shadow-primary/20"
+                onClick={() => navigate(item.href)}
+              >
+                {item.action}
+              </Button>
+            </div>
+          </motion.div>
         ))}
       </div>
-    </motion.div>
+    </div>
   );
 }

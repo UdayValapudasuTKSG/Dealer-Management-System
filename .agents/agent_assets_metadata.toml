@@ -78,6 +78,30 @@ uri = "file://artifacts/aura/public/nav/compliance.png"
 type = "image"
 title = "compliance shield icon"
 
+[[generated]]
+id = "YVzDVzcive_0iBXF0Ksbf"
+uri = "file://artifacts/aura/public/images/handshake.png"
+type = "image"
+title = "Showroom Handshake"
+
+[[generated]]
+id = "mGDRqEsuXxV7SbI25kB0s"
+uri = "file://artifacts/aura/public/images/delivery.png"
+type = "image"
+title = "Car Delivery"
+
+[[generated]]
+id = "8vJHPtbuMjD6C2sqv6da9"
+uri = "file://artifacts/aura/public/images/service_bay.png"
+type = "image"
+title = "Service Bay"
+
+[[generated]]
+id = "S9NwLLobg2GZ_ZUloyFB9"
+uri = "file://artifacts/aura/public/images/team_at_work.png"
+type = "image"
+title = "Team at Work"
+
 [[outputs]]
 id = "OVThM-BLvdGYiJWriQ3Qm"
 uri = "file://docs/AURA_WALKTHROUGH.md"

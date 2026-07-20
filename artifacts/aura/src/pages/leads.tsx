@@ -36,7 +36,6 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
-import { ActionQueue } from "@/components/action-queue";
 
 const STAGES = [
   "new_lead",
@@ -370,8 +369,6 @@ export default function Leads() {
             }}
           />
       </div>
-
-      <ActionQueue />
 
       {layout === "list" ? (
         /* Full-pipeline table: every non-lost lead, searchable + stage filter */

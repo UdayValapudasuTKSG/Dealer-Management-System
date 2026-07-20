@@ -103,10 +103,10 @@ const clerkAppearance = {
     headerSubtitle: "text-neutral-400",
     socialButtonsBlockButtonText: "text-white",
     formFieldLabel: "text-neutral-300",
-    footerActionLink: "text-[hsl(26_75%_55%)] hover:text-[hsl(26_75%_65%)]",
+    footerActionLink: "text-[hsl(209_65%_50%)] hover:text-[hsl(209_60%_60%)]",
     footerActionText: "text-neutral-400",
     dividerText: "text-neutral-500",
-    identityPreviewEditButton: "text-[hsl(26_75%_55%)]",
+    identityPreviewEditButton: "text-[hsl(209_65%_50%)]",
     formFieldSuccessText: "text-emerald-400",
     alertText: "text-red-300",
     logoBox: "justify-center",
@@ -114,7 +114,7 @@ const clerkAppearance = {
     socialButtonsBlockButton:
       "bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] text-white",
     formButtonPrimary:
-      "bg-[hsl(26_75%_50%)] hover:bg-[hsl(26_75%_55%)] text-white shadow-lg shadow-[hsl(26_75%_55%)]/20",
+      "bg-[hsl(209_65%_42%)] hover:bg-[hsl(209_65%_50%)] text-white shadow-lg shadow-[hsl(209_65%_50%)]/20",
     formFieldInput: "bg-white/[0.04] border-white/10 text-white",
     footerAction: "justify-center",
     dividerLine: "bg-white/10",
