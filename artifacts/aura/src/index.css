@@ -142,22 +142,23 @@
   --gold-foreground: 216 20% 10%;
 }
 
-/* Light mode — clean near-white with the same blue accent */
+/* Light mode (DEFAULT) — soft sky-blue surfaces with white cards,
+   NL-Corp-inspired: light content canvas + dark sidebar. */
 :root.light {
-  --background: 0 0% 98%;
+  --background: 202 45% 92%;
   --foreground: 216 20% 10%;
-  --card: 0 0% 100% / 0.85;
+  --card: 0 0% 100% / 0.92;
   --card-foreground: 216 20% 10%;
-  --card-border: 0 0% 0% / 0.08;
+  --card-border: 210 25% 20% / 0.08;
   --popover: 0 0% 100% / 0.98;
   --popover-foreground: 216 20% 10%;
-  --popover-border: 0 0% 0% / 0.1;
+  --popover-border: 210 25% 20% / 0.1;
   --primary: 209 78% 23%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 0 0% 95%;
+  --secondary: 202 40% 88%;
   --secondary-foreground: 216 20% 12%;
-  --muted: 0 0% 94%;
-  --muted-foreground: 0 0% 38%;
+  --muted: 202 35% 87%;
+  --muted-foreground: 215 15% 38%;
   --accent: 204 26% 60% / 0.1;
   --accent-foreground: 209 78% 23%;
   --destructive: 0 74% 46%;
@@ -248,10 +249,10 @@
    overlays so surfaces and hairlines stay legible on white.
    ============================================================ */
 :root.light body {
-  background-color: hsl(0 0% 95%);
+  background-color: hsl(202 45% 92%);
   background-image:
-    radial-gradient(circle at 12% 8%, rgba(127, 157, 177, 0.03) 0%, transparent 42%),
-    radial-gradient(circle at 88% 92%, rgba(127, 157, 177, 0.02) 0%, transparent 45%);
+    radial-gradient(circle at 12% 8%, rgba(180, 214, 227, 0.5) 0%, transparent 42%),
+    radial-gradient(circle at 88% 92%, rgba(180, 214, 227, 0.35) 0%, transparent 45%);
 }
 
 :root.light .glass {

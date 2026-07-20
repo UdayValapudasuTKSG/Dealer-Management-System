@@ -46,7 +46,7 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 
 ## User preferences
 
-- DARK mode default (blood-red + black, premium/futuristic, Netflix-inspired); LIGHT toggle available (Sun/Moon in top nav, persisted in localStorage).
+- LIGHT mode default (2026-07 redesign): soft sky-blue canvas + white rounded cards + always-dark left sidebar (NL-Corp-inspired); DARK mode (deep blue + near-black) via Sun/Moon toggle in the sidebar user card (persisted in localStorage).
 - Strongly car/automotive-themed and aesthetic; use real images. No emojis in the UI.
 - Keep all features end-to-end — no dead-end clicks.
 

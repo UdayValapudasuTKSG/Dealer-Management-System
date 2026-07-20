@@ -2,7 +2,9 @@ import { useState } from "react";
 import { CopilotChat } from "@copilotkit/react-ui";
 import { MessageSquare, X, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { TopNav } from "./top-nav";
+import { SideNav, MobileNav, DealerSwitcher } from "./side-nav";
+import { NotificationBell } from "@/components/notification-bell";
+import { GlobalSearchButton } from "@/components/global-search";
 import { AuraCopilot } from "@/components/copilot/aura-copilot";
 
 const CONCIERGE_INSTRUCTIONS =
@@ -16,14 +18,24 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false);
 
   return (
-    <div className="flex flex-col h-screen w-full bg-background overflow-hidden relative selection:bg-primary/30 selection:text-foreground">
+    <div className="flex h-screen w-full bg-background overflow-hidden relative selection:bg-primary/30 selection:text-foreground">
       {/* Ambient background glow */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
 
-      <TopNav />
+      <SideNav />
 
-      <div className="flex flex-1 min-h-0 w-full">
+      <div className="flex flex-1 min-h-0 w-full flex-col">
+        {/* Slim utility bar */}
+        <div className="flex items-center gap-2 px-5 md:px-8 h-14 shrink-0 relative z-20">
+          <MobileNav />
+          <div className="flex-1" />
+          <DealerSwitcher />
+          <GlobalSearchButton />
+          <NotificationBell />
+        </div>
+
+        <div className="flex flex-1 min-h-0 w-full">
         <main className="flex-1 overflow-y-auto relative z-10 scroll-smooth min-w-0">
           <div className="min-h-full h-full">{children}</div>
         </main>
@@ -77,6 +89,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </motion.aside>
           )}
         </AnimatePresence>
+        </div>
       </div>
 
       {/* Floating launcher */}

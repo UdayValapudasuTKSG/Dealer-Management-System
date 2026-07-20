@@ -5,8 +5,8 @@ export type Theme = "dark" | "light";
 const STORAGE_KEY = "aura-theme";
 
 export function getStoredTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
-  return window.localStorage.getItem(STORAGE_KEY) === "light" ? "light" : "dark";
+  if (typeof window === "undefined") return "light";
+  return window.localStorage.getItem(STORAGE_KEY) === "dark" ? "dark" : "light";
 }
 
 export function applyTheme(theme: Theme) {
