@@ -266,7 +266,7 @@ export default function Landing() {
           >
             The showroom,
             <br />
-            <span className="font-semibold text-primary drop-shadow-[0_0_12px_rgba(197,106,66,0.3)]">orchestrated.</span>
+            <span className="font-semibold text-primary drop-shadow-[0_0_12px_rgba(127,157,177,0.3)]">orchestrated.</span>
           </motion.h1>
 
           <motion.p

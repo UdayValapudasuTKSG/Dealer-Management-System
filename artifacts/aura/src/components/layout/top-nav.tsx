@@ -310,11 +310,11 @@ export function TopNav() {
             title="Back to landing"
           >
             <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-primary/25 transition-transform group-hover:scale-105">
-              <Sparkles className="h-5 w-5 text-primary drop-shadow-[0_0_8px_rgba(197,106,66,0.5)]" />
+              <Sparkles className="h-5 w-5 text-primary drop-shadow-[0_0_8px_rgba(127,157,177,0.5)]" />
             </span>
             <div className="hidden sm:flex flex-col leading-none">
               <span className="text-lg font-bold tracking-tight">
-                AURA<span className="text-primary drop-shadow-[0_0_8px_rgba(197,106,66,0.3)]">.OS</span>
+                AURA<span className="text-primary drop-shadow-[0_0_8px_rgba(127,157,177,0.3)]">.OS</span>
               </span>
               <span className="mt-1 text-[9px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
                 Dealership OS
