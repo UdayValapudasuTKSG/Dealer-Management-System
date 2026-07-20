@@ -82,7 +82,7 @@ const clerkAppearance = {
     logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
   },
   variables: {
-    colorPrimary: "hsl(26 75% 55%)",
+    colorPrimary: "hsl(19 58% 51%)",
     colorForeground: "hsl(0 0% 96%)",
     colorMutedForeground: "hsl(0 0% 62%)",
     colorDanger: "hsl(0 82% 55%)",
@@ -96,7 +96,7 @@ const clerkAppearance = {
   elements: {
     rootBox: "w-full flex justify-center",
     cardBox:
-      "bg-[hsl(0_0%_7%)] rounded-2xl w-[440px] max-w-full overflow-hidden border border-white/10 shadow-[0_30px_80px_-30px_rgba(232,168,119,0.25)]",
+      "bg-[hsl(0_0%_7%)] rounded-2xl w-[440px] max-w-full overflow-hidden border border-white/10 shadow-[0_30px_80px_-30px_rgba(197,106,66,0.25)]",
     card: "!shadow-none !border-0 !bg-transparent !rounded-none",
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
     headerTitle: "text-white font-semibold tracking-tight",
