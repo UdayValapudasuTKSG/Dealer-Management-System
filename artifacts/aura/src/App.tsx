@@ -82,7 +82,7 @@ const clerkAppearance = {
     logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
   },
   variables: {
-    colorPrimary: "hsl(218 72% 50%)",
+    colorPrimary: "hsl(26 75% 55%)",
     colorForeground: "hsl(0 0% 96%)",
     colorMutedForeground: "hsl(0 0% 62%)",
     colorDanger: "hsl(0 82% 55%)",
@@ -96,17 +96,17 @@ const clerkAppearance = {
   elements: {
     rootBox: "w-full flex justify-center",
     cardBox:
-      "bg-[hsl(0_0%_7%)] rounded-2xl w-[440px] max-w-full overflow-hidden border border-white/10 shadow-[0_30px_80px_-30px_rgba(224,19,19,0.35)]",
+      "bg-[hsl(0_0%_7%)] rounded-2xl w-[440px] max-w-full overflow-hidden border border-white/10 shadow-[0_30px_80px_-30px_rgba(232,168,119,0.25)]",
     card: "!shadow-none !border-0 !bg-transparent !rounded-none",
     footer: "!shadow-none !border-0 !bg-transparent !rounded-none",
     headerTitle: "text-white font-semibold tracking-tight",
     headerSubtitle: "text-neutral-400",
     socialButtonsBlockButtonText: "text-white",
     formFieldLabel: "text-neutral-300",
-    footerActionLink: "text-[hsl(0_82%_55%)] hover:text-[hsl(0_82%_65%)]",
+    footerActionLink: "text-[hsl(26_75%_55%)] hover:text-[hsl(26_75%_65%)]",
     footerActionText: "text-neutral-400",
     dividerText: "text-neutral-500",
-    identityPreviewEditButton: "text-[hsl(0_82%_55%)]",
+    identityPreviewEditButton: "text-[hsl(26_75%_55%)]",
     formFieldSuccessText: "text-emerald-400",
     alertText: "text-red-300",
     logoBox: "justify-center",
@@ -114,7 +114,7 @@ const clerkAppearance = {
     socialButtonsBlockButton:
       "bg-white/[0.04] border border-white/10 hover:bg-white/[0.08] text-white",
     formButtonPrimary:
-      "bg-[hsl(0_82%_44%)] hover:bg-[hsl(0_82%_50%)] text-white shadow-lg shadow-red-900/40",
+      "bg-[hsl(26_75%_50%)] hover:bg-[hsl(26_75%_55%)] text-white shadow-lg shadow-[hsl(26_75%_55%)]/20",
     formFieldInput: "bg-white/[0.04] border-white/10 text-white",
     footerAction: "justify-center",
     dividerLine: "bg-white/10",

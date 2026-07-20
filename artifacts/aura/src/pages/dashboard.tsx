@@ -229,7 +229,7 @@ export default function Dashboard() {
   return (
     <div className="h-full overflow-y-auto">
       {/* Compact cinematic briefing band */}
-      <div className="relative h-[160px] w-full overflow-hidden bg-black">
+      <div className="relative h-[200px] md:h-[240px] w-full overflow-hidden bg-black">
         <video
           autoPlay
           muted
@@ -245,7 +245,7 @@ export default function Dashboard() {
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-black/40 z-10" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-transparent z-10" />
 
-        <div className="relative z-20 h-full w-full px-5 md:px-8 flex flex-col justify-center">
+        <div className="relative z-20 h-full w-full px-5 md:px-8 flex flex-col justify-center pb-12">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}

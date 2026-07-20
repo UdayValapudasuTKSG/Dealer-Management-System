@@ -266,7 +266,7 @@ export default function Landing() {
           >
             The showroom,
             <br />
-            <span className="font-semibold">orchestrated.</span>
+            <span className="font-semibold text-primary drop-shadow-[0_0_12px_rgba(232,168,119,0.3)]">orchestrated.</span>
           </motion.h1>
 
           <motion.p
@@ -287,7 +287,7 @@ export default function Landing() {
           >
             <Link
               href="/command-center"
-              className="group inline-flex items-center gap-2 h-14 px-8 rounded-full bg-primary text-white text-base font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all duration-300"
+              className="group inline-flex items-center gap-2 h-14 px-8 rounded-full bg-primary text-white text-base font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all duration-300 glow-brand"
             >
               Enter Command Center
               <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />

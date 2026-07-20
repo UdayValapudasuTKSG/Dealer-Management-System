@@ -87,7 +87,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             onClick={() => setChatOpen(true)}
-            className="fixed bottom-6 right-6 z-30 h-14 pl-5 pr-6 rounded-full bg-primary text-white shadow-lg shadow-primary/40 flex items-center gap-2.5 font-medium hover:bg-primary/90 transition-colors glow-red"
+            className="fixed bottom-6 right-6 z-30 h-14 pl-5 pr-6 rounded-full bg-primary text-white shadow-lg shadow-primary/40 flex items-center gap-2.5 font-medium hover:bg-primary/90 transition-colors glow-brand"
           >
             <MessageSquare className="w-5 h-5" />
             Concierge
