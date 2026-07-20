@@ -85,7 +85,7 @@ const PRIORITY_RANK: Record<string, number> = { high: 0, normal: 1, low: 2 };
 
 const POWERTRAIN_COLORS: Record<string, string> = {
   EV: "hsl(218 72% 52%)",
-  Hybrid: "hsl(43 74% 52%)",
+  Hybrid: "hsl(185 42% 44%)",
   Petrol: "hsl(0 0% 58%)",
   Diesel: "hsl(0 0% 38%)",
 };
