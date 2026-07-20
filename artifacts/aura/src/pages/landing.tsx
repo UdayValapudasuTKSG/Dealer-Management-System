@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import Lenis from "lenis";
+import { LandingPreloader } from "@/components/landing/preloader";
 import { ArrowRight, Loader2, CircleCheck, CheckCircle2, MapPin, Map, Clock, Truck, ShieldCheck } from "lucide-react";
 import {
   Dialog,
@@ -15,6 +19,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { VehicleCascade } from "@/components/vehicle-cascade";
 import { useListEnquiryVehicles } from "@workspace/api-client-react";
+
+gsap.registerPlugin(ScrollTrigger);
 
 const QUICK_LINKS = [
   { name: "Showroom", href: "/inventory" },
@@ -207,18 +213,105 @@ const REGIONS = [
 
 export default function Landing() {
   const [enquiryOpen, setEnquiryOpen] = useState(false);
-  
+  const [loading, setLoading] = useState(
+    () => sessionStorage.getItem("aura-preloaded") !== "1",
+  );
+  const rootRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const heroContentRef = useRef<HTMLDivElement>(null);
+
+  // Lenis smooth scroll + GSAP scrubbed scroll effects
+  useEffect(() => {
+    if (loading) return;
+    const lenis = new Lenis({ lerp: 0.09 });
+    lenis.on("scroll", ScrollTrigger.update);
+    const raf = (time: number) => lenis.raf(time * 1000);
+    gsap.ticker.add(raf);
+    gsap.ticker.lagSmoothing(0);
+    const restoreLagSmoothing = () => gsap.ticker.lagSmoothing(500, 33);
+
+    const ctx = gsap.context(() => {
+      // Pinned hero: video slowly zooms while the copy drifts up and fades
+      gsap.to(videoRef.current, {
+        scale: 1.18,
+        ease: "none",
+        scrollTrigger: {
+          trigger: heroRef.current,
+          start: "top top",
+          end: "+=60%",
+          scrub: true,
+          pin: true,
+          pinSpacing: true,
+        },
+      });
+      gsap.to(heroContentRef.current, {
+        yPercent: -22,
+        opacity: 0,
+        ease: "none",
+        scrollTrigger: {
+          trigger: heroRef.current,
+          start: "top top",
+          end: "+=45%",
+          scrub: true,
+        },
+      });
+      // Parallax drift on showcase imagery
+      gsap.utils
+        .toArray<HTMLElement>("[data-parallax]")
+        .forEach((el) => {
+          const depth = Number(el.dataset.parallax || 8);
+          gsap.fromTo(
+            el,
+            { yPercent: depth },
+            {
+              yPercent: -depth,
+              ease: "none",
+              scrollTrigger: {
+                trigger: el,
+                start: "top bottom",
+                end: "bottom top",
+                scrub: true,
+              },
+            },
+          );
+        });
+    }, rootRef);
+
+    return () => {
+      ctx.revert();
+      gsap.ticker.remove(raf);
+      lenis.destroy();
+      restoreLagSmoothing();
+    };
+  }, [loading]);
+
   return (
-    <div className="bg-black text-white selection:bg-primary/30 selection:text-white min-h-[100dvh] font-sans">
+    <div
+      ref={rootRef}
+      className="bg-black text-white selection:bg-primary/30 selection:text-white min-h-[100dvh] font-sans"
+    >
+      {loading && (
+        <LandingPreloader
+          onDone={() => {
+            sessionStorage.setItem("aura-preloaded", "1");
+            setLoading(false);
+          }}
+        />
+      )}
       {/* Hero Section */}
-      <section className="relative h-[100dvh] w-full overflow-hidden">
+      <section
+        ref={heroRef}
+        className="relative h-[100dvh] w-full overflow-hidden"
+      >
         <video
+          ref={videoRef}
           autoPlay
           muted
           loop
           playsInline
           poster={`${import.meta.env.BASE_URL}vehicles/aura_porsche_taycan.png`}
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover will-change-transform"
         >
           <source
             src={`${import.meta.env.BASE_URL}videos/white_luxury_car_showroom_turntable.mp4`}
@@ -259,7 +352,10 @@ export default function Landing() {
         </motion.header>
 
         {/* Hero content */}
-        <div className="relative z-20 h-full flex flex-col justify-center px-6 md:px-10 lg:px-14 pt-20">
+        <div
+          ref={heroContentRef}
+          className="relative z-20 h-full flex flex-col justify-center px-6 md:px-10 lg:px-14 pt-20 will-change-transform"
+        >
           <div className="max-w-4xl">
             <motion.h1
               initial={{ opacity: 0, y: 20 }}
@@ -355,7 +451,8 @@ export default function Landing() {
                 <img 
                   src={`${import.meta.env.BASE_URL}images/delivery.png`} 
                   alt="AURA Motors delivery" 
-                  className="w-full h-full object-cover"
+                  data-parallax="6"
+                  className="w-full h-[112%] object-cover will-change-transform"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               </div>
@@ -363,7 +460,8 @@ export default function Landing() {
                 <img 
                   src={`${import.meta.env.BASE_URL}images/handshake.png`} 
                   alt="Client taking delivery of a new vehicle" 
-                  className="w-full h-full object-cover"
+                  data-parallax="10"
+                  className="w-full h-[115%] object-cover will-change-transform"
                 />
               </div>
             </motion.div>
@@ -399,7 +497,7 @@ export default function Landing() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-50px" }}
                 transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="p-8 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.05] transition-colors group"
+                className="relative p-8 rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/10 hover:bg-white/[0.07] hover:border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 group overflow-hidden"
               >
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="text-xl font-medium text-white group-hover:text-[#B4D6E3] transition-colors">{region.name}</h4>
