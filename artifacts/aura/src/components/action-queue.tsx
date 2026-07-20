@@ -5,11 +5,9 @@ import {
   useListDeals,
   useListGates,
 } from "@workspace/api-client-react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   PhoneCall,
   CalendarClock,
-  AlarmClock,
   MailQuestion,
   Landmark,
   ShieldCheck,
@@ -20,40 +18,19 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { buildTriage, type TriageItem, type TriageKind } from "@/lib/triage";
 
-type QueueItem = {
-  id: string;
-  key: string;
-  icon: any;
-  tone: string;
-  bgTone: string;
-  context: string;
-  subContext: string;
-  action: string;
-  href: string;
-  rank: number;
+const KIND_UI: Record<
+  TriageKind,
+  { icon: any; tone: string; bgTone: string; action: string }
+> = {
+  gate: { icon: ShieldCheck, tone: "text-destructive", bgTone: "bg-destructive/10", action: "Review" },
+  contact: { icon: PhoneCall, tone: "text-emerald-500", bgTone: "bg-emerald-500/10", action: "Call" },
+  testDrive: { icon: CalendarClock, tone: "text-sky-500", bgTone: "bg-sky-500/10", action: "Prep" },
+  stalled: { icon: AlertCircle, tone: "text-amber-500", bgTone: "bg-amber-500/10", action: "Nudge" },
+  quote: { icon: MailQuestion, tone: "text-violet-500", bgTone: "bg-violet-500/10", action: "Follow" },
+  deposit: { icon: Landmark, tone: "text-orange-500", bgTone: "bg-orange-500/10", action: "Open" },
 };
-
-const SLA_DAYS = 5;
-
-function daysSince(iso: string | null | undefined): number {
-  if (!iso) return 0;
-  return Math.max(
-    0,
-    Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000),
-  );
-}
-
-function isToday(iso: string | null | undefined): boolean {
-  if (!iso) return false;
-  const d = new Date(iso);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
-}
 
 function getInitials(name: string) {
   if (!name) return "?";
@@ -70,126 +47,18 @@ export function ActionQueue() {
   const { data: gates } = useListGates({ status: "pending" });
   const [, navigate] = useLocation();
 
-  const { urgent, today, later } = useMemo(() => {
-    const u: QueueItem[] = [];
-    const t: QueueItem[] = [];
-    const l: QueueItem[] = [];
+  const { urgent, today, later } = useMemo(
+    () => buildTriage(leads, deals, gates),
+    [leads, deals, gates],
+  );
 
-    for (const g of gates ?? []) {
-      u.push({
-        id: g.id.toString(),
-        key: `gate-${g.id}`,
-        icon: ShieldCheck,
-        tone: "text-destructive",
-        bgTone: "bg-destructive/10",
-        context: g.title,
-        subContext: "Approval required",
-        action: "Review",
-        href: "/approvals",
-        rank: g.priority === "high" ? 0 : 2,
-      });
-    }
+  const ItemCard = ({ item }: { item: TriageItem }) => {
+    const ui = KIND_UI[item.kind];
+    return (
 
-    for (const lead of leads ?? []) {
-      if (lead.phase === "lost") continue;
-      
-      let handled = false;
-
-      if (!lead.contactedDate && (lead.status === "new" || lead.status === "assigned")) {
-        t.push({
-          id: lead.id.toString(),
-          key: `contact-${lead.id}`,
-          icon: PhoneCall,
-          tone: "text-emerald-500",
-          bgTone: "bg-emerald-500/10",
-          context: lead.name,
-          subContext: "New lead",
-          action: "Call",
-          href: `/lead/${lead.id}`,
-          rank: 1,
-        });
-        handled = true;
-      }
-      
-      if (isToday(lead.testDriveAt)) {
-        t.push({
-          id: lead.id.toString(),
-          key: `td-${lead.id}`,
-          icon: CalendarClock,
-          tone: "text-sky-500",
-          bgTone: "bg-sky-500/10",
-          context: lead.name,
-          subContext: "Test drive today",
-          action: "Prep",
-          href: `/lead/${lead.id}`,
-          rank: 0,
-        });
-        handled = true;
-      }
-      
-      if (!handled) {
-        const inStage = daysSince(lead.stageEnteredAt ?? lead.createdAt);
-        if (lead.phase !== "won" && inStage > SLA_DAYS) {
-          u.push({
-            id: lead.id.toString(),
-            key: `sla-${lead.id}`,
-            icon: AlertCircle,
-            tone: "text-amber-500",
-            bgTone: "bg-amber-500/10",
-            context: lead.name,
-            subContext: `Stalled ${inStage}d`,
-            action: "Nudge",
-            href: `/lead/${lead.id}`,
-            rank: 3,
-          });
-        } else if (lead.quotationSent && !lead.testDriveAt && lead.phase !== "won") {
-          l.push({
-            id: lead.id.toString(),
-            key: `quote-${lead.id}`,
-            icon: MailQuestion,
-            tone: "text-violet-500",
-            bgTone: "bg-violet-500/10",
-            context: lead.name,
-            subContext: "Quote sent",
-            action: "Follow",
-            href: `/lead/${lead.id}`,
-            rank: 4,
-          });
-        }
-      }
-    }
-
-    for (const d of deals ?? []) {
-      if (
-        !d.depositPaid &&
-        (d.stage === "negotiation" || d.stage === "desking" || d.stage === "finance")
-      ) {
-        t.push({
-          id: d.id.toString(),
-          key: `deal-${d.id}`,
-          icon: Landmark,
-          tone: "text-orange-500",
-          bgTone: "bg-orange-500/10",
-          context: d.customerName ?? "Deal",
-          subContext: "Awaiting deposit",
-          action: "Open",
-          href: "/deals",
-          rank: 2,
-        });
-      }
-    }
-
-    u.sort((a, b) => a.rank - b.rank);
-    t.sort((a, b) => a.rank - b.rank);
-    l.sort((a, b) => a.rank - b.rank);
-
-    return { urgent: u, today: t, later: l };
-  }, [leads, deals, gates]);
-
-  const ItemCard = ({ item }: { item: QueueItem }) => (
     <div className="group flex items-center justify-between p-3 rounded-xl border border-border/50 bg-foreground/[0.02] hover:bg-foreground/[0.04] hover:border-border transition-all">
       <div className="flex items-center gap-3 min-w-0 pr-3">
-        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] tracking-wider", item.bgTone, item.tone)}>
+        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] tracking-wider", ui.bgTone, ui.tone)}>
           {getInitials(item.context)}
         </div>
         <div className="min-w-0">
@@ -203,10 +72,11 @@ export function ActionQueue() {
         className="h-7 px-3 rounded-full text-[11px] font-medium bg-background border border-border/50 shadow-sm shrink-0 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
         onClick={() => navigate(item.href)}
       >
-        {item.action}
+        {ui.action}
       </Button>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

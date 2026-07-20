@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { ActionQueue } from "@/components/action-queue";
 import { TodaySchedule } from "@/components/today-schedule";
+import { buildTriage } from "@/lib/triage";
 import {
   useGetDashboardSummary,
   useGetSalesPerformance,
@@ -156,6 +158,11 @@ export default function Dashboard() {
   );
   const agentEvents = (timeline ?? []).filter((e) => e.isAgent);
 
+  const objectivesCount = useMemo(
+    () => buildTriage(leads, deals, gates).total,
+    [gates, leads, deals],
+  );
+
   const revenueTrend = (performance ?? []).map((p) => p.revenue);
   const revDelta = deltaPct(revenueTrend);
   const unitsDelta = deltaPct((performance ?? []).map((p) => p.units));
@@ -244,8 +251,8 @@ export default function Dashboard() {
               type="video/mp4"
             />
           </video>
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/40 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent" />
         </div>
         
         <div className="relative z-10 h-full px-5 md:px-8 flex flex-col justify-end pb-8">
@@ -260,7 +267,7 @@ export default function Dashboard() {
             </div>
             <h1 className="text-3xl md:text-5xl font-medium tracking-tight text-white max-w-4xl leading-tight drop-shadow-md">
               {greeting()}. <br/>
-              <span className="text-white/80 font-light">{briefingLine(summary, sortedGates.length)}</span>
+              <span className="text-white/80 font-light">{briefingLine(summary, objectivesCount, sortedGates.length)}</span>
             </h1>
           </motion.div>
         </div>
@@ -943,14 +950,17 @@ function briefingLine(
         activeDeals: number;
       }
     | undefined,
-  pendingCount: number,
+  objectivesCount: number,
+  approvalsCount: number,
 ): string {
   if (!summary) return "Bringing the dealership online...";
-  const decisions =
-    pendingCount === 0
-      ? "you're all clear"
-      : `${pendingCount} need${pendingCount > 1 ? "" : "s"} your sign-off`;
-  return `${summary.agentTasksToday} tasks handled autonomously — ${decisions}.`;
+  if (objectivesCount === 0)
+    return `${summary.agentTasksToday} tasks handled autonomously — you're all clear.`;
+  const approvals =
+    approvalsCount > 0
+      ? ` — ${approvalsCount} awaiting your sign-off`
+      : "";
+  return `${objectivesCount} objective${objectivesCount > 1 ? "s" : ""} on your desk today${approvals}.`;
 }
 
 function ChartHeader({

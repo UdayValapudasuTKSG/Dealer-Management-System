@@ -7,7 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { CalendarClock, Car, PenTool, Truck } from "lucide-react";
-import { format, isToday, parseISO } from "date-fns";
+import { format, isToday, parseISO, startOfDay, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
 export function TodaySchedule() {
@@ -27,9 +27,13 @@ export function TodaySchedule() {
       href: string;
     }> = [];
 
+    const windowStart = startOfDay(new Date());
+    const windowEnd = addDays(windowStart, 7);
+    const inWindow = (d: Date) => d >= windowStart && d < windowEnd;
+
     // Leads -> Test drives
     for (const l of leads ?? []) {
-      if (l.testDriveAt && isToday(parseISO(l.testDriveAt))) {
+      if (l.testDriveAt && inWindow(parseISO(l.testDriveAt))) {
         items.push({
           id: `td-${l.id}`,
           time: parseISO(l.testDriveAt),
@@ -46,7 +50,7 @@ export function TodaySchedule() {
     // Deliveries
     for (const d of deliveries ?? []) {
       const appointment = (d as any).appointmentAt;
-      if (appointment && isToday(parseISO(appointment))) {
+      if (appointment && inWindow(parseISO(appointment))) {
         items.push({
           id: `del-${d.id}`,
           time: parseISO(appointment),
@@ -62,10 +66,15 @@ export function TodaySchedule() {
 
     // Service Orders
     for (const s of serviceOrders ?? []) {
-      if (s.scheduledDate && isToday(parseISO(s.scheduledDate))) {
+      // scheduledDate is date-only; parse the date part as a LOCAL date so a
+      // "today" service order isn't shifted to yesterday in UTC-4.
+      const localDay = s.scheduledDate
+        ? parseISO(s.scheduledDate.slice(0, 10))
+        : null;
+      if (localDay && inWindow(localDay)) {
         items.push({
           id: `so-${s.id}`,
-          time: parseISO(s.scheduledDate),
+          time: localDay,
           title: s.customerName || `RO #${s.id}`,
           subtitle: s.vehicleInfo || s.type,
           role: "service",
@@ -93,19 +102,37 @@ export function TodaySchedule() {
     return (
       <div className="rounded-2xl border border-border/50 bg-foreground/[0.02] p-8 text-center flex flex-col items-center">
         <CalendarClock className="w-8 h-8 text-muted-foreground/40 mb-3" />
-        <p className="font-medium text-foreground">No appointments today</p>
-        <p className="text-sm text-muted-foreground mt-1">Your schedule is clear.</p>
+        <p className="font-medium text-foreground">No upcoming appointments</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Nothing scheduled for the next 7 days.
+        </p>
       </div>
     );
   }
 
+  const todayItems = schedule.filter((i) => isToday(i.time));
+  const shown = todayItems.length > 0 ? todayItems : schedule.slice(0, 5);
+  const showingUpcoming = todayItems.length === 0;
+
   return (
-    <div className="relative border-l-2 border-border/50 ml-4 space-y-6 py-2">
-      {schedule.map((item) => (
+    <div>
+      {showingUpcoming && (
+        <p className="text-xs text-muted-foreground mb-3">
+          Nothing left today — here's what's coming up.
+        </p>
+      )}
+      <div className="relative border-l-2 border-border/50 ml-4 space-y-6 py-2">
+      {shown.map((item) => (
         <div key={item.id} className="relative pl-6">
           <div className="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-background border-2 border-primary" />
           <div className="text-xs font-semibold tracking-wider text-primary mb-2 uppercase">
-            {format(item.time, "h:mm a")}
+            {item.time.getHours() === 0 && item.time.getMinutes() === 0
+              ? showingUpcoming
+                ? format(item.time, "EEE") + " · All day"
+                : "All day"
+              : showingUpcoming
+                ? format(item.time, "EEE, h:mm a")
+                : format(item.time, "h:mm a")}
           </div>
           <Link href={item.href}>
             <Card className="glass-panel border-none shadow-sm hover:shadow-md transition-all group cursor-pointer overflow-hidden">
@@ -131,6 +158,7 @@ export function TodaySchedule() {
           </Link>
         </div>
       ))}
+      </div>
     </div>
   );
 }
