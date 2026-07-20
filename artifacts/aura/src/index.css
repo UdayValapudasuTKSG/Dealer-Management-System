@@ -1,5 +1,5 @@
 @layer theme, base, clerk, components, utilities;
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -68,8 +68,8 @@
   --popover-foreground: 0 0% 96%;
   --popover-border: 0 0% 100% / 0.1;
 
-  /* Classic Deep Blue (#0D3B66 light flip, 209 65% 42% dark) */
-  --primary: 209 65% 42%;
+  /* Classic Deep Blue (#0D3B66) */
+  --primary: 209 78% 23%;
   --primary-foreground: 0 0% 100%;
 
   --secondary: 216 20% 13%;
@@ -87,23 +87,23 @@
 
   --border: 0 0% 100% / 0.09;
   --input: 0 0% 100% / 0.1;
-  --ring: 209 65% 42%;
+  --ring: 209 78% 23%;
 
   --sidebar: 216 20% 6% / 0.85;
   --sidebar-foreground: 0 0% 92%;
   --sidebar-border: 0 0% 100% / 0.07;
-  --sidebar-primary: 209 65% 42%;
+  --sidebar-primary: 209 78% 23%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 204 26% 60% / 0.16;
   --sidebar-accent-foreground: 204 26% 75%;
-  --sidebar-ring: 209 65% 42%;
+  --sidebar-ring: 209 78% 23%;
 
   /* Soft Sky Highlights (#B4D6E3) */
   --gold: 197 45% 80%;
   --gold-foreground: 216 20% 10%;
 
   --app-font-sans: 'Outfit', sans-serif;
-  --app-font-mono: 'DM Mono', monospace;
+  --app-font-mono: 'JetBrains Mono', monospace;
   --radius: 1rem;
 }
 
@@ -117,7 +117,7 @@
   --popover: 216 20% 7% / 0.96;
   --popover-foreground: 0 0% 96%;
   --popover-border: 0 0% 100% / 0.1;
-  --primary: 209 65% 42%;
+  --primary: 209 78% 23%;
   --primary-foreground: 0 0% 100%;
   --secondary: 216 20% 13%;
   --secondary-foreground: 0 0% 96%;
@@ -129,15 +129,15 @@
   --destructive-foreground: 0 0% 100%;
   --border: 0 0% 100% / 0.09;
   --input: 0 0% 100% / 0.1;
-  --ring: 209 65% 42%;
+  --ring: 209 78% 23%;
   --sidebar: 216 20% 6% / 0.85;
   --sidebar-foreground: 0 0% 92%;
   --sidebar-border: 0 0% 100% / 0.07;
-  --sidebar-primary: 209 65% 42%;
+  --sidebar-primary: 209 78% 23%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 204 26% 60% / 0.16;
   --sidebar-accent-foreground: 204 26% 75%;
-  --sidebar-ring: 209 65% 42%;
+  --sidebar-ring: 209 78% 23%;
   --gold: 197 45% 80%;
   --gold-foreground: 216 20% 10%;
 }
@@ -152,27 +152,27 @@
   --popover: 0 0% 100% / 0.98;
   --popover-foreground: 216 20% 10%;
   --popover-border: 0 0% 0% / 0.1;
-  --primary: 209 77% 23%;
+  --primary: 209 78% 23%;
   --primary-foreground: 0 0% 100%;
   --secondary: 0 0% 95%;
   --secondary-foreground: 216 20% 12%;
   --muted: 0 0% 94%;
   --muted-foreground: 0 0% 38%;
   --accent: 204 26% 60% / 0.1;
-  --accent-foreground: 209 77% 23%;
+  --accent-foreground: 209 78% 23%;
   --destructive: 0 74% 46%;
   --destructive-foreground: 0 0% 100%;
   --border: 0 0% 0% / 0.1;
   --input: 0 0% 0% / 0.12;
-  --ring: 209 77% 23%;
+  --ring: 209 78% 23%;
   --sidebar: 0 0% 100%;
   --sidebar-foreground: 216 20% 20%;
   --sidebar-border: 0 0% 0% / 0.08;
-  --sidebar-primary: 209 77% 23%;
+  --sidebar-primary: 209 78% 23%;
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 204 26% 60% / 0.1;
-  --sidebar-accent-foreground: 209 77% 23%;
-  --sidebar-ring: 209 77% 23%;
+  --sidebar-accent-foreground: 209 78% 23%;
+  --sidebar-ring: 209 78% 23%;
   --gold: 197 45% 60%;
   --gold-foreground: 0 0% 100%;
 }

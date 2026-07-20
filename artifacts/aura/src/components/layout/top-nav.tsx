@@ -309,14 +309,14 @@ export function TopNav() {
             className="flex items-center gap-3 group shrink-0"
             title="Back to landing"
           >
-            <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20 transition-transform group-hover:scale-105 overflow-hidden">
-              <img src={`${import.meta.env.BASE_URL}logo-mark.png`} alt="AURA" className="h-full w-full object-cover" />
+            <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-primary/25 transition-transform group-hover:scale-105">
+              <Sparkles className="h-5 w-5 text-primary drop-shadow-[0_0_8px_rgba(127,157,177,0.5)]" />
             </span>
             <div className="hidden sm:flex flex-col leading-none">
               <span className="text-lg font-bold tracking-tight">
-                AURA<span className="text-primary font-mono text-base ml-[1px]">.OS</span>
+                AURA<span className="text-primary drop-shadow-[0_0_8px_rgba(127,157,177,0.3)]">.OS</span>
               </span>
-              <span className="mt-1 text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground">
+              <span className="mt-1 text-[9px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
                 Dealership OS
               </span>
             </div>
