@@ -318,9 +318,6 @@ export default function Landing() {
           className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 lg:px-14 h-24"
         >
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-              <span className="font-bold text-white leading-none">A</span>
-            </div>
             <span className="text-xl font-semibold tracking-widest uppercase text-white">
               AURA Motors
             </span>
