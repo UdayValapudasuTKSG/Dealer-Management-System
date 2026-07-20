@@ -30,7 +30,6 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Page } from "@/components/layout/page";
-import { PageHero } from "@/components/layout/page-hero";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { VehicleCascade } from "@/components/vehicle-cascade";
 import { useToast } from "@/hooks/use-toast";
@@ -278,12 +277,6 @@ export default function Leads() {
 
   return (
     <>
-    <PageHero
-
-      eyebrow="Sales Floor"
-      title="Pipeline"
-      subtitle="Every prospect, scored and routed — from first touch to sold."
-    />
     <Page className="space-y-5">
       {/* Compact command row: view controls + primary action. */}
       <div className="flex flex-wrap items-center justify-end gap-3">

@@ -47,6 +47,7 @@ import {
   FileText,
   KeyRound,
   Loader2,
+  Search,
   Pencil,
   Plus,
   X,
@@ -178,6 +179,7 @@ export default function Inventory() {
   const createVehicle = useCreateVehicle();
   const [body, setBody] = useState<string>("all");
   const [powertrain, setPowertrain] = useState<string>("all");
+  const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Vehicle | null>(null);
   const { density, setDensity, layout, setLayout } = useViewMode("inventory");
 
@@ -191,103 +193,138 @@ export default function Inventory() {
     return ["all", ...Array.from(set)];
   }, [vehicles]);
 
-  const featured = useMemo(
-    () => (vehicles ?? []).find((v) => v.featured && v.imageUrl) ?? vehicles?.[0],
-    [vehicles],
-  );
-
-  const filtered = useMemo(
-    () =>
-      (vehicles ?? []).filter(
-        (v) =>
-          (body === "all" || v.bodyType === body) &&
-          (powertrain === "all" || v.powertrain === powertrain),
-      ),
-    [vehicles, body, powertrain],
-  );
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (vehicles ?? []).filter(
+      (v) =>
+        (body === "all" || v.bodyType === body) &&
+        (powertrain === "all" || v.powertrain === powertrain) &&
+        (q === "" ||
+          `${v.year} ${v.make} ${v.model} ${v.trim ?? ""}`
+            .toLowerCase()
+            .includes(q)),
+    );
+  }, [vehicles, body, powertrain, query]);
 
   return (
     <div className="h-full overflow-y-auto">
-      {/* Cinematic featured hero */}
-      <div className="relative h-[62vh] min-h-[420px] w-full overflow-hidden bg-black">
-        {featured?.imageUrl && (
-          <motion.img
-            key={featured.id}
-            initial={{ scale: 1.08, opacity: 0.4 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 1.4, ease: "easeOut" }}
-            src={img(featured.imageUrl)}
-            alt={`${featured.make} ${featured.model}`}
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-black/40 to-black/20 z-10" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/20 to-transparent z-10" />
+      {/* eatnaked-style centered header */}
+      <div className="relative w-full overflow-hidden">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.35]"
+          style={{
+            backgroundImage:
+              "linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)",
+            backgroundSize: "56px 56px",
+            maskImage:
+              "radial-gradient(ellipse 80% 90% at 50% 0%, black 40%, transparent 100%)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 80% 90% at 50% 0%, black 40%, transparent 100%)",
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-72"
+          style={{
+            background:
+              "radial-gradient(ellipse 60% 100% at 50% 0%, rgba(229,9,20,0.12), transparent 70%)",
+          }}
+        />
 
-        <div className="relative z-20 h-full w-full px-5 md:px-8 flex flex-col justify-end pb-16">
-          {featured && (
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.3 }}
-              className="max-w-2xl"
-            >
-              <div className="text-xs font-bold uppercase tracking-[0.25em] text-primary mb-4 text-glow">
-                The Showroom · Featured
-              </div>
-              <h1 className="text-5xl md:text-7xl font-semibold tracking-tight text-white leading-[0.95]">
-                {featured.make}{" "}
-                <span className="font-light">{featured.model}</span>
-              </h1>
-              {featured.description && (
-                <p className="text-lg text-white/80 font-light mt-5 max-w-xl leading-relaxed">
-                  {featured.description}
-                </p>
-              )}
-              <div className="flex flex-wrap items-center gap-6 mt-8 text-white">
-                <div className="text-3xl font-light tracking-tight">
-                  ${featured.price.toLocaleString()}
-                </div>
-                <div className="h-6 w-px bg-white/30" />
-                <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-white/80">
-                  {powertrainIcon(featured.powertrain)}
-                  {featured.powertrain === "EV" ? "Electric" : featured.powertrain}
-                </div>
-                {featured.rangeKm != null && (
-                  <div className="flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-white/80">
-                    <Gauge className="w-4 h-4" />
-                    {featured.rangeKm} km range
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => setSelected(featured)}
-                className="group mt-8 inline-flex items-center gap-2 h-12 px-7 rounded-full bg-primary text-white text-sm font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all duration-300"
+        <div className="relative z-10 flex flex-col items-center text-center px-5 pt-12 pb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-foreground/[0.04] px-4 py-1.5 text-xs font-medium tracking-wide text-foreground/80"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+            The Showroom
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.08 }}
+            className="mt-6 text-5xl md:text-7xl font-semibold tracking-tight leading-[0.95]"
+          >
+            Discover the Range
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.16 }}
+            className="mt-5 text-muted-foreground font-light max-w-xl"
+          >
+            Every vehicle in stock, ready for delivery anywhere in Guyana.
+          </motion.p>
+
+          {/* Search */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.24 }}
+            className="mt-8 w-full max-w-xl"
+          >
+            <div className="relative">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search make, model or year..."
+                className="w-full h-14 rounded-full border border-white/15 bg-foreground/[0.04] pl-6 pr-16 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all"
+              />
+              <span
+                aria-hidden="true"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/40"
               >
-                View 360° & details
-                <Rotate3d className="w-4 h-4 transition-transform duration-500 group-hover:rotate-180" />
-              </button>
-            </motion.div>
-          )}
-          <div className="absolute bottom-6 right-6 md:right-14 text-white/50 flex items-center gap-2 text-xs uppercase tracking-widest">
-            Explore range
-            <ChevronDown className="w-4 h-4 animate-bounce" />
-          </div>
+                <Search className="w-4 h-4" />
+              </span>
+            </div>
+          </motion.div>
+
+          {/* Category pills */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.32 }}
+            className="mt-10 flex flex-wrap items-center justify-center gap-2.5"
+          >
+            {bodyTypes.map((bt) => (
+              <FilterChip
+                key={bt}
+                active={body === bt}
+                onClick={() => setBody(bt)}
+                label={bt === "all" ? "All" : bt}
+              />
+            ))}
+          </motion.div>
         </div>
       </div>
 
       <div className="w-full px-5 md:px-8 py-8 space-y-8">
-        {/* Intro */}
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 className="text-2xl md:text-[1.75rem] font-semibold tracking-tight">
-              Discover the range
-            </h2>
-            <p className="text-muted-foreground mt-2 font-light max-w-2xl">
-              Explore the full lineup ready for delivery and find the vehicle that
-              fits perfectly.
-            </p>
+        {/* Toolbar: powertrain filters, count, view controls, admin actions */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
+          <div className="flex flex-wrap items-center gap-2">
+            {powertrains.map((pt) => (
+              <FilterChip
+                key={pt}
+                active={powertrain === pt}
+                onClick={() => setPowertrain(pt)}
+                label={pt === "all" ? "All powertrains" : powertrainLabel(pt)}
+                subtle
+              />
+            ))}
           </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <p className="text-sm text-muted-foreground tabular-nums">
+              {filtered.length} vehicle{filtered.length === 1 ? "" : "s"}
+            </p>
+            <ViewControls
+              layout={layout}
+              onLayoutChange={setLayout}
+              density={density}
+              onDensityChange={setDensity}
+            />
           {can("inventory", "create") && (
             <div className="flex flex-wrap items-center gap-3">
             <ImportVehiclesDialog
@@ -337,43 +374,6 @@ export default function Inventory() {
             />
             </div>
           )}
-        </div>
-
-        {/* Filter bar (BMW-style) */}
-        <div className="flex flex-col gap-6 border-b border-border pb-6">
-          <div className="flex flex-wrap items-center gap-2">
-            {bodyTypes.map((bt) => (
-              <FilterChip
-                key={bt}
-                active={body === bt}
-                onClick={() => setBody(bt)}
-                label={bt === "all" ? "All models" : bt}
-              />
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              {powertrains.map((pt) => (
-                <FilterChip
-                  key={pt}
-                  active={powertrain === pt}
-                  onClick={() => setPowertrain(pt)}
-                  label={pt === "all" ? "All" : powertrainLabel(pt)}
-                  subtle
-                />
-              ))}
-            </div>
-            <div className="flex items-center gap-4">
-              <p className="text-sm text-muted-foreground tabular-nums">
-                {filtered.length} vehicle{filtered.length === 1 ? "" : "s"}
-              </p>
-              <ViewControls
-                layout={layout}
-                onLayoutChange={setLayout}
-                density={density}
-                onDensityChange={setDensity}
-              />
-            </div>
           </div>
         </div>
 

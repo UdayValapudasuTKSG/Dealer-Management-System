@@ -859,6 +859,8 @@ export default function LeadDetail() {
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
         {/* Left rail */}
         <div className="space-y-6">
+          <AgentBriefPanel leadId={lead.id} leadPhone={lead.phone} />
+
           <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
             <div className="flex items-center gap-2 mb-3">
               <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">
@@ -895,8 +897,6 @@ export default function LeadDetail() {
               ) : null}
             </Field>
           </div>
-
-          <AgentBriefPanel leadId={lead.id} leadPhone={lead.phone} />
 
           <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
             <div className="flex items-center gap-2 mb-3">
