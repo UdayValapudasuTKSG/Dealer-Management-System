@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Plus, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page } from "@/components/layout/page";
+import { PageHero } from "@/components/layout/page-hero";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
@@ -60,14 +61,16 @@ export default function Deals() {
   const stages = ["desking", "negotiation", "finance", "committed", "delivered"];
 
   return (
+    <>
+    <PageHero
+      video="pipeline_sales_floor.mp4"
+      eyebrow="Sales Desk"
+      title="Deal"
+      accent="Structuring"
+      subtitle="Bespoke negotiation and closing."
+    />
     <Page fill>
-      <PageHeader
-        title="Deal"
-        accent="Structuring"
-        subtitle="Bespoke negotiation and closing."
-        className="mb-8 shrink-0"
-        action={
-          <div className="flex items-center gap-3">
+      <div className="mb-8 shrink-0 flex items-center justify-end gap-3">
           <ViewControls
             layout={layout}
             onLayoutChange={setLayout}
@@ -134,9 +137,7 @@ export default function Deals() {
               toast({ title: "Deal desked", description: "AURA computed the OTD structure." });
             }}
           />
-          </div>
-        }
-      />
+      </div>
 
       {layout === "list" ? (
         <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
@@ -312,5 +313,6 @@ export default function Deals() {
       </div>
       )}
     </Page>
+    </>
   );
 }

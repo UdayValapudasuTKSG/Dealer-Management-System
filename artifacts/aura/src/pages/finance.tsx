@@ -38,7 +38,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page } from "@/components/layout/page";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
@@ -48,6 +48,7 @@ import {
   FINANCE_STATUS_LABEL,
   statusBadgeClass,
 } from "@/components/finance/application-detail";
+import { PageHero } from "@/components/layout/page-hero";
 
 const TABS = [
   { id: "applications", label: "Applications", icon: FileText },
@@ -164,12 +165,15 @@ export default function Finance() {
   );
 
   return (
+    <>
+    <PageHero
+      video="finance_signing.mp4"
+      eyebrow="Finance Desk"
+      title="Finance"
+      subtitle="Credit applications, lender routing, invoicing and settlements."
+      action={tab === "applications" ? newApplicationDialog : undefined}
+    />
     <Page className="space-y-5">
-      <PageHeader
-        title="Finance"
-        subtitle="Credit applications, lender routing, invoicing and settlements."
-        action={tab === "applications" ? newApplicationDialog : undefined}
-      />
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex gap-1 bg-white/[0.03] border border-white/10 rounded-full p-1">
@@ -560,5 +564,6 @@ export default function Finance() {
 
       <ApplicationDetailDialog appId={detailId} onClose={() => setDetailId(null)} />
     </Page>
+    </>
   );
 }

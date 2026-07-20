@@ -27,7 +27,8 @@ import { format } from "date-fns";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
 import { motion, AnimatePresence } from "framer-motion";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page } from "@/components/layout/page";
+import { PageHero } from "@/components/layout/page-hero";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -43,21 +44,24 @@ export default function Parts() {
   const [tab, setTab] = useState<TabKey>("parts");
 
   return (
+    <>
+    <PageHero
+      video="parts_warehouse.mp4"
+      eyebrow="Supply Line"
+      title="Parts"
+      accent="Operations"
+      subtitle="Stock, suppliers and purchasing — the workshop's supply line."
+      action={
+        tab === "parts" ? (
+          <CreatePartDialog />
+        ) : tab === "suppliers" ? (
+          <CreateSupplierDialog />
+        ) : (
+          <CreatePurchaseDialog />
+        )
+      }
+    />
     <Page className="space-y-5">
-      <PageHeader
-        title="Parts"
-        accent="Operations"
-        subtitle="Stock, suppliers and purchasing — the workshop's supply line."
-        action={
-          tab === "parts" ? (
-            <CreatePartDialog />
-          ) : tab === "suppliers" ? (
-            <CreateSupplierDialog />
-          ) : (
-            <CreatePurchaseDialog />
-          )
-        }
-      />
 
       <div className="flex items-center gap-1 border-b border-white/10">
         {TABS.map((t) => (
@@ -97,6 +101,7 @@ export default function Parts() {
         </motion.div>
       </AnimatePresence>
     </Page>
+    </>
   );
 }
 

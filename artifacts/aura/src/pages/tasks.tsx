@@ -14,6 +14,7 @@ import {
   type Task,
 } from "@workspace/api-client-react";
 import { Page } from "@/components/layout/page";
+import { PageHero } from "@/components/layout/page-hero";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -128,16 +129,15 @@ export default function Tasks() {
     : null;
 
   return (
+    <>
+    <PageHero
+      video="office_operations.mp4"
+      eyebrow="Back Office"
+      title="Tasks"
+      subtitle="Team follow-ups, deliveries and internal to-dos."
+    />
     <Page className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <ClipboardList className="h-6 w-6 text-primary" /> Tasks
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Team follow-ups, deliveries and internal to-dos.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-4">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setFilterMine((v) => !v)}
@@ -280,6 +280,7 @@ export default function Tasks() {
         onDelete={(id) => deleteTask.mutate({ id })}
       />
     </Page>
+    </>
   );
 }
 

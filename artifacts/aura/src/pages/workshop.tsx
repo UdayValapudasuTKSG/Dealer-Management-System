@@ -1,5 +1,6 @@
 import { useListJobCards } from "@workspace/api-client-react";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page } from "@/components/layout/page";
+import { PageHero } from "@/components/layout/page-hero";
 import { JobCardPanel } from "@/pages/service";
 import { Wrench, ClipboardList, Clock, CheckCircle2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,12 +13,15 @@ export default function Workshop() {
   const hours = cards?.reduce((s, c) => s + c.laborHours, 0) ?? 0;
 
   return (
+    <>
+    <PageHero
+      video="service_bay.mp4"
+      eyebrow="Workshop Floor"
+      title="Workshop"
+      accent="Operations"
+      subtitle="Your assigned job cards, checklists and hours."
+    />
     <Page className="space-y-5">
-      <PageHeader
-        title="Workshop"
-        accent="Operations"
-        subtitle="Your assigned job cards, checklists and hours."
-      />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard icon={ClipboardList} label="Active jobs" value={String(open.length)} />
@@ -46,6 +50,7 @@ export default function Workshop() {
         </div>
       )}
     </Page>
+    </>
   );
 }
 

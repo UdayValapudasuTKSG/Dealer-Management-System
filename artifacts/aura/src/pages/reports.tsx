@@ -39,6 +39,7 @@ import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { PageHero } from "@/components/layout/page-hero";
 
 type ReportType =
   | "lead-conversion"
@@ -180,13 +181,14 @@ export default function Reports() {
 
   return (
     <div className="h-full overflow-y-auto">
+      <PageHero
+        video="office_operations.mp4"
+        eyebrow="Intelligence"
+        title="Reports"
+        subtitle="Performance, revenue and pipeline analytics."
+      />
       <div className="w-full px-5 md:px-8 py-8 space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-[1.75rem] font-semibold tracking-tight">
-              Reports
-            </h1>
-          </div>
+        <div className="flex flex-wrap items-end justify-end gap-4">
           <div className="flex items-end gap-3">
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               From

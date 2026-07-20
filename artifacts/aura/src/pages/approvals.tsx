@@ -4,6 +4,7 @@ import { AnimatePresence } from "framer-motion";
 import { Loader2, Check, Layers, Flame, ShieldCheck, TriangleAlert } from "lucide-react";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page } from "@/components/layout/page";
+import { PageHero } from "@/components/layout/page-hero";
 
 const APPROVAL_TYPES = new Set([
   "below_floor_price",
@@ -20,16 +21,15 @@ export default function Approvals() {
   const exceptions = (gates ?? []).filter((g) => !APPROVAL_TYPES.has(g.type));
 
   return (
+    <>
+    <PageHero
+      video="office_operations.mp4"
+      eyebrow="Sign-Off"
+      title="Reviews"
+      subtitle="The moments that need a human — everything else runs itself."
+    />
     <Page>
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between mb-5">
-        <div>
-          <h1 className="text-2xl md:text-[1.75rem] font-light tracking-tight leading-tight">
-            <span className="font-semibold">Reviews</span>
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1 font-light max-w-xl">
-            The moments that need a human — everything else runs itself.
-          </p>
-        </div>
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-end mb-5">
 
         {total > 0 && (
           <div className="flex gap-3">
@@ -118,5 +118,6 @@ export default function Approvals() {
         </div>
       )}
     </Page>
+    </>
   );
 }

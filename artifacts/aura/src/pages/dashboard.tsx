@@ -287,15 +287,17 @@ export default function Dashboard() {
             <ActionQueue />
           </div>
           
-          <div className="xl:col-span-1">
+          <div className="xl:col-span-1 flex flex-col">
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold tracking-wide">Today's Schedule</h2>
                 <p className="text-sm text-muted-foreground mt-1">Upcoming appointments</p>
               </div>
             </div>
-            <div className="rounded-2xl border border-border/50 bg-foreground/[0.02] p-5 h-[calc(100%-4rem)] overflow-y-auto">
-              <TodaySchedule />
+            <div className="relative flex-1 min-h-[320px] max-h-[420px] xl:max-h-none rounded-2xl border border-border/50 bg-foreground/[0.02]">
+              <div className="absolute inset-0 overflow-y-auto p-5">
+                <TodaySchedule />
+              </div>
             </div>
           </div>
         </div>

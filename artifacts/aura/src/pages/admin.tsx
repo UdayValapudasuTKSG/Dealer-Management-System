@@ -23,7 +23,8 @@ import {
   useListAdminRoles,
 } from "@workspace/api-client-react";
 import type { Dealer, DealerMember } from "@workspace/api-client-react";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page } from "@/components/layout/page";
+import { PageHero } from "@/components/layout/page-hero";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -388,11 +389,15 @@ export default function AdminPage() {
     (dealers ?? []).find((d) => d.id === selectedId) ?? (dealers ?? [])[0];
 
   return (
+    <>
+    <PageHero
+      video="office_operations.mp4"
+      eyebrow="Platform Control"
+      title="Platform"
+      accent="Admin"
+      subtitle="Manage dealerships, memberships, and platform users"
+    />
     <Page>
-      <PageHeader
-        title="Platform Admin"
-        subtitle="Manage dealerships, memberships, and platform users"
-      />
       <Tabs defaultValue="dealers" className="space-y-5">
         <TabsList>
           <TabsTrigger value="dealers">Dealerships</TabsTrigger>
@@ -518,5 +523,6 @@ export default function AdminPage() {
         Platform administration is only visible to the super admin.
       </div>
     </Page>
+    </>
   );
 }

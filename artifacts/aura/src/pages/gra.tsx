@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Check,
 } from "lucide-react";
+import { PageHero } from "@/components/layout/page-hero";
 
 const ACCEPTED: Record<string, GraExtractRequestMediaType> = {
   "image/png": "image/png",
@@ -155,16 +156,15 @@ export default function Gra() {
   };
 
   return (
-    <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div>
-        <h1 className="text-2xl md:text-[1.75rem] font-light tracking-tight leading-tight">
-          GRA Duty <span className="font-semibold">Filing</span>
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1 font-light max-w-2xl">
-          Upload an import document — the concierge prepares the duty pack and
-          routes it for approval.
-        </p>
-      </div>
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <PageHero
+        video="delivery_transport.mp4"
+        eyebrow="Customs Desk"
+        title="GRA Duty"
+        accent="Filing"
+        subtitle="Upload an import document — the concierge prepares the duty pack and routes it for approval."
+      />
+      <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         {/* Upload / preview column */}
@@ -417,6 +417,7 @@ export default function Gra() {
             )}
           </AnimatePresence>
         </div>
+      </div>
       </div>
     </div>
   );

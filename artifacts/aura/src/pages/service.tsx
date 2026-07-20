@@ -47,7 +47,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page } from "@/components/layout/page";
+import { PageHero } from "@/components/layout/page-hero";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
@@ -73,13 +74,16 @@ export default function Service() {
   const [tab, setTab] = useState<TabKey>("bookings");
 
   return (
+    <>
+    <PageHero
+      video="service_bay.mp4"
+      eyebrow="After-Sales"
+      title="Service"
+      accent="Operations"
+      subtitle="Bookings, job cards, invoices and coverage — the full after-sales lane."
+      action={<HeaderAction tab={tab} />}
+    />
     <Page className="space-y-5">
-      <PageHeader
-        title="Service"
-        accent="Operations"
-        subtitle="Bookings, job cards, invoices and coverage — the full after-sales lane."
-        action={<HeaderAction tab={tab} />}
-      />
 
       <div className="flex items-center gap-1 border-b border-white/10 overflow-x-auto no-scrollbar">
         {TABS.map((t) => (
@@ -120,6 +124,7 @@ export default function Service() {
         </motion.div>
       </AnimatePresence>
     </Page>
+    </>
   );
 }
 

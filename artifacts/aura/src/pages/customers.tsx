@@ -9,7 +9,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, User, MapPin, Car, Mail, Phone, Crown } from "lucide-react";
 import { motion } from "framer-motion";
-import { Page, PageHeader } from "@/components/layout/page";
+import { Page } from "@/components/layout/page";
+import { PageHero } from "@/components/layout/page-hero";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
@@ -39,13 +40,16 @@ export default function Customers() {
   const comfortable = density === "comfortable";
 
   return (
+    <>
+    <PageHero
+      video="customer_handover.mp4"
+      eyebrow="Relationships"
+      title="Account"
+      accent="Portfolio"
+      subtitle="Lifetime relationships and loyalty."
+    />
     <Page className="space-y-5">
-      <PageHeader
-        title="Account"
-        accent="Portfolio"
-        subtitle="Lifetime relationships and loyalty."
-        action={
-          <div className="flex items-center gap-3">
+      <div className="flex items-center justify-end gap-3">
             <ViewControls
               layout={layout}
               onLayoutChange={setLayout}
@@ -94,9 +98,7 @@ export default function Customers() {
                 toast({ title: "Account added", description: "AURA is enriching the new profile." });
               }}
             />
-          </div>
-        }
-      />
+      </div>
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -318,5 +320,6 @@ export default function Customers() {
         </div>
       )}
     </Page>
+    </>
   );
 }

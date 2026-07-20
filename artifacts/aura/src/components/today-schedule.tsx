@@ -4,6 +4,7 @@ import {
   useListLeads,
   useListDeliveries,
   useListServiceOrders,
+  useListVehicles,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { CalendarClock, Car, PenTool, Truck } from "lucide-react";
@@ -14,6 +15,7 @@ export function TodaySchedule() {
   const { data: leads, isLoading: leadsLoading } = useListLeads();
   const { data: deliveries, isLoading: deliveriesLoading } = useListDeliveries();
   const { data: serviceOrders, isLoading: serviceLoading } = useListServiceOrders();
+  const { data: vehicles } = useListVehicles();
 
   const schedule = useMemo(() => {
     const items: Array<{
@@ -25,7 +27,31 @@ export function TodaySchedule() {
       roleLabel: string;
       icon: any;
       href: string;
+      image: string | null;
     }> = [];
+
+    const vehicleById = new Map(
+      (vehicles ?? []).map((v) => [v.id, v] as const),
+    );
+    const imageFor = (vehicleId: number | null | undefined): string | null => {
+      if (!vehicleId) return null;
+      const v = vehicleById.get(vehicleId);
+      return v?.imageUrl ?? v?.images?.[0] ?? null;
+    };
+    const imageByLabel = (label: string | null | undefined): string | null => {
+      if (!label) return null;
+      const lower = label.toLowerCase();
+      const v = (vehicles ?? []).find(
+        (veh) =>
+          lower.includes(veh.model.toLowerCase()) ||
+          (veh.make && lower.includes(veh.make.toLowerCase()) && lower.includes(veh.model.toLowerCase().slice(0, 4))),
+      );
+      return v?.imageUrl ?? v?.images?.[0] ?? null;
+    };
+    // Every schedule row shows a car image; fall back to a house asset when
+    // the record has no resolvable vehicle.
+    const FALLBACK_IMAGE = "/vehicles/aura_bmw_i4.png";
+    const withFallback = (url: string | null) => url ?? FALLBACK_IMAGE;
 
     const windowStart = startOfDay(new Date());
     const windowEnd = addDays(windowStart, 7);
@@ -43,6 +69,7 @@ export function TodaySchedule() {
           roleLabel: "Sales Advisor",
           icon: Car,
           href: `/lead/${l.id}`,
+          image: withFallback(imageFor(l.interestedVehicleId)),
         });
       }
     }
@@ -60,6 +87,7 @@ export function TodaySchedule() {
           roleLabel: "Delivery Advisor",
           icon: Truck,
           href: `/deliveries`,
+          image: withFallback(imageFor(d.vehicleId)),
         });
       }
     }
@@ -81,12 +109,13 @@ export function TodaySchedule() {
           roleLabel: "Service Advisor",
           icon: PenTool,
           href: `/service`,
+          image: withFallback(imageByLabel(s.vehicleInfo)),
         });
       }
     }
 
     return items.sort((a, b) => a.time.getTime() - b.time.getTime());
-  }, [leads, deliveries, serviceOrders]);
+  }, [leads, deliveries, serviceOrders, vehicles]);
 
   if (leadsLoading || deliveriesLoading || serviceLoading) {
     return (
@@ -111,8 +140,15 @@ export function TodaySchedule() {
   }
 
   const todayItems = schedule.filter((i) => isToday(i.time));
-  const shown = todayItems.length > 0 ? todayItems : schedule.slice(0, 5);
+  const shown = todayItems.length > 0 ? todayItems : schedule.slice(0, 8);
   const showingUpcoming = todayItems.length === 0;
+
+  const imgSrc = (url: string | null) =>
+    url
+      ? url.startsWith("http")
+        ? url
+        : `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`
+      : null;
 
   return (
     <div>
@@ -137,8 +173,13 @@ export function TodaySchedule() {
           <Link href={item.href}>
             <Card className="glass-panel border-none shadow-sm hover:shadow-md transition-all group cursor-pointer overflow-hidden">
               <CardContent className="p-3.5 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-foreground/[0.04] text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors flex items-center justify-center shrink-0">
-                  <item.icon className="w-4 h-4" />
+                <div className="w-12 h-9 rounded-lg overflow-hidden bg-foreground/[0.04] shrink-0">
+                  <img
+                    src={imgSrc(item.image)!}
+                    alt={item.subtitle}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-semibold truncate group-hover:text-primary transition-colors">

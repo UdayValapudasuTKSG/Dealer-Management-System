@@ -46,6 +46,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { PageHero } from "@/components/layout/page-hero";
 
 const STEP_ICONS: Record<string, React.ReactNode> = {
   sales_order: <FileText className="w-4 h-4" />,
@@ -85,17 +86,14 @@ export default function Deliveries() {
 
   return (
     <div className="h-full overflow-y-auto">
+      <PageHero
+        video="delivery_transport.mp4"
+        eyebrow="Handover Lane"
+        title="Deliveries"
+        subtitle="Bookings, pre-delivery workflow and customer handover — end to end."
+      />
       <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl md:text-[1.75rem] font-light tracking-tight leading-tight">
-              <span className="font-semibold">Deliveries</span>
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1 font-light">
-              Bookings, pre-delivery workflow and customer handover — end to
-              end.
-            </p>
-          </div>
+        <div className="flex flex-wrap items-end justify-end gap-4">
           <div className="flex items-center gap-1 rounded-full border border-white/10 bg-foreground/[0.03] p-1">
             {(
               [
