@@ -60,7 +60,7 @@ const NEXT_ADVANCE: Record<
 > = {
   aware: { toStage: "qualified", label: "Qualified" },
   consider: { toStage: "test_drive", label: "Test Drive" },
-  engage: { toStage: "negotiation", label: "Desking" },
+  engage: { toStage: "negotiation", label: "Negotiation" },
   negotiate: { toStage: "sold", label: "Sold" },
 };
 
