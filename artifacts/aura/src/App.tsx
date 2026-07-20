@@ -32,6 +32,7 @@ import TeamProfile from "@/pages/team-profile";
 import Approvals from "@/pages/approvals";
 import Gra from "@/pages/gra";
 import Tasks from "@/pages/tasks";
+import Agents from "@/pages/agents";
 import SettingsUsers from "@/pages/settings-users";
 import SettingsEmail from "@/pages/settings-email";
 import SettingsRoles from "@/pages/settings-roles";
@@ -177,6 +178,7 @@ function AppShell() {
                 <Route path="/vehicle/:id" component={VehicleDetailPage} />
                 <Route path="/team/:id" component={TeamProfile} />
                 <Route path="/tasks" component={Tasks} />
+                <Route path="/agents" component={Agents} />
                 <Route path="/gra" component={Gra} />
                 <Route path="/settings/users">
                   <RequireSettings>

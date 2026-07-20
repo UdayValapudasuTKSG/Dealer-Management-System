@@ -11,6 +11,26 @@ import {
   ChevronsUpDown,
   Menu,
   X,
+  LayoutDashboard,
+  BarChart3,
+  ClipboardCheck,
+  ListChecks,
+  Waypoints,
+  Landmark,
+  Car,
+  Truck,
+  Wrench,
+  Package,
+  Factory,
+  Users,
+  Stamp,
+  UserCog,
+  ShieldCheck,
+  ScrollText,
+  Mail,
+  Shield,
+  Bot,
+  type LucideIcon,
 } from "lucide-react";
 import { useClerk } from "@clerk/react";
 import { recordLogoutEvent } from "@workspace/api-client-react";
@@ -18,57 +38,52 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuthz } from "@/lib/auth";
 
-type NavItem = { name: string; href: string; module: string };
-type Cluster = { label: string; icon: string; items: NavItem[] };
+type NavItem = { name: string; href: string; module: string; icon: LucideIcon };
+type Cluster = { label: string; items: NavItem[] };
 
 const CLUSTERS: Cluster[] = [
   {
     label: "Insights & Actions",
-    icon: "nav/intelligence.png",
     items: [
-      { name: "Command Center", href: "/command-center", module: "" },
-      { name: "Reports", href: "/reports", module: "" },
-      { name: "Reviews", href: "/approvals", module: "approvals" },
-      { name: "Tasks", href: "/tasks", module: "" },
+      { name: "Command Center", href: "/command-center", module: "", icon: LayoutDashboard },
+      { name: "Reports", href: "/reports", module: "", icon: BarChart3 },
+      { name: "Reviews", href: "/approvals", module: "approvals", icon: ClipboardCheck },
+      { name: "Tasks", href: "/tasks", module: "", icon: ListChecks },
+      { name: "AI Agents", href: "/agents", module: "", icon: Bot },
     ],
   },
   {
     label: "Sales",
-    icon: "nav/sales.png",
     items: [
-      { name: "Pipeline", href: "/pipeline", module: "leads" },
-      { name: "Finance", href: "/finance", module: "finance" },
+      { name: "Pipeline", href: "/pipeline", module: "leads", icon: Waypoints },
+      { name: "Finance", href: "/finance", module: "finance", icon: Landmark },
     ],
   },
   {
     label: "Operations",
-    icon: "nav/operations.png",
     items: [
-      { name: "Inventory", href: "/inventory", module: "inventory" },
-      { name: "Deliveries", href: "/deliveries", module: "deliveries" },
-      { name: "Service", href: "/service", module: "service" },
-      { name: "Parts", href: "/parts", module: "parts" },
-      { name: "Workshop", href: "/workshop", module: "service" },
+      { name: "Inventory", href: "/inventory", module: "inventory", icon: Car },
+      { name: "Deliveries", href: "/deliveries", module: "deliveries", icon: Truck },
+      { name: "Service", href: "/service", module: "service", icon: Wrench },
+      { name: "Parts", href: "/parts", module: "parts", icon: Package },
+      { name: "Workshop", href: "/workshop", module: "service", icon: Factory },
     ],
   },
   {
     label: "Accounts",
-    icon: "nav/clients.png",
-    items: [{ name: "Accounts", href: "/customers", module: "customers" }],
+    items: [{ name: "Accounts", href: "/customers", module: "customers", icon: Users }],
   },
   {
     label: "Compliance",
-    icon: "nav/compliance.png",
-    items: [{ name: "GRA Filing", href: "/gra", module: "gra" }],
+    items: [{ name: "GRA Filing", href: "/gra", module: "gra", icon: Stamp }],
   },
   {
     label: "Settings",
-    icon: "",
     items: [
-      { name: "Users", href: "/settings/users", module: "settings" },
-      { name: "Roles & Permissions", href: "/settings/roles", module: "settings" },
-      { name: "Audit Logs", href: "/settings/audit", module: "settings" },
-      { name: "Email Engine", href: "/settings/email", module: "settings" },
+      { name: "Users", href: "/settings/users", module: "settings", icon: UserCog },
+      { name: "Roles & Permissions", href: "/settings/roles", module: "settings", icon: ShieldCheck },
+      { name: "Audit Logs", href: "/settings/audit", module: "settings", icon: ScrollText },
+      { name: "Email Engine", href: "/settings/email", module: "settings", icon: Mail },
     ],
   },
 ];
@@ -195,7 +210,7 @@ export function DealerSwitcher() {
   );
 }
 
-function UserCard() {
+function UserCard({ collapsed = false }: { collapsed?: boolean }) {
   const { me } = useAuthz();
   const { signOut } = useClerk();
 
@@ -210,19 +225,32 @@ function UserCard() {
 
   const initial = (me?.name ?? me?.email ?? "?").slice(0, 1).toUpperCase();
 
+  const avatar = me?.imageUrl ? (
+    <img
+      src={me.imageUrl}
+      alt=""
+      className="h-9 w-9 rounded-full object-cover shrink-0"
+    />
+  ) : (
+    <span className="h-9 w-9 rounded-full bg-primary/25 text-sky-200 flex items-center justify-center text-sm font-bold shrink-0">
+      {initial}
+    </span>
+  );
+
+  if (collapsed) {
+    return (
+      <div
+        className="flex justify-center"
+        title={me?.name ?? me?.email ?? "Account"}
+      >
+        {avatar}
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2.5 rounded-2xl bg-white/[0.05] border border-white/10 p-2.5">
-      {me?.imageUrl ? (
-        <img
-          src={me.imageUrl}
-          alt=""
-          className="h-9 w-9 rounded-full object-cover shrink-0"
-        />
-      ) : (
-        <span className="h-9 w-9 rounded-full bg-primary/25 text-sky-200 flex items-center justify-center text-sm font-bold shrink-0">
-          {initial}
-        </span>
-      )}
+      {avatar}
       <div className="flex-1 min-w-0 leading-tight">
         <div className="text-xs font-semibold text-white truncate">
           {me?.name ?? me?.email ?? "Account"}
@@ -257,8 +285,7 @@ function useNavClusters() {
   if (me?.isSuperAdmin) {
     clusters.push({
       label: "Admin",
-      icon: "",
-      items: [{ name: "Platform Admin", href: "/admin", module: "" }],
+      items: [{ name: "Platform Admin", href: "/admin", module: "", icon: Shield }],
     });
   }
 
@@ -268,9 +295,11 @@ function useNavClusters() {
 function NavContent({
   layoutId,
   onNavigate,
+  collapsed = false,
 }: {
   layoutId: string;
   onNavigate?: () => void;
+  collapsed?: boolean;
 }) {
   const [location] = useLocation();
   const clusters = useNavClusters();
@@ -281,38 +310,59 @@ function NavContent({
       <Link
         href="/"
         title="Back to landing"
-        className="flex items-center gap-3 px-5 h-20 shrink-0 group"
+        className={cn(
+          "flex items-center gap-3 h-20 shrink-0 group",
+          collapsed ? "justify-center px-0" : "px-5",
+        )}
       >
-        <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-primary/20 ring-1 ring-primary/30 transition-transform group-hover:scale-105">
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/20 ring-1 ring-primary/30 transition-transform group-hover:scale-105">
           <Sparkles className="h-5 w-5 text-sky-300" />
         </span>
-        <div className="flex flex-col leading-none">
-          <span className="text-lg font-bold tracking-tight text-white">
-            AURA<span className="text-sky-300">.OS</span>
-          </span>
-          <span className="mt-1 text-[9px] font-medium uppercase tracking-[0.22em] text-white/40">
-            Dealership OS
-          </span>
-        </div>
+        {!collapsed && (
+          <div className="flex flex-col leading-none whitespace-nowrap overflow-hidden">
+            <span className="text-lg font-bold tracking-tight text-white">
+              AURA<span className="text-sky-300">.OS</span>
+            </span>
+            <span className="mt-1 text-[9px] font-medium uppercase tracking-[0.22em] text-white/40">
+              Dealership OS
+            </span>
+          </div>
+        )}
       </Link>
 
       {/* Nav sections */}
-      <nav className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-3 pb-4 space-y-5">
-        {clusters.map((cluster) => (
+      <nav
+        className={cn(
+          "flex-1 min-h-0 overflow-y-auto no-scrollbar pb-4",
+          collapsed ? "px-2.5 space-y-3" : "px-3 space-y-5",
+        )}
+      >
+        {clusters.map((cluster, ci) => (
           <div key={cluster.label}>
-            <div className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-[0.22em] text-white/35">
-              {cluster.label}
-            </div>
+            {collapsed ? (
+              ci > 0 && <div className="mx-2 mb-3 h-px bg-white/[0.08]" />
+            ) : (
+              <div className="px-3 mb-1.5 text-[9px] font-bold uppercase tracking-[0.22em] text-white/35 whitespace-nowrap overflow-hidden">
+                {cluster.label}
+              </div>
+            )}
             <div className="space-y-0.5">
               {cluster.items.map((item) => {
                 const active = isItemActive(location, item.href);
+                const ItemIcon = item.icon;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={onNavigate}
+                    title={collapsed ? item.name : undefined}
+                    aria-label={item.name}
+                    aria-current={active ? "page" : undefined}
                     className={cn(
-                      "relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium tracking-wide transition-colors",
+                      "relative flex items-center rounded-xl text-[13px] font-medium tracking-wide transition-colors",
+                      collapsed
+                        ? "justify-center h-10 w-10 mx-auto"
+                        : "gap-2.5 px-3 py-2",
                       active
                         ? "text-white"
                         : "text-white/55 hover:text-white hover:bg-white/[0.04]",
@@ -325,13 +375,17 @@ function NavContent({
                         className="absolute inset-0 rounded-xl bg-white/[0.08] ring-1 ring-white/10"
                       />
                     )}
-                    <span
+                    <ItemIcon
                       className={cn(
-                        "relative w-1.5 h-1.5 rounded-full shrink-0 transition-colors",
-                        active ? "bg-gold" : "bg-white/20",
+                        "relative h-4 w-4 shrink-0 transition-colors",
+                        active ? "text-gold" : "text-white/45",
                       )}
                     />
-                    <span className="relative">{item.name}</span>
+                    {!collapsed && (
+                      <span className="relative whitespace-nowrap overflow-hidden">
+                        {item.name}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
@@ -341,19 +395,42 @@ function NavContent({
       </nav>
 
       {/* User card */}
-      <div className="px-3 pb-4 shrink-0">
-        <UserCard />
+      <div className={cn("pb-4 shrink-0", collapsed ? "px-2" : "px-3")}>
+        <UserCard collapsed={collapsed} />
       </div>
     </>
   );
 }
 
-/** NL-Corp-style dark left sidebar — stays dark in BOTH themes. */
+/**
+ * NL-Corp-style dark left sidebar — stays dark in BOTH themes.
+ * Auto-collapses to an icon rail; expands on hover.
+ */
 export function SideNav() {
+  const [hovered, setHovered] = useState(false);
+  const [touchPinned, setTouchPinned] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(hover: none)").matches;
+  });
+  const collapsed = !hovered && !touchPinned;
+
   return (
-    <aside className="relative z-30 hidden md:flex h-full w-60 shrink-0 flex-col bg-[hsl(216,22%,6%)] text-white border-r border-white/[0.06]">
-      <NavContent layoutId="sidenav-active" />
-    </aside>
+    <motion.aside
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocusCapture={() => setHovered(true)}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setHovered(false);
+        }
+      }}
+      onTouchStart={() => setTouchPinned(true)}
+      animate={{ width: collapsed ? 68 : 240 }}
+      transition={{ type: "spring", stiffness: 320, damping: 34 }}
+      className="relative z-30 hidden md:flex h-full shrink-0 flex-col bg-[hsl(216,22%,6%)] text-white border-r border-white/[0.06] overflow-hidden"
+    >
+      <NavContent layoutId="sidenav-active" collapsed={collapsed} />
+    </motion.aside>
   );
 }
 

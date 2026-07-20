@@ -30,6 +30,18 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Page } from "@/components/layout/page";
+import { CarProgress } from "@/components/car-progress";
+import type { LucideIcon } from "lucide-react";
+import {
+  UserPlus,
+  PhoneCall,
+  MessagesSquare,
+  CalendarCheck,
+  KeySquare,
+  CreditCard,
+  ClipboardList,
+  Flag,
+} from "lucide-react";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { VehicleCascade } from "@/components/vehicle-cascade";
 import { useToast } from "@/hooks/use-toast";
@@ -58,6 +70,17 @@ const STAGE_LABEL: Record<Stage, string> = {
   payment: "Payment",
   pre_delivery: "Pre-Delivery",
   delivered: "Delivered",
+};
+
+const STAGE_ICON: Record<Stage, LucideIcon> = {
+  new_lead: UserPlus,
+  contacted: PhoneCall,
+  engaged: MessagesSquare,
+  pre_book: CalendarCheck,
+  vehicle_allocated: KeySquare,
+  payment: CreditCard,
+  pre_delivery: ClipboardList,
+  delivered: Flag,
 };
 
 const STAGE_CAPTION: Record<Stage, string> = {
@@ -527,42 +550,17 @@ export default function Leads() {
         </div>
       ) : (
         <>
-      {/* Stage rail — slim chevron strip */}
-      <div className="flex overflow-x-auto rounded-2xl border border-white/10 bg-foreground/[0.03] p-1.5 gap-0.5">
-        {STAGES.map((stage, i) => {
-          const isActive = stage === selectedStage;
-          return (
-            <button
-              key={stage}
-              onClick={() => setSelectedStage(stage)}
-              style={{
-                clipPath:
-                  i === 0
-                    ? "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%)"
-                    : i === STAGES.length - 1
-                      ? "polygon(0 0, 100% 0, 100% 100%, 0 100%, 10px 50%)"
-                      : "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)",
-              }}
-              className={cn(
-                "relative flex-1 min-w-[110px] flex items-center justify-center gap-2 py-2.5 pl-4 pr-3 text-[11px] font-semibold uppercase tracking-wider transition-colors",
-                isActive
-                  ? "bg-gradient-to-r from-primary to-blue-800 text-white"
-                  : "bg-foreground/[0.05] text-muted-foreground hover:bg-foreground/[0.09] hover:text-foreground",
-              )}
-            >
-              <span className="truncate">{STAGE_LABEL[stage]}</span>
-              <span
-                className={cn(
-                  "shrink-0 rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums",
-                  isActive ? "bg-white/20 text-white" : "bg-foreground/[0.08]",
-                )}
-              >
-                {counts[stage] ?? 0}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Stage rail — order-tracking journey with a car driving to the selected stage */}
+      <CarProgress
+        stages={STAGES.map((s) => ({
+          key: s,
+          label: STAGE_LABEL[s],
+          icon: STAGE_ICON[s],
+          count: counts[s] ?? 0,
+        }))}
+        activeIndex={STAGES.indexOf(selectedStage)}
+        onSelect={(key) => setSelectedStage(key as Stage)}
+      />
 
       {/* Detail — animated per stage */}
       <AnimatePresence mode="wait">

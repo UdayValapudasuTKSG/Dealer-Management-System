@@ -40,9 +40,10 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 - MULTI-DEALER TENANCY: active dealer from the `x-dealer-id` header; routes filter EVERY query by it, stamp it on EVERY insert, and 404 cross-dealer ids. Details in `docs/agent/auth-rbac.md`.
 - Dashboard aggregates are computed server-side (fetch tables, reduce in-memory). `monthlyRevenue` = sum of `otdPrice` for delivered deals created this calendar month.
 - Pipeline stage labels (New → Contacted → Engaged → Pre-Book → Vehicle Allocated → Payment → Pre-Delivery → Delivered, per DMS spec) are label-only mappings over lead phase + linked deal stage — NO DB migration.
-- Hero videos live ONLY on the landing page + dashboard; module pages use `PageHero` WITHOUT the `video` prop (futuristic static gradient/grid backdrop). GRA duty filing is reusable via `components/gra/duty-filing.tsx` (X-ray scan animation) and is embedded in the delivery workflow dialog.
+- Hero videos live ONLY on the landing page + dashboard; `PageHero` is a compact LIGHT header (2026-07: black banner + video removed; `video` prop accepted but ignored). GRA duty filing is reusable via `components/gra/duty-filing.tsx` (X-ray scan animation) and is embedded in the delivery workflow dialog.
 - Lead/deal stage advances are gated: `POST /leads/{id}/advance` validates requirement checklists (422 `unmet[]`); deal PATCH enforces an allowed-transition map.
 - Deals stays OUT of the top nav (deliberate) — reachable via dashboard KPI cards and the copilot `deals` route. Journey + Appraisals pages are deleted; Insurance lives in Delivery, not Finance.
+- Sidebar auto-collapses to a 68px icon rail and expands on hover; staged flows use the `CarProgress` order-tracking rail (`components/car-progress.tsx`); AI Agents hub at `/agents` (GET/PATCH `/agents`, `/activity`).
 
 ## User preferences
 

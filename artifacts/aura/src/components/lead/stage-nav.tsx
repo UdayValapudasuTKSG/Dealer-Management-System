@@ -1,6 +1,20 @@
 import { motion } from "framer-motion";
-import { Check, Lock, Compass } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Check,
+  Compass,
+  UserPlus,
+  PhoneCall,
+  MessagesSquare,
+  CalendarCheck,
+  KeySquare,
+  CreditCard,
+  ClipboardList,
+  Flag,
+  CircleDot,
+  type LucideIcon,
+} from "lucide-react";
+import { CarProgress } from "@/components/car-progress";
 
 export type StageCheckItem = { label: string; done: boolean };
 export type StageNavStage = {
@@ -8,6 +22,17 @@ export type StageNavStage = {
   label: string;
   caption: string;
   checklist: StageCheckItem[];
+};
+
+const STAGE_ICON: Record<string, LucideIcon> = {
+  new_lead: UserPlus,
+  contacted: PhoneCall,
+  engaged: MessagesSquare,
+  pre_book: CalendarCheck,
+  vehicle_allocated: KeySquare,
+  payment: CreditCard,
+  pre_delivery: ClipboardList,
+  delivered: Flag,
 };
 
 /**
@@ -23,79 +48,18 @@ export function StageNav({
   currentIndex: number;
 }) {
   const current = stages[currentIndex];
-  const pct =
-    stages.length > 1 ? (currentIndex / (stages.length - 1)) * 100 : 0;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5 overflow-hidden relative">
-      <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-5">
-        Journey
-      </div>
-
-      {/* Horizontal stepper */}
-      <div className="relative overflow-x-auto pb-1 -mx-1 px-1">
-        <ol className="relative flex items-start min-w-[640px]">
-          {/* Rail */}
-          <div className="absolute top-[13px] left-[calc(100%/16)] right-[calc(100%/16)] h-px bg-white/10" />
-          <motion.div
-            className="absolute top-[13px] left-[calc(100%/16)] h-px bg-primary origin-left"
-            style={{ maxWidth: "calc(100% - 100%/8)" }}
-            initial={{ width: 0 }}
-            animate={{ width: `calc((100% - 100%/8) * ${pct / 100})` }}
-            transition={{ duration: 0.9, ease: "easeOut" }}
-          />
-          {stages.map((s, i) => {
-            const state =
-              i < currentIndex
-                ? "done"
-                : i === currentIndex
-                  ? "current"
-                  : "next";
-            return (
-              <li
-                key={s.key}
-                className="relative flex-1 flex flex-col items-center text-center px-1"
-              >
-                <span
-                  className={cn(
-                    "relative z-10 w-[27px] h-[27px] rounded-full flex items-center justify-center ring-1 transition-colors bg-[#101010]",
-                    state === "done" &&
-                      "bg-primary/15 text-primary ring-primary/40",
-                    state === "current" &&
-                      "bg-primary text-primary-foreground ring-primary shadow-[0_0_14px_rgba(229,9,20,0.5)]",
-                    state === "next" &&
-                      "bg-foreground/[0.04] text-muted-foreground/50 ring-white/10",
-                  )}
-                >
-                  {state === "done" ? (
-                    <Check className="w-3.5 h-3.5" />
-                  ) : state === "next" ? (
-                    <Lock className="w-3 h-3" />
-                  ) : (
-                    <motion.span
-                      className="w-2 h-2 rounded-full bg-primary-foreground"
-                      animate={{ scale: [1, 1.35, 1], opacity: [1, 0.7, 1] }}
-                      transition={{ duration: 1.8, repeat: Infinity }}
-                    />
-                  )}
-                </span>
-                <div
-                  className={cn(
-                    "mt-2 text-[11px] sm:text-xs font-semibold tracking-tight leading-tight",
-                    state === "current"
-                      ? "text-foreground"
-                      : state === "done"
-                        ? "text-foreground/70"
-                        : "text-muted-foreground/60",
-                  )}
-                >
-                  {s.label}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      </div>
+    <div className="space-y-4">
+      {/* Journey — order-tracking rail with the car at the current stage */}
+      <CarProgress
+        stages={stages.map((s) => ({
+          key: s.key,
+          label: s.label,
+          icon: STAGE_ICON[s.key] ?? CircleDot,
+        }))}
+        activeIndex={currentIndex}
+      />
 
       {/* Success guidance for the current stage */}
       {current && (
@@ -104,7 +68,7 @@ export function StageNav({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="mt-5 rounded-xl border border-primary/20 bg-primary/[0.05] p-4"
+          className="rounded-xl border border-primary/20 bg-primary/[0.05] p-4"
         >
           <div className="flex items-center gap-2 mb-1.5">
             <span className="w-6 h-6 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
