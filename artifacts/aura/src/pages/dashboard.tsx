@@ -256,7 +256,7 @@ export default function Dashboard() {
               AURA Concierge · Command Center
             </div>
             <h1 className="text-2xl md:text-[1.75rem] font-semibold tracking-tight text-foreground max-w-3xl leading-tight">
-              {greeting()}. {briefingLine(summary, sortedGates.length)}
+              {greeting()}. Welcome to Command Center.
             </h1>
           </motion.div>
         </div>
