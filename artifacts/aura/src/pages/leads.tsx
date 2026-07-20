@@ -40,43 +40,47 @@ import { ViewControls } from "@/components/view-controls";
 
 const STAGES = [
   "new_lead",
-  "qualified",
-  "test_drive",
-  "desking",
-  "sold",
-  "in_prep",
+  "contacted",
+  "engaged",
+  "pre_book",
+  "vehicle_allocated",
+  "payment",
+  "pre_delivery",
   "delivered",
 ] as const;
 type Stage = (typeof STAGES)[number];
 
 const STAGE_LABEL: Record<Stage, string> = {
-  new_lead: "New Lead",
-  qualified: "Qualified",
-  test_drive: "Test Drive",
-  desking: "Negotiation",
-  sold: "Sold",
-  in_prep: "Pre-Delivery",
+  new_lead: "New",
+  contacted: "Contacted",
+  engaged: "Engaged",
+  pre_book: "Pre-Book",
+  vehicle_allocated: "Vehicle Allocated",
+  payment: "Payment",
+  pre_delivery: "Pre-Delivery",
   delivered: "Delivered",
 };
 
 const STAGE_CAPTION: Record<Stage, string> = {
-  new_lead: "Fresh interest, awaiting first contact",
-  qualified: "Vetted buyers, matching inventory",
-  test_drive: "Test drives and showroom visits",
-  desking: "Structuring terms and negotiating",
-  sold: "Deal agreed, paperwork in motion",
-  in_prep: "Vehicle in prep and pre-delivery",
-  delivered: "Keys handed over, onboarding retention",
+  new_lead: "Fresh interest — code generated, advisor assigned",
+  contacted: "First call inside the 24-hour SLA window",
+  engaged: "Test drives, financing checks, negotiation",
+  pre_book: "Reservation fee paid — order confirmed",
+  vehicle_allocated: "VIN and engine number locked to the order",
+  payment: "Reservation and final invoices settled",
+  pre_delivery: "Docs, duty pack, and handover checklist",
+  delivered: "Keys handed over — asset on the account",
 };
 
 // Rail stage → underlying lead phase (drives AURA suggestions)
 const STAGE_PHASE: Record<Stage, GetPipelineSuggestionsPhase> = {
   new_lead: "aware",
-  qualified: "consider",
-  test_drive: "engage",
-  desking: "negotiate",
-  sold: "won",
-  in_prep: "won",
+  contacted: "consider",
+  engaged: "engage",
+  pre_book: "negotiate",
+  vehicle_allocated: "won",
+  payment: "won",
+  pre_delivery: "won",
   delivered: "won",
 };
 
@@ -110,13 +114,14 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const NEXT_ACTION: Record<Stage, string> = {
-  new_lead: "Make first contact",
-  qualified: "Book a test drive",
-  test_drive: "Run the drive, capture feedback",
-  desking: "Finalize numbers & deposit",
-  sold: "Complete paperwork",
-  in_prep: "Prep vehicle for delivery",
-  delivered: "Follow up & retain",
+  new_lead: "Call within 24h — log the first contact",
+  contacted: "Qualify interest, book a test drive",
+  engaged: "Drive, finance check, close the negotiation",
+  pre_book: "Collect reservation fee, confirm the order",
+  vehicle_allocated: "Validate VIN & engine, soft-lock the unit",
+  payment: "Issue final invoice, capture payment",
+  pre_delivery: "Complete docs, duty pack & handover prep",
+  delivered: "Send feedback survey, hand off to service",
 };
 
 const withBase = (url: string) =>
@@ -142,7 +147,13 @@ export default function Leads() {
   // phase; won leads split into Sold / Pre-Delivery / Delivered by deal stage.
   const stageOf = useMemo(() => {
     const rank = (stage: string) =>
-      stage === "delivered" ? 2 : stage === "committed" ? 1 : 0;
+      stage === "delivered"
+        ? 3
+        : stage === "committed"
+          ? 2
+          : stage === "finance"
+            ? 1
+            : 0;
     const dealByLead = new Map<number, string>();
     const dealByCustomer = new Map<number, string>();
     for (const d of deals ?? []) {
@@ -162,18 +173,19 @@ export default function Leads() {
         case "aware":
           return "new_lead";
         case "consider":
-          return "qualified";
+          return "contacted";
         case "engage":
-          return "test_drive";
+          return "engaged";
         case "negotiate":
-          return "desking";
+          return "pre_book";
         case "won": {
           const dealStage =
             dealByLead.get(l.id) ??
             (l.customerId != null ? dealByCustomer.get(l.customerId) : undefined);
           if (dealStage === "delivered") return "delivered";
-          if (dealStage === "committed") return "in_prep";
-          return "sold";
+          if (dealStage === "committed") return "pre_delivery";
+          if (dealStage === "finance") return "payment";
+          return "vehicle_allocated";
         }
         default:
           return null; // lost — not shown on the rail
@@ -191,7 +203,7 @@ export default function Leads() {
     return map;
   }, [leads, stageOf]);
 
-  const [selectedStage, setSelectedStage] = useState<Stage>("test_drive");
+  const [selectedStage, setSelectedStage] = useState<Stage>("engaged");
   const [, navigate] = useLocation();
 
   const stageLeads = (leads ?? []).filter((l) => stageOf(l) === selectedStage);
@@ -267,7 +279,7 @@ export default function Leads() {
   return (
     <>
     <PageHero
-      video="pipeline_sales_floor.mp4"
+
       eyebrow="Sales Floor"
       title="Pipeline"
       subtitle="Every prospect, scored and routed — from first touch to sold."
@@ -743,7 +755,7 @@ export default function Leads() {
                 {suggestions.isLoading ? (
                   <div className="flex items-center gap-3 text-muted-foreground text-sm py-8 justify-center">
                     <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                    Thinking through {STAGE_LABEL[selectedStage].toLowerCase()}…
+                    Thinking through {(STAGE_LABEL[selectedStage] ?? "this stage").toLowerCase()}…
                   </div>
                 ) : suggestions.isError ? (
                   <div className="text-center py-8 space-y-3">

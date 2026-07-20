@@ -1,0 +1,210 @@
+Dealer Management System (DMS) — Replit Build Guide
+Source: Functional Specification v2.0 — CAM Motors & GT Automotive (Guyana) Goal: Replace the current Salesforce + Excel + WhatsApp/Outlook process with one DMS that runs the complete lead → delivery → service lifecycle.
+
+0. How to build this on Replit (read first)
+Use Replit Agent, and build in phases — do not paste this whole document into one prompt. Give it the prompts in Section 8, one module at a time, in order. Verify each module runs before moving on.
+Recommended stack (what Replit Agent builds best):
+Frontend: React + Vite + TypeScript, Tailwind CSS, shadcn/ui components.
+Backend: Node.js + Express + TypeScript.
+Database: Replit-hosted PostgreSQL, with Drizzle ORM and migrations.
+Auth: email/password sessions + a role on the user (custom RBAC — see Section 4). Replit Auth is optional.
+File storage: Replit Object Storage for uploaded documents & generated PDFs.
+PDFs: pdf-lib or puppeteer for quotes, invoices, handover forms.
+Background jobs: a simple scheduler (node-cron) for SLA checks, reminders, service cadences.
+Integrations are stubbed behind adapters (calling, WhatsApp, email) so the app works without live accounts. See Section 11. Put keys in Replit Secrets.
+Build multi-tenant and config-driven from day one — the client is scaling; nothing about today's headcount, taxes, or pipeline should be hard-coded.
+1. Product summary
+A multi-dealer DMS for two divisions — CAM Motors (Jetour/Foton) and GT Automotive (BYD/Foton) — across 6 showrooms. It captures leads from many channels, auto-assigns them, drives them through an 8-stage sales pipeline with hard stage-gating, generates quotes ("codes") and invoices, manages inventory down to VIN level, handles delivery handover, and (scope TBD) post-sale service.
+
+Primary problems to solve: duplicate leads, missed 24-hour contact SLAs, inconsistent customer communication, and manual Excel/WhatsApp tracking.
+
+2. Core cross-cutting concepts
+Concept	Rule
+"Lead" is the spine	The client does not want a separate "Opportunity" object. Everything customer-facing stays a Lead, but internally the model mirrors Salesforce's Lead→Account/Contact/Asset conversion.
+Ownership transfers	A Lead's "current owner" moves Sales Advisor → Delivery Advisor → Service Advisor across stages. Store who is currently accountable, not one fixed person.
+Interested vs. Selected model	A lead can have multiple Interested Models (with per-model financing & test-drive flags). A single Selected Model is set only when the reservation fee is paid. Keep full history of all interested models even if dropped.
+Config-driven	Taxes, pipeline stages + mandatory fields, lead sources, service cadences, templates, and org hierarchy are all dealer-Admin configurable, not hard-coded.
+In-app first (esp. GT)	In-app notifications/calendar are the single source of truth. Email/WhatsApp are reinforcing channels. WhatsApp is the primary customer channel for Guyana.
+3. Roles, RBAC & Org structure
+3.1 Roles
+Role	Scope	Reports to
+Super Admin	Cross-dealer/tenant platform config	—
+Admin (dealer-level)	Taxes, lead sources, pipeline config, templates, WhatsApp/email config, dealer users/roles, org hierarchy	Super Admin
+Leadership / GM	Company-wide dashboards across both divisions (personas: Vishok, Aditya)	—
+Sales Manager	Owns pipeline + SLA compliance for a division; multiple managers, each owning a subset of advisors	Leadership
+Sales Advisor	Owns lead New→Vehicle Allocated (renamed from "Lead Owner")	Sales Manager
+Delivery Advisor	Physical handover, collect/scan/upload signed docs	Sales/Delivery Manager
+Service Advisor	Owns customer/asset post-delivery; scheduled + unscheduled service	Service Manager (TBD)
+3.2 RBAC matrix (enforce on both API and UI)
+Role	Can access	Cannot
+Sales Advisor	Own leads, own tasks, own calendar, quotes, documents, call logs	Configure taxes, delete leads, see other advisors' leads
+Sales Manager	All leads (division), all advisors, reports, pipeline, calendar, SLA & performance dashboards	Cross-division data (unless also Leadership)
+Delivery Advisor	Assigned deliveries, handover docs, delivery calendar	Pipeline stages before Pre-Delivery
+Service Advisor	Assigned assets/customers post-delivery, service history, work orders	Sales pipeline stages
+Leadership / GM	Company-wide dashboards (both divisions)	—
+Admin (dealer)	Dealer config as above	Cross-dealer/tenant config
+Super Admin	Everything incl. cross-tenant	—
+A detailed persona-to-field access matrix exists on the client's email/Miro board — build RBAC to be field-level configurable so it can be applied when received. (Open Question)
+
+3.3 Employee Master & Org
+Employee Master object: name, role, division (CAM/GT), reporting manager, contact details. Manual entry is fine for Phase 1 (no HRIS integration).
+Support multiple Sales Managers, each owning a subset of Sales Advisors.
+Org/role hierarchy config lives at dealer Admin level, not Super Admin.
+Divisions: CAM, GT. Showrooms: 6 locations (e.g., Austin, Dowling). Every inventory item is tagged to a showroom. No cross-showroom transfer workflow (out of scope).
+4. Data model (the backbone — build this first)
+Entities and their key fields. Multi-tenant: almost everything carries dealerId/divisionId.
+
+Dealer / Tenant — id, name. Division — CAM | GT, brands. Showroom — name, division, address.
+Employee — name, role, divisionId, reportingManagerId (self-FK), email, phone.
+User — email, passwordHash, employeeId, role, isActive. (Auth + RBAC.)
+Lead — the spine:
+address (mandatory), leadSource (combined enum), socialSubPlatform (required if source is social), leadType (Individual | Business).
+stage (enum, see Section 5), status (Open | Not Interested | Not Converted | Delivered/Closed).
+currentOwnerType (Sales | Delivery | Service) + currentOwnerId; assignedSalesAdvisorId; assignmentTimestamp (drives round-robin).
+accountId (linked at Pre-Book), selectedModelId (set at Pre-Book), financingQualified (bool, manually editable, not locked).
+Full audit/history retained.
+LeadInterestedModel (child, many per lead) — modelId, financingNeeded (Y/N), testDriveRequested (Y/N), createdAt. Never deleted (history).
+Account — type (Person | Business), name, householdId/parentAccountId (grouping). Created at Pre-Book, reused if customer already exists.
+Contact — under Account (for Business accounts): name, phone, email, role.
+Asset — created at Delivery: vehicleId (VIN), accountId, deliveryDate, registrationNumber, serviceHistory link. (Lifetime ownership.)
+Model / Product (catalog) — division, manufacturer, model, line/trim, colors, basePrice, applicable tax config.
+Vehicle / InventoryUnit — vin (exactly 17 chars), engineNumber (unique, 1:1 with VIN), manufacturer, manufacturingDate (mandatory), model, trim, color, showroomId, registrationNumber (later), taxConfigId, availabilityStatus (Available | Reserved-TestDrive | Reserved-PreBooked | Sold | Under Repair).
+Quote ("Code") — codeNumber, leadId, customer snapshot (name, address), modelYear (mandatory), dateSent, vehicle details (line/trim, color, manufacturer, mfg date), qty (always 1), price (from inventory), applied taxes, version (regeneratable).
+TaxDefinition — name (VAT, GST, Sales, Luxury, Environmental, Registration Fee, Road Tax, Dealer Charges, Documentation Charges), percentOrFixed, value, effectiveDate, dealerId. Applicability set at vehicle/asset level, not global.
+Reservation — leadId, feeAmount, paymentDate, paymentMode, receiptNumber.
+Payment — reservationPaymentMethod, finalPaymentMethod (Bank Financing | Cash | Check), negotiatedFinalAmount (may differ from quote).
+Invoice — invoiceNumber, invoiceDate, type (Reservation | Final), paymentStatus, amount, attachments. Generated at two points (reservation + final); re-sendable.
+Activity — leadId, type, timestamp, notes. Call activity subtype: startTime, endTime, duration, direction, status, recordingUrl (optional), notes/summary.
+Task — leadId, type (Call | Follow-up | Test Drive | Document Collection | Reservation Payment | Delivery), assigneeId, dueDate, status (Assigned | Pending | Overdue | Upcoming | Done).
+TestDrive — leadId, modelId/vehicleId, scheduledStart/End, customerConfirmed (Y/N/Pending), vehicleSoftLock (bool, only if single unit), reminderSentAt.
+Document — leadId/assetId, type (Driving License, Passport, National ID, Utility Bill, Income Proof, Loan Docs, Bank Statement, Vehicle Registration, Insurance, Warranty, Handover Form, Other), fileUrl, uploadedBy, uploadedDate, version, comments. PDF/JPG/PNG/DOCX, max 20 MB. No gov-ID verification.
+CalendarEvent — type (Test Drive, Delivery, Service), start/end, relatedLeadId, participants.
+Notification — type, channel (In-App | Email | WhatsApp), recipient, status, payload.
+PipelineStageConfig — stage name, order, mandatory fields to advance (Guidance-for-Success gating), dealerId.
+SLARule — type (Contact 24h, Test Drive follow-up, Service contact), window, dealerId.
+(Service — Phase 1 TBD) ServiceCadence (per dealer: every X km / months, free-service count), WorkOrder, ServiceHistory (on Asset), Warranty (types TBD), Technician (availability).
+5. Sales pipeline (8 stages + gating)
+Flow: New → Contacted (24h call SLA) → Engaged (test drive / financing / negotiation) → Pre-Book / Order Confirmed (reservation fee paid) → Vehicle Allocated (VIN/engine) → Payment (reservation + final invoice) → Pre-Delivery (docs & checklist) → Delivered (Closed Won) → Feedback Sent → Handoff to Service Advisor
+
+Guidance for Success (must build): each stage shows a visible checklist/banner of mandatory fields, with a hard stop blocking advancement until complete.
+
+Stage	Enter/exit rules to enforce
+New	Lead created → Code auto-generated → Sales Advisor auto-assigned (round-robin). No test-drive invite yet.
+Contacted	Must call within 24h SLA; cannot advance until call is logged. SLA breach → visual flag for Advisor and Manager (no auto-escalation).
+Engaged	Test-drive scheduling (only now available), financing doc upload → financingQualified=true (manually overridable), negotiation notes. "Not Interested" close is a first-class action here.
+Pre-Book (labeled; internally "Order Confirmed")	Reservation fee mandatory to enter. Capture fee, date, mode, receipt #. Create/link Account + Contact. Set Selected Model. If commit fails → one follow-up → revert to "Not Converted". Cancellation → refund process + release vehicle lock + log activity + retain history.
+Vehicle Allocated	Pull a specific VIN-level unit; validate VIN=17 chars + engine #. Soft-lock (not sold). Auto-suggest VIN from Selected Model.
+Payment	Two payment-method fields (reservation + final). Final method: Bank Financing/Cash/Check. Capture negotiated final amount (may differ from quote).
+Pre-Delivery	Checklist docs sent/received (warranty, handover, insurance). Generate pre-filled handover PDF. Registration = status field only (3rd-party). Hand off to Delivery Advisor.
+Delivered	Track Expected (auto on final payment) + Actual delivery date (manual by Delivery Advisor). Collect/scan/upload signed handover. Send feedback survey within 24h. Vehicle becomes Asset on Account. Hand off to Service Advisor.
+6. Feature modules (Phase 1)
+Each module = build target with must-haves.
+
+M1 — Auth, Users, Employee Master, Org
+Login, RBAC middleware, Employee Master CRUD, division/showroom setup, reporting-manager hierarchy. Dealer-Admin config screens.
+
+M2 — Lead Management
+Create lead: mandatory Address ("Address is required."), combined Lead Source/Channel with social sub-platform, Lead Type, multi-select Interested Models with per-model financing/test-drive flags.
+Duplicate handling: match name + phone/email against open leads; if match, append models to existing lead instead of creating new.
+No qualification gate. Round-robin auto-assign on creation using assignmentTimestamp.
+"Lead Owner" renamed to "Sales Advisor" everywhere; ownership transfers across stages.
+Click-to-call from the lead + free-form call notes; every call → Activity (with duration, direction, status, recording URL, notes). Surface as Activity, not buried in lead view.
+M3 — Quotation ("Code") + Tax config
+Code auto-generated on lead creation, before contact, regardless of source.
+Dealer-specific format (GT format exact): customer name, address, estimate/quote #, model year, date sent, vehicle line/trim, color, manufacturer, mfg date; qty=1; price from inventory.
+Manufacturing Year mandatory. "Generate Code" always available; regenerate/resend on any change (color, tax, financing).
+Tax config: Admin-defined taxes (name, %/fixed, effective date); applicability at vehicle/asset level. Handle VAT 0%/14% by base model + duty-free above ~20 lakh threshold (confirm exact rules; EVs may be excluded).
+M4 — Sales Pipeline + Guidance-for-Success gating
+Implement the 8 stages (Section 5) with per-stage mandatory-field checklists and hard-stop advancement.
+
+M5 — Accounts, Contacts, Assets, Grouping
+Account/Contact created/linked at Pre-Book; reuse existing account for repeat buyers.
+Person Accounts (individual) vs Business Accounts (many Contacts).
+Household & business grouping (manual, no auto-match in Phase 1).
+Delivered vehicle → Asset on Account (lifetime ownership → drives service handoff).
+M6 — Inventory & Asset Management
+Vehicle fields per Section 4; VIN (17) + engine (unique) validation; availability statuses; showroom tagging. One-time Excel data migration (incl. images) — build an import tool.
+
+M7 — Document Management
+Per-lead documents section, listed types + "Add New"; PDF/JPG/PNG/DOCX ≤20 MB; store uploadedBy/date/version/comments; system-generated pre-filled PDFs from templates. No gov-ID verification. (AI auto-fill from uploads = later enhancement.)
+
+M8 — Payments & Invoicing
+Reservation locks Model/Variant/Color/Booking status (read-only unless authorized manager). Two invoice touchpoints (reservation + final). Auto-generate PDF, send via Email/WhatsApp, re-sendable. Store invoice #, date, status, attachments. (Payment QR/link = nice-to-have.)
+
+M9 — Delivery
+Delivery Advisor workflow: pre-filled handover PDF → print/sign/scan/upload; Expected vs Actual delivery dates; feedback survey within 24h; then handoff to Service Advisor.
+
+M10 — Notifications
+In-app (primary) + Email + WhatsApp adapters. Triggers: New Lead, Assigned Lead, Upcoming Call (24h SLA), SLA Breach, Test Drive Reminder (24h, ask confirm Yes/No), Reservation Pending, Invoice Generated, Document Missing, Service Cadence Approaching.
+
+M11 — Calendar, Scheduling & Tasks
+In-app calendar (not Outlook/Teams). Test-drive scheduling checks customer + vehicle availability (not advisor); soft-lock single-unit models; 24h reminder w/ confirm. Tasks page: assigned/pending/overdue/upcoming; task types per Section 4.
+
+M12 — Reporting & Dashboards (persona-aware)
+Distinct dashboards on login: Sales Advisor (own leads, today's tasks, own performance), Sales Manager (team pipeline, SLA-breach flags per advisor, performance), Leadership (company-wide both divisions). Reports: Leads by Source, Leads by Advisor, Conversion Rate (Lead→Pre-Book→Delivered), Quote-to-Order ratio, Avg Response Time, SLA Compliance, Test Drive Success, Reservation Conversion, Revenue by Advisor/Division, Pending Invoices, Lost Leads, Channel Performance, (Service Cadence Compliance if service is in Phase 1).
+
+M13 — Post-Sale Service (Phase 1 vs 2 — CONFIRM with client)
+Handoff to Service Advisor (contact SLA 24h or 7d — confirm). Scheduled service via configurable cadences (per km / months), free-service count (e.g., 3), reminder → contact → validate mileage/registration → check history → confirm → Service Manager → technician availability → Work Order. Unscheduled service (accident/breakdown) same work-order flow, ad hoc. Service History on Asset. Warranty (types TBD — obtain from BRD).
+
+7. Phase boundaries
+Phase 1 (build now): M1–M12 above. Service (M13): confirm — treat as configurable module that can be enabled.
+
+Explicitly OUT of Phase 1:
+
+Parts & Accessories inventory/pricing (process undefined).
+Accounting/ERP integration (QuickBooks/GL) → Phase 2.
+Customer-facing self-service portal → future.
+3rd-party vehicle registration & insurance processing → status fields/checklist only, no integration.
+Digital signature (DocuSign) → future (current process = print/sign/scan/upload).
+8. Build sequence — ready-to-paste Replit Agent prompts
+Paste these in order, verifying each runs. Prefix the first prompt with the stack from Section 0.
+
+Prompt 1 — Scaffold & data model
+
+Build a multi-tenant Dealer Management System web app. Stack: React + Vite + TypeScript + Tailwind + shadcn/ui frontend, Express + TypeScript backend, PostgreSQL with Drizzle ORM. Create the full schema for these entities with relationships: Dealer, Division (CAM/GT), Showroom, Employee (self-referencing reporting manager), User (email/password + role enum: super_admin, admin, leadership, sales_manager, sales_advisor, delivery_advisor, service_advisor), Lead, LeadInterestedModel, Account, Contact, Asset, Model, Vehicle, Quote, TaxDefinition, Reservation, Payment, Invoice, Activity, Task, TestDrive, Document, CalendarEvent, Notification, PipelineStageConfig, SLARule. Use the field lists I provide next. Add seed data for 2 divisions and 6 showrooms. Set up session auth and role-based middleware.
+
+Prompt 2 — Auth, Employee Master, org & admin config (M1) — paste Section 3. Prompt 3 — Lead Management (M2) — paste Section 6/M2 + duplicate & round-robin rules. Prompt 4 — Quotation/Code + Tax config (M3) — paste Section 6/M3 + Section 4 quote fields. Prompt 5 — Sales pipeline + Guidance-for-Success gating (M4) — paste Section 5 table. Prompt 6 — Accounts/Contacts/Assets + grouping (M5). Prompt 7 — Inventory & Excel import (M6). Prompt 8 — Documents + PDF generation (M7). Prompt 9 — Payments & dual invoicing (M8). Prompt 10 — Delivery workflow (M9). Prompt 11 — Notifications (adapters) + Calendar/Tasks (M10, M11). Prompt 12 — Persona dashboards & reports (M12). Prompt 13 — Service module (M13) (only if confirmed Phase 1).
+
+Tip: after each prompt, tell the Agent to "add form validation, RBAC checks on every endpoint, and a basic test that the module's happy path works."
+
+9. Assumptions for open questions (build configurable; confirm with client)
+#	Open question	Default to build
+1	Service in Phase 1 or 2?	Build as a feature-flagged module, default OFF; enable on confirmation.
+2	Duty-free threshold & excluded vehicle types (EVs?)	Make threshold + exclusions admin-configurable; seed ~20 lakh, VAT 0/14%.
+3	Round-robin re-balancing after initial assign?	First assignment sticky; manager manual override only.
+4	Persona-to-field access matrix	Build field-level RBAC config; apply matrix when received.
+5	Discount/negotiation approval matrix	Add optional manager approval above configurable discount %, default off.
+6	Warranty types & terms	Model warranty as a configurable type list; leave terms editable.
+7	Service contact SLA (24h vs 7d)	Make SLA window configurable; default 24h.
+8	Mileage tracking integration	Manual entry at each visit; adapter seam for future integration.
+9	Daily lead volume (200–500/day social)	Design for that peak; index leads, paginate, async notifications.
+10. Acceptance criteria (use as the QA checklist)
+[ ] Address mandatory on lead creation.
+[ ] Lead Source/Channel (with social sub-platform) captured & reported.
+[ ] Leads support multiple Interested Models with per-model financing/test-drive flags.
+[ ] Duplicate submissions append to existing lead (no new record).
+[ ] Timestamp-based round-robin auto-assignment; no manual qualification gate.
+[ ] "Lead Owner" → "Sales Advisor" everywhere; ownership transfers to Delivery then Service.
+[ ] Distinct persona dashboards on login (Advisor / Manager / Leadership).
+[ ] Click-to-call + call history/Activity on the lead.
+[ ] Manufacturing Year mandatory for Code; dealer-specific format followed.
+[ ] Taxes (VAT + duty-free) configurable by Admin at vehicle/asset level.
+[ ] Pipeline enforces stage sequence + 24h contact SLA + Guidance-for-Success gating.
+[ ] Test-drive scheduling checks customer + vehicle availability; only after first contact.
+[ ] Reservation fee locks Model/Variant/Color and creates/links Account + Contact.
+[ ] Selected Model set only after reservation fee; tracked separately from Interested.
+[ ] VIN (17 chars) + Engine Number validated at Vehicle Allocation.
+[ ] Invoices generated at reservation and final payment; re-sendable via Email/WhatsApp.
+[ ] Expected vs Actual delivery dates tracked separately.
+[ ] Delivered vehicles become Assets on the Account; household/business grouping works.
+[ ] Feedback form sent within 24h of actual delivery; then handoff to Service Advisor.
+[ ] Documents uploaded per lead without gov-ID verification; handover forms pre-filled from lead data.
+11. Integrations to stub (adapter pattern, keys in Replit Secrets)
+Capability	Provider (suggested)	Phase 1 approach
+Click-to-call + recording	Twilio Voice / Exotel / Knowlarity	Adapter interface; mock dialer + manual call logging until account provided.
+WhatsApp	Meta WhatsApp Cloud API / Twilio	Adapter; log-to-console/in-app until credentials added.
+Email	SendGrid / Resend	Adapter; same.
+PDF generation	pdf-lib / puppeteer (in-app)	Build now (quotes, invoices, handover forms).
+Excel inventory import	in-app upload + parse (SheetJS)	Build now (one-time migration tool).
+HRIS / Accounting / Mileage	—	Out of scope; leave adapter seams only.
+Cross-check against the client's full ~80-page BRD and Miro board (Lead, Account/Opportunity, Delivery, Service) before finalizing, and re-confirm the Section 7 scope boundary and all Section 9 open questions with Sheri / Faraz / Marlisa.

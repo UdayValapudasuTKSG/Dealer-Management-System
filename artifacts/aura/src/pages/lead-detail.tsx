@@ -8,11 +8,14 @@ import {
   useCreateLeadNote,
   useUpdateLead,
   useListVehicles,
+  useListDeals,
+  useListDeliveries,
   getGetLeadQueryKey,
   getGetLeadTimelineQueryKey,
   getListLeadsQueryKey,
 } from "@workspace/api-client-react";
 import type { Lead, LeadUpdate, Vehicle } from "@workspace/api-client-react";
+import { StageNav, type StageNavStage } from "@/components/lead/stage-nav";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,15 +65,6 @@ const STATUS_LABEL: Record<string, string> = {
   decision: "Decision",
   engaged: "Engaged",
   converted: "Converted",
-  lost: "Lost",
-};
-
-const PHASE_LABEL: Record<string, string> = {
-  aware: "New Lead",
-  consider: "Qualified",
-  engage: "Test Drive",
-  negotiate: "Negotiation",
-  won: "Sold",
   lost: "Lost",
 };
 
@@ -533,6 +527,8 @@ export default function LeadDetail() {
   });
   const { data: timeline } = useGetLeadTimeline(id);
   const { data: quote } = useGetLeadQuote(id);
+  const { data: allDeals } = useListDeals();
+  const { data: allDeliveries } = useListDeliveries();
 
   const [tab, setTab] = useState<Tab>("details");
   const [workflowOpen, setWorkflowOpen] = useState(false);
@@ -598,6 +594,136 @@ export default function LeadDetail() {
   const guidance = GUIDANCE[lead.status] ?? GUIDANCE.new;
   const quotePdfUrl = `${import.meta.env.BASE_URL}api/leads/${lead.id}/quote.pdf`;
   const testDriveScheduled = !!lead.testDriveAt;
+
+  // ----- Journey stage nav (8-phase pipeline, label-only over phase+deal) ---
+  const dealRank = (s: string) =>
+    s === "delivered" ? 3 : s === "committed" ? 2 : s === "finance" ? 1 : 0;
+  const linkedDeal = (allDeals ?? [])
+    .filter(
+      (d) =>
+        d.leadId === lead.id ||
+        (lead.customerId != null && d.customerId === lead.customerId),
+    )
+    .sort((a, b) => dealRank(b.stage) - dealRank(a.stage))[0];
+  const journeyIndex = (() => {
+    switch (lead.phase) {
+      case "aware":
+        return 0;
+      case "consider":
+        return 1;
+      case "engage":
+        return 2;
+      case "negotiate":
+        return 3;
+      case "won": {
+        const s = linkedDeal?.stage;
+        if (s === "delivered") return 7;
+        if (s === "committed") return 6;
+        if (s === "finance") return 5;
+        return 4;
+      }
+      default:
+        return 0; // lost — show at start, badge already says Lost
+    }
+  })();
+  const quoteSent = lead.quotationSent || !!quote?.sentAt;
+  const vinValid = !!vehicle?.vin && vehicle.vin.length === 17;
+  const linkedDelivery = linkedDeal
+    ? (allDeliveries ?? []).find((d) => d.dealId === linkedDeal.id)
+    : undefined;
+  const dutyDocsDone =
+    linkedDelivery?.status === "completed" ||
+    !!linkedDelivery?.steps.some(
+      (s) =>
+        (s.key === "registration" || s.key === "insurance") &&
+        s.status === "completed",
+    );
+  const journeyStages: StageNavStage[] = [
+    {
+      key: "new",
+      label: "New",
+      caption: "Code generated, advisor assigned — call within 24 hours.",
+      checklist: [
+        { label: "Sales advisor assigned", done: !!lead.ownerUserId },
+        { label: "Quote code generated", done: quoteSent },
+        { label: "Contact details on file", done: !!(lead.phone || lead.email) },
+      ],
+    },
+    {
+      key: "contacted",
+      label: "Contacted",
+      caption: "First call logged inside the 24-hour SLA.",
+      checklist: [
+        { label: "First contact logged", done: !!lead.contactedDate },
+        { label: "Address captured", done: !!lead.address },
+        { label: "Budget & financing preference", done: !!lead.budgetFinancing },
+      ],
+    },
+    {
+      key: "engaged",
+      label: "Engaged",
+      caption: "Test drive, financing docs, and negotiation.",
+      checklist: [
+        { label: "Test drive scheduled", done: testDriveScheduled },
+        { label: "Financing qualified", done: !!lead.financingQualified },
+        { label: "Quotation sent", done: quoteSent },
+      ],
+    },
+    {
+      key: "pre_book",
+      label: "Pre-Book",
+      caption: "Reservation fee confirms the order.",
+      checklist: [
+        { label: "Reservation fee paid", done: lead.reservationFeePaid },
+        { label: "Account created & linked", done: !!lead.customerId },
+        { label: "Selected model locked", done: !!lead.interestedVehicleId },
+      ],
+    },
+    {
+      key: "vehicle_allocated",
+      label: "Vehicle Allocated",
+      caption: "A specific VIN-level unit is locked to this order.",
+      checklist: [
+        { label: "VIN validated (17 chars)", done: vinValid },
+        { label: "Unit soft-locked", done: !!linkedDeal },
+      ],
+    },
+    {
+      key: "payment",
+      label: "Payment",
+      caption: "Reservation and final invoices settled.",
+      checklist: [
+        {
+          label: "Final payment structured",
+          done: dealRank(linkedDeal?.stage ?? "") >= 1,
+        },
+      ],
+    },
+    {
+      key: "pre_delivery",
+      label: "Pre-Delivery",
+      caption: "Docs, customs duty pack, and handover checklist.",
+      checklist: [
+        {
+          label: "Deal committed",
+          done: dealRank(linkedDeal?.stage ?? "") >= 2,
+        },
+        { label: "Duty pack & handover docs", done: dutyDocsDone },
+      ],
+    },
+    {
+      key: "delivered",
+      label: "Delivered",
+      caption: "Keys handed over — feedback survey within 24 hours.",
+      checklist: [
+        { label: "Vehicle delivered", done: linkedDeal?.stage === "delivered" },
+      ],
+    },
+  ];
+  const phaseDisplay =
+    lead.phase === "lost"
+      ? "Lost"
+      : (journeyStages[journeyIndex]?.label ?? lead.phase);
 
   const patchField = async (patch: LeadUpdate) => {
     await updateLead.mutateAsync({ id: lead.id, data: patch });
@@ -682,7 +808,7 @@ export default function LeadDetail() {
                 {STATUS_LABEL[lead.status] ?? lead.status}
               </span>
               <span className="inline-flex items-center text-[11px] font-semibold uppercase tracking-wider text-foreground/70 bg-foreground/[0.06] px-2.5 py-1 rounded-full">
-                {PHASE_LABEL[lead.phase] ?? lead.phase}
+                {phaseDisplay}
               </span>
             </div>
           </div>
@@ -763,6 +889,8 @@ export default function LeadDetail() {
               ) : null}
             </Field>
           </div>
+
+          <StageNav stages={journeyStages} currentIndex={journeyIndex} />
 
           <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
             <div className="flex items-center gap-2 mb-3">
@@ -985,7 +1113,7 @@ export default function LeadDetail() {
                       </span>
                     </InlineField>
                     <InlineField label="Pipeline Stage">
-                      {PHASE_LABEL[lead.phase] ?? lead.phase}
+                      {phaseDisplay}
                     </InlineField>
                     <InlineField
                       label="Priority"

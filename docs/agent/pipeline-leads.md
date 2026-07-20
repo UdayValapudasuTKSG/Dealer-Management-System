@@ -1,7 +1,7 @@
 # Pipeline, Leads & Deals
 
 ## Pipeline page (`pages/leads.tsx`, routes `/pipeline` + `/leads`)
-- NO kanban columns. A slim clickable chevron 7-stage rail: New Lead → Qualified → Test Drive → Negotiation → Sold → Pre-Delivery → Delivered (labels only — underlying phase/stage values unchanged, NO DB migration). Pre-sale stages map 1:1 from lead phase (`aware/consider/engage/negotiate`); `won` leads split into Sold / Pre-Delivery / Delivered by their furthest-along linked deal (delivered > committed > other; matched by `deal.leadId`, fallback `customerId`) via `stageOf` (needs `useListDeals`).
+- NO kanban columns. A slim clickable chevron 8-stage rail (DMS-spec phases): New → Contacted → Engaged → Pre-Book → Vehicle Allocated → Payment → Pre-Delivery → Delivered (labels only — underlying phase/stage values unchanged, NO DB migration). Pre-sale stages map 1:1 from lead phase (`aware/consider/engage/negotiate`); `won` leads split into Vehicle Allocated / Payment / Pre-Delivery / Delivered by their furthest-along linked deal (delivered > committed > finance > other; matched by `deal.leadId`, fallback `customerId`) via `stageOf` (needs `useListDeals`).
 - Selecting a stage shows that stage's lead list plus an "AURA recommends" panel auto-fetching `useGetPipelineSuggestions({ phase })` with loading/error/retry states. Suggestions pass the underlying phase (`won` for the last three stages).
 - Full-pipeline list table (search/stage filter/sort, deal value per lead, NEXT_ACTION hints, days-in-stage from `stageEnteredAt`).
 - On the Deals page the `desking` deal stage is labelled "Desking" (deals also has a separate `negotiation` stage — both as "Negotiation" collided).
@@ -14,7 +14,7 @@
 - `components/action-queue.tsx` ("Your day" ranked queue, cap 6) mounts on Pipeline + dashboard; dashboard KPI cards deep-link (deals/pipeline/tasks).
 
 ## Lead detail (`pages/lead-detail.tsx`, route `/lead/:id`)
-- Salesforce-parity record page: header badges + AI score + Workflow dialog, left rail (Key Fields / per-status Guidance for Success / vehicle card), tabs Details / Quotes & Files / Activity (post-note box).
+- Salesforce-parity record page: header badges + AI score + Workflow dialog, left rail (Key Fields / `StageNav` 8-phase journey stepper with per-stage checklists (`components/lead/stage-nav.tsx`, derived from lead fields + furthest linked deal) / per-status Guidance for Success / vehicle card), tabs Details / Quotes & Files / Activity (post-note box).
 - Details tab = 8 collapsible sections; ALL fields inline-editable via `InlineField` (pencil-on-hover; text/textarea/date/checkbox/select; gated `can("leads","edit")`; PATCH via `useUpdateLead` typed against `LeadUpdate`). Every editable field MUST exist in `LeadUpdate` in openapi.yaml or Zod strips it server-side and the PATCH 500s with "No values to set"; never cast the patch `as never`.
 - status/phase stay read-only (Workflow dialog); isRetailCustomer displays `stored||!!customerId`; quotationSent displays `stored||!!quote?.sentAt`. 15 SF-parity lead columns (company, title, isRetailCustomer, quotationSent, reservationFeePaid, reservationComments, financingQualified, contactedDate, revisitIn3Months, closureReason, purchaseIntent, keyInterestDriver, budgetFinancing, description, address).
 - Lead Owner links to `/team/:id` (`pages/team-profile.tsx`; `GET /team/{id}` in `routes/team.ts` — profile + lead stats + recent leads, no testDriveToken leak); vehicle card links to `/vehicle/:id`. Header "Edit" dialog (`editLeadFields()`) for bulk edits.

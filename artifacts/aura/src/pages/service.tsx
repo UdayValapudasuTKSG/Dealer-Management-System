@@ -76,7 +76,7 @@ export default function Service() {
   return (
     <>
     <PageHero
-      video="service_bay.mp4"
+
       eyebrow="After-Sales"
       title="Service"
       accent="Operations"

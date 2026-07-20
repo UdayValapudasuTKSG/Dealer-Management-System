@@ -46,7 +46,7 @@ export default function Parts() {
   return (
     <>
     <PageHero
-      video="parts_warehouse.mp4"
+
       eyebrow="Supply Line"
       title="Parts"
       accent="Operations"

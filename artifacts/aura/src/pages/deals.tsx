@@ -63,7 +63,7 @@ export default function Deals() {
   return (
     <>
     <PageHero
-      video="pipeline_sales_floor.mp4"
+
       eyebrow="Sales Desk"
       title="Deal"
       accent="Structuring"

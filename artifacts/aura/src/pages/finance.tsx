@@ -167,7 +167,7 @@ export default function Finance() {
   return (
     <>
     <PageHero
-      video="finance_signing.mp4"
+
       eyebrow="Finance Desk"
       title="Finance"
       subtitle="Credit applications, lender routing, invoicing and settlements."

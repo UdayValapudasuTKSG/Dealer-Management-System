@@ -182,7 +182,7 @@ export default function Reports() {
   return (
     <div className="h-full overflow-y-auto">
       <PageHero
-        video="office_operations.mp4"
+
         eyebrow="Intelligence"
         title="Reports"
         subtitle="Performance, revenue and pipeline analytics."

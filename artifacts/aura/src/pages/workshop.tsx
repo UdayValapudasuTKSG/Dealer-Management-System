@@ -15,7 +15,7 @@ export default function Workshop() {
   return (
     <>
     <PageHero
-      video="service_bay.mp4"
+
       eyebrow="Workshop Floor"
       title="Workshop"
       accent="Operations"

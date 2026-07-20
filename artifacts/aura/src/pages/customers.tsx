@@ -42,7 +42,7 @@ export default function Customers() {
   return (
     <>
     <PageHero
-      video="customer_handover.mp4"
+
       eyebrow="Relationships"
       title="Account"
       accent="Portfolio"

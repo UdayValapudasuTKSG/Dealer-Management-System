@@ -47,6 +47,8 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { PageHero } from "@/components/layout/page-hero";
+import { DutyFiling } from "@/components/gra/duty-filing";
+import { ShieldCheck } from "lucide-react";
 
 const STEP_ICONS: Record<string, React.ReactNode> = {
   sales_order: <FileText className="w-4 h-4" />,
@@ -87,7 +89,7 @@ export default function Deliveries() {
   return (
     <div className="h-full overflow-y-auto">
       <PageHero
-        video="delivery_transport.mp4"
+
         eyebrow="Handover Lane"
         title="Deliveries"
         subtitle="Bookings, pre-delivery workflow and customer handover — end to end."
@@ -288,6 +290,7 @@ function DeliveryDetail({
   const updatePdi = useUpdateDeliveryPdi();
 
   const [form, setForm] = useState<Record<string, string>>({});
+  const [showDuty, setShowDuty] = useState(false);
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: getListDeliveriesQueryKey() });
@@ -529,6 +532,32 @@ function DeliveryDetail({
               />
             ))}
           </div>
+
+          {/* Customs & duty (GRA) — embedded in the delivery process */}
+          {delivery.status !== "completed" && (
+            <div className="mt-6 rounded-2xl border border-white/10 bg-foreground/[0.02] overflow-hidden">
+              <button
+                onClick={() => setShowDuty((v) => !v)}
+                className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-foreground/[0.03] transition-colors"
+              >
+                <span className="flex items-center gap-2.5 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  Customs duty pack (GRA)
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {showDuty ? "Hide" : "Scan import document"}
+                </span>
+              </button>
+              {showDuty && (
+                <div className="px-5 pb-5">
+                  <DutyFiling
+                    compact
+                    prefillNotes={`Delivery #${delivery.id} · Deal #${delivery.dealId} · ${delivery.customerName ?? "Customer"}`}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* PDI checklist */}
           {delivery.currentStep === "pdi_checklist" &&

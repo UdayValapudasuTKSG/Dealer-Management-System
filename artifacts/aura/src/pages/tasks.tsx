@@ -131,7 +131,7 @@ export default function Tasks() {
   return (
     <>
     <PageHero
-      video="office_operations.mp4"
+
       eyebrow="Back Office"
       title="Tasks"
       subtitle="Team follow-ups, deliveries and internal to-dos."

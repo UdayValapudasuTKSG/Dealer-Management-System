@@ -23,7 +23,7 @@ export default function Approvals() {
   return (
     <>
     <PageHero
-      video="office_operations.mp4"
+
       eyebrow="Sign-Off"
       title="Reviews"
       subtitle="The moments that need a human — everything else runs itself."

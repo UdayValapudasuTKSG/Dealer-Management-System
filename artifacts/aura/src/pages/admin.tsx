@@ -391,7 +391,7 @@ export default function AdminPage() {
   return (
     <>
     <PageHero
-      video="office_operations.mp4"
+
       eyebrow="Platform Control"
       title="Platform"
       accent="Admin"
