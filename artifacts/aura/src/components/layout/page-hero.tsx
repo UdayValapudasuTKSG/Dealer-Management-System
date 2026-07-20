@@ -30,7 +30,7 @@ export function PageHero({
   return (
     <div
       className={cn(
-        "relative h-[110px] md:h-[128px] w-full bg-black overflow-hidden",
+        "relative h-[150px] md:h-[172px] w-full bg-black overflow-hidden",
         className,
       )}
     >
@@ -51,7 +51,7 @@ export function PageHero({
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent" />
       </div>
 
-      <div className="relative z-10 h-full px-5 md:px-8 flex items-center justify-between gap-4">
+      <div className="relative z-10 h-full px-5 md:px-8 flex items-end justify-between gap-4 pb-5 md:pb-6">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -59,22 +59,22 @@ export function PageHero({
           className="min-w-0"
         >
           {eyebrow && (
-            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/70 mb-1">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-white/70 mb-1.5">
               {Icon && <Icon className="w-3.5 h-3.5" />}
               {eyebrow}
             </div>
           )}
-          <h1 className="text-xl md:text-2xl font-light tracking-tight text-white leading-tight drop-shadow-md">
+          <h1 className="text-2xl md:text-[1.75rem] font-light tracking-tight text-white leading-tight drop-shadow-md">
             {title}
             {accent && <span className="font-semibold"> {accent}</span>}
           </h1>
           {subtitle && (
-            <p className="text-white/70 text-[13px] mt-0.5 font-light drop-shadow truncate">
+            <p className="text-white/70 text-sm mt-1 font-light drop-shadow truncate max-w-2xl">
               {subtitle}
             </p>
           )}
         </motion.div>
-        {action && <div className="shrink-0 relative z-10">{action}</div>}
+        {action && <div className="shrink-0 relative z-10 pb-0.5">{action}</div>}
       </div>
     </div>
   );
