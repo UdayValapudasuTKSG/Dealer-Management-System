@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useLocation } from "wouter";
 import {
   useListLeads,
@@ -13,10 +13,10 @@ import {
   MailQuestion,
   Landmark,
   ShieldCheck,
-  ArrowRight,
-  ChevronDown,
-  ChevronUp,
   CheckCircle2,
+  AlertCircle,
+  Clock,
+  Inbox
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 type QueueItem = {
   id: string;
   key: string;
-  icon: typeof PhoneCall;
+  icon: any;
   tone: string;
   bgTone: string;
   context: string;
@@ -32,17 +32,6 @@ type QueueItem = {
   action: string;
   href: string;
   rank: number;
-};
-
-type Group = {
-  id: string;
-  title: string;
-  number: string;
-  items: QueueItem[];
-  href: string;
-  tone: string;
-  bgTone: string;
-  icon: typeof PhoneCall;
 };
 
 const SLA_DAYS = 5;
@@ -66,110 +55,104 @@ function isToday(iso: string | null | undefined): boolean {
   );
 }
 
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+function getInitials(name: string) {
+  if (!name) return "?";
+  const parts = name.trim().split(" ");
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
 }
 
-export function ActionQueue({ compact }: { compact?: boolean }) {
+export function ActionQueue() {
   const { data: leads } = useListLeads();
   const { data: deals } = useListDeals();
   const { data: gates } = useListGates({ status: "pending" });
   const [, navigate] = useLocation();
 
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
-
-  const toggleGroup = (id: string) => {
-    setExpandedGroups((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const { groups, totalCount } = useMemo(() => {
-    const approvals: QueueItem[] = [];
-    const contacts: QueueItem[] = [];
-    const testDrives: QueueItem[] = [];
-    const followUps: QueueItem[] = [];
-    const activeDeals: QueueItem[] = [];
+  const { urgent, today, later } = useMemo(() => {
+    const u: QueueItem[] = [];
+    const t: QueueItem[] = [];
+    const l: QueueItem[] = [];
 
     for (const g of gates ?? []) {
-      approvals.push({
+      u.push({
         id: g.id.toString(),
         key: `gate-${g.id}`,
         icon: ShieldCheck,
-        tone: "text-blue-500",
-        bgTone: "bg-blue-500/10",
+        tone: "text-destructive",
+        bgTone: "bg-destructive/10",
         context: g.title,
-        subContext: "Requires manager approval",
+        subContext: "Approval required",
         action: "Review",
         href: "/approvals",
         rank: g.priority === "high" ? 0 : 2,
       });
     }
 
-    for (const l of leads ?? []) {
-      if (l.phase === "lost") continue;
+    for (const lead of leads ?? []) {
+      if (lead.phase === "lost") continue;
       
       let handled = false;
 
-      if (!l.contactedDate && (l.status === "new" || l.status === "assigned")) {
-        contacts.push({
-          id: l.id.toString(),
-          key: `contact-${l.id}`,
+      if (!lead.contactedDate && (lead.status === "new" || lead.status === "assigned")) {
+        t.push({
+          id: lead.id.toString(),
+          key: `contact-${lead.id}`,
           icon: PhoneCall,
           tone: "text-emerald-500",
           bgTone: "bg-emerald-500/10",
-          context: l.name,
-          subContext: "Awaiting first contact",
+          context: lead.name,
+          subContext: "New lead",
           action: "Call",
-          href: `/lead/${l.id}`,
+          href: `/lead/${lead.id}`,
           rank: 1,
         });
         handled = true;
       }
       
-      if (isToday(l.testDriveAt)) {
-        testDrives.push({
-          id: l.id.toString(),
-          key: `td-${l.id}`,
+      if (isToday(lead.testDriveAt)) {
+        t.push({
+          id: lead.id.toString(),
+          key: `td-${lead.id}`,
           icon: CalendarClock,
           tone: "text-sky-500",
           bgTone: "bg-sky-500/10",
-          context: l.name,
-          subContext: "Test drive scheduled today",
-          action: "Prepare",
-          href: `/lead/${l.id}`,
+          context: lead.name,
+          subContext: "Test drive today",
+          action: "Prep",
+          href: `/lead/${lead.id}`,
           rank: 0,
         });
         handled = true;
       }
       
       if (!handled) {
-        const inStage = daysSince(l.stageEnteredAt ?? l.createdAt);
-        if (l.phase !== "won" && inStage > SLA_DAYS) {
-          followUps.push({
-            id: l.id.toString(),
-            key: `sla-${l.id}`,
-            icon: AlarmClock,
+        const inStage = daysSince(lead.stageEnteredAt ?? lead.createdAt);
+        if (lead.phase !== "won" && inStage > SLA_DAYS) {
+          u.push({
+            id: lead.id.toString(),
+            key: `sla-${lead.id}`,
+            icon: AlertCircle,
             tone: "text-amber-500",
             bgTone: "bg-amber-500/10",
-            context: l.name,
-            subContext: `Stalled for ${inStage} days`,
-            action: "Follow up",
-            href: `/lead/${l.id}`,
+            context: lead.name,
+            subContext: `Stalled ${inStage}d`,
+            action: "Nudge",
+            href: `/lead/${lead.id}`,
             rank: 3,
           });
-        } else if (l.quotationSent && !l.testDriveAt && l.phase !== "won") {
-          followUps.push({
-            id: l.id.toString(),
-            key: `quote-${l.id}`,
+        } else if (lead.quotationSent && !lead.testDriveAt && lead.phase !== "won") {
+          l.push({
+            id: lead.id.toString(),
+            key: `quote-${lead.id}`,
             icon: MailQuestion,
             tone: "text-violet-500",
             bgTone: "bg-violet-500/10",
-            context: l.name,
-            subContext: "Quote sent, awaiting reply",
-            action: "Nudge",
-            href: `/lead/${l.id}`,
+            context: lead.name,
+            subContext: "Quote sent",
+            action: "Follow",
+            href: `/lead/${lead.id}`,
             rank: 4,
           });
         }
@@ -181,7 +164,7 @@ export function ActionQueue({ compact }: { compact?: boolean }) {
         !d.depositPaid &&
         (d.stage === "negotiation" || d.stage === "desking" || d.stage === "finance")
       ) {
-        activeDeals.push({
+        t.push({
           id: d.id.toString(),
           key: `deal-${d.id}`,
           icon: Landmark,
@@ -196,248 +179,92 @@ export function ActionQueue({ compact }: { compact?: boolean }) {
       }
     }
 
-    // Sort items inside groups
-    approvals.sort((a, b) => a.rank - b.rank);
-    contacts.sort((a, b) => a.rank - b.rank);
-    testDrives.sort((a, b) => a.rank - b.rank);
-    followUps.sort((a, b) => a.rank - b.rank);
-    activeDeals.sort((a, b) => a.rank - b.rank);
+    u.sort((a, b) => a.rank - b.rank);
+    t.sort((a, b) => a.rank - b.rank);
+    l.sort((a, b) => a.rank - b.rank);
 
-    const outGroups: Group[] = [];
-    let counter = 1;
-
-    if (contacts.length > 0) {
-      outGroups.push({
-        id: "contacts",
-        title: "Priority Calls",
-        number: `0${counter++}`,
-        items: contacts,
-        href: "/leads",
-        tone: "text-emerald-500",
-        bgTone: "bg-emerald-500/10",
-        icon: PhoneCall,
-      });
-    }
-
-    if (approvals.length > 0) {
-      outGroups.push({
-        id: "approvals",
-        title: "Approvals waiting on you",
-        number: `0${counter++}`,
-        items: approvals,
-        href: "/approvals",
-        tone: "text-blue-500",
-        bgTone: "bg-blue-500/10",
-        icon: ShieldCheck,
-      });
-    }
-
-    if (testDrives.length > 0) {
-      outGroups.push({
-        id: "testDrives",
-        title: "Test Drives Today",
-        number: `0${counter++}`,
-        items: testDrives,
-        href: "/pipeline",
-        tone: "text-sky-500",
-        bgTone: "bg-sky-500/10",
-        icon: CalendarClock,
-      });
-    }
-
-    if (followUps.length > 0) {
-      outGroups.push({
-        id: "followUps",
-        title: "Follow-ups",
-        number: `0${counter++}`,
-        items: followUps,
-        href: "/pipeline",
-        tone: "text-amber-500",
-        bgTone: "bg-amber-500/10",
-        icon: AlarmClock,
-      });
-    }
-
-    if (activeDeals.length > 0) {
-      outGroups.push({
-        id: "deals",
-        title: "Deals Awaiting Deposit",
-        number: `0${counter++}`,
-        items: activeDeals,
-        href: "/deals",
-        tone: "text-orange-500",
-        bgTone: "bg-orange-500/10",
-        icon: Landmark,
-      });
-    }
-
-    const total =
-      approvals.length +
-      contacts.length +
-      testDrives.length +
-      followUps.length +
-      activeDeals.length;
-
-    return { groups: outGroups, totalCount: total };
+    return { urgent: u, today: t, later: l };
   }, [leads, deals, gates]);
 
-  if (totalCount === 0) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="py-12 border border-border/50 rounded-2xl glass flex flex-col items-center justify-center text-center space-y-3"
+  const ItemCard = ({ item }: { item: QueueItem }) => (
+    <div className="group flex items-center justify-between p-3 rounded-xl border border-border/50 bg-foreground/[0.02] hover:bg-foreground/[0.04] hover:border-border transition-all">
+      <div className="flex items-center gap-3 min-w-0 pr-3">
+        <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] tracking-wider", item.bgTone, item.tone)}>
+          {getInitials(item.context)}
+        </div>
+        <div className="min-w-0">
+          <div className="font-semibold text-sm truncate">{item.context}</div>
+          <div className="text-[11px] text-muted-foreground truncate">{item.subContext}</div>
+        </div>
+      </div>
+      <Button 
+        size="sm" 
+        variant="ghost" 
+        className="h-7 px-3 rounded-full text-[11px] font-medium bg-background border border-border/50 shadow-sm shrink-0 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors"
+        onClick={() => navigate(item.href)}
       >
-        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-          <CheckCircle2 className="w-6 h-6" />
-        </div>
-        <div>
-          <h3 className="text-xl font-medium">You're all caught up.</h3>
-          <p className="text-muted-foreground mt-1 text-sm">
-            No pending objectives. AURA is monitoring your pipeline.
-          </p>
-        </div>
-      </motion.div>
-    );
-  }
+        {item.action}
+      </Button>
+    </div>
+  );
 
   return (
-    <div className="space-y-8 md:space-y-10">
-      {/* Day Brief Header */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-      >
-        <h2 className="text-3xl md:text-5xl font-medium tracking-tight text-foreground leading-tight">
-          {greeting()} &mdash; you have <span className="font-semibold text-primary">{totalCount} objectives</span> today.
-        </h2>
-        
-        {/* Breakdown Strip */}
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          {groups.map((g, i) => (
-            <motion.button
-              key={g.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: i * 0.05 + 0.2 }}
-              onClick={() => {
-                const el = document.getElementById(`queue-group-${g.id}`);
-                if (el) {
-                  el.scrollIntoView({ behavior: "smooth", block: "center" });
-                  setExpandedGroups((prev) => ({ ...prev, [g.id]: true }));
-                }
-              }}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-foreground/[0.03] hover:bg-foreground/[0.06] border border-border/50 hover:border-border transition-all text-sm font-medium"
-            >
-              <g.icon className={cn("w-4 h-4", g.tone)} />
-              <span>{g.items.length} {g.title.toLowerCase()}</span>
-            </motion.button>
-          ))}
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* URGENT NOW */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 mb-4">
+          <AlertCircle className="w-4 h-4 text-destructive" />
+          <h3 className="font-semibold tracking-wide text-sm uppercase text-foreground">Urgent Now</h3>
+          <span className="ml-auto text-xs font-medium text-muted-foreground bg-foreground/[0.05] px-2 py-0.5 rounded-full">{urgent.length}</span>
         </div>
-      </motion.div>
+        <div className="space-y-2">
+          {urgent.length > 0 ? (
+            urgent.slice(0, 5).map(item => <ItemCard key={item.key} item={item} />)
+          ) : (
+            <div className="p-4 rounded-xl border border-dashed border-border/50 text-center text-muted-foreground/60 text-sm flex flex-col items-center gap-2">
+              <CheckCircle2 className="w-5 h-5" />
+              All clear
+            </div>
+          )}
+        </div>
+      </div>
 
-      {/* Objectives Groups */}
-      <div className="space-y-8">
-        {groups.map((g, idx) => {
-          const isExpanded = expandedGroups[g.id] ?? g.items.length <= 4;
-          const shownItems = isExpanded ? g.items : g.items.slice(0, 3);
-          const hasMore = !isExpanded && g.items.length > 3;
+      {/* TODAY */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 mb-4">
+          <Clock className="w-4 h-4 text-emerald-500" />
+          <h3 className="font-semibold tracking-wide text-sm uppercase text-foreground">Today</h3>
+          <span className="ml-auto text-xs font-medium text-muted-foreground bg-foreground/[0.05] px-2 py-0.5 rounded-full">{today.length}</span>
+        </div>
+        <div className="space-y-2">
+          {today.length > 0 ? (
+            today.slice(0, 5).map(item => <ItemCard key={item.key} item={item} />)
+          ) : (
+            <div className="p-4 rounded-xl border border-dashed border-border/50 text-center text-muted-foreground/60 text-sm flex flex-col items-center gap-2">
+              <Inbox className="w-5 h-5" />
+              Inbox zero
+            </div>
+          )}
+        </div>
+      </div>
 
-          return (
-            <motion.div
-              key={g.id}
-              id={`queue-group-${g.id}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: idx * 0.1 + 0.1 }}
-              className="scroll-m-24"
-            >
-              {/* Group Header */}
-              <div className="flex items-center gap-4 mb-4">
-                <div className="text-xl md:text-2xl font-bold text-muted-foreground/40 tabular-nums select-none tracking-tighter">
-                  {g.number}
-                </div>
-                <h3 className="text-lg md:text-xl font-medium tracking-tight">
-                  {g.title}
-                </h3>
-                <div className="h-px flex-1 bg-border/40 ml-2 hidden md:block" />
-              </div>
-
-              {/* Group Items */}
-              <div className="grid grid-cols-1 gap-2.5">
-                <AnimatePresence initial={false}>
-                  {shownItems.map((item, itemIdx) => (
-                    <motion.div
-                      key={item.key}
-                      initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                      animate={{ opacity: 1, height: "auto", marginBottom: 0 }}
-                      exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="group overflow-hidden"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl glass-panel border border-border/50 hover:border-border transition-colors gap-4 relative">
-                        {/* Subtle accent strip */}
-                        <div className={cn("absolute left-0 top-0 bottom-0 w-1 opacity-60", g.bgTone)} />
-                        
-                        <div className="flex items-center gap-4 min-w-0 pl-1">
-                          <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", g.bgTone)}>
-                            <g.icon className={cn("w-5 h-5", g.tone)} />
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="font-semibold text-base truncate">{item.context}</h4>
-                            <p className="text-sm text-muted-foreground mt-0.5 truncate">{item.subContext}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between sm:justify-end gap-6 sm:pl-4 pl-14">
-                          <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground whitespace-nowrap">
-                            {item.rank === 0 ? "High Priority" : item.rank === 1 ? "Priority" : "Standard"}
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="h-8 px-4 rounded-full bg-foreground/[0.05] hover:bg-primary hover:text-primary-foreground transition-colors shadow-none shrink-0"
-                            onClick={() => navigate(item.href)}
-                          >
-                            {item.action}
-                          </Button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
-
-              {/* Footer / Expand */}
-              {g.items.length > 3 && (
-                <div className="mt-3 flex items-center pl-14 md:pl-[4.5rem]">
-                  <button
-                    onClick={() => toggleGroup(g.id)}
-                    className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
-                  >
-                    {hasMore ? (
-                      <>Show {g.items.length - 3} more <ChevronDown className="w-4 h-4" /></>
-                    ) : (
-                      <>Show less <ChevronUp className="w-4 h-4" /></>
-                    )}
-                  </button>
-                  {isExpanded && (
-                    <>
-                      <span className="mx-3 text-border">&bull;</span>
-                      <button
-                        onClick={() => navigate(g.href)}
-                        className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5"
-                      >
-                        View in board <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </motion.div>
-          );
-        })}
+      {/* CAN WAIT */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 mb-4">
+          <Inbox className="w-4 h-4 text-muted-foreground" />
+          <h3 className="font-semibold tracking-wide text-sm uppercase text-foreground">Can Wait</h3>
+          <span className="ml-auto text-xs font-medium text-muted-foreground bg-foreground/[0.05] px-2 py-0.5 rounded-full">{later.length}</span>
+        </div>
+        <div className="space-y-2">
+          {later.length > 0 ? (
+            later.slice(0, 5).map(item => <ItemCard key={item.key} item={item} />)
+          ) : (
+            <div className="p-4 rounded-xl border border-dashed border-border/50 text-center text-muted-foreground/60 text-sm flex flex-col items-center gap-2">
+              <CheckCircle2 className="w-5 h-5" />
+              Nothing pending
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

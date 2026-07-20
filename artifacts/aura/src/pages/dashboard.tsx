@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { ActionQueue } from "@/components/action-queue";
+import { TodaySchedule } from "@/components/today-schedule";
 import {
   useGetDashboardSummary,
   useGetSalesPerformance,
@@ -229,45 +230,71 @@ export default function Dashboard() {
   return (
     <div className="h-full overflow-y-auto">
       {/* Compact cinematic briefing band */}
-      <div className="relative h-[200px] md:h-[240px] w-full overflow-hidden bg-black">
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-50"
-        >
-          <source
-            src={`${import.meta.env.BASE_URL}videos/red_car_leaving_showroom.mp4`}
-            type="video/mp4"
-          />
-        </video>
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-black/40 z-10" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-transparent z-10" />
-
-        <div className="relative z-20 h-full w-full px-5 md:px-8 flex flex-col justify-center pb-12">
+      <div className="relative h-[240px] md:h-[280px] w-full bg-black overflow-hidden group">
+        <div className="absolute inset-0 z-0">
+          <video
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="w-full h-full object-cover opacity-60 mix-blend-screen"
+          >
+            <source
+              src={`${import.meta.env.BASE_URL}videos/red_car_leaving_showroom.mp4`}
+              type="video/mp4"
+            />
+          </video>
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/40 to-transparent" />
+        </div>
+        
+        <div className="relative z-10 h-full px-5 md:px-8 flex flex-col justify-end pb-8">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground mb-2">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-white/80 mb-3">
               <Bot className="w-4 h-4" />
-              AURA Concierge · Command Center
+              AURA Command Center
             </div>
-            <h1 className="text-2xl md:text-[1.75rem] font-semibold tracking-tight text-foreground max-w-3xl leading-tight">
-              {greeting()}. Welcome to Command Center.
+            <h1 className="text-3xl md:text-5xl font-medium tracking-tight text-white max-w-4xl leading-tight drop-shadow-md">
+              {greeting()}. <br/>
+              <span className="text-white/80 font-light">{briefingLine(summary, sortedGates.length)}</span>
             </h1>
           </motion.div>
         </div>
       </div>
 
-      <div className="w-full px-5 md:px-8 pb-14 -mt-12 relative z-30 space-y-6">
-        {/* Your day — action queue leads the page */}
-        <ActionQueue />
+      <div className="w-full px-5 md:px-8 pb-14 mt-8 relative z-30 space-y-10">
+        
+        {/* Day Brief: Triage + Schedule */}
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+          <div className="xl:col-span-3">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold tracking-wide">Triage</h2>
+                <p className="text-sm text-muted-foreground mt-1">Actions requiring your attention</p>
+              </div>
+            </div>
+            <ActionQueue />
+          </div>
+          
+          <div className="xl:col-span-1">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold tracking-wide">Today's Schedule</h2>
+                <p className="text-sm text-muted-foreground mt-1">Upcoming appointments</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border/50 bg-foreground/[0.02] p-5 h-[calc(100%-4rem)] overflow-y-auto">
+              <TodaySchedule />
+            </div>
+          </div>
+        </div>
 
         {/* KPI Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mt-6">
           <KPICard
             title="Monthly Revenue"
             value={summary ? `$${(summary.monthlyRevenue / 1000).toFixed(1)}k` : "$0"}
@@ -543,53 +570,9 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Decisions + Autonomous activity */}
+        {/* Autonomous activity */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col">
-            <div className="p-6 pb-4 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 text-primary" />
-                  <h3 className="text-lg font-semibold tracking-wide">
-                    Decisions that need you
-                  </h3>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Reserved for a human. AURA handled the rest.
-                </p>
-              </div>
-              {sortedGates.length > 0 && (
-                <Link
-                  href="/approvals"
-                  className="text-sm text-primary font-medium flex items-center gap-1 hover:gap-2 transition-all shrink-0"
-                >
-                  Review all
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              )}
-            </div>
-            <CardContent className="px-6 pb-6 pt-0 flex-1">
-              {sortedGates.length === 0 ? (
-                <div className="h-full min-h-[220px] flex flex-col items-center justify-center text-center">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-3">
-                    <CheckCircle2 className="w-6 h-6" />
-                  </div>
-                  <p className="font-medium">All clear</p>
-                  <p className="text-sm text-muted-foreground max-w-xs mt-1">
-                    No decisions waiting. AURA has it under control.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {sortedGates.slice(0, 3).map((gate, i) => (
-                    <DecisionRow key={gate.id} gate={gate} delay={i * 0.05} />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="glass-panel border-none shadow-xl flex flex-col">
             <div className="p-6 pb-4 border-b border-border/50">
               <div className="flex items-center gap-2">
                 <Bot className="w-4 h-4 text-primary" />
@@ -1119,112 +1102,104 @@ function KPICard({
   );
 }
 
-function DecisionRow({ gate, delay }: { gate: Gate; delay: number }) {
+function PipelineFunnel({ stages }: { stages: PipelineStage[] }) {
+  if (stages.length === 0) {
+    return (
+      <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+        No pipeline data yet.
+      </div>
+    );
+  }
+
+  const max = Math.max(...stages.map((s) => s.value), 1);
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 12 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay }}
-    >
-      <Link href="/approvals">
-        <div className="group flex items-center gap-4 rounded-2xl border border-border/60 bg-white/[0.05] hover:bg-primary/5 hover:border-primary/30 transition-colors p-4 cursor-pointer">
-          <div
-            className={`w-1.5 self-stretch rounded-full shrink-0 ${
-              gate.priority === "high"
-                ? "bg-primary"
-                : gate.priority === "normal"
-                  ? "bg-amber-400"
-                  : "bg-border"
-            }`}
-          />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-primary">
-                {GATE_LABEL[gate.type] ?? gate.type}
-              </span>
-              {gate.priority === "high" && (
-                <span className="text-[10px] font-bold uppercase tracking-widest text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                  Urgent
-                </span>
-              )}
-            </div>
-            <p className="font-semibold text-sm leading-snug truncate mt-0.5">
-              {gate.title}
-            </p>
-            {gate.customerName && (
-              <p className="text-xs text-muted-foreground truncate mt-0.5">
-                {gate.customerName}
-              </p>
-            )}
-          </div>
-          {gate.amount != null && (
+    <div className="space-y-4 pt-2">
+      {stages.map((s) => (
+        <div key={s.phase}>
+          <div className="flex items-center justify-between text-sm mb-1.5">
+            <span className="font-medium capitalize min-w-0 pr-4">
+              {s.label}
+            </span>
             <div className="text-right shrink-0">
-              <p className="text-sm font-semibold tabular-nums">
-                ${gate.amount.toLocaleString()}
-              </p>
+              <span className="font-medium">${Math.round(s.value / 1000)}k</span>
+              <span className="text-muted-foreground text-xs ml-2 tabular-nums">
+                ({s.count})
+              </span>
             </div>
-          )}
-          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+          </div>
+          <div className="h-2 rounded-full bg-foreground/[0.06] overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${(s.value / max) * 100}%` }}
+              transition={{ duration: 0.6 }}
+              className="h-full rounded-full bg-primary"
+            />
+          </div>
         </div>
-      </Link>
-    </motion.div>
+      ))}
+    </div>
   );
 }
 
-function ActivityRow({ event, delay }: { event: TimelineEvent; delay: number }) {
+function UnitsBar({ data }: { data: { month: string; units: number }[] }) {
+  if (data.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+        No sales data yet.
+      </div>
+    );
+  }
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay }}
-      className="flex gap-3"
-    >
-      <div
-        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-          event.isAgent ? "bg-primary/10 text-primary" : "bg-white/[0.05] text-foreground"
-        }`}
-      >
-        {event.isAgent ? <Bot className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium leading-snug">{event.title}</p>
-        <div className="flex items-center gap-1.5 mt-1 text-[10px] uppercase tracking-widest text-muted-foreground">
-          <Clock className="w-3 h-3" />
-          {formatDistanceToNow(new Date(event.createdAt), { addSuffix: true })}
-        </div>
-      </div>
-    </motion.div>
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data} margin={{ top: 16, right: 8, left: -24, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+        <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} />
+        <Tooltip
+          contentStyle={TOOLTIP_STYLE}
+          itemStyle={{ color: "hsl(var(--foreground))" }}
+          labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+          cursor={{ fill: "hsl(var(--foreground) / 0.04)" }}
+          formatter={(val: number) => [`${val}`, "Units"]}
+        />
+        <Bar dataKey="units" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={32} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
 function InventoryDonut({ data }: { data: InventoryBreakdownItem[] }) {
   if (data.length === 0) {
     return (
-      <div className="text-center py-12 text-muted-foreground text-sm">
+      <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
         No inventory data yet.
       </div>
     );
   }
+
+  const chartData = data.map((d) => ({
+    name: d.powertrain === "EV" ? "Electric" : d.powertrain,
+    value: d.count,
+    fill: POWERTRAIN_COLORS[d.powertrain] ?? POWERTRAIN_FALLBACK,
+  }));
   const total = data.reduce((s, d) => s + d.count, 0);
+
   return (
-    <div className="flex flex-col">
-      <div className="relative w-full h-[176px]">
+    <div className="flex flex-col h-full pt-2">
+      <div className="relative w-full h-[180px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={data}
-              dataKey="count"
-              nameKey="powertrain"
-              innerRadius={58}
-              outerRadius={82}
+              data={chartData}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={60}
+              outerRadius={86}
               paddingAngle={2}
               stroke="none"
             >
-              {data.map((d, i) => (
-                <Cell
-                  key={i}
-                  fill={POWERTRAIN_COLORS[d.powertrain] ?? POWERTRAIN_FALLBACK}
-                />
+              {chartData.map((d, i) => (
+                <Cell key={i} fill={d.fill} />
               ))}
             </Pie>
             <Tooltip
@@ -1239,29 +1214,21 @@ function InventoryDonut({ data }: { data: InventoryBreakdownItem[] }) {
             {total}
           </span>
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
-            In stock
+            Units
           </span>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 mt-5">
-        {data.map((d) => (
-          <div
-            key={d.powertrain}
-            className="flex items-center justify-between text-sm"
-          >
+      <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-6">
+        {chartData.map((d) => (
+          <div key={d.name} className="flex items-center justify-between text-sm">
             <span className="flex items-center gap-2 min-w-0">
               <span
                 className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{
-                  background:
-                    POWERTRAIN_COLORS[d.powertrain] ?? POWERTRAIN_FALLBACK,
-                }}
+                style={{ background: d.fill }}
               />
-              <span className="text-muted-foreground truncate">
-                {d.powertrain}
-              </span>
+              <span className="text-muted-foreground truncate">{d.name}</span>
             </span>
-            <span className="font-semibold tabular-nums">{d.count}</span>
+            <span className="font-semibold tabular-nums">{d.value}</span>
           </div>
         ))}
       </div>
@@ -1269,78 +1236,32 @@ function InventoryDonut({ data }: { data: InventoryBreakdownItem[] }) {
   );
 }
 
-function UnitsBar({ data }: { data: { month: string; units: number }[] }) {
-  if (data.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-        No sales data yet.
-      </div>
-    );
-  }
+function ActivityRow({ event, delay }: { event: TimelineEvent; delay: number }) {
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 12, right: 8, left: -12, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} dy={6} />
-        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} allowDecimals={false} width={28} />
-        <Tooltip
-          cursor={{ fill: "hsl(var(--muted) / 0.18)" }}
-          contentStyle={TOOLTIP_STYLE}
-          itemStyle={{ color: "hsl(var(--foreground))" }}
-          labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-          formatter={(val: number) => [val, "Units"]}
-        />
-        <Bar dataKey="units" radius={[6, 6, 0, 0]} fill="hsl(var(--primary))" maxBarSize={40} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-function PipelineFunnel({ stages }: { stages: PipelineStage[] }) {
-  if (stages.length === 0) {
-    return (
-      <div className="text-center py-12 text-muted-foreground text-sm">
-        No pipeline data yet.
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay, duration: 0.3 }}
+      className="flex gap-4 group"
+    >
+      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+        <Bot className="w-4 h-4" />
       </div>
-    );
-  }
-  const max = Math.max(...stages.map((s) => s.value), 1);
-  const totalValue = stages.reduce((s, x) => s + x.value, 0);
-  return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-baseline justify-between mb-4">
-        <span className="text-xs uppercase tracking-widest text-muted-foreground">
-          Total open value
-        </span>
-        <span className="text-2xl font-bold tabular-nums">
-          ${(totalValue / 1000).toFixed(0)}k
-        </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <h4 className="font-medium text-sm text-foreground truncate">
+            {event.title}
+          </h4>
+          <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+            {formatDistanceToNow(new Date(event.createdAt), {
+              addSuffix: true,
+            })}
+          </span>
+        </div>
+        <p className="text-sm text-muted-foreground mt-0.5 leading-snug line-clamp-2">
+          {event.detail ?? event.title}
+        </p>
       </div>
-      <div className="space-y-3.5 flex-1">
-        {stages.map((stage, i) => (
-          <motion.div
-            key={stage.phase}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: i * 0.06 }}
-          >
-            <div className="flex items-baseline justify-between mb-1.5">
-              <span className="text-sm font-medium">{stage.label}</span>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {stage.count} · ${(stage.value / 1000).toFixed(0)}k
-              </span>
-            </div>
-            <div className="h-2.5 rounded-full bg-white/[0.05] overflow-hidden">
-              <motion.div
-                className="h-full rounded-full bg-gradient-to-r from-primary/70 to-primary"
-                initial={{ width: 0 }}
-                animate={{ width: `${(stage.value / max) * 100}%` }}
-                transition={{ delay: i * 0.06 + 0.1, duration: 0.6 }}
-              />
-            </div>
-          </motion.div>
-        ))}
-      </div>
-    </div>
+    </motion.div>
   );
 }

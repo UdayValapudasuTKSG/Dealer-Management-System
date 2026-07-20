@@ -104,7 +104,7 @@ export default function VehicleDetailPage() {
     );
 
   return (
-    <Page>
+    <Page className="pb-28">
       <Link
         href="/inventory"
         className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors mb-5"
@@ -333,6 +333,22 @@ export default function VehicleDetailPage() {
               Open in Showroom
             </Link>
           </div>
+        </div>
+      </div>
+      
+      {/* Sticky Summary Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-t border-border/50 p-4 transform translate-y-0">
+        <div className="container mx-auto max-w-5xl flex items-center justify-between gap-4">
+           <div>
+             <div className="text-sm font-semibold tracking-tight">{vehicle.make} {vehicle.model}</div>
+             <div className="text-xs text-muted-foreground">{vehicle.trim}</div>
+           </div>
+           <div className="flex items-center gap-6">
+             <div className="text-xl font-light tabular-nums hidden sm:block">${vehicle.price.toLocaleString()}</div>
+             <button onClick={() => navigate(`/deals?vehicle=${vehicle.id}`)} className="h-10 px-8 rounded-full bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
+               Structure Deal
+             </button>
+           </div>
         </div>
       </div>
     </Page>
