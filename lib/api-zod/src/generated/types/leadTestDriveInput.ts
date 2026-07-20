@@ -10,4 +10,7 @@ export interface LeadTestDriveInput {
   scheduledAt: Date;
   branch?: string;
   vehicleId?: number;
+  /** @minLength 1 */
+  licenceNumber: string;
+  waiverAccepted: boolean;
 }

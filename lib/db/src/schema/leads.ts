@@ -52,6 +52,9 @@ export const leadsTable = pgTable("leads", {
     .notNull()
     .unique()
     .default(sql`gen_random_uuid()`),
+  // Test-drive compliance: driver's licence + signed waiver (required before booking).
+  testDriveLicence: text("test_drive_licence"),
+  testDriveWaiver: boolean("test_drive_waiver").notNull().default(false),
   availability: text("availability"),
   purchaseType: text("purchase_type"),
   attachments: jsonb("attachments")
@@ -76,6 +79,8 @@ export const leadsTable = pgTable("leads", {
   budgetFinancing: text("budget_financing"),
   description: text("description"),
   address: text("address"),
+  // Stamped whenever the lead advances to a new pipeline stage (powers days-in-stage / SLA).
+  stageEnteredAt: timestamp("stage_entered_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

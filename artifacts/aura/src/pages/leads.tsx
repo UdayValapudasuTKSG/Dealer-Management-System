@@ -24,6 +24,9 @@ import {
   Loader2,
   ChevronRight,
   Check,
+  Clock,
+  UserCheck,
+  Search,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Page } from "@/components/layout/page";
@@ -31,6 +34,9 @@ import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { VehicleCascade } from "@/components/vehicle-cascade";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useViewMode } from "@/hooks/use-view-mode";
+import { ViewControls } from "@/components/view-controls";
+import { ActionQueue } from "@/components/action-queue";
 
 const STAGES = [
   "new_lead",
@@ -47,9 +53,9 @@ const STAGE_LABEL: Record<Stage, string> = {
   new_lead: "New Lead",
   qualified: "Qualified",
   test_drive: "Test Drive",
-  desking: "Desking",
+  desking: "Negotiation",
   sold: "Sold",
-  in_prep: "In Prep",
+  in_prep: "Pre-Delivery",
   delivered: "Delivered",
 };
 
@@ -57,7 +63,7 @@ const STAGE_CAPTION: Record<Stage, string> = {
   new_lead: "Fresh interest, awaiting first contact",
   qualified: "Vetted buyers, matching inventory",
   test_drive: "Test drives and showroom visits",
-  desking: "Structuring terms and desking",
+  desking: "Structuring terms and negotiating",
   sold: "Deal agreed, paperwork in motion",
   in_prep: "Vehicle in prep and pre-delivery",
   delivered: "Keys handed over, onboarding retention",
@@ -103,8 +109,24 @@ const STATUS_LABEL: Record<string, string> = {
   lost: "Lost",
 };
 
+const NEXT_ACTION: Record<Stage, string> = {
+  new_lead: "Make first contact",
+  qualified: "Book a test drive",
+  test_drive: "Run the drive, capture feedback",
+  desking: "Finalize numbers & deposit",
+  sold: "Complete paperwork",
+  in_prep: "Prep vehicle for delivery",
+  delivered: "Follow up & retain",
+};
+
 const withBase = (url: string) =>
   `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`;
+
+function daysInStage(lead: { stageEnteredAt?: string | null; createdAt: string }) {
+  const since = lead.stageEnteredAt ?? lead.createdAt;
+  const ms = Date.now() - new Date(since).getTime();
+  return Math.max(0, Math.floor(ms / 86_400_000));
+}
 
 export default function Leads() {
   const { data: leads, isLoading } = useListLeads();
@@ -112,14 +134,13 @@ export default function Leads() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createLead = useCreateLead();
+  const { density, setDensity, layout, setLayout } = useViewMode("pipeline");
 
   const { data: deals } = useListDeals();
 
   // Derive the rail stage for a lead: pre-sale stages map 1:1 from the lead
-  // phase; won leads split into Sold / In Prep / Delivered by their deal stage.
+  // phase; won leads split into Sold / Pre-Delivery / Delivered by deal stage.
   const stageOf = useMemo(() => {
-    // Deterministic precedence across multiple deals: the furthest-along deal
-    // wins (delivered > committed > everything else), independent of row order.
     const rank = (stage: string) =>
       stage === "delivered" ? 2 : stage === "committed" ? 1 : 0;
     const dealByLead = new Map<number, string>();
@@ -171,22 +192,89 @@ export default function Leads() {
   }, [leads, stageOf]);
 
   const [selectedStage, setSelectedStage] = useState<Stage>("test_drive");
-  const activeIndex = STAGES.indexOf(selectedStage);
   const [, navigate] = useLocation();
 
   const stageLeads = (leads ?? []).filter((l) => stageOf(l) === selectedStage);
+
+  // Full-pipeline table (list layout): search, stage filter, sortable columns.
+  const [search, setSearch] = useState("");
+  const [stageFilter, setStageFilter] = useState<"all" | Stage>("all");
+  const [sort, setSort] = useState<{
+    key: "name" | "stage" | "owner" | "value" | "days" | "ai";
+    dir: "asc" | "desc";
+  }>({ key: "days", dir: "desc" });
+
+  const dealValueByLead = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const d of deals ?? []) {
+      if (d.leadId != null) {
+        const v = d.otdPrice || d.vehiclePrice - d.discount;
+        const prev = map.get(d.leadId);
+        if (prev === undefined || v > prev) map.set(d.leadId, v);
+      }
+    }
+    return map;
+  }, [deals]);
+
+  const tableRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const rows = (leads ?? [])
+      .map((lead) => {
+        const stage = stageOf(lead);
+        if (!stage) return null;
+        const vehicle = vehicles?.find((v) => v.id === lead.interestedVehicleId);
+        const value =
+          dealValueByLead.get(lead.id) ?? (vehicle ? vehicle.price : null);
+        return { lead, stage, vehicle, value, days: daysInStage(lead) };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
+      .filter((r) => stageFilter === "all" || r.stage === stageFilter)
+      .filter(
+        (r) =>
+          !q ||
+          r.lead.name.toLowerCase().includes(q) ||
+          (r.lead.assignedTo ?? "").toLowerCase().includes(q) ||
+          (r.vehicle
+            ? `${r.vehicle.make} ${r.vehicle.model}`.toLowerCase().includes(q)
+            : false),
+      );
+    const dir = sort.dir === "asc" ? 1 : -1;
+    rows.sort((a, b) => {
+      switch (sort.key) {
+        case "name":
+          return a.lead.name.localeCompare(b.lead.name) * dir;
+        case "stage":
+          return (STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage)) * dir;
+        case "owner":
+          return (a.lead.assignedTo ?? "").localeCompare(b.lead.assignedTo ?? "") * dir;
+        case "value":
+          return ((a.value ?? 0) - (b.value ?? 0)) * dir;
+        case "days":
+          return (a.days - b.days) * dir;
+        case "ai":
+          return (a.lead.aiScore - b.lead.aiScore) * dir;
+      }
+    });
+    return rows;
+  }, [leads, vehicles, stageOf, dealValueByLead, search, stageFilter, sort]);
 
   const suggestions = useGetPipelineSuggestions({
     phase: STAGE_PHASE[selectedStage],
   });
 
+  const compact = density === "compact";
+
   return (
     <Page className="space-y-5">
-      {/* Compact command row: primary action only. The top nav already says
-          where we are — no repeated page title eating vertical space. Test
-          drives live on the Test Drive stage of the rail below. */}
+      {/* Compact command row: view controls + primary action. */}
       <div className="flex flex-wrap items-center justify-end gap-3">
-          <CreateRecordDialog
+        <ViewControls
+          layout={layout}
+          onLayoutChange={setLayout}
+          density={density}
+          onDensityChange={setDensity}
+        />
+        <CreateRecordDialog
             title="New Lead"
             description="Capture a prospect — AURA scores and routes it instantly."
             pending={createLead.isPending}
@@ -283,96 +371,187 @@ export default function Leads() {
           />
       </div>
 
-      {/* Stage rail — segmented stepper */}
-      <div className="relative rounded-3xl bg-foreground/[0.03] border border-white/10 shadow-[0_18px_48px_-28px_rgba(0,0,0,0.6)] p-3 md:p-4">
-        {/* Progress track */}
-        <div className="relative mx-2 mb-3 h-1 rounded-full bg-foreground/[0.07] overflow-hidden">
-          <motion.div
-            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary/40 via-primary to-primary shadow-[0_0_16px_hsl(var(--primary)/0.6)]"
-            initial={false}
-            animate={{
-              width: `${((activeIndex + 1) / STAGES.length) * 100}%`,
-            }}
-            transition={{ type: "spring", stiffness: 200, damping: 30 }}
-          />
-        </div>
+      <ActionQueue />
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 md:gap-3">
-          {STAGES.map((stage, i) => {
-            const isActive = stage === selectedStage;
-            const isPast = i < activeIndex;
-            return (
+      {layout === "list" ? (
+        /* Full-pipeline table: every non-lost lead, searchable + stage filter */
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[220px] max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search client, vehicle or advisor…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-full bg-foreground/[0.04] border border-white/10 pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-primary/50"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1.5">
               <button
-                key={stage}
-                onClick={() => setSelectedStage(stage)}
+                onClick={() => setStageFilter("all")}
                 className={cn(
-                  "relative rounded-2xl px-3 py-3 md:px-4 md:py-4 text-left transition-colors group overflow-hidden",
-                  !isActive && "hover:bg-foreground/[0.05]",
+                  "rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors",
+                  stageFilter === "all"
+                    ? "bg-primary text-white"
+                    : "bg-foreground/[0.05] text-muted-foreground hover:text-foreground",
                 )}
               >
-                {isActive && (
-                  <motion.span
-                    layoutId="pipeline-node-active"
-                    transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                    className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary via-primary to-red-900 shadow-lg shadow-primary/40"
-                  />
-                )}
-                <span className="relative z-10 flex flex-col gap-1.5 min-w-0">
-                  <span className="flex items-center justify-between gap-2">
-                    <span
-                      className={cn(
-                        "flex h-5 w-5 md:h-6 md:w-6 items-center justify-center rounded-full text-[10px] font-bold transition-colors shrink-0",
-                        isActive
-                          ? "bg-white/20 text-white"
-                          : isPast
-                            ? "bg-primary/15 text-primary"
-                            : "bg-foreground/[0.07] text-muted-foreground group-hover:text-foreground",
-                      )}
-                    >
-                      {isPast ? <Check className="h-3 w-3" /> : i + 1}
-                    </span>
-                    <span
-                      className={cn(
-                        "text-xl md:text-2xl font-bold tabular-nums leading-none transition-colors",
-                        isActive
-                          ? "text-white"
-                          : isPast
-                            ? "text-foreground"
-                            : "text-muted-foreground group-hover:text-foreground",
-                      )}
-                    >
-                      {counts[stage] ?? 0}
-                    </span>
-                  </span>
-                  <span className="flex items-baseline justify-between gap-2 min-w-0">
-                    <span
-                      className={cn(
-                        "text-[10px] md:text-[11px] font-semibold uppercase tracking-widest truncate transition-colors",
-                        isActive
-                          ? "text-white/90"
-                          : "text-muted-foreground group-hover:text-foreground",
-                      )}
-                    >
-                      {STAGE_LABEL[stage]}
-                    </span>
-                    <span
-                      className={cn(
-                        "hidden md:inline text-[9px] uppercase tracking-wider shrink-0 transition-colors",
-                        isActive
-                          ? "text-white/60"
-                          : isPast
-                            ? "text-primary/80"
-                            : "text-muted-foreground/60",
-                      )}
-                    >
-                      {isActive ? "Viewing" : isPast ? "Done" : `0${i + 1}`}
-                    </span>
-                  </span>
-                </span>
+                All
               </button>
-            );
-          })}
+              {STAGES.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setStageFilter(s)}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors",
+                    stageFilter === s
+                      ? "bg-primary text-white"
+                      : "bg-foreground/[0.05] text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {STAGE_LABEL[s]}
+                  <span className="ml-1.5 tabular-nums opacity-70">{counts[s] ?? 0}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="glass-panel rounded-2xl overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  {(
+                    [
+                      ["name", "Client"],
+                      ["stage", "Stage"],
+                      ["owner", "Owner"],
+                      ["value", "Value"],
+                      ["days", "Days in stage"],
+                      ["ai", "AI"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <th
+                      key={key}
+                      onClick={() =>
+                        setSort((prev) =>
+                          prev.key === key
+                            ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+                            : { key, dir: "asc" },
+                        )
+                      }
+                      className={cn(
+                        "px-4 py-3 font-semibold cursor-pointer select-none hover:text-foreground whitespace-nowrap",
+                        (key === "value" || key === "days" || key === "ai") && "text-right",
+                      )}
+                    >
+                      {label}
+                      {sort.key === key && (sort.dir === "asc" ? " ↑" : " ↓")}
+                    </th>
+                  ))}
+                  <th className="px-4 py-3 font-semibold">Next action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                      No leads match this view
+                    </td>
+                  </tr>
+                ) : (
+                  tableRows.map((row) => (
+                    <tr
+                      key={row.lead.id}
+                      onClick={() => navigate(`/lead/${row.lead.id}`)}
+                      className={cn(
+                        "border-b border-white/5 last:border-0 cursor-pointer hover:bg-foreground/[0.04] transition-colors",
+                        compact ? "h-10" : "h-12",
+                      )}
+                    >
+                      <td className="px-4 py-2">
+                        <div className="font-medium truncate max-w-[200px]">{row.lead.name}</div>
+                        {!compact && (
+                          <div className="text-[11px] text-muted-foreground truncate max-w-[220px]">
+                            {row.vehicle ? `${row.vehicle.make} ${row.vehicle.model}` : SOURCE_LABEL[row.lead.source] ?? row.lead.source}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                          {STAGE_LABEL[row.stage]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-muted-foreground truncate max-w-[150px]">
+                        {row.lead.assignedTo || <span className="text-amber-400">Needs advisor</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
+                        {row.value != null
+                          ? row.value.toLocaleString("en-US", {
+                              style: "currency",
+                              currency: "USD",
+                              maximumFractionDigits: 0,
+                            })
+                          : "—"}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-4 py-2 text-right tabular-nums",
+                          row.days >= 7 ? "text-amber-400 font-semibold" : "text-muted-foreground",
+                        )}
+                      >
+                        {row.days}d
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums font-medium text-primary">
+                        {row.lead.aiScore}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                        {NEXT_ACTION[row.stage]}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
+      ) : (
+        <>
+      {/* Stage rail — slim chevron strip */}
+      <div className="flex overflow-x-auto rounded-2xl border border-white/10 bg-foreground/[0.03] p-1.5 gap-0.5">
+        {STAGES.map((stage, i) => {
+          const isActive = stage === selectedStage;
+          return (
+            <button
+              key={stage}
+              onClick={() => setSelectedStage(stage)}
+              style={{
+                clipPath:
+                  i === 0
+                    ? "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%)"
+                    : i === STAGES.length - 1
+                      ? "polygon(0 0, 100% 0, 100% 100%, 0 100%, 10px 50%)"
+                      : "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)",
+              }}
+              className={cn(
+                "relative flex-1 min-w-[110px] flex items-center justify-center gap-2 py-2.5 pl-4 pr-3 text-[11px] font-semibold uppercase tracking-wider transition-colors",
+                isActive
+                  ? "bg-gradient-to-r from-primary to-blue-800 text-white"
+                  : "bg-foreground/[0.05] text-muted-foreground hover:bg-foreground/[0.09] hover:text-foreground",
+              )}
+            >
+              <span className="truncate">{STAGE_LABEL[stage]}</span>
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums",
+                  isActive ? "bg-white/20 text-white" : "bg-foreground/[0.08]",
+                )}
+              >
+                {counts[stage] ?? 0}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Detail — animated per stage */}
@@ -401,33 +580,44 @@ export default function Leads() {
               </span>
             </div>
 
-            <div className="space-y-3">
-              {isLoading ? (
-                [1, 2, 3].map((i) => (
+            {isLoading ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
                   <div
                     key={i}
                     className="h-20 rounded-2xl bg-foreground/[0.04] animate-pulse"
                   />
-                ))
-              ) : stageLeads.length === 0 ? (
-                <div className="flex items-center justify-center h-32 rounded-2xl border-2 border-dashed border-border/60 text-muted-foreground/60 text-sm uppercase tracking-widest font-semibold">
-                  No clients in this stage
-                </div>
-              ) : (
-                stageLeads.map((lead, i) => {
+                ))}
+              </div>
+            ) : stageLeads.length === 0 ? (
+              <div className="flex items-center justify-center h-32 rounded-2xl border-2 border-dashed border-border/60 text-muted-foreground/60 text-sm uppercase tracking-widest font-semibold">
+                No clients in this stage
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {stageLeads.map((lead, i) => {
                   const vehicle = vehicles?.find(
                     (v) => v.id === lead.interestedVehicleId,
                   );
+                  const days = daysInStage(lead);
                   return (
                     <motion.div
                       key={lead.id}
                       initial={{ opacity: 0, x: -12 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.04 }}
+                      transition={{ delay: Math.min(i * 0.04, 0.4) }}
                       onClick={() => navigate(`/lead/${lead.id}`)}
-                      className="group flex items-center gap-4 rounded-2xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:border-primary/30 transition-all duration-300 p-3 pr-4 cursor-pointer"
+                      className={cn(
+                        "group flex items-center gap-4 rounded-2xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:border-primary/30 transition-all duration-300 cursor-pointer",
+                        compact ? "p-2.5 pr-3" : "p-3 pr-4",
+                      )}
                     >
-                      <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-foreground/[0.04] flex items-center justify-center">
+                      <div
+                        className={cn(
+                          "shrink-0 rounded-xl overflow-hidden bg-foreground/[0.04] flex items-center justify-center",
+                          compact ? "w-12 h-12" : "w-16 h-16",
+                        )}
+                      >
                         {vehicle?.imageUrl ? (
                           <img
                             src={withBase(vehicle.imageUrl)}
@@ -439,15 +629,17 @@ export default function Leads() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-base leading-tight truncate group-hover:text-primary transition-colors">
-                          {lead.name}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-semibold text-base leading-tight truncate group-hover:text-primary transition-colors">
+                            {lead.name}
+                          </span>
+                          {vehicle && (
+                            <span className="text-xs text-muted-foreground truncate hidden sm:inline">
+                              · {vehicle.make} {vehicle.model}
+                            </span>
+                          )}
                         </div>
-                        {vehicle && (
-                          <div className="text-xs text-muted-foreground truncate mt-0.5">
-                            {vehicle.make} {vehicle.model}
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <div className={cn("flex items-center gap-2 flex-wrap", compact ? "mt-1" : "mt-2")}>
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                             {SOURCE_LABEL[lead.source] ?? lead.source}
                           </span>
@@ -459,10 +651,30 @@ export default function Leads() {
                           >
                             {lead.priority}
                           </span>
-                          <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-foreground/70 bg-foreground/[0.06] px-2 py-0.5 rounded-full">
-                            {STATUS_LABEL[lead.status] ?? lead.status}
+                          {!compact && (
+                            <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-foreground/70 bg-foreground/[0.06] px-2 py-0.5 rounded-full">
+                              {STATUS_LABEL[lead.status] ?? lead.status}
+                            </span>
+                          )}
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full",
+                              days >= 7
+                                ? "text-amber-400 bg-amber-500/10"
+                                : "text-muted-foreground bg-foreground/[0.05]",
+                            )}
+                          >
+                            <Clock className="w-3 h-3" />
+                            {days}d in stage
                           </span>
-                          {!lead.ownerUserId && (
+                          {lead.assignedTo ? (
+                            !compact && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-foreground/[0.05] px-2 py-0.5 rounded-full">
+                                <UserCheck className="w-3 h-3" />
+                                {lead.assignedTo}
+                              </span>
+                            )
+                          ) : (
                             <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
                               Needs advisor
                             </span>
@@ -480,13 +692,14 @@ export default function Leads() {
                           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                             AI Score
                           </div>
-                          <div className="text-lg font-light text-primary">
+                          <div className={cn("font-light text-primary", compact ? "text-base" : "text-lg")}>
                             {lead.aiScore}
                           </div>
                         </div>
                         {lead.customerId && (
                           <Link
                             href={`/customers/${lead.customerId}`}
+                            onClick={(e) => e.stopPropagation()}
                             className="text-[10px] font-bold uppercase tracking-wider text-primary inline-flex items-center gap-0.5 hover:underline"
                           >
                             Account
@@ -496,9 +709,9 @@ export default function Leads() {
                       </div>
                     </motion.div>
                   );
-                })
-              )}
-            </div>
+                })}
+              </div>
+            )}
           </div>
 
           {/* AURA suggestions */}
@@ -597,6 +810,8 @@ export default function Leads() {
           </div>
         </motion.div>
       </AnimatePresence>
+        </>
+      )}
     </Page>
   );
 }

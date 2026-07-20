@@ -5,10 +5,8 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { LeadAdvanceInputToStage } from './leadAdvanceInputToStage';
 
-export interface BookTestDriveInput {
-  slot: Date;
-  /** @minLength 1 */
-  licenceNumber: string;
-  waiverAccepted: boolean;
+export interface LeadAdvanceInput {
+  toStage: LeadAdvanceInputToStage;
 }

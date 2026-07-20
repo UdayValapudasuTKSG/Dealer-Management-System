@@ -13,7 +13,7 @@ const ROUTE_MAP: Record<string, string> = {
   showroom: "/inventory",
   pipeline: "/pipeline",
   leads: "/pipeline",
-  // deals is shelved from the nav for now
+  deals: "/deals",
   finance: "/finance",
   service: "/service",
   deliveries: "/deliveries",
@@ -28,7 +28,6 @@ const ROUTE_MAP: Record<string, string> = {
 
 const ROUTE_LABEL: Record<string, string> = {
   "/command-center": "Command Center",
-  "/journey": "Journey",
   "/approvals": "Approvals",
   "/inventory": "Inventory",
   "/pipeline": "Pipeline",
@@ -82,7 +81,7 @@ export function AuraCopilot() {
         name: "destination",
         type: "string",
         description:
-          "One of: command center, journey, approvals, inventory, leads, deals, finance, service, customers, gra filing.",
+          "One of: command center, approvals, inventory, leads, deals, finance, service, customers, gra filing.",
         required: true,
       },
     ],

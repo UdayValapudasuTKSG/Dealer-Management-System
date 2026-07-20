@@ -69,7 +69,7 @@ const PHASE_LABEL: Record<string, string> = {
   aware: "New Lead",
   consider: "Qualified",
   engage: "Test Drive",
-  negotiate: "Desking",
+  negotiate: "Negotiation",
   won: "Sold",
   lost: "Lost",
 };

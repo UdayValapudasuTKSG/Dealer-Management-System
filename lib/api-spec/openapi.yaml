@@ -1011,6 +1011,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /leads/{id}/advance:
+    post:
+      operationId: advanceLeadStage
+      tags: [leads]
+      summary: Gated stage advance — validates the target stage's checklist first
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadAdvanceInput"
+      responses:
+        "200":
+          description: Lead advanced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "422":
+          description: Checklist criteria unmet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadAdvanceUnmet"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /leads/{id}/test-drive:
     post:
       operationId: scheduleTestDrive
@@ -4583,6 +4619,9 @@ components:
         budgetFinancing: { type: ["string", "null"] }
         description: { type: ["string", "null"] }
         address: { type: ["string", "null"] }
+        stageEnteredAt: { type: ["string", "null"], format: date-time }
+        testDriveLicence: { type: ["string", "null"] }
+        testDriveWaiver: { type: boolean }
         createdAt: { type: string, format: date-time }
     LeadInput:
       type: object
@@ -4747,9 +4786,11 @@ components:
             $ref: "#/components/schemas/TestDriveDay"
     BookTestDriveInput:
       type: object
-      required: [slot]
+      required: [slot, licenceNumber, waiverAccepted]
       properties:
         slot: { type: string, format: date-time }
+        licenceNumber: { type: string, minLength: 1 }
+        waiverAccepted: { type: boolean }
     AssignLeadInput:
       type: object
       required: [userId]
@@ -4757,11 +4798,28 @@ components:
         userId: { type: integer }
     LeadTestDriveInput:
       type: object
-      required: [scheduledAt]
+      required: [scheduledAt, licenceNumber, waiverAccepted]
       properties:
         scheduledAt: { type: string, format: date-time }
         branch: { type: string }
         vehicleId: { type: integer }
+        licenceNumber: { type: string, minLength: 1 }
+        waiverAccepted: { type: boolean }
+    LeadAdvanceInput:
+      type: object
+      required: [toStage]
+      properties:
+        toStage:
+          type: string
+          enum: [qualified, test_drive, negotiation, sold]
+    LeadAdvanceUnmet:
+      type: object
+      required: [error, unmet]
+      properties:
+        error: { type: string }
+        unmet:
+          type: array
+          items: { type: string }
     LeadDecisionInput:
       type: object
       required: [choice]

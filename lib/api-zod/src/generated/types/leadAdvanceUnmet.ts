@@ -6,9 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface BookTestDriveInput {
-  slot: Date;
-  /** @minLength 1 */
-  licenceNumber: string;
-  waiverAccepted: boolean;
+export interface LeadAdvanceUnmet {
+  error: string;
+  unmet: string[];
 }

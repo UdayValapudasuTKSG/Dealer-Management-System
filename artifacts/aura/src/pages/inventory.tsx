@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useViewMode } from "@/hooks/use-view-mode";
+import { ViewControls } from "@/components/view-controls";
 import {
   CarFront,
   Zap,
@@ -177,6 +179,7 @@ export default function Inventory() {
   const [body, setBody] = useState<string>("all");
   const [powertrain, setPowertrain] = useState<string>("all");
   const [selected, setSelected] = useState<Vehicle | null>(null);
+  const { density, setDensity, layout, setLayout } = useViewMode("inventory");
 
   const bodyTypes = useMemo(() => {
     const set = new Set((vehicles ?? []).map((v) => v.bodyType));
@@ -360,9 +363,17 @@ export default function Inventory() {
                 />
               ))}
             </div>
-            <p className="text-sm text-muted-foreground tabular-nums">
-              {filtered.length} vehicle{filtered.length === 1 ? "" : "s"}
-            </p>
+            <div className="flex items-center gap-4">
+              <p className="text-sm text-muted-foreground tabular-nums">
+                {filtered.length} vehicle{filtered.length === 1 ? "" : "s"}
+              </p>
+              <ViewControls
+                layout={layout}
+                onLayoutChange={setLayout}
+                density={density}
+                onDensityChange={setDensity}
+              />
+            </div>
           </div>
         </div>
 
@@ -378,8 +389,66 @@ export default function Inventory() {
             <CarFront className="w-12 h-12 mx-auto mb-4 opacity-20" />
             <p className="font-medium">No vehicles match these filters.</p>
           </div>
+        ) : layout === "list" ? (
+          <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-3 font-semibold">Vehicle</th>
+                  <th className="px-4 py-3 font-semibold hidden md:table-cell">Powertrain</th>
+                  <th className="px-4 py-3 font-semibold hidden md:table-cell">Body</th>
+                  <th className="px-4 py-3 font-semibold hidden lg:table-cell">Colour</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold text-right">Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((vehicle) => (
+                  <tr
+                    key={vehicle.id}
+                    className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors cursor-pointer"
+                    onClick={() => setSelected(vehicle)}
+                  >
+                    <td
+                      className={`px-4 font-medium ${
+                        density === "compact" ? "py-2.5" : "py-3.5"
+                      }`}
+                    >
+                      {vehicle.year} {vehicle.make} {vehicle.model}
+                      {vehicle.trim ? (
+                        <span className="text-muted-foreground font-normal"> · {vehicle.trim}</span>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">
+                      {vehicle.powertrain === "EV" ? "Electric" : vehicle.powertrain}
+                    </td>
+                    <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">
+                      {vehicle.bodyType}
+                    </td>
+                    <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
+                      {vehicle.exteriorColor}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className="rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-semibold capitalize">
+                        {vehicle.status.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                      ${vehicle.price.toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div
+            className={`grid grid-cols-1 md:grid-cols-2 ${
+              density === "compact"
+                ? "lg:grid-cols-4 gap-5"
+                : "lg:grid-cols-3 gap-8"
+            }`}
+          >
             {filtered.map((vehicle, i) => (
               <VehicleCard
                 key={vehicle.id}

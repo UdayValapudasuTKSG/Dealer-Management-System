@@ -16,6 +16,8 @@ import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page, PageHeader } from "@/components/layout/page";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useViewMode } from "@/hooks/use-view-mode";
+import { ViewControls } from "@/components/view-controls";
 
 const STAGE_LABEL: Record<string, string> = {
   desking: "Desking",
@@ -32,6 +34,8 @@ export default function Deals() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createDeal = useCreateDeal();
+  const { density, setDensity, layout, setLayout } = useViewMode("deals");
+  const compact = density === "compact";
 
   const search = useSearch();
   const [, navigate] = useLocation();
@@ -63,6 +67,13 @@ export default function Deals() {
         subtitle="Bespoke negotiation and closing."
         className="mb-8 shrink-0"
         action={
+          <div className="flex items-center gap-3">
+          <ViewControls
+            layout={layout}
+            onLayoutChange={setLayout}
+            density={density}
+            onDensityChange={setDensity}
+          />
           <CreateRecordDialog
             title="Desk a New Deal"
             description="Structure a deal — AURA computes OTD and flags approvals."
@@ -123,9 +134,71 @@ export default function Deals() {
               toast({ title: "Deal desked", description: "AURA computed the OTD structure." });
             }}
           />
+          </div>
         }
       />
 
+      {layout === "list" ? (
+        <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 font-semibold">Customer</th>
+                <th className="px-4 py-3 font-semibold">Stage</th>
+                <th className="px-4 py-3 font-semibold text-right">OTD</th>
+                <th className="px-4 py-3 font-semibold text-right hidden md:table-cell">Discount</th>
+                <th className="px-4 py-3 font-semibold text-center hidden md:table-cell">Deposit</th>
+                <th className="px-4 py-3 font-semibold hidden lg:table-cell">Advisor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(deals ?? []).map((deal) => (
+                <tr
+                  key={deal.id}
+                  className={`border-b border-white/5 hover:bg-foreground/[0.03] transition-colors ${
+                    deal.customerId ? "cursor-pointer" : ""
+                  } ${compact ? "" : "h-14"}`}
+                  onClick={() =>
+                    deal.customerId && navigate(`/customers/${deal.customerId}`)
+                  }
+                >
+                  <td className={`px-4 font-medium ${compact ? "py-2.5" : "py-3.5"}`}>
+                    {deal.customerName || "Unknown Customer"}
+                  </td>
+                  <td className="px-4 py-2">
+                    <span className="rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-semibold">
+                      {STAGE_LABEL[deal.stage] ?? deal.stage}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                    ${deal.otdPrice.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums text-primary hidden md:table-cell">
+                    -${deal.discount.toLocaleString()}
+                  </td>
+                  <td className="px-4 py-2 text-center hidden md:table-cell">
+                    {deal.depositPaid ? (
+                      <span className="text-emerald-400 text-xs font-semibold">Paid</span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">Pending</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
+                    {deal.salesAdvisor ?? "—"}
+                  </td>
+                </tr>
+              ))}
+              {(deals ?? []).length === 0 && !isLoading && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                    No deals yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
       <div className="flex gap-6 overflow-x-auto pb-4 flex-1 hide-scrollbar -mx-1 px-1">
         {stages.map((stage, stageIndex) => {
           const stageDeals = deals?.filter((d) => d.stage === stage) ?? [];
@@ -237,6 +310,7 @@ export default function Deals() {
           );
         })}
       </div>
+      )}
     </Page>
   );
 }

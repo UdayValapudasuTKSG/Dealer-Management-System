@@ -78,7 +78,7 @@ export default function CustomerDetail() {
     aware: "New Lead",
     consider: "Qualified",
     engage: "Test Drive",
-    negotiate: "Desking",
+    negotiate: "Negotiation",
     won: "Delivered",
   };
   const leadPhaseIndex = leads.reduce(

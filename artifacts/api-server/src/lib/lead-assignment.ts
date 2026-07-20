@@ -137,6 +137,7 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
             ? "assigned"
             : lead.status,
         phase: lead.phase === "aware" ? "consider" : lead.phase,
+        ...(lead.phase === "aware" ? { stageEnteredAt: new Date() } : {}),
       })
       .where(and(eq(leadsTable.id, lead.id), sql`owner_user_id is null`))
       .returning();

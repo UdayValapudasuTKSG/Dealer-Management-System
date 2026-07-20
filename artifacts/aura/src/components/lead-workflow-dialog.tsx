@@ -6,6 +6,7 @@ import {
   useScheduleTestDrive,
   useCheckLeadAvailability,
   useRecordLeadDecision,
+  useAdvanceLeadStage,
   useListLeadAdvisors,
   useGetLeadTimeline,
   useListVehicles,
@@ -47,9 +48,21 @@ import {
   CircleAlert,
   History,
   ArrowUpRight,
+  ArrowRight,
+  TriangleAlert,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+const NEXT_ADVANCE: Record<
+  string,
+  { toStage: "qualified" | "test_drive" | "negotiation" | "sold"; label: string } | undefined
+> = {
+  aware: { toStage: "qualified", label: "Qualified" },
+  consider: { toStage: "test_drive", label: "Test Drive" },
+  engage: { toStage: "negotiation", label: "Desking" },
+  negotiate: { toStage: "sold", label: "Sold" },
+};
 
 const STATUS_LABEL: Record<string, string> = {
   new: "New",
@@ -140,13 +153,17 @@ export function LeadWorkflowDialog({
   const scheduleTestDrive = useScheduleTestDrive();
   const checkAvailability = useCheckLeadAvailability();
   const recordDecision = useRecordLeadDecision();
+  const advanceStage = useAdvanceLeadStage();
 
   const [advisorId, setAdvisorId] = useState<string>("");
   const [tdDate, setTdDate] = useState("");
   const [tdTime, setTdTime] = useState("");
   const [tdBranch, setTdBranch] = useState("");
+  const [tdLicence, setTdLicence] = useState("");
+  const [tdWaiver, setTdWaiver] = useState(false);
   const [attachName, setAttachName] = useState("");
   const [attachUrl, setAttachUrl] = useState("");
+  const [advanceUnmet, setAdvanceUnmet] = useState<string[]>([]);
 
   const l = lead.data;
   const vehicle = useMemo(
@@ -283,6 +300,63 @@ export function LeadWorkflowDialog({
               </SectionCard>
 
               {/* 2 — Status */}
+              {NEXT_ADVANCE[l.phase] && (
+                <SectionCard icon={ArrowRight} title="Review & Advance">
+                  <p className="text-xs text-muted-foreground">
+                    Next stage:{" "}
+                    <span className="text-foreground font-semibold">
+                      {NEXT_ADVANCE[l.phase]!.label}
+                    </span>
+                    . AURA checks the stage criteria before moving the lead.
+                  </p>
+                  {advanceUnmet.length > 0 && (
+                    <ul className="space-y-1.5">
+                      {advanceUnmet.map((item) => (
+                        <li
+                          key={item}
+                          className="flex items-start gap-2 text-xs text-amber-400"
+                        >
+                          <TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-px" />
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <Button
+                    size="sm"
+                    className="w-full gap-2"
+                    disabled={advanceStage.isPending}
+                    onClick={async () => {
+                      setAdvanceUnmet([]);
+                      try {
+                        await advanceStage.mutateAsync({
+                          id: l.id,
+                          data: { toStage: NEXT_ADVANCE[l.phase]!.toStage },
+                        });
+                        refresh();
+                        toast({
+                          title: `Advanced to ${NEXT_ADVANCE[l.phase]!.label}`,
+                          description: "All stage criteria met.",
+                        });
+                      } catch (err) {
+                        const data = (err as { data?: { unmet?: string[] } })?.data;
+                        if (data?.unmet?.length) setAdvanceUnmet(data.unmet);
+                        else fail(err);
+                      }
+                    }}
+                  >
+                    {advanceStage.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        Review & Advance
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </>
+                    )}
+                  </Button>
+                </SectionCard>
+              )}
+
               <SectionCard icon={History} title="Status">
                 <Select
                   value={l.status}
@@ -345,6 +419,20 @@ export function LeadWorkflowDialog({
                     onChange={(e) => setTdTime(e.target.value)}
                   />
                 </div>
+                <Input
+                  placeholder="Driver's licence number"
+                  value={tdLicence}
+                  onChange={(e) => setTdLicence(e.target.value)}
+                />
+                <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={tdWaiver}
+                    onChange={(e) => setTdWaiver(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>Customer has signed the test-drive waiver.</span>
+                </label>
                 <div className="flex gap-2">
                   <Input
                     placeholder="Branch (optional)"
@@ -353,7 +441,13 @@ export function LeadWorkflowDialog({
                   />
                   <Button
                     size="sm"
-                    disabled={!tdDate || !tdTime || scheduleTestDrive.isPending}
+                    disabled={
+                      !tdDate ||
+                      !tdTime ||
+                      !tdLicence.trim() ||
+                      !tdWaiver ||
+                      scheduleTestDrive.isPending
+                    }
                     onClick={async () => {
                       try {
                         await scheduleTestDrive.mutateAsync({
@@ -362,6 +456,8 @@ export function LeadWorkflowDialog({
                             scheduledAt: new Date(
                               `${tdDate}T${tdTime}`,
                             ).toISOString(),
+                            licenceNumber: tdLicence.trim(),
+                            waiverAccepted: tdWaiver,
                             ...(tdBranch ? { branch: tdBranch } : {}),
                           },
                         });

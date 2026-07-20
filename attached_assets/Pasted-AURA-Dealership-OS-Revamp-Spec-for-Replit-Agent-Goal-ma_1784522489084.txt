@@ -1,0 +1,193 @@
+AURA Dealership OS — Revamp Spec (for Replit Agent)
+Goal: make AURA read as a trustworthy, premium Dealer Management System the moment a customer opens it — deeper information, calmer denser layouts, an insights screen that drives action, an explicit review-and-approve gate between every pipeline stage, and a new trust-and-richness color system.
+
+How to use this doc: work top to bottom. Each work item (WI-#) has What / Where / How / Done-when. Do NOT change API contracts unless a WI says so. Restart the artifacts/api-server workflow after any route change. Keep light + dark mode working and no emojis in the UI.
+
+Global constraints (do not break)
+Contract-first: any new endpoint goes in lib/api-spec/openapi.yaml first, then pnpm --filter @workspace/api-spec run codegen, then implement route + use generated hooks.
+RBAC: every new mutating route runs through requireAuth → authorize → auditTrail and filters/stamps dealerId (see middlewares/rbac.ts).
+Theme tokens only: never hardcode brand colors in components. Use text-primary, bg-primary, text-gold, etc. (Tailwind v4: a bg-x utility only works if --color-x is registered in the @theme inline block of index.css.)
+Keep semantic colors: success = emerald, warning = amber, error/destructive = red. Only the brand red becomes sapphire. Do not turn error states blue.
+Preserve the light/dark toggle and all existing :root.light override behavior.
+1 · Color system — "Sapphire + Champagne Gold" (trust + richness)
+Decision: replace blood-red brand with royal sapphire (primary, = trust/safety) and add champagne gold (accent, = richness/premium). Black + white stay. Red is retained only for destructive/error.
+
+WI-1.1 — Rewrite theme tokens
+Where: artifacts/aura/src/index.css
+
+How: In BOTH :root and .dark, replace these values:
+
+/* was: --primary: 0 82% 44%; */
+--primary: 218 72% 50%;
+--primary-foreground: 0 0% 100%;
+/* was: --accent: 0 82% 44% / 0.14; --accent-foreground: 0 84% 62%; */
+--accent: 218 72% 50% / 0.14;
+--accent-foreground: 214 90% 72%;
+/* was: --ring: 0 82% 48%; */
+--ring: 218 72% 56%;
+--sidebar-primary: 218 72% 50%;
+--sidebar-accent: 218 72% 50% / 0.14;
+--sidebar-accent-foreground: 214 90% 72%;
+--sidebar-ring: 218 72% 56%;
+/* NEW — champagne gold accent */
+--gold: 43 74% 52%;
+--gold-foreground: 40 45% 12%;
+/* keep --destructive red as-is */
+In :root.light, replace with the darker-for-white variants:
+
+--primary: 218 72% 46%;
+--accent: 218 72% 46% / 0.10;
+--accent-foreground: 218 72% 38%;
+--ring: 218 72% 50%;
+--sidebar-primary: 218 72% 46%;
+--sidebar-accent: 218 72% 46% / 0.10;
+--sidebar-accent-foreground: 218 72% 38%;
+--sidebar-ring: 218 72% 50%;
+--gold: 43 70% 42%;
+--gold-foreground: 0 0% 100%;
+Done-when: primary buttons, links, focus rings, active nav/pipeline node render sapphire in both themes; error toasts still render red.
+
+WI-1.2 — Register gold utilities
+Where: index.css @theme inline block. How: add:
+
+--color-gold: hsl(var(--gold));
+--color-gold-foreground: hsl(var(--gold-foreground));
+Done-when: bg-gold, text-gold, border-gold work in components.
+
+WI-1.3 — Update ambient + glow + CopilotKit
+Where: index.css How:
+
+Body radial gradients: replace rgba(139, 0, 0, …) (dark) and rgba(200, 16, 16, …) (light) with sapphire rgba(23, 58, 140, …) at the same alphas.
+.glow-red / .text-glow / .glow-red light override: replace red rgba (rgba(220, 38, 38 …), rgba(220, 20, 20 …), rgba(200, 16, 16 …)) with sapphire rgba(39, 100, 214 …). Rename class to .glow-brand and keep .glow-red as an alias pointing to the same rule so existing usages don't break.
+CopilotKit: --copilot-kit-primary-color: hsl(218 72% 52%); the window box-shadow red rgba(220, 20, 20, …) / rgba(200, 16, 16, …) → rgba(39, 100, 214, …).
+WI-1.4 — Sweep hardcoded brand-red in components
+Where: all of artifacts/aura/src How: grep and reassign brand reds (NOT semantic error reds):
+
+rg "hsl\(0 82%|hsl\(0 84%|rgba\(220, ?38|rgba\(220, ?20|#dc2626.*brand|0 82% 4" artifacts/aura/src
+Chart brand series that used red → hsl(var(--primary)) (sapphire) or the gold token for a second series. Example: dashboard.tsx POWERTRAIN_COLORS.EV = "hsl(0 82% 50%)" → keep a distinct hue but move EV to sapphire and use gold for Hybrid so the palette is on-brand.
+Leave text-red-400, --destructive, and negative-delta reds alone (semantic). Done-when: no red remains except error/destructive/negative-trend indicators.
+WI-1.5 — Gold usage rules (richness, used sparingly)
+Gold is a highlight, not a second primary. Use only for: loyalty tiers (Platinum/Gold/Silver already gold-ish — keep), "Won/Delivered" success milestones, premium KPI emphasis, and the active "done" check on the pipeline chevron. Everything interactive stays sapphire.
+
+2 · Density & layout system (compact + list view — "these are too big")
+Two problems the customer sees: cards/rails are oversized, and there's no way to scan as a list. Build ONE reusable system and apply it everywhere lists/cards appear.
+
+WI-2.1 — useViewMode hook + ViewControls component
+Where: new artifacts/aura/src/hooks/use-view-mode.ts and artifacts/aura/src/components/view-controls.tsx How:
+
+useViewMode(pageKey: string) returns { density, setDensity, layout, setLayout }.
+density: "comfortable" | "compact" — persisted in localStorage key aura-density (global, shared across pages).
+layout: "grid" | "list" — persisted per page in aura-view:<pageKey>.
+Defaults: density = "compact", layout = "grid" (compact is the new default — the current sizing becomes "comfortable").
+<ViewControls> renders a small segmented control on the right of each page's command row: a Grid/List toggle (lucide LayoutGrid / List) and a Density toggle (lucide Rows3 / Rows2). Match the existing pill styling; sapphire active state. Done-when: toggles persist across reloads and page navigation.
+WI-2.2 — Apply to every card/list surface
+Add <ViewControls> + honor density/layout on: pages/customers.tsx (Account Portfolio), pages/inventory.tsx, pages/leads.tsx (Pipeline), pages/deals.tsx, pages/finance.tsx lists, pages/service.tsx, pages/parts.tsx. Rule: grid = cards (compact by default), list = dense table rows (~44–48px tall, text-sm, one row per record). Comfortable density = today's larger sizing.
+
+WI-2.3 — Compact the Account Portfolio card (screenshot #1)
+Where: pages/customers.tsx How (compact grid card): avatar 40px (not 96px); name text-base + city on one line; tier badge inline top-right; collapse email/phone to icon + single line each; KPI row LTV and Owned as two small stat chips. Target card height ~ half of today. Show 4–5 per row on desktop. How (list row): table columns — Account (avatar+name+city) · Tier · LTV · Vehicles · Contact (mail/phone icons) · row-click → account detail. Right-align numbers, tabular-nums.
+
+3 · Pipeline redesign (chevron rail + list view + richer leads)
+Addresses screenshot #2 (rail too big/cluttered) and the earlier finding that lead rows are information-thin and the rail is read-only.
+
+WI-3.1 — Compact chevron stage rail (match example #3 style)
+Where: pages/leads.tsx (STAGES rail block) How: replace the large segmented cards with a chevron/arrow stepper — right-pointing arrow segments in one row (like the "Institutionalization → Communication → …" example the client provided). Each segment:
+
+Height ~56–64px (roughly half of current).
+Left: stage label (text-xs uppercase tracking-wide). Right: count as a small pill.
+Active segment filled sapphire; completed segments show a small gold check; upcoming segments muted/hollow.
+Remove the noisy secondary labels (DONE, VIEWING, 04, 05, 06, 07) and the giant count numerals — keep just label + count pill + state.
+Keep the framer-motion active indicator (layoutId="pipeline-node-active"), on sapphire. Done-when: the rail is a single slim chevron strip; clicking a segment still filters the list below.
+WI-3.2 — Pipeline "List view" (see the whole pipeline as a table)
+Where: pages/leads.tsx How: with layout === "list", replace the per-stage view with ONE sortable, filterable table of all non-lost leads. Columns: Name · Stage · Owner · Vehicle · Value ($) · Last activity · Days in stage · Next action · AI score. Add a text search box and a stage filter. Row-click → /lead/:id. Done-when: a manager can scan and sort the entire pipeline without clicking through stages.
+
+WI-3.3 — Enrich the lead row (grid + list)
+Where: pages/leads.tsx lead card, and the list table above. How: surface the fields that make a pipeline usable, which are missing today:
+
+Owner name (not just "Needs advisor").
+Last contact / last activity (relative time) — derive from latest timeline event.
+Days in stage — see WI-4.4 (stageEnteredAt); show an amber chip when over an SLA threshold.
+Deal value (otdPrice/vehiclePrice from linked deal) when present.
+Next action + due (from WI-4).
+Collapse the three overlapping labels (stage + status + phase) down to one canonical stage label. Keep AI score as a small sapphire figure.
+4 · Stage-gate review checks (the "review & approve to next stage" the client wants)
+Today advancement happens via side-effects or a free status dropdown, with only cosmetic checkmarks (lead-workflow-dialog.tsx) and no gate. The delivery workflow (routes/deliveries.ts) is the ONLY real gated flow — use it as the model for the whole pipeline.
+
+WI-4.1 — Define entry/exit criteria per stage
+Implement these as the checklist shown before advancing. Advancement is blocked (button disabled + reason) until required items pass; the "Sold" transition additionally needs a manager approval.
+
+Advance to	Required checklist	Approver
+Qualified	Contact made · budget/financing captured · purchase intent set · vehicle of interest set	Advisor
+Test Drive	Vehicle available · driver's licence + signed waiver captured · slot booked	Advisor
+Negotiation (was "Desking")	Test drive done or explicitly waived · trade-in appraised or "no trade" · draft numbers entered	Advisor
+Sold	Deposit taken · finance approved OR cash verified · discount within floor (else raises below_floor_price gate) · vehicle locked to VIN	Manager
+In Prep → Delivered	already gated in routes/deliveries.ts — leave as-is	Delivery / QC
+WI-4.2 — "Advance stage" gated action
+Where: components/lead-workflow-dialog.tsx + new endpoint. How:
+
+Add POST /leads/{id}/advance (openapi first). Body: { toStage }. Server validates the checklist for toStage; returns 422 { unmet: [...] } if criteria fail; on success sets phase/status, writes a timeline event (stage_advanced, actor = signed-in user), and stamps stageEnteredAt (WI-4.4).
+In the dialog, replace the free Status dropdown (currently any→any) with a Review & Advance panel: render the target-stage checklist with pass/fail ticks (reuse the SectionCard done styling) and a primary "Approve → Advance to X" button, disabled with a reason chip until all required items pass. Done-when: you cannot set a lead to a later stage while required items are unmet; every advance is logged with who approved it.
+WI-4.3 — Manager approval on "Sold" + unified Reviews inbox
+Where: routes/deals.ts, pages/approvals.tsx, components/gate-card.tsx How:
+
+Guard deal stage transitions in PATCH /deals/:id with an allowed-transition map (mirror VEHICLE_STATUS_TRANSITIONS); reject out-of-order jumps 422.
+Advancing a deal to committed/sold with a discount below floor creates a below_floor_price gate (already a type) requiring manager approval; block commit until resolved.
+Rename the Approvals page to "Reviews" and show BOTH exception gates AND pending stage-advance reviews awaiting the current user, grouped (Needs your approval / Exceptions). Done-when: a rep cannot self-approve a below-floor discount to Sold; a manager sees it in Reviews.
+WI-4.4 — Track time-in-stage
+Where: lib/db/src/schema/leads.ts (+ deals if useful), codegen, routes. How: add nullable stageEnteredAt timestamptz; set it on every advance. Expose in list responses. Powers "Days in stage" and SLA chips (WI-3.3) and the landing action queue (WI-5). Run pnpm --filter @workspace/db run push (dev).
+
+WI-4.5 — Add the missing controls (from prior analysis)
+Vehicle VIN lock: creating/committing a deal sets the vehicle status available → reserved (and → booked on commit); block a second deal on a reserved/booked VIN (422). Use the existing VEHICLE_STATUS_TRANSITIONS.
+Deposit gate: reservationFeePaid/depositPaid must be true before Sold.
+Test-drive licence + waiver: capture licence number + a waiver-accepted flag on both the staff POST /leads/:id/test-drive and the public booking flow before confirming.
+5 · Landing / insights → an Action Queue that drives CTAs
+The Command Center is 12 passive charts with one CTA. Make the landing lead with action.
+
+WI-5.1 — "Your day" Action Queue
+Where: top of the landing (Pipeline page is the default landing; also add to pages/dashboard.tsx command center). How: a compact, ranked worklist card at the very top with a button per row. Sources (all derivable from existing data):
+
+Leads awaiting first contact (no contactedDate, status new/assigned).
+Test drives today (from testDriveAt).
+Overdue follow-ups / leads over SLA in stage (WI-4.4).
+Quotes sent, no reply (quotationSent + no recent inbound).
+Deals awaiting a decision / deposit.
+Reviews needing approval (WI-4.3). Each row: icon · one-line context · primary action button (Call / Book / Review / Open). Cap at ~6, with "View all". Reuse the pipeline-suggestions AI endpoint to phrase the "why". Done-when: a rep landing sees a prioritized to-do list with working buttons before any chart.
+WI-5.2 — Make KPIs and charts actionable
+Where: pages/dashboard.tsx How: make the 4 KPI cards clickable → deep-link to the filtered list behind them (e.g. Active Deals → deals filtered open). Move the big "Handled Autonomously" vanity metric lower. Keep charts, but below the Action Queue.
+
+6 · Removals (confirmed scope cuts)
+WI-6.1 — Remove the Journey page
+Delete pages/journey.tsx, its route in App.tsx, and any nav/copilot ROUTE_MAP entry. The pipeline is now the single journey representation.
+
+WI-6.2 — Remove Appraisals
+Appraisals is already shelved (removed from nav). Fully remove the route + page from App.tsx and copilot ROUTE_MAP; leave DB tables in place (no migration) to avoid data loss, but remove all UI entry points.
+
+WI-6.3 — Remove Insurance from Finance
+Insurance stays a delivery step (routes/deliveries.ts insurance) — do NOT touch that. Remove any insurance tab/section from the Finance module UI (pages/finance.tsx) and its nav sub-item if present.
+
+Done-when: no dead links; top-nav clusters and copilot ROUTE_MAP updated together.
+
+7 · Wording review (client asked "is this the right wording")
+Current rail: New Lead → Qualified → Test Drive → Desking → Sold → In Prep → Delivered. Assessment + recommended changes (labels only; underlying phase/stage values stay):
+
+Current	Verdict	Use
+New Lead	clear	New Lead
+Qualified	clear	Qualified
+Test Drive	clear	Test Drive
+Desking	internal F&I jargon — unclear to execs/customers	Negotiation
+Sold	clear	Sold
+In Prep	abbreviated/casual	Pre-Delivery
+Delivered	clear	Delivered
+Also update STAGE_CAPTION to match, and drop the cluttered per-segment micro-labels (DONE / VIEWING / 0X). Apply the same renames anywhere these stages are shown (customer-detail stepper, dashboard funnel labels, copilot).
+
+8 · Acceptance criteria (definition of done for the whole revamp)
+App is sapphire + gold in both light and dark; only errors are red; nothing looks red-branded.
+Every list/card page has a working, persisted Grid/List + Compact/Comfortable toggle; compact is default; cards are visibly smaller.
+Account Portfolio and the Pipeline rail are compact; both have a usable list/table view.
+The Pipeline rail is a slim chevron; lead rows show owner, last activity, days-in-stage, value, next action; a full-pipeline table exists.
+Advancing a lead/deal requires a visible review checklist; required items block the "Approve → Advance" button; below-floor discounts need manager approval; every advance is logged with the approver.
+Vehicle VIN cannot be double-sold; deposit required before Sold; licence + waiver captured before a test drive.
+Landing leads with a prioritized Action Queue whose buttons work; KPI cards deep-link.
+Journey + Appraisals removed; Insurance removed from Finance (kept in Delivery); "Desking"→"Negotiation", "In Prep"→"Pre-Delivery" everywhere.
+pnpm run typecheck passes; api-server restarted; light/dark both verified; no emojis.
+Suggested build order
+1 (color) → 2 (density/list system) → 3 (pipeline) → 7 (wording) → 6 (removals) → 4 (stage gates + controls) → 5 (action queue). Colors and the density system first so every later screen inherits them.

@@ -109,6 +109,8 @@ import type {
   JobCardPartInput,
   JobCardUpdate,
   Lead,
+  LeadAdvanceInput,
+  LeadAdvanceUnmet,
   LeadAdvisor,
   LeadDecisionInput,
   LeadInput,
@@ -3228,6 +3230,78 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getAssignLeadMutationOptions(options));
+    }
+
+export const getAdvanceLeadStageUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/advance`
+}
+
+/**
+ * @summary Gated stage advance — validates the target stage's checklist first
+ */
+export const advanceLeadStage = async (id: number,
+    leadAdvanceInput: LeadAdvanceInput, options?: RequestInit): Promise<Lead> => {
+
+  return customFetch<Lead>(getAdvanceLeadStageUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(leadAdvanceInput)
+  }
+);}
+
+
+
+
+
+export const getAdvanceLeadStageMutationOptions = <TError = ErrorType<Error | LeadAdvanceUnmet>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof advanceLeadStage>>, TError,{id: number;data: BodyType<LeadAdvanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof advanceLeadStage>>, TError,{id: number;data: BodyType<LeadAdvanceInput>}, TContext> => {
+
+const mutationKey = ['advanceLeadStage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof advanceLeadStage>>, {id: number;data: BodyType<LeadAdvanceInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  advanceLeadStage(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdvanceLeadStageMutationResult = NonNullable<Awaited<ReturnType<typeof advanceLeadStage>>>
+    export type AdvanceLeadStageMutationBody = BodyType<LeadAdvanceInput>
+    export type AdvanceLeadStageMutationError = ErrorType<Error | LeadAdvanceUnmet>
+
+    /**
+ * @summary Gated stage advance — validates the target stage's checklist first
+ */
+export const useAdvanceLeadStage = <TError = ErrorType<Error | LeadAdvanceUnmet>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof advanceLeadStage>>, TError,{id: number;data: BodyType<LeadAdvanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof advanceLeadStage>>,
+        TError,
+        {id: number;data: BodyType<LeadAdvanceInput>},
+        TContext
+      > => {
+      return useMutation(getAdvanceLeadStageMutationOptions(options));
     }
 
 export const getScheduleTestDriveUrl = (id: number,) => {

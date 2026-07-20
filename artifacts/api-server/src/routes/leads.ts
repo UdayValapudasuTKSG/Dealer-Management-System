@@ -10,6 +10,7 @@ import {
   timelineEventsTable,
   emailLogsTable,
   whatsappMessagesTable,
+  dealsTable,
   type Lead,
 } from "@workspace/db";
 import {
@@ -27,6 +28,8 @@ import {
   AssignLeadBody,
   ScheduleTestDriveParams,
   ScheduleTestDriveBody,
+  AdvanceLeadStageParams,
+  AdvanceLeadStageBody,
   CheckLeadAvailabilityParams,
   RecordLeadDecisionParams,
   RecordLeadDecisionBody,
@@ -658,6 +661,7 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
           ? "assigned"
           : existing.status,
       phase: existing.phase === "aware" ? "consider" : existing.phase,
+      ...(existing.phase === "aware" ? { stageEnteredAt: new Date() } : {}),
     })
     .where(
       and(
@@ -698,6 +702,139 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
   res.json(GetLeadResponse.parse(lead));
 });
 
+// Gated stage advance: each target stage has a checklist that must be met
+// before the lead moves forward. Unmet criteria come back as a 422 so the
+// client can render a "Review & Advance" checklist.
+const ADVANCE_TARGET_PHASE = {
+  qualified: "consider",
+  test_drive: "engage",
+  negotiation: "negotiate",
+  sold: "won",
+} as const;
+const PHASE_ORDER = ["aware", "consider", "engage", "negotiate", "won"];
+
+router.post("/leads/:id/advance", async (req, res): Promise<void> => {
+  const params = AdvanceLeadStageParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = AdvanceLeadStageBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const dealerId = activeDealerId(res);
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.dealerId, dealerId)));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const toStage = body.data.toStage as keyof typeof ADVANCE_TARGET_PHASE;
+  const targetPhase = ADVANCE_TARGET_PHASE[toStage];
+  const fromIdx = PHASE_ORDER.indexOf(lead.phase);
+  const toIdx = PHASE_ORDER.indexOf(targetPhase);
+
+  const unmet: string[] = [];
+  if (toIdx !== fromIdx + 1) {
+    unmet.push(
+      toIdx <= fromIdx
+        ? "Lead is already at or past this stage"
+        : "Stages can't be skipped — advance one stage at a time",
+    );
+    res.status(422).json({ error: "Stage advance blocked", unmet });
+    return;
+  }
+
+  const leadDeals = await db
+    .select()
+    .from(dealsTable)
+    .where(and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, lead.id)));
+
+  if (toStage === "qualified") {
+    if (!lead.email && !lead.phone) unmet.push("Contact details (email or phone) captured");
+    if (!lead.interestedVehicleId) unmet.push("Vehicle of interest selected");
+    if (!lead.budgetFinancing) unmet.push("Budget / financing discussed");
+  } else if (toStage === "test_drive") {
+    if (!lead.testDriveAt) unmet.push("Test-drive slot booked");
+    if (!lead.testDriveLicence) unmet.push("Driver's licence number on file");
+    if (!lead.testDriveWaiver) unmet.push("Test-drive waiver signed");
+    if (lead.interestedVehicleId) {
+      const [v] = await db
+        .select({ status: vehiclesTable.status })
+        .from(vehiclesTable)
+        .where(
+          and(
+            eq(vehiclesTable.id, lead.interestedVehicleId),
+            eq(vehiclesTable.dealerId, dealerId),
+          ),
+        );
+      if (v && v.status !== "available" && v.status !== "reserved")
+        unmet.push("Interested vehicle is not available for a drive");
+    }
+  } else if (toStage === "negotiation") {
+    if (!lead.testDriveAt) unmet.push("Test drive completed (or explicitly booked)");
+    if (leadDeals.length === 0) unmet.push("Draft deal numbers entered (create a deal)");
+  } else if (toStage === "sold") {
+    const deal = leadDeals[0];
+    if (!deal) unmet.push("A deal must exist before marking sold");
+    if (deal && !deal.depositPaid && !lead.reservationFeePaid)
+      unmet.push("Deposit taken (deal deposit or reservation fee)");
+    if (!lead.financingQualified && lead.purchaseType !== "cash")
+      unmet.push("Finance approved or cash purchase verified");
+  }
+
+  if (unmet.length > 0) {
+    res.status(422).json({ error: "Stage advance blocked", unmet });
+    return;
+  }
+
+  const [updated] = await db
+    .update(leadsTable)
+    .set({
+      phase: targetPhase,
+      stageEnteredAt: new Date(),
+      ...(toStage === "sold" ? { status: "converted" } : {}),
+    })
+    .where(and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, dealerId)))
+    .returning();
+
+  // Sold locks the VIN: reserve the vehicle so it can't be sold twice.
+  if (toStage === "sold" && lead.interestedVehicleId) {
+    await db
+      .update(vehiclesTable)
+      .set({ status: "reserved" })
+      .where(
+        and(
+          eq(vehiclesTable.id, lead.interestedVehicleId),
+          eq(vehiclesTable.dealerId, dealerId),
+          eq(vehiclesTable.status, "available"),
+        ),
+      );
+  }
+
+  const STAGE_LABEL: Record<string, string> = {
+    qualified: "Qualified",
+    test_drive: "Test Drive",
+    negotiation: "Negotiation",
+    sold: "Sold",
+  };
+  await logLeadEvent(
+    updated!,
+    "stage_advanced",
+    `Advanced to ${STAGE_LABEL[toStage]}`,
+    "All stage checklist criteria met.",
+    actorName(res),
+  );
+
+  res.json(GetLeadResponse.parse(updated));
+});
+
 router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
   const params = ScheduleTestDriveParams.safeParse(req.params);
   if (!params.success) {
@@ -721,6 +858,13 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
     );
   if (!existing) {
     res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  if (!parsed.data.waiverAccepted) {
+    res.status(422).json({
+      error: "The customer must sign the test-drive waiver before booking",
+    });
     return;
   }
 
@@ -749,11 +893,16 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
         parsed.data.branch ?? existing.preferredBranch ?? null,
       interestedVehicleId:
         parsed.data.vehicleId ?? existing.interestedVehicleId,
+      testDriveLicence: parsed.data.licenceNumber,
+      testDriveWaiver: true,
       status: "test_drive",
       phase:
         existing.phase === "aware" || existing.phase === "consider"
           ? "engage"
           : existing.phase,
+      ...(existing.phase === "aware" || existing.phase === "consider"
+        ? { stageEnteredAt: new Date() }
+        : {}),
     })
     .where(
       and(
@@ -955,6 +1104,7 @@ router.post("/leads/:id/decision", async (req, res): Promise<void> => {
       purchaseType: choice,
       status: "converted",
       phase: "negotiate",
+      stageEnteredAt: new Date(),
     })
     .where(
       and(
@@ -1008,7 +1158,12 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
 
   const [lead] = await db
     .update(leadsTable)
-    .set(parsed.data)
+    .set({
+      ...parsed.data,
+      ...(parsed.data.phase && parsed.data.phase !== before.phase
+        ? { stageEnteredAt: new Date() }
+        : {}),
+    })
     .where(
       and(
         eq(leadsTable.id, params.data.id),

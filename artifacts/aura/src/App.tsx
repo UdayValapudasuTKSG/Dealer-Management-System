@@ -19,7 +19,6 @@ import Reports from "@/pages/reports";
 import Inventory from "@/pages/inventory";
 import Leads from "@/pages/leads";
 import Deals from "@/pages/deals";
-import Appraisals from "@/pages/appraisals";
 import Finance from "@/pages/finance";
 import Service from "@/pages/service";
 import Parts from "@/pages/parts";
@@ -31,7 +30,6 @@ import LeadDetail from "@/pages/lead-detail";
 import VehicleDetailPage from "@/pages/vehicle-detail";
 import TeamProfile from "@/pages/team-profile";
 import Approvals from "@/pages/approvals";
-import Journey from "@/pages/journey";
 import Gra from "@/pages/gra";
 import Tasks from "@/pages/tasks";
 import SettingsUsers from "@/pages/settings-users";
@@ -84,7 +82,7 @@ const clerkAppearance = {
     logoImageUrl: `${window.location.origin}${basePath}/logo.svg`,
   },
   variables: {
-    colorPrimary: "hsl(0 82% 44%)",
+    colorPrimary: "hsl(218 72% 50%)",
     colorForeground: "hsl(0 0% 96%)",
     colorMutedForeground: "hsl(0 0% 62%)",
     colorDanger: "hsl(0 82% 55%)",
@@ -167,7 +165,6 @@ function AppShell() {
                 <Route path="/reports" component={Reports} />
                 <Route path="/inventory" component={Inventory} />
                 <Route path="/deals" component={Deals} />
-                <Route path="/appraisals" component={Appraisals} />
                 <Route path="/finance" component={Finance} />
                 <Route path="/service" component={Service} />
                 <Route path="/parts" component={Parts} />
@@ -179,7 +176,6 @@ function AppShell() {
                 <Route path="/lead/:id" component={LeadDetail} />
                 <Route path="/vehicle/:id" component={VehicleDetailPage} />
                 <Route path="/team/:id" component={TeamProfile} />
-                <Route path="/journey" component={Journey} />
                 <Route path="/tasks" component={Tasks} />
                 <Route path="/gra" component={Gra} />
                 <Route path="/settings/users">

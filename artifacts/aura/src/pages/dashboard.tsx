@@ -1,4 +1,5 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { ActionQueue } from "@/components/action-queue";
 import {
   useGetDashboardSummary,
   useGetSalesPerformance,
@@ -80,8 +81,8 @@ const GATE_LABEL: Record<string, string> = {
 const PRIORITY_RANK: Record<string, number> = { high: 0, normal: 1, low: 2 };
 
 const POWERTRAIN_COLORS: Record<string, string> = {
-  EV: "hsl(0 82% 50%)",
-  Hybrid: "hsl(18 82% 52%)",
+  EV: "hsl(218 72% 52%)",
+  Hybrid: "hsl(43 74% 52%)",
   Petrol: "hsl(0 0% 58%)",
   Diesel: "hsl(0 0% 38%)",
 };
@@ -262,6 +263,9 @@ export default function Dashboard() {
       </div>
 
       <div className="w-full px-5 md:px-8 pb-14 -mt-12 relative z-30 space-y-6">
+        {/* Your day — action queue leads the page */}
+        <ActionQueue />
+
         {/* KPI Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
           <KPICard
@@ -274,6 +278,7 @@ export default function Dashboard() {
             accent
             delta={revDelta}
             trend={revenueTrend}
+            href="/deals"
           />
           <KPICard
             title="Active Deals"
@@ -282,6 +287,7 @@ export default function Dashboard() {
             icon={GitBranch}
             isLoading={isLoadingSummary}
             delay={0.1}
+            href="/deals"
           />
           <KPICard
             title="Conversion"
@@ -290,6 +296,7 @@ export default function Dashboard() {
             icon={Users}
             isLoading={isLoadingSummary}
             delay={0.15}
+            href="/pipeline"
           />
           <KPICard
             title="Handled Autonomously"
@@ -298,6 +305,7 @@ export default function Dashboard() {
             icon={Zap}
             isLoading={isLoadingSummary}
             delay={0.2}
+            href="/tasks"
           />
         </div>
 
@@ -1053,8 +1061,10 @@ function KPICard({
   accent,
   delta,
   trend,
+  href,
 }: any) {
   const hasTrend = Array.isArray(trend) && trend.length > 1;
+  const [, navigate] = useLocation();
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1062,9 +1072,10 @@ function KPICard({
       transition={{ delay, duration: 0.5 }}
     >
       <Card
+        onClick={href ? () => navigate(href) : undefined}
         className={`border-none shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-300 ${
-          accent ? "bg-primary text-white" : "glass-panel"
-        }`}
+          href ? "cursor-pointer" : ""
+        } ${accent ? "bg-primary text-white" : "glass-panel"}`}
       >
         <CardContent className="p-5 relative">
           <div className="flex items-start justify-between">

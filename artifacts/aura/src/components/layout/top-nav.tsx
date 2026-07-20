@@ -31,7 +31,7 @@ const CLUSTERS: Cluster[] = [
       // Shelved for now (page + route kept):
       // { name: "Journey", href: "/journey", module: "dashboard" },
       { name: "Reports", href: "/reports", module: "" },
-      { name: "Approvals", href: "/approvals", module: "approvals" },
+      { name: "Reviews", href: "/approvals", module: "approvals" },
       { name: "Tasks", href: "/tasks", module: "" },
     ],
   },

@@ -43,6 +43,9 @@
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
+  --color-gold: hsl(var(--gold));
+  --color-gold-foreground: hsl(var(--gold-foreground));
+
   --font-sans: var(--app-font-sans);
   --font-mono: var(--app-font-mono);
 
@@ -53,7 +56,7 @@
 }
 
 :root {
-  /* Premium Blood-Red / Black Dark Mode (Netflix-inspired) */
+  /* Premium Sapphire / Black Dark Mode (trust + richness) */
   --background: 0 0% 5%;
   --foreground: 0 0% 96%;
 
@@ -65,8 +68,8 @@
   --popover-foreground: 0 0% 96%;
   --popover-border: 0 0% 100% / 0.1;
 
-  /* Blood red */
-  --primary: 0 82% 44%;
+  /* Royal sapphire */
+  --primary: 218 72% 50%;
   --primary-foreground: 0 0% 100%;
 
   --secondary: 0 0% 13%;
@@ -75,24 +78,28 @@
   --muted: 0 0% 15%;
   --muted-foreground: 0 0% 62%;
 
-  --accent: 0 82% 44% / 0.14;
-  --accent-foreground: 0 84% 62%;
+  --accent: 218 72% 50% / 0.14;
+  --accent-foreground: 214 90% 72%;
 
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
 
   --border: 0 0% 100% / 0.09;
   --input: 0 0% 100% / 0.1;
-  --ring: 0 82% 48%;
+  --ring: 218 72% 56%;
 
   --sidebar: 0 0% 6% / 0.85;
   --sidebar-foreground: 0 0% 92%;
   --sidebar-border: 0 0% 100% / 0.07;
-  --sidebar-primary: 0 82% 44%;
+  --sidebar-primary: 218 72% 50%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 0 82% 44% / 0.14;
-  --sidebar-accent-foreground: 0 84% 62%;
-  --sidebar-ring: 0 82% 48%;
+  --sidebar-accent: 218 72% 50% / 0.14;
+  --sidebar-accent-foreground: 214 90% 72%;
+  --sidebar-ring: 218 72% 56%;
+
+  /* Champagne gold accent */
+  --gold: 43 74% 52%;
+  --gold-foreground: 40 45% 12%;
 
   --app-font-sans: 'Outfit', sans-serif;
   --app-font-mono: 'JetBrains Mono', monospace;
@@ -109,30 +116,32 @@
   --popover: 0 0% 8% / 0.96;
   --popover-foreground: 0 0% 96%;
   --popover-border: 0 0% 100% / 0.1;
-  --primary: 0 82% 44%;
+  --primary: 218 72% 50%;
   --primary-foreground: 0 0% 100%;
   --secondary: 0 0% 13%;
   --secondary-foreground: 0 0% 96%;
   --muted: 0 0% 15%;
   --muted-foreground: 0 0% 62%;
-  --accent: 0 82% 44% / 0.14;
-  --accent-foreground: 0 84% 62%;
+  --accent: 218 72% 50% / 0.14;
+  --accent-foreground: 214 90% 72%;
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
   --border: 0 0% 100% / 0.09;
   --input: 0 0% 100% / 0.1;
-  --ring: 0 82% 48%;
+  --ring: 218 72% 56%;
   --sidebar: 0 0% 6% / 0.85;
   --sidebar-foreground: 0 0% 92%;
   --sidebar-border: 0 0% 100% / 0.07;
-  --sidebar-primary: 0 82% 44%;
+  --sidebar-primary: 218 72% 50%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 0 82% 44% / 0.14;
-  --sidebar-accent-foreground: 0 84% 62%;
-  --sidebar-ring: 0 82% 48%;
+  --sidebar-accent: 218 72% 50% / 0.14;
+  --sidebar-accent-foreground: 214 90% 72%;
+  --sidebar-ring: 218 72% 56%;
+  --gold: 43 74% 52%;
+  --gold-foreground: 40 45% 12%;
 }
 
-/* Light mode — clean near-white with the same blood-red accent */
+/* Light mode — clean near-white with the same sapphire accent */
 :root.light {
   --background: 0 0% 95%;
   --foreground: 0 0% 9%;
@@ -142,27 +151,29 @@
   --popover: 0 0% 100% / 0.98;
   --popover-foreground: 0 0% 9%;
   --popover-border: 0 0% 0% / 0.1;
-  --primary: 0 82% 46%;
+  --primary: 218 72% 46%;
   --primary-foreground: 0 0% 100%;
   --secondary: 0 0% 95%;
   --secondary-foreground: 0 0% 12%;
   --muted: 0 0% 94%;
   --muted-foreground: 0 0% 38%;
-  --accent: 0 82% 46% / 0.1;
-  --accent-foreground: 0 74% 42%;
+  --accent: 218 72% 46% / 0.1;
+  --accent-foreground: 218 72% 38%;
   --destructive: 0 74% 46%;
   --destructive-foreground: 0 0% 100%;
   --border: 0 0% 0% / 0.1;
   --input: 0 0% 0% / 0.12;
-  --ring: 0 82% 48%;
+  --ring: 218 72% 50%;
   --sidebar: 0 0% 100%;
   --sidebar-foreground: 0 0% 20%;
   --sidebar-border: 0 0% 0% / 0.08;
-  --sidebar-primary: 0 82% 46%;
+  --sidebar-primary: 218 72% 46%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 0 82% 46% / 0.1;
-  --sidebar-accent-foreground: 0 74% 42%;
-  --sidebar-ring: 0 82% 48%;
+  --sidebar-accent: 218 72% 46% / 0.1;
+  --sidebar-accent-foreground: 218 72% 38%;
+  --sidebar-ring: 218 72% 50%;
+  --gold: 43 70% 42%;
+  --gold-foreground: 0 0% 100%;
 }
 
 @layer base {
@@ -173,8 +184,8 @@
     @apply font-sans antialiased bg-background text-foreground selection:bg-primary/30 selection:text-foreground;
     background-color: hsl(0 0% 4%);
     background-image:
-      radial-gradient(circle at 12% 8%, rgba(139, 0, 0, 0.22) 0%, transparent 42%),
-      radial-gradient(circle at 88% 92%, rgba(139, 0, 0, 0.16) 0%, transparent 45%),
+      radial-gradient(circle at 12% 8%, rgba(23, 58, 140, 0.22) 0%, transparent 42%),
+      radial-gradient(circle at 88% 92%, rgba(23, 58, 140, 0.16) 0%, transparent 45%),
       radial-gradient(circle at 50% 50%, rgba(20, 20, 20, 0.6) 0%, transparent 60%);
     background-attachment: fixed;
   }
@@ -188,19 +199,20 @@
   @apply bg-white/[0.06] backdrop-blur-2xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.4)];
 }
 
-/* Premium red glow utilities */
+/* Premium brand glow utilities (.glow-red kept as an alias) */
+.glow-brand,
 .glow-red {
-  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.25), 0 12px 40px -12px rgba(220, 20, 20, 0.55);
+  box-shadow: 0 0 0 1px rgba(39, 100, 214, 0.25), 0 12px 40px -12px rgba(39, 100, 214, 0.55);
 }
 .text-glow {
-  text-shadow: 0 0 24px rgba(220, 20, 20, 0.35);
+  text-shadow: 0 0 24px rgba(39, 100, 214, 0.35);
 }
 
-/* CopilotKit — blood-red / black premium dark theme */
+/* CopilotKit — sapphire / black premium dark theme */
 .copilotKitSidebar,
 .copilotKitPopup,
 .copilotKitWindow {
-  --copilot-kit-primary-color: hsl(0 82% 46%);
+  --copilot-kit-primary-color: hsl(218 72% 52%);
   --copilot-kit-contrast-color: #ffffff;
   --copilot-kit-background-color: rgba(14, 14, 14, 0.94);
   --copilot-kit-secondary-color: rgba(28, 28, 28, 0.9);
@@ -214,7 +226,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 1.25rem !important;
   overflow: hidden;
-  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(220, 20, 20, 0.15);
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(39, 100, 214, 0.15);
 }
 
 /* ============================================================
@@ -226,8 +238,8 @@
 :root.light body {
   background-color: hsl(0 0% 95%);
   background-image:
-    radial-gradient(circle at 12% 8%, rgba(200, 16, 16, 0.05) 0%, transparent 42%),
-    radial-gradient(circle at 88% 92%, rgba(200, 16, 16, 0.04) 0%, transparent 45%);
+    radial-gradient(circle at 12% 8%, rgba(23, 58, 140, 0.05) 0%, transparent 42%),
+    radial-gradient(circle at 88% 92%, rgba(23, 58, 140, 0.04) 0%, transparent 45%);
 }
 
 :root.light .glass {
@@ -244,8 +256,9 @@
 :root.light .text-glow {
   text-shadow: none;
 }
+:root.light .glow-brand,
 :root.light .glow-red {
-  box-shadow: 0 0 0 1px rgba(200, 16, 16, 0.2), 0 12px 40px -12px rgba(200, 16, 16, 0.35);
+  box-shadow: 0 0 0 1px rgba(39, 100, 214, 0.2), 0 12px 40px -12px rgba(39, 100, 214, 0.35);
 }
 
 /* Faint white surface overlays -> faint dark surface overlays */
@@ -301,5 +314,5 @@
 :root.light .copilotKitWindow {
   background: rgba(255, 255, 255, 0.97);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(200, 16, 16, 0.1);
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(39, 100, 214, 0.1);
 }

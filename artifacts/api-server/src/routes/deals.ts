@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and } from "drizzle-orm";
-import { db, dealsTable } from "@workspace/db";
+import { db, dealsTable, vehiclesTable, gatesTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
 import {
   CreateDealBody,
@@ -16,6 +16,69 @@ import { onDealStageChanged } from "../lib/email-triggers";
 import { ensureDeliveryForDeal } from "../lib/delivery";
 
 const router: IRouter = Router();
+
+// Deals move forward one stage at a time (backwards moves allowed for
+// corrections back to the immediately preceding stage only).
+const DEAL_STAGE_ORDER = [
+  "desking",
+  "negotiation",
+  "finance",
+  "committed",
+  "delivered",
+];
+
+// Discounts beyond this share of the vehicle price raise a below-floor
+// approval gate for a sales manager (the deal itself is not blocked).
+const FLOOR_DISCOUNT_RATIO = 0.05;
+
+const money = (n: number) =>
+  n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+async function raiseBelowFloorGateIfNeeded(
+  deal: typeof dealsTable.$inferSelect,
+): Promise<void> {
+  if (deal.vehiclePrice <= 0) return;
+  const floor = deal.vehiclePrice * (1 - FLOOR_DISCOUNT_RATIO);
+  const effective = deal.vehiclePrice - deal.discount;
+  if (effective >= floor) return;
+
+  const [existing] = await db
+    .select({ id: gatesTable.id })
+    .from(gatesTable)
+    .where(
+      and(
+        eq(gatesTable.dealerId, deal.dealerId),
+        eq(gatesTable.type, "below_floor_price"),
+        eq(gatesTable.refType, "deal"),
+        eq(gatesTable.refId, deal.id),
+        eq(gatesTable.status, "pending"),
+      ),
+    );
+  if (existing) return;
+
+  await db.insert(gatesTable).values({
+    dealerId: deal.dealerId,
+    type: "below_floor_price",
+    status: "pending",
+    priority: "high",
+    customerId: deal.customerId ?? null,
+    customerName: deal.customerName,
+    refType: "deal",
+    refId: deal.id,
+    title: `Below-floor price — ${deal.customerName ?? `Deal #${deal.id}`}`,
+    summary: `Discount of ${money(deal.discount)} takes the selling price to ${money(effective)}, below the ${money(floor)} floor (${FLOOR_DISCOUNT_RATIO * 100}% margin guard).`,
+    recommendation:
+      "Approve the discount, adjust it back above floor, or dismiss if the numbers were entered in error.",
+    amount: effective,
+    floorAmount: floor,
+    evidence: [
+      { label: "Vehicle price", value: money(deal.vehiclePrice) },
+      { label: "Discount", value: money(deal.discount) },
+      { label: "Effective price", value: money(effective) },
+      { label: "Floor price", value: money(floor) },
+    ],
+  });
+}
 
 router.get("/deals", async (req, res): Promise<void> => {
   const query = ListDealsQueryParams.safeParse(req.query);
@@ -52,6 +115,8 @@ router.post("/deals", async (req, res): Promise<void> => {
     .insert(dealsTable)
     .values({ ...parsed.data, dealerId: activeDealerId(res) })
     .returning();
+
+  await raiseBelowFloorGateIfNeeded(deal!);
 
   res.status(201).json(GetDealResponse.parse(deal));
 });
@@ -100,6 +165,27 @@ router.patch("/deals/:id", async (req, res): Promise<void> => {
     .from(dealsTable)
     .where(and(eq(dealsTable.id, params.data.id), eq(dealsTable.dealerId, dealerId)));
 
+  if (before && parsed.data.stage && parsed.data.stage !== before.stage) {
+    const fromIdx = DEAL_STAGE_ORDER.indexOf(before.stage);
+    const toIdx = DEAL_STAGE_ORDER.indexOf(parsed.data.stage);
+    if (fromIdx !== -1 && toIdx !== -1 && toIdx !== fromIdx + 1 && toIdx !== fromIdx - 1) {
+      res.status(422).json({
+        error: `Deals move one stage at a time (${before.stage} → ${parsed.data.stage} is not allowed)`,
+      });
+      return;
+    }
+    // Deposit gate: a deal can't be committed until the deposit is recorded.
+    if (
+      parsed.data.stage === "committed" &&
+      !(parsed.data.depositPaid ?? before.depositPaid)
+    ) {
+      res.status(422).json({
+        error: "Deposit must be recorded before committing the deal",
+      });
+      return;
+    }
+  }
+
   const [deal] = await db
     .update(dealsTable)
     .set(parsed.data)
@@ -112,6 +198,34 @@ router.patch("/deals/:id", async (req, res): Promise<void> => {
   }
 
   if (before) onDealStageChanged(before, deal);
+
+  await raiseBelowFloorGateIfNeeded(deal);
+
+  // VIN lock: committing reserves the vehicle; delivering marks it sold.
+  if (before && before.stage !== deal.stage) {
+    if (deal.stage === "committed") {
+      await db
+        .update(vehiclesTable)
+        .set({ status: "reserved" })
+        .where(
+          and(
+            eq(vehiclesTable.id, deal.vehicleId),
+            eq(vehiclesTable.dealerId, dealerId),
+            eq(vehiclesTable.status, "available"),
+          ),
+        );
+    } else if (deal.stage === "delivered") {
+      await db
+        .update(vehiclesTable)
+        .set({ status: "sold" })
+        .where(
+          and(
+            eq(vehiclesTable.id, deal.vehicleId),
+            eq(vehiclesTable.dealerId, dealerId),
+          ),
+        );
+    }
+  }
 
   // Cash decision / commitment → kick off the delivery workflow.
   if (before && before.stage !== "committed" && deal.stage === "committed") {

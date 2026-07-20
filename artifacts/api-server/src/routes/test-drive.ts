@@ -178,6 +178,13 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!body.data.waiverAccepted) {
+    res.status(422).json({
+      error: "Please accept the test-drive waiver to confirm your booking",
+    });
+    return;
+  }
+
   // The slot must be one the showroom actually offers (tomorrow → +14 days,
   // on the hour between opening hours).
   const offered = new Set(
@@ -213,11 +220,16 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
       testDriveAt: when,
       testDriveBranch:
         lead.testDriveBranch ?? lead.preferredBranch ?? "Main Showroom",
+      testDriveLicence: body.data.licenceNumber,
+      testDriveWaiver: true,
       status: "test_drive",
       phase:
         lead.phase === "aware" || lead.phase === "consider"
           ? "engage"
           : lead.phase,
+      ...(lead.phase === "aware" || lead.phase === "consider"
+        ? { stageEnteredAt: new Date() }
+        : {}),
     })
     .where(and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)))
     .returning();

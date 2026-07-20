@@ -50,6 +50,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Page, PageHeader } from "@/components/layout/page";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useViewMode } from "@/hooks/use-view-mode";
+import { ViewControls } from "@/components/view-controls";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -186,9 +188,80 @@ function BookingsTab() {
   const { data: orders, isLoading } = useListServiceOrders();
   const { toast } = useToast();
   const remind = useSendServiceReminder();
+  const { density, setDensity, layout, setLayout } = useViewMode("service");
+
+  if (!isLoading && orders?.length !== 0 && layout === "list") {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <ViewControls
+            layout={layout}
+            onLayoutChange={setLayout}
+            density={density}
+            onDensityChange={setDensity}
+          />
+        </div>
+        <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 font-semibold">RO</th>
+                <th className="px-4 py-3 font-semibold">Vehicle</th>
+                <th className="px-4 py-3 font-semibold hidden md:table-cell">Customer</th>
+                <th className="px-4 py-3 font-semibold hidden md:table-cell">Type</th>
+                <th className="px-4 py-3 font-semibold">Scheduled</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(orders ?? []).map((order) => (
+                <tr key={order.id} className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors">
+                  <td className={`px-4 tabular-nums text-primary font-semibold ${density === "compact" ? "py-2.5" : "py-3.5"}`}>
+                    #{order.id.toString().padStart(5, "0")}
+                  </td>
+                  <td className="px-4 py-2 font-medium">{order.vehicleInfo}</td>
+                  <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">
+                    {order.customerName || "Unknown"}
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground capitalize hidden md:table-cell">
+                    {order.type}
+                  </td>
+                  <td className="px-4 py-2 tabular-nums">
+                    {format(new Date(order.scheduledDate), "MMM d")}
+                  </td>
+                  <td className="px-4 py-2">
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest ${
+                        order.status === "completed"
+                          ? "bg-primary/15 text-primary"
+                          : "bg-foreground/[0.06] text-muted-foreground"
+                      }`}
+                    >
+                      {order.status.replace(/_/g, " ")}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="grid grid-cols-1 gap-6">
+    <div className="space-y-4">
+      {!isLoading && orders?.length !== 0 && (
+        <div className="flex justify-end">
+          <ViewControls
+            layout={layout}
+            onLayoutChange={setLayout}
+            density={density}
+            onDensityChange={setDensity}
+          />
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-6">
       {isLoading ? (
         [...Array(4)].map((_, i) => (
           <div key={i} className="h-40 bg-white/[0.05] rounded-3xl animate-pulse" />
@@ -309,6 +382,7 @@ function BookingsTab() {
           </motion.div>
         ))
       )}
+      </div>
     </div>
   );
 }

@@ -24,6 +24,8 @@ import {
   Search,
 } from "lucide-react";
 import { format } from "date-fns";
+import { useViewMode } from "@/hooks/use-view-mode";
+import { ViewControls } from "@/components/view-controls";
 import { motion, AnimatePresence } from "framer-motion";
 import { Page, PageHeader } from "@/components/layout/page";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
@@ -163,6 +165,7 @@ function PartsTab() {
   });
 
   const lowCount = parts?.filter((p) => p.stock <= p.reorderLevel).length ?? 0;
+  const { density, setDensity, layout, setLayout } = useViewMode("parts");
 
   return (
     <div className="space-y-5">
@@ -189,6 +192,12 @@ function PartsTab() {
           <AlertTriangle className="w-4 h-4" />
           Reorder alerts{lowCount > 0 && !lowOnly ? ` (${lowCount})` : ""}
         </Button>
+        <ViewControls
+          layout={layout}
+          onLayoutChange={setLayout}
+          density={density}
+          onDensityChange={setDensity}
+        />
       </div>
 
       {isLoading ? (
@@ -197,6 +206,49 @@ function PartsTab() {
         <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 flex flex-col items-center gap-3">
           <Package className="w-8 h-8 text-muted-foreground" />
           <p className="text-muted-foreground">No parts found.</p>
+        </div>
+      ) : layout === "list" ? (
+        <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 font-semibold">Part</th>
+                <th className="px-4 py-3 font-semibold hidden md:table-cell">SKU</th>
+                <th className="px-4 py-3 font-semibold hidden lg:table-cell">Category</th>
+                <th className="px-4 py-3 font-semibold text-right">Stock</th>
+                <th className="px-4 py-3 font-semibold text-right hidden md:table-cell">Cost</th>
+                <th className="px-4 py-3 font-semibold text-right">Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              {parts.map((p) => {
+                const low = p.stock <= p.reorderLevel;
+                return (
+                  <tr key={p.id} className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors">
+                    <td className={cn("px-4 font-medium", density === "compact" ? "py-2.5" : "py-3.5")}>
+                      {p.name}
+                      {low && (
+                        <span className="ml-2 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
+                          Reorder
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">{p.sku}</td>
+                    <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">{p.category}</td>
+                    <td className={cn("px-4 py-2 text-right tabular-nums font-semibold", low && "text-primary")}>
+                      {p.stock} <span className="text-muted-foreground font-normal">/ {p.reorderLevel}</span>
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums hidden md:table-cell">
+                      ${p.unitCost.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">
+                      ${p.unitPrice.toLocaleString()}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

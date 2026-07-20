@@ -934,6 +934,11 @@ export interface Lead {
   description?: string | null;
   /** @nullable */
   address?: string | null;
+  /** @nullable */
+  stageEnteredAt?: string | null;
+  /** @nullable */
+  testDriveLicence?: string | null;
+  testDriveWaiver?: boolean;
   createdAt: string;
 }
 
@@ -1277,6 +1282,9 @@ export interface TestDriveInvite {
 
 export interface BookTestDriveInput {
   slot: string;
+  /** @minLength 1 */
+  licenceNumber: string;
+  waiverAccepted: boolean;
 }
 
 export interface AssignLeadInput {
@@ -1287,6 +1295,28 @@ export interface LeadTestDriveInput {
   scheduledAt: string;
   branch?: string;
   vehicleId?: number;
+  /** @minLength 1 */
+  licenceNumber: string;
+  waiverAccepted: boolean;
+}
+
+export type LeadAdvanceInputToStage = typeof LeadAdvanceInputToStage[keyof typeof LeadAdvanceInputToStage];
+
+
+export const LeadAdvanceInputToStage = {
+  qualified: 'qualified',
+  test_drive: 'test_drive',
+  negotiation: 'negotiation',
+  sold: 'sold',
+} as const;
+
+export interface LeadAdvanceInput {
+  toStage: LeadAdvanceInputToStage;
+}
+
+export interface LeadAdvanceUnmet {
+  error: string;
+  unmet: string[];
 }
 
 export type LeadDecisionInputChoice = typeof LeadDecisionInputChoice[keyof typeof LeadDecisionInputChoice];

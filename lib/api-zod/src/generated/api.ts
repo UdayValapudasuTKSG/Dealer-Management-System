@@ -902,6 +902,9 @@ export const ListLeadsResponseItem = zod.object({
   "budgetFinancing": zod.string().nullish(),
   "description": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
 export const ListLeadsResponse = zod.array(ListLeadsResponseItem)
@@ -979,6 +982,9 @@ export const CreateLeadResponse = zod.object({
   "budgetFinancing": zod.string().nullish(),
   "description": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1033,6 +1039,9 @@ export const GetLeadResponse = zod.object({
   "budgetFinancing": zod.string().nullish(),
   "description": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1131,6 +1140,9 @@ export const UpdateLeadResponse = zod.object({
   "budgetFinancing": zod.string().nullish(),
   "description": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1207,6 +1219,9 @@ export const CreateEnquiryResponse = zod.object({
   "budgetFinancing": zod.string().nullish(),
   "description": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1262,8 +1277,13 @@ export const BookTestDriveSlotParams = zod.object({
   "token": zod.coerce.string()
 })
 
+
+
+
 export const BookTestDriveSlotBody = zod.object({
-  "slot": zod.coerce.date()
+  "slot": zod.coerce.date(),
+  "licenceNumber": zod.string().min(1),
+  "waiverAccepted": zod.boolean()
 })
 
 export const BookTestDriveSlotResponse = zod.object({
@@ -1351,6 +1371,73 @@ export const AssignLeadResponse = zod.object({
   "budgetFinancing": zod.string().nullish(),
   "description": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Gated stage advance — validates the target stage's checklist first
+ */
+export const AdvanceLeadStageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AdvanceLeadStageBody = zod.object({
+  "toStage": zod.enum(['qualified', 'test_drive', 'negotiation', 'sold'])
+})
+
+
+
+
+
+export const AdvanceLeadStageResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
+  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
+  "interestedVehicleId": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
+  "aiScore": zod.number(),
+  "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1359,10 +1446,15 @@ export const ScheduleTestDriveParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
 export const ScheduleTestDriveBody = zod.object({
   "scheduledAt": zod.coerce.date(),
   "branch": zod.string().optional(),
-  "vehicleId": zod.number().optional()
+  "vehicleId": zod.number().optional(),
+  "licenceNumber": zod.string().min(1),
+  "waiverAccepted": zod.boolean()
 })
 
 
@@ -1411,6 +1503,9 @@ export const ScheduleTestDriveResponse = zod.object({
   "budgetFinancing": zod.string().nullish(),
   "description": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1465,6 +1560,9 @@ export const CheckLeadAvailabilityResponse = zod.object({
   "budgetFinancing": zod.string().nullish(),
   "description": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1523,6 +1621,9 @@ export const RecordLeadDecisionResponse = zod.object({
   "budgetFinancing": zod.string().nullish(),
   "description": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -3673,6 +3774,9 @@ export const GetCustomerOverviewResponse = zod.object({
   "budgetFinancing": zod.string().nullish(),
   "description": zod.string().nullish(),
   "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
 })),
   "timeline": zod.array(zod.object({

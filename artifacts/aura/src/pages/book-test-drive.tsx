@@ -37,6 +37,8 @@ export default function BookTestDrive({
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [rescheduling, setRescheduling] = useState(false);
   const [bookError, setBookError] = useState<string | null>(null);
+  const [licence, setLicence] = useState("");
+  const [waiver, setWaiver] = useState(false);
   const [justBooked, setJustBooked] = useState(false);
 
   const days = data?.days ?? [];
@@ -54,7 +56,11 @@ export default function BookTestDrive({
     try {
       const refreshed = await book.mutateAsync({
         token,
-        data: { slot: selectedSlot },
+        data: {
+          slot: selectedSlot,
+          licenceNumber: licence.trim(),
+          waiverAccepted: waiver,
+        },
       });
       queryClient.setQueryData(getGetTestDriveInviteQueryKey(token), refreshed);
       setSelectedSlot(null);
@@ -253,6 +259,28 @@ export default function BookTestDrive({
                     </div>
                   )}
 
+                  <div className="space-y-3 max-w-sm">
+                    <input
+                      type="text"
+                      placeholder="Driver's licence number"
+                      value={licence}
+                      onChange={(e) => setLicence(e.target.value)}
+                      className="w-full rounded-lg bg-white/5 border border-white/10 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/60"
+                    />
+                    <label className="flex items-start gap-2.5 text-sm text-muted-foreground cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={waiver}
+                        onChange={(e) => setWaiver(e.target.checked)}
+                        className="mt-0.5 accent-[hsl(218_72%_50%)]"
+                      />
+                      <span>
+                        I accept the test-drive waiver and confirm I hold a
+                        valid driver's licence.
+                      </span>
+                    </label>
+                  </div>
+
                   {bookError && (
                     <p className="text-sm text-primary flex items-center gap-1.5">
                       <TriangleAlert className="w-4 h-4 shrink-0" />
@@ -263,7 +291,9 @@ export default function BookTestDrive({
                   <div className="flex items-center gap-3">
                     <Button
                       className="rounded-full px-8"
-                      disabled={!selectedSlot || book.isPending}
+                      disabled={
+                        !selectedSlot || !licence.trim() || !waiver || book.isPending
+                      }
                       onClick={confirm}
                     >
                       {book.isPending ? (

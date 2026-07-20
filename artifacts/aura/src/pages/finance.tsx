@@ -41,6 +41,8 @@ import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page, PageHeader } from "@/components/layout/page";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useViewMode } from "@/hooks/use-view-mode";
+import { ViewControls } from "@/components/view-controls";
 import {
   ApplicationDetailDialog,
   FINANCE_STATUS_LABEL,
@@ -63,6 +65,8 @@ export default function Finance() {
   const search = useSearch();
   const leadParam = new URLSearchParams(search).get("lead");
   const [tab, setTab] = useState<TabId>("applications");
+  const { density, setDensity, layout, setLayout } = useViewMode("finance");
+  const compactRow = density === "compact" ? "py-2.5" : "py-3.5";
   const [detailId, setDetailId] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -189,15 +193,69 @@ export default function Finance() {
             </button>
           ))}
         </div>
-        {connector && (
-          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground bg-white/[0.03] border border-white/10 rounded-full px-4 py-2">
-            <Wifi className={`w-3.5 h-3.5 ${connector.mode === "live" ? "text-emerald-400" : "text-amber-400"}`} />
-            {connector.connector} LOS · {connector.mode === "live" ? "Live" : "Sandbox"}
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          <ViewControls
+            layout={layout}
+            onLayoutChange={setLayout}
+            density={density}
+            onDensityChange={setDensity}
+          />
+          {connector && (
+            <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground bg-white/[0.03] border border-white/10 rounded-full px-4 py-2">
+              <Wifi className={`w-3.5 h-3.5 ${connector.mode === "live" ? "text-emerald-400" : "text-amber-400"}`} />
+              {connector.connector} LOS · {connector.mode === "live" ? "Live" : "Sandbox"}
+            </div>
+          )}
+        </div>
       </div>
 
-      {tab === "applications" && (
+      {tab === "applications" && layout === "list" && (
+        <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 font-semibold">Customer</th>
+                <th className="px-4 py-3 font-semibold hidden md:table-cell">Lender</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold text-right">Amount</th>
+                <th className="px-4 py-3 font-semibold text-right hidden md:table-cell">Term</th>
+                <th className="px-4 py-3 font-semibold text-right hidden lg:table-cell">APR</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(apps ?? []).map((app) => (
+                <tr
+                  key={app.id}
+                  className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors cursor-pointer"
+                  onClick={() => setDetailId(app.id)}
+                >
+                  <td className={`px-4 font-medium ${compactRow}`}>{app.customerName}</td>
+                  <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">
+                    {app.lender || "Pending"}
+                  </td>
+                  <td className="px-4 py-2">
+                    <Badge className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest border-none ${statusBadgeClass(app.status)}`}>
+                      {FINANCE_STATUS_LABEL[app.status] ?? app.status}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-2 text-right tabular-nums font-semibold">{money(app.amount)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums hidden md:table-cell">{app.termMonths} mo</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-primary hidden lg:table-cell">{app.apr}%</td>
+                </tr>
+              ))}
+              {(apps ?? []).length === 0 && !isLoading && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                    No credit applications yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {tab === "applications" && layout !== "list" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {isLoading ? (
             [...Array(6)].map((_, i) => <div key={i} className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />)

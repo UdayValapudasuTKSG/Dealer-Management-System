@@ -77,5 +77,10 @@ export interface Lead {
   description?: string | null;
   /** @nullable */
   address?: string | null;
+  /** @nullable */
+  stageEnteredAt?: Date | null;
+  /** @nullable */
+  testDriveLicence?: string | null;
+  testDriveWaiver?: boolean;
   createdAt: Date;
 }
