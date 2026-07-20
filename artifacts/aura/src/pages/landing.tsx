@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Lenis from "lenis";
-import { LandingPreloader } from "@/components/landing/preloader";
 import { ArrowRight, Loader2, CircleCheck, CheckCircle2, MapPin, Map, Clock, Truck, ShieldCheck } from "lucide-react";
 import {
   Dialog,
@@ -213,9 +212,6 @@ const REGIONS = [
 
 export default function Landing() {
   const [enquiryOpen, setEnquiryOpen] = useState(false);
-  const [loading, setLoading] = useState(
-    () => sessionStorage.getItem("aura-preloaded") !== "1",
-  );
   const rootRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -223,7 +219,6 @@ export default function Landing() {
 
   // Lenis smooth scroll + GSAP scrubbed scroll effects
   useEffect(() => {
-    if (loading) return;
     const lenis = new Lenis({ lerp: 0.09 });
     lenis.on("scroll", ScrollTrigger.update);
     const raf = (time: number) => lenis.raf(time * 1000);
@@ -284,21 +279,13 @@ export default function Landing() {
       lenis.destroy();
       restoreLagSmoothing();
     };
-  }, [loading]);
+  }, []);
 
   return (
     <div
       ref={rootRef}
       className="bg-black text-white selection:bg-primary/30 selection:text-white min-h-[100dvh] font-sans"
     >
-      {loading && (
-        <LandingPreloader
-          onDone={() => {
-            sessionStorage.setItem("aura-preloaded", "1");
-            setLoading(false);
-          }}
-        />
-      )}
       {/* Hero Section */}
       <section
         ref={heroRef}
