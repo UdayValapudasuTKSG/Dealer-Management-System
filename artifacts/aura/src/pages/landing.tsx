@@ -267,8 +267,8 @@ export default function Landing() {
               transition={{ duration: 0.7, delay: 0.2 }}
               className="text-5xl md:text-7xl lg:text-[5.5rem] font-light tracking-tight text-white leading-[1.05]"
             >
-              Nationwide Delivery. <br />
-              <span className="font-semibold text-[#B4D6E3]">Zero Compromise.</span>
+              Your dream car. <br />
+              <span className="font-semibold text-[#B4D6E3]">Delivered anywhere in Guyana.</span>
             </motion.h1>
 
             <motion.p
@@ -277,7 +277,7 @@ export default function Landing() {
               transition={{ duration: 0.7, delay: 0.35 }}
               className="mt-8 max-w-xl text-lg md:text-xl text-zinc-300 font-light leading-relaxed"
             >
-              Guyana's premier automotive network. From the coast to the Rupununi, we deliver excellence directly to you.
+              5,000+ vehicles delivered on time and fully insured — from our Georgetown showroom to the farthest reaches of the Rupununi.
             </motion.p>
 
             <motion.div
@@ -416,103 +416,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Map Section */}
-      <section className="py-32 bg-zinc-950 relative border-t border-white/5 overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10 pointer-events-none mix-blend-overlay"></div>
-        <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-14 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <motion.div
-              initial={{ opacity: 0, x: -40 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.8 }}
-            >
-              <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-primary mb-6">Our Network</h2>
-              <h3 className="text-4xl md:text-5xl font-light tracking-tight leading-tight text-white mb-8">
-                Strategically placed <br />
-                <span className="font-semibold text-[#B4D6E3]">across Guyana.</span>
-              </h3>
-              <p className="text-lg text-zinc-400 font-light leading-relaxed mb-10">
-                With a primary showroom in Georgetown and strategic hubs across key regions, AURA Motors provides unparalleled access to premium vehicles, parts, and service support.
-              </p>
-
-              <div className="space-y-6">
-                {[
-                  { title: "Georgetown Showroom & HQ", desc: "Full inventory, finance center, and executive service bay." },
-                  { title: "Linden Logistics Hub", desc: "Forward deployment center for interior deliveries." },
-                  { title: "Berbice Branch", desc: "Dedicated sales and service facility for the eastern corridor." }
-                ].map((loc, i) => (
-                  <div key={i} className="flex gap-4">
-                    <div className="mt-1">
-                      <div className="w-2 h-2 rounded-full bg-primary" />
-                    </div>
-                    <div>
-                      <h5 className="text-white font-medium mb-1">{loc.title}</h5>
-                      <p className="text-zinc-500 text-sm">{loc.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.8 }}
-              className="relative aspect-square max-w-lg mx-auto w-full flex items-center justify-center"
-            >
-              {/* Stylized Guyana Map */}
-              <svg viewBox="0 0 200 260" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full drop-shadow-2xl opacity-80">
-                <path 
-                  d="M100 10 L130 15 L145 25 L160 40 L165 60 L180 80 L170 120 L180 150 L160 190 L140 220 L110 240 L80 250 L60 220 L40 180 L20 150 L30 110 L25 80 L50 60 L70 30 Z" 
-                  fill="hsl(var(--muted))" 
-                  stroke="hsl(var(--primary))" 
-                  strokeWidth="0.5"
-                  className="transition-all duration-1000 ease-in-out"
-                />
-                
-                {/* Georgetown */}
-                <g transform="translate(140, 30)">
-                  <circle cx="0" cy="0" r="3" fill="hsl(var(--primary))" />
-                  <circle cx="0" cy="0" r="3" fill="hsl(var(--primary))" className="animate-ping origin-center" />
-                  <text x="8" y="3" fill="white" fontSize="6" fontWeight="500">Georgetown</text>
-                </g>
-
-                {/* Linden */}
-                <g transform="translate(130, 80)">
-                  <circle cx="0" cy="0" r="2.5" fill="#7F9DB1" />
-                  <text x="-32" y="3" fill="#B4D6E3" fontSize="5" fontWeight="400">Linden</text>
-                </g>
-
-                {/* Berbice / New Amsterdam */}
-                <g transform="translate(160, 50)">
-                  <circle cx="0" cy="0" r="2.5" fill="#7F9DB1" />
-                  <text x="6" y="3" fill="#B4D6E3" fontSize="5" fontWeight="400">New Amsterdam</text>
-                </g>
-
-                {/* Bartica */}
-                <g transform="translate(110, 70)">
-                  <circle cx="0" cy="0" r="2" fill="hsl(var(--muted-foreground))" />
-                  <text x="-25" y="3" fill="hsl(var(--muted-foreground))" fontSize="4" fontWeight="400">Bartica</text>
-                </g>
-
-                {/* Lethem */}
-                <g transform="translate(60, 200)">
-                  <circle cx="0" cy="0" r="2" fill="hsl(var(--muted-foreground))" />
-                  <text x="6" y="2" fill="hsl(var(--muted-foreground))" fontSize="4" fontWeight="400">Lethem</text>
-                </g>
-                
-                {/* Anna Regina */}
-                <g transform="translate(100, 35)">
-                  <circle cx="0" cy="0" r="2" fill="hsl(var(--muted-foreground))" />
-                  <text x="-35" y="2" fill="hsl(var(--muted-foreground))" fontSize="4" fontWeight="400">Anna Regina</text>
-                </g>
-              </svg>
-            </motion.div>
-          </div>
-        </div>
-      </section>
 
       {/* Call to Action & Footer */}
       <section className="py-24 bg-black text-center relative">
