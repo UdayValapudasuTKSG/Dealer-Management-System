@@ -42,12 +42,16 @@ declare global {
   }
 }
 
-export const SUPER_ADMIN_EMAIL = (
+// Comma-separated list of platform administrator emails.
+export const SUPER_ADMIN_EMAILS = (
   process.env.SUPER_ADMIN_EMAIL ?? "uday.valapudasu@theksquaregroup.com"
-).toLowerCase();
+)
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
 
 export function isSuperAdminEmail(email: string | null | undefined): boolean {
-  return !!email && email.toLowerCase() === SUPER_ADMIN_EMAIL;
+  return !!email && SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
 }
 
 // Short-lived cache of role permissions to avoid a query on every request.

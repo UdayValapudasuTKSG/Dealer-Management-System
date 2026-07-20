@@ -46,3 +46,4 @@ channel = "stable-25_05"
 
 [userenv.shared]
 WHATSAPP_PROVIDER = "twilio"
+SUPER_ADMIN_EMAIL = "akhelaaditya99@gmail.com,uday.valapudasu@theksquaregroup.com"
