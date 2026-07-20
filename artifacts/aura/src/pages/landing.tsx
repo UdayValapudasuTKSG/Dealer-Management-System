@@ -201,14 +201,14 @@ export default function Landing() {
   return (
     <div className="bg-black text-white selection:bg-primary/30 selection:text-white">
       {/* Hero Section */}
-      <section className="relative h-[100dvh] w-full overflow-hidden">
+      <section className="relative h-[100dvh] w-full overflow-hidden bg-zinc-950">
         <video
           autoPlay
           muted
           loop
           playsInline
           poster={`${import.meta.env.BASE_URL}vehicles/aura_porsche_taycan.png`}
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover opacity-80 mix-blend-lighten"
         >
           <source
             src={`${import.meta.env.BASE_URL}videos/white_luxury_car_showroom_turntable.mp4`}
@@ -217,8 +217,8 @@ export default function Landing() {
         </video>
 
         {/* Cinematic legibility gradients */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/60 z-10" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/20 to-transparent z-10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-black/60 z-10" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent z-10" />
 
         {/* Top bar */}
         <motion.header
@@ -228,19 +228,19 @@ export default function Landing() {
           className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 lg:px-14 h-24"
         >
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-              <span className="font-bold text-white leading-none">A</span>
+            <div className="w-10 h-10 rounded-xl overflow-hidden ring-1 ring-white/20 bg-black/20 flex items-center justify-center">
+              <img src={`${import.meta.env.BASE_URL}logo-mark.png`} alt="AURA" className="h-full w-full object-cover" />
             </div>
-            <span className="text-xl font-semibold tracking-widest uppercase text-white">
+            <span className="text-lg font-semibold tracking-[0.2em] uppercase text-white font-sans">
               AURA Motors
             </span>
           </div>
-          <nav className="hidden md:flex items-center gap-8 bg-white/5 backdrop-blur-md px-8 py-3 rounded-full border border-white/10">
+          <nav className="hidden md:flex items-center gap-8 bg-black/20 backdrop-blur-md px-8 py-3 rounded-full border border-white/10 font-mono text-[11px] uppercase tracking-widest">
             {QUICK_LINKS.map((l) => (
               <Link
                 key={l.name}
                 href={l.href}
-                className="text-sm font-medium tracking-wide text-white/80 hover:text-white transition-colors"
+                className="text-white/70 hover:text-white transition-colors"
               >
                 {l.name}
               </Link>

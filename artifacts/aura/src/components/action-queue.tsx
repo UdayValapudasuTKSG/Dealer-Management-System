@@ -202,14 +202,14 @@ export function ActionQueue({ compact }: { compact?: boolean }) {
               </div>
             </div>
             
-            <div className="flex items-center justify-between mt-auto pt-2">
-              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/[0.04]">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
                 {item.rank === 0 ? "High Priority" : item.rank === 1 ? "Priority" : "Standard"}
               </div>
               <Button
                 size="sm"
                 variant="secondary"
-                className="h-8 px-4 rounded-full bg-foreground/[0.05] hover:bg-primary hover:text-white transition-all shadow-none group-hover:shadow-lg group-hover:shadow-primary/20"
+                className="h-7 px-4 rounded-full font-mono text-[11px] uppercase tracking-wider bg-foreground/[0.05] hover:bg-primary hover:text-white transition-all shadow-none group-hover:shadow-lg group-hover:shadow-primary/20"
                 onClick={() => navigate(item.href)}
               >
                 {item.action}

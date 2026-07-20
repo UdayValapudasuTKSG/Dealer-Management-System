@@ -102,6 +102,12 @@ uri = "file://artifacts/aura/public/images/team_at_work.png"
 type = "image"
 title = "Team at Work"
 
+[[generated]]
+id = "jL2mabCRriA9zgtbDgMn4"
+uri = "file://artifacts/aura/public/logo-generated.png"
+type = "image"
+title = "Teal orbital abstract logo"
+
 [[outputs]]
 id = "OVThM-BLvdGYiJWriQ3Qm"
 uri = "file://docs/AURA_WALKTHROUGH.md"

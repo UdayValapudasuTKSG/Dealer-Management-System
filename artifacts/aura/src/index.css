@@ -1,5 +1,5 @@
 @layer theme, base, clerk, components, utilities;
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -56,124 +56,123 @@
 }
 
 :root {
-  /* Deep Blue Dark Mode (trust + premium) */
-  --background: 216 20% 5%;
+  /* Precision Teal Dark Mode */
+  --background: 180 5% 4%;
   --foreground: 0 0% 96%;
 
-  --card: 216 20% 8% / 0.72;
+  --card: 180 5% 7% / 0.72;
   --card-foreground: 0 0% 96%;
   --card-border: 0 0% 100% / 0.08;
 
-  --popover: 216 20% 7% / 0.96;
+  --popover: 180 5% 7% / 0.96;
   --popover-foreground: 0 0% 96%;
   --popover-border: 0 0% 100% / 0.1;
 
-  /* Classic Deep Blue (#0D3B66) */
-  --primary: 209 78% 23%;
+  /* Vivid Teal (#00897B) */
+  --primary: 174 100% 27%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 216 20% 13%;
+  --secondary: 180 5% 13%;
   --secondary-foreground: 0 0% 96%;
 
-  --muted: 216 20% 15%;
+  --muted: 180 5% 15%;
   --muted-foreground: 0 0% 62%;
 
-  /* Dusty Blue Accent (#7F9DB1) */
-  --accent: 204 26% 60% / 0.16;
-  --accent-foreground: 204 26% 75%;
+  --accent: 174 100% 27% / 0.16;
+  --accent-foreground: 174 100% 75%;
 
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
 
   --border: 0 0% 100% / 0.09;
   --input: 0 0% 100% / 0.1;
-  --ring: 209 78% 23%;
+  --ring: 174 100% 27%;
 
-  --sidebar: 216 20% 6% / 0.85;
+  --sidebar: 180 5% 6% / 0.85;
   --sidebar-foreground: 0 0% 92%;
   --sidebar-border: 0 0% 100% / 0.07;
-  --sidebar-primary: 209 78% 23%;
+  --sidebar-primary: 174 100% 27%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 204 26% 60% / 0.16;
-  --sidebar-accent-foreground: 204 26% 75%;
-  --sidebar-ring: 209 78% 23%;
+  --sidebar-accent: 174 100% 27% / 0.16;
+  --sidebar-accent-foreground: 174 100% 75%;
+  --sidebar-ring: 174 100% 27%;
 
-  /* Soft Sky Highlights (#B4D6E3) */
-  --gold: 197 45% 80%;
-  --gold-foreground: 216 20% 10%;
+  --gold: 174 45% 80%;
+  --gold-foreground: 180 5% 10%;
 
   --app-font-sans: 'Outfit', sans-serif;
-  --app-font-mono: 'JetBrains Mono', monospace;
+  --app-font-mono: 'DM Mono', monospace;
   --radius: 1rem;
 }
 
 /* .dark kept in sync so `dark` class usage stays consistent */
 .dark {
-  --background: 216 20% 5%;
+  --background: 180 5% 4%;
   --foreground: 0 0% 96%;
-  --card: 216 20% 8% / 0.72;
+  --card: 180 5% 7% / 0.72;
   --card-foreground: 0 0% 96%;
   --card-border: 0 0% 100% / 0.08;
-  --popover: 216 20% 7% / 0.96;
+  --popover: 180 5% 7% / 0.96;
   --popover-foreground: 0 0% 96%;
   --popover-border: 0 0% 100% / 0.1;
-  --primary: 209 78% 23%;
+  --primary: 174 100% 27%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 216 20% 13%;
+  --secondary: 180 5% 13%;
   --secondary-foreground: 0 0% 96%;
-  --muted: 216 20% 15%;
+  --muted: 180 5% 15%;
   --muted-foreground: 0 0% 62%;
-  --accent: 204 26% 60% / 0.16;
-  --accent-foreground: 204 26% 75%;
+  --accent: 174 100% 27% / 0.16;
+  --accent-foreground: 174 100% 75%;
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
   --border: 0 0% 100% / 0.09;
   --input: 0 0% 100% / 0.1;
-  --ring: 209 78% 23%;
-  --sidebar: 216 20% 6% / 0.85;
+  --ring: 174 100% 27%;
+  --sidebar: 180 5% 6% / 0.85;
   --sidebar-foreground: 0 0% 92%;
   --sidebar-border: 0 0% 100% / 0.07;
-  --sidebar-primary: 209 78% 23%;
+  --sidebar-primary: 174 100% 27%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 204 26% 60% / 0.16;
-  --sidebar-accent-foreground: 204 26% 75%;
-  --sidebar-ring: 209 78% 23%;
-  --gold: 197 45% 80%;
-  --gold-foreground: 216 20% 10%;
+  --sidebar-accent: 174 100% 27% / 0.16;
+  --sidebar-accent-foreground: 174 100% 75%;
+  --sidebar-ring: 174 100% 27%;
+  --gold: 174 45% 80%;
+  --gold-foreground: 180 5% 10%;
 }
 
-/* Light mode — clean near-white with the same blue accent */
+/* Light mode — ultra-clean white/light surfaces */
 :root.light {
   --background: 0 0% 98%;
-  --foreground: 216 20% 10%;
+  --foreground: 180 5% 10%;
   --card: 0 0% 100% / 0.85;
-  --card-foreground: 216 20% 10%;
+  --card-foreground: 180 5% 10%;
   --card-border: 0 0% 0% / 0.08;
   --popover: 0 0% 100% / 0.98;
-  --popover-foreground: 216 20% 10%;
+  --popover-foreground: 180 5% 10%;
   --popover-border: 0 0% 0% / 0.1;
-  --primary: 209 78% 23%;
+  /* Deep Teal (#004E54) */
+  --primary: 184 100% 16%;
   --primary-foreground: 0 0% 100%;
   --secondary: 0 0% 95%;
-  --secondary-foreground: 216 20% 12%;
+  --secondary-foreground: 180 5% 12%;
   --muted: 0 0% 94%;
   --muted-foreground: 0 0% 38%;
-  --accent: 204 26% 60% / 0.1;
-  --accent-foreground: 209 78% 23%;
+  --accent: 184 100% 16% / 0.1;
+  --accent-foreground: 184 100% 16%;
   --destructive: 0 74% 46%;
   --destructive-foreground: 0 0% 100%;
   --border: 0 0% 0% / 0.1;
   --input: 0 0% 0% / 0.12;
-  --ring: 209 78% 23%;
+  --ring: 184 100% 16%;
   --sidebar: 0 0% 100%;
-  --sidebar-foreground: 216 20% 20%;
+  --sidebar-foreground: 180 5% 20%;
   --sidebar-border: 0 0% 0% / 0.08;
-  --sidebar-primary: 209 78% 23%;
+  --sidebar-primary: 184 100% 16%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 204 26% 60% / 0.1;
-  --sidebar-accent-foreground: 209 78% 23%;
-  --sidebar-ring: 209 78% 23%;
-  --gold: 197 45% 60%;
+  --sidebar-accent: 184 100% 16% / 0.1;
+  --sidebar-accent-foreground: 184 100% 16%;
+  --sidebar-ring: 184 100% 16%;
+  --gold: 174 45% 60%;
   --gold-foreground: 0 0% 100%;
 }
 
@@ -185,8 +184,8 @@
     @apply font-sans antialiased bg-background text-foreground selection:bg-primary/30 selection:text-foreground;
     background-color: hsl(0 0% 4%);
     background-image:
-      radial-gradient(circle at 12% 8%, rgba(127, 157, 177, 0.08) 0%, transparent 42%),
-      radial-gradient(circle at 88% 92%, rgba(127, 157, 177, 0.06) 0%, transparent 45%),
+      radial-gradient(circle at 12% 8%, rgba(0, 152, 164, 0.08) 0%, transparent 42%),
+      radial-gradient(circle at 88% 92%, rgba(0, 152, 164, 0.06) 0%, transparent 45%),
       radial-gradient(circle at 50% 50%, rgba(20, 20, 20, 0.6) 0%, transparent 60%);
     background-attachment: fixed;
   }
@@ -214,20 +213,20 @@
 .glow-brand,
 .glow-red,
 .glow-copper {
-  box-shadow: 0 0 0 1px rgba(127, 157, 177, 0.25), 0 12px 40px -12px rgba(127, 157, 177, 0.55);
+  box-shadow: 0 0 0 1px rgba(0, 152, 164, 0.25), 0 12px 40px -12px rgba(0, 152, 164, 0.55);
 }
 .text-glow {
-  text-shadow: 0 0 24px rgba(127, 157, 177, 0.35);
+  text-shadow: 0 0 24px rgba(0, 152, 164, 0.35);
 }
 
 /* CopilotKit — copper / black premium dark theme */
 .copilotKitSidebar,
 .copilotKitPopup,
 .copilotKitWindow {
-  --copilot-kit-primary-color: hsl(209 65% 42%);
+  --copilot-kit-primary-color: hsl(174 100% 27%);
   --copilot-kit-contrast-color: hsl(0 0% 100%);
-  --copilot-kit-background-color: rgba(14, 14, 14, 0.94);
-  --copilot-kit-secondary-color: rgba(28, 28, 28, 0.9);
+  --copilot-kit-background-color: rgba(14, 15, 15, 0.94);
+  --copilot-kit-secondary-color: rgba(28, 30, 30, 0.9);
   --copilot-kit-secondary-contrast-color: hsl(0 0% 94%);
   --copilot-kit-separator-color: rgba(255, 255, 255, 0.08);
   --copilot-kit-muted-color: hsl(0 0% 60%);
@@ -238,7 +237,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 1.25rem !important;
   overflow: hidden;
-  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(127, 157, 177, 0.15);
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 152, 164, 0.15);
 }
 
 /* ============================================================
@@ -250,8 +249,8 @@
 :root.light body {
   background-color: hsl(0 0% 95%);
   background-image:
-    radial-gradient(circle at 12% 8%, rgba(127, 157, 177, 0.03) 0%, transparent 42%),
-    radial-gradient(circle at 88% 92%, rgba(127, 157, 177, 0.02) 0%, transparent 45%);
+    radial-gradient(circle at 12% 8%, rgba(0, 152, 164, 0.03) 0%, transparent 42%),
+    radial-gradient(circle at 88% 92%, rgba(0, 152, 164, 0.02) 0%, transparent 45%);
 }
 
 :root.light .glass {
@@ -271,7 +270,7 @@
 :root.light .glow-brand,
 :root.light .glow-red,
 :root.light .glow-copper {
-  box-shadow: 0 0 0 1px rgba(127, 157, 177, 0.2), 0 12px 40px -12px rgba(127, 157, 177, 0.35);
+  box-shadow: 0 0 0 1px rgba(0, 152, 164, 0.2), 0 12px 40px -12px rgba(0, 152, 164, 0.35);
 }
 
 /* Faint white surface overlays -> faint dark surface overlays */
@@ -327,5 +326,5 @@
 :root.light .copilotKitWindow {
   background: rgba(255, 255, 255, 0.97);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(127, 157, 177, 0.1);
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 152, 164, 0.1);
 }
