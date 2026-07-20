@@ -457,8 +457,22 @@ export default function Landing() {
       </section>
 
       {/* Nationwide Coverage & Speed */}
-      <section className="py-32 bg-black relative">
-        <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-14">
+      <section className="py-32 bg-black relative overflow-hidden">
+        {/* Subtle blueprint grid backdrop */}
+        <div
+          aria-hidden
+          className="absolute inset-0 pointer-events-none opacity-[0.35]"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
+            backgroundSize: "56px 56px",
+            maskImage:
+              "radial-gradient(ellipse 80% 70% at 50% 40%, black, transparent)",
+            WebkitMaskImage:
+              "radial-gradient(ellipse 80% 70% at 50% 40%, black, transparent)",
+          }}
+        />
+        <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-14 relative">
           <div className="text-center max-w-3xl mx-auto mb-20">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -484,17 +498,28 @@ export default function Landing() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-50px" }}
                 transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="relative p-8 rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/10 hover:bg-white/[0.07] hover:border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300 group overflow-hidden"
+                className="relative p-8 rounded-2xl bg-white/[0.03] backdrop-blur-xl border border-white/10 hover:border-primary/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-500 group overflow-hidden"
               >
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-xl font-medium text-white group-hover:text-[#B4D6E3] transition-colors">{region.name}</h4>
-                  <MapPin className="w-5 h-5 text-primary opacity-50 group-hover:opacity-100 transition-opacity" />
+                {/* Warm inner glow, AURA red */}
+                <div
+                  aria-hidden
+                  className="absolute inset-0 pointer-events-none opacity-60 group-hover:opacity-100 transition-opacity duration-500"
+                  style={{
+                    background:
+                      "radial-gradient(120% 90% at 15% 110%, rgba(229,9,20,0.28), rgba(229,9,20,0.08) 45%, transparent 70%)",
+                  }}
+                />
+                <div className="relative">
+                  <div className="flex items-center justify-between mb-5">
+                    <h4 className="text-xl font-medium text-white transition-colors">{region.name}</h4>
+                    <MapPin className="w-5 h-5 text-primary opacity-60 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                  <span className="inline-flex items-center gap-2 mb-4 rounded-full border border-white/15 bg-black/40 px-4 py-1.5 text-sm font-medium text-white/90 shadow-[0_0_20px_rgba(229,9,20,0.15)]">
+                    <Clock className="w-3.5 h-3.5 text-primary" />
+                    {region.time}
+                  </span>
+                  <p className="text-zinc-400 text-sm leading-relaxed">{region.desc}</p>
                 </div>
-                <div className="flex items-center gap-2 text-[#7F9DB1] font-medium mb-4">
-                  <Clock className="w-4 h-4" />
-                  <span>{region.time}</span>
-                </div>
-                <p className="text-zinc-400 text-sm leading-relaxed">{region.desc}</p>
               </motion.div>
             ))}
           </div>
