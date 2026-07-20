@@ -1,0 +1,26 @@
+# Intake Channels, Emails & Messaging
+
+## Lifecycle emails
+- Auto-enqueue via `artifacts/api-server/src/lib/email-triggers.ts` (fire-and-forget, never fails the request):
+  - lead create → `vehicle_quote` (branded PDF quotation attached; fires when the lead has a recipient AND `interestedVehicleId` matches inventory; qty 1, quote ref `Q-<leadId>-<yyyymmdd>`, valid 14 days) or `lead_received` fallback
+  - lead patch advisor change → `lead_assignment`; phase→engage → `test_drive_confirmation`
+  - deal stage → finance/committed/delivered → `finance_processing` / `finance_approved`+`vehicle_booking` / `delivery_confirmation`
+  - service order → completed → `vehicle_ready`
+- Recipient = lead email or customer email via `customerId`; no email → silently skipped.
+- Quote PDFs: `lib/quote-pdf.ts` (`buildQuotePdf(payload)` → Buffer, pdfkit, AURA dark header + red accent; all inputs are strings from the email-queue payload). Generated at SEND time inside `processQueue` (payload jsonb survives retries) and attached only for `template === "vehicle_quote"`. `/enquiries` routes through `onLeadCreated` too, so public enquiries matched to inventory also get quotes.
+
+## Gmail email-to-lead intake agent
+- `lib/gmail-intake.ts` (worker started in `index.ts`) polls the Gmail inbox every 2 min over plain IMAP (imapflow + mailparser, `GMAIL_USER`/`GMAIL_APP_PASSWORD` — deliberately NOT the Replit Gmail connector, for portability).
+- Anthropic classifies each unseen email (enquiry vs newsletter/spam/receipt) and extracts name/phone/vehicle/summary; enquiries go through `createInboundLead` (channel "email", source "gmail", actor "AURA Email Agent").
+- Idempotent via `webhook_events` channel `gmail_email` keyed by Message-ID (plus a `gmail_intake`/`enabled_at` watermark row — no pre-launch backfill). Self-sent mail (From = GMAIL_USER incl. +alias rewrites) skipped. Repeat senders with an open lead get an `email_message` timeline note + owner notification instead of a duplicate. Processed mail marked \Seen and copied to Gmail label "AURA/Processed". Missing creds → single warn, agent idles; per-message failures leave mail unseen so the next poll retries.
+
+## WhatsApp guided lead-capture bot (dual channel)
+- One deterministic state machine (`lib/whatsapp-flow.ts`, sessions in `whatsapp_conversations` keyed by phone digits, 24h expiry) drives Meta Cloud API AND Twilio via a `WhatsappTransport` abstraction (`lib/whatsapp.ts`): greet → name → mobile → email (skippable, regex-validated) → vehicle (up to 9 deduped available models + "Other" free-text via `matchVehicleByText`) → `createInboundLead` (source whatsapp, auto-assign, timeline, emails) + confirmation.
+- `whatsappProvider()`: explicit `WHATSAPP_PROVIDER` env (`meta`|`twilio`) wins, else auto-detect (meta if Meta creds set, else twilio); the NON-selected channel falls back to legacy one-shot intake (`handleWhatsappOneShot`).
+- Meta transport is interactive (reply buttons + list messages, Graph API v21.0; `WHATSAPP_GRAPH_BASE_URL` override for tests). Twilio runs text-only via a TwiML-capturing transport — numbered menus whose option ids persist in `whatsapp_conversations.menu` so a bare numeric reply maps via `resolveMenuReply`; engine sends exactly one outbound per inbound (single TwiML `<Message>`).
+- Webhooks: `GET/POST /api/webhooks/whatsapp` (Meta: hub.challenge + X-Hub-Signature-256 over RAW body — app.ts routes through `express.raw`; dedupe channel `meta_whatsapp`) and `POST /api/webhooks/twilio/whatsapp` (HMAC-SHA1 signature, MessageSid dedupe channel `twilio_whatsapp`). Open-lead phones with no active session get a timeline note + owner notification instead of a flow restart.
+- Secrets: Meta `WHATSAPP_ACCESS_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` (+ shared `META_APP_SECRET`/`META_VERIFY_TOKEN`); Twilio `TWILIO_AUTH_TOKEN`; unconfigured → 503.
+- Transcripts: every inbound and outbound message recorded in `whatsapp_messages` (transport wrapper in `lib/whatsapp-log.ts`; pre-lead rows keyed by phone digits, backfill-linked to the lead AFTER the final ack send).
+
+## Meta Lead Ads webhook
+- `GET/POST /api/webhooks/meta` (`routes/webhooks.ts`, public, mounted before auth): hub.challenge handshake + X-Hub-Signature-256 HMAC over the RAW body (`express.raw`); leadgen ids fetched from the Graph API with `META_PAGE_ACCESS_TOKEN`; idempotent via `webhook_events`; platform `ig`→instagram else facebook. Creates leads through `lib/lead-intake.ts` (shared with enquiries: timeline event, coordinator/manager notifications, lead_received/vehicle_quote email). Unconfigured → explicit 503.
