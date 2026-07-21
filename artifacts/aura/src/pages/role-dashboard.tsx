@@ -15,6 +15,7 @@ import {
   useListVehicles,
 } from "@workspace/api-client-react";
 import { useAuthz } from "@/lib/auth";
+import { useMoney } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Loader2,
@@ -227,8 +228,6 @@ function Empty({ text }: { text: string }) {
   );
 }
 
-const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
-
 const SERIES_COLORS = [
   "hsl(var(--primary))",
   "hsl(0 0% 62%)",
@@ -261,6 +260,8 @@ const weekLabel = (key: string) => {
 
 function SalesManagerDashboard() {
   const { me } = useAuthz();
+  const rawMoney = useMoney();
+  const money = (n: number) => rawMoney.gyd(n);
   const { data: pipeline } = useGetPipeline();
   const { data: deals } = useListDeals();
   const { data: leads } = useListLeads();
@@ -396,6 +397,8 @@ function SalesManagerDashboard() {
 
 function FinanceManagerDashboard() {
   const { me } = useAuthz();
+  const rawMoney = useMoney();
+  const money = (n: number) => rawMoney.gyd(n);
   const { data: gates } = useListGates({ status: "pending" });
   const { data: apps } = useListFinanceApplications();
 
@@ -717,6 +720,8 @@ function TechnicianDashboard() {
 
 function SalesAdvisorDashboard() {
   const { me } = useAuthz();
+  const rawMoney = useMoney();
+  const money = (n: number) => rawMoney.gyd(n);
   const { data: leads } = useListLeads();
   const { data: deals } = useListDeals();
 
@@ -848,6 +853,8 @@ function DeliveryAdvisorDashboard() {
 
 function PartsAdvisorDashboard() {
   const { me } = useAuthz();
+  const rawMoney = useMoney();
+  const money = (n: number) => rawMoney.gyd(n);
   const { data: parts } = useListParts();
 
   const all = parts ?? [];

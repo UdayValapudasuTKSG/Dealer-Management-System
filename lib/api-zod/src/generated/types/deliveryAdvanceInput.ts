@@ -11,6 +11,10 @@ export interface DeliveryAdvanceInput {
   step: DeliveryAdvanceInputStep;
   note?: string;
   appointmentAt?: Date;
+  /**
+     * Guyana plate — 3 uppercase letters followed by 1-4 digits (e.g. PAB 1234)
+     * @pattern ^[A-Z]{3}[0-9]{1,4}$
+     */
   registrationNumber?: string;
   insurancePolicy?: string;
   insuranceProvider?: string;

@@ -58,7 +58,7 @@ import { autoAssignLead } from "../lib/lead-assignment";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
 import { activeDealerId } from "../middlewares/rbac";
-import { defaultDivisionId } from "../lib/divisions";
+import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
 import {
   ownerCalendarContact,
   testDriveCalendarFields,
@@ -116,6 +116,8 @@ router.get("/leads", async (req, res): Promise<void> => {
   }
 
   const filters: SQL[] = [eq(leadsTable.dealerId, activeDealerId(res))];
+  if (query.data.divisionId)
+    filters.push(eq(leadsTable.divisionId, query.data.divisionId));
   if (query.data.phase) filters.push(eq(leadsTable.phase, query.data.phase));
   if (query.data.status) filters.push(eq(leadsTable.status, query.data.status));
 
@@ -179,13 +181,19 @@ router.post("/leads", async (req, res): Promise<void> => {
   }
 
   const dealerId = activeDealerId(res);
+  let divisionId = parsed.data.divisionId ?? null;
+  if (
+    divisionId != null &&
+    !(await divisionBelongsToDealer(divisionId, dealerId))
+  ) {
+    res.status(404).json({ error: "Division not found" });
+    return;
+  }
+  if (divisionId == null) divisionId = await defaultDivisionId(dealerId);
+
   const [lead] = await db
     .insert(leadsTable)
-    .values({
-      ...parsed.data,
-      dealerId,
-      divisionId: await defaultDivisionId(dealerId),
-    })
+    .values({ ...parsed.data, divisionId, dealerId })
     .returning();
 
   if (lead) onLeadCreated(lead);

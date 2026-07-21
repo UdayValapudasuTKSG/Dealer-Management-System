@@ -44,6 +44,8 @@ tags:
     description: Anthropic AI chat operations
   - name: auth
     description: Current user, session and effective permissions
+  - name: divisions
+    description: Dealership business divisions (CAM Motors / GT Automotive)
   - name: admin
     description: User, role and permission administration
   - name: audit
@@ -286,6 +288,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /divisions:
+    get:
+      operationId: listDivisions
+      tags: [divisions]
+      summary: List the active dealership's business divisions
+      responses:
+        "200":
+          description: List of divisions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Division"
+
   /vehicles:
     get:
       operationId: listVehicles
@@ -296,6 +313,10 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: divisionId
+          in: query
+          required: false
+          schema: { type: integer }
         - name: powertrain
           in: query
           required: false
@@ -781,6 +802,10 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: divisionId
+          in: query
+          required: false
+          schema: { type: integer }
       responses:
         "200":
           description: List of leads
@@ -2531,19 +2556,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /divisions:
-    get:
-      operationId: listDivisions
-      tags: [admin]
-      responses:
-        "200":
-          description: Divisions of the active dealer
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Division"
   /agents:
     get:
       operationId: listAgents
@@ -4131,15 +4143,7 @@ components:
         dealerName: { type: string }
         roleName: { type: ["string", "null"] }
         isGeneralManager: { type: boolean }
-        usdExchangeRate: { type: number, description: "GYD per 1 USD for this dealer" }
-    Division:
-      type: object
-      required: [id, dealerId, code, name]
-      properties:
-        id: { type: integer }
-        dealerId: { type: integer }
-        code: { type: string }
-        name: { type: string }
+        usdExchangeRate: { type: number, description: "GYD per 1 USD for this dealership" }
     Dealer:
       type: object
       required: [id, name, status, createdAt]
@@ -4149,6 +4153,7 @@ components:
         city: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
         status: { type: string, enum: [active, inactive] }
+        usdExchangeRate: { type: number, description: "GYD per 1 USD" }
         userCount: { type: integer }
         createdAt: { type: string, format: date-time }
     DealerInput:
@@ -4159,6 +4164,15 @@ components:
         city: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
         status: { type: string, enum: [active, inactive] }
+        usdExchangeRate: { type: number, exclusiveMinimum: 0, description: "GYD per 1 USD" }
+    Division:
+      type: object
+      required: [id, dealerId, name, code]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        name: { type: string }
+        code: { type: string, enum: [CAM, GT] }
     DealerMember:
       type: object
       required: [id, userId, dealerId, roleId, isGeneralManager]
@@ -4460,15 +4474,16 @@ components:
       type: object
       required: [make, model, year, price, powertrain, mileageKm, exteriorColor, bodyType]
       properties:
+        divisionId: { type: integer }
         make: { type: string, minLength: 1 }
         model: { type: string, minLength: 1 }
         trim: { type: string }
         year: { type: integer }
-        vin: { type: string, minLength: 17, maxLength: 17, description: "VIN must be exactly 17 characters" }
+        vin: { type: string, minLength: 17, maxLength: 17, description: "VIN / chassis number — exactly 17 characters" }
         engineNumber: { type: string, minLength: 17, maxLength: 17, description: "Engine number must be exactly 17 characters" }
         registration: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$", description: "3 uppercase letters followed by 1-4 digits" }
         variant: { type: string }
-        engine: { type: string }
+        engine: { type: string, minLength: 17, maxLength: 17, description: "Engine number — exactly 17 characters" }
         transmission: { type: string }
         price: { type: number }
         powertrain: { type: string, enum: [EV, Hybrid, Petrol, Diesel] }
@@ -4493,15 +4508,16 @@ components:
     VehicleUpdate:
       type: object
       properties:
+        divisionId: { type: integer }
         make: { type: string, minLength: 1 }
         model: { type: string, minLength: 1 }
         trim: { type: string }
         year: { type: integer }
-        vin: { type: string, minLength: 17, maxLength: 17 }
+        vin: { type: string, minLength: 17, maxLength: 17, description: "VIN / chassis number — exactly 17 characters" }
         engineNumber: { type: string, minLength: 17, maxLength: 17 }
         registration: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$" }
         variant: { type: string }
-        engine: { type: string }
+        engine: { type: string, minLength: 17, maxLength: 17, description: "Engine number — exactly 17 characters" }
         transmission: { type: string }
         price: { type: number }
         powertrain: { type: string, enum: [EV, Hybrid, Petrol, Diesel] }
@@ -4645,7 +4661,7 @@ components:
         step: { type: string, enum: [sales_order, vehicle_prep, accessory_installation, pdi_checklist, registration, insurance, invoice, delivery_appointment, vehicle_delivery, customer_signature, feedback] }
         note: { type: string }
         appointmentAt: { type: string, format: date-time }
-        registrationNumber: { type: string }
+        registrationNumber: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$", description: "Guyana plate — 3 uppercase letters followed by 1-4 digits (e.g. PAB 1234)" }
         insurancePolicy: { type: string }
         insuranceProvider: { type: string }
         signatureName: { type: string }
@@ -4727,6 +4743,7 @@ components:
       type: object
       required: [name, channel]
       properties:
+        divisionId: { type: integer }
         name: { type: string, minLength: 1 }
         email: { type: string }
         phone: { type: string }
@@ -4750,6 +4767,7 @@ components:
     LeadUpdate:
       type: object
       properties:
+        divisionId: { type: ["integer", "null"] }
         name: { type: string, minLength: 1 }
         email: { type: string }
         phone: { type: string }
@@ -5124,6 +5142,7 @@ components:
       type: object
       required: [vehicleId, vehiclePrice]
       properties:
+        divisionId: { type: integer }
         customerId: { type: integer }
         leadId: { type: integer }
         vehicleId: { type: integer }

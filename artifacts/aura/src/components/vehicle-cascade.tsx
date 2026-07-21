@@ -7,6 +7,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import { useMoney } from "@/lib/format";
 
 export type CascadeVehicle = {
   id: number;
@@ -36,6 +37,7 @@ export function VehicleCascade({
   onResolve: (vehicle: CascadeVehicle | null) => void;
   showSummary?: boolean;
 }) {
+  const money = useMoney();
   const [sel, setSel] = useState<Record<Step, string>>({
     brand: "",
     model: "",
@@ -161,8 +163,8 @@ export function VehicleCascade({
             <SelectContent>
               {candidates.map((v) => (
                 <SelectItem key={v.id} value={String(v.id)}>
-                  {v.year} · {v.vin ? `VIN ${v.vin}` : `Unit #${v.id}`} · $
-                  {v.price.toLocaleString()}
+                  {v.year} · {v.vin ? `VIN ${v.vin}` : `Unit #${v.id}`} ·{" "}
+                  {money.gyd(v.price)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -188,7 +190,7 @@ export function VehicleCascade({
               Price
             </div>
             <div className="font-medium">
-              ${resolved.price.toLocaleString()}
+              {money.gyd(resolved.price)}
             </div>
           </div>
         </div>

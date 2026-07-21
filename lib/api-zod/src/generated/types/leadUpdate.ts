@@ -15,6 +15,8 @@ import type { LeadUpdateSource } from './leadUpdateSource';
 import type { LeadUpdateStatus } from './leadUpdateStatus';
 
 export interface LeadUpdate {
+  /** @nullable */
+  divisionId?: number | null;
   /** @minLength 1 */
   name?: string;
   email?: string;

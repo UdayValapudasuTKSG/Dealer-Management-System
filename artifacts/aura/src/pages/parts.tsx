@@ -32,6 +32,7 @@ import { PageHero } from "@/components/layout/page-hero";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useMoney } from "@/lib/format";
 
 const TABS = [
   { key: "parts", label: "Parts", icon: Package },
@@ -162,6 +163,7 @@ function CreatePartDialog() {
 }
 
 function PartsTab() {
+  const money = useMoney();
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
   const { data: parts, isLoading } = useListParts({
@@ -244,10 +246,10 @@ function PartsTab() {
                       {p.stock} <span className="text-muted-foreground font-normal">/ {p.reorderLevel}</span>
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums hidden md:table-cell">
-                      ${p.unitCost.toLocaleString()}
+                      {money.gyd(p.unitCost)}
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">
-                      ${p.unitPrice.toLocaleString()}
+                      {money.gyd(p.unitPrice)}
                     </td>
                   </tr>
                 );
@@ -296,8 +298,8 @@ function PartsTab() {
                       </div>
                     </div>
                     <div className="text-right text-sm">
-                      <div className="text-muted-foreground">Cost ${p.unitCost.toLocaleString()}</div>
-                      <div className="font-medium">Price ${p.unitPrice.toLocaleString()}</div>
+                      <div className="text-muted-foreground">Cost {money.gyd(p.unitCost)}</div>
+                      <div className="font-medium">Price {money.gyd(p.unitPrice)}</div>
                     </div>
                   </div>
                 </CardContent>
@@ -436,6 +438,7 @@ function CreatePurchaseDialog() {
 }
 
 function PurchasesTab() {
+  const money = useMoney();
   const { data: purchases, isLoading } = useListPartPurchases();
   const { data: parts } = useListParts();
   const { data: suppliers } = useListSuppliers();
@@ -469,7 +472,7 @@ function PurchasesTab() {
             <div className="text-right">
               <div className="font-light text-xl">+{p.quantity}</div>
               <div className="text-sm text-muted-foreground">
-                @ ${p.unitCost.toLocaleString()}
+                @ {money.gyd(p.unitCost)}
               </div>
             </div>
           </CardContent>

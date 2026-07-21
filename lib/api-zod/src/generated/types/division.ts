@@ -5,10 +5,11 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DivisionCode } from './divisionCode';
 
 export interface Division {
   id: number;
   dealerId: number;
-  code: string;
   name: string;
+  code: DivisionCode;
 }

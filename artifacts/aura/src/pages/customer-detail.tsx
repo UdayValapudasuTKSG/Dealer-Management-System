@@ -13,6 +13,7 @@ import { DocumentsTab } from "@/components/customer/documents-tab";
 import { NotesPanel } from "@/components/customer/notes-panel";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useMoney } from "@/lib/format";
 import {
   Loader2,
   ArrowLeft,
@@ -29,6 +30,8 @@ const withBase = (path: string) =>
 export default function CustomerDetail() {
   const [, params] = useRoute("/customers/:id");
   const id = params ? Number(params.id) : NaN;
+  const rawMoney = useMoney();
+  const money = (n: number) => rawMoney.gyd(n);
   const { data, isLoading, isError } = useGetCustomerOverview(id);
 
   if (isLoading) {
@@ -70,8 +73,6 @@ export default function CustomerDetail() {
     notes,
     documents,
   } = data;
-
-  const money = (n: number) => `$${n.toLocaleString("en-US")}`;
 
   const JOURNEY_PHASES = ["aware", "consider", "engage", "negotiate", "won"] as const;
   const JOURNEY_LABEL: Record<string, string> = {

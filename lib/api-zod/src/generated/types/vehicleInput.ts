@@ -10,6 +10,7 @@ import type { VehicleInputPowertrain } from './vehicleInputPowertrain';
 import type { VehicleInputStatus } from './vehicleInputStatus';
 
 export interface VehicleInput {
+  divisionId?: number;
   /** @minLength 1 */
   make: string;
   /** @minLength 1 */
@@ -17,7 +18,7 @@ export interface VehicleInput {
   trim?: string;
   year: number;
   /**
-     * VIN must be exactly 17 characters
+     * VIN / chassis number — exactly 17 characters
      * @minLength 17
      * @maxLength 17
      */
@@ -34,6 +35,11 @@ export interface VehicleInput {
      */
   registration?: string;
   variant?: string;
+  /**
+     * Engine number — exactly 17 characters
+     * @minLength 17
+     * @maxLength 17
+     */
   engine?: string;
   transmission?: string;
   price: number;

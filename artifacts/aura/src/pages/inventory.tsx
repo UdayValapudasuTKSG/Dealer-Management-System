@@ -6,10 +6,11 @@ import {
   useCreateBooking,
   useCreateVehicle,
   useUpdateVehicle,
+  useListDivisions,
   getListVehiclesQueryKey,
   getListBookingsQueryKey,
 } from "@workspace/api-client-react";
-import type { Vehicle } from "@workspace/api-client-react";
+import type { Vehicle, Division } from "@workspace/api-client-react";
 import { CreateRecordDialog, type FieldDef } from "@/components/create-record-dialog";
 import { ImportVehiclesDialog } from "@/components/inventory/import-vehicles-dialog";
 import { Button } from "@/components/ui/button";
@@ -112,7 +113,23 @@ const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   sold: [],
 };
 
-function vehicleFields(existing?: Vehicle): FieldDef[] {
+/** Client-side mirror of the server's VIN/Engine# 17-character rule. */
+function vehicleIdentifierError(values: Record<string, unknown>): string | null {
+  const vin = values.vin as string | undefined;
+  const engine = values.engine as string | undefined;
+  if (vin && vin.length !== 17) return "VIN must be exactly 17 characters";
+  if (engine && engine.length !== 17)
+    return "Engine number must be exactly 17 characters";
+  const engineNumber = values.engineNumber as string | undefined;
+  if (engineNumber && engineNumber.length !== 17)
+    return "Engine number must be exactly 17 characters";
+  const registration = values.registration as string | undefined;
+  if (registration && !/^[A-Z]{3}[0-9]{1,4}$/.test(registration))
+    return "Registration must be 3 uppercase letters followed by 1–4 digits (e.g. PAB1234)";
+  return null;
+}
+
+function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
   const bodyOptions = Array.from(
     new Set([...BODY_TYPES, ...(existing?.bodyType ? [existing.bodyType] : [])]),
   ).map((b) => ({ value: b, label: b }));
@@ -130,7 +147,25 @@ function vehicleFields(existing?: Vehicle): FieldDef[] {
     { name: "model", label: "Model", type: "text", required: true, span: "half", placeholder: "i7", defaultValue: existing?.model },
     { name: "trim", label: "Trim", type: "text", span: "half", placeholder: "xDrive60 M Sport", defaultValue: existing?.trim ?? undefined },
     { name: "year", label: "Year", type: "number", required: true, span: "half", placeholder: "2026", defaultValue: existing ? String(existing.year) : undefined },
-    { name: "vin", label: "VIN (17 characters)", type: "text", span: "half", placeholder: "WBY73AW0XPCK00000A", defaultValue: existing?.vin ?? undefined },
+    { name: "vin", label: "VIN (17 characters)", type: "text", span: "half", placeholder: "WBY73AW0XPCK00000", defaultValue: existing?.vin ?? undefined },
+    ...(divisions && divisions.length > 0
+      ? [
+          {
+            name: "divisionId",
+            label: "Division",
+            type: "select",
+            span: "half",
+            defaultValue:
+              existing?.divisionId != null
+                ? String(existing.divisionId)
+                : undefined,
+            options: divisions.map((d) => ({
+              value: String(d.id),
+              label: d.name,
+            })),
+          } as FieldDef,
+        ]
+      : []),
     { name: "engineNumber", label: "Engine Number (17 characters)", type: "text", span: "half", placeholder: "ENG1234567890ABCD", defaultValue: existing?.engineNumber ?? undefined },
     { name: "registration", label: "Registration (e.g. PAB1234)", type: "text", span: "half", placeholder: "PAB1234", defaultValue: existing?.registration ?? undefined },
     { name: "price", label: "Price ($)", type: "number", required: true, span: "half", placeholder: "125000", defaultValue: existing ? String(existing.price) : undefined },
@@ -160,7 +195,7 @@ function vehicleFields(existing?: Vehicle): FieldDef[] {
       defaultValue: existing?.bodyType,
       options: bodyOptions,
     },
-    { name: "engine", label: "Engine", type: "text", span: "half", placeholder: "4.4L V8 TwinPower", defaultValue: existing?.engine ?? undefined },
+    { name: "engine", label: "Engine # (17 characters)", type: "text", span: "half", placeholder: "ENG0000000PCK0001", defaultValue: existing?.engine ?? undefined },
     { name: "transmission", label: "Transmission", type: "text", span: "half", placeholder: "8-speed automatic", defaultValue: existing?.transmission ?? undefined },
     {
       name: "status",
@@ -176,12 +211,15 @@ function vehicleFields(existing?: Vehicle): FieldDef[] {
 
 export default function Inventory() {
   const { data: vehicles, isLoading } = useListVehicles();
+  const { data: divisions } = useListDivisions();
   const { can } = useAuthz();
   const { gyd } = useMoney();
   const qc = useQueryClient();
   const { toast } = useToast();
   const createVehicle = useCreateVehicle();
+  const money = useMoney();
   const [body, setBody] = useState<string>("all");
+  const [division, setDivision] = useState<string>("all");
   const [powertrain, setPowertrain] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Vehicle | null>(null);
@@ -202,13 +240,14 @@ export default function Inventory() {
     return (vehicles ?? []).filter(
       (v) =>
         (body === "all" || v.bodyType === body) &&
+        (division === "all" || String(v.divisionId ?? "") === division) &&
         (powertrain === "all" || v.powertrain === powertrain) &&
         (q === "" ||
           `${v.year} ${v.make} ${v.model} ${v.trim ?? ""}`
             .toLowerCase()
             .includes(q)),
     );
-  }, [vehicles, body, powertrain, query]);
+  }, [vehicles, body, division, powertrain, query]);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -318,6 +357,26 @@ export default function Inventory() {
                 subtle
               />
             ))}
+            {(divisions?.length ?? 0) > 0 && (
+              <span className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
+            )}
+            {(divisions ?? []).length > 0 &&
+              ["all", ...(divisions ?? []).map((d) => String(d.id))].map(
+                (dv) => (
+                  <FilterChip
+                    key={`div-${dv}`}
+                    active={division === dv}
+                    onClick={() => setDivision(dv)}
+                    label={
+                      dv === "all"
+                        ? "All divisions"
+                        : (divisions?.find((d) => String(d.id) === dv)?.name ??
+                          dv)
+                    }
+                    subtle
+                  />
+                ),
+              )}
           </div>
           <div className="flex flex-wrap items-center gap-4">
             <p className="text-sm text-muted-foreground tabular-nums">
@@ -353,8 +412,19 @@ export default function Inventory() {
                   Add Vehicle
                 </Button>
               }
-              fields={vehicleFields()}
+              fields={vehicleFields(undefined, divisions)}
               onSubmit={async (values) => {
+                const idError = vehicleIdentifierError(values);
+                if (idError) {
+                  toast({
+                    title: "Check vehicle identifiers",
+                    description: idError,
+                    variant: "destructive",
+                  });
+                  throw new Error(idError);
+                }
+                if (values.divisionId != null)
+                  values.divisionId = Number(values.divisionId);
                 try {
                   const created = await createVehicle.mutateAsync({
                     data: values as never,
@@ -438,7 +508,7 @@ export default function Inventory() {
                       </span>
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums font-semibold">
-                      {gyd(vehicle.price)}
+                      {money.gyd(vehicle.price)}
                     </td>
                   </tr>
                 ))}
@@ -512,7 +582,7 @@ function VehicleCard({
   delay: number;
   onSelect: () => void;
 }) {
-  const { gyd, usd } = useMoney();
+  const money = useMoney();
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -591,10 +661,7 @@ function VehicleCard({
                 Price
               </p>
               <p className="text-2xl font-light tracking-tight">
-                {gyd(vehicle.price)}
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {usd(vehicle.price)}
+                {money.gyd(vehicle.price)}
               </p>
             </div>
             <div className="w-11 h-11 rounded-full bg-white/[0.06] group-hover:bg-primary group-hover:text-white flex items-center justify-center transition-all duration-300">
@@ -618,6 +685,8 @@ function VehicleDetail({
   canEdit: boolean;
   onUpdated: (v: Vehicle) => void;
 }) {
+  const money = useMoney();
+  const { data: divisions } = useListDivisions();
   const [mode, setMode] = useState<"photo" | "spin">("photo");
   const [reserving, setReserving] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
@@ -837,6 +906,14 @@ function VehicleDetail({
 
               <div className="text-[11px] font-bold uppercase tracking-widest text-primary mb-2">
                 {vehicle.bodyType} · {vehicle.year}
+                {vehicle.divisionId != null && divisions && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    ·{" "}
+                    {divisions.find((d) => d.id === vehicle.divisionId)?.name ??
+                      ""}
+                  </span>
+                )}
               </div>
               <DialogTitle className="text-4xl font-semibold tracking-tight leading-none">
                 {vehicle.make}{" "}
@@ -848,7 +925,7 @@ function VehicleDetail({
 
               <div className="flex items-baseline gap-2 mt-6">
                 <span className="text-3xl font-light tracking-tight">
-                  {gyd(vehicle.price)}
+                  {money.dual(vehicle.price)}
                 </span>
                 <span className="text-xs uppercase tracking-widest text-muted-foreground">
                   {usd(vehicle.price)} OTD est.
@@ -959,8 +1036,19 @@ function VehicleDetail({
                         <Pencil className="w-4 h-4" /> Edit
                       </button>
                     }
-                    fields={vehicleFields(vehicle)}
+                    fields={vehicleFields(vehicle, divisions)}
                     onSubmit={async (values) => {
+                      const idError = vehicleIdentifierError(values);
+                      if (idError) {
+                        toast({
+                          title: "Check vehicle identifiers",
+                          description: idError,
+                          variant: "destructive",
+                        });
+                        throw new Error(idError);
+                      }
+                      if (values.divisionId != null)
+                        values.divisionId = Number(values.divisionId);
                       try {
                         const updated = await updateVehicle.mutateAsync({
                           id: vehicle.id,

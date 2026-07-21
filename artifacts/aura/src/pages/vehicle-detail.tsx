@@ -25,6 +25,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Page } from "@/components/layout/page";
 import { cn } from "@/lib/utils";
+import { useMoney } from "@/lib/format";
 
 function img(url: string | null | undefined) {
   if (!url) return undefined;
@@ -67,6 +68,7 @@ export default function VehicleDetailPage() {
   const id = params ? Number(params.id) : NaN;
   const [, navigate] = useLocation();
   const [mode, setMode] = useState<"photo" | "spin">("photo");
+  const money = useMoney();
 
   const { data: vehicle, isLoading, isError } = useGetVehicle(id);
 
@@ -197,7 +199,7 @@ export default function VehicleDetailPage() {
 
           <div className="flex items-baseline gap-2 mt-6">
             <span className="text-3xl font-light tracking-tight">
-              ${vehicle.price.toLocaleString()}
+              {money.dual(vehicle.price)}
             </span>
             <span className="text-xs uppercase tracking-widest text-muted-foreground">
               OTD est.
@@ -344,7 +346,7 @@ export default function VehicleDetailPage() {
              <div className="text-xs text-muted-foreground">{vehicle.trim}</div>
            </div>
            <div className="flex items-center gap-6">
-             <div className="text-xl font-light tabular-nums hidden sm:block">${vehicle.price.toLocaleString()}</div>
+             <div className="text-xl font-light tabular-nums hidden sm:block">{money.gyd(vehicle.price)}</div>
              <button onClick={() => navigate(`/deals?vehicle=${vehicle.id}`)} className="h-10 px-8 rounded-full bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
                Structure Deal
              </button>

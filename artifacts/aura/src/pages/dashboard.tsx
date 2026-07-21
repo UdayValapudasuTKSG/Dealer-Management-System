@@ -77,6 +77,7 @@ import {
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuthz } from "@/lib/auth";
+import { useMoney } from "@/lib/format";
 import type { TriageItem } from "@/lib/triage";
 
 /* Mild, muted palette — soft blues/greys so series stay distinguishable
@@ -306,6 +307,7 @@ const BROAD_VIEW_ROLES = new Set([
 
 export default function Dashboard() {
   const { me, can } = useAuthz();
+  const money = useMoney();
   const isBroadView =
     !!me && (me.isSuperAdmin || BROAD_VIEW_ROLES.has(me.roleName ?? ""));
   const myName = me?.name ?? null;
@@ -517,7 +519,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 pt-4">
             <KPICard
               title="Monthly Revenue"
-              value={summary ? `$${(summary.monthlyRevenue / 1000).toFixed(1)}k` : "$0"}
+              value={summary ? money.gyd(summary.monthlyRevenue) : money.gyd(0)}
               sub="Delivered this month"
               icon={TrendingUp}
               isLoading={isLoadingSummary}
@@ -736,7 +738,7 @@ export default function Dashboard() {
                           <div className="flex items-center justify-between text-sm mb-1.5">
                             <span className="font-medium truncate pr-3 text-foreground">{m.model}</span>
                             <span className="text-muted-foreground tabular-nums shrink-0 text-xs">
-                              ${Math.round(m.value / 1000)}k <span className="opacity-50 mx-1">/</span> {m.units}
+                              {money.gyd(m.value)} <span className="opacity-50 mx-1">/</span> {m.units}
                             </span>
                           </div>
                           <div className="h-1.5 rounded-full bg-foreground/[0.05] overflow-hidden">
@@ -821,6 +823,7 @@ function PredictiveSection({
   monthlyRevenue: number | null;
   revDelta: number | null;
 }) {
+  const money = useMoney();
   const { data, isLoading } = useGetPredictiveAnalytics();
 
   return (
@@ -840,9 +843,7 @@ function PredictiveSection({
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-light tabular-nums tracking-tight text-foreground">
-              {monthlyRevenue != null
-                ? `$${(monthlyRevenue / 1000).toFixed(1)}k`
-                : "—"}
+              {monthlyRevenue != null ? money.gyd(monthlyRevenue) : "—"}
             </span>
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
               this month
@@ -1268,6 +1269,7 @@ function KPICard({
 }
 
 function PipelineFunnel({ stages }: { stages: PipelineStage[] }) {
+  const money = useMoney();
   if (stages.length === 0) {
     return (
       <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
@@ -1286,7 +1288,7 @@ function PipelineFunnel({ stages }: { stages: PipelineStage[] }) {
               {s.label}
             </span>
             <div className="text-right shrink-0">
-              <span className="font-medium text-sm text-foreground">${Math.round(s.value / 1000)}k</span>
+              <span className="font-medium text-sm text-foreground">{money.gyd(s.value)}</span>
               <span className="text-muted-foreground/50 text-[10px] font-bold ml-2 tabular-nums bg-foreground/5 px-1.5 py-0.5 rounded-full">
                 {s.count}
               </span>

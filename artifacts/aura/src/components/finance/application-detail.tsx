@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useMoney, formatGuyanaDateTime } from "@/lib/format";
 import {
   Send,
   RefreshCw,
@@ -76,11 +77,6 @@ export function statusBadgeClass(status: string): string {
     default:
       return "bg-foreground/10 text-muted-foreground";
   }
-}
-
-function money(n: number | null | undefined): string {
-  if (n == null) return "—";
-  return `$${n.toLocaleString()}`;
 }
 
 function StatusStepper({ status }: { status: string }) {
@@ -142,6 +138,9 @@ export function ApplicationDetailDialog({
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const rawMoney = useMoney();
+  const money = (n: number | null | undefined) =>
+    n == null ? "—" : rawMoney.gyd(n);
   const { data, isLoading } = useGetFinanceApplication(appId ?? 0, {
     query: {
       queryKey: getGetFinanceApplicationQueryKey(appId ?? 0),
@@ -391,7 +390,7 @@ export function ApplicationDetailDialog({
                       <div className="text-sm font-semibold">{FINANCE_STATUS_LABEL[ev.status] ?? ev.status}</div>
                       <div className="text-sm text-muted-foreground">{ev.note}</div>
                       <div className="text-[10px] text-muted-foreground/60 uppercase tracking-widest mt-0.5">
-                        {new Date(ev.at).toLocaleString()}
+                        {formatGuyanaDateTime(ev.at)}
                       </div>
                     </div>
                   </div>

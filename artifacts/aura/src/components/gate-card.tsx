@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useMoney } from "@/lib/format";
 import { motion } from "framer-motion";
 import {
   Loader2,
@@ -66,6 +67,7 @@ export function GateCard({
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const money = useMoney();
   const [adjusting, setAdjusting] = useState(false);
   const [adjustValue, setAdjustValue] = useState(
     gate.amount ? String(gate.amount) : "",
@@ -194,7 +196,7 @@ export function GateCard({
           {/* Adjust input */}
           {adjusting && (
             <div className="mt-4 flex items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground">$</span>
+              <span className="text-sm font-medium text-muted-foreground">GYD</span>
               <Input
                 type="number"
                 value={adjustValue}
@@ -227,7 +229,7 @@ export function GateCard({
                   ) : (
                     <Check className="w-4 h-4" />
                   )}
-                  Approve at ${Number(adjustValue || 0).toLocaleString()}
+                  Approve at {money.gyd(Number(adjustValue || 0))}
                 </Button>
                 <Button
                   variant="ghost"

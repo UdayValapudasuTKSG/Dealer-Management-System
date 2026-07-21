@@ -15,4 +15,9 @@ export interface DealerInput {
   /** @nullable */
   country?: string | null;
   status?: DealerInputStatus;
+  /**
+     * GYD per 1 USD
+     * @exclusiveMinimum 0
+     */
+  usdExchangeRate?: number;
 }

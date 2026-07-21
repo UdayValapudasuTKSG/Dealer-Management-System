@@ -8,6 +8,7 @@
 import type { DealInputStage } from './dealInputStage';
 
 export interface DealInput {
+  divisionId?: number;
   customerId?: number;
   leadId?: number;
   vehicleId: number;

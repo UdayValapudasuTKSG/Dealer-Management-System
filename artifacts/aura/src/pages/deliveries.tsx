@@ -34,6 +34,7 @@ import {
   ChevronRight,
   X,
 } from "lucide-react";
+import { useMoney, formatGuyanaDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -64,16 +65,7 @@ const STEP_ICONS: Record<string, React.ReactNode> = {
   feedback: <Star className="w-4 h-4" />,
 };
 
-const money = (n: number) => `$${n.toLocaleString()}`;
-
-const fmtDate = (s?: string | null) =>
-  s
-    ? new Date(s).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
-    : "—";
+const fmtDate = (s?: string | null) => (s ? formatGuyanaDate(s) : "—");
 
 export default function Deliveries() {
   const [tab, setTab] = useState<"deliveries" | "bookings">("deliveries");
@@ -302,6 +294,19 @@ function DeliveryDetail({
   );
 
   const handleAdvance = () => {
+    if (
+      delivery.currentStep === "registration" &&
+      form.registrationNumber &&
+      !/^[A-Z]{3}[0-9]{1,4}$/.test(form.registrationNumber)
+    ) {
+      toast({
+        title: "Invalid registration number",
+        description:
+          "Must be 3 uppercase letters followed by 1–4 digits (e.g. PAB1234)",
+        variant: "destructive",
+      });
+      return;
+    }
     const data: DeliveryAdvanceInput = {
       step: delivery.currentStep,
       ...(form.note ? { note: form.note } : {}),
@@ -369,7 +374,7 @@ function DeliveryDetail({
       case "registration":
         return (
           <Input
-            placeholder="Registration number (optional)"
+            placeholder="Registration number, e.g. PAB1234 (optional)"
             value={form.registrationNumber ?? ""}
             onChange={(e) =>
               setForm({ ...form, registrationNumber: e.target.value })
@@ -694,6 +699,8 @@ function StepRow({
 function BookingsTab({ bookings }: { bookings: Booking[] }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const rawMoney = useMoney();
+  const money = (n: number) => rawMoney.gyd(n);
   const updateBooking = useUpdateBooking();
   const remind = useSendBookingPaymentReminder();
 

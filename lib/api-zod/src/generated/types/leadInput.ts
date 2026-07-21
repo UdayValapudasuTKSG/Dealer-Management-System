@@ -12,6 +12,7 @@ import type { LeadInputSource } from './leadInputSource';
 import type { LeadInputStatus } from './leadInputStatus';
 
 export interface LeadInput {
+  divisionId?: number;
   /** @minLength 1 */
   name: string;
   email?: string;

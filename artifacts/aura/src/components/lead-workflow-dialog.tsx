@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { formatGuyanaDateTime } from "@/lib/format";
 
 const NEXT_ADVANCE: Record<
   string,
@@ -396,13 +397,7 @@ export function LeadWorkflowDialog({
                   <p className="text-sm text-muted-foreground">
                     Booked for{" "}
                     <span className="text-foreground font-medium">
-                      {new Date(l.testDriveAt).toLocaleString(undefined, {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
+                      {formatGuyanaDateTime(l.testDriveAt)}
                     </span>
                     {l.testDriveBranch ? ` — ${l.testDriveBranch}` : ""}
                   </p>
@@ -702,12 +697,7 @@ export function LeadWorkflowDialog({
                       )}
                       <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mt-1">
                         {e.actor} ·{" "}
-                        {new Date(e.createdAt).toLocaleString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
+                        {formatGuyanaDateTime(e.createdAt)}
                       </div>
                     </li>
                   ))}

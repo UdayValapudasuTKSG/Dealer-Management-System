@@ -50,7 +50,7 @@ export interface DealerMembershipInfo {
   /** @nullable */
   roleName?: string | null;
   isGeneralManager?: boolean;
-  /** GYD per 1 USD for this dealer */
+  /** GYD per 1 USD for this dealership */
   usdExchangeRate?: number;
 }
 
@@ -75,13 +75,6 @@ export interface CurrentUser {
   permissions: PermissionGrant[];
 }
 
-export interface Division {
-  id: number;
-  dealerId: number;
-  code: string;
-  name: string;
-}
-
 export type DealerStatus = typeof DealerStatus[keyof typeof DealerStatus];
 
 
@@ -98,6 +91,8 @@ export interface Dealer {
   /** @nullable */
   country?: string | null;
   status: DealerStatus;
+  /** GYD per 1 USD */
+  usdExchangeRate?: number;
   userCount?: number;
   createdAt: string;
 }
@@ -118,6 +113,26 @@ export interface DealerInput {
   /** @nullable */
   country?: string | null;
   status?: DealerInputStatus;
+  /**
+     * GYD per 1 USD
+     * @exclusiveMinimum 0
+     */
+  usdExchangeRate?: number;
+}
+
+export type DivisionCode = typeof DivisionCode[keyof typeof DivisionCode];
+
+
+export const DivisionCode = {
+  CAM: 'CAM',
+  GT: 'GT',
+} as const;
+
+export interface Division {
+  id: number;
+  dealerId: number;
+  name: string;
+  code: DivisionCode;
 }
 
 export interface DealerMember {
@@ -449,6 +464,7 @@ export const VehicleInputStatus = {
 } as const;
 
 export interface VehicleInput {
+  divisionId?: number;
   /** @minLength 1 */
   make: string;
   /** @minLength 1 */
@@ -456,7 +472,7 @@ export interface VehicleInput {
   trim?: string;
   year: number;
   /**
-     * VIN must be exactly 17 characters
+     * VIN / chassis number — exactly 17 characters
      * @minLength 17
      * @maxLength 17
      */
@@ -473,6 +489,11 @@ export interface VehicleInput {
      */
   registration?: string;
   variant?: string;
+  /**
+     * Engine number — exactly 17 characters
+     * @minLength 17
+     * @maxLength 17
+     */
   engine?: string;
   transmission?: string;
   price: number;
@@ -514,6 +535,7 @@ export const VehicleUpdateStatus = {
 } as const;
 
 export interface VehicleUpdate {
+  divisionId?: number;
   /** @minLength 1 */
   make?: string;
   /** @minLength 1 */
@@ -521,6 +543,7 @@ export interface VehicleUpdate {
   trim?: string;
   year?: number;
   /**
+     * VIN / chassis number — exactly 17 characters
      * @minLength 17
      * @maxLength 17
      */
@@ -533,6 +556,11 @@ export interface VehicleUpdate {
   /** @pattern ^[A-Z]{3}[0-9]{1,4}$ */
   registration?: string;
   variant?: string;
+  /**
+     * Engine number — exactly 17 characters
+     * @minLength 17
+     * @maxLength 17
+     */
   engine?: string;
   transmission?: string;
   price?: number;
@@ -798,6 +826,10 @@ export interface DeliveryAdvanceInput {
   step: DeliveryAdvanceInputStep;
   note?: string;
   appointmentAt?: string;
+  /**
+     * Guyana plate — 3 uppercase letters followed by 1-4 digits (e.g. PAB 1234)
+     * @pattern ^[A-Z]{3}[0-9]{1,4}$
+     */
   registrationNumber?: string;
   insurancePolicy?: string;
   insuranceProvider?: string;
@@ -1049,6 +1081,7 @@ export const LeadInputStatus = {
 } as const;
 
 export interface LeadInput {
+  divisionId?: number;
   /** @minLength 1 */
   name: string;
   email?: string;
@@ -1151,6 +1184,8 @@ export const LeadUpdatePurchaseType = {
 } as const;
 
 export interface LeadUpdate {
+  /** @nullable */
+  divisionId?: number | null;
   /** @minLength 1 */
   name?: string;
   email?: string;
@@ -1731,6 +1766,7 @@ export const DealInputStage = {
 } as const;
 
 export interface DealInput {
+  divisionId?: number;
   customerId?: number;
   leadId?: number;
   vehicleId: number;
@@ -3460,6 +3496,7 @@ export type ReceiveMetaWebhook200 = {
 
 export type ListVehiclesParams = {
 status?: string;
+divisionId?: number;
 powertrain?: string;
 search?: string;
 };
@@ -3477,6 +3514,7 @@ mine?: number;
 export type ListLeadsParams = {
 phase?: string;
 status?: string;
+divisionId?: number;
 };
 
 export type ListDealsParams = {

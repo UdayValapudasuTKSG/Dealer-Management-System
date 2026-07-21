@@ -8,6 +8,7 @@
 
 export type ListVehiclesParams = {
 status?: string;
+divisionId?: number;
 powertrain?: string;
 search?: string;
 };

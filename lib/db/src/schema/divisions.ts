@@ -10,11 +10,10 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { dealersTable } from "./dealers";
 
-/**
- * Divisions are business units within a dealer group (per DMS spec: CAM
- * Motors and GT Automotive). Records that matter carry `divisionId` alongside
- * `dealerId` so leadership reporting can slice across divisions.
- */
+/** Business divisions within a dealership (CAM Motors / GT Automotive). */
+export const DIVISION_CODES = ["CAM", "GT"] as const;
+export type DivisionCode = (typeof DIVISION_CODES)[number];
+
 export const divisionsTable = pgTable(
   "divisions",
   {
@@ -22,8 +21,8 @@ export const divisionsTable = pgTable(
     dealerId: integer("dealer_id")
       .notNull()
       .references(() => dealersTable.id, { onDelete: "cascade" }),
-    code: text("code").notNull(),
     name: text("name").notNull(),
+    code: text("code").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -32,8 +31,7 @@ export const divisionsTable = pgTable(
 );
 
 export const insertDivisionSchema = createInsertSchema(divisionsTable, {
-  code: z.string().min(1).max(8),
-  name: z.string().min(1),
+  code: z.enum(DIVISION_CODES),
 }).omit({ id: true, createdAt: true });
 export type InsertDivision = z.infer<typeof insertDivisionSchema>;
 export type Division = typeof divisionsTable.$inferSelect;

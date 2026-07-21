@@ -54,6 +54,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
 import { cn } from "@/lib/utils";
+import { useMoney } from "@/lib/format";
 
 const TABS = [
   { key: "bookings", label: "Bookings", icon: Calendar },
@@ -192,6 +193,7 @@ function CreateBookingDialog() {
 function BookingsTab() {
   const { data: orders, isLoading } = useListServiceOrders();
   const { toast } = useToast();
+  const money = useMoney();
   const remind = useSendServiceReminder();
   const { density, setDensity, layout, setLayout } = useViewMode("service");
 
@@ -358,7 +360,7 @@ function BookingsTab() {
                         <DollarSign className="w-3.5 h-3.5" /> Est. Total
                       </div>
                       <div className="font-light text-2xl tracking-tight">
-                        ${order.estimatedCost.toLocaleString()}
+                        {money.gyd(order.estimatedCost)}
                       </div>
                     </div>
                     <Button
@@ -498,6 +500,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
   const update = useUpdateJobCard();
   const invoice = useCreateJobCardInvoice();
   const addPart = useAddJobCardPart();
+  const money = useMoney();
   const { data: lines } = useListJobCardParts(card.id);
   const { data: parts } = useListParts();
 
@@ -545,7 +548,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
             <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
               <PenTool className="w-3.5 h-3.5" />
               {card.technicianName ?? "Unassigned"}
-              <span>· {card.laborHours}h @ ${card.laborRate}/hr</span>
+              <span>· {card.laborHours}h @ {money.gyd(card.laborRate)}/hr</span>
             </div>
           </div>
           <Badge
@@ -588,7 +591,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
               <Package className="w-3.5 h-3.5" /> Parts
             </span>
             <span>
-              Parts ${partsTotal.toLocaleString()} · Labour ${laborTotal.toLocaleString()}
+              Parts {money.gyd(partsTotal)} · Labour {money.gyd(laborTotal)}
             </span>
           </div>
           {lines?.length ? (
@@ -600,7 +603,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
                     {l.kind === "return" && " (returned)"}
                   </span>
                   <span className="text-muted-foreground">
-                    ${(l.unitPrice * l.quantity).toLocaleString()}
+                    {money.gyd(l.unitPrice * l.quantity)}
                   </span>
                 </div>
               ))}
@@ -694,7 +697,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
                   queryClient.invalidateQueries({ queryKey: getListServiceInvoicesQueryKey() });
                   toast({
                     title: `Invoice #${inv.id} issued`,
-                    description: `Total $${inv.total.toLocaleString()} (parts + labour + tax).`,
+                    description: `Total ${money.gyd(inv.total)} (parts + labour + tax).`,
                   });
                 } catch (e: unknown) {
                   const msg =
@@ -722,6 +725,7 @@ function InvoicesTab() {
   const update = useUpdateServiceInvoice();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const money = useMoney();
 
   if (isLoading)
     return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
@@ -750,13 +754,13 @@ function InvoicesTab() {
             </div>
             <div className="flex items-center gap-6">
               <div className="text-sm text-muted-foreground text-right">
-                <div>Parts ${inv.partsTotal.toLocaleString()}</div>
-                <div>Labour ${inv.laborTotal.toLocaleString()}</div>
-                <div>Tax ${inv.tax.toLocaleString()}</div>
+                <div>Parts {money.gyd(inv.partsTotal)}</div>
+                <div>Labour {money.gyd(inv.laborTotal)}</div>
+                <div>Tax {money.gyd(inv.tax)}</div>
               </div>
               <div className="text-right">
                 <div className="font-light text-3xl tracking-tight">
-                  ${inv.total.toLocaleString()}
+                  {money.gyd(inv.total)}
                 </div>
                 <Badge
                   variant="secondary"

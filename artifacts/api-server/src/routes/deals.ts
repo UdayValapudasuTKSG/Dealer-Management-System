@@ -2,7 +2,6 @@ import { Router, type IRouter } from "express";
 import { eq, desc, and } from "drizzle-orm";
 import { db, dealsTable, vehiclesTable, gatesTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
-import { defaultDivisionId } from "../lib/divisions";
 import {
   CreateDealBody,
   UpdateDealBody,
@@ -16,6 +15,7 @@ import {
 import { onDealStageChanged } from "../lib/email-triggers";
 import { ensureDeliveryForDeal } from "../lib/delivery";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
+import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
 
 const router: IRouter = Router();
 
@@ -119,14 +119,31 @@ router.post("/deals", async (req, res): Promise<void> => {
     parsed.data.salesAdvisorUserId ??
     (await resolveDealerUserIdByName(dealerId, parsed.data.salesAdvisor));
 
+  let divisionId = parsed.data.divisionId ?? null;
+  if (
+    divisionId != null &&
+    !(await divisionBelongsToDealer(divisionId, dealerId))
+  ) {
+    res.status(404).json({ error: "Division not found" });
+    return;
+  }
+  if (divisionId == null) {
+    // Inherit the vehicle's division when desking a deal, else dealer default.
+    const [veh] = await db
+      .select({ divisionId: vehiclesTable.divisionId })
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.id, parsed.data.vehicleId),
+          eq(vehiclesTable.dealerId, dealerId),
+        ),
+      );
+    divisionId = veh?.divisionId ?? (await defaultDivisionId(dealerId));
+  }
+
   const [deal] = await db
     .insert(dealsTable)
-    .values({
-      ...parsed.data,
-      salesAdvisorUserId,
-      dealerId,
-      divisionId: await defaultDivisionId(dealerId),
-    })
+    .values({ ...parsed.data, divisionId, salesAdvisorUserId, dealerId })
     .returning();
 
   await raiseBelowFloorGateIfNeeded(deal!);

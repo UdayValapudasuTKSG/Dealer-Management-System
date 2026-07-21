@@ -15,6 +15,8 @@ export interface Dealer {
   /** @nullable */
   country?: string | null;
   status: DealerStatus;
+  /** GYD per 1 USD */
+  usdExchangeRate?: number;
   userCount?: number;
   createdAt: Date;
 }

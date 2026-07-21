@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListLeadsParams = {
-phase?: string;
-status?: string;
-divisionId?: number;
-};
+export type DivisionCode = typeof DivisionCode[keyof typeof DivisionCode];
+
+
+export const DivisionCode = {
+  CAM: 'CAM',
+  GT: 'GT',
+} as const;

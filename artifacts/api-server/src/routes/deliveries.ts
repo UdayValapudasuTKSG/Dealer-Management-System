@@ -264,7 +264,14 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
   }
   const parsed = AdvanceDeliveryBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    const registrationIssue = parsed.error.issues.some((i) =>
+      i.path.includes("registrationNumber"),
+    );
+    res.status(400).json({
+      error: registrationIssue
+        ? "Registration number must be 3 uppercase letters followed by 1–4 digits (e.g. PAB1234)"
+        : parsed.error.message,
+    });
     return;
   }
   const delivery = await loadDelivery(params.data.id, activeDealerId(res));

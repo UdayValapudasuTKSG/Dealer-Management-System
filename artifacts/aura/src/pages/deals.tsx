@@ -4,6 +4,7 @@ import {
   useListDeals,
   useListGates,
   useListVehicles,
+  useListDivisions,
   useCreateDeal,
   getListDealsQueryKey,
 } from "@workspace/api-client-react";
@@ -19,6 +20,7 @@ import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
+import { useMoney } from "@/lib/format";
 
 const STAGE_LABEL: Record<string, string> = {
   desking: "Desking",
@@ -32,9 +34,11 @@ export default function Deals() {
   const { data: deals, isLoading } = useListDeals();
   const { data: gates } = useListGates({ status: "pending" });
   const { data: vehicles } = useListVehicles();
+  const { data: divisions } = useListDivisions();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createDeal = useCreateDeal();
+  const money = useMoney();
   const { density, setDensity, layout, setLayout } = useViewMode("deals");
   const compact = density === "compact";
 
@@ -101,7 +105,7 @@ export default function Deals() {
                 defaultValue: prefillVehicle ? String(prefillVehicle.id) : undefined,
                 options: (vehicles ?? []).map((v) => ({
                   value: String(v.id),
-                  label: `${v.year} ${v.make} ${v.model} — $${v.price.toLocaleString()}`,
+                  label: `${v.year} ${v.make} ${v.model} — ${money.gyd(v.price)}`,
                 })),
               },
               { name: "customerName", label: "Customer", type: "text", span: "full", placeholder: "Ama Owusu" },
@@ -146,6 +150,7 @@ export default function Deals() {
               <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-3 font-semibold">Customer</th>
                 <th className="px-4 py-3 font-semibold">Stage</th>
+                <th className="px-4 py-3 font-semibold hidden lg:table-cell">Division</th>
                 <th className="px-4 py-3 font-semibold text-right">OTD</th>
                 <th className="px-4 py-3 font-semibold text-right hidden md:table-cell">Discount</th>
                 <th className="px-4 py-3 font-semibold text-center hidden md:table-cell">Deposit</th>
@@ -171,11 +176,15 @@ export default function Deals() {
                       {STAGE_LABEL[deal.stage] ?? deal.stage}
                     </span>
                   </td>
+                  <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
+                    {divisions?.find((d) => d.id === deal.divisionId)?.name ??
+                      "—"}
+                  </td>
                   <td className="px-4 py-2 text-right tabular-nums font-semibold">
-                    ${deal.otdPrice.toLocaleString()}
+                    {money.gyd(deal.otdPrice)}
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums text-primary hidden md:table-cell">
-                    -${deal.discount.toLocaleString()}
+                    -{money.gyd(deal.discount)}
                   </td>
                   <td className="px-4 py-2 text-center hidden md:table-cell">
                     {deal.depositPaid ? (
@@ -191,7 +200,7 @@ export default function Deals() {
               ))}
               {(deals ?? []).length === 0 && !isLoading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                  <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground text-sm">
                     No deals yet.
                   </td>
                 </tr>
@@ -261,7 +270,7 @@ export default function Deals() {
                           </div>
 
                           <div className="font-light text-3xl mb-4 tracking-tight text-primary">
-                            ${deal.otdPrice.toLocaleString()}
+                            {money.dual(deal.otdPrice)}
                           </div>
 
                           <div className="space-y-2 text-sm font-medium text-muted-foreground pt-4 border-t border-border/50">
@@ -270,14 +279,14 @@ export default function Deals() {
                                 MSRP
                               </span>
                               <span className="text-foreground">
-                                ${deal.vehiclePrice.toLocaleString()}
+                                {money.gyd(deal.vehiclePrice)}
                               </span>
                             </div>
                             <div className="flex justify-between items-center text-primary">
                               <span className="uppercase tracking-wider text-xs">
                                 Discount
                               </span>
-                              <span>-${deal.discount.toLocaleString()}</span>
+                              <span>-{money.gyd(deal.discount)}</span>
                             </div>
                             {deal.monthlyPayment && (
                               <div className="flex justify-between items-center pt-2">
@@ -285,7 +294,7 @@ export default function Deals() {
                                   Monthly
                                 </span>
                                 <span className="text-foreground font-bold">
-                                  ${deal.monthlyPayment}/mo
+                                  {money.gyd(Number(deal.monthlyPayment))}/mo
                                 </span>
                               </div>
                             )}

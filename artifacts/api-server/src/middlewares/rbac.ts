@@ -376,7 +376,7 @@ const AUTH_ONLY_SEGMENTS = new Set([
   "search",
   // team member profiles are viewable by every signed-in staff member
   "team",
-  // divisions are read-only reference data for every signed-in user
+  // divisions are a read-only lookup every signed-in user needs for filters
   "divisions",
   // object storage: presigned upload URLs + object serving for any signed-in
   // staff member; feature-level gating (e.g. inventory edit) happens in the UI

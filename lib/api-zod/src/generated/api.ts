@@ -134,10 +134,23 @@ export const ReceiveTwilioWhatsappWebhookResponse = zod.unknown()
 
 
 /**
+ * @summary List the active dealership's business divisions
+ */
+export const ListDivisionsResponseItem = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "name": zod.string(),
+  "code": zod.enum(['CAM', 'GT'])
+})
+export const ListDivisionsResponse = zod.array(ListDivisionsResponseItem)
+
+
+/**
  * @summary List inventory vehicles
  */
 export const ListVehiclesQueryParams = zod.object({
   "status": zod.coerce.string().optional(),
+  "divisionId": zod.coerce.number().optional(),
   "powertrain": zod.coerce.string().optional(),
   "search": zod.coerce.string().optional()
 })
@@ -192,20 +205,24 @@ export const createVehicleBodyEngineNumberMin = 17;
 export const createVehicleBodyEngineNumberMax = 17;
 
 export const createVehicleBodyRegistrationRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
+export const createVehicleBodyEngineMin = 17;
+export const createVehicleBodyEngineMax = 17;
+
 
 
 
 
 export const CreateVehicleBody = zod.object({
+  "divisionId": zod.number().optional(),
   "make": zod.string().min(1),
   "model": zod.string().min(1),
   "trim": zod.string().optional(),
   "year": zod.number(),
-  "vin": zod.string().min(createVehicleBodyVinMin).max(createVehicleBodyVinMax).optional().describe('VIN must be exactly 17 characters'),
+  "vin": zod.string().min(createVehicleBodyVinMin).max(createVehicleBodyVinMax).optional().describe('VIN \/ chassis number — exactly 17 characters'),
   "engineNumber": zod.string().min(createVehicleBodyEngineNumberMin).max(createVehicleBodyEngineNumberMax).optional().describe('Engine number must be exactly 17 characters'),
   "registration": zod.string().regex(createVehicleBodyRegistrationRegExp).optional().describe('3 uppercase letters followed by 1-4 digits'),
   "variant": zod.string().optional(),
-  "engine": zod.string().optional(),
+  "engine": zod.string().min(createVehicleBodyEngineMin).max(createVehicleBodyEngineMax).optional().describe('Engine number — exactly 17 characters'),
   "transmission": zod.string().optional(),
   "price": zod.number(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
@@ -316,20 +333,24 @@ export const updateVehicleBodyEngineNumberMin = 17;
 export const updateVehicleBodyEngineNumberMax = 17;
 
 export const updateVehicleBodyRegistrationRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
+export const updateVehicleBodyEngineMin = 17;
+export const updateVehicleBodyEngineMax = 17;
+
 
 
 
 
 export const UpdateVehicleBody = zod.object({
+  "divisionId": zod.number().optional(),
   "make": zod.string().min(1).optional(),
   "model": zod.string().min(1).optional(),
   "trim": zod.string().optional(),
   "year": zod.number().optional(),
-  "vin": zod.string().min(updateVehicleBodyVinMin).max(updateVehicleBodyVinMax).optional(),
+  "vin": zod.string().min(updateVehicleBodyVinMin).max(updateVehicleBodyVinMax).optional().describe('VIN \/ chassis number — exactly 17 characters'),
   "engineNumber": zod.string().min(updateVehicleBodyEngineNumberMin).max(updateVehicleBodyEngineNumberMax).optional(),
   "registration": zod.string().regex(updateVehicleBodyRegistrationRegExp).optional(),
   "variant": zod.string().optional(),
-  "engine": zod.string().optional(),
+  "engine": zod.string().min(updateVehicleBodyEngineMin).max(updateVehicleBodyEngineMax).optional().describe('Engine number — exactly 17 characters'),
   "transmission": zod.string().optional(),
   "price": zod.number().optional(),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']).optional(),
@@ -750,6 +771,7 @@ export const AdvanceDeliveryParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const advanceDeliveryBodyRegistrationNumberRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
 export const advanceDeliveryBodyFeedbackRatingMax = 5;
 
 
@@ -758,7 +780,7 @@ export const AdvanceDeliveryBody = zod.object({
   "step": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
   "note": zod.string().optional(),
   "appointmentAt": zod.coerce.date().optional(),
-  "registrationNumber": zod.string().optional(),
+  "registrationNumber": zod.string().regex(advanceDeliveryBodyRegistrationNumberRegExp).optional().describe('Guyana plate — 3 uppercase letters followed by 1-4 digits (e.g. PAB 1234)'),
   "insurancePolicy": zod.string().optional(),
   "insuranceProvider": zod.string().optional(),
   "signatureName": zod.string().optional(),
@@ -883,7 +905,8 @@ export const ListDeliveryAdvisorsResponse = zod.array(ListDeliveryAdvisorsRespon
  */
 export const ListLeadsQueryParams = zod.object({
   "phase": zod.coerce.string().optional(),
-  "status": zod.coerce.string().optional()
+  "status": zod.coerce.string().optional(),
+  "divisionId": zod.coerce.number().optional()
 })
 
 
@@ -945,6 +968,7 @@ export const ListLeadsResponse = zod.array(ListLeadsResponseItem)
 
 
 export const CreateLeadBody = zod.object({
+  "divisionId": zod.number().optional(),
   "name": zod.string().min(1),
   "email": zod.string().optional(),
   "phone": zod.string().optional(),
@@ -1089,6 +1113,7 @@ export const UpdateLeadParams = zod.object({
 
 
 export const UpdateLeadBody = zod.object({
+  "divisionId": zod.number().nullish(),
   "name": zod.string().min(1).optional(),
   "email": zod.string().optional(),
   "phone": zod.string().optional(),
@@ -1987,6 +2012,7 @@ export const ListDealsResponse = zod.array(ListDealsResponseItem)
 
 
 export const CreateDealBody = zod.object({
+  "divisionId": zod.number().optional(),
   "customerId": zod.number().optional(),
   "leadId": zod.number().optional(),
   "vehicleId": zod.number(),
@@ -3323,15 +3349,6 @@ export const CreatePartPurchaseResponse = zod.object({
 })
 
 
-export const ListDivisionsResponseItem = zod.object({
-  "id": zod.number(),
-  "dealerId": zod.number(),
-  "code": zod.string(),
-  "name": zod.string()
-})
-export const ListDivisionsResponse = zod.array(ListDivisionsResponseItem)
-
-
 export const ListAgentsResponseItem = zod.object({
   "id": zod.number(),
   "key": zod.string(),
@@ -4446,7 +4463,7 @@ export const GetCurrentUserResponse = zod.object({
   "dealerName": zod.string(),
   "roleName": zod.string().nullish(),
   "isGeneralManager": zod.boolean().optional(),
-  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD for this dealer')
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD for this dealership')
 })),
   "permissions": zod.array(zod.object({
   "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
@@ -4497,6 +4514,7 @@ export const ListDealersResponseItem = zod.object({
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
   "status": zod.enum(['active', 'inactive']),
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -4507,13 +4525,16 @@ export const ListDealersResponse = zod.array(ListDealersResponseItem)
  * @summary Create a dealer (super admin only)
  */
 
+export const createDealerBodyUsdExchangeRateExclusiveMin = 0;
+
 
 
 export const CreateDealerBody = zod.object({
   "name": zod.string().min(1),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'inactive']).optional()
+  "status": zod.enum(['active', 'inactive']).optional(),
+  "usdExchangeRate": zod.number().gt(createDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD')
 })
 
 export const CreateDealerResponse = zod.object({
@@ -4522,6 +4543,7 @@ export const CreateDealerResponse = zod.object({
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
   "status": zod.enum(['active', 'inactive']),
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -4535,13 +4557,16 @@ export const UpdateDealerParams = zod.object({
 })
 
 
+export const updateDealerBodyUsdExchangeRateExclusiveMin = 0;
+
 
 
 export const UpdateDealerBody = zod.object({
   "name": zod.string().min(1),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'inactive']).optional()
+  "status": zod.enum(['active', 'inactive']).optional(),
+  "usdExchangeRate": zod.number().gt(updateDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD')
 })
 
 export const UpdateDealerResponse = zod.object({
@@ -4550,6 +4575,7 @@ export const UpdateDealerResponse = zod.object({
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
   "status": zod.enum(['active', 'inactive']),
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })

@@ -49,6 +49,7 @@ import {
   statusBadgeClass,
 } from "@/components/finance/application-detail";
 import { PageHero } from "@/components/layout/page-hero";
+import { useMoney, formatGuyanaDate } from "@/lib/format";
 
 const TABS = [
   { id: "applications", label: "Applications", icon: FileText },
@@ -60,8 +61,6 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-const money = (n: number) => `$${n.toLocaleString()}`;
-
 export default function Finance() {
   const search = useSearch();
   const leadParam = new URLSearchParams(search).get("lead");
@@ -71,6 +70,8 @@ export default function Finance() {
   const [detailId, setDetailId] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const rawMoney = useMoney();
+  const money = (n: number) => rawMoney.gyd(n);
 
   const { data: apps, isLoading } = useListFinanceApplications();
   const { data: gates } = useListGates({ status: "pending" });
@@ -308,7 +309,7 @@ export default function Finance() {
 
                     <div className="pt-5 text-xs uppercase tracking-widest text-muted-foreground flex items-center justify-between">
                       <span>{app.statusHistory.at(-1)?.note ? "Latest activity" : "Created"}</span>
-                      <span>{new Date(app.statusHistory.at(-1)?.at ?? app.createdAt).toLocaleDateString()}</span>
+                      <span>{formatGuyanaDate(app.statusHistory.at(-1)?.at ?? app.createdAt)}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -499,7 +500,7 @@ export default function Finance() {
                     </div>
                     <div className="text-right shrink-0">
                       <div className="font-light text-lg text-primary">{money(p.amount)}</div>
-                      <div className="text-[10px] text-muted-foreground uppercase tracking-widest">{new Date(p.createdAt).toLocaleDateString()}</div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-widest">{formatGuyanaDate(p.createdAt)}</div>
                     </div>
                   </div>
                 ))}
@@ -524,7 +525,7 @@ export default function Finance() {
               <div className="text-right shrink-0">
                 <div className="font-light text-lg">{money(r.amount)}</div>
                 <div className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                  {r.method.replace("_", " ")} · {new Date(r.createdAt).toLocaleDateString()}
+                  {r.method.replace("_", " ")} · {formatGuyanaDate(r.createdAt)}
                 </div>
               </div>
             </div>

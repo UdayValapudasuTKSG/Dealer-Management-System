@@ -10,6 +10,7 @@ import type { VehicleUpdatePowertrain } from './vehicleUpdatePowertrain';
 import type { VehicleUpdateStatus } from './vehicleUpdateStatus';
 
 export interface VehicleUpdate {
+  divisionId?: number;
   /** @minLength 1 */
   make?: string;
   /** @minLength 1 */
@@ -17,6 +18,7 @@ export interface VehicleUpdate {
   trim?: string;
   year?: number;
   /**
+     * VIN / chassis number — exactly 17 characters
      * @minLength 17
      * @maxLength 17
      */
@@ -29,6 +31,11 @@ export interface VehicleUpdate {
   /** @pattern ^[A-Z]{3}[0-9]{1,4}$ */
   registration?: string;
   variant?: string;
+  /**
+     * Engine number — exactly 17 characters
+     * @minLength 17
+     * @maxLength 17
+     */
   engine?: string;
   transmission?: string;
   price?: number;

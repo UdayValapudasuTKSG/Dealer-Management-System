@@ -12,6 +12,6 @@ export interface DealerMembershipInfo {
   /** @nullable */
   roleName?: string | null;
   isGeneralManager?: boolean;
-  /** GYD per 1 USD for this dealer */
+  /** GYD per 1 USD for this dealership */
   usdExchangeRate?: number;
 }

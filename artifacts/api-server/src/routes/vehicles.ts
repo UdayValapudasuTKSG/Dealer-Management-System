@@ -21,9 +21,21 @@ import {
   ImportVehiclesResponse,
 } from "@workspace/api-zod";
 import { activeDealerId } from "../middlewares/rbac";
-import { defaultDivisionId } from "../lib/divisions";
+import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
 
 const router: IRouter = Router();
+
+/** Human-readable VIN/Engine# validation (17 chars, DMS spec §9). */
+export function vehicleIdentifierError(body: {
+  vin?: string;
+  engine?: string;
+}): string | null {
+  if (body.vin !== undefined && body.vin.length !== 17)
+    return "VIN must be exactly 17 characters";
+  if (body.engine !== undefined && body.engine.length !== 17)
+    return "Engine number must be exactly 17 characters";
+  return null;
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -38,6 +50,8 @@ router.get("/vehicles", async (req, res): Promise<void> => {
   }
 
   const filters: SQL[] = [eq(vehiclesTable.dealerId, activeDealerId(res))];
+  if (query.data.divisionId)
+    filters.push(eq(vehiclesTable.divisionId, query.data.divisionId));
   if (query.data.status) filters.push(eq(vehiclesTable.status, query.data.status));
   if (query.data.powertrain)
     filters.push(eq(vehiclesTable.powertrain, query.data.powertrain));
@@ -65,18 +79,23 @@ router.get("/vehicles", async (req, res): Promise<void> => {
 router.post("/vehicles", async (req, res): Promise<void> => {
   const parsed = CreateVehicleBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    res.status(400).json({
+      error: vehicleIdentifierError(req.body ?? {}) ?? parsed.error.message,
+    });
     return;
   }
 
   const dealerId = activeDealerId(res);
+  let divisionId = parsed.data.divisionId ?? null;
+  if (divisionId != null && !(await divisionBelongsToDealer(divisionId, dealerId))) {
+    res.status(404).json({ error: "Division not found" });
+    return;
+  }
+  if (divisionId == null) divisionId = await defaultDivisionId(dealerId);
+
   const [vehicle] = await db
     .insert(vehiclesTable)
-    .values({
-      ...parsed.data,
-      dealerId,
-      divisionId: await defaultDivisionId(dealerId),
-    })
+    .values({ ...parsed.data, divisionId, dealerId })
     .returning();
 
   res.status(201).json(GetVehicleResponse.parse(vehicle));
@@ -324,12 +343,13 @@ router.post(
     }
 
     let created = 0;
+    const importDivisionId = await defaultDivisionId(dealerId);
     for (const { row, data } of validRows) {
       try {
         await db.insert(vehiclesTable).values({
           ...data,
+          divisionId: data.divisionId ?? importDivisionId,
           dealerId,
-          divisionId: await defaultDivisionId(dealerId),
         });
         created += 1;
       } catch (err) {
@@ -357,7 +377,7 @@ const TEMPLATE_COLUMNS: { header: string; example: string | number }[] = [
   { header: "Year", example: 2026 },
   { header: "VIN", example: "WBY73AW0XPCK00001" },
   { header: "Variant", example: "Long Wheelbase" },
-  { header: "Engine", example: "Dual electric motors" },
+  { header: "Engine", example: "ENG0000000PCK0001" },
   { header: "Transmission", example: "Single-speed automatic" },
   { header: "Price", example: 125000 },
   { header: "Powertrain", example: "EV" },
@@ -385,6 +405,7 @@ router.get("/vehicles/import/template", async (_req, res): Promise<void> => {
   notes.addRow(["Required columns: Make, Model, Year, Price, Powertrain, Mileage (km), Exterior Color, Body Type"]);
   notes.addRow(["Powertrain: EV, Hybrid, Petrol or Diesel (Electric/Gas aliases accepted)"]);
   notes.addRow(["Status (optional): available, in_transit or service — defaults to available"]);
+  notes.addRow(["VIN and Engine number (optional) must be exactly 17 characters when provided"]);
   notes.addRow(["Delete the example row before importing your own stock."]);
   notes.getColumn(1).width = 100;
 
@@ -434,11 +455,20 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
 
   const parsed = UpdateVehicleBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    res.status(400).json({
+      error: vehicleIdentifierError(req.body ?? {}) ?? parsed.error.message,
+    });
     return;
   }
 
   const dealerId = activeDealerId(res);
+  if (
+    parsed.data.divisionId != null &&
+    !(await divisionBelongsToDealer(parsed.data.divisionId, dealerId))
+  ) {
+    res.status(404).json({ error: "Division not found" });
+    return;
+  }
   const [before] = await db
     .select({ status: vehiclesTable.status })
     .from(vehiclesTable)

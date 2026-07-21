@@ -46,6 +46,7 @@ import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { VehicleCascade } from "@/components/vehicle-cascade";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useMoney } from "@/lib/format";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
 
@@ -160,6 +161,7 @@ export default function Leads() {
   const { data: vehicles } = useListVehicles();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const money = useMoney();
   const createLead = useCreateLead();
   const { density, setDensity, layout, setLayout } = useViewMode("pipeline");
 
@@ -519,13 +521,7 @@ export default function Leads() {
                         {row.lead.assignedTo || <span className="text-amber-400">Needs advisor</span>}
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
-                        {row.value != null
-                          ? row.value.toLocaleString("en-US", {
-                              style: "currency",
-                              currency: "USD",
-                              maximumFractionDigits: 0,
-                            })
-                          : "—"}
+                        {row.value != null ? money.gyd(row.value) : "—"}
                       </td>
                       <td
                         className={cn(

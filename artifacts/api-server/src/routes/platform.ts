@@ -84,6 +84,9 @@ router.post("/platform/dealers", async (req, res): Promise<void> => {
       city: body.data.city ?? null,
       country: body.data.country ?? null,
       status: body.data.status ?? "active",
+      ...(body.data.usdExchangeRate !== undefined
+        ? { usdExchangeRate: body.data.usdExchangeRate }
+        : {}),
       createdBy: res.locals.user?.clerkId ?? null,
     })
     .returning();
@@ -108,6 +111,9 @@ router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
         ? { country: body.data.country }
         : {}),
       ...(body.data.status !== undefined ? { status: body.data.status } : {}),
+      ...(body.data.usdExchangeRate !== undefined
+        ? { usdExchangeRate: body.data.usdExchangeRate }
+        : {}),
     })
     .where(eq(dealersTable.id, params.data.id))
     .returning();

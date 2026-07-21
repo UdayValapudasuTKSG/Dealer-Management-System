@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import {
   useGetLead,
+  useListDivisions,
   useGetVehicle,
   useGetLeadTimeline,
   useGetLeadQuote,
@@ -58,6 +59,7 @@ import {
 } from "@/components/create-record-dialog";
 import { WhatsappPanel } from "@/components/lead/whatsapp-panel";
 import { useAuthz } from "@/lib/auth";
+import { useMoney, formatGuyanaDate, formatGuyanaDateTime } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -523,6 +525,7 @@ export default function LeadDetail() {
   const id = params ? Number(params.id) : NaN;
   const qc = useQueryClient();
   const { toast } = useToast();
+  const money = useMoney();
 
   const { data: lead, isLoading, isError } = useGetLead(id);
   const { data: vehicle } = useGetVehicle(lead?.interestedVehicleId ?? 0, {
@@ -531,6 +534,7 @@ export default function LeadDetail() {
       enabled: !!lead?.interestedVehicleId,
     },
   });
+  const { data: divisions } = useListDivisions();
   const { data: timeline } = useGetLeadTimeline(id);
   const { data: quote } = useGetLeadQuote(id);
   const { data: allDeals } = useListDeals();
@@ -903,6 +907,11 @@ export default function LeadDetail() {
             <Field label="Lead Source">
               {SOURCE_LABEL[lead.source] ?? lead.source}
             </Field>
+            {lead.divisionId != null && (
+              <Field label="Division">
+                {divisions?.find((d) => d.id === lead.divisionId)?.name ?? "—"}
+              </Field>
+            )}
             <Field label="Lead Owner">{ownerDisplay}</Field>
             <Field label="Phone">
               {lead.phone ? (
@@ -985,7 +994,7 @@ export default function LeadDetail() {
                   {vehicle.exteriorColor ? ` · ${vehicle.exteriorColor}` : ""}
                 </div>
                 <div className="text-lg font-light text-primary mt-2">
-                  ${vehicle.price.toLocaleString()}
+                  {money.gyd(vehicle.price)}
                 </div>
               </div>
             </Link>
@@ -1205,7 +1214,7 @@ export default function LeadDetail() {
                       ) : null}
                     </InlineField>
                     <InlineField label="Unit Price">
-                      {vehicle ? `$${vehicle.price.toLocaleString()}` : null}
+                      {vehicle ? money.gyd(vehicle.price) : null}
                     </InlineField>
                     <InlineField
                       label="Availability"
@@ -1302,10 +1311,7 @@ export default function LeadDetail() {
                       }
                     >
                       {lead.contactedDate
-                        ? new Date(lead.contactedDate).toLocaleDateString(
-                            undefined,
-                            { dateStyle: "medium" },
-                          )
+                        ? formatGuyanaDate(lead.contactedDate)
                         : null}
                     </InlineField>
                     <InlineField
@@ -1352,10 +1358,7 @@ export default function LeadDetail() {
                     </InlineField>
                     <InlineField label="Test Drive Date">
                       {lead.testDriveAt
-                        ? new Date(lead.testDriveAt).toLocaleString(undefined, {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          })
+                        ? formatGuyanaDateTime(lead.testDriveAt)
                         : null}
                     </InlineField>
                     <InlineField label="Test Drive Branch">
@@ -1471,10 +1474,7 @@ export default function LeadDetail() {
 
                   <Section title="System Information">
                     <InlineField label="Created">
-                      {new Date(lead.createdAt).toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
+                      {formatGuyanaDateTime(lead.createdAt)}
                     </InlineField>
                     <InlineField label="AI Score">
                       <span className="text-primary font-medium">
@@ -1504,7 +1504,7 @@ export default function LeadDetail() {
                           {quote.sentAt ? (
                             <span className="text-emerald-400">
                               Emailed{" "}
-                              {new Date(quote.sentAt).toLocaleDateString()}
+                              {formatGuyanaDate(quote.sentAt)}
                             </span>
                           ) : (
                             <span className="text-amber-400">
@@ -1620,13 +1620,7 @@ export default function LeadDetail() {
                                 {e.title}
                               </span>
                               <span className="text-[11px] text-muted-foreground shrink-0">
-                                {new Date(e.createdAt).toLocaleString(
-                                  undefined,
-                                  {
-                                    dateStyle: "medium",
-                                    timeStyle: "short",
-                                  },
-                                )}
+                                {formatGuyanaDateTime(e.createdAt)}
                               </span>
                             </div>
                             {e.detail && (
