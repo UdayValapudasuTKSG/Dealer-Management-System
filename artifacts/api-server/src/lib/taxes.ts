@@ -54,6 +54,63 @@ export function computeTaxes(
   };
 }
 
+/**
+ * Service-invoice tax: applies the dealer's configured VAT rule (code "vat")
+ * to the labor+parts base. Same deterministic engine as sales quotes — no
+ * literal rates anywhere. Returns 0 when the dealer has no active VAT rule.
+ */
+export function computeServiceTax(
+  base: number,
+  taxes: Parameters<typeof computeTaxes>[1],
+): { tax: number; total: number } {
+  const vatRules = taxes.filter((t) => t.code === "vat");
+  // Service work is never an EV-exempt sale — don't pass a powertrain.
+  const { totalTax } = computeTaxes(base, vatRules);
+  return {
+    tax: totalTax,
+    total: Math.round((base + totalTax) * 100) / 100,
+  };
+}
+
+/**
+ * GRA vehicle-duty computation from the dealer's configured tax rules.
+ * Deterministic, server-side — the AI never computes amounts. Duty/excise/
+ * levies are assessed on the CIF value; VAT is assessed on (CIF + duty +
+ * other levies), matching customs practice. Rules are matched by code:
+ * import_duty, excise, vat; any other active rules land in `otherLevies`.
+ */
+export function computeGraDuty(
+  cifValue: number,
+  taxes: DealerTax[],
+  opts: { isEv?: boolean } = {},
+): {
+  importDuty: number;
+  exciseDuty: number;
+  vat: number;
+  otherLevies: TaxLine[];
+  /** Every assessed line (duty, excise, levies, then VAT) in display order. */
+  lines: TaxLine[];
+  totalPayable: number;
+} {
+  const powertrain = opts.isEv ? "ev" : null;
+  const nonVat = taxes.filter((t) => t.code !== "vat");
+  const preVat = computeTaxes(cifValue, nonVat, { powertrain });
+  const importDuty =
+    preVat.lines.find((l) => l.code === "import_duty")?.amount ?? 0;
+  const exciseDuty = preVat.lines.find((l) => l.code === "excise")?.amount ?? 0;
+  const otherLevies = preVat.lines.filter(
+    (l) => l.code !== "import_duty" && l.code !== "excise",
+  );
+  const vatBase = Math.round((cifValue + preVat.totalTax) * 100) / 100;
+  const vatRules = taxes.filter((t) => t.code === "vat");
+  const vatResult = computeTaxes(vatBase, vatRules, { powertrain });
+  const vat = vatResult.totalTax;
+  const lines = [...preVat.lines, ...vatResult.lines];
+  const totalPayable =
+    Math.round((preVat.totalTax + vat) * 100) / 100;
+  return { importDuty, exciseDuty, vat, otherLevies, lines, totalPayable };
+}
+
 /** Fetch the dealer's tax rules, seeding the Guyana defaults on first read. */
 export async function ensureDealerTaxes(dealerId: number): Promise<DealerTax[]> {
   const rows = await db

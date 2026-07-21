@@ -214,10 +214,18 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
           ? await listAllDealers()
           : await loadMemberships(user.id);
         const requested = requestedDealerId(req);
-        const active =
-          (requested != null
-            ? dealers.find((d) => d.dealerId === requested)
-            : dealers[0]) ?? null;
+        let active: DealerMembership | null = null;
+        if (requested != null) {
+          active = dealers.find((d) => d.dealerId === requested) ?? null;
+          if (!active) {
+            // Same opaque 404 as the real auth path: no-membership must not
+            // leak whether the dealership exists.
+            res.status(404).json({ error: "Not found" });
+            return;
+          }
+        } else {
+          active = dealers[0] ?? null;
+        }
         const permissions = isSuperAdmin
           ? FULL_PERMISSIONS
           : await loadPermissions(active?.roleId ?? null);
@@ -283,7 +291,9 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     if (requested != null) {
       active = dealers.find((d) => d.dealerId === requested) ?? null;
       if (!active) {
-        res.status(403).json({ error: "Not a member of this dealership" });
+        // Opaque 404 for no-membership (per spec): don't leak whether the
+        // dealership exists. True RBAC/permission denials remain 403.
+        res.status(404).json({ error: "Not found" });
         return;
       }
     } else {

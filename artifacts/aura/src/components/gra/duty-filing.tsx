@@ -30,25 +30,8 @@ const ACCEPTED: Record<string, GraExtractRequestMediaType> = {
   "image/gif": "image/gif",
 };
 
-type NumericField = Exclude<
-  keyof GraFilingDraft,
-  | "ownerName"
-  | "tin"
-  | "vin"
-  | "make"
-  | "model"
-  | "fuelType"
-  | "hsCode"
-  | "notes"
->;
-
-const MONEY_FIELDS: { key: NumericField; label: string }[] = [
+const MONEY_FIELDS: { key: keyof GraFilingDraft; label: string }[] = [
   { key: "cifValue", label: "CIF Value (GHS)" },
-  { key: "importDuty", label: "Import Duty (GHS)" },
-  { key: "vat", label: "VAT (GHS)" },
-  { key: "nhil", label: "NHIL (GHS)" },
-  { key: "getfundLevy", label: "GETFund Levy (GHS)" },
-  { key: "exciseDuty", label: "Excise Duty (GHS)" },
 ];
 
 const ghs = (n: number) =>
@@ -189,13 +172,9 @@ export function DutyFiling({
     );
   };
 
-  const total = draft
-    ? draft.importDuty +
-      draft.vat +
-      draft.nhil +
-      draft.getfundLevy +
-      draft.exciseDuty
-    : 0;
+  // Duty lines and the total are computed server-side from the dealer's
+  // configured tax rules — never recomputed (or editable) in the client.
+  const total = draft ? draft.totalPayable : 0;
 
   const updateField = (key: keyof GraFilingDraft, value: string) => {
     setDraft((prev) => {
@@ -203,7 +182,7 @@ export function DutyFiling({
       const isNumeric =
         key === "year" ||
         key === "engineCc" ||
-        MONEY_FIELDS.some((f) => f.key === key);
+        key === "cifValue";
       return {
         ...prev,
         [key]: isNumeric ? Number(value.replace(/[^0-9.]/g, "")) || 0 : value,
@@ -214,7 +193,7 @@ export function DutyFiling({
   const handleSubmit = () => {
     if (!draft) return;
     submit.mutate(
-      { data: { draft: { ...draft, totalPayable: total } } },
+      { data: { draft } },
       {
         onSuccess: (gate) => {
           setSubmittedGateId(gate.id);
@@ -455,7 +434,47 @@ export function DutyFiling({
                         />
                       ))}
                     </div>
+                    {/* Server-computed duty lines (dealer tax rules) — read-only */}
+                    <div className="mt-4 rounded-xl border border-border bg-white/[0.03] divide-y divide-border">
+                      {draft.taxLines.map((line, i) => (
+                        <motion.div
+                          key={line.code}
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{
+                            delay:
+                              (IDENTITY_FIELDS.length + MONEY_FIELDS.length + i) *
+                              0.08,
+                          }}
+                          className="flex items-center justify-between px-4 py-2.5 text-sm"
+                        >
+                          <span className="text-muted-foreground">
+                            {line.name}
+                            {line.kind === "percent" && (
+                              <span className="ml-1.5 text-xs opacity-70">
+                                {line.rate}%
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-medium tabular-nums">
+                            {ghs(line.amount)}
+                          </span>
+                        </motion.div>
+                      ))}
+                      {draft.taxLines.length === 0 && (
+                        <div className="px-4 py-2.5 text-sm text-muted-foreground">
+                          No duty assessed — check the CIF value.
+                        </div>
+                      )}
+                    </div>
                   </div>
+
+                  {draft.uncertainFields.length > 0 && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-300">
+                      Verify before filing — not read confidently:{" "}
+                      {draft.uncertainFields.join(", ")}.
+                    </div>
+                  )}
 
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}

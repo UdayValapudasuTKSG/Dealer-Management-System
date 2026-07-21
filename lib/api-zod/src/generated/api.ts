@@ -5024,7 +5024,7 @@ export const ExtractGraFilingBody = zod.object({
 
 export const ExtractGraFilingResponse = zod.object({
   "ownerName": zod.string(),
-  "tin": zod.string().describe('Taxpayer Identification Number'),
+  "tin": zod.string().describe('Guyana Taxpayer Identification Number'),
   "vin": zod.string().describe('Chassis \/ VIN number'),
   "make": zod.string(),
   "model": zod.string(),
@@ -5033,12 +5033,16 @@ export const ExtractGraFilingResponse = zod.object({
   "fuelType": zod.string(),
   "hsCode": zod.string().describe('Harmonised System tariff code'),
   "cifValue": zod.number().describe('Cost'),
-  "importDuty": zod.number(),
-  "vat": zod.number(),
-  "nhil": zod.number().describe('National Health Insurance Levy'),
-  "getfundLevy": zod.number().describe('GETFund Levy'),
-  "exciseDuty": zod.number(),
-  "totalPayable": zod.number(),
+  "taxLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number().describe('USD-scale amount computed server-side')
+})).describe('Deterministic server-computed duty\/levy lines from the dealer\'s tax rules (never AI-computed)'),
+  "totalPayable": zod.number().describe('Sum of taxLines'),
+  "confidence": zod.number().nullish().describe('Extraction confidence 0-1 reported by the vision model'),
+  "uncertainFields": zod.array(zod.string()).describe('Extracted fields the model could not clearly read; must be human-verified'),
   "notes": zod.string().nullish()
 })
 
@@ -5049,7 +5053,7 @@ export const ExtractGraFilingResponse = zod.object({
 export const SubmitGraFilingBody = zod.object({
   "draft": zod.object({
   "ownerName": zod.string(),
-  "tin": zod.string().describe('Taxpayer Identification Number'),
+  "tin": zod.string().describe('Guyana Taxpayer Identification Number'),
   "vin": zod.string().describe('Chassis \/ VIN number'),
   "make": zod.string(),
   "model": zod.string(),
@@ -5058,12 +5062,16 @@ export const SubmitGraFilingBody = zod.object({
   "fuelType": zod.string(),
   "hsCode": zod.string().describe('Harmonised System tariff code'),
   "cifValue": zod.number().describe('Cost'),
-  "importDuty": zod.number(),
-  "vat": zod.number(),
-  "nhil": zod.number().describe('National Health Insurance Levy'),
-  "getfundLevy": zod.number().describe('GETFund Levy'),
-  "exciseDuty": zod.number(),
-  "totalPayable": zod.number(),
+  "taxLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number().describe('USD-scale amount computed server-side')
+})).describe('Deterministic server-computed duty\/levy lines from the dealer\'s tax rules (never AI-computed)'),
+  "totalPayable": zod.number().describe('Sum of taxLines'),
+  "confidence": zod.number().nullish().describe('Extraction confidence 0-1 reported by the vision model'),
+  "uncertainFields": zod.array(zod.string()).describe('Extracted fields the model could not clearly read; must be human-verified'),
   "notes": zod.string().nullish()
 })
 })

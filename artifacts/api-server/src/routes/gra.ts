@@ -1,8 +1,14 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod/v4";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { db, gatesTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
-import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
+import {
+  isAgentEnabled,
+  recordAgentRun,
+  MIN_AGENT_CONFIDENCE,
+} from "../lib/agent-governance";
+import { computeGraDuty, ensureDealerTaxes } from "../lib/taxes";
 import {
   ExtractGraFilingBody,
   ExtractGraFilingResponse,
@@ -12,31 +18,51 @@ import {
 
 const router: IRouter = Router();
 
-const EXTRACTION_PROMPT = `You are a customs documentation officer for a luxury automotive dealership in Ghana. You are reading an uploaded vehicle import document (bill of lading, commercial invoice, customs declaration, or similar).
+// Extract-only: the model reads legible fields off the document. It NEVER
+// computes duty/VAT/levies (that is done server-side from the dealer's
+// configured tax rules) and NEVER invents identifiers or amounts.
+const EXTRACTION_PROMPT = `You are reading an uploaded vehicle import document (bill of lading, commercial invoice, customs declaration, or similar) for a customs duty filing.
 
-Extract the details needed to prepare a Ghana Revenue Authority (GRA) vehicle import-duty filing. Return ONLY a JSON object (no markdown, no commentary) with exactly these keys:
+Extract ONLY what is actually legible on the document. Return ONLY a JSON object (no markdown, no commentary) with exactly these keys:
 
 {
-  "ownerName": string,        // importer / owner full name
-  "tin": string,              // Taxpayer Identification Number, format GHA-000000000-0
-  "vin": string,              // chassis / VIN number
-  "make": string,
-  "model": string,
-  "year": number,
-  "engineCc": number,         // engine capacity in cubic centimetres
-  "fuelType": string,         // Petrol, Diesel, Hybrid, or Electric
-  "hsCode": string,           // Harmonised System tariff code, e.g. 8703.23.90
-  "cifValue": number,         // Cost, Insurance & Freight value in Ghana Cedis (GHS)
-  "importDuty": number,       // 20% of CIF for most passenger vehicles
-  "vat": number,              // 15% of (CIF + importDuty + nhil + getfundLevy)
-  "nhil": number,             // National Health Insurance Levy, 2.5% of CIF
-  "getfundLevy": number,      // GETFund Levy, 2.5% of CIF
-  "exciseDuty": number,       // 0 if under 1900cc, otherwise 20-50% of CIF
-  "totalPayable": number,     // importDuty + vat + nhil + getfundLevy + exciseDuty
-  "notes": string             // one short sentence on anything unclear or assumed
+  "ownerName": string|null,   // importer / owner full name, exactly as printed
+  "tin": string|null,         // Taxpayer Identification Number, exactly as printed
+  "vin": string|null,         // chassis / VIN number, exactly as printed
+  "make": string|null,
+  "model": string|null,
+  "year": number|null,
+  "engineCc": number|null,    // engine capacity in cubic centimetres
+  "fuelType": string|null,    // Petrol, Diesel, Hybrid, or Electric
+  "hsCode": string|null,      // Harmonised System tariff code, exactly as printed
+  "cifValue": number|null,    // Cost, Insurance & Freight value as printed (plain number)
+  "confidence": {             // 0..1 per field: how certain you are the value is read correctly
+    "ownerName": number, "tin": number, "vin": number, "make": number,
+    "model": number, "year": number, "engineCc": number, "fuelType": number,
+    "hsCode": number, "cifValue": number
+  },
+  "notes": string             // one short sentence on anything unclear
 }
 
-If any field is not legible, infer a realistic value consistent with the rest of the document. All monetary values must be plain numbers in GHS with no currency symbols or separators. Compute the levies from the CIF value using the rates above so the arithmetic is internally consistent.`;
+STRICT RULES:
+- If a field is not clearly legible on the document, return null for it and a low confidence. NEVER guess, infer, or invent a TIN, VIN, amount, or any other value.
+- Do NOT compute any duty, VAT, or levy. Only transcribe values printed on the document.
+- Monetary values must be plain numbers with no currency symbols or separators.`;
+
+const RawExtraction = z.object({
+  ownerName: z.string().nullable(),
+  tin: z.string().nullable(),
+  vin: z.string().nullable(),
+  make: z.string().nullable(),
+  model: z.string().nullable(),
+  year: z.number().nullable(),
+  engineCc: z.number().nullable(),
+  fuelType: z.string().nullable(),
+  hsCode: z.string().nullable(),
+  cifValue: z.number().nullable(),
+  confidence: z.record(z.string(), z.number()).optional(),
+  notes: z.string().optional().default(""),
+});
 
 router.post("/gra/extract", async (req, res): Promise<void> => {
   const parsed = ExtractGraFilingBody.safeParse(req.body);
@@ -101,15 +127,79 @@ router.post("/gra/extract", async (req, res): Promise<void> => {
       return;
     }
 
-    const draft = ExtractGraFilingResponse.safeParse(candidate);
-    if (!draft.success) {
+    const extraction = RawExtraction.safeParse(candidate);
+    if (!extraction.success) {
       req.log.error(
-        { issues: draft.error.issues },
+        { issues: extraction.error.issues },
         "GRA extraction failed validation",
       );
       res.status(502).json({ error: "The document was missing required details" });
       return;
     }
+    const x = extraction.data;
+    const conf = x.confidence ?? {};
+
+    // Fields the model could not read confidently drop to human review: they
+    // are left blank/zero in the draft and called out in the notes so the
+    // officer corrects them before the (existing) approval gate.
+    const FIELD_LABELS: Record<string, string> = {
+      ownerName: "Importer / Owner",
+      tin: "TIN",
+      vin: "Chassis / VIN",
+      make: "Make",
+      model: "Model",
+      year: "Year",
+      engineCc: "Engine (cc)",
+      fuelType: "Fuel Type",
+      hsCode: "HS Code",
+      cifValue: "CIF Value",
+    };
+    const needsReview = Object.keys(FIELD_LABELS).filter((k) => {
+      const value = x[k as keyof typeof FIELD_LABELS as keyof typeof x];
+      return value == null || (conf[k] ?? 0) < MIN_AGENT_CONFIDENCE;
+    });
+
+    // Deterministic server-side duty computation from the dealer's configured
+    // tax rules (dealer_taxes) — the model never computes amounts. Every
+    // active rule lands in taxLines and totalPayable is their exact sum.
+    const cifValue = x.cifValue ?? 0;
+    const isEv = (x.fuelType ?? "").toLowerCase() === "electric";
+    const taxRules = await ensureDealerTaxes(dealerId);
+    const duty = computeGraDuty(cifValue, taxRules, { isEv });
+
+    const reviewNote =
+      needsReview.length > 0
+        ? `Verify before filing (not read confidently): ${needsReview
+            .map((k) => FIELD_LABELS[k])
+            .join(", ")}.`
+        : "";
+    const notes = [x.notes?.trim(), reviewNote].filter(Boolean).join(" ") || "";
+
+    const confValues = Object.values(conf);
+    const avgConfidence =
+      confValues.length > 0
+        ? Math.round(
+            (confValues.reduce((a, b) => a + b, 0) / confValues.length) * 100,
+          ) / 100
+        : null;
+
+    const draft = ExtractGraFilingResponse.parse({
+      ownerName: x.ownerName ?? "",
+      tin: x.tin ?? "",
+      vin: x.vin ?? "",
+      make: x.make ?? "",
+      model: x.model ?? "",
+      year: x.year ?? 0,
+      engineCc: x.engineCc ?? 0,
+      fuelType: x.fuelType ?? "",
+      hsCode: x.hsCode ?? "",
+      cifValue,
+      taxLines: duty.lines,
+      totalPayable: duty.totalPayable,
+      confidence: avgConfidence,
+      uncertainFields: needsReview.map((k) => FIELD_LABELS[k]),
+      notes,
+    });
 
     await recordAgentRun({
       dealerId,
@@ -117,10 +207,11 @@ router.post("/gra/extract", async (req, res): Promise<void> => {
       runType: "gra_document_extraction",
       inputSource: "gra",
       inputSummary: `Uploaded ${parsed.data.mediaType} document`,
-      outputSummary: `Extracted duty draft for ${`${draft.data.year} ${draft.data.make} ${draft.data.model}`}`,
+      outputSummary: `Extracted duty draft for ${`${draft.year} ${draft.make} ${draft.model}`}${needsReview.length ? ` (${needsReview.length} fields need review)` : ""}`,
+      confidence: avgConfidence,
       latencyMs: Date.now() - startedAt,
     });
-    res.json(ExtractGraFilingResponse.parse(draft.data));
+    res.json(draft);
   } catch (err) {
     req.log.error({ err }, "GRA extraction request failed");
     await recordAgentRun({
@@ -146,8 +237,20 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
     return;
   }
 
-  const d = parsed.data.draft;
   const dealerId = activeDealerId(res);
+
+  // Never trust client-submitted amounts: recompute every duty/levy/VAT line
+  // and the total server-side from the dealer's configured tax rules and the
+  // (possibly officer-corrected) CIF value + fuel type in the draft.
+  const submitted = parsed.data.draft;
+  const isEv = (submitted.fuelType ?? "").toLowerCase() === "electric";
+  const taxRules = await ensureDealerTaxes(dealerId);
+  const duty = computeGraDuty(submitted.cifValue, taxRules, { isEv });
+  const d = {
+    ...submitted,
+    taxLines: duty.lines,
+    totalPayable: duty.totalPayable,
+  };
 
   const [gate] = await db
     .insert(gatesTable)
@@ -176,11 +279,7 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
         { label: "Engine", value: `${d.engineCc.toLocaleString()} cc ${d.fuelType}` },
         { label: "HS Code", value: d.hsCode },
         { label: "CIF Value", value: ghs(d.cifValue) },
-        { label: "Import Duty", value: ghs(d.importDuty) },
-        { label: "VAT", value: ghs(d.vat) },
-        { label: "NHIL", value: ghs(d.nhil) },
-        { label: "GETFund Levy", value: ghs(d.getfundLevy) },
-        { label: "Excise Duty", value: ghs(d.exciseDuty) },
+        ...d.taxLines.map((l) => ({ label: l.name, value: ghs(l.amount) })),
         { label: "Total Payable", value: ghs(d.totalPayable) },
       ],
     })

@@ -5,10 +5,11 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { GraTaxLine } from './graTaxLine';
 
 export interface GraFilingDraft {
   ownerName: string;
-  /** Taxpayer Identification Number */
+  /** Guyana Taxpayer Identification Number */
   tin: string;
   /** Chassis / VIN number */
   vin: string;
@@ -22,14 +23,17 @@ export interface GraFilingDraft {
   hsCode: string;
   /** Cost */
   cifValue: number;
-  importDuty: number;
-  vat: number;
-  /** National Health Insurance Levy */
-  nhil: number;
-  /** GETFund Levy */
-  getfundLevy: number;
-  exciseDuty: number;
+  /** Deterministic server-computed duty/levy lines from the dealer's tax rules (never AI-computed) */
+  taxLines: GraTaxLine[];
+  /** Sum of taxLines */
   totalPayable: number;
+  /**
+     * Extraction confidence 0-1 reported by the vision model
+     * @nullable
+     */
+  confidence?: number | null;
+  /** Extracted fields the model could not clearly read; must be human-verified */
+  uncertainFields: string[];
   /** @nullable */
   notes?: string | null;
 }

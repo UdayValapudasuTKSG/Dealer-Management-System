@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, leadsTable, dealsTable, vehiclesTable, serviceOrdersTable, agentsTable } from "@workspace/db";
+import { and, avg, eq, gte } from "drizzle-orm";
+import { db, leadsTable, dealsTable, vehiclesTable, serviceOrdersTable, agentsTable, agentRunsTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
 import {
   GetDashboardSummaryResponse,
@@ -36,6 +36,22 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     db.select().from(agentsTable).where(eq(agentsTable.dealerId, dealerId)),
   ]);
 
+  // Real agent latency over the last 7 days of this dealer's runs.
+  // No runs in the window → 0, never a placeholder.
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [latency] = await db
+    .select({ avgMs: avg(agentRunsTable.latencyMs) })
+    .from(agentRunsTable)
+    .where(
+      and(
+        eq(agentRunsTable.dealerId, dealerId),
+        gte(agentRunsTable.createdAt, since),
+      ),
+    );
+  const avgResponseSeconds = latency?.avgMs
+    ? Math.round((Number(latency.avgMs) / 1000) * 10) / 10
+    : 0;
+
   const totalLeads = leads.length;
   const wonLeads = leads.filter((l) => l.phase === "won" || l.status === "converted").length;
   const activeDeals = deals.filter((d) => ACTIVE_DEAL_STAGES.includes(d.stage)).length;
@@ -67,7 +83,7 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     serviceOrdersOpen,
     agentTasksToday,
     conversionRate,
-    avgResponseSeconds: 38,
+    avgResponseSeconds,
   };
 
   res.json(GetDashboardSummaryResponse.parse(summary));

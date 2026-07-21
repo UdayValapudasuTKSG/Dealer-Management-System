@@ -4,11 +4,16 @@ import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
+import { eq } from "drizzle-orm";
+import { db, documentsTable } from "@workspace/db";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
-import { ObjectPermission } from "../lib/objectAcl";
+import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
+
+/** Matches an upload key carrying a dealer-tenancy prefix, e.g. uploads/dealer-3/uuid */
+const DEALER_PREFIX_RE = /^uploads\/dealer-(\d+)\//;
 
 /**
  * POST /storage/uploads/request-url
@@ -46,7 +51,11 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
       return;
     }
 
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+    // The dealer prefix is stamped server-side (never client-supplied) so the
+    // object key itself encodes ownership; reads enforce it below.
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL(
+      `dealer-${activeDealerId(res)}`,
+    );
     const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
 
     res.json(
@@ -103,34 +112,40 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  * These are served from a separate path from /public-objects and can optionally
  * be protected with authentication or ACL checks based on the use case.
  *
- * NOTE: this route sits behind requireAuth (any signed-in staff member can read
- * any object) with NO per-object ACL or dealer-tenancy check. That is acceptable
- * for vehicle display photos, the only current use. TODO: if non-image or
- * sensitive assets (finance documents, customer uploads) ever use this path,
- * enforce setObjectAclPolicy at upload confirmation and canAccessObjectEntity here.
+ * Tenancy enforcement (behind requireAuth):
+ * - New uploads carry a server-stamped `uploads/dealer-{id}/` prefix: only the
+ *   owning dealer can read them; any other dealer gets an indistinguishable 404.
+ * - Legacy unprefixed keys: if a documents row references the key, its dealerId
+ *   must match the active dealer (404 otherwise). Unreferenced legacy objects
+ *   (vehicle display photos) remain readable by any signed-in member.
  */
 router.get("/storage/objects/*path", async (req: Request, res: Response) => {
   try {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
+
+    const dealerId = activeDealerId(res);
+    const prefixMatch = DEALER_PREFIX_RE.exec(wildcardPath);
+    if (prefixMatch) {
+      if (Number(prefixMatch[1]) !== dealerId) {
+        // Cross-dealer read — 404, indistinguishable from a missing object.
+        res.status(404).json({ error: "Object not found" });
+        return;
+      }
+    } else {
+      const [owningDoc] = await db
+        .select({ dealerId: documentsTable.dealerId })
+        .from(documentsTable)
+        .where(eq(documentsTable.storageKey, objectPath))
+        .limit(1);
+      if (owningDoc && owningDoc.dealerId !== dealerId) {
+        res.status(404).json({ error: "Object not found" });
+        return;
+      }
+    }
+
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
-
-    // --- Protected route example (uncomment when using replit-auth) ---
-    // if (!req.isAuthenticated()) {
-    //   res.status(401).json({ error: "Unauthorized" });
-    //   return;
-    // }
-    // const canAccess = await objectStorageService.canAccessObjectEntity({
-    //   userId: req.user.id,
-    //   objectFile,
-    //   requestedPermission: ObjectPermission.READ,
-    // });
-    // if (!canAccess) {
-    //   res.status(403).json({ error: "Forbidden" });
-    //   return;
-    // }
-
     const response = await objectStorageService.downloadObject(objectFile);
 
     res.status(response.status);

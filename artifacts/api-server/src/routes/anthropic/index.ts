@@ -18,12 +18,17 @@ import { anthropic } from "@workspace/integrations-anthropic-ai";
 
 const router: IRouter = Router();
 
-async function buildSystemPrompt(): Promise<string> {
+// Grounding data is ALWAYS scoped to the active dealer: the concierge must
+// never see (or leak) another tenant's inventory, pipeline, or service book.
+async function buildSystemPrompt(dealerId: number): Promise<string> {
   const [vehicles, leads, deals, serviceOrders] = await Promise.all([
-    db.select().from(vehiclesTable),
-    db.select().from(leadsTable),
-    db.select().from(dealsTable),
-    db.select().from(serviceOrdersTable),
+    db.select().from(vehiclesTable).where(eq(vehiclesTable.dealerId, dealerId)),
+    db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
+    db.select().from(dealsTable).where(eq(dealsTable.dealerId, dealerId)),
+    db
+      .select()
+      .from(serviceOrdersTable)
+      .where(eq(serviceOrdersTable.dealerId, dealerId)),
   ]);
 
   const available = vehicles.filter((v) => v.status === "available").slice(0, 40);
@@ -79,6 +84,7 @@ router.get("/anthropic/conversations", async (_req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(conversations)
+    .where(eq(conversations.dealerId, activeDealerId(res)))
     .orderBy(desc(conversations.createdAt));
   res.json(rows);
 });
@@ -105,7 +111,9 @@ router.get("/anthropic/conversations/:id", async (req, res): Promise<void> => {
   const [conversation] = await db
     .select()
     .from(conversations)
-    .where(eq(conversations.id, id));
+    .where(
+      and(eq(conversations.id, id), eq(conversations.dealerId, activeDealerId(res))),
+    );
   if (!conversation) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -126,7 +134,9 @@ router.delete("/anthropic/conversations/:id", async (req, res): Promise<void> =>
   }
   const [deleted] = await db
     .delete(conversations)
-    .where(eq(conversations.id, id))
+    .where(
+      and(eq(conversations.id, id), eq(conversations.dealerId, activeDealerId(res))),
+    )
     .returning();
   if (!deleted) {
     res.status(404).json({ error: "Not found" });
@@ -140,6 +150,19 @@ router.get(
   async (req, res): Promise<void> => {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    const [conversation] = await db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.id, id),
+          eq(conversations.dealerId, activeDealerId(res)),
+        ),
+      );
+    if (!conversation) {
       res.status(404).json({ error: "Not found" });
       return;
     }
@@ -170,7 +193,12 @@ router.post(
     const [conversation] = await db
       .select()
       .from(conversations)
-      .where(eq(conversations.id, id));
+      .where(
+        and(
+          eq(conversations.id, id),
+          eq(conversations.dealerId, activeDealerId(res)),
+        ),
+      );
     if (!conversation) {
       res.status(404).json({ error: "Not found" });
       return;
@@ -197,7 +225,7 @@ router.post(
         content: m.content,
       }));
 
-    const systemPrompt = await buildSystemPrompt();
+    const systemPrompt = await buildSystemPrompt(conversation.dealerId);
 
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");

@@ -152,6 +152,12 @@ router.post("/documents", async (req: Request, res: Response): Promise<void> => 
     res.status(422).json({ error: "Invalid storage path" });
     return;
   }
+  // Presigned uploads are stamped with the active dealer's prefix server-side;
+  // a document may only reference a key owned by this dealer.
+  if (!storageKey.startsWith(`/objects/uploads/dealer-${dealerId}/`)) {
+    res.status(422).json({ error: "Invalid storage path" });
+    return;
+  }
 
   const user = res.locals.user as
     | { name?: string | null; email?: string | null }

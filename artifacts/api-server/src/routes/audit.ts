@@ -5,6 +5,7 @@ import {
   ListAuditLogsQueryParams,
   ListAuditLogsResponse,
 } from "@workspace/api-zod";
+import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
 
@@ -15,7 +16,9 @@ router.get("/audit-logs", async (req, res): Promise<void> => {
     return;
   }
 
-  const conditions: SQL[] = [];
+  // Tenancy: audit reads are always scoped to the active dealer. Cross-dealer
+  // audit access exists only on super-admin platform routes.
+  const conditions: SQL[] = [eq(auditLogsTable.dealerId, activeDealerId(res))];
   if (query.data.action) {
     conditions.push(eq(auditLogsTable.action, query.data.action));
   }

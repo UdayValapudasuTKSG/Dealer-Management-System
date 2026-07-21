@@ -57,10 +57,9 @@ import { onServiceOrderCompleted } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { activeDealerId } from "../middlewares/rbac";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
+import { computeServiceTax, ensureDealerTaxes } from "../lib/taxes";
 
 const router: IRouter = Router();
-
-const TAX_RATE = 0.15;
 
 function toDateString(value: unknown): string | undefined {
   if (value == null) return undefined;
@@ -578,8 +577,13 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
     0,
   );
   const laborTotal = card.laborHours * card.laborRate;
-  const tax = Math.round((partsTotal + laborTotal) * TAX_RATE * 100) / 100;
-  const total = Math.round((partsTotal + laborTotal + tax) * 100) / 100;
+  // Deterministic tax engine: same per-dealer configured rules as sales
+  // quotes (dealer_taxes VAT rule) — no hardcoded rate.
+  const taxRules = await ensureDealerTaxes(card.dealerId);
+  const { tax, total } = computeServiceTax(
+    Math.round((partsTotal + laborTotal) * 100) / 100,
+    taxRules,
+  );
 
   const [invoice] = await db
     .insert(serviceInvoicesTable)
