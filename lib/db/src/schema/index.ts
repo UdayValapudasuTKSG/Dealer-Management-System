@@ -34,3 +34,4 @@ export * from "./whatsappMessages";
 export * from "./deliveries";
 export * from "./dealers";
 export * from "./divisions";
+export * from "./callLogs";

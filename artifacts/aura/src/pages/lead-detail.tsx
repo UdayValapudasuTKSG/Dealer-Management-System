@@ -58,6 +58,7 @@ import {
   type FieldDef,
 } from "@/components/create-record-dialog";
 import { WhatsappPanel } from "@/components/lead/whatsapp-panel";
+import { CallDialog } from "@/components/lead/call-dialog";
 import { useAuthz } from "@/lib/auth";
 import { useMoney, formatGuyanaDate, formatGuyanaDateTime } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -543,6 +544,7 @@ export default function LeadDetail() {
   const [tab, setTab] = useState<Tab>("details");
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
 
   const { can } = useAuthz();
@@ -842,6 +844,16 @@ export default function LeadDetail() {
             {canEdit && (
               <Button
                 variant="outline"
+                onClick={() => setCallOpen(true)}
+                className="gap-1.5"
+              >
+                <Phone className="w-3.5 h-3.5" />
+                Call
+              </Button>
+            )}
+            {canEdit && (
+              <Button
+                variant="outline"
                 onClick={() => setEditOpen(true)}
                 className="gap-1.5"
               >
@@ -859,6 +871,14 @@ export default function LeadDetail() {
           </div>
         </div>
       </div>
+
+      <CallDialog
+        leadId={lead.id}
+        leadName={lead.name}
+        leadPhone={lead.phone ?? null}
+        open={callOpen}
+        onOpenChange={setCallOpen}
+      />
 
       {/* Journey navigation pane — full width on top */}
       <div className="mb-6">
@@ -912,7 +932,7 @@ export default function LeadDetail() {
                 {divisions?.find((d) => d.id === lead.divisionId)?.name ?? "—"}
               </Field>
             )}
-            <Field label="Lead Owner">{ownerDisplay}</Field>
+            <Field label="Sales Advisor">{ownerDisplay}</Field>
             <Field label="Phone">
               {lead.phone ? (
                 <a
@@ -1178,7 +1198,7 @@ export default function LeadDetail() {
                     >
                       <span className="capitalize">{lead.priority}</span>
                     </InlineField>
-                    <InlineField label="Lead Owner">{ownerDisplay}</InlineField>
+                    <InlineField label="Sales Advisor">{ownerDisplay}</InlineField>
                   </Section>
 
                   <Section title="Product Interest">

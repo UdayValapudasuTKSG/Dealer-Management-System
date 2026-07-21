@@ -996,6 +996,7 @@ export const CreateLeadBody = zod.object({
 
 
 export const CreateLeadResponse = zod.object({
+  "lead": zod.object({
   "id": zod.number(),
   "divisionId": zod.number().nullish(),
   "name": zod.string(),
@@ -1042,6 +1043,9 @@ export const CreateLeadResponse = zod.object({
   "testDriveLicence": zod.string().nullish(),
   "testDriveWaiver": zod.boolean().optional(),
   "createdAt": zod.coerce.date()
+}),
+  "merged": zod.boolean(),
+  "mergeNotice": zod.string().nullish()
 })
 
 
@@ -1836,6 +1840,87 @@ export const DownloadLeadQuotePdfParams = zod.object({
 })
 
 export const DownloadLeadQuotePdfResponse = zod.unknown()
+
+
+/**
+ * @summary Call log history for this lead
+ */
+export const ListLeadCallsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListLeadCallsResponseItem = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "direction": zod.enum(['outbound', 'inbound']),
+  "status": zod.enum(['completed', 'no_answer', 'busy', 'voicemail']),
+  "durationSeconds": zod.number().nullish(),
+  "sentiment": zod.enum(['positive', 'neutral', 'negative']),
+  "notes": zod.string().nullish(),
+  "provider": zod.string(),
+  "providerCallId": zod.string().nullish(),
+  "actor": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListLeadCallsResponse = zod.array(ListLeadCallsResponseItem)
+
+
+/**
+ * @summary Log a call via the telephony adapter (one activity per call)
+ */
+export const CreateLeadCallParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createLeadCallBodyDurationSecondsMin = 0;
+
+export const createLeadCallBodyNotesMax = 4000;
+
+
+
+export const CreateLeadCallBody = zod.object({
+  "direction": zod.enum(['outbound', 'inbound']),
+  "status": zod.enum(['completed', 'no_answer', 'busy', 'voicemail']),
+  "durationSeconds": zod.number().min(createLeadCallBodyDurationSecondsMin).optional(),
+  "sentiment": zod.enum(['positive', 'neutral', 'negative']),
+  "notes": zod.string().max(createLeadCallBodyNotesMax).optional()
+})
+
+export const CreateLeadCallResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "direction": zod.enum(['outbound', 'inbound']),
+  "status": zod.enum(['completed', 'no_answer', 'busy', 'voicemail']),
+  "durationSeconds": zod.number().nullish(),
+  "sentiment": zod.enum(['positive', 'neutral', 'negative']),
+  "notes": zod.string().nullish(),
+  "provider": zod.string(),
+  "providerCallId": zod.string().nullish(),
+  "actor": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary AI-assist — suggest an overall sentiment from call notes (gated by the Sales agent kill switch)
+ */
+export const SuggestCallSentimentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const suggestCallSentimentBodyNotesMin = 5;
+export const suggestCallSentimentBodyNotesMax = 4000;
+
+
+
+export const SuggestCallSentimentBody = zod.object({
+  "notes": zod.string().min(suggestCallSentimentBodyNotesMin).max(suggestCallSentimentBodyNotesMax)
+})
+
+export const SuggestCallSentimentResponse = zod.object({
+  "sentiment": zod.enum(['positive', 'neutral', 'negative']),
+  "rationale": zod.string().nullish()
+})
 
 
 export const ListCustomersResponseItem = zod.object({

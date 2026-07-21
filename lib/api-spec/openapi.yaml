@@ -826,11 +826,11 @@ paths:
               $ref: "#/components/schemas/LeadInput"
       responses:
         "201":
-          description: Created
+          description: Created (or merged into an existing open duplicate lead)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Lead"
+                $ref: "#/components/schemas/LeadCreateResult"
   /leads/{id}:
     get:
       operationId: getLead
@@ -1352,6 +1352,102 @@ paths:
                 format: binary
         "404":
           description: Lead not found or no vehicle of interest on file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /leads/{id}/calls:
+    get:
+      operationId: listLeadCalls
+      tags: [leads]
+      summary: Call log history for this lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Calls, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CallLog"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createLeadCall
+      tags: [leads]
+      summary: Log a call via the telephony adapter (one activity per call)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CallLogInput"
+      responses:
+        "201":
+          description: Call logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallLog"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /leads/{id}/calls/suggest-sentiment:
+    post:
+      operationId: suggestCallSentiment
+      tags: [leads]
+      summary: AI-assist — suggest an overall sentiment from call notes (gated by the Sales agent kill switch)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CallSentimentSuggestInput"
+      responses:
+        "200":
+          description: Suggested sentiment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallSentimentSuggestion"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The Sales agent is paused (kill switch)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: The AI service is unavailable
           content:
             application/json:
               schema:
@@ -4803,6 +4899,49 @@ components:
         budgetFinancing: { type: ["string", "null"] }
         description: { type: ["string", "null"] }
         address: { type: ["string", "null"] }
+    LeadCreateResult:
+      type: object
+      required: [lead, merged]
+      properties:
+        lead:
+          $ref: "#/components/schemas/Lead"
+        merged: { type: boolean }
+        mergeNotice: { type: ["string", "null"] }
+    CallLog:
+      type: object
+      required: [id, leadId, direction, status, sentiment, provider, actor, createdAt]
+      properties:
+        id: { type: integer }
+        leadId: { type: integer }
+        direction: { type: string, enum: [outbound, inbound] }
+        status: { type: string, enum: [completed, no_answer, busy, voicemail] }
+        durationSeconds: { type: ["integer", "null"] }
+        sentiment: { type: string, enum: [positive, neutral, negative] }
+        notes: { type: ["string", "null"] }
+        provider: { type: string }
+        providerCallId: { type: ["string", "null"] }
+        actor: { type: string }
+        createdAt: { type: string, format: date-time }
+    CallLogInput:
+      type: object
+      required: [direction, status, sentiment]
+      properties:
+        direction: { type: string, enum: [outbound, inbound] }
+        status: { type: string, enum: [completed, no_answer, busy, voicemail] }
+        durationSeconds: { type: integer, minimum: 0 }
+        sentiment: { type: string, enum: [positive, neutral, negative] }
+        notes: { type: string, maxLength: 4000 }
+    CallSentimentSuggestInput:
+      type: object
+      required: [notes]
+      properties:
+        notes: { type: string, minLength: 5, maxLength: 4000 }
+    CallSentimentSuggestion:
+      type: object
+      required: [sentiment]
+      properties:
+        sentiment: { type: string, enum: [positive, neutral, negative] }
+        rationale: { type: ["string", "null"] }
     LeadNoteInput:
       type: object
       required: [text]

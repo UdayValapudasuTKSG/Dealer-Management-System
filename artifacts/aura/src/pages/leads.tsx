@@ -401,9 +401,20 @@ export default function Leads() {
                   payload.color = v.exteriorColor;
                 }
               }
-              await createLead.mutateAsync({ data: payload as never });
+              const result = await createLead.mutateAsync({
+                data: payload as never,
+              });
               queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
-              toast({ title: "Lead captured", description: "AURA is scoring and routing this prospect." });
+              if (result.merged) {
+                toast({
+                  title: "Merged into an existing lead",
+                  description:
+                    result.mergeNotice ??
+                    "This enquiry matched an open lead, so it was merged instead of creating a duplicate.",
+                });
+              } else {
+                toast({ title: "Lead captured", description: "AURA is scoring and routing this prospect." });
+              }
             }}
           />
       </div>
@@ -460,7 +471,7 @@ export default function Leads() {
                     [
                       ["name", "Client"],
                       ["stage", "Stage"],
-                      ["owner", "Owner"],
+                      ["owner", "Advisor"],
                       ["value", "Value"],
                       ["days", "Days in stage"],
                       ["ai", "AI"],

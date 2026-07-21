@@ -43,6 +43,11 @@ export const dealerUsersTable = pgTable(
       .notNull()
       .references(() => rolesTable.id),
     isGeneralManager: boolean("is_general_manager").notNull().default(false),
+    // Timestamp-based round robin: stamped whenever a lead is assigned to
+    // this member (auto or manual). Oldest (or never) goes next.
+    lastLeadAssignedAt: timestamp("last_lead_assigned_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

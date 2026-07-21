@@ -1233,6 +1233,117 @@ export interface LeadUpdate {
   address?: string | null;
 }
 
+export interface LeadCreateResult {
+  lead: Lead;
+  merged: boolean;
+  /** @nullable */
+  mergeNotice?: string | null;
+}
+
+export type CallLogDirection = typeof CallLogDirection[keyof typeof CallLogDirection];
+
+
+export const CallLogDirection = {
+  outbound: 'outbound',
+  inbound: 'inbound',
+} as const;
+
+export type CallLogStatus = typeof CallLogStatus[keyof typeof CallLogStatus];
+
+
+export const CallLogStatus = {
+  completed: 'completed',
+  no_answer: 'no_answer',
+  busy: 'busy',
+  voicemail: 'voicemail',
+} as const;
+
+export type CallLogSentiment = typeof CallLogSentiment[keyof typeof CallLogSentiment];
+
+
+export const CallLogSentiment = {
+  positive: 'positive',
+  neutral: 'neutral',
+  negative: 'negative',
+} as const;
+
+export interface CallLog {
+  id: number;
+  leadId: number;
+  direction: CallLogDirection;
+  status: CallLogStatus;
+  /** @nullable */
+  durationSeconds?: number | null;
+  sentiment: CallLogSentiment;
+  /** @nullable */
+  notes?: string | null;
+  provider: string;
+  /** @nullable */
+  providerCallId?: string | null;
+  actor: string;
+  createdAt: string;
+}
+
+export type CallLogInputDirection = typeof CallLogInputDirection[keyof typeof CallLogInputDirection];
+
+
+export const CallLogInputDirection = {
+  outbound: 'outbound',
+  inbound: 'inbound',
+} as const;
+
+export type CallLogInputStatus = typeof CallLogInputStatus[keyof typeof CallLogInputStatus];
+
+
+export const CallLogInputStatus = {
+  completed: 'completed',
+  no_answer: 'no_answer',
+  busy: 'busy',
+  voicemail: 'voicemail',
+} as const;
+
+export type CallLogInputSentiment = typeof CallLogInputSentiment[keyof typeof CallLogInputSentiment];
+
+
+export const CallLogInputSentiment = {
+  positive: 'positive',
+  neutral: 'neutral',
+  negative: 'negative',
+} as const;
+
+export interface CallLogInput {
+  direction: CallLogInputDirection;
+  status: CallLogInputStatus;
+  /** @minimum 0 */
+  durationSeconds?: number;
+  sentiment: CallLogInputSentiment;
+  /** @maxLength 4000 */
+  notes?: string;
+}
+
+export interface CallSentimentSuggestInput {
+  /**
+     * @minLength 5
+     * @maxLength 4000
+     */
+  notes: string;
+}
+
+export type CallSentimentSuggestionSentiment = typeof CallSentimentSuggestionSentiment[keyof typeof CallSentimentSuggestionSentiment];
+
+
+export const CallSentimentSuggestionSentiment = {
+  positive: 'positive',
+  neutral: 'neutral',
+  negative: 'negative',
+} as const;
+
+export interface CallSentimentSuggestion {
+  sentiment: CallSentimentSuggestionSentiment;
+  /** @nullable */
+  rationale?: string | null;
+}
+
 export interface LeadNoteInput {
   /**
      * @minLength 1

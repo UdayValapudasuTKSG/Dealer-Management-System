@@ -11,6 +11,8 @@ import {
   emailLogsTable,
   whatsappMessagesTable,
   dealsTable,
+  callLogsTable,
+  agentsTable,
   type Lead,
 } from "@workspace/db";
 import {
@@ -51,10 +53,21 @@ import {
   SendLeadWhatsappReplyResponse,
   GetLeadAgentBriefParams,
   GetLeadAgentBriefResponse,
+  CreateLeadResponse,
+  ListLeadCallsParams,
+  ListLeadCallsResponse,
+  CreateLeadCallParams,
+  CreateLeadCallBody,
+  CreateLeadCallResponse,
+  SuggestCallSentimentParams,
+  SuggestCallSentimentBody,
+  SuggestCallSentimentResponse,
 } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
-import { autoAssignLead } from "../lib/lead-assignment";
+import { autoAssignLead, stampLeadAssignment } from "../lib/lead-assignment";
+import { findOpenDuplicate, mergeIntoExistingLead } from "../lib/lead-dedup";
+import { telephonyAdapter } from "../lib/telephony";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
 import { activeDealerId } from "../middlewares/rbac";
@@ -191,6 +204,21 @@ router.post("/leads", async (req, res): Promise<void> => {
   }
   if (divisionId == null) divisionId = await defaultDivisionId(dealerId);
 
+  // Dedup agent (A1): a matching open lead absorbs this enquiry instead of
+  // spawning a duplicate record.
+  const duplicate = await findOpenDuplicate(dealerId, parsed.data);
+  if (duplicate) {
+    const { lead, notice } = await mergeIntoExistingLead(
+      duplicate,
+      parsed.data,
+      actorName(res),
+    );
+    res
+      .status(201)
+      .json(CreateLeadResponse.parse({ lead, merged: true, mergeNotice: notice }));
+    return;
+  }
+
   const [lead] = await db
     .insert(leadsTable)
     .values({ ...parsed.data, divisionId, dealerId })
@@ -206,10 +234,16 @@ router.post("/leads", async (req, res): Promise<void> => {
     actorName(res),
   );
 
-  // Sales agent routes unowned leads to the least-loaded advisor.
+  // Sales agent routes unowned leads by timestamp-based round robin.
   const assigned = await autoAssignLead(lead!);
 
-  res.status(201).json(GetLeadResponse.parse(assigned ?? lead));
+  res.status(201).json(
+    CreateLeadResponse.parse({
+      lead: assigned ?? lead,
+      merged: false,
+      mergeNotice: null,
+    }),
+  );
 });
 
 router.get("/leads/:id", async (req, res): Promise<void> => {
@@ -730,6 +764,9 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
       ),
     )
     .returning();
+
+  // Manual override still advances the round-robin clock for fairness.
+  await stampLeadAssignment(activeDealerId(res), advisor.id);
 
   await logLeadEvent(
     lead!,
@@ -1426,5 +1463,180 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
     res.status(502).json({ error: "The agent service is unavailable" });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Click-to-call (A6) — stub telephony adapter + one call log per call.
+// ---------------------------------------------------------------------------
+
+async function leadForDealer(
+  leadId: number,
+  dealerId: number,
+): Promise<Lead | null> {
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.dealerId, dealerId)));
+  return lead ?? null;
+}
+
+router.get("/leads/:id/calls", async (req, res): Promise<void> => {
+  const params = ListLeadCallsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const lead = await leadForDealer(params.data.id, activeDealerId(res));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+  const calls = await db
+    .select()
+    .from(callLogsTable)
+    .where(
+      and(
+        eq(callLogsTable.leadId, lead.id),
+        eq(callLogsTable.dealerId, lead.dealerId),
+      ),
+    )
+    .orderBy(desc(callLogsTable.createdAt));
+  res.json(ListLeadCallsResponse.parse(calls));
+});
+
+router.post("/leads/:id/calls", async (req, res): Promise<void> => {
+  const params = CreateLeadCallParams.safeParse(req.params);
+  const body = CreateLeadCallBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({
+      error: (params.success ? body : params).error?.message ?? "Invalid input",
+    });
+    return;
+  }
+  const lead = await leadForDealer(params.data.id, activeDealerId(res));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  // PENDING-INFRA seam: the adapter is a stub until a real provider exists.
+  const session = await telephonyAdapter().placeCall({
+    dealerId: lead.dealerId,
+    leadId: lead.id,
+    toPhone: lead.phone,
+    direction: body.data.direction,
+  });
+
+  const [call] = await db
+    .insert(callLogsTable)
+    .values({
+      dealerId: lead.dealerId,
+      leadId: lead.id,
+      direction: body.data.direction,
+      status: body.data.status,
+      durationSeconds: body.data.durationSeconds ?? null,
+      sentiment: body.data.sentiment,
+      notes: body.data.notes?.trim() || null,
+      provider: session.provider,
+      providerCallId: session.providerCallId,
+      actor: actorName(res),
+    })
+    .returning();
+
+  // Exactly ONE activity record per call: the call log row above plus a
+  // single timeline event that carries outcome + sentiment into the feed.
+  const mins =
+    call!.durationSeconds != null
+      ? ` (${Math.round(call!.durationSeconds / 60)} min)`
+      : "";
+  const statusLabel = call!.status.replace("_", " ");
+  await logLeadEvent(
+    lead,
+    "call",
+    `${call!.direction === "outbound" ? "Outbound" : "Inbound"} call — ${statusLabel}${mins}`,
+    `${call!.notes ? `${call!.notes}\n` : ""}Sentiment: ${call!.sentiment}.`,
+    actorName(res),
+  );
+
+  res.status(201).json(CreateLeadCallResponse.parse(call));
+});
+
+// AI-assist: suggest a sentiment from call notes. Gated behind the Sales
+// agent kill switch — paused agent means no LLM calls, manual picker only.
+router.post(
+  "/leads/:id/calls/suggest-sentiment",
+  async (req, res): Promise<void> => {
+    const params = SuggestCallSentimentParams.safeParse(req.params);
+    const body = SuggestCallSentimentBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({
+        error:
+          (params.success ? body : params).error?.message ?? "Invalid input",
+      });
+      return;
+    }
+    const lead = await leadForDealer(params.data.id, activeDealerId(res));
+    if (!lead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const [agent] = await db
+      .select()
+      .from(agentsTable)
+      .where(
+        and(
+          eq(agentsTable.key, "sales"),
+          eq(agentsTable.dealerId, lead.dealerId),
+        ),
+      );
+    if (!agent || agent.status !== "active") {
+      res.status(409).json({
+        error:
+          "The Sales agent is paused — pick the sentiment manually or resume the agent in AI Agents.",
+      });
+      return;
+    }
+
+    try {
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 200,
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `You classify the customer's overall sentiment from a car dealership call note. Respond with ONLY a JSON object like {"sentiment":"positive","rationale":"…"} where sentiment is exactly one of "positive", "neutral", "negative" and rationale is one short sentence.\n\nCall notes:\n${body.data.notes}`,
+              },
+            ],
+          },
+        ],
+      });
+      const textBlock = message.content.find((b) => b.type === "text");
+      const raw = textBlock && textBlock.type === "text" ? textBlock.text : "";
+      const jsonStart = raw.indexOf("{");
+      const jsonEnd = raw.lastIndexOf("}");
+      if (jsonStart === -1 || jsonEnd === -1) throw new Error("No JSON in reply");
+      const parsedJson = JSON.parse(raw.slice(jsonStart, jsonEnd + 1)) as {
+        sentiment?: string;
+        rationale?: string;
+      };
+      const sentiment = ["positive", "neutral", "negative"].includes(
+        parsedJson.sentiment ?? "",
+      )
+        ? parsedJson.sentiment
+        : "neutral";
+      res.json(
+        SuggestCallSentimentResponse.parse({
+          sentiment,
+          rationale: parsedJson.rationale ?? null,
+        }),
+      );
+    } catch (err) {
+      req.log.error({ err }, "Call sentiment suggestion failed");
+      res.status(502).json({ error: "The AI service is unavailable" });
+    }
+  },
+);
 
 export default router;

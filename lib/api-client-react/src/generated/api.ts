@@ -44,6 +44,10 @@ import type {
   Booking,
   BookingInput,
   BookingUpdate,
+  CallLog,
+  CallLogInput,
+  CallSentimentSuggestInput,
+  CallSentimentSuggestion,
   CommNote,
   CommNoteInput,
   CoveragePlan,
@@ -114,6 +118,7 @@ import type {
   LeadAdvanceUnmet,
   LeadAdvisor,
   LeadAgentBrief,
+  LeadCreateResult,
   LeadDecisionInput,
   LeadInput,
   LeadNoteInput,
@@ -2614,9 +2619,9 @@ export const getCreateLeadUrl = () => {
   return `/api/leads`
 }
 
-export const createLead = async (leadInput: LeadInput, options?: RequestInit): Promise<Lead> => {
+export const createLead = async (leadInput: LeadInput, options?: RequestInit): Promise<LeadCreateResult> => {
 
-  return customFetch<Lead>(getCreateLeadUrl(),
+  return customFetch<LeadCreateResult>(getCreateLeadUrl(),
   {
     ...options,
     method: 'POST',
@@ -4104,6 +4109,227 @@ export function useDownloadLeadQuotePdf<TData = Awaited<ReturnType<typeof downlo
 
 
 
+
+export const getListLeadCallsUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/calls`
+}
+
+/**
+ * @summary Call log history for this lead
+ */
+export const listLeadCalls = async (id: number, options?: RequestInit): Promise<CallLog[]> => {
+
+  return customFetch<CallLog[]>(getListLeadCallsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLeadCallsQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/calls`
+    ] as const;
+    }
+
+
+export const getListLeadCallsQueryOptions = <TData = Awaited<ReturnType<typeof listLeadCalls>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadCalls>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLeadCallsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLeadCalls>>> = ({ signal }) => listLeadCalls(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLeadCalls>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLeadCallsQueryResult = NonNullable<Awaited<ReturnType<typeof listLeadCalls>>>
+export type ListLeadCallsQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Call log history for this lead
+ */
+
+export function useListLeadCalls<TData = Awaited<ReturnType<typeof listLeadCalls>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadCalls>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLeadCallsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateLeadCallUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/calls`
+}
+
+/**
+ * @summary Log a call via the telephony adapter (one activity per call)
+ */
+export const createLeadCall = async (id: number,
+    callLogInput: CallLogInput, options?: RequestInit): Promise<CallLog> => {
+
+  return customFetch<CallLog>(getCreateLeadCallUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(callLogInput)
+  }
+);}
+
+
+
+
+
+export const getCreateLeadCallMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLeadCall>>, TError,{id: number;data: BodyType<CallLogInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLeadCall>>, TError,{id: number;data: BodyType<CallLogInput>}, TContext> => {
+
+const mutationKey = ['createLeadCall'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLeadCall>>, {id: number;data: BodyType<CallLogInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createLeadCall(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLeadCallMutationResult = NonNullable<Awaited<ReturnType<typeof createLeadCall>>>
+    export type CreateLeadCallMutationBody = BodyType<CallLogInput>
+    export type CreateLeadCallMutationError = ErrorType<Error>
+
+    /**
+ * @summary Log a call via the telephony adapter (one activity per call)
+ */
+export const useCreateLeadCall = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLeadCall>>, TError,{id: number;data: BodyType<CallLogInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createLeadCall>>,
+        TError,
+        {id: number;data: BodyType<CallLogInput>},
+        TContext
+      > => {
+      return useMutation(getCreateLeadCallMutationOptions(options));
+    }
+
+export const getSuggestCallSentimentUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/calls/suggest-sentiment`
+}
+
+/**
+ * @summary AI-assist — suggest an overall sentiment from call notes (gated by the Sales agent kill switch)
+ */
+export const suggestCallSentiment = async (id: number,
+    callSentimentSuggestInput: CallSentimentSuggestInput, options?: RequestInit): Promise<CallSentimentSuggestion> => {
+
+  return customFetch<CallSentimentSuggestion>(getSuggestCallSentimentUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(callSentimentSuggestInput)
+  }
+);}
+
+
+
+
+
+export const getSuggestCallSentimentMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestCallSentiment>>, TError,{id: number;data: BodyType<CallSentimentSuggestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof suggestCallSentiment>>, TError,{id: number;data: BodyType<CallSentimentSuggestInput>}, TContext> => {
+
+const mutationKey = ['suggestCallSentiment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof suggestCallSentiment>>, {id: number;data: BodyType<CallSentimentSuggestInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  suggestCallSentiment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SuggestCallSentimentMutationResult = NonNullable<Awaited<ReturnType<typeof suggestCallSentiment>>>
+    export type SuggestCallSentimentMutationBody = BodyType<CallSentimentSuggestInput>
+    export type SuggestCallSentimentMutationError = ErrorType<Error>
+
+    /**
+ * @summary AI-assist — suggest an overall sentiment from call notes (gated by the Sales agent kill switch)
+ */
+export const useSuggestCallSentiment = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestCallSentiment>>, TError,{id: number;data: BodyType<CallSentimentSuggestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof suggestCallSentiment>>,
+        TError,
+        {id: number;data: BodyType<CallSentimentSuggestInput>},
+        TContext
+      > => {
+      return useMutation(getSuggestCallSentimentMutationOptions(options));
+    }
 
 export const getListCustomersUrl = () => {
 

@@ -14,6 +14,7 @@ import {
 import { notifyUsers } from "../lib/email";
 import { onLeadCreated } from "../lib/email-triggers";
 import { autoAssignLead } from "../lib/lead-assignment";
+import { findOpenDuplicate, mergeIntoExistingLead } from "../lib/lead-dedup";
 import { defaultDealerId, dealerStaffIdsByRole } from "../lib/tenancy";
 
 const router: IRouter = Router();
@@ -113,6 +114,35 @@ router.post("/enquiries", async (req, res): Promise<void> => {
   if (comments && comments.trim()) noteParts.push(comments.trim());
   if (vehicleName && !matchedVehicleLabel)
     noteParts.push(`Enquired about: ${vehicleName}`);
+
+  // Dedup agent: a matching open lead absorbs this enquiry instead of
+  // creating a duplicate record.
+  const duplicate = await findOpenDuplicate(dealerId, {
+    name,
+    email,
+    phone,
+    interestedVehicleId,
+    variant: variant ?? matchedVariant,
+    color: color ?? matchedColor,
+    notes: noteParts.length ? noteParts.join("\n") : null,
+  });
+  if (duplicate) {
+    const { lead: merged } = await mergeIntoExistingLead(
+      duplicate,
+      {
+        name,
+        email,
+        phone,
+        interestedVehicleId,
+        variant: variant ?? matchedVariant,
+        color: color ?? matchedColor,
+        notes: noteParts.length ? noteParts.join("\n") : null,
+      },
+      "Website enquiry",
+    );
+    res.status(201).json(CreateEnquiryResponse.parse(merged));
+    return;
+  }
 
   const [lead] = await db
     .insert(leadsTable)

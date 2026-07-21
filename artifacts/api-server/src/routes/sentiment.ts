@@ -87,7 +87,7 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
   for (const e of noteEvents) {
     if (items.length >= MAX_ITEMS) break;
     if (!e.detail || e.detail.trim().length < 10) continue;
-    if (!["note", "whatsapp_message"].includes(e.kind)) continue;
+    if (!["note", "whatsapp_message", "call"].includes(e.kind)) continue;
     const id = e.refType === "lead" ? (e.refId ?? null) : null;
     items.push({
       leadId: id,

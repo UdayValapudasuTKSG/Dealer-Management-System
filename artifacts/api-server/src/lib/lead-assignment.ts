@@ -1,4 +1,4 @@
-import { eq, sql, and, notInArray, inArray, isNotNull } from "drizzle-orm";
+import { eq, sql, and, inArray } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -17,11 +17,13 @@ import { logger } from "./logger";
 // ---------------------------------------------------------------------------
 // Sales agent — automatic lead routing.
 //
-// When a new lead lands without an owner, the Sales agent assigns it to the
-// least-loaded active Sales Advisor (fallback: Sales Manager) so no lead sits
-// unowned. Mirrors the manual POST /leads/:id/assign side-effects: status
-// new→assigned, phase aware→consider, timeline event, advisor notification,
-// lead_assignment email — plus an agent activity entry for the dashboard feed.
+// When a new lead lands without an owner, the Sales agent routes it by
+// timestamp-based round robin across the dealer's active Sales Advisors
+// (fallback: Sales Manager): whoever was assigned a lead least recently (or
+// never) is next — deterministic, plain code, no LLM. Managers can always
+// override via POST /leads/:id/assign. Mirrors the manual-assign side-effects:
+// status new→assigned, phase aware→consider, timeline event, advisor
+// notification, lead_assignment email — plus an agent activity entry.
 // Never throws: on any failure the lead simply stays unassigned for a human.
 // ---------------------------------------------------------------------------
 
@@ -33,6 +35,7 @@ type Candidate = {
   name: string | null;
   email: string | null;
   roleName: string | null;
+  lastLeadAssignedAt: Date | null;
 };
 
 async function candidateAdvisors(dealerId: number): Promise<Candidate[]> {
@@ -42,6 +45,7 @@ async function candidateAdvisors(dealerId: number): Promise<Candidate[]> {
       name: usersTable.name,
       email: usersTable.email,
       roleName: rolesTable.name,
+      lastLeadAssignedAt: dealerUsersTable.lastLeadAssignedAt,
     })
     .from(dealerUsersTable)
     .innerJoin(usersTable, eq(dealerUsersTable.userId, usersTable.id))
@@ -57,32 +61,23 @@ async function candidateAdvisors(dealerId: number): Promise<Candidate[]> {
   return advisors.length > 0 ? advisors : rows;
 }
 
-/** Open-lead count per owner (won/lost excluded) for workload balancing. */
-async function openLeadCounts(
+/**
+ * Stamp the round-robin clock for a dealer member. Exported so the manual
+ * POST /leads/:id/assign override keeps the rotation fair too.
+ */
+export async function stampLeadAssignment(
   dealerId: number,
-  userIds: number[],
-): Promise<Map<number, number>> {
-  const counts = new Map<number, number>(userIds.map((id) => [id, 0]));
-  if (userIds.length === 0) return counts;
-  const rows = await db
-    .select({
-      ownerUserId: leadsTable.ownerUserId,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(leadsTable)
+  userId: number,
+): Promise<void> {
+  await db
+    .update(dealerUsersTable)
+    .set({ lastLeadAssignedAt: new Date() })
     .where(
       and(
-        eq(leadsTable.dealerId, dealerId),
-        isNotNull(leadsTable.ownerUserId),
-        inArray(leadsTable.ownerUserId, userIds),
-        notInArray(leadsTable.phase, ["won", "lost"]),
+        eq(dealerUsersTable.dealerId, dealerId),
+        eq(dealerUsersTable.userId, userId),
       ),
-    )
-    .groupBy(leadsTable.ownerUserId);
-  for (const row of rows) {
-    if (row.ownerUserId != null) counts.set(row.ownerUserId, row.count);
-  }
-  return counts;
+    );
 }
 
 async function vehicleLabelFor(lead: Lead): Promise<string> {
@@ -115,17 +110,15 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
       return null;
     }
 
-    const counts = await openLeadCounts(
-      lead.dealerId,
-      candidates.map((c) => c.id),
-    );
+    // Timestamp-based round robin: least-recently-assigned first (never
+    // assigned sorts before everyone), ties broken by user id — deterministic.
     const ranked = [...candidates].sort((a, b) => {
-      const load = (counts.get(a.id) ?? 0) - (counts.get(b.id) ?? 0);
-      return load !== 0 ? load : a.id - b.id;
+      const at = a.lastLeadAssignedAt?.getTime() ?? 0;
+      const bt = b.lastLeadAssignedAt?.getTime() ?? 0;
+      return at !== bt ? at - bt : a.id - b.id;
     });
     const advisor = ranked[0]!;
     const advisorName = advisor.name ?? advisor.email ?? `User #${advisor.id}`;
-    const load = counts.get(advisor.id) ?? 0;
 
     const [updated] = await db
       .update(leadsTable)
@@ -143,7 +136,11 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
       .returning();
     if (!updated) return null; // raced with a manual assignment
 
-    const reasoning = `Routed by workload balance — ${advisorName} has ${load} active lead${load === 1 ? "" : "s"} (lowest on the team).`;
+    await stampLeadAssignment(updated.dealerId, advisor.id);
+
+    const reasoning = advisor.lastLeadAssignedAt
+      ? `Routed by round robin — ${advisorName} was last assigned a lead on ${advisor.lastLeadAssignedAt.toISOString().slice(0, 10)}, the longest wait on the team.`
+      : `Routed by round robin — ${advisorName} had not been assigned a lead yet.`;
 
     await db.insert(timelineEventsTable).values({
       dealerId: updated.dealerId,
