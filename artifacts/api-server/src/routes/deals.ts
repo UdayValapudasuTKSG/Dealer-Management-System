@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc, and } from "drizzle-orm";
 import { db, dealsTable, vehiclesTable, gatesTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
+import { idempotent } from "../middlewares/idempotency";
 import {
   findBlockedEditField,
   redactHiddenFields,
@@ -182,7 +183,9 @@ router.get("/deals/:id", async (req, res): Promise<void> => {
   res.json(GetDealResponse.parse(visible));
 });
 
-router.patch("/deals/:id", async (req, res): Promise<void> => {
+// Idempotent: stage changes allocate/release vehicles — a retried request
+// with the same X-Idempotency-Key must not re-run the transition.
+router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise<void> => {
   const params = UpdateDealParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

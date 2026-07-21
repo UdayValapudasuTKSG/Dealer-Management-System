@@ -3363,6 +3363,69 @@ export interface AgentUpdate {
   status?: AgentUpdateStatus;
 }
 
+export type AgentRunStatus = typeof AgentRunStatus[keyof typeof AgentRunStatus];
+
+
+export const AgentRunStatus = {
+  completed: 'completed',
+  accepted: 'accepted',
+  overridden: 'overridden',
+  error: 'error',
+  blocked: 'blocked',
+} as const;
+
+export interface AgentRun {
+  id: number;
+  agentKey: string;
+  runType: string;
+  inputSource: string;
+  /** @nullable */
+  inputSummary?: string | null;
+  /** @nullable */
+  outputSummary?: string | null;
+  /** @nullable */
+  confidence?: number | null;
+  status: AgentRunStatus;
+  /** @nullable */
+  errorMessage?: string | null;
+  /** @nullable */
+  refType?: string | null;
+  /** @nullable */
+  refId?: number | null;
+  /** @nullable */
+  latencyMs?: number | null;
+  createdAt: string;
+}
+
+export type AgentRunReviewDecision = typeof AgentRunReviewDecision[keyof typeof AgentRunReviewDecision];
+
+
+export const AgentRunReviewDecision = {
+  accepted: 'accepted',
+  overridden: 'overridden',
+} as const;
+
+export interface AgentRunReview {
+  decision: AgentRunReviewDecision;
+}
+
+export interface AgentMetrics {
+  agentKey: string;
+  runs: number;
+  accepted: number;
+  overridden: number;
+  errors: number;
+  blocked: number;
+  /** 0-100, accepted / (accepted+overridden) */
+  acceptanceRate: number;
+  /** @nullable */
+  avgConfidence?: number | null;
+  /** @nullable */
+  avgLatencyMs?: number | null;
+  /** @nullable */
+  lastRunAt?: string | null;
+}
+
 export interface Activity {
   id: number;
   /** @nullable */
@@ -4237,6 +4300,12 @@ type?: string;
 export type ListPartsParams = {
 search?: string;
 lowStock?: string;
+};
+
+export type ListAgentRunsParams = {
+agentKey?: string;
+status?: string;
+limit?: number;
 };
 
 export type ListActivityParams = {

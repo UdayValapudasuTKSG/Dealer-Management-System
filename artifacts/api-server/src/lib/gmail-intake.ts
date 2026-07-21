@@ -12,6 +12,11 @@ import { notifyUser } from "./email";
 import { createInboundLead, matchVehicleByText } from "./lead-intake";
 import { defaultDealerId } from "./tenancy";
 import { logger } from "./logger";
+import {
+  guardUntrusted,
+  isAgentEnabled,
+  recordAgentRun,
+} from "./agent-governance";
 
 // ---------------------------------------------------------------------------
 // Gmail email-to-lead intake agent.
@@ -128,7 +133,7 @@ job applications, supplier/internal mail are NOT enquiries.
 From: ${input.fromName} <${input.fromEmail}>
 Subject: ${input.subject}
 Body:
-${input.body.slice(0, 4000)}
+${guardUntrusted("email_body", input.body)}
 
 Respond with ONLY a JSON object, no markdown fences:
 {"isEnquiry": boolean, "name": string|null (the customer's name), "phone": string|null (phone number mentioned in the body), "vehicle": string|null (the vehicle they mention, e.g. "BMW X5"), "summary": string|null (1-2 sentence summary of what they want)}`;
@@ -286,6 +291,8 @@ export async function pollGmailInbox(): Promise<void> {
     }
     return;
   }
+  // Kill switch: dealer paused the email intake agent — skip polling entirely.
+  if (!(await isAgentEnabled(await defaultDealerId(), "sales"))) return;
   polling = true;
   const client = new ImapFlow({
     host: "imap.gmail.com",
@@ -344,6 +351,7 @@ export async function pollGmailInbox(): Promise<void> {
           }
 
           let leadId: number | null = null;
+          const startedAt = Date.now();
           const extraction = await classifyEmail({
             fromName,
             fromEmail: fromAddr,
@@ -368,6 +376,20 @@ export async function pollGmailInbox(): Promise<void> {
               "Gmail intake: email classified as non-enquiry, skipped",
             );
           }
+          await recordAgentRun({
+            dealerId: await defaultDealerId(),
+            agentKey: "sales",
+            runType: "email_intake",
+            inputSource: "gmail",
+            inputSummary: subject || "(no subject)",
+            outputSummary: extraction.isEnquiry
+              ? `Enquiry → lead #${leadId}: ${extraction.summary ?? ""}`
+              : "Classified as non-enquiry, skipped",
+            refType: leadId != null ? "lead" : null,
+            refId: leadId,
+            latencyMs: Date.now() - startedAt,
+            mutation: leadId != null,
+          });
 
           await recordProcessed(messageId, leadId);
           await markHandled(client, uid, hasProcessedBox);

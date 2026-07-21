@@ -26,6 +26,9 @@ import type {
   AdminUserAdd,
   AdminUserUpdate,
   Agent,
+  AgentMetrics,
+  AgentRun,
+  AgentRunReview,
   AgentUpdate,
   AnthropicConversation,
   AnthropicConversationInput,
@@ -142,6 +145,7 @@ import type {
   LeadTestDriveInput,
   LeadUpdate,
   ListActivityParams,
+  ListAgentRunsParams,
   ListAuditLogsParams,
   ListBookingsParams,
   ListCoveragePlansParams,
@@ -8830,6 +8834,239 @@ export function useListAgents<TData = Awaited<ReturnType<typeof listAgents>>, TE
 
 
 
+
+export const getListAgentRunsUrl = (params?: ListAgentRunsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/agents/runs?${stringifiedParams}` : `/api/agents/runs`
+}
+
+/**
+ * @summary Per-run audit records for AI agents (Admin/Leadership only)
+ */
+export const listAgentRuns = async (params?: ListAgentRunsParams, options?: RequestInit): Promise<AgentRun[]> => {
+
+  return customFetch<AgentRun[]>(getListAgentRunsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAgentRunsQueryKey = (params?: ListAgentRunsParams,) => {
+    return [
+    `/api/agents/runs`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAgentRunsQueryOptions = <TData = Awaited<ReturnType<typeof listAgentRuns>>, TError = ErrorType<Error>>(params?: ListAgentRunsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAgentRunsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgentRuns>>> = ({ signal }) => listAgentRuns(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAgentRuns>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAgentRunsQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentRuns>>>
+export type ListAgentRunsQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Per-run audit records for AI agents (Admin/Leadership only)
+ */
+
+export function useListAgentRuns<TData = Awaited<ReturnType<typeof listAgentRuns>>, TError = ErrorType<Error>>(
+ params?: ListAgentRunsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAgentRunsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAgentMetricsUrl = () => {
+
+
+
+
+  return `/api/agents/metrics`
+}
+
+/**
+ * @summary Acceptance/override/error metrics per agent (Admin/Leadership only)
+ */
+export const getAgentMetrics = async ( options?: RequestInit): Promise<AgentMetrics[]> => {
+
+  return customFetch<AgentMetrics[]>(getGetAgentMetricsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAgentMetricsQueryKey = () => {
+    return [
+    `/api/agents/metrics`
+    ] as const;
+    }
+
+
+export const getGetAgentMetricsQueryOptions = <TData = Awaited<ReturnType<typeof getAgentMetrics>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgentMetrics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAgentMetricsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAgentMetrics>>> = ({ signal }) => getAgentMetrics({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAgentMetrics>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAgentMetricsQueryResult = NonNullable<Awaited<ReturnType<typeof getAgentMetrics>>>
+export type GetAgentMetricsQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Acceptance/override/error metrics per agent (Admin/Leadership only)
+ */
+
+export function useGetAgentMetrics<TData = Awaited<ReturnType<typeof getAgentMetrics>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAgentMetrics>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAgentMetricsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReviewAgentRunUrl = (id: number,) => {
+
+
+
+
+  return `/api/agents/runs/${id}/review`
+}
+
+/**
+ * @summary Mark an agent run accepted or overridden (Admin/Leadership only)
+ */
+export const reviewAgentRun = async (id: number,
+    agentRunReview: AgentRunReview, options?: RequestInit): Promise<AgentRun> => {
+
+  return customFetch<AgentRun>(getReviewAgentRunUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentRunReview)
+  }
+);}
+
+
+
+
+
+export const getReviewAgentRunMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAgentRun>>, TError,{id: number;data: BodyType<AgentRunReview>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewAgentRun>>, TError,{id: number;data: BodyType<AgentRunReview>}, TContext> => {
+
+const mutationKey = ['reviewAgentRun'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewAgentRun>>, {id: number;data: BodyType<AgentRunReview>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reviewAgentRun(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewAgentRunMutationResult = NonNullable<Awaited<ReturnType<typeof reviewAgentRun>>>
+    export type ReviewAgentRunMutationBody = BodyType<AgentRunReview>
+    export type ReviewAgentRunMutationError = ErrorType<Error>
+
+    /**
+ * @summary Mark an agent run accepted or overridden (Admin/Leadership only)
+ */
+export const useReviewAgentRun = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAgentRun>>, TError,{id: number;data: BodyType<AgentRunReview>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewAgentRun>>,
+        TError,
+        {id: number;data: BodyType<AgentRunReview>},
+        TContext
+      > => {
+      return useMutation(getReviewAgentRunMutationOptions(options));
+    }
 
 export const getGetAgentUrl = (id: number,) => {
 

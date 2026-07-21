@@ -3,6 +3,8 @@ import { logger } from "./lib/logger";
 import { startEmailWorker } from "./lib/email";
 import { startGmailIntakeWorker } from "./lib/gmail-intake";
 import { migrateLegacyAttachments } from "./lib/documents-migrate";
+import { startMetricsFlusher } from "./lib/metrics";
+import { logPendingInfraSeams } from "./lib/infra-seams";
 
 const rawPort = process.env["PORT"];
 
@@ -28,4 +30,6 @@ app.listen(port, (err) => {
   startEmailWorker();
   startGmailIntakeWorker();
   void migrateLegacyAttachments();
+  startMetricsFlusher();
+  logPendingInfraSeams();
 });

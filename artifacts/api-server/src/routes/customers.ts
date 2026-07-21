@@ -69,6 +69,7 @@ import {
 } from "@workspace/api-zod";
 import { storage } from "../lib/storage";
 import { activeDealerId } from "../middlewares/rbac";
+import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
 
 const router: IRouter = Router();
 
@@ -733,6 +734,21 @@ router.post(
       `The vehicleId MUST be one of the ids listed above. The reason is 1-2 sentences, warm and confident, referencing the client's persona.`,
     ].join("\n");
 
+    if (!(await isAgentEnabled(dealerId, "concierge"))) {
+      await recordAgentRun({
+        dealerId,
+        agentKey: "concierge",
+        runType: "vehicle_recommendation",
+        inputSource: "customers",
+        refType: "customer",
+        refId: customerId,
+        status: "blocked",
+        errorMessage: "Agent paused by dealer kill switch",
+      });
+      res.status(409).json({ error: "The concierge agent is paused for this dealership" });
+      return;
+    }
+    const startedAt = Date.now();
     try {
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
@@ -783,10 +799,33 @@ router.post(
           },
         });
 
+      await recordAgentRun({
+        dealerId,
+        agentKey: "concierge",
+        runType: "vehicle_recommendation",
+        inputSource: "customers",
+        inputSummary: `Customer #${customerId}`,
+        outputSummary: `Recommended vehicle #${vehicleId}: ${reason}`,
+        refType: "customer",
+        refId: customerId,
+        latencyMs: Date.now() - startedAt,
+        mutation: true,
+      });
       const payload = await personaPayload(customerId, dealerId);
       res.json(RecommendCustomerVehicleResponse.parse(payload));
     } catch (err) {
       req.log.error({ err }, "Vehicle recommendation request failed");
+      await recordAgentRun({
+        dealerId,
+        agentKey: "concierge",
+        runType: "vehicle_recommendation",
+        inputSource: "customers",
+        refType: "customer",
+        refId: customerId,
+        status: "error",
+        errorMessage: err instanceof Error ? err.message : String(err),
+        latencyMs: Date.now() - startedAt,
+      });
       res.status(502).json({ error: "The concierge is unavailable right now" });
     }
   },

@@ -22,6 +22,7 @@ import {
   recordingTransport,
 } from "./whatsapp-log";
 import { logger } from "./logger";
+import { isAgentEnabled, recordAgentRun } from "./agent-governance";
 import { rescheduleLink } from "./test-drive-scheduler";
 import type { Lead } from "@workspace/db";
 
@@ -298,6 +299,17 @@ async function completeFlow(
   // WhatsApp leads become accounts right away (matched by email/phone,
   // created if none exists). Never throws.
   lead.customerId = await ensureAccountForLead(lead, "whatsapp");
+  await recordAgentRun({
+    dealerId,
+    agentKey: "concierge",
+    runType: "whatsapp_lead_capture",
+    inputSource: "whatsapp",
+    inputSummary: freeTextAnswer ?? vehicle?.label ?? null,
+    outputSummary: `Created lead #${lead.id} from guided WhatsApp flow`,
+    refType: "lead",
+    refId: lead.id,
+    mutation: true,
+  });
   await endConversation(convo.phone);
 
   const firstName = name.split(/\s+/)[0];
@@ -460,6 +472,26 @@ export async function handleWhatsappMessage(
   const t = recordingTransport(rawTransport);
   try {
     const dealerId = await defaultDealerId();
+    // Kill switch: when the concierge agent is paused for this dealer, log
+    // the inbound message but do not run the bot.
+    if (!(await isAgentEnabled(dealerId, "concierge"))) {
+      await recordWhatsappMessage({
+        phone,
+        direction: "in",
+        body: msg.text || msg.replyTitle || "",
+        dealerId,
+      });
+      await recordAgentRun({
+        dealerId,
+        agentKey: "concierge",
+        runType: "whatsapp_bot_reply",
+        inputSource: "whatsapp",
+        inputSummary: msg.text ?? msg.replyTitle ?? null,
+        status: "blocked",
+        errorMessage: "Agent paused by dealer kill switch",
+      });
+      return;
+    }
     await recordWhatsappMessage({
       phone,
       direction: "in",
@@ -616,6 +648,18 @@ export async function handleWhatsappOneShot(
   const t = recordingTransport(rawTransport);
   try {
     const dealerId = await defaultDealerId();
+    if (!(await isAgentEnabled(dealerId, "concierge"))) {
+      await recordAgentRun({
+        dealerId,
+        agentKey: "concierge",
+        runType: "whatsapp_one_shot_intake",
+        inputSource: "whatsapp",
+        inputSummary: msg.text ?? msg.replyTitle ?? null,
+        status: "blocked",
+        errorMessage: "Agent paused by dealer kill switch",
+      });
+      return;
+    }
     await recordWhatsappMessage({
       phone: msg.from,
       direction: "in",
@@ -642,6 +686,17 @@ export async function handleWhatsappOneShot(
     });
     // WhatsApp leads become accounts right away. Never throws.
     lead.customerId = await ensureAccountForLead(lead, "whatsapp");
+    await recordAgentRun({
+      dealerId,
+      agentKey: "concierge",
+      runType: "whatsapp_lead_capture",
+      inputSource: "whatsapp",
+      inputSummary: body || null,
+      outputSummary: `Created lead #${lead.id} from one-shot WhatsApp intake`,
+      refType: "lead",
+      refId: lead.id,
+      mutation: true,
+    });
     await t.sendText(
       msg.from,
       "Thank you for contacting AURA Motors. We've received your message and one of our advisors will be in touch shortly.",

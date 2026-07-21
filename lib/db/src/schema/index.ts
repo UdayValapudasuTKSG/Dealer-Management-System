@@ -18,6 +18,8 @@ export * from "./payments";
 export * from "./serviceOrders";
 export * from "./workshop";
 export * from "./agents";
+export * from "./agentRuns";
+export * from "./idempotencyKeys";
 export * from "./activity";
 export * from "./timelineEvents";
 export * from "./gates";

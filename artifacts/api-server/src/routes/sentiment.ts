@@ -3,6 +3,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { db, leadsTable, timelineEventsTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
+import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
 import {
   GetSentimentAnalysisQueryParams,
   GetSentimentAnalysisResponse,
@@ -149,6 +150,19 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
     `Use the real lead names and ids provided. Be precise and honest — do not inflate positivity.`,
   ].join("\n");
 
+  if (!(await isAgentEnabled(dealerId, "analyst"))) {
+    await recordAgentRun({
+      dealerId,
+      agentKey: "analyst",
+      runType: "sentiment_analysis",
+      inputSource: "sentiment",
+      status: "blocked",
+      errorMessage: "Agent paused by dealer kill switch",
+    });
+    res.status(409).json({ error: "The analyst agent is paused for this dealership" });
+    return;
+  }
+  const startedAt = Date.now();
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -189,10 +203,28 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
       return;
     }
 
+    await recordAgentRun({
+      dealerId,
+      agentKey: "analyst",
+      runType: "sentiment_analysis",
+      inputSource: "sentiment",
+      inputSummary: `${items.length} notes analysed`,
+      outputSummary: result.data.summary,
+      latencyMs: Date.now() - startedAt,
+    });
     cache.set(dealerId, { data: result.data, at: Date.now() });
     res.json(result.data);
   } catch (err) {
     req.log.error({ err }, "Sentiment analysis request failed");
+    await recordAgentRun({
+      dealerId,
+      agentKey: "analyst",
+      runType: "sentiment_analysis",
+      inputSource: "sentiment",
+      status: "error",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - startedAt,
+    });
     res.status(502).json({ error: "The sentiment engine is unavailable right now" });
   }
 });

@@ -87,6 +87,11 @@ import { telephonyAdapter } from "../lib/telephony";
 import { enqueueEmail, enqueueWhatsapp, notifyUser } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
 import { activeDealerId } from "../middlewares/rbac";
+import {
+  guardUntrusted,
+  isAgentEnabled,
+  recordAgentRun,
+} from "../lib/agent-governance";
 import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
 import {
   ownerCalendarContact,
@@ -1792,6 +1797,23 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
       .limit(8),
   ]);
 
+  if (!(await isAgentEnabled(dealerId, "sales"))) {
+    await recordAgentRun({
+      dealerId,
+      agentKey: "sales",
+      runType: "lead_agent_brief",
+      inputSource: "leads",
+      refType: "lead",
+      refId: lead.id,
+      status: "blocked",
+      errorMessage: "Agent paused by dealer kill switch",
+    });
+    res.status(409).json({
+      error: "The Sales agent is paused — resume it in AI Agents to use briefs.",
+    });
+    return;
+  }
+
   const stageGoal = BRIEF_STAGE_GOAL[lead.phase] ?? "advance the relationship";
   const facts = [
     `Name: ${lead.name}; phase: ${lead.phase}; status: ${lead.status}; AI score: ${lead.aiScore}; priority: ${lead.priority}; channel: ${lead.channel}.`,
@@ -1805,7 +1827,7 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
     deals.length
       ? `Linked deal stage: ${deals.map((d) => d.stage).join(", ")}.`
       : `No deal opened yet.`,
-    lead.notes ? `Notes: ${lead.notes.slice(0, 300)}` : "",
+    lead.notes ? `Notes: ${guardUntrusted("lead_notes", lead.notes, 300)}` : "",
     timeline.length
       ? `Recent activity: ${timeline.map((t) => t.title).join("; ")}.`
       : "No recorded activity yet.",
@@ -1830,6 +1852,7 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
     `Ground every action in the facts above (missing checklist items first). Luxury-brand tone: warm, confident, concise.`,
   ].join("\n");
 
+  const briefStartedAt = Date.now();
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -1868,9 +1891,31 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
       res.status(502).json({ error: "The agent returned an unexpected shape" });
       return;
     }
+    await recordAgentRun({
+      dealerId,
+      agentKey: "sales",
+      runType: "lead_agent_brief",
+      inputSource: "leads",
+      inputSummary: `Lead #${lead.id} (${lead.phase})`,
+      outputSummary: result.data.headline,
+      refType: "lead",
+      refId: lead.id,
+      latencyMs: Date.now() - briefStartedAt,
+    });
     res.json(result.data);
   } catch (err) {
     req.log.error({ err }, "Lead agent brief LLM call failed");
+    await recordAgentRun({
+      dealerId,
+      agentKey: "sales",
+      runType: "lead_agent_brief",
+      inputSource: "leads",
+      refType: "lead",
+      refId: lead.id,
+      status: "error",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - briefStartedAt,
+    });
     res.status(502).json({ error: "The agent service is unavailable" });
   }
 });
@@ -2017,7 +2062,7 @@ router.post(
             content: [
               {
                 type: "text",
-                text: `You classify the customer's overall sentiment from a car dealership call note. Respond with ONLY a JSON object like {"sentiment":"positive","rationale":"…"} where sentiment is exactly one of "positive", "neutral", "negative" and rationale is one short sentence.\n\nCall notes:\n${body.data.notes}`,
+                text: `You classify the customer's overall sentiment from a car dealership call note. Respond with ONLY a JSON object like {"sentiment":"positive","rationale":"…"} where sentiment is exactly one of "positive", "neutral", "negative" and rationale is one short sentence.\n\nCall notes:\n${guardUntrusted("call_notes", body.data.notes)}`,
               },
             ],
           },
@@ -2037,6 +2082,16 @@ router.post(
       )
         ? parsedJson.sentiment
         : "neutral";
+      await recordAgentRun({
+        dealerId: lead.dealerId,
+        agentKey: "sales",
+        runType: "call_sentiment_suggestion",
+        inputSource: "leads",
+        inputSummary: body.data.notes,
+        outputSummary: `Suggested ${sentiment}: ${parsedJson.rationale ?? ""}`,
+        refType: "lead",
+        refId: lead.id,
+      });
       res.json(
         SuggestCallSentimentResponse.parse({
           sentiment,
@@ -2045,6 +2100,16 @@ router.post(
       );
     } catch (err) {
       req.log.error({ err }, "Call sentiment suggestion failed");
+      await recordAgentRun({
+        dealerId: lead.dealerId,
+        agentKey: "sales",
+        runType: "call_sentiment_suggestion",
+        inputSource: "leads",
+        refType: "lead",
+        refId: lead.id,
+        status: "error",
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
       res.status(502).json({ error: "The AI service is unavailable" });
     }
   },

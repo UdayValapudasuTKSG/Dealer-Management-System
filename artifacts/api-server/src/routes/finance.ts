@@ -54,6 +54,7 @@ import {
 import { storage } from "../lib/storage";
 import { getLosConnector } from "../lib/los";
 import { activeDealerId } from "../middlewares/rbac";
+import { idempotent } from "../middlewares/idempotency";
 import {
   applyFinanceStatusEffects,
   transitionFinanceStatus,
@@ -610,7 +611,7 @@ router.get("/invoices", async (req, res): Promise<void> => {
   res.json(ListInvoicesResponse.parse(rows));
 });
 
-router.post("/invoices", async (req, res): Promise<void> => {
+router.post("/invoices", idempotent("invoices.create"), async (req, res): Promise<void> => {
   const parsed = CreateInvoiceBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -670,7 +671,7 @@ router.get("/payments", async (_req, res): Promise<void> => {
   res.json(ListPaymentsResponse.parse(rows));
 });
 
-router.post("/payments", async (req, res): Promise<void> => {
+router.post("/payments", idempotent("payments.create"), async (req, res): Promise<void> => {
   const parsed = CreatePaymentBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

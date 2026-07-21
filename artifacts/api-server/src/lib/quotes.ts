@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import { computeTaxes, ensureDealerTaxes } from "./taxes";
 import { logger } from "./logger";
+import { recordAgentRun } from "./agent-governance";
 
 // ---------------------------------------------------------------------------
 // Quote agent (A3) — auto-generates the GT-format "Code" (estimate) for every
@@ -139,6 +140,20 @@ export async function generateQuoteForLead(
     `${quoteNumber} rev ${version} — ${vehicle.year} ${vehicle.make} ${vehicle.model}, ` +
     `base $${vehicle.price.toLocaleString("en-US")}, ${taxSummary}, ` +
     `total $${computed.totalWithTax.toLocaleString("en-US")}.`;
+
+  if (opts.isAgent) {
+    await recordAgentRun({
+      dealerId: lead.dealerId,
+      agentKey: "sales",
+      runType: "quote_generation",
+      inputSource: "quotes",
+      inputSummary: `Lead #${lead.id}, trigger=${opts.trigger}`,
+      outputSummary: detail,
+      refType: "quote",
+      refId: quote?.id ?? null,
+      mutation: true,
+    });
+  }
 
   await db.insert(timelineEventsTable).values({
     dealerId: lead.dealerId,

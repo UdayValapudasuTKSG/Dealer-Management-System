@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { db, gatesTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
+import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
 import {
   ExtractGraFilingBody,
   ExtractGraFilingResponse,
@@ -44,6 +45,21 @@ router.post("/gra/extract", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
+  if (!(await isAgentEnabled(dealerId, "customs"))) {
+    await recordAgentRun({
+      dealerId,
+      agentKey: "customs",
+      runType: "gra_document_extraction",
+      inputSource: "gra",
+      status: "blocked",
+      errorMessage: "Agent paused by dealer kill switch",
+    });
+    res.status(409).json({ error: "The customs agent is paused for this dealership" });
+    return;
+  }
+
+  const startedAt = Date.now();
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -95,9 +111,27 @@ router.post("/gra/extract", async (req, res): Promise<void> => {
       return;
     }
 
+    await recordAgentRun({
+      dealerId,
+      agentKey: "customs",
+      runType: "gra_document_extraction",
+      inputSource: "gra",
+      inputSummary: `Uploaded ${parsed.data.mediaType} document`,
+      outputSummary: `Extracted duty draft for ${`${draft.data.year} ${draft.data.make} ${draft.data.model}`}`,
+      latencyMs: Date.now() - startedAt,
+    });
     res.json(ExtractGraFilingResponse.parse(draft.data));
   } catch (err) {
     req.log.error({ err }, "GRA extraction request failed");
+    await recordAgentRun({
+      dealerId,
+      agentKey: "customs",
+      runType: "gra_document_extraction",
+      inputSource: "gra",
+      status: "error",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - startedAt,
+    });
     res.status(502).json({ error: "The extraction service is unavailable" });
   }
 });

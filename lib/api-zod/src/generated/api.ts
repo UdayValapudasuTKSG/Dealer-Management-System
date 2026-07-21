@@ -3658,6 +3658,79 @@ export const ListAgentsResponseItem = zod.object({
 export const ListAgentsResponse = zod.array(ListAgentsResponseItem)
 
 
+/**
+ * @summary Per-run audit records for AI agents (Admin/Leadership only)
+ */
+export const ListAgentRunsQueryParams = zod.object({
+  "agentKey": zod.coerce.string().optional(),
+  "status": zod.coerce.string().optional(),
+  "limit": zod.coerce.number().optional()
+})
+
+export const ListAgentRunsResponseItem = zod.object({
+  "id": zod.number(),
+  "agentKey": zod.string(),
+  "runType": zod.string(),
+  "inputSource": zod.string(),
+  "inputSummary": zod.string().nullish(),
+  "outputSummary": zod.string().nullish(),
+  "confidence": zod.number().nullish(),
+  "status": zod.enum(['completed', 'accepted', 'overridden', 'error', 'blocked']),
+  "errorMessage": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "latencyMs": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAgentRunsResponse = zod.array(ListAgentRunsResponseItem)
+
+
+/**
+ * @summary Acceptance/override/error metrics per agent (Admin/Leadership only)
+ */
+export const GetAgentMetricsResponseItem = zod.object({
+  "agentKey": zod.string(),
+  "runs": zod.number(),
+  "accepted": zod.number(),
+  "overridden": zod.number(),
+  "errors": zod.number(),
+  "blocked": zod.number(),
+  "acceptanceRate": zod.number().describe('0-100, accepted \/ (accepted+overridden)'),
+  "avgConfidence": zod.number().nullish(),
+  "avgLatencyMs": zod.number().nullish(),
+  "lastRunAt": zod.coerce.date().nullish()
+})
+export const GetAgentMetricsResponse = zod.array(GetAgentMetricsResponseItem)
+
+
+/**
+ * @summary Mark an agent run accepted or overridden (Admin/Leadership only)
+ */
+export const ReviewAgentRunParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ReviewAgentRunBody = zod.object({
+  "decision": zod.enum(['accepted', 'overridden'])
+})
+
+export const ReviewAgentRunResponse = zod.object({
+  "id": zod.number(),
+  "agentKey": zod.string(),
+  "runType": zod.string(),
+  "inputSource": zod.string(),
+  "inputSummary": zod.string().nullish(),
+  "outputSummary": zod.string().nullish(),
+  "confidence": zod.number().nullish(),
+  "status": zod.enum(['completed', 'accepted', 'overridden', 'error', 'blocked']),
+  "errorMessage": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "latencyMs": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
 export const GetAgentParams = zod.object({
   "id": zod.coerce.number()
 })

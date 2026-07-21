@@ -39,12 +39,15 @@ import enquiriesRouter from "./enquiries";
 import webhooksRouter from "./webhooks";
 import testDriveRouter from "./test-drive";
 import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
+import { authedRateLimit, publicRateLimit } from "../middlewares/rate-limit";
 
 const router: IRouter = Router();
 
 // Public: health check, website enquiry intake and inbound lead webhooks
 // (Meta Lead Ads + Twilio WhatsApp — signature-verified, not session-authed).
+// Tight per-IP rate limit — these are internet-exposed.
 router.use(healthRouter);
+router.use(publicRateLimit);
 router.use(enquiriesRouter);
 router.use(webhooksRouter);
 // Public: customer self-service test-drive booking (token-authenticated link).
@@ -52,7 +55,9 @@ router.use(testDriveRouter);
 
 // Everything below requires a signed-in user, then a role permission
 // matching the route (see middlewares/rbac.ts), and mutations are audited.
+// A generous per-user rate limit guards against runaway clients.
 router.use(requireAuth);
+router.use(authedRateLimit);
 router.use(authorize);
 router.use(auditTrail);
 

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { db, leadsTable, vehiclesTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
+import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
 import {
   GetPipelineSuggestionsQueryParams,
   GetPipelineSuggestionsResponse,
@@ -39,6 +40,19 @@ router.get("/pipeline/suggestions", async (req, res): Promise<void> => {
   const label = PHASE_LABEL[phase] ?? phase;
 
   const dealerId = activeDealerId(res);
+  if (!(await isAgentEnabled(dealerId, "sales"))) {
+    await recordAgentRun({
+      dealerId,
+      agentKey: "sales",
+      runType: "pipeline_suggestions",
+      inputSource: "pipeline",
+      inputSummary: `phase=${phase}`,
+      status: "blocked",
+      errorMessage: "Agent paused by dealer kill switch",
+    });
+    res.status(409).json({ error: "The sales agent is paused for this dealership" });
+    return;
+  }
   const [leads, vehicles] = await Promise.all([
     db
       .select()
@@ -86,6 +100,7 @@ router.get("/pipeline/suggestions", async (req, res): Promise<void> => {
     `Reference the real lead names above where relevant. Speak with the polish of a luxury brand: warm, confident, concise, never robotic.`,
   ].join("\n");
 
+  const startedAt = Date.now();
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -128,9 +143,28 @@ router.get("/pipeline/suggestions", async (req, res): Promise<void> => {
       return;
     }
 
+    await recordAgentRun({
+      dealerId,
+      agentKey: "sales",
+      runType: "pipeline_suggestions",
+      inputSource: "pipeline",
+      inputSummary: `phase=${phase}, ${leads.length} leads`,
+      outputSummary: result.data.headline,
+      latencyMs: Date.now() - startedAt,
+    });
     res.json(GetPipelineSuggestionsResponse.parse(result.data));
   } catch (err) {
     req.log.error({ err }, "Pipeline suggestions request failed");
+    await recordAgentRun({
+      dealerId,
+      agentKey: "sales",
+      runType: "pipeline_suggestions",
+      inputSource: "pipeline",
+      inputSummary: `phase=${phase}`,
+      status: "error",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - startedAt,
+    });
     res.status(502).json({ error: "The concierge is unavailable right now" });
   }
 });

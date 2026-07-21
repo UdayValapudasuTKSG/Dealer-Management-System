@@ -15,3 +15,4 @@
 - [Headless api-server testing](headless-server-testing.md) — never `pkill -f dist/index.mjs` to stop a headless test server; the real workflow runs the same command and dies too. Kill by captured PID.
 - [Multi-dealer tenancy](multi-dealer-tenancy.md) — every select filtered + insert stamped with dealerId; cross-dealer = 404; helpers require dealerId from parent record.
 - [Date-only fields shift a day in UTC-4](date-only-utc-shift.md) — API serializes date columns as UTC midnight; parse only the date part locally or today-filters miss rows.
+- [Agent kill switches fail open](agent-governance-kill-switch.md) — per-dealer agent pause only works if that dealer has seeded `agents` rows; seed every dealer or the toggle silently no-ops.

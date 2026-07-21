@@ -1,9 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   useListAgents,
   useUpdateAgent,
   useListActivity,
+  useListAgentRuns,
+  useGetAgentMetrics,
+  useReviewAgentRun,
   getListAgentsQueryKey,
+  getListAgentRunsQueryKey,
+  getGetAgentMetricsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -17,11 +22,17 @@ import {
   Play,
   Pause,
   Activity as ActivityIcon,
+  ShieldCheck,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Ban,
   type LucideIcon,
 } from "lucide-react";
 import { Page } from "@/components/layout/page";
 import { PageHero } from "@/components/layout/page-hero";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthz } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const DOMAIN_ICON: Record<string, LucideIcon> = {
@@ -37,6 +48,186 @@ const STATUS_STYLE: Record<string, string> = {
   idle: "bg-amber-500/15 text-amber-600 ring-amber-500/30",
   paused: "bg-foreground/[0.06] text-muted-foreground ring-border",
 };
+
+const RUN_STATUS_STYLE: Record<string, string> = {
+  completed: "bg-emerald-500/15 text-emerald-600 ring-emerald-500/30",
+  accepted: "bg-primary/15 text-primary ring-primary/30",
+  overridden: "bg-amber-500/15 text-amber-600 ring-amber-500/30",
+  error: "bg-red-500/15 text-red-600 ring-red-500/30",
+  blocked: "bg-foreground/[0.06] text-muted-foreground ring-border",
+};
+
+const RUN_STATUS_ICON: Record<string, LucideIcon> = {
+  completed: CheckCircle2,
+  accepted: CheckCircle2,
+  overridden: XCircle,
+  error: AlertTriangle,
+  blocked: Ban,
+};
+
+function GovernanceConsole() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const { data: runs, isLoading: runsLoading } = useListAgentRuns({
+    limit: 50,
+  });
+  const { data: metrics } = useGetAgentMetrics();
+  const reviewRun = useReviewAgentRun();
+
+  const visibleRuns = (runs ?? []).filter(
+    (r) => !statusFilter || r.status === statusFilter,
+  );
+
+  const review = async (id: number, decision: "accepted" | "overridden") => {
+    await reviewRun.mutateAsync({ id, data: { decision } });
+    queryClient.invalidateQueries({ queryKey: getListAgentRunsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetAgentMetricsQueryKey() });
+    toast({
+      title: decision === "accepted" ? "Run accepted" : "Run overridden",
+    });
+  };
+
+  return (
+    <div className="rounded-2xl bg-card border border-border/60 shadow-sm p-5 space-y-5">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-primary" />
+        <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
+          Governance console
+        </h2>
+        <span className="ml-auto text-[11px] text-muted-foreground">
+          Admin &amp; Leadership only
+        </span>
+      </div>
+
+      {/* Per-agent metrics */}
+      {(metrics ?? []).length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+          {(metrics ?? []).map((m) => (
+            <div
+              key={m.agentKey}
+              className="rounded-xl border border-border/50 bg-foreground/[0.02] p-3"
+            >
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground truncate">
+                {m.agentKey}
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <span className="text-lg font-bold tabular-nums">{m.runs}</span>
+                <span className="text-[11px] text-muted-foreground">runs</span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                {m.errors > 0 && (
+                  <span className="text-red-600">{m.errors} errors</span>
+                )}
+                {m.blocked > 0 && <span>{m.blocked} blocked</span>}
+                {m.avgLatencyMs != null && (
+                  <span>{Math.round(m.avgLatencyMs)}ms avg</span>
+                )}
+                {m.accepted + m.overridden > 0 && (
+                  <span>{Math.round(m.acceptanceRate)}% accepted</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Status filter */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {[null, "completed", "accepted", "overridden", "error", "blocked"].map(
+          (s) => (
+            <button
+              key={s ?? "all"}
+              onClick={() => setStatusFilter(s)}
+              className={cn(
+                "rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
+                statusFilter === s
+                  ? "bg-primary text-white"
+                  : "bg-foreground/[0.05] text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {s ?? "All"}
+            </button>
+          ),
+        )}
+      </div>
+
+      {/* Run audit trail */}
+      {runsLoading ? (
+        <div className="h-24 rounded-xl bg-foreground/[0.04] animate-pulse" />
+      ) : visibleRuns.length === 0 ? (
+        <div className="text-sm text-muted-foreground py-6 text-center">
+          No agent runs recorded yet
+        </div>
+      ) : (
+        <ul className="space-y-1">
+          {visibleRuns.map((r) => {
+            const StatusIcon = RUN_STATUS_ICON[r.status] ?? CheckCircle2;
+            return (
+              <li
+                key={r.id}
+                className="flex items-start gap-3 rounded-xl px-3 py-2.5 hover:bg-foreground/[0.03] transition-colors"
+              >
+                <span
+                  className={cn(
+                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ring-1",
+                    RUN_STATUS_STYLE[r.status] ?? RUN_STATUS_STYLE.completed,
+                  )}
+                >
+                  <StatusIcon className="h-3 w-3" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm">
+                    <span className="font-medium">{r.agentKey}</span>{" "}
+                    <span className="text-muted-foreground">
+                      {r.runType.replace(/_/g, " ")}
+                    </span>
+                    <span
+                      className={cn(
+                        "ml-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1",
+                        RUN_STATUS_STYLE[r.status] ?? RUN_STATUS_STYLE.completed,
+                      )}
+                    >
+                      {r.status}
+                    </span>
+                  </div>
+                  {(r.outputSummary || r.errorMessage) && (
+                    <div className="text-xs text-muted-foreground truncate">
+                      {r.errorMessage ?? r.outputSummary}
+                    </div>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {r.status === "completed" && (
+                    <>
+                      <button
+                        onClick={() => review(r.id, "accepted")}
+                        disabled={reviewRun.isPending}
+                        className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 hover:bg-emerald-500/20 transition-colors"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => review(r.id, "overridden")}
+                        disabled={reviewRun.isPending}
+                        className="rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-600 hover:bg-amber-500/20 transition-colors"
+                      >
+                        Override
+                      </button>
+                    </>
+                  )}
+                  <span className="text-[11px] text-muted-foreground tabular-nums">
+                    {timeAgo(r.createdAt)}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function timeAgo(iso: string) {
   const ms = Date.now() - new Date(iso).getTime();
@@ -54,6 +245,15 @@ export default function Agents() {
   const updateAgent = useUpdateAgent();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { me, can, activeDealer } = useAuthz();
+
+  // Mirrors the server-side requireGovernance gate.
+  const canGovern =
+    !!me &&
+    (me.isSuperAdmin ||
+      activeDealer?.isGeneralManager === true ||
+      me.roleName === "General Manager" ||
+      can("settings", "admin"));
 
   const aiActivity = useMemo(
     () => (activity ?? []).filter((a) => a.isAi),
@@ -172,6 +372,9 @@ export default function Agents() {
                 );
               })}
         </div>
+
+        {/* Governance console — Admin/Leadership only */}
+        {canGovern && <GovernanceConsole />}
 
         {/* Autonomous activity feed */}
         <div className="rounded-2xl bg-card border border-border/60 shadow-sm p-5">
