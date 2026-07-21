@@ -16,6 +16,7 @@ import {
 import { PersonaTab } from "@/components/customer/persona-tab";
 import { DocumentsTab } from "@/components/customer/documents-tab";
 import { NotesPanel } from "@/components/customer/notes-panel";
+import { CareTab } from "@/components/customer/care-tab";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useMoney } from "@/lib/format";
@@ -219,6 +220,7 @@ export default function CustomerDetail() {
             { value: "profile", label: "Profile" },
             { value: "persona", label: "Persona" },
             { value: "documents", label: "Documents" },
+            { value: "care", label: "Care" },
             { value: "activity", label: "Activity" },
           ].map((tab) => (
             <TabsTrigger
@@ -511,6 +513,11 @@ export default function CustomerDetail() {
         {/* ---------------- Documents ---------------- */}
         <TabsContent value="documents" className="mt-0">
           <DocumentsTab customerId={customer.id} documents={documents ?? []} />
+        </TabsContent>
+
+        {/* ---------------- Care: cases + reviews ---------------- */}
+        <TabsContent value="care" className="mt-0">
+          <CareTab customerId={customer.id} customerName={customer.name} />
         </TabsContent>
 
         {/* ---------------- Activity ---------------- */}

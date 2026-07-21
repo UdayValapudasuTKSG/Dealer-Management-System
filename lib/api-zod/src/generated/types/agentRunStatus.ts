@@ -15,4 +15,5 @@ export const AgentRunStatus = {
   overridden: 'overridden',
   error: 'error',
   blocked: 'blocked',
+  needs_review: 'needs_review',
 } as const;

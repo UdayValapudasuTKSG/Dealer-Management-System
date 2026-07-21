@@ -5,6 +5,7 @@ import {
   leadsTable,
   vehiclesTable,
   timelineEventsTable,
+  testDrivesTable,
   type Lead,
 } from "@workspace/db";
 import {
@@ -247,6 +248,30 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
 
   // A booked test drive promotes the lead to an account.
   updated!.customerId = await ensureAccountForLead(updated!);
+
+  // First-class record: supersede any prior scheduled drive, insert the new one.
+  await db
+    .update(testDrivesTable)
+    .set({ status: "cancelled", cancelledAt: new Date() })
+    .where(
+      and(
+        eq(testDrivesTable.dealerId, updated!.dealerId),
+        eq(testDrivesTable.leadId, updated!.id),
+        eq(testDrivesTable.status, "scheduled"),
+      ),
+    );
+  await db.insert(testDrivesTable).values({
+    dealerId: updated!.dealerId,
+    leadId: updated!.id,
+    vehicleId: updated!.interestedVehicleId ?? null,
+    customerId: updated!.customerId ?? null,
+    status: "scheduled",
+    scheduledAt: when,
+    branch: updated!.testDriveBranch,
+    licenceNumber: updated!.testDriveLicence,
+    waiverAccepted: true,
+    bookedVia: "self_service",
+  });
 
   const [v] = updated!.interestedVehicleId
     ? await db

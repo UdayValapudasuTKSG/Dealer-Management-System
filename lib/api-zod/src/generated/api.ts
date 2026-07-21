@@ -3722,6 +3722,266 @@ export const CreatePartPurchaseResponse = zod.object({
 })
 
 
+/**
+ * @summary Test-drive records, newest first
+ */
+export const ListTestDrivesQueryParams = zod.object({
+  "leadId": zod.coerce.number().optional(),
+  "status": zod.enum(['scheduled', 'completed', 'no_show', 'cancelled']).optional()
+})
+
+export const ListTestDrivesResponseItem = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
+  "status": zod.enum(['scheduled', 'completed', 'no_show', 'cancelled']),
+  "scheduledAt": zod.coerce.date(),
+  "branch": zod.string().nullish(),
+  "licenceNumber": zod.string().nullish(),
+  "waiverAccepted": zod.boolean(),
+  "bookedVia": zod.string(),
+  "outcomeNotes": zod.string().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListTestDrivesResponse = zod.array(ListTestDrivesResponseItem)
+
+
+/**
+ * @summary Book a test drive for a lead (staff)
+ */
+export const CreateTestDriveBody = zod.object({
+  "leadId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "scheduledAt": zod.coerce.date(),
+  "branch": zod.string().nullish(),
+  "licenceNumber": zod.string().nullish(),
+  "waiverAccepted": zod.boolean().optional()
+})
+
+export const CreateTestDriveResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
+  "status": zod.enum(['scheduled', 'completed', 'no_show', 'cancelled']),
+  "scheduledAt": zod.coerce.date(),
+  "branch": zod.string().nullish(),
+  "licenceNumber": zod.string().nullish(),
+  "waiverAccepted": zod.boolean(),
+  "bookedVia": zod.string(),
+  "outcomeNotes": zod.string().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a test drive (reschedule, complete, no-show, cancel)
+ */
+export const UpdateTestDriveParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateTestDriveBody = zod.object({
+  "status": zod.enum(['scheduled', 'completed', 'no_show', 'cancelled']).optional(),
+  "scheduledAt": zod.coerce.date().optional(),
+  "branch": zod.string().nullish(),
+  "licenceNumber": zod.string().nullish(),
+  "waiverAccepted": zod.boolean().optional(),
+  "outcomeNotes": zod.string().nullish()
+})
+
+export const UpdateTestDriveResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
+  "status": zod.enum(['scheduled', 'completed', 'no_show', 'cancelled']),
+  "scheduledAt": zod.coerce.date(),
+  "branch": zod.string().nullish(),
+  "licenceNumber": zod.string().nullish(),
+  "waiverAccepted": zod.boolean(),
+  "bookedVia": zod.string(),
+  "outcomeNotes": zod.string().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Customer reviews / CSAT scores, newest first
+ */
+export const ListReviewsQueryParams = zod.object({
+  "customerId": zod.coerce.number().optional(),
+  "source": zod.enum(['delivery_csat', 'service_csat', 'manual']).optional()
+})
+
+export const listReviewsResponseRatingMax = 5;
+
+
+
+export const ListReviewsResponseItem = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "source": zod.enum(['delivery_csat', 'service_csat', 'manual']),
+  "rating": zod.number().min(1).max(listReviewsResponseRatingMax),
+  "comment": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "capturedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListReviewsResponse = zod.array(ListReviewsResponseItem)
+
+
+/**
+ * @summary Log a customer review / CSAT score
+ */
+export const createReviewBodyRatingMax = 5;
+
+
+
+export const CreateReviewBody = zod.object({
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "source": zod.enum(['delivery_csat', 'service_csat', 'manual']).optional(),
+  "rating": zod.number().min(1).max(createReviewBodyRatingMax),
+  "comment": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "vehicleLabel": zod.string().nullish()
+})
+
+export const createReviewResponseRatingMax = 5;
+
+
+
+export const CreateReviewResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "source": zod.enum(['delivery_csat', 'service_csat', 'manual']),
+  "rating": zod.number().min(1).max(createReviewResponseRatingMax),
+  "comment": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "capturedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Customer cases (complaints / exceptions), newest first
+ */
+export const ListCasesQueryParams = zod.object({
+  "customerId": zod.coerce.number().optional(),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']).optional(),
+  "refType": zod.coerce.string().optional(),
+  "refId": zod.coerce.number().optional()
+})
+
+export const ListCasesResponseItem = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "type": zod.enum(['complaint', 'exception', 'inquiry']),
+  "severity": zod.enum(['low', 'medium', 'high']),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "resolutionNote": zod.string().nullish(),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCasesResponse = zod.array(ListCasesResponseItem)
+
+
+/**
+ * @summary Open a customer case
+ */
+export const createCaseBodyTitleMin = 3;
+
+
+
+export const CreateCaseBody = zod.object({
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "title": zod.string().min(createCaseBodyTitleMin),
+  "description": zod.string().nullish(),
+  "type": zod.enum(['complaint', 'exception', 'inquiry']).optional(),
+  "severity": zod.enum(['low', 'medium', 'high']).optional(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "assignedTo": zod.string().nullish()
+})
+
+export const CreateCaseResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "type": zod.enum(['complaint', 'exception', 'inquiry']),
+  "severity": zod.enum(['low', 'medium', 'high']),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "resolutionNote": zod.string().nullish(),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a case (assign, progress, resolve, close)
+ */
+export const UpdateCaseParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateCaseBody = zod.object({
+  "title": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "type": zod.enum(['complaint', 'exception', 'inquiry']).optional(),
+  "severity": zod.enum(['low', 'medium', 'high']).optional(),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']).optional(),
+  "assignedTo": zod.string().nullish(),
+  "resolutionNote": zod.string().nullish()
+})
+
+export const UpdateCaseResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "type": zod.enum(['complaint', 'exception', 'inquiry']),
+  "severity": zod.enum(['low', 'medium', 'high']),
+  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "resolutionNote": zod.string().nullish(),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
 export const ListAgentsResponseItem = zod.object({
   "id": zod.number(),
   "key": zod.string(),
@@ -3752,10 +4012,17 @@ export const ListAgentRunsResponseItem = zod.object({
   "inputSummary": zod.string().nullish(),
   "outputSummary": zod.string().nullish(),
   "confidence": zod.number().nullish(),
-  "status": zod.enum(['completed', 'accepted', 'overridden', 'error', 'blocked']),
+  "status": zod.enum(['completed', 'accepted', 'overridden', 'error', 'blocked', 'needs_review']),
   "errorMessage": zod.string().nullish(),
   "refType": zod.string().nullish(),
   "refId": zod.number().nullish(),
+  "autonomy": zod.enum(['advisory', 'autonomous']),
+  "affectedEntities": zod.array(zod.object({
+  "type": zod.string(),
+  "id": zod.number()
+})),
+  "changeSummary": zod.string().nullish(),
+  "reviewReason": zod.string().nullish(),
   "latencyMs": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -3799,10 +4066,17 @@ export const ReviewAgentRunResponse = zod.object({
   "inputSummary": zod.string().nullish(),
   "outputSummary": zod.string().nullish(),
   "confidence": zod.number().nullish(),
-  "status": zod.enum(['completed', 'accepted', 'overridden', 'error', 'blocked']),
+  "status": zod.enum(['completed', 'accepted', 'overridden', 'error', 'blocked', 'needs_review']),
   "errorMessage": zod.string().nullish(),
   "refType": zod.string().nullish(),
   "refId": zod.number().nullish(),
+  "autonomy": zod.enum(['advisory', 'autonomous']),
+  "affectedEntities": zod.array(zod.object({
+  "type": zod.string(),
+  "id": zod.number()
+})),
+  "changeSummary": zod.string().nullish(),
+  "reviewReason": zod.string().nullish(),
   "latencyMs": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })

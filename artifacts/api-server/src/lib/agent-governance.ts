@@ -6,6 +6,8 @@ import {
   auditLogsTable,
   type AgentRun,
   type AgentRunStatus,
+  type AgentRunAutonomy,
+  type AgentRunAffectedEntity,
 } from "@workspace/db";
 import { logger } from "./logger";
 import { incrementMetric } from "./metrics";
@@ -19,6 +21,27 @@ import { incrementMetric } from "./metrics";
 
 /** Model confidence below this must NOT be auto-applied — fall back to human. */
 export const MIN_AGENT_CONFIDENCE = 0.6;
+
+/**
+ * Hard confidence gate for auto-write agents. Returns the reason the output
+ * must NOT be auto-applied (route it to a human instead), or null when the
+ * write may proceed. A missing confidence from a model that was asked for one
+ * is treated as below-floor — uncertainty is never a free pass.
+ */
+export function confidenceGateReason(
+  confidence: number | null | undefined,
+  opts?: { requireConfidence?: boolean },
+): string | null {
+  if (confidence == null) {
+    return opts?.requireConfidence
+      ? "Model returned no confidence score — held for human review"
+      : null;
+  }
+  if (confidence < MIN_AGENT_CONFIDENCE) {
+    return `Confidence ${confidence.toFixed(2)} is below the ${MIN_AGENT_CONFIDENCE} auto-apply floor — held for human review`;
+  }
+  return null;
+}
 
 /**
  * Per-dealer kill switch. An agent is enabled unless its row for this dealer
@@ -87,6 +110,14 @@ export type RecordAgentRunInput = {
   latencyMs?: number | null;
   /** True when the run changed state (created/updated a record) — also writes an audit-log row. */
   mutation?: boolean;
+  /** advisory | autonomous. Defaults to autonomous when mutation is true. */
+  autonomy?: AgentRunAutonomy;
+  /** Every entity the run created/changed. Defaults to [refType/refId] for mutations. */
+  affectedEntities?: AgentRunAffectedEntity[];
+  /** Short before → after description of the change. */
+  changeSummary?: string | null;
+  /** Why the output was held for human review (sets status needs_review upstream). */
+  reviewReason?: string | null;
 };
 
 /** Write the per-run audit record. Never throws — governance must not break the feature. */
@@ -95,6 +126,13 @@ export async function recordAgentRun(
 ): Promise<AgentRun | null> {
   try {
     const status = input.status ?? "completed";
+    const autonomy: AgentRunAutonomy =
+      input.autonomy ?? (input.mutation ? "autonomous" : "advisory");
+    const affectedEntities =
+      input.affectedEntities ??
+      (input.mutation && input.refType && input.refId != null
+        ? [{ type: input.refType, id: input.refId }]
+        : []);
     const [run] = await db
       .insert(agentRunsTable)
       .values({
@@ -109,6 +147,10 @@ export async function recordAgentRun(
         errorMessage: input.errorMessage?.slice(0, 500) ?? null,
         refType: input.refType ?? null,
         refId: input.refId ?? null,
+        autonomy,
+        affectedEntities,
+        changeSummary: minimizePii(input.changeSummary),
+        reviewReason: input.reviewReason?.slice(0, 300) ?? null,
         latencyMs: input.latencyMs ?? null,
       })
       .returning();
@@ -132,6 +174,8 @@ export async function recordAgentRun(
           runId: run?.id,
           runType: input.runType,
           confidence: input.confidence ?? null,
+          autonomy,
+          affectedEntities,
         },
       });
     }

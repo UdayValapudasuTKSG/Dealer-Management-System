@@ -55,6 +55,7 @@ const RUN_STATUS_STYLE: Record<string, string> = {
   overridden: "bg-amber-500/15 text-amber-600 ring-amber-500/30",
   error: "bg-red-500/15 text-red-600 ring-red-500/30",
   blocked: "bg-foreground/[0.06] text-muted-foreground ring-border",
+  needs_review: "bg-amber-500/15 text-amber-600 ring-amber-500/30",
 };
 
 const RUN_STATUS_ICON: Record<string, LucideIcon> = {
@@ -63,6 +64,7 @@ const RUN_STATUS_ICON: Record<string, LucideIcon> = {
   overridden: XCircle,
   error: AlertTriangle,
   blocked: Ban,
+  needs_review: AlertTriangle,
 };
 
 function GovernanceConsole() {
@@ -134,7 +136,15 @@ function GovernanceConsole() {
 
       {/* Status filter */}
       <div className="flex flex-wrap items-center gap-1.5">
-        {[null, "completed", "accepted", "overridden", "error", "blocked"].map(
+        {[
+          null,
+          "needs_review",
+          "completed",
+          "accepted",
+          "overridden",
+          "error",
+          "blocked",
+        ].map(
           (s) => (
             <button
               key={s ?? "all"}
@@ -146,7 +156,7 @@ function GovernanceConsole() {
                   : "bg-foreground/[0.05] text-muted-foreground hover:text-foreground",
               )}
             >
-              {s ?? "All"}
+              {s ? s.replace(/_/g, " ") : "All"}
             </button>
           ),
         )}
@@ -188,17 +198,44 @@ function GovernanceConsole() {
                         RUN_STATUS_STYLE[r.status] ?? RUN_STATUS_STYLE.completed,
                       )}
                     >
-                      {r.status}
+                      {r.status.replace(/_/g, " ")}
                     </span>
+                    {r.autonomy === "autonomous" && (
+                      <span className="ml-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary ring-1 ring-primary/25">
+                        auto-write
+                      </span>
+                    )}
+                    {r.confidence != null && (
+                      <span className="ml-1.5 text-[11px] text-muted-foreground tabular-nums">
+                        {Math.round(r.confidence * 100)}% conf
+                      </span>
+                    )}
                   </div>
-                  {(r.outputSummary || r.errorMessage) && (
+                  {(r.changeSummary || r.outputSummary || r.errorMessage) && (
                     <div className="text-xs text-muted-foreground truncate">
-                      {r.errorMessage ?? r.outputSummary}
+                      {r.errorMessage ?? r.changeSummary ?? r.outputSummary}
+                    </div>
+                  )}
+                  {r.status === "needs_review" && r.reviewReason && (
+                    <div className="text-xs text-amber-600 truncate">
+                      Held for review: {r.reviewReason}
+                    </div>
+                  )}
+                  {(r.affectedEntities ?? []).length > 0 && (
+                    <div className="mt-0.5 flex flex-wrap gap-1">
+                      {(r.affectedEntities ?? []).slice(0, 4).map((e, idx) => (
+                        <span
+                          key={idx}
+                          className="rounded-full bg-foreground/[0.05] px-2 py-0.5 text-[10px] text-muted-foreground"
+                        >
+                          {e.type} #{e.id}
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  {r.status === "completed" && (
+                  {(r.status === "completed" || r.status === "needs_review") && (
                     <>
                       <button
                         onClick={() => review(r.id, "accepted")}

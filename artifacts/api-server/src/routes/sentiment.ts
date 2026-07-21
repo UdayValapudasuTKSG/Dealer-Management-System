@@ -1,9 +1,13 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
-import { db, leadsTable, timelineEventsTable } from "@workspace/db";
+import { db, leadsTable, timelineEventsTable, agentRunsTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
-import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
+import {
+  guardUntrusted,
+  isAgentEnabled,
+  recordAgentRun,
+} from "../lib/agent-governance";
 import {
   GetSentimentAnalysisQueryParams,
   GetSentimentAnalysisResponse,
@@ -36,7 +40,7 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
     return;
   }
 
-  const [recentLeads, noteEvents] = await Promise.all([
+  const [recentLeads, noteEvents, failedRuns] = await Promise.all([
     db
       .select()
       .from(leadsTable)
@@ -54,7 +58,27 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
       )
       .orderBy(desc(timelineEventsTable.createdAt))
       .limit(200),
+    // Guard-failed agent output must not poison the digest: leads whose
+    // agent runs errored, were held below the confidence floor, or were
+    // overridden by a human have their AGENT-authored notes excluded.
+    db
+      .select({ refId: agentRunsTable.refId })
+      .from(agentRunsTable)
+      .where(
+        and(
+          eq(agentRunsTable.dealerId, dealerId),
+          eq(agentRunsTable.refType, "lead"),
+          inArray(agentRunsTable.status, [
+            "error",
+            "needs_review",
+            "overridden",
+          ]),
+        ),
+      ),
   ]);
+  const guardFailedLeadIds = new Set(
+    failedRuns.map((r) => r.refId).filter((id): id is number => id != null),
+  );
 
   const leadName = new Map(recentLeads.map((l) => [l.id, l.name]));
   const missingIds = [
@@ -90,6 +114,7 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
     if (!e.detail || e.detail.trim().length < 10) continue;
     if (!["note", "whatsapp_message", "call"].includes(e.kind)) continue;
     const id = e.refType === "lead" ? (e.refId ?? null) : null;
+    if (e.isAgent && id != null && guardFailedLeadIds.has(id)) continue;
     items.push({
       leadId: id,
       leadName: (id != null ? leadName.get(id) : null) ?? "Unknown lead",
@@ -135,7 +160,7 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
   const prompt = [
     `You are AURA, the AI concierge of an ultra-premium automotive dealership.`,
     `Below are ${items.length} recent customer-facing notes and messages from the lead pipeline:`,
-    corpus,
+    guardUntrusted("sentiment_corpus", corpus),
     ``,
     `Analyse the overall customer sentiment across these interactions.`,
     `Return ONLY a JSON object (no markdown, no commentary) with exactly these keys:`,

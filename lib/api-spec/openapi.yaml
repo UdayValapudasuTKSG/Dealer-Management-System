@@ -2922,6 +2922,210 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /test-drives:
+    get:
+      operationId: listTestDrives
+      tags: [test-drives]
+      summary: Test-drive records, newest first
+      parameters:
+        - name: leadId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [scheduled, completed, no_show, cancelled] }
+      responses:
+        "200":
+          description: Test drives
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TestDrive"
+    post:
+      operationId: createTestDrive
+      tags: [test-drives]
+      summary: Book a test drive for a lead (staff)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestDriveCreate"
+      responses:
+        "201":
+          description: Created test drive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestDrive"
+        "404":
+          description: Lead not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /test-drives/{id}:
+    patch:
+      operationId: updateTestDrive
+      tags: [test-drives]
+      summary: Update a test drive (reschedule, complete, no-show, cancel)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestDriveUpdate"
+      responses:
+        "200":
+          description: Updated test drive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestDrive"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /reviews:
+    get:
+      operationId: listReviews
+      tags: [reviews]
+      summary: Customer reviews / CSAT scores, newest first
+      parameters:
+        - name: customerId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: source
+          in: query
+          required: false
+          schema: { type: string, enum: [delivery_csat, service_csat, manual] }
+      responses:
+        "200":
+          description: Reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Review"
+    post:
+      operationId: createReview
+      tags: [reviews]
+      summary: Log a customer review / CSAT score
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewCreate"
+      responses:
+        "201":
+          description: Created review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+  /cases:
+    get:
+      operationId: listCases
+      tags: [cases]
+      summary: Customer cases (complaints / exceptions), newest first
+      parameters:
+        - name: customerId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [open, in_progress, resolved, closed] }
+        - name: refType
+          in: query
+          required: false
+          schema: { type: string }
+        - name: refId
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Cases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Case"
+    post:
+      operationId: createCase
+      tags: [cases]
+      summary: Open a customer case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaseCreate"
+      responses:
+        "201":
+          description: Created case
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Case"
+  /cases/{id}:
+    patch:
+      operationId: updateCase
+      tags: [cases]
+      summary: Update a case (assign, progress, resolve, close)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaseUpdate"
+      responses:
+        "200":
+          description: Updated case
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Case"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid status transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /agents:
     get:
       operationId: listAgents
@@ -7237,7 +7441,7 @@ components:
         status: { type: string, enum: [active, idle, paused] }
     AgentRun:
       type: object
-      required: [id, agentKey, runType, inputSource, status, createdAt]
+      required: [id, agentKey, runType, inputSource, status, autonomy, affectedEntities, createdAt]
       properties:
         id: { type: integer }
         agentKey: { type: string }
@@ -7248,10 +7452,23 @@ components:
         confidence: { type: ["number", "null"] }
         status:
           type: string
-          enum: [completed, accepted, overridden, error, blocked]
+          enum: [completed, accepted, overridden, error, blocked, needs_review]
         errorMessage: { type: ["string", "null"] }
         refType: { type: ["string", "null"] }
         refId: { type: ["integer", "null"] }
+        autonomy:
+          type: string
+          enum: [advisory, autonomous]
+        affectedEntities:
+          type: array
+          items:
+            type: object
+            required: [type, id]
+            properties:
+              type: { type: string }
+              id: { type: integer }
+        changeSummary: { type: ["string", "null"] }
+        reviewReason: { type: ["string", "null"] }
         latencyMs: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
     AgentRunReview:
@@ -7273,6 +7490,137 @@ components:
         avgConfidence: { type: ["number", "null"] }
         avgLatencyMs: { type: ["integer", "null"] }
         lastRunAt: { type: ["string", "null"], format: date-time }
+
+    TestDrive:
+      type: object
+      required: [id, leadId, status, scheduledAt, waiverAccepted, bookedVia, createdAt]
+      properties:
+        id: { type: integer }
+        leadId: { type: integer }
+        vehicleId: { type: ["integer", "null"] }
+        customerId: { type: ["integer", "null"] }
+        status:
+          type: string
+          enum: [scheduled, completed, no_show, cancelled]
+        scheduledAt: { type: string, format: date-time }
+        branch: { type: ["string", "null"] }
+        licenceNumber: { type: ["string", "null"] }
+        waiverAccepted: { type: boolean }
+        bookedVia: { type: string }
+        outcomeNotes: { type: ["string", "null"] }
+        completedAt: { type: ["string", "null"], format: date-time }
+        cancelledAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    TestDriveCreate:
+      type: object
+      required: [leadId, scheduledAt]
+      properties:
+        leadId: { type: integer }
+        vehicleId: { type: ["integer", "null"] }
+        scheduledAt: { type: string, format: date-time }
+        branch: { type: ["string", "null"] }
+        licenceNumber: { type: ["string", "null"] }
+        waiverAccepted: { type: boolean }
+    TestDriveUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [scheduled, completed, no_show, cancelled]
+        scheduledAt: { type: string, format: date-time }
+        branch: { type: ["string", "null"] }
+        licenceNumber: { type: ["string", "null"] }
+        waiverAccepted: { type: boolean }
+        outcomeNotes: { type: ["string", "null"] }
+    Review:
+      type: object
+      required: [id, source, rating, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        source:
+          type: string
+          enum: [delivery_csat, service_csat, manual]
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: ["string", "null"] }
+        refType: { type: ["string", "null"] }
+        refId: { type: ["integer", "null"] }
+        vehicleLabel: { type: ["string", "null"] }
+        capturedBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    ReviewCreate:
+      type: object
+      required: [rating]
+      properties:
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        source:
+          type: string
+          enum: [delivery_csat, service_csat, manual]
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: ["string", "null"] }
+        refType: { type: ["string", "null"] }
+        refId: { type: ["integer", "null"] }
+        vehicleLabel: { type: ["string", "null"] }
+    Case:
+      type: object
+      required: [id, title, type, severity, status, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        title: { type: string }
+        description: { type: ["string", "null"] }
+        type:
+          type: string
+          enum: [complaint, exception, inquiry]
+        severity:
+          type: string
+          enum: [low, medium, high]
+        status:
+          type: string
+          enum: [open, in_progress, resolved, closed]
+        refType: { type: ["string", "null"] }
+        refId: { type: ["integer", "null"] }
+        assignedTo: { type: ["string", "null"] }
+        resolutionNote: { type: ["string", "null"] }
+        resolvedAt: { type: ["string", "null"], format: date-time }
+        createdBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    CaseCreate:
+      type: object
+      required: [title]
+      properties:
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        title: { type: string, minLength: 3 }
+        description: { type: ["string", "null"] }
+        type:
+          type: string
+          enum: [complaint, exception, inquiry]
+        severity:
+          type: string
+          enum: [low, medium, high]
+        refType: { type: ["string", "null"] }
+        refId: { type: ["integer", "null"] }
+        assignedTo: { type: ["string", "null"] }
+    CaseUpdate:
+      type: object
+      properties:
+        title: { type: string }
+        description: { type: ["string", "null"] }
+        type:
+          type: string
+          enum: [complaint, exception, inquiry]
+        severity:
+          type: string
+          enum: [low, medium, high]
+        status:
+          type: string
+          enum: [open, in_progress, resolved, closed]
+        assignedTo: { type: ["string", "null"] }
+        resolutionNote: { type: ["string", "null"] }
 
     Activity:
       type: object

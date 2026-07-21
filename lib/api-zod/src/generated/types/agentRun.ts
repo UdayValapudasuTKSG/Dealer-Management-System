@@ -5,6 +5,8 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { AgentRunAffectedEntitiesItem } from './agentRunAffectedEntitiesItem';
+import type { AgentRunAutonomy } from './agentRunAutonomy';
 import type { AgentRunStatus } from './agentRunStatus';
 
 export interface AgentRun {
@@ -25,6 +27,12 @@ export interface AgentRun {
   refType?: string | null;
   /** @nullable */
   refId?: number | null;
+  autonomy: AgentRunAutonomy;
+  affectedEntities: AgentRunAffectedEntitiesItem[];
+  /** @nullable */
+  changeSummary?: string | null;
+  /** @nullable */
+  reviewReason?: string | null;
   /** @nullable */
   latencyMs?: number | null;
   createdAt: Date;

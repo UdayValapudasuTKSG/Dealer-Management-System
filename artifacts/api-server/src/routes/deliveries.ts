@@ -14,6 +14,7 @@ import {
   dealerUsersTable,
   timelineEventsTable,
   assetsTable,
+  reviewsTable,
   DELIVERY_STEPS,
   DELIVERY_STEP_LABELS,
   type Delivery,
@@ -462,6 +463,48 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
     });
   } catch (err) {
     logger.error({ err, deliveryId: delivery.id }, "step receipt failed");
+  }
+
+  // The CSAT rating becomes a first-class review record.
+  if (step === "feedback" && parsed.data.feedbackRating) {
+    try {
+      const [customer] = delivery.customerId
+        ? await db
+            .select()
+            .from(customersTable)
+            .where(
+              and(
+                eq(customersTable.id, delivery.customerId),
+                eq(customersTable.dealerId, delivery.dealerId),
+              ),
+            )
+        : [];
+      const [vehicle] = await db
+        .select()
+        .from(vehiclesTable)
+        .where(
+          and(
+            eq(vehiclesTable.id, delivery.vehicleId),
+            eq(vehiclesTable.dealerId, delivery.dealerId),
+          ),
+        );
+      await db.insert(reviewsTable).values({
+        dealerId: delivery.dealerId,
+        customerId: delivery.customerId ?? null,
+        customerName: customer?.name ?? null,
+        source: "delivery_csat",
+        rating: parsed.data.feedbackRating,
+        comment: parsed.data.feedbackComment ?? null,
+        refType: "delivery",
+        refId: delivery.id,
+        vehicleLabel: vehicle
+          ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+          : null,
+        capturedBy: actor,
+      });
+    } catch (err) {
+      logger.error({ err, deliveryId: delivery.id }, "csat review insert failed");
+    }
   }
 
   // Handover side effects on the final step.

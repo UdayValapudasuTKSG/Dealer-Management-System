@@ -15,6 +15,7 @@ import {
   agentsTable,
   gatesTable,
   quotesTable,
+  testDrivesTable,
   SOCIAL_SUB_PLATFORMS,
   type Lead,
   type ChecklistStage,
@@ -1434,10 +1435,16 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
           inputSource: "stage_advance",
           inputSummary: `Lead #${lead.id} advanced to Negotiation with no deal on file`,
           outputSummary: `Drafted deal #${autoDeal.id} at listed price for vehicle #${vehicle.id}`,
+          confidence: 1,
           refType: "deal",
           refId: autoDeal.id,
           latencyMs: Date.now() - startedAt,
           mutation: true,
+          changeSummary: `No deal on file → draft deal #${autoDeal.id} created at listed price ${vehicle.price} with 0 discount`,
+          affectedEntities: [
+            { type: "deal", id: autoDeal.id },
+            { type: "lead", id: lead.id },
+          ],
         });
       }
     }
@@ -1588,6 +1595,30 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
 
   // A booked test drive promotes the lead to an account.
   lead!.customerId = await ensureAccountForLead(lead!);
+
+  // First-class record: supersede any prior scheduled drive, insert the new one.
+  await db
+    .update(testDrivesTable)
+    .set({ status: "cancelled", cancelledAt: new Date() })
+    .where(
+      and(
+        eq(testDrivesTable.dealerId, lead!.dealerId),
+        eq(testDrivesTable.leadId, lead!.id),
+        eq(testDrivesTable.status, "scheduled"),
+      ),
+    );
+  await db.insert(testDrivesTable).values({
+    dealerId: lead!.dealerId,
+    leadId: lead!.id,
+    vehicleId: lead!.interestedVehicleId ?? null,
+    customerId: lead!.customerId ?? null,
+    status: "scheduled",
+    scheduledAt: when,
+    branch: lead!.testDriveBranch,
+    licenceNumber: lead!.testDriveLicence,
+    waiverAccepted: true,
+    bookedVia: "staff",
+  });
 
   const vehicle = await vehicleLabel(lead!.dealerId, lead!.interestedVehicleId);
   const dateStr = when.toLocaleDateString("en-US", {

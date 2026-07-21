@@ -23,6 +23,8 @@ import {
   useListServiceTechnicians,
   useListParts,
   getListPartsQueryKey,
+  useCreateCase,
+  getListCasesQueryKey,
   type JobCard,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -43,8 +45,26 @@ import {
   Circle,
   FileText,
   User,
+  MessageSquareWarning,
+  Loader2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { Page } from "@/components/layout/page";
@@ -382,6 +402,12 @@ function BookingsTab() {
                     >
                       <Mail className="w-3.5 h-3.5" /> Remind
                     </Button>
+                    <OpenCaseButton
+                      customerId={order.customerId ?? null}
+                      customerName={order.customerName ?? null}
+                      refId={order.id}
+                      contextLabel={`RO #${order.id.toString().padStart(5, "0")} — ${order.vehicleInfo}`}
+                    />
                   </div>
                 </div>
               </CardContent>
@@ -927,6 +953,117 @@ function CoverageTab() {
         );
       })}
     </div>
+  );
+}
+
+function OpenCaseButton({
+  customerId,
+  customerName,
+  refId,
+  contextLabel,
+}: {
+  customerId: number | null;
+  customerName: string | null;
+  refId: number;
+  contextLabel: string;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const createCase = useCreateCase();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [severity, setSeverity] = useState<"low" | "medium" | "high">("medium");
+
+  const submit = async () => {
+    try {
+      await createCase.mutateAsync({
+        data: {
+          customerId,
+          customerName,
+          title,
+          description: description ? `${contextLabel}: ${description}` : contextLabel,
+          type: "complaint",
+          severity,
+          refType: "service_order",
+          refId,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getListCasesQueryKey() });
+      setOpen(false);
+      setTitle("");
+      setDescription("");
+      toast({
+        title: "Case opened",
+        description: customerId
+          ? "Track it from the customer's Care tab."
+          : "Case logged for this repair order.",
+      });
+    } catch (e) {
+      toast({
+        title: "Couldn't open the case",
+        description: e instanceof Error ? e.message : undefined,
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        className="rounded-full border-white/15 gap-1.5 text-xs"
+        onClick={() => setOpen(true)}
+      >
+        <MessageSquareWarning className="w-3.5 h-3.5" /> Open Case
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Open a case</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-xs text-muted-foreground">{contextLabel}</div>
+            <Input
+              placeholder="Case title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <Textarea
+              placeholder="What happened? (optional)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+            />
+            <Select
+              value={severity}
+              onValueChange={(v) => setSeverity(v as typeof severity)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Severity" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={submit}
+              disabled={title.trim().length < 3 || createCase.isPending}
+            >
+              {createCase.isPending && (
+                <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+              )}
+              Open Case
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

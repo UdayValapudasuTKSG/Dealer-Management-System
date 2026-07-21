@@ -5,6 +5,7 @@ import {
   integer,
   doublePrecision,
   timestamp,
+  jsonb,
   index,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
@@ -16,8 +17,19 @@ export const AGENT_RUN_STATUSES = [
   "overridden",
   "error",
   "blocked",
+  "needs_review",
 ] as const;
 export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
+
+/**
+ * Whether the run only advised a human (suggestions, drafts, analyses) or
+ * autonomously wrote state (created/updated records without a human in the
+ * loop). Autonomous runs surface distinctly in the governance console.
+ */
+export const AGENT_RUN_AUTONOMY = ["advisory", "autonomous"] as const;
+export type AgentRunAutonomy = (typeof AGENT_RUN_AUTONOMY)[number];
+
+export type AgentRunAffectedEntity = { type: string; id: number };
 
 /**
  * Per-invocation audit record for every AI agent run: what triggered it,
@@ -39,6 +51,17 @@ export const agentRunsTable = pgTable(
     errorMessage: text("error_message"),
     refType: text("ref_type"),
     refId: integer("ref_id"),
+    /** advisory | autonomous — autonomous runs changed records without a human. */
+    autonomy: text("autonomy").notNull().default("advisory"),
+    /** Every entity the run created or changed, e.g. [{type:"lead",id:12}]. */
+    affectedEntities: jsonb("affected_entities")
+      .$type<AgentRunAffectedEntity[]>()
+      .notNull()
+      .default([]),
+    /** Short before → after description of what the run changed. */
+    changeSummary: text("change_summary"),
+    /** Why the output was held for human review (e.g. below confidence floor). */
+    reviewReason: text("review_reason"),
     latencyMs: integer("latency_ms"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -52,6 +75,7 @@ export const agentRunsTable = pgTable(
 
 export const insertAgentRunSchema = createInsertSchema(agentRunsTable, {
   status: z.enum(AGENT_RUN_STATUSES),
+  autonomy: z.enum(AGENT_RUN_AUTONOMY),
 }).omit({ id: true, createdAt: true });
 
 export type InsertAgentRun = z.infer<typeof insertAgentRunSchema>;

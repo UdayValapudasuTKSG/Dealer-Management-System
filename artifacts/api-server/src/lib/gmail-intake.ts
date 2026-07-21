@@ -8,11 +8,12 @@ import {
   timelineEventsTable,
   webhookEventsTable,
 } from "@workspace/db";
-import { notifyUser, SYSTEM_MAIL_HEADER } from "./email";
+import { notifyUser, notifyUsers, SYSTEM_MAIL_HEADER } from "./email";
 import { createInboundLead, matchVehicleByText } from "./lead-intake";
-import { defaultDealerId } from "./tenancy";
+import { defaultDealerId, dealerStaffIdsByRole } from "./tenancy";
 import { logger } from "./logger";
 import {
+  confidenceGateReason,
   guardUntrusted,
   isAgentEnabled,
   recordAgentRun,
@@ -110,6 +111,7 @@ async function recordProcessed(
 
 type Extraction = {
   isEnquiry: boolean;
+  confidence: number | null;
   name: string | null;
   email: string | null;
   phone: string | null;
@@ -141,7 +143,7 @@ Body:
 ${guardUntrusted("email_body", input.body)}
 
 Respond with ONLY a JSON object, no markdown fences:
-{"isEnquiry": boolean, "name": string|null (the customer's name), "email": string|null (the customer's email address if stated in the body, else null), "phone": string|null (phone number mentioned in the body), "vehicle": string|null (the vehicle they mention, e.g. "BMW X5"), "summary": string|null (1-2 sentence summary of what they want)}`;
+{"isEnquiry": boolean, "confidence": number (0 to 1 — how sure you are about this classification and the extracted details), "name": string|null (the customer's name), "email": string|null (the customer's email address if stated in the body, else null), "phone": string|null (phone number mentioned in the body), "vehicle": string|null (the vehicle they mention, e.g. "BMW X5"), "summary": string|null (1-2 sentence summary of what they want)}`;
 
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
@@ -159,6 +161,12 @@ Respond with ONLY a JSON object, no markdown fences:
   const parsed = JSON.parse(text) as Partial<Extraction>;
   return {
     isEnquiry: parsed.isEnquiry === true,
+    confidence:
+      typeof parsed.confidence === "number" &&
+      parsed.confidence >= 0 &&
+      parsed.confidence <= 1
+        ? parsed.confidence
+        : null,
     name: typeof parsed.name === "string" ? parsed.name : null,
     email:
       typeof parsed.email === "string" && parsed.email.includes("@")
@@ -383,7 +391,45 @@ export async function pollGmailInbox(): Promise<void> {
             subject,
             body,
           });
-          if (extraction.isEnquiry) {
+          // Confidence hard gate (R9.2): an enquiry classified below the
+          // floor is NEVER auto-converted into a lead — it is routed to the
+          // governance HITL queue and staff are told to triage it by hand.
+          const gateReason = extraction.isEnquiry
+            ? confidenceGateReason(extraction.confidence, {
+                requireConfidence: true,
+              })
+            : null;
+          if (extraction.isEnquiry && gateReason) {
+            const dealerId = await defaultDealerId();
+            logger.warn(
+              { uid, from: fromAddr, confidence: extraction.confidence },
+              "Gmail intake: enquiry below confidence floor — held for review",
+            );
+            await recordAgentRun({
+              dealerId,
+              agentKey: "sales",
+              runType: "email_intake",
+              inputSource: "gmail",
+              inputSummary: subject || "(no subject)",
+              outputSummary: `Possible enquiry from ${fromAddr} held for review: ${extraction.summary ?? "(no summary)"}`,
+              confidence: extraction.confidence,
+              status: "needs_review",
+              reviewReason: gateReason,
+              latencyMs: Date.now() - startedAt,
+            });
+            const coordinators = await dealerStaffIdsByRole(dealerId, [
+              "Marketing Coordinator",
+              "Sales Manager",
+              "General Manager",
+            ]);
+            await notifyUsers(coordinators, {
+              dealerId,
+              type: "task",
+              title: "Email enquiry needs manual review",
+              body: `AURA was not confident enough to auto-create a lead from "${(subject || "(no subject)").slice(0, 80)}" — please review the inbox and capture it manually if genuine.`,
+              link: "/agents",
+            });
+          } else if (extraction.isEnquiry) {
             leadId = await handleEnquiry({
               fromName,
               fromEmail: fromAddr,
@@ -401,20 +447,27 @@ export async function pollGmailInbox(): Promise<void> {
               "Gmail intake: email classified as non-enquiry, skipped",
             );
           }
-          await recordAgentRun({
-            dealerId: await defaultDealerId(),
-            agentKey: "sales",
-            runType: "email_intake",
-            inputSource: "gmail",
-            inputSummary: subject || "(no subject)",
-            outputSummary: extraction.isEnquiry
-              ? `Enquiry → lead #${leadId}: ${extraction.summary ?? ""}`
-              : "Classified as non-enquiry, skipped",
-            refType: leadId != null ? "lead" : null,
-            refId: leadId,
-            latencyMs: Date.now() - startedAt,
-            mutation: leadId != null,
-          });
+          if (!(extraction.isEnquiry && gateReason)) {
+            await recordAgentRun({
+              dealerId: await defaultDealerId(),
+              agentKey: "sales",
+              runType: "email_intake",
+              inputSource: "gmail",
+              inputSummary: subject || "(no subject)",
+              outputSummary: extraction.isEnquiry
+                ? `Enquiry → lead #${leadId}: ${extraction.summary ?? ""}`
+                : "Classified as non-enquiry, skipped",
+              confidence: extraction.confidence,
+              refType: leadId != null ? "lead" : null,
+              refId: leadId,
+              latencyMs: Date.now() - startedAt,
+              mutation: leadId != null,
+              changeSummary:
+                leadId != null
+                  ? `No lead on file for sender → lead #${leadId} created from email enquiry`
+                  : null,
+            });
+          }
 
           await recordProcessed(messageId, leadId);
           await markHandled(client, uid, hasProcessedBox);

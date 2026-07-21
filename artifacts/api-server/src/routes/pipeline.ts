@@ -3,7 +3,11 @@ import { and, eq } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { db, leadsTable, vehiclesTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
-import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
+import {
+  guardUntrusted,
+  isAgentEnabled,
+  recordAgentRun,
+} from "../lib/agent-governance";
 import {
   GetPipelineSuggestionsQueryParams,
   GetPipelineSuggestionsResponse,
@@ -81,7 +85,9 @@ router.get("/pipeline/suggestions", async (req, res): Promise<void> => {
     `You are AURA, the AI concierge running an ultra-premium automotive dealership.`,
     `You are looking at the "${label}" stage of the sales pipeline, where the goal is to ${STAGE_GOAL[phase] ?? "advance the relationship"}.`,
     `There are ${leads.length} leads currently in this stage:`,
-    leadLines || "- (no leads currently in this stage)",
+    leadLines
+      ? guardUntrusted("pipeline_leads", leadLines)
+      : "- (no leads currently in this stage)",
     ``,
     `Recommend the most valuable next actions a dealership manager should take right now for this stage.`,
     `Return ONLY a JSON object (no markdown, no commentary) with exactly these keys:`,

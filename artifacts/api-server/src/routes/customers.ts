@@ -69,7 +69,11 @@ import {
 } from "@workspace/api-zod";
 import { storage } from "../lib/storage";
 import { activeDealerId } from "../middlewares/rbac";
-import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
+import {
+  guardUntrusted,
+  isAgentEnabled,
+  recordAgentRun,
+} from "../lib/agent-governance";
 
 const router: IRouter = Router();
 
@@ -724,7 +728,7 @@ router.post(
       ``,
       `Client: ${bundle.customer.name}${bundle.customer.occupation ? `, ${bundle.customer.occupation}` : ""}${bundle.customer.city ? `, based in ${bundle.customer.city}` : ""}`,
       `Persona:`,
-      personaLines,
+      guardUntrusted("customer_persona", personaLines),
       ``,
       `Available inventory:`,
       inventoryLines,

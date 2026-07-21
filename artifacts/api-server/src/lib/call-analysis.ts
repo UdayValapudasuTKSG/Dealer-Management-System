@@ -10,6 +10,7 @@ import {
 import { sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import {
+  confidenceGateReason,
   guardUntrusted,
   isAgentEnabled,
   recordAgentRun,
@@ -102,7 +103,7 @@ ${facts}
 ${untrusted ? guardUntrusted("call_context", untrusted) : "No notes were captured for this call — judge from the call facts alone and keep the summary factual."}
 
 Respond with ONLY a JSON object:
-{"sentiment": "positive"|"neutral"|"negative", "summary": "1-2 sentence summary of the call and suggested next step"}`,
+{"sentiment": "positive"|"neutral"|"negative", "confidence": number (0 to 1 — how sure you are about the sentiment call), "summary": "1-2 sentence summary of the call and suggested next step"}`,
             },
           ],
         },
@@ -117,15 +118,46 @@ Respond with ONLY a JSON object:
     if (jsonStart === -1 || jsonEnd === -1) throw new Error("No JSON in reply");
     const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1)) as {
       sentiment?: string;
+      confidence?: number;
       summary?: string;
     };
     const sentiment = VALID.includes(parsed.sentiment as (typeof VALID)[number])
       ? (parsed.sentiment as (typeof VALID)[number])
       : "neutral";
+    const confidence =
+      typeof parsed.confidence === "number" &&
+      parsed.confidence >= 0 &&
+      parsed.confidence <= 1
+        ? parsed.confidence
+        : null;
     const summary =
       typeof parsed.summary === "string"
         ? parsed.summary.slice(0, 500)
         : "Call reviewed.";
+
+    // Confidence hard gate (R9.2): a below-floor score is never written to
+    // the call log or lead timeline — it lands in the governance HITL queue
+    // for a human to score the call instead.
+    const gateReason = confidenceGateReason(confidence, {
+      requireConfidence: true,
+    });
+    if (gateReason) {
+      await recordAgentRun({
+        dealerId: lead.dealerId,
+        agentKey: AGENT_KEY,
+        runType: "call_sentiment_auto",
+        inputSource: "calls",
+        inputSummary: `Call #${call.id} (${call.direction}, ${call.status})`,
+        outputSummary: `Suggested ${sentiment} (not applied): ${summary}`,
+        confidence,
+        status: "needs_review",
+        reviewReason: gateReason,
+        refType: "lead",
+        refId: lead.id,
+        latencyMs: Date.now() - started,
+      });
+      return;
+    }
 
     await db
       .update(callLogsTable)
@@ -171,10 +203,16 @@ Respond with ONLY a JSON object:
       inputSource: "calls",
       inputSummary: `Call #${call.id} (${call.direction}, ${call.status})`,
       outputSummary: `Scored ${sentiment}: ${summary}`,
+      confidence,
       refType: "lead",
       refId: lead.id,
       latencyMs: Date.now() - started,
       mutation: true,
+      changeSummary: `Call #${call.id} sentiment ${call.sentiment ?? "unscored"} → ${sentiment}; summary note added to lead timeline`,
+      affectedEntities: [
+        { type: "call_log", id: call.id },
+        { type: "lead", id: lead.id },
+      ],
     });
   } catch (err) {
     logger.error({ err, callLogId }, "Auto call sentiment failed");

@@ -306,9 +306,11 @@ async function completeFlow(
     inputSource: "whatsapp",
     inputSummary: freeTextAnswer ?? vehicle?.label ?? null,
     outputSummary: `Created lead #${lead.id} from guided WhatsApp flow`,
+    confidence: 1,
     refType: "lead",
     refId: lead.id,
     mutation: true,
+    changeSummary: `Guided WhatsApp flow completed → lead #${lead.id} created (deterministic state machine, no model output applied)`,
   });
   await endConversation(convo.phone);
 
@@ -693,9 +695,11 @@ export async function handleWhatsappOneShot(
       inputSource: "whatsapp",
       inputSummary: body || null,
       outputSummary: `Created lead #${lead.id} from one-shot WhatsApp intake`,
+      confidence: 1,
       refType: "lead",
       refId: lead.id,
       mutation: true,
+      changeSummary: `No open lead for sender → lead #${lead.id} + customer account created from WhatsApp message (deterministic rules, no model output applied)`,
     });
     await t.sendText(
       msg.from,

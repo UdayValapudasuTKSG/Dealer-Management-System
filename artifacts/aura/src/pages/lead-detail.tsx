@@ -71,6 +71,7 @@ import {
   DocumentPrefillBanner,
 } from "@/components/documents-card";
 import { CallDialog } from "@/components/lead/call-dialog";
+import { TestDriveCard } from "@/components/lead/test-drive-card";
 import { useAuthz } from "@/lib/auth";
 import { useMoney, formatGuyanaDate, formatGuyanaDateTime } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -2430,32 +2431,7 @@ export default function LeadDetail() {
             )}
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-                <Car className="w-3.5 h-3.5" />
-              </span>
-              <span className="text-sm font-semibold tracking-tight">
-                Test Drive
-              </span>
-            </div>
-            {lead.testDriveAt ? (
-              <div className="space-y-1">
-                <div className="text-sm font-medium">
-                  {formatGuyanaDateTime(lead.testDriveAt)}
-                </div>
-                {lead.testDriveBranch && (
-                  <div className="text-xs text-muted-foreground">
-                    {lead.testDriveBranch}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">
-                No test drive scheduled.
-              </div>
-            )}
-          </div>
+          <TestDriveCard leadId={lead.id} onBook={() => setWorkflowOpen(true)} />
 
           {pendingGates.length > 0 && (
             <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-5">

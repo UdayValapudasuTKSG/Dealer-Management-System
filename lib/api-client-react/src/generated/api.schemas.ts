@@ -3465,7 +3465,21 @@ export const AgentRunStatus = {
   overridden: 'overridden',
   error: 'error',
   blocked: 'blocked',
+  needs_review: 'needs_review',
 } as const;
+
+export type AgentRunAutonomy = typeof AgentRunAutonomy[keyof typeof AgentRunAutonomy];
+
+
+export const AgentRunAutonomy = {
+  advisory: 'advisory',
+  autonomous: 'autonomous',
+} as const;
+
+export type AgentRunAffectedEntitiesItem = {
+  type: string;
+  id: number;
+};
 
 export interface AgentRun {
   id: number;
@@ -3485,6 +3499,12 @@ export interface AgentRun {
   refType?: string | null;
   /** @nullable */
   refId?: number | null;
+  autonomy: AgentRunAutonomy;
+  affectedEntities: AgentRunAffectedEntitiesItem[];
+  /** @nullable */
+  changeSummary?: string | null;
+  /** @nullable */
+  reviewReason?: string | null;
   /** @nullable */
   latencyMs?: number | null;
   createdAt: string;
@@ -3517,6 +3537,271 @@ export interface AgentMetrics {
   avgLatencyMs?: number | null;
   /** @nullable */
   lastRunAt?: string | null;
+}
+
+export type TestDriveStatus = typeof TestDriveStatus[keyof typeof TestDriveStatus];
+
+
+export const TestDriveStatus = {
+  scheduled: 'scheduled',
+  completed: 'completed',
+  no_show: 'no_show',
+  cancelled: 'cancelled',
+} as const;
+
+export interface TestDrive {
+  id: number;
+  leadId: number;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** @nullable */
+  customerId?: number | null;
+  status: TestDriveStatus;
+  scheduledAt: string;
+  /** @nullable */
+  branch?: string | null;
+  /** @nullable */
+  licenceNumber?: string | null;
+  waiverAccepted: boolean;
+  bookedVia: string;
+  /** @nullable */
+  outcomeNotes?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  /** @nullable */
+  cancelledAt?: string | null;
+  createdAt: string;
+}
+
+export interface TestDriveCreate {
+  leadId: number;
+  /** @nullable */
+  vehicleId?: number | null;
+  scheduledAt: string;
+  /** @nullable */
+  branch?: string | null;
+  /** @nullable */
+  licenceNumber?: string | null;
+  waiverAccepted?: boolean;
+}
+
+export type TestDriveUpdateStatus = typeof TestDriveUpdateStatus[keyof typeof TestDriveUpdateStatus];
+
+
+export const TestDriveUpdateStatus = {
+  scheduled: 'scheduled',
+  completed: 'completed',
+  no_show: 'no_show',
+  cancelled: 'cancelled',
+} as const;
+
+export interface TestDriveUpdate {
+  status?: TestDriveUpdateStatus;
+  scheduledAt?: string;
+  /** @nullable */
+  branch?: string | null;
+  /** @nullable */
+  licenceNumber?: string | null;
+  waiverAccepted?: boolean;
+  /** @nullable */
+  outcomeNotes?: string | null;
+}
+
+export type ReviewSource = typeof ReviewSource[keyof typeof ReviewSource];
+
+
+export const ReviewSource = {
+  delivery_csat: 'delivery_csat',
+  service_csat: 'service_csat',
+  manual: 'manual',
+} as const;
+
+export interface Review {
+  id: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  source: ReviewSource;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  rating: number;
+  /** @nullable */
+  comment?: string | null;
+  /** @nullable */
+  refType?: string | null;
+  /** @nullable */
+  refId?: number | null;
+  /** @nullable */
+  vehicleLabel?: string | null;
+  /** @nullable */
+  capturedBy?: string | null;
+  createdAt: string;
+}
+
+export type ReviewCreateSource = typeof ReviewCreateSource[keyof typeof ReviewCreateSource];
+
+
+export const ReviewCreateSource = {
+  delivery_csat: 'delivery_csat',
+  service_csat: 'service_csat',
+  manual: 'manual',
+} as const;
+
+export interface ReviewCreate {
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  source?: ReviewCreateSource;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  rating: number;
+  /** @nullable */
+  comment?: string | null;
+  /** @nullable */
+  refType?: string | null;
+  /** @nullable */
+  refId?: number | null;
+  /** @nullable */
+  vehicleLabel?: string | null;
+}
+
+export type CaseType = typeof CaseType[keyof typeof CaseType];
+
+
+export const CaseType = {
+  complaint: 'complaint',
+  exception: 'exception',
+  inquiry: 'inquiry',
+} as const;
+
+export type CaseSeverity = typeof CaseSeverity[keyof typeof CaseSeverity];
+
+
+export const CaseSeverity = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+} as const;
+
+export type CaseStatus = typeof CaseStatus[keyof typeof CaseStatus];
+
+
+export const CaseStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  resolved: 'resolved',
+  closed: 'closed',
+} as const;
+
+export interface Case {
+  id: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  type: CaseType;
+  severity: CaseSeverity;
+  status: CaseStatus;
+  /** @nullable */
+  refType?: string | null;
+  /** @nullable */
+  refId?: number | null;
+  /** @nullable */
+  assignedTo?: string | null;
+  /** @nullable */
+  resolutionNote?: string | null;
+  /** @nullable */
+  resolvedAt?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
+  createdAt: string;
+}
+
+export type CaseCreateType = typeof CaseCreateType[keyof typeof CaseCreateType];
+
+
+export const CaseCreateType = {
+  complaint: 'complaint',
+  exception: 'exception',
+  inquiry: 'inquiry',
+} as const;
+
+export type CaseCreateSeverity = typeof CaseCreateSeverity[keyof typeof CaseCreateSeverity];
+
+
+export const CaseCreateSeverity = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+} as const;
+
+export interface CaseCreate {
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  /** @minLength 3 */
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  type?: CaseCreateType;
+  severity?: CaseCreateSeverity;
+  /** @nullable */
+  refType?: string | null;
+  /** @nullable */
+  refId?: number | null;
+  /** @nullable */
+  assignedTo?: string | null;
+}
+
+export type CaseUpdateType = typeof CaseUpdateType[keyof typeof CaseUpdateType];
+
+
+export const CaseUpdateType = {
+  complaint: 'complaint',
+  exception: 'exception',
+  inquiry: 'inquiry',
+} as const;
+
+export type CaseUpdateSeverity = typeof CaseUpdateSeverity[keyof typeof CaseUpdateSeverity];
+
+
+export const CaseUpdateSeverity = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+} as const;
+
+export type CaseUpdateStatus = typeof CaseUpdateStatus[keyof typeof CaseUpdateStatus];
+
+
+export const CaseUpdateStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  resolved: 'resolved',
+  closed: 'closed',
+} as const;
+
+export interface CaseUpdate {
+  title?: string;
+  /** @nullable */
+  description?: string | null;
+  type?: CaseUpdateType;
+  severity?: CaseUpdateSeverity;
+  status?: CaseUpdateStatus;
+  /** @nullable */
+  assignedTo?: string | null;
+  /** @nullable */
+  resolutionNote?: string | null;
 }
 
 export interface Activity {
@@ -4427,6 +4712,52 @@ export type ListPartsParams = {
 search?: string;
 lowStock?: string;
 };
+
+export type ListTestDrivesParams = {
+leadId?: number;
+status?: ListTestDrivesStatus;
+};
+
+export type ListTestDrivesStatus = typeof ListTestDrivesStatus[keyof typeof ListTestDrivesStatus];
+
+
+export const ListTestDrivesStatus = {
+  scheduled: 'scheduled',
+  completed: 'completed',
+  no_show: 'no_show',
+  cancelled: 'cancelled',
+} as const;
+
+export type ListReviewsParams = {
+customerId?: number;
+source?: ListReviewsSource;
+};
+
+export type ListReviewsSource = typeof ListReviewsSource[keyof typeof ListReviewsSource];
+
+
+export const ListReviewsSource = {
+  delivery_csat: 'delivery_csat',
+  service_csat: 'service_csat',
+  manual: 'manual',
+} as const;
+
+export type ListCasesParams = {
+customerId?: number;
+status?: ListCasesStatus;
+refType?: string;
+refId?: number;
+};
+
+export type ListCasesStatus = typeof ListCasesStatus[keyof typeof ListCasesStatus];
+
+
+export const ListCasesStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  resolved: 'resolved',
+  closed: 'closed',
+} as const;
 
 export type ListAgentRunsParams = {
 agentKey?: string;
