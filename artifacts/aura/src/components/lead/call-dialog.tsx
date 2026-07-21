@@ -1,11 +1,16 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useCreateLeadCall,
+  useUpdateLeadCall,
   useSuggestCallSentiment,
+  useGetTelephonyConfig,
+  useCreateTelephonyToken,
   getGetLeadTimelineQueryKey,
   getListLeadCallsQueryKey,
+  listLeadCalls,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Device, type Call } from "@twilio/voice-sdk";
 import {
   Dialog,
   DialogContent,
@@ -17,13 +22,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Phone, Sparkles } from "lucide-react";
+import { Loader2, Phone, PhoneCall, PhoneOff, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 type Direction = "outbound" | "inbound";
 type CallStatus = "completed" | "no_answer" | "busy" | "voicemail";
 type Sentiment = "positive" | "neutral" | "negative";
+type LiveState = "idle" | "connecting" | "ringing" | "in_call" | "ended";
 
 const STATUS_OPTIONS: { value: CallStatus; label: string }[] = [
   { value: "completed", label: "Completed" },
@@ -37,6 +43,12 @@ const SENTIMENT_STYLE: Record<Sentiment, string> = {
   neutral: "bg-foreground/[0.06] text-foreground/70 ring-white/15",
   negative: "bg-primary/15 text-primary ring-primary/30",
 };
+
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 export function CallDialog({
   leadId,
@@ -54,7 +66,12 @@ export function CallDialog({
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createCall = useCreateLeadCall();
+  const updateCall = useUpdateLeadCall();
   const suggest = useSuggestCallSentiment();
+  const mintToken = useCreateTelephonyToken();
+  const telephony = useGetTelephonyConfig();
+  const browserCalling =
+    telephony.data?.browserCallingEnabled === true && !!leadPhone;
 
   const [direction, setDirection] = useState<Direction>("outbound");
   const [status, setStatus] = useState<CallStatus>("completed");
@@ -63,6 +80,36 @@ export function CallDialog({
   const [notes, setNotes] = useState("");
   const [rationale, setRationale] = useState<string | null>(null);
 
+  // Live browser-call state (Twilio Voice SDK).
+  const [liveState, setLiveState] = useState<LiveState>("idle");
+  const [elapsed, setElapsed] = useState(0);
+  const [liveCallLogId, setLiveCallLogId] = useState<number | null>(null);
+  const deviceRef = useRef<Device | null>(null);
+  const callRef = useRef<Call | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const teardownDevice = () => {
+    stopTimer();
+    callRef.current?.disconnect();
+    callRef.current = null;
+    deviceRef.current?.destroy();
+    deviceRef.current = null;
+  };
+
+  useEffect(() => {
+    // Kill the audio session when the dialog closes or unmounts.
+    if (!open) teardownDevice();
+    return teardownDevice;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const reset = () => {
     setDirection("outbound");
     setStatus("completed");
@@ -70,6 +117,99 @@ export function CallDialog({
     setSentiment("neutral");
     setNotes("");
     setRationale(null);
+    setLiveState("idle");
+    setElapsed(0);
+    setLiveCallLogId(null);
+  };
+
+  const refreshCallData = () => {
+    queryClient.invalidateQueries({
+      queryKey: getGetLeadTimelineQueryKey(leadId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: getListLeadCallsQueryKey(leadId),
+    });
+  };
+
+  const resolveLiveCallLogId = async (callSid: string | undefined) => {
+    if (!callSid) return;
+    // The server created the call log in the voice webhook; find it by the
+    // Twilio CallSid so notes + sentiment can be attached afterwards.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const calls = await listLeadCalls(leadId);
+        const match = calls.find((c) => c.providerCallId === callSid);
+        if (match) {
+          setLiveCallLogId(match.id);
+          return;
+        }
+      } catch {
+        // retry below
+      }
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+  };
+
+  const startBrowserCall = async () => {
+    if (!leadPhone) return;
+    setLiveState("connecting");
+    try {
+      const { token } = await mintToken.mutateAsync();
+      const device = new Device(token, {
+        // Prefer Opus, fall back to PCMU.
+        codecPreferences: ["opus", "pcmu"] as never,
+      });
+      deviceRef.current = device;
+      await device.register();
+      const call = await device.connect({
+        params: { To: leadPhone, LeadId: String(leadId) },
+      });
+      callRef.current = call;
+      setLiveState("ringing");
+
+      call.on("accept", () => {
+        setLiveState("in_call");
+        setElapsed(0);
+        stopTimer();
+        timerRef.current = setInterval(
+          () => setElapsed((s) => s + 1),
+          1000,
+        );
+        void resolveLiveCallLogId(call.parameters["CallSid"]);
+      });
+      call.on("disconnect", () => {
+        stopTimer();
+        setLiveState("ended");
+        callRef.current = null;
+        deviceRef.current?.destroy();
+        deviceRef.current = null;
+        // Give the completion webhook a beat, then pull the fresh outcome.
+        setTimeout(refreshCallData, 1500);
+        void resolveLiveCallLogId(call.parameters["CallSid"]);
+      });
+      call.on("error", () => {
+        stopTimer();
+        setLiveState("ended");
+        toast({
+          title: "Call problem",
+          description: "The call ended unexpectedly.",
+          variant: "destructive",
+        });
+      });
+    } catch {
+      teardownDevice();
+      setLiveState("idle");
+      toast({
+        title: "Could not start the call",
+        description:
+          "Check your microphone permission and try again, or dial manually.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const hangUp = () => {
+    callRef.current?.disconnect();
   };
 
   const suggestSentiment = async () => {
@@ -94,6 +234,41 @@ export function CallDialog({
     }
   };
 
+  // After a live browser call, notes + sentiment PATCH onto the call log the
+  // server already created (duration/status were captured automatically).
+  const saveLiveAnnotation = async () => {
+    if (liveCallLogId == null) {
+      toast({
+        title: "Call record still syncing",
+        description: "Give it a moment and try saving again.",
+      });
+      return;
+    }
+    try {
+      await updateCall.mutateAsync({
+        id: leadId,
+        callId: liveCallLogId,
+        data: {
+          sentiment,
+          ...(notes.trim() ? { notes: notes.trim() } : {}),
+        },
+      });
+      refreshCallData();
+      toast({
+        title: "Call saved",
+        description: `Notes and sentiment saved to ${leadName}'s record.`,
+      });
+      reset();
+      onOpenChange(false);
+    } catch {
+      toast({
+        title: "Could not save the call notes",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const logCall = async () => {
     const mins = minutes.trim() === "" ? null : Number(minutes);
     try {
@@ -109,12 +284,7 @@ export function CallDialog({
           ...(notes.trim() ? { notes: notes.trim() } : {}),
         },
       });
-      queryClient.invalidateQueries({
-        queryKey: getGetLeadTimelineQueryKey(leadId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: getListLeadCallsQueryKey(leadId),
-      });
+      refreshCallData();
       toast({
         title: "Call logged",
         description: `Outcome and sentiment saved to ${leadName}'s record.`,
@@ -130,8 +300,17 @@ export function CallDialog({
     }
   };
 
+  const liveActive = liveState === "connecting" || liveState === "ringing" || liveState === "in_call";
+  const afterLiveCall = liveState === "ended";
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && liveActive) hangUp();
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -139,7 +318,9 @@ export function CallDialog({
             Call {leadName}
           </DialogTitle>
           <DialogDescription>
-            {leadPhone ? (
+            {browserCalling ? (
+              <>Call {leadPhone} straight from your browser — duration and outcome are captured automatically.</>
+            ) : leadPhone ? (
               <>
                 Dial{" "}
                 <a href={`tel:${leadPhone}`} className="text-primary hover:underline">
@@ -153,66 +334,114 @@ export function CallDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {browserCalling && (
+          <div className="rounded-xl ring-1 ring-white/10 bg-foreground/[0.03] p-4 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold truncate">
+                {liveState === "idle" && "Ready to dial"}
+                {liveState === "connecting" && "Starting call…"}
+                {liveState === "ringing" && "Ringing…"}
+                {liveState === "in_call" && `On call — ${formatElapsed(elapsed)}`}
+                {liveState === "ended" && "Call ended"}
+              </div>
+              <div className="text-xs text-muted-foreground truncate">
+                {liveState === "ended"
+                  ? "Duration and outcome were recorded automatically. Add notes below."
+                  : leadPhone}
+              </div>
+            </div>
+            {liveActive ? (
+              <Button
+                variant="destructive"
+                size="sm"
+                className="gap-1.5 shrink-0"
+                onClick={hangUp}
+              >
+                <PhoneOff className="w-4 h-4" />
+                Hang up
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                className="gap-1.5 shrink-0"
+                onClick={startBrowserCall}
+                disabled={mintToken.isPending}
+              >
+                {mintToken.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <PhoneCall className="w-4 h-4" />
+                )}
+                {afterLiveCall ? "Call again" : "Call now"}
+              </Button>
+            )}
+          </div>
+        )}
+
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          {!afterLiveCall && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
+                  Direction
+                </div>
+                <div className="flex gap-1.5">
+                  {(["outbound", "inbound"] as const).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setDirection(d)}
+                      className={cn(
+                        "rounded-full px-3 py-1.5 text-xs font-semibold capitalize ring-1 transition-colors",
+                        direction === d
+                          ? "bg-primary text-white ring-primary"
+                          : "bg-foreground/[0.04] text-muted-foreground ring-white/10 hover:text-foreground",
+                      )}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
+                  Duration (min)
+                </div>
+                <Input
+                  type="number"
+                  min={0}
+                  value={minutes}
+                  onChange={(e) => setMinutes(e.target.value)}
+                  placeholder="e.g. 6"
+                />
+              </div>
+            </div>
+          )}
+
+          {!afterLiveCall && (
             <div>
               <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
-                Direction
+                Outcome
               </div>
-              <div className="flex gap-1.5">
-                {(["outbound", "inbound"] as const).map((d) => (
+              <div className="flex flex-wrap gap-1.5">
+                {STATUS_OPTIONS.map((o) => (
                   <button
-                    key={d}
+                    key={o.value}
                     type="button"
-                    onClick={() => setDirection(d)}
+                    onClick={() => setStatus(o.value)}
                     className={cn(
-                      "rounded-full px-3 py-1.5 text-xs font-semibold capitalize ring-1 transition-colors",
-                      direction === d
+                      "rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-colors",
+                      status === o.value
                         ? "bg-primary text-white ring-primary"
                         : "bg-foreground/[0.04] text-muted-foreground ring-white/10 hover:text-foreground",
                     )}
                   >
-                    {d}
+                    {o.label}
                   </button>
                 ))}
               </div>
             </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
-                Duration (min)
-              </div>
-              <Input
-                type="number"
-                min={0}
-                value={minutes}
-                onChange={(e) => setMinutes(e.target.value)}
-                placeholder="e.g. 6"
-              />
-            </div>
-          </div>
-
-          <div>
-            <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
-              Outcome
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {STATUS_OPTIONS.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => setStatus(o.value)}
-                  className={cn(
-                    "rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-colors",
-                    status === o.value
-                      ? "bg-primary text-white ring-primary"
-                      : "bg-foreground/[0.04] text-muted-foreground ring-white/10 hover:text-foreground",
-                  )}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          )}
 
           <div>
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
@@ -279,22 +508,37 @@ export function CallDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={createCall.isPending}
+            disabled={createCall.isPending || updateCall.isPending}
           >
             Cancel
           </Button>
-          <Button
-            onClick={logCall}
-            disabled={createCall.isPending}
-            className="gap-1.5"
-          >
-            {createCall.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Phone className="w-4 h-4" />
-            )}
-            Log call
-          </Button>
+          {afterLiveCall ? (
+            <Button
+              onClick={saveLiveAnnotation}
+              disabled={updateCall.isPending}
+              className="gap-1.5"
+            >
+              {updateCall.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Phone className="w-4 h-4" />
+              )}
+              Save notes
+            </Button>
+          ) : (
+            <Button
+              onClick={logCall}
+              disabled={createCall.isPending || liveActive}
+              className="gap-1.5"
+            >
+              {createCall.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Phone className="w-4 h-4" />
+              )}
+              Log call
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

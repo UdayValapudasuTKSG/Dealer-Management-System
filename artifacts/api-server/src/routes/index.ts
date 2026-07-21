@@ -38,6 +38,7 @@ import documentsRouter from "./documents";
 import enquiriesRouter from "./enquiries";
 import webhooksRouter from "./webhooks";
 import testDriveRouter from "./test-drive";
+import telephonyRouter from "./telephony";
 import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
 import { authedRateLimit, publicRateLimit } from "../middlewares/rate-limit";
 
@@ -96,5 +97,6 @@ router.use(searchRouter);
 router.use(teamRouter);
 router.use(storageRouter);
 router.use(documentsRouter);
+router.use(telephonyRouter);
 
 export default router;

@@ -10,6 +10,7 @@ export type CallLogStatus = typeof CallLogStatus[keyof typeof CallLogStatus];
 
 
 export const CallLogStatus = {
+  in_progress: 'in_progress',
   completed: 'completed',
   no_answer: 'no_answer',
   busy: 'busy',

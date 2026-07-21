@@ -73,6 +73,9 @@ import {
   CreateLeadCallParams,
   CreateLeadCallBody,
   CreateLeadCallResponse,
+  UpdateLeadCallParams,
+  UpdateLeadCallBody,
+  UpdateLeadCallResponse,
   SuggestCallSentimentParams,
   SuggestCallSentimentBody,
   SuggestCallSentimentResponse,
@@ -2014,6 +2017,49 @@ router.post("/leads/:id/calls", async (req, res): Promise<void> => {
   );
 
   res.status(201).json(CreateLeadCallResponse.parse(call));
+});
+
+// Annotate a call log after the fact — used by the browser-calling flow to
+// attach notes + sentiment once the live Twilio call has ended.
+router.patch("/leads/:id/calls/:callId", async (req, res): Promise<void> => {
+  const params = UpdateLeadCallParams.safeParse(req.params);
+  const body = UpdateLeadCallBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({
+      error: (params.success ? body : params).error?.message ?? "Invalid input",
+    });
+    return;
+  }
+  const lead = await leadForDealer(params.data.id, activeDealerId(res));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(callLogsTable)
+    .where(
+      and(
+        eq(callLogsTable.id, params.data.callId),
+        eq(callLogsTable.leadId, lead.id),
+        eq(callLogsTable.dealerId, lead.dealerId),
+      ),
+    );
+  if (!existing) {
+    res.status(404).json({ error: "Call not found" });
+    return;
+  }
+  const [updated] = await db
+    .update(callLogsTable)
+    .set({
+      ...(body.data.sentiment ? { sentiment: body.data.sentiment } : {}),
+      ...(body.data.notes !== undefined
+        ? { notes: body.data.notes.trim() || null }
+        : {}),
+    })
+    .where(eq(callLogsTable.id, existing.id))
+    .returning();
+  res.json(UpdateLeadCallResponse.parse(updated));
 });
 
 // AI-assist: suggest a sentiment from call notes. Gated behind the Sales

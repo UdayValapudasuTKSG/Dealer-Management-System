@@ -1591,6 +1591,72 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /leads/{id}/calls/{callId}:
+    patch:
+      operationId: updateLeadCall
+      tags: [leads]
+      summary: Annotate a call log (notes + sentiment after a live call ends)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: callId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CallLogUpdate"
+      responses:
+        "200":
+          description: Updated call log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallLog"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /telephony/config:
+    get:
+      operationId: getTelephonyConfig
+      tags: [telephony]
+      summary: Which telephony provider is active and whether browser calling is enabled
+      responses:
+        "200":
+          description: Telephony configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelephonyConfig"
+
+  /telephony/token:
+    post:
+      operationId: createTelephonyToken
+      tags: [telephony]
+      summary: Mint a short-lived Twilio Voice access token for browser calling
+      responses:
+        "200":
+          description: Voice access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelephonyToken"
+        "503":
+          description: Browser calling is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /leads/{id}/calls/suggest-sentiment:
     post:
       operationId: suggestCallSentiment
@@ -5955,7 +6021,7 @@ components:
         id: { type: integer }
         leadId: { type: integer }
         direction: { type: string, enum: [outbound, inbound] }
-        status: { type: string, enum: [completed, no_answer, busy, voicemail] }
+        status: { type: string, enum: [in_progress, completed, no_answer, busy, voicemail] }
         durationSeconds: { type: ["integer", "null"] }
         sentiment: { type: string, enum: [positive, neutral, negative] }
         notes: { type: ["string", "null"] }
@@ -5963,6 +6029,24 @@ components:
         providerCallId: { type: ["string", "null"] }
         actor: { type: string }
         createdAt: { type: string, format: date-time }
+    CallLogUpdate:
+      type: object
+      properties:
+        sentiment: { type: string, enum: [positive, neutral, negative] }
+        notes: { type: string, maxLength: 4000 }
+    TelephonyConfig:
+      type: object
+      required: [provider, browserCallingEnabled]
+      properties:
+        provider: { type: string, enum: [stub, twilio] }
+        browserCallingEnabled: { type: boolean }
+        callerId: { type: ["string", "null"] }
+    TelephonyToken:
+      type: object
+      required: [token, identity]
+      properties:
+        token: { type: string }
+        identity: { type: string }
     CallLogInput:
       type: object
       required: [direction, status, sentiment]

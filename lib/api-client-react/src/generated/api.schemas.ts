@@ -1547,6 +1547,7 @@ export type CallLogStatus = typeof CallLogStatus[keyof typeof CallLogStatus];
 
 
 export const CallLogStatus = {
+  in_progress: 'in_progress',
   completed: 'completed',
   no_answer: 'no_answer',
   busy: 'busy',
@@ -1577,6 +1578,41 @@ export interface CallLog {
   providerCallId?: string | null;
   actor: string;
   createdAt: string;
+}
+
+export type CallLogUpdateSentiment = typeof CallLogUpdateSentiment[keyof typeof CallLogUpdateSentiment];
+
+
+export const CallLogUpdateSentiment = {
+  positive: 'positive',
+  neutral: 'neutral',
+  negative: 'negative',
+} as const;
+
+export interface CallLogUpdate {
+  sentiment?: CallLogUpdateSentiment;
+  /** @maxLength 4000 */
+  notes?: string;
+}
+
+export type TelephonyConfigProvider = typeof TelephonyConfigProvider[keyof typeof TelephonyConfigProvider];
+
+
+export const TelephonyConfigProvider = {
+  stub: 'stub',
+  twilio: 'twilio',
+} as const;
+
+export interface TelephonyConfig {
+  provider: TelephonyConfigProvider;
+  browserCallingEnabled: boolean;
+  /** @nullable */
+  callerId?: string | null;
+}
+
+export interface TelephonyToken {
+  token: string;
+  identity: string;
 }
 
 export type CallLogInputDirection = typeof CallLogInputDirection[keyof typeof CallLogInputDirection];

@@ -52,6 +52,7 @@ import type {
   CalendarResponse,
   CallLog,
   CallLogInput,
+  CallLogUpdate,
   CallSentimentSuggestInput,
   CallSentimentSuggestion,
   CommNote,
@@ -215,6 +216,8 @@ import type {
   TaskUpdate,
   TeamMemberProfile,
   TechnicianRef,
+  TelephonyConfig,
+  TelephonyToken,
   TestDriveInvite,
   TestEmailRequest,
   TestEmailResult,
@@ -4747,6 +4750,228 @@ export const useCreateLeadCall = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getCreateLeadCallMutationOptions(options));
+    }
+
+export const getUpdateLeadCallUrl = (id: number,
+    callId: number,) => {
+
+
+
+
+  return `/api/leads/${id}/calls/${callId}`
+}
+
+/**
+ * @summary Annotate a call log (notes + sentiment after a live call ends)
+ */
+export const updateLeadCall = async (id: number,
+    callId: number,
+    callLogUpdate: CallLogUpdate, options?: RequestInit): Promise<CallLog> => {
+
+  return customFetch<CallLog>(getUpdateLeadCallUrl(id,callId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(callLogUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateLeadCallMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLeadCall>>, TError,{id: number;callId: number;data: BodyType<CallLogUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLeadCall>>, TError,{id: number;callId: number;data: BodyType<CallLogUpdate>}, TContext> => {
+
+const mutationKey = ['updateLeadCall'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLeadCall>>, {id: number;callId: number;data: BodyType<CallLogUpdate>}> = (props) => {
+          const {id,callId,data} = props ?? {};
+
+          return  updateLeadCall(id,callId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLeadCallMutationResult = NonNullable<Awaited<ReturnType<typeof updateLeadCall>>>
+    export type UpdateLeadCallMutationBody = BodyType<CallLogUpdate>
+    export type UpdateLeadCallMutationError = ErrorType<Error>
+
+    /**
+ * @summary Annotate a call log (notes + sentiment after a live call ends)
+ */
+export const useUpdateLeadCall = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLeadCall>>, TError,{id: number;callId: number;data: BodyType<CallLogUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLeadCall>>,
+        TError,
+        {id: number;callId: number;data: BodyType<CallLogUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateLeadCallMutationOptions(options));
+    }
+
+export const getGetTelephonyConfigUrl = () => {
+
+
+
+
+  return `/api/telephony/config`
+}
+
+/**
+ * @summary Which telephony provider is active and whether browser calling is enabled
+ */
+export const getTelephonyConfig = async ( options?: RequestInit): Promise<TelephonyConfig> => {
+
+  return customFetch<TelephonyConfig>(getGetTelephonyConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTelephonyConfigQueryKey = () => {
+    return [
+    `/api/telephony/config`
+    ] as const;
+    }
+
+
+export const getGetTelephonyConfigQueryOptions = <TData = Awaited<ReturnType<typeof getTelephonyConfig>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelephonyConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTelephonyConfigQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTelephonyConfig>>> = ({ signal }) => getTelephonyConfig({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTelephonyConfig>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTelephonyConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getTelephonyConfig>>>
+export type GetTelephonyConfigQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Which telephony provider is active and whether browser calling is enabled
+ */
+
+export function useGetTelephonyConfig<TData = Awaited<ReturnType<typeof getTelephonyConfig>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTelephonyConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTelephonyConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateTelephonyTokenUrl = () => {
+
+
+
+
+  return `/api/telephony/token`
+}
+
+/**
+ * @summary Mint a short-lived Twilio Voice access token for browser calling
+ */
+export const createTelephonyToken = async ( options?: RequestInit): Promise<TelephonyToken> => {
+
+  return customFetch<TelephonyToken>(getCreateTelephonyTokenUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCreateTelephonyTokenMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTelephonyToken>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTelephonyToken>>, TError,void, TContext> => {
+
+const mutationKey = ['createTelephonyToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTelephonyToken>>, void> = () => {
+
+
+          return  createTelephonyToken(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTelephonyTokenMutationResult = NonNullable<Awaited<ReturnType<typeof createTelephonyToken>>>
+
+    export type CreateTelephonyTokenMutationError = ErrorType<Error>
+
+    /**
+ * @summary Mint a short-lived Twilio Voice access token for browser calling
+ */
+export const useCreateTelephonyToken = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTelephonyToken>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTelephonyToken>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCreateTelephonyTokenMutationOptions(options));
     }
 
 export const getSuggestCallSentimentUrl = (id: number,) => {

@@ -388,6 +388,9 @@ const AUTH_ONLY_SEGMENTS = new Set([
   // documents attach to either a lead or a vehicle — the route enforces the
   // matching module (leads vs inventory) per entity via hasPermission.
   "documents",
+  // telephony config + browser-calling tokens: any signed-in staff member may
+  // dial; call logging itself is gated on the leads module.
+  "telephony",
 ]);
 
 export function routePermission(

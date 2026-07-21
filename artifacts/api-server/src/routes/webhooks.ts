@@ -3,10 +3,13 @@ import crypto from "node:crypto";
 import { and, eq, notInArray, isNotNull } from "drizzle-orm";
 import {
   db,
+  callLogsTable,
   leadsTable,
   timelineEventsTable,
+  usersTable,
   webhookEventsTable,
 } from "@workspace/db";
+import { mapTwilioDialStatus, twilioVoiceConfig } from "../lib/telephony";
 import { notifyUser } from "../lib/email";
 import { logger } from "../lib/logger";
 import {
@@ -562,5 +565,191 @@ router.post("/webhooks/twilio/whatsapp", async (req, res): Promise<void> => {
     res.status(500).json({ error: "Failed to process message" });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Twilio Voice webhooks — browser click-to-call.
+//
+// The TwiML App's Voice Request URL must point at POST /api/webhooks/twilio/voice.
+// The Voice JS SDK connects with custom params { To, LeadId }; we create the
+// call log row here (status in_progress) and return <Dial> to the customer.
+// When the dialed leg ends, Twilio calls the <Dial action> URL and we stamp
+// the real duration + outcome onto the same row automatically.
+// ---------------------------------------------------------------------------
+
+const escapeXml = (s: string): string =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+function voiceSay(res: Parameters<Parameters<IRouter["post"]>[1]>[1], message: string): void {
+  res
+    .status(200)
+    .type("text/xml")
+    .send(
+      `<?xml version="1.0" encoding="UTF-8"?><Response><Say>${escapeXml(message)}</Say></Response>`,
+    );
+}
+
+router.post("/webhooks/twilio/voice", async (req, res): Promise<void> => {
+  const cfg = twilioVoiceConfig();
+  if (!cfg) {
+    res.status(503).json({ error: "Twilio Voice is not configured" });
+    return;
+  }
+
+  const params: Record<string, string> = {};
+  for (const [k, v] of Object.entries(req.body ?? {})) {
+    if (typeof v === "string") params[k] = v;
+  }
+  const signature = req.get("x-twilio-signature");
+  if (
+    !verifyTwilioSignature(cfg.authToken, publicUrl(req), params, signature ?? undefined)
+  ) {
+    req.log.warn("Twilio voice webhook rejected: bad signature");
+    res.status(403).json({ error: "Invalid signature" });
+    return;
+  }
+
+  const to = (params["To"] ?? "").trim();
+  const leadId = Number(params["LeadId"] ?? "");
+  const callSid = params["CallSid"] ?? "";
+  // Browser leg arrives as From=client:advisor-<userId> — resolve the name.
+  const fromIdentity = params["From"] ?? "";
+  const userId = Number(fromIdentity.replace(/^client:advisor-/, ""));
+
+  if (!to || !Number.isFinite(leadId) || leadId <= 0) {
+    voiceSay(res, "This call cannot be completed. Missing destination.");
+    return;
+  }
+
+  try {
+    const [lead] = await db
+      .select()
+      .from(leadsTable)
+      .where(eq(leadsTable.id, leadId));
+    if (!lead) {
+      voiceSay(res, "This call cannot be completed. Lead not found.");
+      return;
+    }
+
+    let actor = "Staff";
+    if (Number.isFinite(userId) && userId > 0) {
+      const [user] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, userId));
+      if (user) actor = user.name ?? user.email ?? "Staff";
+    }
+
+    const [call] = await db
+      .insert(callLogsTable)
+      .values({
+        dealerId: lead.dealerId,
+        leadId: lead.id,
+        direction: "outbound",
+        status: "in_progress",
+        sentiment: "neutral",
+        provider: "twilio",
+        providerCallId: callSid || null,
+        actor,
+      })
+      .returning();
+
+    const proto = req.get("x-forwarded-proto")?.split(",")[0]?.trim() || req.protocol;
+    const host = req.get("x-forwarded-host")?.split(",")[0]?.trim() || req.get("host");
+    const actionUrl = `${proto}://${host}/api/webhooks/twilio/voice/complete?callLogId=${call!.id}`;
+
+    res
+      .status(200)
+      .type("text/xml")
+      .send(
+        `<?xml version="1.0" encoding="UTF-8"?><Response><Dial callerId="${escapeXml(cfg.callerId)}" action="${escapeXml(actionUrl)}" timeout="25"><Number>${escapeXml(to)}</Number></Dial></Response>`,
+      );
+  } catch (err) {
+    req.log.error({ err, leadId }, "Failed to start Twilio voice call");
+    voiceSay(res, "Sorry, the call could not be connected.");
+  }
+});
+
+// <Dial action> callback: the dialed leg finished — capture outcome + duration.
+router.post(
+  "/webhooks/twilio/voice/complete",
+  async (req, res): Promise<void> => {
+    const cfg = twilioVoiceConfig();
+    if (!cfg) {
+      res.status(503).json({ error: "Twilio Voice is not configured" });
+      return;
+    }
+
+    const params: Record<string, string> = {};
+    for (const [k, v] of Object.entries(req.body ?? {})) {
+      if (typeof v === "string") params[k] = v;
+    }
+    const signature = req.get("x-twilio-signature");
+    if (
+      !verifyTwilioSignature(cfg.authToken, publicUrl(req), params, signature ?? undefined)
+    ) {
+      req.log.warn("Twilio voice completion webhook rejected: bad signature");
+      res.status(403).json({ error: "Invalid signature" });
+      return;
+    }
+
+    const callLogId = Number(req.query["callLogId"] ?? "");
+    const status = mapTwilioDialStatus(params["DialCallStatus"]);
+    const duration = Number(params["DialCallDuration"] ?? "");
+
+    try {
+      if (Number.isFinite(callLogId) && callLogId > 0) {
+        const [call] = await db
+          .update(callLogsTable)
+          .set({
+            status,
+            durationSeconds:
+              Number.isFinite(duration) && duration >= 0
+                ? Math.round(duration)
+                : null,
+          })
+          .where(eq(callLogsTable.id, callLogId))
+          .returning();
+
+        // One activity record per call, written once the outcome is known.
+        if (call) {
+          const [lead] = await db
+            .select()
+            .from(leadsTable)
+            .where(eq(leadsTable.id, call.leadId));
+          if (lead) {
+            const mins =
+              call.durationSeconds != null
+                ? ` (${Math.max(1, Math.round(call.durationSeconds / 60))} min)`
+                : "";
+            await db.insert(timelineEventsTable).values({
+              dealerId: lead.dealerId,
+              customerId: lead.customerId,
+              domain: "leads",
+              kind: "call",
+              title: `Outbound call — ${status.replace("_", " ")}${mins}`,
+              detail: `Dialed from the browser via Twilio.`,
+              actor: call.actor,
+              isAgent: false,
+              refType: "lead",
+              refId: lead.id,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      req.log.error({ err, callLogId }, "Failed to finalize Twilio voice call");
+    }
+
+    // End the parent (browser) leg cleanly.
+    res
+      .status(200)
+      .type("text/xml")
+      .send('<?xml version="1.0" encoding="UTF-8"?><Response/>');
+  },
+);
 
 export default router;

@@ -71,6 +71,7 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 - Streaming routes (CopilotKit, SSE) need `Cache-Control: no-cache, no-transform` + `X-Accel-Buffering: no` or the proxy cuts the stream (`ERR_INCOMPLETE_CHUNKED_ENCODING`).
 - Clerk dev vs production user stores are separate: demo persona accounts exist in DEV only; re-run the seeder against production if needed there.
 - `AUTH_BYPASS=1` (dev-only) gives a synthetic super-admin for headless testing; used by the gate-cascades validation.
+- Browser click-to-call needs the FULL Twilio Voice credential set (account SID, API key SID/secret, TwiML App SID, phone number, auth token) — any missing piece silently falls back to the stub/manual flow (`twilioVoiceConfig()` in `api-server/src/lib/telephony.ts`); the Twilio TwiML App's Voice URL must point at `/api/webhooks/twilio/voice` on the public domain.
 
 ## Pointers
 

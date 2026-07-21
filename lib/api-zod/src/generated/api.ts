@@ -2052,7 +2052,7 @@ export const ListLeadCallsResponseItem = zod.object({
   "id": zod.number(),
   "leadId": zod.number(),
   "direction": zod.enum(['outbound', 'inbound']),
-  "status": zod.enum(['completed', 'no_answer', 'busy', 'voicemail']),
+  "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail']),
   "durationSeconds": zod.number().nullish(),
   "sentiment": zod.enum(['positive', 'neutral', 'negative']),
   "notes": zod.string().nullish(),
@@ -2089,7 +2089,7 @@ export const CreateLeadCallResponse = zod.object({
   "id": zod.number(),
   "leadId": zod.number(),
   "direction": zod.enum(['outbound', 'inbound']),
-  "status": zod.enum(['completed', 'no_answer', 'busy', 'voicemail']),
+  "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail']),
   "durationSeconds": zod.number().nullish(),
   "sentiment": zod.enum(['positive', 'neutral', 'negative']),
   "notes": zod.string().nullish(),
@@ -2097,6 +2097,57 @@ export const CreateLeadCallResponse = zod.object({
   "providerCallId": zod.string().nullish(),
   "actor": zod.string(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Annotate a call log (notes + sentiment after a live call ends)
+ */
+export const UpdateLeadCallParams = zod.object({
+  "id": zod.coerce.number(),
+  "callId": zod.coerce.number()
+})
+
+export const updateLeadCallBodyNotesMax = 4000;
+
+
+
+export const UpdateLeadCallBody = zod.object({
+  "sentiment": zod.enum(['positive', 'neutral', 'negative']).optional(),
+  "notes": zod.string().max(updateLeadCallBodyNotesMax).optional()
+})
+
+export const UpdateLeadCallResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "direction": zod.enum(['outbound', 'inbound']),
+  "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail']),
+  "durationSeconds": zod.number().nullish(),
+  "sentiment": zod.enum(['positive', 'neutral', 'negative']),
+  "notes": zod.string().nullish(),
+  "provider": zod.string(),
+  "providerCallId": zod.string().nullish(),
+  "actor": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Which telephony provider is active and whether browser calling is enabled
+ */
+export const GetTelephonyConfigResponse = zod.object({
+  "provider": zod.enum(['stub', 'twilio']),
+  "browserCallingEnabled": zod.boolean(),
+  "callerId": zod.string().nullish()
+})
+
+
+/**
+ * @summary Mint a short-lived Twilio Voice access token for browser calling
+ */
+export const CreateTelephonyTokenResponse = zod.object({
+  "token": zod.string(),
+  "identity": zod.string()
 })
 
 

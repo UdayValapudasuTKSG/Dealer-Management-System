@@ -12,6 +12,7 @@ export const CALL_DIRECTIONS = ["outbound", "inbound"] as const;
 export type CallDirection = (typeof CALL_DIRECTIONS)[number];
 
 export const CALL_STATUSES = [
+  "in_progress",
   "completed",
   "no_answer",
   "busy",
