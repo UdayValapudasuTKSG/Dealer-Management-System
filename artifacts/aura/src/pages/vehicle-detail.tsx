@@ -26,6 +26,8 @@ import { Badge } from "@/components/ui/badge";
 import { Page } from "@/components/layout/page";
 import { cn } from "@/lib/utils";
 import { useMoney } from "@/lib/format";
+import { useAuthz } from "@/lib/auth";
+import { DocumentsCard } from "@/components/documents-card";
 
 function img(url: string | null | undefined) {
   if (!url) return undefined;
@@ -69,6 +71,7 @@ export default function VehicleDetailPage() {
   const [, navigate] = useLocation();
   const [mode, setMode] = useState<"photo" | "spin">("photo");
   const money = useMoney();
+  const { can } = useAuthz();
 
   const { data: vehicle, isLoading, isError } = useGetVehicle(id);
 
@@ -320,6 +323,14 @@ export default function VehicleDetailPage() {
               </div>
             </div>
           )}
+
+          <div className="mt-5">
+            <DocumentsCard
+              entityType="vehicle"
+              entityId={vehicle.id}
+              canEdit={can("inventory", "edit")}
+            />
+          </div>
 
           <div className="flex flex-wrap items-center gap-3 mt-8">
             <button

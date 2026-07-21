@@ -1054,6 +1054,132 @@ export interface DeliveryAdvisor {
   email?: string | null;
 }
 
+export interface DocumentExtractionField {
+  field: string;
+  label: string;
+  value: string;
+}
+
+export interface DocumentExtraction {
+  /** @nullable */
+  summary?: string | null;
+  fields: DocumentExtractionField[];
+}
+
+export type DocumentEntityType = typeof DocumentEntityType[keyof typeof DocumentEntityType];
+
+
+export const DocumentEntityType = {
+  lead: 'lead',
+  vehicle: 'vehicle',
+} as const;
+
+export type DocumentType = typeof DocumentType[keyof typeof DocumentType];
+
+
+export const DocumentType = {
+  id_document: 'id_document',
+  financing: 'financing',
+  test_drive: 'test_drive',
+  insurance: 'insurance',
+  registration: 'registration',
+  customs: 'customs',
+  invoice: 'invoice',
+  quote: 'quote',
+  other: 'other',
+} as const;
+
+export type DocumentExtractionStatus = typeof DocumentExtractionStatus[keyof typeof DocumentExtractionStatus];
+
+
+export const DocumentExtractionStatus = {
+  none: 'none',
+  pending: 'pending',
+  proposed: 'proposed',
+  accepted: 'accepted',
+  dismissed: 'dismissed',
+  failed: 'failed',
+} as const;
+
+export interface Document {
+  id: number;
+  entityType: DocumentEntityType;
+  entityId: number;
+  type: DocumentType;
+  version: number;
+  fileName: string;
+  /** @nullable */
+  storageKey?: string | null;
+  /** @nullable */
+  externalUrl?: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  /** @nullable */
+  comments?: string | null;
+  /** @nullable */
+  uploadedBy?: string | null;
+  extractionStatus: DocumentExtractionStatus;
+  extraction?: DocumentExtraction | null;
+  createdAt: string;
+}
+
+export type DocumentInputEntityType = typeof DocumentInputEntityType[keyof typeof DocumentInputEntityType];
+
+
+export const DocumentInputEntityType = {
+  lead: 'lead',
+  vehicle: 'vehicle',
+} as const;
+
+export type DocumentInputType = typeof DocumentInputType[keyof typeof DocumentInputType];
+
+
+export const DocumentInputType = {
+  id_document: 'id_document',
+  financing: 'financing',
+  test_drive: 'test_drive',
+  insurance: 'insurance',
+  registration: 'registration',
+  customs: 'customs',
+  invoice: 'invoice',
+  quote: 'quote',
+  other: 'other',
+} as const;
+
+export interface DocumentInput {
+  entityType: DocumentInputEntityType;
+  entityId: number;
+  type: DocumentInputType;
+  /** @minLength 1 */
+  fileName: string;
+  /** @minLength 1 */
+  storageKey: string;
+  /** @minLength 1 */
+  mimeType: string;
+  /** @minimum 0 */
+  sizeBytes: number;
+  comments?: string;
+}
+
+export type DocumentExtractionReviewBodyAction = typeof DocumentExtractionReviewBodyAction[keyof typeof DocumentExtractionReviewBodyAction];
+
+
+export const DocumentExtractionReviewBodyAction = {
+  accept: 'accept',
+  dismiss: 'dismiss',
+} as const;
+
+export type DocumentExtractionReviewBodyFieldsItem = {
+  field: string;
+  value: string;
+};
+
+export interface DocumentExtractionReviewBody {
+  action: DocumentExtractionReviewBodyAction;
+  /** Edited field values to apply on accept (subset of the proposal) */
+  fields?: DocumentExtractionReviewBodyFieldsItem[];
+}
+
 export interface LeadAttachment {
   /** @minLength 1 */
   name: string;
@@ -4201,4 +4327,17 @@ status?: string;
 assigneeUserId?: number;
 leadId?: number;
 };
+
+export type ListDocumentsParams = {
+entityType: ListDocumentsEntityType;
+entityId: number;
+};
+
+export type ListDocumentsEntityType = typeof ListDocumentsEntityType[keyof typeof ListDocumentsEntityType];
+
+
+export const ListDocumentsEntityType = {
+  lead: 'lead',
+  vehicle: 'vehicle',
+} as const;
 

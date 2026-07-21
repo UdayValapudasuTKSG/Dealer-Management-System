@@ -34,6 +34,7 @@ import reportsRouter from "./reports";
 import searchRouter from "./search";
 import teamRouter from "./team";
 import storageRouter from "./storage";
+import documentsRouter from "./documents";
 import enquiriesRouter from "./enquiries";
 import webhooksRouter from "./webhooks";
 import testDriveRouter from "./test-drive";
@@ -89,5 +90,6 @@ router.use(reportsRouter);
 router.use(searchRouter);
 router.use(teamRouter);
 router.use(storageRouter);
+router.use(documentsRouter);
 
 export default router;

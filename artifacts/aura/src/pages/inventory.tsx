@@ -539,7 +539,7 @@ export default function Inventory() {
       <VehicleDetail
         vehicle={selected}
         onClose={() => setSelected(null)}
-        canEdit={can("inventory", "update")}
+        canEdit={can("inventory", "edit")}
         onUpdated={(v) => setSelected(v)}
       />
     </div>

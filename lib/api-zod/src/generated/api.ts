@@ -6131,6 +6131,139 @@ export const CreateCommNoteResponse = zod.object({
 
 
 /**
+ * @summary List documents for a lead or vehicle (all versions, newest first)
+ */
+export const ListDocumentsQueryParams = zod.object({
+  "entityType": zod.enum(['lead', 'vehicle']),
+  "entityId": zod.coerce.number()
+})
+
+export const ListDocumentsResponseItem = zod.object({
+  "id": zod.number(),
+  "entityType": zod.enum(['lead', 'vehicle']),
+  "entityId": zod.number(),
+  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'other']),
+  "version": zod.number(),
+  "fileName": zod.string(),
+  "storageKey": zod.string().nullish(),
+  "externalUrl": zod.string().nullish(),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "comments": zod.string().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "extractionStatus": zod.enum(['none', 'pending', 'proposed', 'accepted', 'dismissed', 'failed']),
+  "extraction": zod.union([zod.object({
+  "summary": zod.string().nullish(),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "label": zod.string(),
+  "value": zod.string()
+}))
+}),zod.null()]).optional(),
+  "createdAt": zod.coerce.date()
+})
+export const ListDocumentsResponse = zod.array(ListDocumentsResponseItem)
+
+
+/**
+ * @summary Register an uploaded document (creates the next version of its type)
+ */
+
+
+
+export const createDocumentBodySizeBytesMin = 0;
+
+
+
+export const CreateDocumentBody = zod.object({
+  "entityType": zod.enum(['lead', 'vehicle']),
+  "entityId": zod.number(),
+  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'other']),
+  "fileName": zod.string().min(1),
+  "storageKey": zod.string().min(1),
+  "mimeType": zod.string().min(1),
+  "sizeBytes": zod.number().min(createDocumentBodySizeBytesMin),
+  "comments": zod.string().optional()
+})
+
+export const CreateDocumentResponse = zod.object({
+  "id": zod.number(),
+  "entityType": zod.enum(['lead', 'vehicle']),
+  "entityId": zod.number(),
+  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'other']),
+  "version": zod.number(),
+  "fileName": zod.string(),
+  "storageKey": zod.string().nullish(),
+  "externalUrl": zod.string().nullish(),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "comments": zod.string().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "extractionStatus": zod.enum(['none', 'pending', 'proposed', 'accepted', 'dismissed', 'failed']),
+  "extraction": zod.union([zod.object({
+  "summary": zod.string().nullish(),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "label": zod.string(),
+  "value": zod.string()
+}))
+}),zod.null()]).optional(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Download a document file (streams from object storage)
+ */
+export const DownloadDocumentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DownloadDocumentResponse = zod.unknown()
+
+
+/**
+ * @summary Accept (with optional edits) or dismiss an AI pre-fill proposal
+ */
+export const ReviewDocumentExtractionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ReviewDocumentExtractionBody = zod.object({
+  "action": zod.enum(['accept', 'dismiss']),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "value": zod.string()
+})).optional().describe('Edited field values to apply on accept (subset of the proposal)')
+})
+
+export const ReviewDocumentExtractionResponse = zod.object({
+  "id": zod.number(),
+  "entityType": zod.enum(['lead', 'vehicle']),
+  "entityId": zod.number(),
+  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'other']),
+  "version": zod.number(),
+  "fileName": zod.string(),
+  "storageKey": zod.string().nullish(),
+  "externalUrl": zod.string().nullish(),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "comments": zod.string().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "extractionStatus": zod.enum(['none', 'pending', 'proposed', 'accepted', 'dismissed', 'failed']),
+  "extraction": zod.union([zod.object({
+  "summary": zod.string().nullish(),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "label": zod.string(),
+  "value": zod.string()
+}))
+}),zod.null()]).optional(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * Returns a presigned GCS URL for direct upload. The client sends JSON
  * metadata here, then uploads the file directly to the returned URL.
  * @summary Request a presigned URL for file upload

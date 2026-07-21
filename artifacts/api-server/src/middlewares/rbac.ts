@@ -385,6 +385,9 @@ const AUTH_ONLY_SEGMENTS = new Set([
   // staff member; feature-level gating (e.g. inventory edit) happens in the UI
   // and on the record mutation that stores the object path.
   "storage",
+  // documents attach to either a lead or a vehicle — the route enforces the
+  // matching module (leads vs inventory) per entity via hasPermission.
+  "documents",
 ]);
 
 export function routePermission(

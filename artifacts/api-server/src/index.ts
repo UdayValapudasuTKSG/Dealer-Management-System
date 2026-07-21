@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startEmailWorker } from "./lib/email";
 import { startGmailIntakeWorker } from "./lib/gmail-intake";
+import { migrateLegacyAttachments } from "./lib/documents-migrate";
 
 const rawPort = process.env["PORT"];
 
@@ -26,4 +27,5 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
   startEmailWorker();
   startGmailIntakeWorker();
+  void migrateLegacyAttachments();
 });

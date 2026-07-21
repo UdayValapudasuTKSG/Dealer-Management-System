@@ -47,7 +47,6 @@ import {
   Loader2,
   Mail,
   MessageSquare,
-  Paperclip,
   Pencil,
   Phone,
   PhoneIncoming,
@@ -65,6 +64,10 @@ import {
   type FieldDef,
 } from "@/components/create-record-dialog";
 import { WhatsappPanel } from "@/components/lead/whatsapp-panel";
+import {
+  DocumentsCard,
+  DocumentPrefillBanner,
+} from "@/components/documents-card";
 import { CallDialog } from "@/components/lead/call-dialog";
 import { useAuthz } from "@/lib/auth";
 import { useMoney, formatGuyanaDate, formatGuyanaDateTime } from "@/lib/format";
@@ -1125,6 +1128,10 @@ export default function LeadDetail() {
             ))}
           </div>
 
+          <div className="px-4 pt-4 empty:hidden [&:not(:has(*))]:hidden">
+            <DocumentPrefillBanner leadId={lead.id} />
+          </div>
+
           <AnimatePresence mode="wait">
             <motion.div
               key={tab}
@@ -1762,22 +1769,11 @@ export default function LeadDetail() {
                     </div>
                   )}
 
-                  {lead.attachments.length > 0 && (
-                    <div className="space-y-2">
-                      {lead.attachments.map((a) => (
-                        <a
-                          key={a.url}
-                          href={a.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-3 rounded-xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] transition-colors p-3"
-                        >
-                          <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <span className="text-sm truncate">{a.name}</span>
-                        </a>
-                      ))}
-                    </div>
-                  )}
+                  <DocumentsCard
+                    entityType="lead"
+                    entityId={lead.id}
+                    canEdit={canEdit}
+                  />
                 </div>
               )}
 

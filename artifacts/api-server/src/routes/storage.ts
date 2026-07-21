@@ -27,16 +27,22 @@ router.post("/storage/uploads/request-url", async (req: Request, res: Response) 
   try {
     const { name, size, contentType } = parsed.data;
 
-    // Currently the only consumer is vehicle gallery photos — reject anything
-    // that isn't a reasonably-sized image at presign time. Relax this (and add
-    // per-object ACLs, see the serve route below) if other asset types are added.
-    const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
-    if (!contentType.startsWith("image/")) {
-      res.status(422).json({ error: "Only image uploads are allowed" });
+    // Consumers: vehicle gallery photos (images) and the Documents module
+    // (PDF/JPG/PNG/DOCX up to 20MB). Reject everything else at presign time.
+    const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB
+    const DOCUMENT_MIME = new Set([
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ]);
+    const isImage = contentType.startsWith("image/");
+    if (!isImage && !DOCUMENT_MIME.has(contentType)) {
+      res
+        .status(422)
+        .json({ error: "Only image, PDF or DOCX uploads are allowed" });
       return;
     }
     if (size > MAX_UPLOAD_BYTES) {
-      res.status(422).json({ error: "File is too large (max 10MB)" });
+      res.status(422).json({ error: "File is too large (max 20MB)" });
       return;
     }
 

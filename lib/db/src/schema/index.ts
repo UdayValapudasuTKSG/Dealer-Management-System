@@ -4,6 +4,7 @@ export * from "./customers";
 export * from "./contacts";
 export * from "./assets";
 export * from "./customerDocuments";
+export * from "./documents";
 export * from "./customerNotes";
 export * from "./customerPersonas";
 export * from "./deals";
