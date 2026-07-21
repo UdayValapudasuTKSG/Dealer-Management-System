@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AccountRelations,
   Activity,
   AdminUser,
   AdminUserAdd,
@@ -35,6 +36,7 @@ import type {
   Appraisal,
   AppraisalInput,
   AppraisalUpdate,
+  Asset,
   AssignLeadInput,
   AuditLogEntry,
   Bank,
@@ -50,6 +52,9 @@ import type {
   CallSentimentSuggestion,
   CommNote,
   CommNoteInput,
+  Contact,
+  ContactInput,
+  ContactUpdate,
   CoveragePlan,
   CoveragePlanInput,
   CoveragePlanUpdate,
@@ -9352,6 +9357,456 @@ export function useGetCustomerOverview<TData = Awaited<ReturnType<typeof getCust
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetCustomerOverviewQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListContactsUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/contacts`
+}
+
+/**
+ * @summary List contacts under an account
+ */
+export const listContacts = async (id: number, options?: RequestInit): Promise<Contact[]> => {
+
+  return customFetch<Contact[]>(getListContactsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContactsQueryKey = (id: number,) => {
+    return [
+    `/api/customers/${id}/contacts`
+    ] as const;
+    }
+
+
+export const getListContactsQueryOptions = <TData = Awaited<ReturnType<typeof listContacts>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContactsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContacts>>> = ({ signal }) => listContacts(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContactsQueryResult = NonNullable<Awaited<ReturnType<typeof listContacts>>>
+export type ListContactsQueryError = ErrorType<Error>
+
+
+/**
+ * @summary List contacts under an account
+ */
+
+export function useListContacts<TData = Awaited<ReturnType<typeof listContacts>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContacts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContactsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateContactUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/contacts`
+}
+
+/**
+ * @summary Add a contact to an account
+ */
+export const createContact = async (id: number,
+    contactInput: ContactInput, options?: RequestInit): Promise<Contact> => {
+
+  return customFetch<Contact>(getCreateContactUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(contactInput)
+  }
+);}
+
+
+
+
+
+export const getCreateContactMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,{id: number;data: BodyType<ContactInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,{id: number;data: BodyType<ContactInput>}, TContext> => {
+
+const mutationKey = ['createContact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createContact>>, {id: number;data: BodyType<ContactInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createContact(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateContactMutationResult = NonNullable<Awaited<ReturnType<typeof createContact>>>
+    export type CreateContactMutationBody = BodyType<ContactInput>
+    export type CreateContactMutationError = ErrorType<Error>
+
+    /**
+ * @summary Add a contact to an account
+ */
+export const useCreateContact = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,{id: number;data: BodyType<ContactInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createContact>>,
+        TError,
+        {id: number;data: BodyType<ContactInput>},
+        TContext
+      > => {
+      return useMutation(getCreateContactMutationOptions(options));
+    }
+
+export const getUpdateContactUrl = (id: number,
+    contactId: number,) => {
+
+
+
+
+  return `/api/customers/${id}/contacts/${contactId}`
+}
+
+/**
+ * @summary Update a contact
+ */
+export const updateContact = async (id: number,
+    contactId: number,
+    contactUpdate: ContactUpdate, options?: RequestInit): Promise<Contact> => {
+
+  return customFetch<Contact>(getUpdateContactUrl(id,contactId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(contactUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateContactMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContact>>, TError,{id: number;contactId: number;data: BodyType<ContactUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateContact>>, TError,{id: number;contactId: number;data: BodyType<ContactUpdate>}, TContext> => {
+
+const mutationKey = ['updateContact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateContact>>, {id: number;contactId: number;data: BodyType<ContactUpdate>}> = (props) => {
+          const {id,contactId,data} = props ?? {};
+
+          return  updateContact(id,contactId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateContactMutationResult = NonNullable<Awaited<ReturnType<typeof updateContact>>>
+    export type UpdateContactMutationBody = BodyType<ContactUpdate>
+    export type UpdateContactMutationError = ErrorType<Error>
+
+    /**
+ * @summary Update a contact
+ */
+export const useUpdateContact = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateContact>>, TError,{id: number;contactId: number;data: BodyType<ContactUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateContact>>,
+        TError,
+        {id: number;contactId: number;data: BodyType<ContactUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateContactMutationOptions(options));
+    }
+
+export const getDeleteContactUrl = (id: number,
+    contactId: number,) => {
+
+
+
+
+  return `/api/customers/${id}/contacts/${contactId}`
+}
+
+/**
+ * @summary Remove a contact
+ */
+export const deleteContact = async (id: number,
+    contactId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteContactUrl(id,contactId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteContactMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContact>>, TError,{id: number;contactId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteContact>>, TError,{id: number;contactId: number}, TContext> => {
+
+const mutationKey = ['deleteContact'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteContact>>, {id: number;contactId: number}> = (props) => {
+          const {id,contactId} = props ?? {};
+
+          return  deleteContact(id,contactId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteContactMutationResult = NonNullable<Awaited<ReturnType<typeof deleteContact>>>
+
+    export type DeleteContactMutationError = ErrorType<Error>
+
+    /**
+ * @summary Remove a contact
+ */
+export const useDeleteContact = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteContact>>, TError,{id: number;contactId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteContact>>,
+        TError,
+        {id: number;contactId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteContactMutationOptions(options));
+    }
+
+export const getListAccountAssetsUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/assets`
+}
+
+/**
+ * @summary List lifetime vehicle assets owned by an account
+ */
+export const listAccountAssets = async (id: number, options?: RequestInit): Promise<Asset[]> => {
+
+  return customFetch<Asset[]>(getListAccountAssetsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAccountAssetsQueryKey = (id: number,) => {
+    return [
+    `/api/customers/${id}/assets`
+    ] as const;
+    }
+
+
+export const getListAccountAssetsQueryOptions = <TData = Awaited<ReturnType<typeof listAccountAssets>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountAssets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAccountAssetsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAccountAssets>>> = ({ signal }) => listAccountAssets(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAccountAssets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAccountAssetsQueryResult = NonNullable<Awaited<ReturnType<typeof listAccountAssets>>>
+export type ListAccountAssetsQueryError = ErrorType<Error>
+
+
+/**
+ * @summary List lifetime vehicle assets owned by an account
+ */
+
+export function useListAccountAssets<TData = Awaited<ReturnType<typeof listAccountAssets>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAccountAssets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAccountAssetsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAccountRelationsUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/relations`
+}
+
+/**
+ * @summary Household / parent-business grouping for an account
+ */
+export const getAccountRelations = async (id: number, options?: RequestInit): Promise<AccountRelations> => {
+
+  return customFetch<AccountRelations>(getGetAccountRelationsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAccountRelationsQueryKey = (id: number,) => {
+    return [
+    `/api/customers/${id}/relations`
+    ] as const;
+    }
+
+
+export const getGetAccountRelationsQueryOptions = <TData = Awaited<ReturnType<typeof getAccountRelations>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountRelations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAccountRelationsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAccountRelations>>> = ({ signal }) => getAccountRelations(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAccountRelations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAccountRelationsQueryResult = NonNullable<Awaited<ReturnType<typeof getAccountRelations>>>
+export type GetAccountRelationsQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Household / parent-business grouping for an account
+ */
+
+export function useGetAccountRelations<TData = Awaited<ReturnType<typeof getAccountRelations>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAccountRelations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAccountRelationsQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -474,6 +474,7 @@ export const CreateBookingBody = zod.object({
   "vehicleId": zod.number(),
   "customerId": zod.number().optional(),
   "customerName": zod.string().min(1),
+  "leadId": zod.number().optional(),
   "dealId": zod.number().optional(),
   "bookingAmount": zod.number().min(createBookingBodyBookingAmountMin),
   "amountPaid": zod.number().min(createBookingBodyAmountPaidMin).optional(),
@@ -926,6 +927,7 @@ export const ListLeadsResponseItem = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "color": zod.string().nullish(),
   "preferredBranch": zod.string().nullish(),
@@ -1009,6 +1011,7 @@ export const CreateLeadResponse = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "color": zod.string().nullish(),
   "preferredBranch": zod.string().nullish(),
@@ -1070,6 +1073,7 @@ export const GetLeadResponse = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "color": zod.string().nullish(),
   "preferredBranch": zod.string().nullish(),
@@ -1127,6 +1131,7 @@ export const UpdateLeadBody = zod.object({
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']).optional(),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']).optional(),
   "interestedVehicleId": zod.number().optional(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().optional(),
   "color": zod.string().optional(),
   "availability": zod.enum(['available', 'back_order']).optional(),
@@ -1173,6 +1178,7 @@ export const UpdateLeadResponse = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "color": zod.string().nullish(),
   "preferredBranch": zod.string().nullish(),
@@ -1253,6 +1259,7 @@ export const CreateEnquiryResponse = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "color": zod.string().nullish(),
   "preferredBranch": zod.string().nullish(),
@@ -1406,6 +1413,7 @@ export const AssignLeadResponse = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "color": zod.string().nullish(),
   "preferredBranch": zod.string().nullish(),
@@ -1492,6 +1500,7 @@ export const AdvanceLeadStageResponse = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "color": zod.string().nullish(),
   "preferredBranch": zod.string().nullish(),
@@ -1561,6 +1570,7 @@ export const ScheduleTestDriveResponse = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "color": zod.string().nullish(),
   "preferredBranch": zod.string().nullish(),
@@ -1619,6 +1629,7 @@ export const CheckLeadAvailabilityResponse = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "color": zod.string().nullish(),
   "preferredBranch": zod.string().nullish(),
@@ -1681,6 +1692,7 @@ export const RecordLeadDecisionResponse = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "color": zod.string().nullish(),
   "preferredBranch": zod.string().nullish(),
@@ -1925,6 +1937,8 @@ export const SuggestCallSentimentResponse = zod.object({
 
 export const ListCustomersResponseItem = zod.object({
   "id": zod.number(),
+  "accountType": zod.enum(['person', 'business']),
+  "parentAccountId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -1952,6 +1966,8 @@ export const ListCustomersResponse = zod.array(ListCustomersResponseItem)
 
 export const CreateCustomerBody = zod.object({
   "name": zod.string().min(1),
+  "accountType": zod.enum(['person', 'business']).optional(),
+  "parentAccountId": zod.number().optional(),
   "email": zod.string().optional(),
   "phone": zod.string().optional(),
   "whatsapp": zod.string().optional(),
@@ -1972,6 +1988,8 @@ export const CreateCustomerBody = zod.object({
 
 export const CreateCustomerResponse = zod.object({
   "id": zod.number(),
+  "accountType": zod.enum(['person', 'business']),
+  "parentAccountId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -1999,6 +2017,8 @@ export const GetCustomerParams = zod.object({
 
 export const GetCustomerResponse = zod.object({
   "id": zod.number(),
+  "accountType": zod.enum(['person', 'business']),
+  "parentAccountId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -2029,6 +2049,8 @@ export const UpdateCustomerParams = zod.object({
 
 export const UpdateCustomerBody = zod.object({
   "name": zod.string().min(1).optional(),
+  "accountType": zod.enum(['person', 'business']).optional(),
+  "parentAccountId": zod.number().nullish(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "whatsapp": zod.string().nullish(),
@@ -2049,6 +2071,8 @@ export const UpdateCustomerBody = zod.object({
 
 export const UpdateCustomerResponse = zod.object({
   "id": zod.number(),
+  "accountType": zod.enum(['person', 'business']),
+  "parentAccountId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -3707,6 +3731,8 @@ export const GetCustomerOverviewParams = zod.object({
 export const GetCustomerOverviewResponse = zod.object({
   "customer": zod.object({
   "id": zod.number(),
+  "accountType": zod.enum(['person', 'business']),
+  "parentAccountId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -3725,6 +3751,50 @@ export const GetCustomerOverviewResponse = zod.object({
   "vehiclesOwned": zod.number(),
   "loyaltyTier": zod.enum(['new', 'silver', 'gold', 'platinum']),
   "createdAt": zod.coerce.date()
+}),
+  "contacts": zod.array(zod.object({
+  "id": zod.number(),
+  "accountId": zod.number(),
+  "name": zod.string(),
+  "title": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "isPrimary": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})),
+  "assets": zod.array(zod.object({
+  "id": zod.number(),
+  "accountId": zod.number(),
+  "vehicleId": zod.number(),
+  "dealId": zod.number().nullish(),
+  "deliveryId": zod.number().nullish(),
+  "deliveredAt": zod.coerce.date(),
+  "serviceAdvisorUserId": zod.number().nullish(),
+  "serviceAdvisorName": zod.string().nullish(),
+  "status": zod.enum(['active', 'transferred']),
+  "vehicleLabel": zod.string().nullish(),
+  "vehicleImageUrl": zod.string().nullish(),
+  "registration": zod.string().nullish(),
+  "vin": zod.string().nullish(),
+  "serviceOrderCount": zod.number(),
+  "lastServiceAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "relations": zod.object({
+  "parent": zod.union([zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "accountType": zod.enum(['person', 'business']),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish()
+}),zod.null()]).optional(),
+  "children": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "accountType": zod.enum(['person', 'business']),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish()
+}))
 }),
   "persona": zod.union([zod.object({
   "id": zod.number().nullish(),
@@ -3943,6 +4013,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "color": zod.string().nullish(),
   "preferredBranch": zod.string().nullish(),
@@ -4014,6 +4085,151 @@ export const GetCustomerOverviewResponse = zod.object({
   "resolvedBy": zod.string().nullish(),
   "resolvedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary List contacts under an account
+ */
+export const ListContactsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListContactsResponseItem = zod.object({
+  "id": zod.number(),
+  "accountId": zod.number(),
+  "name": zod.string(),
+  "title": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "isPrimary": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+export const ListContactsResponse = zod.array(ListContactsResponseItem)
+
+
+/**
+ * @summary Add a contact to an account
+ */
+export const CreateContactParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const CreateContactBody = zod.object({
+  "name": zod.string().min(1),
+  "title": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "isPrimary": zod.boolean().optional()
+})
+
+export const CreateContactResponse = zod.object({
+  "id": zod.number(),
+  "accountId": zod.number(),
+  "name": zod.string(),
+  "title": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "isPrimary": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a contact
+ */
+export const UpdateContactParams = zod.object({
+  "id": zod.coerce.number(),
+  "contactId": zod.coerce.number()
+})
+
+
+
+
+export const UpdateContactBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "title": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "isPrimary": zod.boolean().optional()
+})
+
+export const UpdateContactResponse = zod.object({
+  "id": zod.number(),
+  "accountId": zod.number(),
+  "name": zod.string(),
+  "title": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "isPrimary": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Remove a contact
+ */
+export const DeleteContactParams = zod.object({
+  "id": zod.coerce.number(),
+  "contactId": zod.coerce.number()
+})
+
+export const DeleteContactResponse = zod.void()
+
+
+/**
+ * @summary List lifetime vehicle assets owned by an account
+ */
+export const ListAccountAssetsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListAccountAssetsResponseItem = zod.object({
+  "id": zod.number(),
+  "accountId": zod.number(),
+  "vehicleId": zod.number(),
+  "dealId": zod.number().nullish(),
+  "deliveryId": zod.number().nullish(),
+  "deliveredAt": zod.coerce.date(),
+  "serviceAdvisorUserId": zod.number().nullish(),
+  "serviceAdvisorName": zod.string().nullish(),
+  "status": zod.enum(['active', 'transferred']),
+  "vehicleLabel": zod.string().nullish(),
+  "vehicleImageUrl": zod.string().nullish(),
+  "registration": zod.string().nullish(),
+  "vin": zod.string().nullish(),
+  "serviceOrderCount": zod.number(),
+  "lastServiceAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAccountAssetsResponse = zod.array(ListAccountAssetsResponseItem)
+
+
+/**
+ * @summary Household / parent-business grouping for an account
+ */
+export const GetAccountRelationsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetAccountRelationsResponse = zod.object({
+  "parent": zod.union([zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "accountType": zod.enum(['person', 'business']),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish()
+}),zod.null()]).optional(),
+  "children": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "accountType": zod.enum(['person', 'business']),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish()
 }))
 })
 

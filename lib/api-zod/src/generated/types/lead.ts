@@ -33,6 +33,8 @@ export interface Lead {
   /** @nullable */
   interestedVehicleId?: number | null;
   /** @nullable */
+  selectedModel?: string | null;
+  /** @nullable */
   variant?: string | null;
   /** @nullable */
   color?: string | null;

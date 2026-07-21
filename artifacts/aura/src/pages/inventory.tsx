@@ -7,6 +7,7 @@ import {
   useCreateVehicle,
   useUpdateVehicle,
   useListDivisions,
+  useListLeads,
   getListVehiclesQueryKey,
   getListBookingsQueryKey,
 } from "@workspace/api-client-react";
@@ -1155,6 +1156,8 @@ function ReserveDialog({
   const qc = useQueryClient();
   const { toast } = useToast();
   const createBooking = useCreateBooking();
+  const { data: leads } = useListLeads();
+  const [leadId, setLeadId] = useState<string>("");
   const [customerName, setCustomerName] = useState("");
   const [bookingAmount, setBookingAmount] = useState("1000");
   const [amountPaid, setAmountPaid] = useState("0");
@@ -1176,6 +1179,7 @@ function ReserveDialog({
           bookingAmount: Number(bookingAmount) || 0,
           amountPaid: Number(amountPaid) || 0,
           expiresAt: new Date(`${expiresAt}T23:59:59`).toISOString(),
+          ...(leadId ? { leadId: Number(leadId) } : {}),
         },
       },
       {
@@ -1212,6 +1216,36 @@ function ReserveDialog({
           {vehicle.vin ? ` · ${vehicle.vin}` : ""}
         </p>
         <div className="space-y-3 mt-2">
+          <div>
+            <label className="text-xs uppercase tracking-widest text-muted-foreground">
+              Link to lead (optional)
+            </label>
+            <select
+              className="mt-1.5 w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+              value={leadId}
+              onChange={(e) => {
+                const value = e.target.value;
+                setLeadId(value);
+                if (value) {
+                  const lead = leads?.find((l) => l.id === Number(value));
+                  if (lead && !customerName.trim()) setCustomerName(lead.name);
+                }
+              }}
+            >
+              <option value="">No linked lead</option>
+              {leads
+                ?.filter((l) => l.phase !== "won" && l.phase !== "lost")
+                .map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name} · {l.phase}
+                  </option>
+                ))}
+            </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Linking a lead creates the account, records the selected model
+              and marks the reservation on the lead.
+            </p>
+          </div>
           <div>
             <label className="text-xs uppercase tracking-widest text-muted-foreground">
               Customer name

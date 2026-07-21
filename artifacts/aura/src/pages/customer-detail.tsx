@@ -8,6 +8,11 @@ import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { CommunicationCenter } from "@/components/communication-center";
 import { Page } from "@/components/layout/page";
 import { ProfileTab } from "@/components/customer/profile-tab";
+import {
+  ContactsSection,
+  AssetsSection,
+  RelationsSection,
+} from "@/components/customer/account-structure";
 import { PersonaTab } from "@/components/customer/persona-tab";
 import { DocumentsTab } from "@/components/customer/documents-tab";
 import { NotesPanel } from "@/components/customer/notes-panel";
@@ -22,6 +27,7 @@ import {
   Car,
   ShieldAlert,
   Gauge,
+  Building2,
 } from "lucide-react";
 
 const withBase = (path: string) =>
@@ -72,6 +78,9 @@ export default function CustomerDetail() {
     persona,
     notes,
     documents,
+    contacts,
+    assets,
+    relations,
   } = data;
 
   const JOURNEY_PHASES = ["aware", "consider", "engage", "negotiate", "won"] as const;
@@ -134,6 +143,12 @@ export default function CustomerDetail() {
                 <Crown className="w-3.5 h-3.5" />
                 {customer.loyaltyTier}
               </div>
+              {customer.accountType === "business" && (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-indigo-500/10 text-indigo-500">
+                  <Building2 className="w-3.5 h-3.5" />
+                  Business
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
               {customer.location && (
@@ -287,6 +302,9 @@ export default function CustomerDetail() {
             </Card>
           )}
 
+          {/* Lifetime garage — vehicles owned as assets */}
+          <AssetsSection assets={assets} />
+
           {/* Communication center — emails, calls, meetings */}
           <div className="space-y-4">
             <h2 className="text-lg font-semibold tracking-wide">
@@ -344,6 +362,16 @@ export default function CustomerDetail() {
 
             {/* Right column */}
             <div className="space-y-8">
+              {(customer.accountType === "business" ||
+                contacts.length > 0) && (
+                <ContactsSection
+                  customerId={customer.id}
+                  contacts={contacts}
+                />
+              )}
+
+              <RelationsSection customer={customer} relations={relations} />
+
               {activeDeal && (
                 <Section title="Active Deal">
                   <div className="p-4 rounded-2xl bg-white/[0.03]">

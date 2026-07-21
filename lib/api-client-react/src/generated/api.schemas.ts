@@ -646,6 +646,7 @@ export interface BookingInput {
   customerId?: number;
   /** @minLength 1 */
   customerName: string;
+  leadId?: number;
   dealId?: number;
   /** @minimum 0 */
   bookingAmount: number;
@@ -964,6 +965,8 @@ export interface Lead {
   /** @nullable */
   interestedVehicleId?: number | null;
   /** @nullable */
+  selectedModel?: string | null;
+  /** @nullable */
   variant?: string | null;
   /** @nullable */
   color?: string | null;
@@ -1196,6 +1199,8 @@ export interface LeadUpdate {
   phase?: LeadUpdatePhase;
   status?: LeadUpdateStatus;
   interestedVehicleId?: number;
+  /** @nullable */
+  selectedModel?: string | null;
   variant?: string;
   color?: string;
   availability?: LeadUpdateAvailability;
@@ -1530,6 +1535,14 @@ export interface LeadAdvisor {
   roleName?: string | null;
 }
 
+export type CustomerAccountType = typeof CustomerAccountType[keyof typeof CustomerAccountType];
+
+
+export const CustomerAccountType = {
+  person: 'person',
+  business: 'business',
+} as const;
+
 export type CustomerLoyaltyTier = typeof CustomerLoyaltyTier[keyof typeof CustomerLoyaltyTier];
 
 
@@ -1542,6 +1555,9 @@ export const CustomerLoyaltyTier = {
 
 export interface Customer {
   id: number;
+  accountType: CustomerAccountType;
+  /** @nullable */
+  parentAccountId?: number | null;
   name: string;
   /** @nullable */
   email?: string | null;
@@ -1574,6 +1590,14 @@ export interface Customer {
   createdAt: string;
 }
 
+export type CustomerInputAccountType = typeof CustomerInputAccountType[keyof typeof CustomerInputAccountType];
+
+
+export const CustomerInputAccountType = {
+  person: 'person',
+  business: 'business',
+} as const;
+
 export type CustomerInputLoyaltyTier = typeof CustomerInputLoyaltyTier[keyof typeof CustomerInputLoyaltyTier];
 
 
@@ -1587,6 +1611,8 @@ export const CustomerInputLoyaltyTier = {
 export interface CustomerInput {
   /** @minLength 1 */
   name: string;
+  accountType?: CustomerInputAccountType;
+  parentAccountId?: number;
   email?: string;
   phone?: string;
   whatsapp?: string;
@@ -1605,6 +1631,14 @@ export interface CustomerInput {
   loyaltyTier?: CustomerInputLoyaltyTier;
 }
 
+export type CustomerUpdateAccountType = typeof CustomerUpdateAccountType[keyof typeof CustomerUpdateAccountType];
+
+
+export const CustomerUpdateAccountType = {
+  person: 'person',
+  business: 'business',
+} as const;
+
 export type CustomerUpdateLoyaltyTier = typeof CustomerUpdateLoyaltyTier[keyof typeof CustomerUpdateLoyaltyTier];
 
 
@@ -1618,6 +1652,9 @@ export const CustomerUpdateLoyaltyTier = {
 export interface CustomerUpdate {
   /** @minLength 1 */
   name?: string;
+  accountType?: CustomerUpdateAccountType;
+  /** @nullable */
+  parentAccountId?: number | null;
   /** @nullable */
   email?: string | null;
   /** @nullable */
@@ -1646,6 +1683,100 @@ export interface CustomerUpdate {
   lifetimeValue?: number;
   vehiclesOwned?: number;
   loyaltyTier?: CustomerUpdateLoyaltyTier;
+}
+
+export interface Contact {
+  id: number;
+  accountId: number;
+  name: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  isPrimary: boolean;
+  createdAt: string;
+}
+
+export interface ContactInput {
+  /** @minLength 1 */
+  name: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  isPrimary?: boolean;
+}
+
+export interface ContactUpdate {
+  /** @minLength 1 */
+  name?: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  isPrimary?: boolean;
+}
+
+export type AssetStatus = typeof AssetStatus[keyof typeof AssetStatus];
+
+
+export const AssetStatus = {
+  active: 'active',
+  transferred: 'transferred',
+} as const;
+
+export interface Asset {
+  id: number;
+  accountId: number;
+  vehicleId: number;
+  /** @nullable */
+  dealId?: number | null;
+  /** @nullable */
+  deliveryId?: number | null;
+  deliveredAt: string;
+  /** @nullable */
+  serviceAdvisorUserId?: number | null;
+  /** @nullable */
+  serviceAdvisorName?: string | null;
+  status: AssetStatus;
+  /** @nullable */
+  vehicleLabel?: string | null;
+  /** @nullable */
+  vehicleImageUrl?: string | null;
+  /** @nullable */
+  registration?: string | null;
+  /** @nullable */
+  vin?: string | null;
+  serviceOrderCount: number;
+  /** @nullable */
+  lastServiceAt?: string | null;
+  createdAt: string;
+}
+
+export type AccountSummaryAccountType = typeof AccountSummaryAccountType[keyof typeof AccountSummaryAccountType];
+
+
+export const AccountSummaryAccountType = {
+  person: 'person',
+  business: 'business',
+} as const;
+
+export interface AccountSummary {
+  id: number;
+  name: string;
+  accountType: AccountSummaryAccountType;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+}
+
+export interface AccountRelations {
+  parent?: AccountSummary | null;
+  children: AccountSummary[];
 }
 
 export type CustomerPersonaAgeGroup = typeof CustomerPersonaAgeGroup[keyof typeof CustomerPersonaAgeGroup] | null;
@@ -3302,6 +3433,9 @@ export interface GraFilingSubmission {
 
 export interface Customer360 {
   customer: Customer;
+  contacts: Contact[];
+  assets: Asset[];
+  relations: AccountRelations;
   persona: CustomerPersona | null;
   notes: CustomerNote[];
   documents: CustomerDocument[];

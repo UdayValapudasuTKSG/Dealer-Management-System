@@ -42,6 +42,8 @@ export const leadsTable = pgTable("leads", {
   status: text("status").notNull().default("new"),
   customerId: integer("customer_id"),
   interestedVehicleId: integer("interested_vehicle_id"),
+  // Locked at reservation (Pre-Book) — distinct from the interested model(s).
+  selectedModel: text("selected_model"),
   variant: text("variant"),
   color: text("color"),
   preferredBranch: text("preferred_branch"),

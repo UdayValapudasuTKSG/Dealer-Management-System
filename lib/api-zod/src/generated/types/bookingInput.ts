@@ -12,6 +12,7 @@ export interface BookingInput {
   customerId?: number;
   /** @minLength 1 */
   customerName: string;
+  leadId?: number;
   dealId?: number;
   /** @minimum 0 */
   bookingAmount: number;

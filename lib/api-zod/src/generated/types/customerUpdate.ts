@@ -5,11 +5,15 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { CustomerUpdateAccountType } from './customerUpdateAccountType';
 import type { CustomerUpdateLoyaltyTier } from './customerUpdateLoyaltyTier';
 
 export interface CustomerUpdate {
   /** @minLength 1 */
   name?: string;
+  accountType?: CustomerUpdateAccountType;
+  /** @nullable */
+  parentAccountId?: number | null;
   /** @nullable */
   email?: string | null;
   /** @nullable */

@@ -13,6 +13,10 @@ import { z } from "zod/v4";
 export const customersTable = pgTable("customers", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
+  // Person or Business account. Business accounts hold multiple contacts.
+  accountType: text("account_type").notNull().default("person"),
+  // Manual grouping: household head or parent business account (same dealer).
+  parentAccountId: integer("parent_account_id"),
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
@@ -40,6 +44,7 @@ export const customersTable = pgTable("customers", {
 
 export const insertCustomerSchema = createInsertSchema(customersTable, {
   loyaltyTier: z.enum(["new", "silver", "gold", "platinum"]),
+  accountType: z.enum(["person", "business"]),
 }).omit({ dealerId: true,
   id: true,
   createdAt: true,

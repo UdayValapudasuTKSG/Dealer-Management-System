@@ -27,6 +27,8 @@ export interface LeadUpdate {
   phase?: LeadUpdatePhase;
   status?: LeadUpdateStatus;
   interestedVehicleId?: number;
+  /** @nullable */
+  selectedModel?: string | null;
   variant?: string;
   color?: string;
   availability?: LeadUpdateAvailability;

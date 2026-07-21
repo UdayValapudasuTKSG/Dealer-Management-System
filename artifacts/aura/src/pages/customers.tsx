@@ -7,7 +7,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, User, MapPin, Car, Mail, Phone, Crown } from "lucide-react";
+import { Plus, User, MapPin, Car, Mail, Phone, Crown, Building2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Page } from "@/components/layout/page";
 import { PageHero } from "@/components/layout/page-hero";
@@ -15,6 +15,14 @@ import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
+
+const TypeBadge = ({ type }: { type?: string }) =>
+  type === "business" ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-500 shrink-0">
+      <Building2 className="w-3 h-3" />
+      Business
+    </span>
+  ) : null;
 
 const tierColor = (tier: string) => {
   switch (tier) {
@@ -69,6 +77,17 @@ export default function Customers() {
               }
               fields={[
                 { name: "name", label: "Full name", type: "text", required: true, span: "full", placeholder: "Jane Mensah" },
+                {
+                  name: "accountType",
+                  label: "Account type",
+                  type: "select",
+                  span: "half",
+                  defaultValue: "person",
+                  options: [
+                    { value: "person", label: "Person" },
+                    { value: "business", label: "Business" },
+                  ],
+                },
                 { name: "email", label: "Email", type: "text", span: "half", placeholder: "jane@email.com" },
                 { name: "phone", label: "Phone", type: "text", span: "half", placeholder: "+233 …" },
                 { name: "whatsapp", label: "WhatsApp", type: "text", span: "half", placeholder: "+233 …" },
@@ -135,7 +154,10 @@ export default function Customers() {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-medium truncate">{customer.name}</div>
+                        <div className="font-medium truncate flex items-center gap-2">
+                          {customer.name}
+                          <TypeBadge type={customer.accountType} />
+                        </div>
                         <div className="text-xs text-muted-foreground truncate">
                           {customer.location || "Location unknown"}
                         </div>
@@ -199,8 +221,9 @@ export default function Customers() {
                           <User className="w-10 h-10 text-muted-foreground/30" />
                         )}
                       </div>
-                      <h3 className="font-bold text-2xl leading-tight mb-1 group-hover:text-primary transition-colors">
+                      <h3 className="font-bold text-2xl leading-tight mb-1 group-hover:text-primary transition-colors flex items-center gap-2 flex-wrap">
                         {customer.name}
+                        <TypeBadge type={customer.accountType} />
                       </h3>
                       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                         <MapPin className="w-3.5 h-3.5" />
@@ -271,8 +294,9 @@ export default function Customers() {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-base leading-tight truncate group-hover:text-primary transition-colors">
-                          {customer.name}
+                        <div className="font-semibold text-base leading-tight truncate group-hover:text-primary transition-colors flex items-center gap-1.5">
+                          <span className="truncate">{customer.name}</span>
+                          <TypeBadge type={customer.accountType} />
                         </div>
                         <div className="text-xs text-muted-foreground truncate flex items-center gap-1">
                           <MapPin className="w-3 h-3 shrink-0" />

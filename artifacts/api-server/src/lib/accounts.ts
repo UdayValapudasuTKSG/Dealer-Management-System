@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import {
   db,
   customersTable,
+  contactsTable,
   leadsTable,
   timelineEventsTable,
   type Lead,
@@ -17,13 +18,14 @@ import { logger } from "./logger";
  * account creation must not fail the flow that triggered it.
  *
  * `source` controls the tag + timeline copy: "test_drive" (booking promoted
- * the lead) or "whatsapp" (WhatsApp intake created the lead).
+ * the lead), "whatsapp" (WhatsApp intake created the lead) or "reservation"
+ * (a vehicle reservation/Pre-Book promoted the lead).
  *
  * Returns the linked customer id (or the existing one / null on failure).
  */
 export async function ensureAccountForLead(
   lead: Lead,
-  source: "test_drive" | "whatsapp" = "test_drive",
+  source: "test_drive" | "whatsapp" | "reservation" = "test_drive",
 ): Promise<number | null> {
   if (lead.customerId) return lead.customerId;
 
@@ -67,12 +69,40 @@ export async function ensureAccountForLead(
           email: lead.email ?? null,
           phone: lead.phone ?? null,
           location: lead.preferredBranch ?? null,
-          tags: [source === "whatsapp" ? "whatsapp" : "test-drive"],
+          accountType: lead.company ? "business" : "person",
+          company: lead.company ?? null,
+          tags: [
+            source === "whatsapp"
+              ? "whatsapp"
+              : source === "reservation"
+                ? "reservation"
+                : "test-drive",
+          ],
         })
         .returning();
       created = true;
     }
     if (!customer) return null;
+
+    // Every account carries at least one primary contact. For a business
+    // account this is the person on the lead; for a person account it mirrors
+    // the person themselves.
+    const [existingContact] = await db
+      .select({ id: contactsTable.id })
+      .from(contactsTable)
+      .where(eq(contactsTable.accountId, customer.id))
+      .limit(1);
+    if (!existingContact) {
+      await db.insert(contactsTable).values({
+        dealerId: lead.dealerId,
+        accountId: customer.id,
+        name: lead.name,
+        title: lead.title ?? null,
+        email: lead.email ?? null,
+        phone: lead.phone ?? null,
+        isPrimary: true,
+      });
+    }
 
     await db
       .update(leadsTable)

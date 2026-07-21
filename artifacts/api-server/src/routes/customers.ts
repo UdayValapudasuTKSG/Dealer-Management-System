@@ -5,6 +5,9 @@ import { anthropic } from "@workspace/integrations-anthropic-ai";
 import {
   db,
   customersTable,
+  contactsTable,
+  assetsTable,
+  usersTable,
   customerPersonasTable,
   customerNotesTable,
   customerDocumentsTable,
@@ -50,6 +53,19 @@ import {
   UploadCustomerDocumentResponse,
   DeleteCustomerDocumentParams,
   DownloadCustomerDocumentParams,
+  ListContactsParams,
+  ListContactsResponse,
+  CreateContactParams,
+  CreateContactBody,
+  CreateContactResponse,
+  UpdateContactParams,
+  UpdateContactBody,
+  UpdateContactResponse,
+  DeleteContactParams,
+  ListAccountAssetsParams,
+  ListAccountAssetsResponse,
+  GetAccountRelationsParams,
+  GetAccountRelationsResponse,
 } from "@workspace/api-zod";
 import { storage } from "../lib/storage";
 import { activeDealerId } from "../middlewares/rbac";
@@ -260,6 +276,37 @@ router.patch("/customers/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Household / parent-business linking guards.
+  if (parsed.data.parentAccountId != null) {
+    if (parsed.data.parentAccountId === params.data.id) {
+      res.status(422).json({ error: "An account cannot be its own parent" });
+      return;
+    }
+    const [parent] = await db
+      .select({
+        id: customersTable.id,
+        parentAccountId: customersTable.parentAccountId,
+      })
+      .from(customersTable)
+      .where(
+        and(
+          eq(customersTable.id, parsed.data.parentAccountId),
+          eq(customersTable.dealerId, activeDealerId(res)),
+        ),
+      );
+    if (!parent) {
+      res.status(404).json({ error: "Parent account not found" });
+      return;
+    }
+    if (parent.parentAccountId === params.data.id) {
+      res.status(422).json({
+        error:
+          "That account is already grouped under this one — unlink it first",
+      });
+      return;
+    }
+  }
+
   const [customer] = await db
     .update(customersTable)
     .set(parsed.data)
@@ -277,6 +324,282 @@ router.patch("/customers/:id", async (req, res): Promise<void> => {
   }
 
   res.json(UpdateCustomerResponse.parse(customer));
+});
+
+// ---------------------------------------------------------------------------
+// Contacts, Assets & Relations (account structure)
+// ---------------------------------------------------------------------------
+
+async function accountOr404(
+  id: number,
+  dealerId: number,
+): Promise<typeof customersTable.$inferSelect | null> {
+  const [account] = await db
+    .select()
+    .from(customersTable)
+    .where(
+      and(eq(customersTable.id, id), eq(customersTable.dealerId, dealerId)),
+    );
+  return account ?? null;
+}
+
+type AssetRow = typeof assetsTable.$inferSelect;
+
+/** Enrich raw asset rows with vehicle label/image, advisor name and service history stats. */
+async function enrichAssets(rows: AssetRow[], dealerId: number) {
+  if (rows.length === 0) return [];
+  const [vehicles, advisors, orders] = await Promise.all([
+    db.select().from(vehiclesTable).where(eq(vehiclesTable.dealerId, dealerId)),
+    db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email }).from(usersTable),
+    db
+      .select()
+      .from(serviceOrdersTable)
+      .where(eq(serviceOrdersTable.dealerId, dealerId)),
+  ]);
+  const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
+  const advisorById = new Map(advisors.map((u) => [u.id, u]));
+
+  return rows.map((a) => {
+    const v = vehicleById.get(a.vehicleId);
+    const label = v ? `${v.year} ${v.make} ${v.model}` : null;
+    // Service orders carry free-text vehicleInfo — match by account + model text.
+    const related = orders.filter(
+      (o) =>
+        o.customerId === a.accountId &&
+        v != null &&
+        o.vehicleInfo.toLowerCase().includes(v.model.toLowerCase()),
+    );
+    const lastServiceAt =
+      related.length > 0
+        ? related
+            .map((o) => o.createdAt)
+            .sort((x, y) => +new Date(y) - +new Date(x))[0]
+        : null;
+    const advisor = a.serviceAdvisorUserId
+      ? advisorById.get(a.serviceAdvisorUserId)
+      : undefined;
+    return {
+      ...a,
+      vehicleLabel: label,
+      vehicleImageUrl: v?.imageUrl ?? null,
+      registration: v?.registration ?? null,
+      vin: v?.vin ?? null,
+      serviceAdvisorName: advisor
+        ? (advisor.name ?? advisor.email ?? `User #${advisor.id}`)
+        : null,
+      serviceOrderCount: related.length,
+      lastServiceAt,
+    };
+  });
+}
+
+const accountSummary = (c: typeof customersTable.$inferSelect) => ({
+  id: c.id,
+  name: c.name,
+  accountType: c.accountType,
+  email: c.email,
+  phone: c.phone,
+});
+
+async function relationsFor(
+  account: typeof customersTable.$inferSelect,
+  dealerId: number,
+) {
+  const [parent, children] = await Promise.all([
+    account.parentAccountId
+      ? accountOr404(account.parentAccountId, dealerId)
+      : Promise.resolve(null),
+    db
+      .select()
+      .from(customersTable)
+      .where(
+        and(
+          eq(customersTable.parentAccountId, account.id),
+          eq(customersTable.dealerId, dealerId),
+        ),
+      ),
+  ]);
+  return {
+    parent: parent ? accountSummary(parent) : null,
+    children: children.map(accountSummary),
+  };
+}
+
+router.get("/customers/:id/contacts", async (req, res): Promise<void> => {
+  const params = ListContactsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  if (!(await accountOr404(params.data.id, dealerId))) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(contactsTable)
+    .where(
+      and(
+        eq(contactsTable.accountId, params.data.id),
+        eq(contactsTable.dealerId, dealerId),
+      ),
+    )
+    .orderBy(desc(contactsTable.isPrimary), desc(contactsTable.createdAt));
+  res.json(ListContactsResponse.parse(rows));
+});
+
+router.post("/customers/:id/contacts", async (req, res): Promise<void> => {
+  const params = CreateContactParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = CreateContactBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  if (!(await accountOr404(params.data.id, dealerId))) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  if (parsed.data.isPrimary) {
+    await db
+      .update(contactsTable)
+      .set({ isPrimary: false })
+      .where(
+        and(
+          eq(contactsTable.accountId, params.data.id),
+          eq(contactsTable.dealerId, dealerId),
+        ),
+      );
+  }
+  const [contact] = await db
+    .insert(contactsTable)
+    .values({
+      dealerId,
+      accountId: params.data.id,
+      name: parsed.data.name,
+      title: parsed.data.title ?? null,
+      email: parsed.data.email ?? null,
+      phone: parsed.data.phone ?? null,
+      isPrimary: parsed.data.isPrimary ?? false,
+    })
+    .returning();
+  res.status(201).json(CreateContactResponse.parse(contact));
+});
+
+router.patch(
+  "/customers/:id/contacts/:contactId",
+  async (req, res): Promise<void> => {
+    const params = UpdateContactParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const parsed = UpdateContactBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const dealerId = activeDealerId(res);
+    if (parsed.data.isPrimary === true) {
+      await db
+        .update(contactsTable)
+        .set({ isPrimary: false })
+        .where(
+          and(
+            eq(contactsTable.accountId, params.data.id),
+            eq(contactsTable.dealerId, dealerId),
+          ),
+        );
+    }
+    const [contact] = await db
+      .update(contactsTable)
+      .set(parsed.data)
+      .where(
+        and(
+          eq(contactsTable.id, params.data.contactId),
+          eq(contactsTable.accountId, params.data.id),
+          eq(contactsTable.dealerId, dealerId),
+        ),
+      )
+      .returning();
+    if (!contact) {
+      res.status(404).json({ error: "Contact not found" });
+      return;
+    }
+    res.json(UpdateContactResponse.parse(contact));
+  },
+);
+
+router.delete(
+  "/customers/:id/contacts/:contactId",
+  async (req, res): Promise<void> => {
+    const params = DeleteContactParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const deleted = await db
+      .delete(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.id, params.data.contactId),
+          eq(contactsTable.accountId, params.data.id),
+          eq(contactsTable.dealerId, activeDealerId(res)),
+        ),
+      )
+      .returning();
+    if (deleted.length === 0) {
+      res.status(404).json({ error: "Contact not found" });
+      return;
+    }
+    res.status(204).end();
+  },
+);
+
+router.get("/customers/:id/assets", async (req, res): Promise<void> => {
+  const params = ListAccountAssetsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  if (!(await accountOr404(params.data.id, dealerId))) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(assetsTable)
+    .where(
+      and(
+        eq(assetsTable.accountId, params.data.id),
+        eq(assetsTable.dealerId, dealerId),
+      ),
+    )
+    .orderBy(desc(assetsTable.deliveredAt));
+  res.json(ListAccountAssetsResponse.parse(await enrichAssets(rows, dealerId)));
+});
+
+router.get("/customers/:id/relations", async (req, res): Promise<void> => {
+  const params = GetAccountRelationsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const account = await accountOr404(params.data.id, dealerId);
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+  res.json(
+    GetAccountRelationsResponse.parse(await relationsFor(account, dealerId)),
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -727,6 +1050,8 @@ router.get("/customers/:id/overview", async (req, res): Promise<void> => {
     notes,
     documents,
     [personaRow],
+    contacts,
+    assetRows,
   ] = await Promise.all([
     db
       .select()
@@ -822,6 +1147,31 @@ router.get("/customers/:id/overview", async (req, res): Promise<void> => {
           eq(customerPersonasTable.dealerId, dealerId),
         ),
       ),
+    db
+      .select()
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.accountId, customerId),
+          eq(contactsTable.dealerId, dealerId),
+        ),
+      )
+      .orderBy(desc(contactsTable.isPrimary), desc(contactsTable.createdAt)),
+    db
+      .select()
+      .from(assetsTable)
+      .where(
+        and(
+          eq(assetsTable.accountId, customerId),
+          eq(assetsTable.dealerId, dealerId),
+        ),
+      )
+      .orderBy(desc(assetsTable.deliveredAt)),
+  ]);
+
+  const [assets, relations] = await Promise.all([
+    enrichAssets(assetRows, dealerId),
+    relationsFor(customer, dealerId),
   ]);
 
   const vehicleById = new Map(vehicles.map((v) => [v.id, v]));
@@ -849,6 +1199,9 @@ router.get("/customers/:id/overview", async (req, res): Promise<void> => {
 
   const overview = {
     customer,
+    contacts,
+    assets,
+    relations,
     persona,
     notes,
     documents,

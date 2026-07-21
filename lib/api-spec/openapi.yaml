@@ -2933,6 +2933,153 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /customers/{id}/contacts:
+    get:
+      operationId: listContacts
+      tags: [customers]
+      summary: List contacts under an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Contacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Contact" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: createContact
+      tags: [customers]
+      summary: Add a contact to an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactInput" }
+      responses:
+        "201":
+          description: Created contact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Contact" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /customers/{id}/contacts/{contactId}:
+    patch:
+      operationId: updateContact
+      tags: [customers]
+      summary: Update a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: contactId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactUpdate" }
+      responses:
+        "200":
+          description: Updated contact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Contact" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      operationId: deleteContact
+      tags: [customers]
+      summary: Remove a contact
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: contactId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /customers/{id}/assets:
+    get:
+      operationId: listAccountAssets
+      tags: [customers]
+      summary: List lifetime vehicle assets owned by an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Asset" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /customers/{id}/relations:
+    get:
+      operationId: getAccountRelations
+      tags: [customers]
+      summary: Household / parent-business grouping for an account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Relations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountRelations" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /customers/{id}/persona:
     get:
       operationId: getCustomerPersona
@@ -4676,6 +4823,7 @@ components:
         vehicleId: { type: integer }
         customerId: { type: integer }
         customerName: { type: string, minLength: 1 }
+        leadId: { type: integer }
         dealId: { type: integer }
         bookingAmount: { type: number, minimum: 0 }
         amountPaid: { type: number, minimum: 0 }
@@ -4802,6 +4950,7 @@ components:
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         customerId: { type: ["integer", "null"] }
         interestedVehicleId: { type: ["integer", "null"] }
+        selectedModel: { type: ["string", "null"] }
         variant: { type: ["string", "null"] }
         color: { type: ["string", "null"] }
         preferredBranch: { type: ["string", "null"] }
@@ -4873,6 +5022,7 @@ components:
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         interestedVehicleId: { type: integer }
+        selectedModel: { type: ["string", "null"] }
         variant: { type: string }
         color: { type: string }
         availability: { type: string, enum: [available, back_order] }
@@ -5093,9 +5243,11 @@ components:
 
     Customer:
       type: object
-      required: [id, name, tags, lifetimeValue, vehiclesOwned, loyaltyTier, createdAt]
+      required: [id, name, accountType, tags, lifetimeValue, vehiclesOwned, loyaltyTier, createdAt]
       properties:
         id: { type: integer }
+        accountType: { type: string, enum: [person, business] }
+        parentAccountId: { type: ["integer", "null"] }
         name: { type: string }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
@@ -5121,6 +5273,8 @@ components:
       required: [name]
       properties:
         name: { type: string, minLength: 1 }
+        accountType: { type: string, enum: [person, business] }
+        parentAccountId: { type: integer }
         email: { type: string }
         phone: { type: string }
         whatsapp: { type: string }
@@ -5143,6 +5297,8 @@ components:
       type: object
       properties:
         name: { type: string, minLength: 1 }
+        accountType: { type: string, enum: [person, business] }
+        parentAccountId: { type: ["integer", "null"] }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
         whatsapp: { type: ["string", "null"] }
@@ -5161,6 +5317,76 @@ components:
         lifetimeValue: { type: number }
         vehiclesOwned: { type: integer }
         loyaltyTier: { type: string, enum: [new, silver, gold, platinum] }
+
+    Contact:
+      type: object
+      required: [id, accountId, name, isPrimary, createdAt]
+      properties:
+        id: { type: integer }
+        accountId: { type: integer }
+        name: { type: string }
+        title: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        isPrimary: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    ContactInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        title: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        isPrimary: { type: boolean }
+    ContactUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        title: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        isPrimary: { type: boolean }
+    Asset:
+      type: object
+      required: [id, accountId, vehicleId, deliveredAt, status, createdAt, serviceOrderCount]
+      properties:
+        id: { type: integer }
+        accountId: { type: integer }
+        vehicleId: { type: integer }
+        dealId: { type: ["integer", "null"] }
+        deliveryId: { type: ["integer", "null"] }
+        deliveredAt: { type: string, format: date-time }
+        serviceAdvisorUserId: { type: ["integer", "null"] }
+        serviceAdvisorName: { type: ["string", "null"] }
+        status: { type: string, enum: [active, transferred] }
+        vehicleLabel: { type: ["string", "null"] }
+        vehicleImageUrl: { type: ["string", "null"] }
+        registration: { type: ["string", "null"] }
+        vin: { type: ["string", "null"] }
+        serviceOrderCount: { type: integer }
+        lastServiceAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    AccountSummary:
+      type: object
+      required: [id, name, accountType]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        accountType: { type: string, enum: [person, business] }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+    AccountRelations:
+      type: object
+      required: [children]
+      properties:
+        parent:
+          oneOf:
+            - $ref: "#/components/schemas/AccountSummary"
+            - type: "null"
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/AccountSummary" }
 
     CustomerPersona:
       type: object
@@ -6244,9 +6470,16 @@ components:
 
     Customer360:
       type: object
-      required: [customer, ownedVehicles, deals, appraisals, financeApplications, serviceOrders, leads, timeline, openGates, persona, notes, documents]
+      required: [customer, ownedVehicles, deals, appraisals, financeApplications, serviceOrders, leads, timeline, openGates, persona, notes, documents, contacts, assets, relations]
       properties:
         customer: { $ref: "#/components/schemas/Customer" }
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/Contact" }
+        assets:
+          type: array
+          items: { $ref: "#/components/schemas/Asset" }
+        relations: { $ref: "#/components/schemas/AccountRelations" }
         persona:
           oneOf:
             - $ref: "#/components/schemas/CustomerPersona"

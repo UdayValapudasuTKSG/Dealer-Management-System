@@ -5,7 +5,10 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { AccountRelations } from './accountRelations';
 import type { Appraisal } from './appraisal';
+import type { Asset } from './asset';
+import type { Contact } from './contact';
 import type { Customer } from './customer';
 import type { CustomerDocument } from './customerDocument';
 import type { CustomerNote } from './customerNote';
@@ -20,6 +23,9 @@ import type { Vehicle } from './vehicle';
 
 export interface Customer360 {
   customer: Customer;
+  contacts: Contact[];
+  assets: Asset[];
+  relations: AccountRelations;
   persona: CustomerPersona | null;
   notes: CustomerNote[];
   documents: CustomerDocument[];

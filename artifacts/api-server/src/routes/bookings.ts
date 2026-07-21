@@ -5,6 +5,8 @@ import {
   bookingsTable,
   vehiclesTable,
   customersTable,
+  leadsTable,
+  timelineEventsTable,
   type Booking,
 } from "@workspace/db";
 import {
@@ -22,6 +24,7 @@ import {
 } from "@workspace/api-zod";
 import { enqueueEmail } from "../lib/email";
 import { logger } from "../lib/logger";
+import { ensureAccountForLead } from "../lib/accounts";
 import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
@@ -176,6 +179,56 @@ router.post("/bookings", async (req, res): Promise<void> => {
     return;
   }
 
+  // Reservation from a lead (Pre-Book): promote the lead to an Account with a
+  // primary Contact, and lock the Selected Model on the lead.
+  let customerId = parsed.data.customerId ?? null;
+  if (parsed.data.leadId !== undefined) {
+    const [lead] = await db
+      .select()
+      .from(leadsTable)
+      .where(
+        and(
+          eq(leadsTable.id, parsed.data.leadId),
+          eq(leadsTable.dealerId, dealerId),
+        ),
+      );
+    if (!lead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const linkedId = await ensureAccountForLead(lead, "reservation");
+    if (linkedId) customerId = customerId ?? linkedId;
+
+    const selectedModel = `${vehicle.year} ${vehicle.make} ${vehicle.model}`;
+    const paidNow = (parsed.data.amountPaid ?? 0) > 0;
+    await db
+      .update(leadsTable)
+      .set({
+        selectedModel,
+        ...(paidNow ? { reservationFeePaid: true } : {}),
+      })
+      .where(eq(leadsTable.id, lead.id));
+
+    if (customerId) {
+      try {
+        await db.insert(timelineEventsTable).values({
+          dealerId,
+          customerId,
+          domain: "leads",
+          kind: "model_selected",
+          title: `Selected model locked: ${selectedModel}`,
+          detail: `Reservation placed — ${selectedModel} is now the selected model for this account.`,
+          actor: "AURA",
+          isAgent: true,
+          refType: "lead",
+          refId: lead.id,
+        });
+      } catch (err) {
+        logger.error({ err, leadId: lead.id }, "selected-model receipt failed");
+      }
+    }
+  }
+
   const paid = parsed.data.amountPaid ?? 0;
   const paymentStatus =
     parsed.data.paymentStatus ??
@@ -190,7 +243,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
     .values({
       dealerId,
       vehicleId: parsed.data.vehicleId,
-      customerId: parsed.data.customerId ?? null,
+      customerId,
       customerName: parsed.data.customerName,
       dealId: parsed.data.dealId ?? null,
       bookingAmount: parsed.data.bookingAmount,

@@ -1335,6 +1335,19 @@ export default function LeadDetail() {
                         : null}
                     </InlineField>
                     <InlineField
+                      label="Selected Model"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "text",
+                        value: lead.selectedModel ?? "",
+                      }}
+                      onSave={(v) =>
+                        patchField({ selectedModel: v ? String(v) : null })
+                      }
+                    >
+                      {lead.selectedModel || null}
+                    </InlineField>
+                    <InlineField
                       label="Reservation Fee Paid"
                       canEdit={canEdit}
                       editor={{

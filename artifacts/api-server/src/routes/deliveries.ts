@@ -13,6 +13,7 @@ import {
   rolesTable,
   dealerUsersTable,
   timelineEventsTable,
+  assetsTable,
   DELIVERY_STEPS,
   DELIVERY_STEP_LABELS,
   type Delivery,
@@ -507,6 +508,95 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
         .returning();
       if (after) onDealStageChanged(before, after);
     }
+    // Lifetime Asset: the delivered vehicle joins the account's garage and is
+    // handed off to a Service Advisor for the ownership phase.
+    if (delivery.customerId) {
+      try {
+        const [existingAsset] = await db
+          .select({ id: assetsTable.id })
+          .from(assetsTable)
+          .where(
+            and(
+              eq(assetsTable.vehicleId, delivery.vehicleId),
+              eq(assetsTable.accountId, delivery.customerId),
+              eq(assetsTable.dealerId, delivery.dealerId),
+              eq(assetsTable.status, "active"),
+            ),
+          );
+        if (!existingAsset) {
+          // Any previous owner's active asset row for this vehicle is closed out.
+          await db
+            .update(assetsTable)
+            .set({ status: "transferred" })
+            .where(
+              and(
+                eq(assetsTable.vehicleId, delivery.vehicleId),
+                eq(assetsTable.dealerId, delivery.dealerId),
+                eq(assetsTable.status, "active"),
+              ),
+            );
+
+          const [serviceAdvisor] = await db
+            .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
+            .from(usersTable)
+            .innerJoin(dealerUsersTable, eq(dealerUsersTable.userId, usersTable.id))
+            .innerJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
+            .where(
+              and(
+                eq(dealerUsersTable.dealerId, delivery.dealerId),
+                eq(rolesTable.name, "Service Advisor"),
+                eq(usersTable.status, "active"),
+              ),
+            )
+            .limit(1);
+
+          const [asset] = await db
+            .insert(assetsTable)
+            .values({
+              dealerId: delivery.dealerId,
+              accountId: delivery.customerId,
+              vehicleId: delivery.vehicleId,
+              dealId: delivery.dealId,
+              deliveryId: delivery.id,
+              deliveredAt: new Date(),
+              serviceAdvisorUserId: serviceAdvisor?.id ?? null,
+              status: "active",
+            })
+            .returning();
+
+          const label = await vehicleLabelFor(delivery.vehicleId, delivery.dealerId);
+          await db.insert(timelineEventsTable).values({
+            dealerId: delivery.dealerId,
+            customerId: delivery.customerId,
+            domain: "delivery",
+            kind: "asset_created",
+            title: `${label ?? "Vehicle"} added to the garage`,
+            detail: serviceAdvisor
+              ? `Ownership handed off to Service Advisor ${serviceAdvisor.name ?? serviceAdvisor.email ?? `#${serviceAdvisor.id}`} for the lifetime relationship.`
+              : "Vehicle recorded as a lifetime asset. No Service Advisor is configured yet — assign one for the ownership phase.",
+            actor: "AURA orchestration",
+            isAgent: true,
+            cause: `Delivery #${delivery.id} completed`,
+            refType: "asset",
+            refId: asset?.id ?? null,
+          });
+
+          if (serviceAdvisor) {
+            await notifyUser({
+              userId: serviceAdvisor.id,
+              dealerId: delivery.dealerId,
+              type: "system",
+              title: `New vehicle in your care: ${label ?? `Vehicle #${delivery.vehicleId}`}`,
+              body: `${delivery.customerName ?? "A customer"} took delivery. The vehicle is now a lifetime asset on their account — you own the service relationship.`,
+              link: `/customers/${delivery.customerId}`,
+            });
+          }
+        }
+      } catch (err) {
+        logger.error({ err, deliveryId: delivery.id }, "asset creation failed");
+      }
+    }
+
     void (async () => {
       const { email, name } = await customerEmailFor(delivery);
       if (!email) return;
