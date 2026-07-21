@@ -6,7 +6,6 @@ import {
   useScheduleTestDrive,
   useCheckLeadAvailability,
   useRecordLeadDecision,
-  useAdvanceLeadStage,
   useListLeadAdvisors,
   useGetLeadTimeline,
   useListVehicles,
@@ -49,7 +48,6 @@ import {
   History,
   ArrowUpRight,
   ArrowRight,
-  TriangleAlert,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -154,7 +152,6 @@ export function LeadWorkflowDialog({
   const scheduleTestDrive = useScheduleTestDrive();
   const checkAvailability = useCheckLeadAvailability();
   const recordDecision = useRecordLeadDecision();
-  const advanceStage = useAdvanceLeadStage();
 
   const [advisorId, setAdvisorId] = useState<string>("");
   const [tdDate, setTdDate] = useState("");
@@ -164,7 +161,6 @@ export function LeadWorkflowDialog({
   const [tdWaiver, setTdWaiver] = useState(false);
   const [attachName, setAttachName] = useState("");
   const [attachUrl, setAttachUrl] = useState("");
-  const [advanceUnmet, setAdvanceUnmet] = useState<string[]>([]);
 
   const l = lead.data;
   const vehicle = useMemo(
@@ -300,61 +296,18 @@ export function LeadWorkflowDialog({
                 </div>
               </SectionCard>
 
-              {/* 2 — Status */}
+              {/* Stage advancing lives in the workbench Action Chain — this
+                  dialog only handles the supporting actions. */}
               {NEXT_ADVANCE[l.phase] && (
-                <SectionCard icon={ArrowRight} title="Review & Advance">
+                <SectionCard icon={ArrowRight} title="Next Stage">
                   <p className="text-xs text-muted-foreground">
                     Next stage:{" "}
                     <span className="text-foreground font-semibold">
                       {NEXT_ADVANCE[l.phase]!.label}
                     </span>
-                    . AURA checks the stage criteria before moving the lead.
+                    . Advance from the Action Chain on the lead page — it shows
+                    the readiness checklist and any pending approvals.
                   </p>
-                  {advanceUnmet.length > 0 && (
-                    <ul className="space-y-1.5">
-                      {advanceUnmet.map((item) => (
-                        <li
-                          key={item}
-                          className="flex items-start gap-2 text-xs text-amber-400"
-                        >
-                          <TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-px" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <Button
-                    size="sm"
-                    className="w-full gap-2"
-                    disabled={advanceStage.isPending}
-                    onClick={async () => {
-                      setAdvanceUnmet([]);
-                      try {
-                        await advanceStage.mutateAsync({
-                          id: l.id,
-                          data: { toStage: NEXT_ADVANCE[l.phase]!.toStage },
-                        });
-                        refresh();
-                        toast({
-                          title: `Advanced to ${NEXT_ADVANCE[l.phase]!.label}`,
-                          description: "All stage criteria met.",
-                        });
-                      } catch (err) {
-                        const data = (err as { data?: { unmet?: string[] } })?.data;
-                        if (data?.unmet?.length) setAdvanceUnmet(data.unmet);
-                        else fail(err);
-                      }
-                    }}
-                  >
-                    {advanceStage.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        Review & Advance
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </>
-                    )}
-                  </Button>
                 </SectionCard>
               )}
 

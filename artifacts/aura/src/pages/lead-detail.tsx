@@ -52,7 +52,6 @@ import {
   PhoneIncoming,
   PhoneOutgoing,
   Send,
-  ShieldCheck,
   User,
   Workflow,
   X,
@@ -60,7 +59,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Page } from "@/components/layout/page";
 import { LeadWorkflowDialog } from "@/components/lead-workflow-dialog";
-import { RunReviewDialog } from "@/components/lead/run-review-dialog";
 import {
   CreateRecordDialog,
   type FieldDef,
@@ -584,7 +582,6 @@ export default function LeadDetail() {
   const [tab, setTab] = useState<Tab>("overview");
   const [corrView, setCorrView] = useState<"calls" | "whatsapp">("calls");
   const [workflowOpen, setWorkflowOpen] = useState(false);
-  const [runReviewOpen, setRunReviewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deskOpen, setDeskOpen] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
@@ -1044,14 +1041,6 @@ export default function LeadDetail() {
               </Button>
             )}
             <Button
-              variant="outline"
-              onClick={() => setRunReviewOpen(true)}
-              className="gap-1.5"
-            >
-              <ShieldCheck className="w-4 h-4" />
-              Run Review
-            </Button>
-            <Button
               onClick={() => setWorkflowOpen(true)}
               className="gap-1.5 glow-red"
             >
@@ -1154,11 +1143,6 @@ export default function LeadDetail() {
                   <ActionChain
                     lead={lead}
                     stage={stagesWithAlerts[journeyIndex]}
-                    nextStageLabel={
-                      lead.phase === "lost"
-                        ? null
-                        : (stagesWithAlerts[journeyIndex + 1]?.label ?? null)
-                    }
                     onOpenWorkflow={() => setWorkflowOpen(true)}
                     canEdit={canEdit}
                     pendingGates={chainGates}
@@ -2437,7 +2421,7 @@ export default function LeadDetail() {
             <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-5">
               <div className="flex items-center gap-2 mb-3 text-amber-500">
                 <span className="text-sm font-semibold tracking-tight">
-                  Pending Manager Reviews
+                  Pending Approvals
                 </span>
                 <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20">
                   {pendingGates.length}
@@ -2457,7 +2441,7 @@ export default function LeadDetail() {
                 onClick={() => setTab("overview")}
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
               >
-                Review in the Action Chain
+                Resolve in the Action Chain
                 <ArrowUpRight className="w-3 h-3" />
               </button>
             </div>
@@ -2531,13 +2515,6 @@ export default function LeadDetail() {
         leadId={workflowOpen ? lead.id : null}
         open={workflowOpen}
         onOpenChange={setWorkflowOpen}
-      />
-
-      <RunReviewDialog
-        leadId={lead.id}
-        open={runReviewOpen}
-        onOpenChange={setRunReviewOpen}
-        canEdit={canEdit}
       />
 
       {canEdit && editOpen && (

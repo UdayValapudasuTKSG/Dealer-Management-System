@@ -24,6 +24,8 @@ const ROUTE_MAP: Record<string, string> = {
   deals: "/deals",
   finance: "/finance",
   service: "/service",
+  workshop: "/service",
+  "my jobs": "/service",
   deliveries: "/deliveries",
   delivery: "/deliveries",
   bookings: "/deliveries",

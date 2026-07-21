@@ -4,19 +4,33 @@ import {
   useCreateTask,
   useUpdateTask,
   getListTasksQueryKey,
+  useGetLeadReview,
+  useAdvanceLeadStage,
+  getGetLeadReviewQueryKey,
+  getGetLeadQueryKey,
+  getGetLeadTimelineQueryKey,
+  getListLeadsQueryKey,
 } from "@workspace/api-client-react";
-import type { Lead, Task } from "@workspace/api-client-react";
+import type {
+  Lead,
+  Task,
+  LeadAdvanceInput,
+  LeadReviewItem,
+} from "@workspace/api-client-react";
 import type { StageNavStage } from "@/components/lead/stage-nav";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  ArrowRight,
   ArrowUpRight,
   Check,
   ClipboardList,
   Loader2,
+  Lock,
   Plus,
   ShieldCheck,
+  TriangleAlert,
   Workflow,
   CheckCircle2,
 } from "lucide-react";
@@ -25,10 +39,41 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
 
+const OWNER_LABEL: Record<string, string> = {
+  advisor: "Sales Advisor",
+  sales_advisor: "Sales Advisor",
+  customer: "Customer",
+  finance: "Finance",
+  inventory: "Inventory",
+  manager: "Sales Manager",
+  sales_manager: "Sales Manager",
+  agent: "AI Agent",
+};
+
+const OWNER_STYLE: Record<string, string> = {
+  customer: "bg-sky-500/15 text-sky-500 ring-sky-500/30",
+  finance: "bg-violet-500/15 text-violet-500 ring-violet-500/30",
+  inventory: "bg-amber-500/15 text-amber-500 ring-amber-500/30",
+  manager: "bg-primary/15 text-primary ring-primary/30",
+  sales_manager: "bg-primary/15 text-primary ring-primary/30",
+};
+
+function OwnerChip({ owner }: { owner: string }) {
+  return (
+    <span
+      className={cn(
+        "text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ring-1 shrink-0",
+        OWNER_STYLE[owner] ?? "bg-foreground/[0.06] text-foreground/70 ring-white/15",
+      )}
+    >
+      {OWNER_LABEL[owner] ?? owner.replace(/_/g, " ")}
+    </span>
+  );
+}
+
 export function ActionChain({
   lead,
   stage,
-  nextStageLabel,
   onOpenWorkflow,
   canEdit,
   pendingGates,
@@ -36,7 +81,6 @@ export function ActionChain({
 }: {
   lead: Lead;
   stage: StageNavStage | undefined;
-  nextStageLabel: string | null;
   onOpenWorkflow: () => void;
   canEdit: boolean;
   pendingGates: any[];
@@ -45,7 +89,39 @@ export function ActionChain({
   const qc = useQueryClient();
   const { toast } = useToast();
   const [title, setTitle] = useState("");
+  const [advanceUnmet, setAdvanceUnmet] = useState<string[]>([]);
   const tasks = useListTasks({ leadId: lead.id });
+  const review = useGetLeadReview(lead.id, {
+    query: { queryKey: getGetLeadReviewQueryKey(lead.id) },
+  });
+  const reviewStage = review.data?.stages.find((s) => s.state === "current");
+  const advanceStage = useAdvanceLeadStage({
+    mutation: {
+      onSuccess: () => {
+        setAdvanceUnmet([]);
+        qc.invalidateQueries({ queryKey: getGetLeadQueryKey(lead.id) });
+        qc.invalidateQueries({ queryKey: getGetLeadReviewQueryKey(lead.id) });
+        qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(lead.id) });
+        qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+        toast({
+          title: `Advanced to ${reviewStage?.label ?? "next stage"}`,
+          description: "All readiness requirements met.",
+        });
+      },
+      onError: (err) => {
+        const data = (err as { data?: { unmet?: string[] } })?.data;
+        if (data?.unmet?.length) {
+          setAdvanceUnmet(data.unmet);
+        } else {
+          toast({
+            title: "Could not advance",
+            description: err instanceof Error ? err.message : undefined,
+            variant: "destructive",
+          });
+        }
+      },
+    },
+  });
   const invalidate = () => qc.invalidateQueries({ queryKey: getListTasksQueryKey() });
   const createTask = useCreateTask({
     mutation: {
@@ -64,8 +140,18 @@ export function ActionChain({
     },
   });
 
-  const items = stage?.checklist ?? [];
-  const unmet = items.filter((c) => !c.done);
+  // Readiness comes from the stage-review endpoint (met/unmet + owner);
+  // fall back to the journey-rail checklist when it hasn't loaded.
+  const readinessItems: LeadReviewItem[] =
+    reviewStage?.items ??
+    (stage?.checklist ?? []).map((c) => ({
+      key: c.label,
+      label: c.label,
+      met: c.done,
+      owner: "advisor",
+    }));
+  const items = readinessItems;
+  const unmet = items.filter((c) => !c.met);
   const ready = unmet.length === 0 && items.length > 0;
   const gatesPending = pendingGates.length > 0;
   const sortedGates = [...pendingGates].sort((a, b) => {
@@ -120,29 +206,30 @@ export function ActionChain({
             <CheckCircle2 className="w-3.5 h-3.5" />
           </div>
           <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
-            {stage?.label} Requirements
+            {stage?.label} Readiness
           </div>
           {items.length === 0 ? (
             <div className="text-sm text-muted-foreground bg-foreground/[0.02] border border-white/5 rounded-xl px-4 py-3">
-              No specific requirements for this stage.
+              No readiness requirements for this stage.
             </div>
           ) : (
             <ul className="space-y-2">
               {items.map((c) => (
-                <li key={c.label} className="flex items-center gap-3 text-sm bg-foreground/[0.02] border border-white/5 rounded-xl px-4 py-3 hover:bg-foreground/[0.04] transition-colors">
+                <li key={c.key} className="flex items-center gap-3 text-sm bg-foreground/[0.02] border border-white/5 rounded-xl px-4 py-3 hover:bg-foreground/[0.04] transition-colors">
                   <span
                     className={cn(
                       "w-4 h-4 rounded-full flex items-center justify-center shrink-0 ring-1",
-                      c.done
+                      c.met
                         ? "bg-emerald-500/20 text-emerald-400 ring-emerald-500/40"
                         : "bg-foreground/[0.05] text-muted-foreground/40 ring-white/10"
                     )}
                   >
-                    {c.done && <Check className="w-3 h-3" />}
+                    {c.met && <Check className="w-3 h-3" />}
                   </span>
-                  <span className={cn(c.done ? "text-foreground/50 line-through decoration-foreground/30" : "text-foreground/90 font-medium")}>
+                  <span className={cn("flex-1 min-w-0", c.met ? "text-foreground/50 line-through decoration-foreground/30" : "text-foreground/90 font-medium")}>
                     {c.label}
                   </span>
+                  <OwnerChip owner={c.owner} />
                 </li>
               ))}
             </ul>
@@ -161,7 +248,7 @@ export function ActionChain({
               <ShieldCheck className="w-3.5 h-3.5" />
             </div>
             <div className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-3">
-              Manager Review Required
+              Approvals Needed
             </div>
             <ul className="space-y-3">
               {sortedGates.map((g) => {
@@ -281,21 +368,67 @@ export function ActionChain({
           <div className="absolute -left-[27px] top-2 w-6 h-6 rounded-full bg-card border-2 border-primary/30 flex items-center justify-center ring-4 ring-card text-primary">
             <ArrowUpRight className="w-3.5 h-3.5" />
           </div>
-          <div className="pt-0.5">
-            {canEdit && (
-              <Button
-                onClick={onOpenWorkflow}
-                className={cn(
-                  "w-full sm:w-auto gap-2 h-11 px-6 rounded-xl font-semibold shadow-md transition-all",
-                  ready && !currentStageBlocked && "glow-red scale-[1.02]"
-                )}
-                variant={ready && !currentStageBlocked ? "default" : "secondary"}
-              >
-                <Workflow className="w-4 h-4" />
-                {ready && !currentStageBlocked && nextStageLabel
-                  ? `Advance to ${nextStageLabel}`
-                  : "Open workflow"}
-              </Button>
+          <div className="pt-0.5 space-y-3">
+            {advanceUnmet.length > 0 && (
+              <ul className="space-y-1.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3">
+                {advanceUnmet.map((m) => (
+                  <li
+                    key={m}
+                    className="flex items-start gap-2 text-xs text-amber-500"
+                  >
+                    <TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-px" />
+                    {m}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {reviewStage?.stage === "delivery" ? (
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-foreground/[0.03] px-4 py-2.5 text-xs text-muted-foreground">
+                <Lock className="w-3.5 h-3.5 shrink-0" />
+                Delivery completes through the deal workflow — GRA duty filing
+                and handover are cleared there.
+              </div>
+            ) : (
+              canEdit && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {reviewStage && (
+                    <Button
+                      disabled={advanceStage.isPending}
+                      onClick={() =>
+                        advanceStage.mutate({
+                          id: lead.id,
+                          data: {
+                            toStage:
+                              reviewStage.stage as LeadAdvanceInput["toStage"],
+                          },
+                        })
+                      }
+                      className={cn(
+                        "w-full sm:w-auto gap-2 h-11 px-6 rounded-xl font-semibold shadow-md transition-all",
+                        ready && !currentStageBlocked && "glow-red scale-[1.02]",
+                      )}
+                      variant={
+                        ready && !currentStageBlocked ? "default" : "secondary"
+                      }
+                    >
+                      {advanceStage.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ArrowRight className="w-4 h-4" />
+                      )}
+                      Advance to {reviewStage.label}
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    onClick={onOpenWorkflow}
+                    className="gap-2 h-11 px-4 rounded-xl"
+                  >
+                    <Workflow className="w-4 h-4" />
+                    Open workflow
+                  </Button>
+                </div>
+              )
             )}
           </div>
         </MotionDiv>

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, Redirect, useLocation } from "wouter";
 import { buildTriage, isTodayDateOnly } from "@/lib/triage";
 import {
   useListGates,
@@ -48,7 +48,7 @@ function greeting() {
 }
 
 const KIND_UI: Record<string, { icon: any; action: string; label: string }> = {
-  gate: { icon: ShieldCheck, action: "Review", label: "Approvals" },
+  gate: { icon: ShieldCheck, action: "Approve", label: "Approvals" },
   contact: { icon: PhoneCall, action: "Call", label: "Contacts" },
   testDrive: { icon: CalendarClock, action: "Prepare", label: "Test Drives" },
   delivery: { icon: Car, action: "Deliver", label: "Deliveries" },
@@ -367,6 +367,16 @@ const BROAD_VIEW_ROLES = new Set([
 /* My Day: the single home — the merged daily briefing + calendar. An
    immediate-task list filterable by severity and type, next to the schedule. */
 export default function Dashboard() {
+  // Technicians live on the workshop floor — their day starts in
+  // Service › My Jobs, not the sales briefing. Kept as a wrapper so the
+  // inner component's hooks run unconditionally.
+  const { me } = useAuthz();
+  const isTechnician = (me?.roleName ?? "").toLowerCase().includes("tech");
+  if (isTechnician) return <Redirect to="/service" />;
+  return <DashboardInner />;
+}
+
+function DashboardInner() {
   const { me, can, activeDealer } = useAuthz();
   const isBroadView =
     !!me && (me.isSuperAdmin || BROAD_VIEW_ROLES.has(me.roleName ?? ""));

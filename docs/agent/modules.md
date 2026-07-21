@@ -21,10 +21,9 @@
 - LOS connector abstraction in `lib/los/` — Demerara adapter goes live when `DEMERARA_LOS_API_URL`/`DEMERARA_LOS_API_KEY` set, otherwise deterministic sandbox mock (each sync advances one stage; declines when DTI>45% or no income).
 - Status transitions run through `lib/finance-effects.ts`: timeline receipt + lifecycle email + notifications to finance users; declined→`credit_decline` gate; disbursed→deal auto-advances to committed. Payments auto-issue `RCT-` receipts and update invoice status (invoices `INV-YYYY-####`). Lead workflow "Open F&I" links to `/finance?lead=<id>` (prefills + auto-opens the new-application dialog).
 
-## After-sales: Service, Parts, Workshop
-- Service page (`pages/service.tsx`): tabs Bookings / Job Cards / Invoices / Warranty & AMC.
+## After-sales: Service & Parts
+- Service page (`pages/service.tsx`): tabs Bookings / Job Cards / My Jobs / Invoices / Warranty & AMC. "My Jobs" is the technician view (`/job-cards?mine=1` matches technicianUserId), merged in from the deleted standalone Workshop page (2026-07); `/workshop` redirects to `/service`; technicians default to the My Jobs tab and `/command-center` redirects them to `/service`.
 - Parts page (`pages/parts.tsx`): tabs Parts / Suppliers / Purchases; low-stock = stock<=reorderLevel; "parts" RBAC module.
-- Workshop page (`pages/workshop.tsx`): technician view (`/job-cards?mine=1` matches technicianUserId).
 - Job card flow: open→in_progress→quality_check→completed; issuing a part decrements stock (422 on insufficient), returns restock; completed cards roll into a service invoice (parts+labour+15% tax, 409 if one exists; issued→paid/void).
 - Reminder emails: `POST /service-orders/{id}/remind` (service_reminder) and `/coverage/{id}/remind` (warranty_reminder) — 422 when the linked customer has no email. `/service-technicians` lists users with the Technician role; technician assignment fires a notification. Tables in `lib/db/src/schema/workshop.ts`.
 

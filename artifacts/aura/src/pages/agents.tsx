@@ -218,7 +218,7 @@ function GovernanceConsole() {
                   )}
                   {r.status === "needs_review" && r.reviewReason && (
                     <div className="text-xs text-amber-600 truncate">
-                      Held for review: {r.reviewReason}
+                      Needs your approval: {r.reviewReason}
                     </div>
                   )}
                   {(r.affectedEntities ?? []).length > 0 && (
@@ -242,7 +242,7 @@ function GovernanceConsole() {
                         disabled={reviewRun.isPending}
                         className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-600 hover:bg-emerald-500/20 transition-colors"
                       >
-                        Accept
+                        Approve
                       </button>
                       <button
                         onClick={() => review(r.id, "overridden")}

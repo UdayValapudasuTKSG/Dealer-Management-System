@@ -146,7 +146,7 @@ export function buildTriage(
       id: g.id.toString(),
       key: `gate-${g.id}`,
       context: g.title,
-      subContext: "Ready for your review",
+      subContext: "Awaiting your approval",
       href: gateHref(g),
       rank: g.priority === "high" ? 0 : 2,
     });

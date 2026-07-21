@@ -22,7 +22,6 @@ import Deals from "@/pages/deals";
 import Finance from "@/pages/finance";
 import Service from "@/pages/service";
 import Parts from "@/pages/parts";
-import Workshop from "@/pages/workshop";
 import Deliveries from "@/pages/deliveries";
 import Customers from "@/pages/customers";
 import CustomerDetail from "@/pages/customer-detail";
@@ -249,7 +248,10 @@ function AppRoutes() {
                 </Route>
                 <Route path="/service" component={Service} />
                 <Route path="/parts" component={Parts} />
-                <Route path="/workshop" component={Workshop} />
+                {/* Workshop is merged into Service as the "My Jobs" tab (2026-07) */}
+                <Route path="/workshop">
+                  <Redirect to="/service" />
+                </Route>
                 <Route path="/deliveries" component={Deliveries} />
                 <Route path="/customers" component={Customers} />
                 <Route path="/customers/:id" component={CustomerDetail} />

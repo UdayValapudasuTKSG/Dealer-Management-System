@@ -20,7 +20,7 @@ import {
   Truck,
   Wrench,
   Package,
-  Factory,
+  Handshake,
   Users,
   Stamp,
   UserCog,
@@ -62,6 +62,7 @@ const CLUSTERS: Cluster[] = [
     label: "Sales",
     items: [
       { name: "Pipeline", href: "/pipeline", module: "leads", icon: Waypoints },
+      { name: "Deals", href: "/deals", module: "deals", icon: Handshake },
       { name: "Finance", href: "/finance", module: "finance", icon: Landmark },
     ],
   },
@@ -72,7 +73,6 @@ const CLUSTERS: Cluster[] = [
       { name: "Deliveries", href: "/deliveries", module: "deliveries", icon: Truck },
       { name: "Service", href: "/service", module: "service", icon: Wrench, ent: "service_module" },
       { name: "Parts", href: "/parts", module: "parts", icon: Package, ent: "parts_module" },
-      { name: "Workshop", href: "/workshop", module: "service", icon: Factory, ent: "service_module" },
     ],
   },
   {
@@ -299,6 +299,7 @@ const MINIMAL_CLUSTER: Cluster = {
     { name: "My Day", href: "/command-center", module: "", icon: LayoutDashboard },
     { name: "Pipeline", href: "/pipeline", module: "leads", icon: Waypoints },
     { name: "Inventory", href: "/inventory", module: "inventory", icon: Car },
+    { name: "Service", href: "/service", module: "service", icon: Wrench },
     { name: "Customers", href: "/customers", module: "customers", icon: Users },
   ],
 };

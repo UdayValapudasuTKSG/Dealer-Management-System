@@ -26,7 +26,7 @@ const KIND_UI: Record<
   TriageKind,
   { icon: any; tone: string; bgTone: string; action: string }
 > = {
-  gate: { icon: ShieldCheck, tone: "text-destructive", bgTone: "bg-destructive/10", action: "Review" },
+  gate: { icon: ShieldCheck, tone: "text-destructive", bgTone: "bg-destructive/10", action: "Approve" },
   contact: { icon: PhoneCall, tone: "text-emerald-500", bgTone: "bg-emerald-500/10", action: "Call" },
   testDrive: { icon: CalendarClock, tone: "text-fuchsia-500", bgTone: "bg-fuchsia-500/10", action: "Prep" },
   stalled: { icon: AlertCircle, tone: "text-amber-500", bgTone: "bg-amber-500/10", action: "Nudge" },
