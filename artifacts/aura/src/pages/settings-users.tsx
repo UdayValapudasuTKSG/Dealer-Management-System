@@ -1,3 +1,4 @@
+import { PageHero } from "@/components/layout/page-hero";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -76,20 +77,20 @@ export default function SettingsUsers() {
   });
 
   return (
-    <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-primary" /> Team Members
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Assign roles and manage account access for this dealership.
-          </p>
-        </div>
+    <>
+    <PageHero
+      eyebrow="Settings"
+      icon={ShieldCheck}
+      title="Team"
+      accent="Members"
+      subtitle="Assign roles and manage account access for this dealership."
+      action={
         <Button onClick={() => setAddOpen(true)}>
           <UserPlus className="h-4 w-4 mr-2" /> Add Member
         </Button>
-      </div>
+      }
+    />
+    <div className="w-full px-5 md:px-8 pb-8 space-y-6">
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-md">
@@ -324,5 +325,6 @@ export default function SettingsUsers() {
         </div>
       )}
     </div>
+    </>
   );
 }

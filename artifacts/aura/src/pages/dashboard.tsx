@@ -1,37 +1,44 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { TodaySchedule } from "@/components/today-schedule";
-import { buildTriage } from "@/lib/triage";
+import { buildTriage, isTodayDateOnly } from "@/lib/triage";
 import {
   useListGates,
+  getListGatesQueryKey,
   useListLeads,
   useListDeals,
   useListDeliveries,
   useListServiceOrders,
-  useGetSentimentAnalysis,
-  getGetSentimentAnalysisQueryKey,
+  getListServiceOrdersQueryKey,
+  useListTasks,
+  useGetCalendar,
 } from "@workspace/api-client-react";
-import type { SentimentHighlight } from "@workspace/api-client-react";
+import type {
+  CalendarEvent,
+  CalendarEventKind,
+  Task,
+} from "@workspace/api-client-react";
 import {
   ArrowRight,
-  HeartPulse,
-  RefreshCw,
   Zap,
   Car,
+  Truck,
+  Wrench,
+  BellRing,
   AlertCircle,
   CheckCircle2,
   ShieldCheck,
   PhoneCall,
   CalendarClock,
+  CalendarDays,
   MailQuestion,
   Landmark,
-  Bot,
-  BarChart3,
+  ClipboardList,
+  Building2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuthz } from "@/lib/auth";
-import type { TriageItem } from "@/lib/triage";
+import type { TriageItem, TriageBucket } from "@/lib/triage";
 
 function greeting() {
   const h = new Date().getHours();
@@ -40,15 +47,36 @@ function greeting() {
   return "Good evening";
 }
 
-const KIND_UI: Record<string, { icon: any; action: string }> = {
-  gate: { icon: ShieldCheck, action: "Review" },
-  contact: { icon: PhoneCall, action: "Call" },
-  testDrive: { icon: CalendarClock, action: "Prepare" },
-  delivery: { icon: Car, action: "Deliver" },
-  service: { icon: Zap, action: "Service" },
-  stalled: { icon: AlertCircle, action: "Check in" },
-  quote: { icon: MailQuestion, action: "Follow up" },
-  deposit: { icon: Landmark, action: "Open" },
+const KIND_UI: Record<string, { icon: any; action: string; label: string }> = {
+  gate: { icon: ShieldCheck, action: "Review", label: "Approvals" },
+  contact: { icon: PhoneCall, action: "Call", label: "Contacts" },
+  testDrive: { icon: CalendarClock, action: "Prepare", label: "Test Drives" },
+  delivery: { icon: Car, action: "Deliver", label: "Deliveries" },
+  service: { icon: Zap, action: "Service", label: "Service" },
+  stalled: { icon: AlertCircle, action: "Check in", label: "Follow-Ups" },
+  quote: { icon: MailQuestion, action: "Follow up", label: "Follow-Ups" },
+  deposit: { icon: Landmark, action: "Open", label: "Follow-Ups" },
+  task: { icon: ClipboardList, action: "Open", label: "Tasks" },
+};
+
+/* Type filter chips: each maps to one or more triage kinds. */
+const TYPE_FILTERS: { key: string; label: string; icon: any; kinds: string[] }[] = [
+  { key: "contact", label: "Contacts", icon: PhoneCall, kinds: ["contact"] },
+  { key: "gate", label: "Approvals", icon: ShieldCheck, kinds: ["gate"] },
+  { key: "testDrive", label: "Test drives", icon: CalendarClock, kinds: ["testDrive"] },
+  { key: "delivery", label: "Deliveries", icon: Car, kinds: ["delivery"] },
+  { key: "service", label: "Service", icon: Zap, kinds: ["service"] },
+  { key: "followUp", label: "Follow-ups", icon: AlertCircle, kinds: ["stalled", "quote", "deposit"] },
+  { key: "task", label: "Tasks", icon: ClipboardList, kinds: ["task"] },
+];
+
+const SEVERITY_META: Record<
+  TriageBucket,
+  { label: string; dot: string; hint: string }
+> = {
+  urgent: { label: "Urgent", dot: "bg-red-500", hint: "Needs action now" },
+  today: { label: "Today", dot: "bg-gold", hint: "Due before end of day" },
+  later: { label: "Later", dot: "bg-foreground/30", hint: "Coming up" },
 };
 
 function getInitials(name: string) {
@@ -60,28 +88,10 @@ function getInitials(name: string) {
   return name.slice(0, 2).toUpperCase();
 }
 
-/* Categorized brief: instead of one flat dump of cards, the queue is grouped
-   into clear categories, each capped and forwarding to its owning page. */
-const TRIAGE_CATEGORIES: {
-  key: string;
-  kinds: string[];
-  label: string;
-  icon: any;
-  href: string;
-}[] = [
-  { key: "contacts", kinds: ["contact"], label: "Contacts Due", icon: PhoneCall, href: "/pipeline" },
-  { key: "approvals", kinds: ["gate"], label: "Approvals", icon: ShieldCheck, href: "/approvals" },
-  { key: "testDrives", kinds: ["testDrive"], label: "Test Drives", icon: CalendarClock, href: "/pipeline" },
-  { key: "deliveries", kinds: ["delivery"], label: "Deliveries", icon: Car, href: "/deliveries" },
-  { key: "service", kinds: ["service"], label: "Service", icon: Zap, href: "/service" },
-  { key: "followUps", kinds: ["stalled", "quote", "deposit"], label: "Follow-Ups", icon: AlertCircle, href: "/pipeline" },
-];
-
-const TRIAGE_CAP = 3;
-
 function TriageRow({ item }: { item: TriageItem }) {
   const [, navigate] = useLocation();
   const ui = KIND_UI[item.kind] || KIND_UI.stalled;
+  const Icon = ui.icon;
   const isUrgent = item.bucket === "urgent";
   const isOverdue =
     item.kind === "contact" &&
@@ -91,38 +101,44 @@ function TriageRow({ item }: { item: TriageItem }) {
   return (
     <button
       onClick={() => navigate(item.href)}
-      className="group w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-left transition-all bg-foreground text-background hover:shadow-lg hover:-translate-y-px"
+      className="group w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-left transition-all bg-card border border-border/60 hover:border-foreground/20 hover:shadow-md hover:-translate-y-px"
     >
       <div
         className={cn(
           "w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] tracking-wider",
           isOverdue
-            ? "bg-red-400/20 text-red-300"
+            ? "bg-red-500/15 text-red-500"
             : isUrgent
-              ? "bg-gold/25 text-gold"
-              : "bg-background/15 text-background",
+              ? "bg-gold/20 text-gold"
+              : "bg-foreground/[0.06] text-foreground",
         )}
       >
         {getInitials(item.context)}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-sm truncate">{item.context}</span>
+          <span className="font-semibold text-sm truncate text-foreground">
+            {item.context}
+          </span>
           {isOverdue && (
-            <span className="inline-flex items-center bg-red-400/15 text-red-300 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
+            <span className="inline-flex items-center bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
               Past due
             </span>
           )}
         </div>
-        <div className="text-[11px] truncate mt-0.5 text-background/60">
+        <div className="text-[11px] truncate mt-0.5 text-muted-foreground">
           {item.subContext}
           {item.assignee ? ` · with ${item.assignee}` : ""}
         </div>
       </div>
+      <span className="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground shrink-0">
+        <Icon className="w-3.5 h-3.5" />
+        {ui.label}
+      </span>
       <span
         className={cn(
           "flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest shrink-0 transition-colors",
-          isOverdue ? "text-red-300" : "text-gold",
+          isOverdue ? "text-red-500" : "text-gold",
         )}
       >
         {ui.action}
@@ -132,85 +148,214 @@ function TriageRow({ item }: { item: TriageItem }) {
   );
 }
 
-function TriageBrief({ items }: { items: TriageItem[] }) {
-  const groups = TRIAGE_CATEGORIES.map((cat) => ({
-    ...cat,
-    items: items.filter((i) => cat.kinds.includes(i.kind)),
-  })).filter((g) => g.items.length > 0);
+/* ---------- Schedule (merged Calendar) ---------- */
 
-  if (groups.length === 0) {
-    return (
-      <div className="py-12 rounded-3xl border border-dashed border-border flex flex-col items-center justify-center text-muted-foreground">
-        <CheckCircle2 className="w-8 h-8 mb-3 opacity-20" />
-        <p className="text-sm font-medium">All caught up</p>
-        <p className="text-xs mt-1 opacity-70">Nothing needs your attention right now.</p>
+const EVENT_META: Record<
+  CalendarEventKind,
+  { label: string; icon: typeof Car; chip: string }
+> = {
+  test_drive: {
+    label: "Test drive",
+    icon: Car,
+    chip: "bg-gold/15 text-gold ring-gold/30",
+  },
+  delivery: {
+    label: "Delivery",
+    icon: Truck,
+    chip: "bg-emerald-500/15 text-emerald-500 ring-emerald-500/30",
+  },
+  service: {
+    label: "Service",
+    icon: Wrench,
+    chip: "bg-amber-500/15 text-amber-500 ring-amber-500/30",
+  },
+  follow_up: {
+    label: "Follow-up",
+    icon: BellRing,
+    chip: "bg-primary/15 text-primary ring-primary/30",
+  },
+};
+
+function ymd(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function eventDateKey(e: CalendarEvent) {
+  if (e.allDay) return e.startsAt.slice(0, 10);
+  return ymd(new Date(e.startsAt));
+}
+
+function eventTime(e: CalendarEvent) {
+  if (e.allDay) return "All day";
+  return new Date(e.startsAt).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function ScheduleEvent({ e }: { e: CalendarEvent }) {
+  const meta = EVENT_META[e.kind];
+  const Icon = meta.icon;
+  const body = (
+    <div className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-card p-3 hover:border-foreground/20 transition-colors">
+      <span
+        className={cn(
+          "mt-0.5 w-7 h-7 rounded-full ring-1 flex items-center justify-center shrink-0",
+          meta.chip,
+        )}
+      >
+        <Icon className="w-3.5 h-3.5" />
+      </span>
+      <div className="min-w-0">
+        <div className="text-sm font-medium leading-tight truncate text-foreground">
+          {e.title}
+        </div>
+        <div className="text-xs text-muted-foreground mt-0.5">
+          {eventTime(e)} · {meta.label}
+          {e.assigneeName ? ` · ${e.assigneeName}` : ""}
+        </div>
+        {e.detail && (
+          <div className="text-xs text-muted-foreground/80 mt-0.5 truncate">
+            {e.detail}
+          </div>
+        )}
       </div>
-    );
-  }
+    </div>
+  );
+  return e.link ? <Link href={e.link}>{body}</Link> : body;
+}
 
-  /* Balance the category panels into two columns by visible row count so the
-     board always looks deliberate — no ragged empty space. */
-  const columns: (typeof groups)[] = [[], []];
-  const heights = [0, 0];
-  for (const g of groups) {
-    const h = Math.min(g.items.length, TRIAGE_CAP) + 1;
-    const target = heights[0] <= heights[1] ? 0 : 1;
-    columns[target].push(g);
-    heights[target] += h;
-  }
+function Schedule() {
+  const [range, setRange] = useState<"day" | "week">("day");
+  const today = new Date();
+  const weekEnd = new Date(today);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  const params = { from: ymd(today), to: ymd(weekEnd) };
+  const { data, isLoading } = useGetCalendar(params);
+
+  const todayKey = ymd(today);
+  const events = useMemo(() => {
+    const all = [...(data?.events ?? [])].sort((a, b) =>
+      a.startsAt.localeCompare(b.startsAt),
+    );
+    return range === "day"
+      ? all.filter((e) => eventDateKey(e) === todayKey)
+      : all;
+  }, [data, range, todayKey]);
+
+  const byDay = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const e of events) {
+      const key = eventDateKey(e);
+      const list = map.get(key) ?? [];
+      list.push(e);
+      map.set(key, list);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [events]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-      {columns
-        .filter((col) => col.length > 0)
-        .map((col, ci) => (
-          <div key={ci} className="space-y-5">
-            {col.map((g, gi) => {
-              const Icon = g.icon;
-              const overflow = g.items.length - TRIAGE_CAP;
-              return (
-                <motion.div
-                  key={g.key}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: (ci * 3 + gi) * 0.05 }}
-                  className="rounded-3xl border border-border/60 bg-card/60 p-3.5"
-                >
-                  <div className="flex items-center gap-2.5 px-1 pb-3">
-                    <span className="w-7 h-7 rounded-xl bg-gold/10 text-gold flex items-center justify-center shrink-0">
-                      <Icon className="w-3.5 h-3.5" />
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-foreground">
-                      {g.label}
-                    </span>
-                    <span className="bg-foreground/10 text-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums">
-                      {g.items.length}
-                    </span>
-                    {overflow > 0 && (
-                      <Link
-                        href={g.href}
-                        className="ml-auto text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-gold transition-colors"
-                      >
-                        +{overflow} more
-                      </Link>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    {g.items.slice(0, TRIAGE_CAP).map((item) => (
-                      <TriageRow key={item.key} item={item} />
-                    ))}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        ))}
+    <div className="rounded-3xl border border-border/60 bg-card/60 p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
+        <h2 className="text-xs font-bold uppercase tracking-widest text-foreground">
+          Schedule
+        </h2>
+        <div className="ml-auto flex items-center rounded-full border border-border/60 bg-foreground/[0.03] p-0.5">
+          {(["day", "week"] as const).map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={cn(
+                "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors",
+                range === r
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {r === "day" ? "Today" : "Week"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-16 rounded-xl bg-foreground/5 animate-pulse" />
+          ))}
+        </div>
+      ) : events.length === 0 ? (
+        <div className="py-10 flex flex-col items-center text-center text-muted-foreground">
+          <CalendarClock className="w-7 h-7 mb-3 opacity-25" />
+          <p className="text-sm font-medium">
+            {range === "day" ? "Nothing scheduled today" : "Nothing scheduled this week"}
+          </p>
+          <p className="text-xs mt-1 opacity-70">
+            Test drives, deliveries, service and follow-ups appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {byDay.map(([day, dayEvents]) => (
+            <div key={day}>
+              {range === "week" && (
+                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground mb-2">
+                  {day === todayKey
+                    ? "Today"
+                    : new Date(`${day}T12:00:00`).toLocaleDateString([], {
+                        weekday: "long",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                </div>
+              )}
+              <ul className="space-y-2">
+                {dayEvents.map((e) => (
+                  <li key={e.id}>
+                    <ScheduleEvent e={e} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-/* Roles that see the dealership-wide triage queue. Everyone else (advisors,
-   technicians, coordinators) gets a personal briefing scoped to their own
+/* ---------- Personal tasks -> triage items ---------- */
+
+function taskToTriage(t: Task): TriageItem {
+  const today = ymd(new Date());
+  const overdue = !!t.dueDate && t.dueDate.slice(0, 10) < today;
+  const dueToday = !!t.dueDate && isTodayDateOnly(t.dueDate);
+  const urgent = overdue || t.priority === "urgent" || t.priority === "high";
+  const bucket: TriageBucket = urgent ? "urgent" : dueToday ? "today" : "later";
+  return {
+    kind: "task",
+    bucket,
+    id: t.id.toString(),
+    key: `task-${t.id}`,
+    context: t.title,
+    subContext: overdue
+      ? "Task overdue"
+      : dueToday
+        ? "Task due today"
+        : t.dueDate
+          ? `Due ${t.dueDate.slice(0, 10)}`
+          : "Open task",
+    href: "/tasks",
+    rank: overdue ? 1 : 4,
+  };
+}
+
+/* Roles that see the dealership-wide queue. Everyone else (advisors,
+   technicians, coordinators) gets a personal My Day scoped to their own
    assignments. */
 const BROAD_VIEW_ROLES = new Set([
   "General Manager",
@@ -219,19 +364,38 @@ const BROAD_VIEW_ROLES = new Set([
   "Finance Manager",
 ]);
 
-/* The Daily Briefing is deliberately LEAN: triage, today's scheduling and
-   overall call sentiment only. ALL charts, KPIs and funnels live in Reports. */
+/* My Day: the single home — the merged daily briefing + calendar. An
+   immediate-task list filterable by severity and type, next to the schedule. */
 export default function Dashboard() {
-  const { me, can } = useAuthz();
+  const { me, can, activeDealer } = useAuthz();
   const isBroadView =
     !!me && (me.isSuperAdmin || BROAD_VIEW_ROLES.has(me.roleName ?? ""));
   const myName = me?.name ?? null;
 
-  const { data: gates } = useListGates({ status: "pending" });
-  const { data: leads, isLoading: leadsLoading } = useListLeads();
+  const [severityFilter, setSeverityFilter] = useState<TriageBucket | null>(null);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+
+  // Permission-gated fetches: roles without approvals/service access skip
+  // these queries entirely instead of hammering 403s.
+  const { data: gates } = useListGates(
+    { status: "pending" },
+    {
+      query: {
+        queryKey: getListGatesQueryKey({ status: "pending" }),
+        enabled: can("approvals", "view"),
+      },
+    },
+  );
+  const { data: leads } = useListLeads();
   const { data: deals } = useListDeals();
-  const { data: deliveries, isLoading: deliveriesLoading } = useListDeliveries();
-  const { data: serviceOrders, isLoading: serviceLoading } = useListServiceOrders();
+  const { data: deliveries } = useListDeliveries();
+  const { data: serviceOrders } = useListServiceOrders(undefined, {
+    query: {
+      queryKey: getListServiceOrdersQueryKey(),
+      enabled: can("service", "view"),
+    },
+  });
+  const { data: tasks } = useListTasks();
 
   /* Persona scoping: advisors only triage records assigned to them.
      Deny-by-default: a non-manager with no display name sees NOTHING
@@ -287,221 +451,210 @@ export default function Dashboard() {
     [serviceOrders, isBroadView, nameKey, myId],
   );
   const scopedGates = can("approvals", "view") ? gates : [];
-
-  const { urgent, today, later, total: objectivesCount } = useMemo(
+  /* Personal tasks are always own-only, for every role. */
+  const myTasks = useMemo(
     () =>
-      buildTriage(
-        scopedLeads,
-        scopedDeals,
-        scopedGates,
-        scopedDeliveries,
-        scopedServiceOrders,
+      (tasks ?? []).filter(
+        (t) => t.status !== "done" && (myId == null || t.assigneeUserId === myId),
       ),
-    [scopedLeads, scopedDeals, scopedGates, scopedDeliveries, scopedServiceOrders],
+    [tasks, myId],
   );
-  const triageItems = useMemo(
+
+  const { urgent, today, later } = useMemo(() => {
+    const base = buildTriage(
+      scopedLeads,
+      scopedDeals,
+      scopedGates,
+      scopedDeliveries,
+      scopedServiceOrders,
+    );
+    for (const t of myTasks) {
+      const item = taskToTriage(t);
+      base[item.bucket].push(item);
+      base[item.bucket].sort((a, b) => a.rank - b.rank);
+    }
+    return base;
+  }, [scopedLeads, scopedDeals, scopedGates, scopedDeliveries, scopedServiceOrders, myTasks]);
+
+  const counts = { urgent: urgent.length, today: today.length, later: later.length };
+  const allItems = useMemo(
     () => [...urgent, ...today, ...later],
     [urgent, today, later],
   );
 
+  const activeKinds =
+    TYPE_FILTERS.find((t) => t.key === typeFilter)?.kinds ?? null;
+  const filtered = allItems.filter(
+    (i) =>
+      (!severityFilter || i.bucket === severityFilter) &&
+      (!activeKinds || activeKinds.includes(i.kind)),
+  );
+
+  /* Which types actually have items — chips for empty types are hidden. */
+  const presentTypes = TYPE_FILTERS.filter((t) =>
+    allItems.some((i) => t.kinds.includes(i.kind)),
+  );
+
+  const sections: { bucket: TriageBucket; items: TriageItem[] }[] = (
+    ["urgent", "today", "later"] as const
+  )
+    .map((b) => ({ bucket: b, items: filtered.filter((i) => i.bucket === b) }))
+    .filter((s) => s.items.length > 0);
+
+  const firstName = (myName ?? "").trim().split(" ")[0] || null;
+  const dateLabel = new Date().toLocaleDateString([], {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
   return (
     <div className="min-h-[100dvh] pb-20">
-      <div className="px-5 md:px-8 pt-8 space-y-10">
-        {/* Greeting */}
-        <div className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-2">
-                <Bot className="w-3.5 h-3.5" />
-                Daily Briefing
-              </div>
-              <h1 className="text-3xl md:text-4xl font-light tracking-tight text-foreground">
-                {greeting()}, <span className="font-medium">here is what needs your attention.</span>
-              </h1>
+      <div className="px-5 md:px-8 pt-2 space-y-8">
+        {/* Greeting header: personal, stateful, dealership identity */}
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-primary/70 mb-1.5">
+              <Building2 className="w-3.5 h-3.5" />
+              {activeDealer?.dealerName ?? "My Day"}
+              <span className="text-muted-foreground/60 normal-case tracking-normal font-medium">
+                · {dateLabel}
+              </span>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-foreground/[0.03] border border-border/60 rounded-full px-4 py-1.5">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-widest">
-                  Contact leads within 24h
-                </span>
-              </div>
-              <Link
-                href="/reports"
-                className="flex items-center gap-2 bg-foreground text-background rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-opacity"
-              >
-                <BarChart3 className="w-3.5 h-3.5" />
-                Reports
-              </Link>
-            </div>
+            <h1 className="text-3xl md:text-4xl font-light tracking-tight text-foreground">
+              {greeting()}
+              {firstName ? (
+                <span className="font-medium">, {firstName}.</span>
+              ) : (
+                "."
+              )}
+            </h1>
+            <p className="mt-1.5 text-sm text-muted-foreground font-light">
+              {counts.urgent > 0
+                ? `${counts.urgent} urgent ${counts.urgent === 1 ? "item" : "items"} and ${counts.today} due today.`
+                : counts.today > 0
+                  ? `Nothing urgent — ${counts.today} ${counts.today === 1 ? "item" : "items"} due today.`
+                  : "You're all clear. Enjoy the calm."}
+            </p>
           </div>
 
-          {/* Triage + Today's schedule */}
-          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-6">
-            <div className="md:col-span-2 xl:col-span-3">
-              <div className="flex items-center gap-2 mb-4">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-foreground">Triage Queue</h2>
-                <span className="bg-foreground text-background text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums">
-                  {objectivesCount}
-                </span>
-              </div>
-
-              <TriageBrief items={triageItems} />
-            </div>
-
-            <div className="md:col-span-1 xl:col-span-1">
-              <div className="flex items-center gap-2 mb-4">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-foreground">Today's Schedule</h2>
-              </div>
-              <div className="relative min-h-[300px] h-[calc(100%-2rem)] rounded-2xl border border-border/60 bg-card overflow-hidden">
-                <div className="absolute inset-0 overflow-y-auto p-4">
-                  {/* Same persona-scoped datasets as triage — advisors only
-                      ever see their own appointments here. */}
-                  <TodaySchedule
-                    leads={scopedLeads}
-                    deliveries={scopedDeliveries}
-                    serviceOrders={scopedServiceOrders}
-                    isLoading={leadsLoading || deliveriesLoading || serviceLoading}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Overall call sentiment — the ONLY signal beyond triage/scheduling */}
-        <CallSentimentBrief />
-      </div>
-    </div>
-  );
-}
-
-/* Compact call-sentiment digest: positive/neutral/negative counts + notable
-   negative voices. Detailed sentiment analytics live in Reports. */
-function CallSentimentBrief() {
-  const { data, isLoading, isError, refetch, isFetching } =
-    useGetSentimentAnalysis(undefined, {
-      query: {
-        queryKey: getGetSentimentAnalysisQueryKey(),
-        retry: 1,
-        staleTime: 10 * 60 * 1000,
-        refetchOnWindowFocus: false,
-      },
-    });
-
-  const counts = useMemo(() => {
-    if (!data) return null;
-    const n = data.sampleSize;
-    const pos = Math.round((data.distribution.positive / 100) * n);
-    const neg = Math.round((data.distribution.negative / 100) * n);
-    const neu = Math.max(0, n - pos - neg);
-    return { positive: pos, neutral: neu, negative: neg };
-  }, [data]);
-
-  const negatives = (data?.highlights ?? []).filter(
-    (h) => h.sentiment === "negative",
-  );
-
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-4">
-        <HeartPulse className="w-3.5 h-3.5 text-muted-foreground" />
-        <h2 className="text-xs font-bold uppercase tracking-widest text-foreground">
-          Call Sentiment
-        </h2>
-        <Link
-          href="/reports"
-          className="ml-auto text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Full analytics
-        </Link>
-      </div>
-
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-24 rounded-2xl bg-foreground/5 animate-pulse" />
-          ))}
-        </div>
-      ) : isError || !data || !counts ? (
-        <div className="rounded-2xl border border-dashed border-border p-8 flex flex-col items-center text-center">
-          <p className="text-sm text-muted-foreground max-w-sm">
-            The sentiment engine could not analyse recent conversations.
-          </p>
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="mt-4 inline-flex items-center gap-2 rounded-full border border-border/60 bg-foreground/5 px-4 py-2 text-sm font-medium hover:border-foreground/20 hover:text-foreground transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
-            Try again
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Counts */}
-          <div className="grid grid-cols-3 gap-3 lg:col-span-1">
-            {(
-              [
-                ["Positive", counts.positive, "bg-foreground"],
-                ["Neutral", counts.neutral, "bg-foreground/40"],
-                ["Negative", counts.negative, "bg-foreground/15"],
-              ] as const
-            ).map(([label, value, dot]) => (
-              <div
-                key={label}
-                className="rounded-2xl border border-border/60 bg-card px-4 py-4 flex flex-col items-start"
+          {/* Today at a glance */}
+          <div className="flex items-center gap-3">
+            {(["urgent", "today", "later"] as const).map((b) => (
+              <button
+                key={b}
+                onClick={() =>
+                  setSeverityFilter((cur) => (cur === b ? null : b))
+                }
+                className={cn(
+                  "flex flex-col items-start rounded-2xl border px-4 py-2.5 min-w-[92px] transition-colors text-left",
+                  severityFilter === b
+                    ? "border-foreground/40 bg-foreground/[0.05]"
+                    : "border-border/60 bg-card hover:border-foreground/20",
+                )}
               >
-                <span className={cn("w-2 h-2 rounded-full mb-2", dot)} />
-                <span className="text-2xl font-light tabular-nums text-foreground leading-none">
-                  {value}
+                <span className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                  <span className={cn("w-1.5 h-1.5 rounded-full", SEVERITY_META[b].dot)} />
+                  {SEVERITY_META[b].label}
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-2">
-                  {label}
+                <span className="text-xl font-light tabular-nums text-foreground leading-tight mt-0.5">
+                  {counts[b]}
                 </span>
-              </div>
+              </button>
             ))}
-            <p className="col-span-3 text-[10px] uppercase tracking-widest text-muted-foreground">
-              {data.sampleSize} interactions · overall {data.overallLabel}
-            </p>
           </div>
+        </div>
 
-          {/* Notable negatives */}
-          <div className="lg:col-span-2 rounded-2xl border border-border/60 bg-card p-5">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-foreground mb-3">
-              Notable Negatives
-            </p>
-            {negatives.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No negative conversations flagged. Keep it up.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {negatives.slice(0, 4).map((h: SentimentHighlight, i: number) => {
-                  const body = (
-                    <div className="relative pl-4 py-1 group">
-                      <div className="absolute left-0 top-0 bottom-0 w-[3px] rounded-full bg-foreground/15 transition-all duration-300 group-hover:w-1" />
-                      <p className="text-sm italic text-muted-foreground leading-snug">
-                        "{h.snippet}"
-                      </p>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-foreground mt-2">
-                        — {h.leadName}
-                      </p>
-                    </div>
-                  );
-                  return h.leadId != null ? (
-                    <Link key={i} href={`/lead/${h.leadId}`} className="block">
-                      {body}
-                    </Link>
-                  ) : (
-                    <div key={i}>{body}</div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          {/* Immediate tasks */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Type filter chips */}
+            {presentTypes.length > 1 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setTypeFilter(null)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-full text-[11px] font-semibold ring-1 transition-colors",
+                    typeFilter === null
+                      ? "bg-foreground text-background ring-foreground"
+                      : "bg-foreground/[0.03] text-muted-foreground ring-border hover:bg-foreground/[0.08]",
+                  )}
+                >
+                  All
+                </button>
+                {presentTypes.map((t) => {
+                  const Icon = t.icon;
+                  const active = typeFilter === t.key;
+                  const n = allItems.filter((i) => t.kinds.includes(i.kind)).length;
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => setTypeFilter(active ? null : t.key)}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold ring-1 transition-colors",
+                        active
+                          ? "bg-foreground text-background ring-foreground"
+                          : "bg-foreground/[0.03] text-muted-foreground ring-border hover:bg-foreground/[0.08]",
+                      )}
+                    >
+                      <Icon className="w-3 h-3" />
+                      {t.label}
+                      <span className="tabular-nums opacity-70">{n}</span>
+                    </button>
                   );
                 })}
               </div>
             )}
+
+            {sections.length === 0 ? (
+              <div className="py-14 rounded-3xl border border-dashed border-border flex flex-col items-center justify-center text-muted-foreground">
+                <CheckCircle2 className="w-8 h-8 mb-3 opacity-20" />
+                <p className="text-sm font-medium">All caught up</p>
+                <p className="text-xs mt-1 opacity-70">
+                  Nothing matches these filters right now.
+                </p>
+              </div>
+            ) : (
+              sections.map((s, si) => (
+                <motion.div
+                  key={s.bucket}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: si * 0.06 }}
+                >
+                  <div className="flex items-center gap-2 mb-2 mt-1">
+                    <span
+                      className={cn(
+                        "w-1.5 h-1.5 rounded-full",
+                        SEVERITY_META[s.bucket].dot,
+                      )}
+                    />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-foreground">
+                      {SEVERITY_META[s.bucket].label}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {SEVERITY_META[s.bucket].hint}
+                    </span>
+                    <span className="ml-auto bg-foreground/10 text-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums">
+                      {s.items.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {s.items.map((item) => (
+                      <TriageRow key={item.key} item={item} />
+                    ))}
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </div>
+
+          {/* Schedule column */}
+          <div className="lg:col-span-1">
+            <Schedule />
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

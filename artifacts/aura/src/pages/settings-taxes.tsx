@@ -1,3 +1,4 @@
+import { PageHero } from "@/components/layout/page-hero";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -135,21 +136,20 @@ export default function SettingsTaxes() {
   const valid = form.name.trim() && form.rate.trim() && !Number.isNaN(Number(form.rate));
 
   return (
-    <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Percent className="h-6 w-6 text-primary" /> Tax Configuration
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Dealership tax rules — percentage or fixed amounts, applied in
-            order, with optional price thresholds. Amounts are USD-scale.
-          </p>
-        </div>
+    <>
+    <PageHero
+      eyebrow="Settings"
+      icon={Percent}
+      title="Tax"
+      accent="Configuration"
+      subtitle="Percentage or fixed tax rules, applied in order, with optional price thresholds. Amounts are USD-scale."
+      action={
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4 mr-1" /> New Tax Rule
         </Button>
-      </div>
+      }
+    />
+    <div className="w-full px-5 md:px-8 pb-8 space-y-6">
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -325,5 +325,6 @@ export default function SettingsTaxes() {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 }

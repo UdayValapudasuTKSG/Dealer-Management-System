@@ -1,3 +1,4 @@
+import { PageHero } from "@/components/layout/page-hero";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -68,21 +69,20 @@ export default function SettingsSources() {
   });
 
   return (
-    <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Megaphone className="h-6 w-6 text-primary" /> Lead Sources
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Configure where leads come from. Active sources appear in the
-            new-lead form; social sources ask for the specific platform.
-          </p>
-        </div>
+    <>
+    <PageHero
+      eyebrow="Settings"
+      icon={Megaphone}
+      title="Lead"
+      accent="Sources"
+      subtitle="Where leads come from. Active sources appear in the new-lead form; social sources ask for the platform."
+      action={
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> New Source
         </Button>
-      </div>
+      }
+    />
+    <div className="w-full px-5 md:px-8 pb-8 space-y-6">
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -193,5 +193,6 @@ export default function SettingsSources() {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 }

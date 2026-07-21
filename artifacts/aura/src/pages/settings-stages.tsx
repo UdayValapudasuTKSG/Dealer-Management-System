@@ -1,3 +1,4 @@
+import { PageHero } from "@/components/layout/page-hero";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -64,16 +65,15 @@ export default function SettingsStages() {
   };
 
   return (
-    <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <ListChecks className="h-6 w-6 text-primary" /> Stage Checklists
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure the requirements a lead must meet before advancing to the
-          next pipeline stage. Saving publishes a new version instantly.
-        </p>
-      </div>
+    <>
+    <PageHero
+      eyebrow="Settings"
+      icon={ListChecks}
+      title="Stage"
+      accent="Checklists"
+      subtitle="Requirements a lead must meet before advancing a stage. Saving publishes a new version instantly."
+    />
+    <div className="w-full px-5 md:px-8 pb-8 space-y-6">
 
       {isLoading ? (
         <div className="flex items-center gap-2 text-muted-foreground">
@@ -179,5 +179,6 @@ export default function SettingsStages() {
         </div>
       )}
     </div>
+    </>
   );
 }

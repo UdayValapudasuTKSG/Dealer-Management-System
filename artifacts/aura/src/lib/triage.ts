@@ -10,7 +10,8 @@ export type TriageKind =
   | "service"
   | "stalled"
   | "quote"
-  | "deposit";
+  | "deposit"
+  | "task";
 
 export type TriageBucket = "urgent" | "today" | "later";
 

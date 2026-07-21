@@ -363,6 +363,20 @@ export async function customFetch<T = unknown>(
     }
   }
 
+  // Dev-only persona testing: forward the impersonation header when set.
+  // The server honors it only outside production (NODE_ENV !== "production").
+  if (!headers.has("x-test-user-email")) {
+    try {
+      const testEmail =
+        typeof localStorage !== "undefined"
+          ? localStorage.getItem("aura-test-user-email")
+          : null;
+      if (testEmail) headers.set("x-test-user-email", testEmail);
+    } catch {
+      // localStorage unavailable — skip.
+    }
+  }
+
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
   if (_authTokenGetter && !headers.has("authorization")) {

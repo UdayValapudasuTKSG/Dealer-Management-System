@@ -1,11 +1,17 @@
 import { useLocation } from "wouter";
 import { useCopilotReadable, useCopilotAction } from "@copilotkit/react-core";
-import { useGetDashboardSummary, useListGates } from "@workspace/api-client-react";
+import {
+  useGetDashboardSummary,
+  useListGates,
+  getListGatesQueryKey,
+} from "@workspace/api-client-react";
+import { useAuthz } from "@/lib/auth";
 
 const ROUTE_MAP: Record<string, string> = {
   home: "/command-center",
   "command center": "/command-center",
   "daily briefing": "/command-center",
+  "my day": "/command-center",
   dashboard: "/command-center",
   // journey is shelved from the nav for now
   approvals: "/approvals",
@@ -28,7 +34,7 @@ const ROUTE_MAP: Record<string, string> = {
 };
 
 const ROUTE_LABEL: Record<string, string> = {
-  "/command-center": "Daily Briefing",
+  "/command-center": "My Day",
   "/approvals": "Approvals",
   "/inventory": "Inventory",
   "/pipeline": "Pipeline",
@@ -43,8 +49,18 @@ const ROUTE_LABEL: Record<string, string> = {
 
 export function AuraCopilot() {
   const [location, navigate] = useLocation();
+  const { can } = useAuthz();
   const { data: summary } = useGetDashboardSummary();
-  const { data: pendingGates } = useListGates({ status: "pending" });
+  // Roles without approvals access skip the gates query instead of 403ing.
+  const { data: pendingGates } = useListGates(
+    { status: "pending" },
+    {
+      query: {
+        queryKey: getListGatesQueryKey({ status: "pending" }),
+        enabled: can("approvals", "view"),
+      },
+    },
+  );
 
   useCopilotReadable({
     description:
@@ -54,7 +70,7 @@ export function AuraCopilot() {
 
   useCopilotReadable({
     description:
-      "Live dealership KPIs from the AURA daily briefing (dashboard summary).",
+      "Live dealership KPIs from the AURA My Day home (dashboard summary).",
     value: summary ?? "loading",
   });
 
@@ -82,7 +98,7 @@ export function AuraCopilot() {
         name: "destination",
         type: "string",
         description:
-          "One of: daily briefing, approvals, inventory, leads, deals, finance, service, customers, gra filing.",
+          "One of: my day, approvals, inventory, leads, deals, finance, service, customers, gra filing.",
         required: true,
       },
     ],

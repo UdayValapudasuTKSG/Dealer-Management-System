@@ -32,7 +32,6 @@ import TeamProfile from "@/pages/team-profile";
 import Approvals from "@/pages/approvals";
 import Gra from "@/pages/gra";
 import Tasks from "@/pages/tasks";
-import CalendarPage from "@/pages/calendar";
 import Agents from "@/pages/agents";
 import SettingsUsers from "@/pages/settings-users";
 import SettingsEmail from "@/pages/settings-email";
@@ -150,7 +149,50 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+/* Dev-only persona testing: when `aura-test-user-email` is set in
+   localStorage, the Clerk gate is skipped and every API call impersonates
+   that seeded user (the server honors the header only outside production).
+   Never active in production builds. */
+const testPersonaActive =
+  import.meta.env.DEV &&
+  (() => {
+    try {
+      // URL switch: ?test-user=<email> activates a persona, ?test-user=off
+      // clears it. Persisted in localStorage across navigation.
+      const param = new URLSearchParams(window.location.search).get(
+        "test-user",
+      );
+      if (param === "off") {
+        localStorage.removeItem("aura-test-user-email");
+      } else if (param) {
+        localStorage.setItem("aura-test-user-email", param);
+      }
+      return !!localStorage.getItem("aura-test-user-email");
+    } catch {
+      return false;
+    }
+  })();
+
 function AppShell() {
+  if (testPersonaActive) {
+    return (
+      <AuthProvider>
+        <DealershipGate>
+          <CopilotKit
+            runtimeUrl={`${import.meta.env.BASE_URL}api/copilotkit`}
+            headers={{
+              "x-test-user-email":
+                localStorage.getItem("aura-test-user-email") ?? "",
+            }}
+          >
+            <Shell>
+              <AppRoutes />
+            </Shell>
+          </CopilotKit>
+        </DealershipGate>
+      </AuthProvider>
+    );
+  }
   return (
     <>
       <Show when="signed-in">
@@ -158,7 +200,22 @@ function AppShell() {
           <DealershipGate>
           <CopilotKit runtimeUrl={`${import.meta.env.BASE_URL}api/copilotkit`}>
             <Shell>
-              <Switch>
+              <AppRoutes />
+            </Shell>
+          </CopilotKit>
+          </DealershipGate>
+        </AuthProvider>
+      </Show>
+      <Show when="signed-out">
+        <RedirectToSignInPage />
+      </Show>
+    </>
+  );
+}
+
+function AppRoutes() {
+  return (
+    <Switch>
                 <Route path="/admin">
                   <RequireSuperAdmin>
                     <AdminPage />
@@ -182,7 +239,10 @@ function AppShell() {
                 <Route path="/vehicle/:id" component={VehicleDetailPage} />
                 <Route path="/team/:id" component={TeamProfile} />
                 <Route path="/tasks" component={Tasks} />
-                <Route path="/calendar" component={CalendarPage} />
+                {/* Calendar is merged into My Day (2026-07) */}
+                <Route path="/calendar">
+                  <Redirect to="/command-center" />
+                </Route>
                 <Route path="/agents" component={Agents} />
                 <Route path="/gra" component={Gra} />
                 <Route path="/settings/users">
@@ -225,15 +285,6 @@ function AppShell() {
                 </Route>
                 <Route component={NotFound} />
               </Switch>
-            </Shell>
-          </CopilotKit>
-          </DealershipGate>
-        </AuthProvider>
-      </Show>
-      <Show when="signed-out">
-        <RedirectToSignInPage />
-      </Show>
-    </>
   );
 }
 
@@ -300,7 +351,7 @@ function ClerkProviderWithRoutes() {
         signIn: {
           start: {
             title: "Welcome back to AURA",
-            subtitle: "Sign in to enter your daily briefing",
+            subtitle: "Sign in to start your day",
           },
         },
         signUp: {

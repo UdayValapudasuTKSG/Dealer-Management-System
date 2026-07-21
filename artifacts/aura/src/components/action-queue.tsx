@@ -4,7 +4,9 @@ import {
   useListLeads,
   useListDeals,
   useListGates,
+  getListGatesQueryKey,
 } from "@workspace/api-client-react";
+import { useAuthz } from "@/lib/auth";
 import {
   PhoneCall,
   CalendarClock,
@@ -28,6 +30,7 @@ const KIND_UI: Record<
   contact: { icon: PhoneCall, tone: "text-emerald-500", bgTone: "bg-emerald-500/10", action: "Call" },
   testDrive: { icon: CalendarClock, tone: "text-fuchsia-500", bgTone: "bg-fuchsia-500/10", action: "Prep" },
   stalled: { icon: AlertCircle, tone: "text-amber-500", bgTone: "bg-amber-500/10", action: "Nudge" },
+  task: { icon: Clock, tone: "text-sky-500", bgTone: "bg-sky-500/10", action: "Open" },
   quote: { icon: MailQuestion, tone: "text-violet-500", bgTone: "bg-violet-500/10", action: "Follow" },
   deposit: { icon: Landmark, tone: "text-orange-500", bgTone: "bg-orange-500/10", action: "Open" },
   delivery: { icon: CheckCircle2, tone: "text-teal-500", bgTone: "bg-teal-500/10", action: "Open" },
@@ -44,9 +47,19 @@ function getInitials(name: string) {
 }
 
 export function ActionQueue() {
+  const { can } = useAuthz();
   const { data: leads } = useListLeads();
   const { data: deals } = useListDeals();
-  const { data: gates } = useListGates({ status: "pending" });
+  // Roles without approvals access skip the gates query instead of 403ing.
+  const { data: gates } = useListGates(
+    { status: "pending" },
+    {
+      query: {
+        queryKey: getListGatesQueryKey({ status: "pending" }),
+        enabled: can("approvals", "view"),
+      },
+    },
+  );
   const [, navigate] = useLocation();
 
   const { urgent, today, later } = useMemo(

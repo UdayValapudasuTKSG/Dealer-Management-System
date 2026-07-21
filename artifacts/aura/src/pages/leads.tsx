@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Page } from "@/components/layout/page";
+import { PageHero } from "@/components/layout/page-hero";
 import { CarProgress } from "@/components/car-progress";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -321,7 +322,12 @@ export default function Leads() {
 
   return (
     <>
-    <Page className="space-y-5">
+    <PageHero
+      eyebrow="Sales"
+      title="Pipeline"
+      subtitle="Every lead, from first enquiry to delivery."
+    />
+    <Page className="space-y-5 pt-0">
       {/* Compact command row: view controls + primary action. */}
       <div className="flex flex-wrap items-center justify-end gap-3">
         <ViewControls

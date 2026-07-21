@@ -1,3 +1,4 @@
+import { PageHero } from "@/components/layout/page-hero";
 import { useState } from "react";
 import { useListAuditLogs } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
@@ -58,15 +59,15 @@ export default function SettingsAudit() {
   });
 
   return (
-    <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <ScrollText className="h-6 w-6 text-primary" /> Audit Logs
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Every sign-in and change across the dealership, newest first.
-        </p>
-      </div>
+    <>
+    <PageHero
+      eyebrow="Settings"
+      icon={ScrollText}
+      title="Audit"
+      accent="Logs"
+      subtitle="Every sign-in and change across the dealership, newest first."
+    />
+    <div className="w-full px-5 md:px-8 pb-8 space-y-6">
 
       <div className="flex flex-wrap items-center gap-3">
         <Input
@@ -147,5 +148,6 @@ export default function SettingsAudit() {
         </div>
       )}
     </div>
+    </>
   );
 }

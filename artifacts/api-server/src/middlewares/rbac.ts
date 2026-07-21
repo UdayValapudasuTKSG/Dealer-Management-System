@@ -195,6 +195,45 @@ function requestedDealerId(req: Request): number | null {
 
 export const requireAuth: RequestHandler = async (req, res, next) => {
   try {
+    // Dev-only persona impersonation: outside production, an
+    // `x-test-user-email` header signs the request in as that seeded user
+    // with their REAL memberships/role/permissions (for persona testing).
+    if (process.env.NODE_ENV !== "production") {
+      const testEmail = req.header("x-test-user-email")?.trim().toLowerCase();
+      if (testEmail) {
+        const [user] = await db
+          .select()
+          .from(usersTable)
+          .where(eq(usersTable.email, testEmail));
+        if (!user) {
+          res.status(401).json({ error: `Test user ${testEmail} not found` });
+          return;
+        }
+        const isSuperAdmin = isSuperAdminEmail(user.email);
+        const dealers = isSuperAdmin
+          ? await listAllDealers()
+          : await loadMemberships(user.id);
+        const requested = requestedDealerId(req);
+        const active =
+          (requested != null
+            ? dealers.find((d) => d.dealerId === requested)
+            : dealers[0]) ?? null;
+        const permissions = isSuperAdmin
+          ? FULL_PERMISSIONS
+          : await loadPermissions(active?.roleId ?? null);
+        res.locals.user = {
+          ...user,
+          roleName: isSuperAdmin ? "Super Admin" : (active?.roleName ?? null),
+          permissions,
+          isSuperAdmin,
+          dealerId: active?.dealerId ?? null,
+          dealers,
+        } as AuthedUser;
+        if (active) res.locals.dealerId = active.dealerId;
+        next();
+        return;
+      }
+    }
     if (AUTH_BYPASS) {
       const dealerId = requestedDealerId(req) ?? 2;
       res.locals.user = {

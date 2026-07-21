@@ -27,7 +27,9 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
+import { PageHero } from "@/components/layout/page-hero";
 import {
+  Car,
   CarFront,
   Zap,
   Fuel,
@@ -252,87 +254,35 @@ export default function Inventory() {
 
   return (
     <div className="h-full overflow-y-auto">
-      {/* eatnaked-style centered header */}
-      <div className="relative w-full overflow-hidden">
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.35]"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px)",
-            backgroundSize: "56px 56px",
-            maskImage:
-              "radial-gradient(ellipse 80% 90% at 50% 0%, black 40%, transparent 100%)",
-            WebkitMaskImage:
-              "radial-gradient(ellipse 80% 90% at 50% 0%, black 40%, transparent 100%)",
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-72"
-          style={{
-            background:
-              "radial-gradient(ellipse 60% 100% at 50% 0%, rgba(229,9,20,0.12), transparent 70%)",
-          }}
-        />
+      {/* Compact uniform header (2026-07: the tall centered showroom hero is gone) */}
+      <PageHero
+        eyebrow="Operations"
+        icon={Car}
+        title="The"
+        accent="Showroom"
+        subtitle="Every vehicle in stock, ready for delivery anywhere in Guyana."
+        action={
+          <div className="relative w-64 md:w-80">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search make, model or year..."
+              className="w-full h-11 rounded-full border border-border bg-foreground/[0.03] pl-5 pr-12 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all"
+            />
+            <span
+              aria-hidden="true"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/40"
+            >
+              <Search className="w-4 h-4" />
+            </span>
+          </div>
+        }
+      />
 
-        <div className="relative z-10 flex flex-col items-center text-center px-5 pt-12 pb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-foreground/[0.04] px-4 py-1.5 text-xs font-medium tracking-wide text-foreground/80"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            The Showroom
-          </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.08 }}
-            className="mt-6 text-5xl md:text-7xl font-semibold tracking-tight leading-[0.95]"
-          >
-            Discover the Range
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.16 }}
-            className="mt-5 text-muted-foreground font-light max-w-xl"
-          >
-            Every vehicle in stock, ready for delivery anywhere in Guyana.
-          </motion.p>
-
-          {/* Search */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.24 }}
-            className="mt-8 w-full max-w-xl"
-          >
-            <div className="relative">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search make, model or year..."
-                className="w-full h-14 rounded-full border border-white/15 bg-foreground/[0.04] pl-6 pr-16 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/60 focus:ring-2 focus:ring-primary/20 transition-all"
-              />
-              <span
-                aria-hidden="true"
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/40"
-              >
-                <Search className="w-4 h-4" />
-              </span>
-            </div>
-          </motion.div>
-
-          {/* Category pills */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.32 }}
-            className="mt-10 flex flex-wrap items-center justify-center gap-2.5"
-          >
+      <div className="w-full px-5 md:px-8 pb-8 space-y-6">
+        {/* Toolbar: body/powertrain/division filters, count, view controls, admin actions */}
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
+          <div className="flex flex-wrap items-center gap-2">
             {bodyTypes.map((bt) => (
               <FilterChip
                 key={bt}
@@ -341,14 +291,9 @@ export default function Inventory() {
                 label={bt === "all" ? "All" : bt}
               />
             ))}
-          </motion.div>
-        </div>
-      </div>
-
-      <div className="w-full px-5 md:px-8 py-8 space-y-8">
-        {/* Toolbar: powertrain filters, count, view controls, admin actions */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
-          <div className="flex flex-wrap items-center gap-2">
+            {powertrains.length > 1 && (
+              <span className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
+            )}
             {powertrains.map((pt) => (
               <FilterChip
                 key={pt}

@@ -202,9 +202,9 @@ function EnquiryDialog({
 }
 
 const BRAND_CARS = [
-  { brand: "Tesla", file: "cutout_tesla_side.png" },
-  { brand: "BYD", file: "cutout_byd_side.png" },
-  { brand: "FOTON", file: "cutout_foton_side.png" },
+  { brand: "Electric sedan", file: "cutout_tesla_side.png" },
+  { brand: "Executive saloon", file: "cutout_byd_side.png" },
+  { brand: "Commercial truck", file: "cutout_foton_side.png" },
 ];
 
 const STAGES = [
@@ -225,7 +225,7 @@ const STAGES = [
   {
     id: "testdrive",
     title: "The Experience",
-    desc: "Seamless test drive scheduling, digital liability waivers, and real-time fleet tracking. The BYD Seal leaves the showroom, the deal stays on track.",
+    desc: "Seamless test drive scheduling, digital liability waivers, and real-time fleet tracking. The car leaves the showroom, the deal stays on track.",
     icon: CarFront,
     video: "red_car_leaving_showroom.mp4",
   },
@@ -239,7 +239,7 @@ const STAGES = [
   {
     id: "delivery",
     title: "Delivery & Handover",
-    desc: "The keys are handed over — from a Tesla sedan to a FOTON workhorse. Automated post-sale workflows trigger service reminders, CRM updates, and satisfaction surveys.",
+    desc: "The keys are handed over — from executive sedans to commercial workhorses. Automated post-sale workflows trigger service reminders, CRM updates, and satisfaction surveys.",
     icon: CheckCircle2,
     video: "customer_handover.mp4",
   },
@@ -442,7 +442,7 @@ export default function Landing() {
               </Link>
             </div>
             <p className="mt-10 text-[11px] font-semibold uppercase tracking-[0.35em] text-zinc-500">
-              Tesla · BYD · FOTON
+              Sedans · SUVs · Commercial Fleet
             </p>
           </motion.div>
         </div>

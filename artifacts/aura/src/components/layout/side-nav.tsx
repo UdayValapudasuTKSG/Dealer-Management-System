@@ -15,7 +15,6 @@ import {
   BarChart3,
   ClipboardCheck,
   ListChecks,
-  CalendarDays,
   Waypoints,
   Landmark,
   Car,
@@ -48,11 +47,9 @@ const CLUSTERS: Cluster[] = [
   {
     label: "Insights & Actions",
     items: [
-      { name: "Daily Briefing", href: "/command-center", module: "", icon: LayoutDashboard },
+      { name: "My Day", href: "/command-center", module: "", icon: LayoutDashboard },
       { name: "Reports", href: "/reports", module: "", icon: BarChart3 },
       { name: "Reviews", href: "/approvals", module: "approvals", icon: ClipboardCheck },
-      { name: "Tasks", href: "/tasks", module: "", icon: ListChecks },
-      { name: "Calendar", href: "/calendar", module: "", icon: CalendarDays },
       { name: "AI Agents", href: "/agents", module: "", icon: Bot },
     ],
   },
@@ -281,10 +278,35 @@ function UserCard({ collapsed = false }: { collapsed?: boolean }) {
   );
 }
 
+/* Roles that get the full operational menu. Everyone else (Sales Advisors,
+   technicians, coordinators…) gets the minimal focused menu: My Day,
+   Pipeline, Inventory, Customers — still gated by their RBAC permissions. */
+const FULL_MENU_ROLES = new Set([
+  "General Manager",
+  "Sales Manager",
+  "Service Manager",
+  "Finance Manager",
+]);
+
+const MINIMAL_CLUSTER: Cluster = {
+  label: "Workspace",
+  items: [
+    { name: "My Day", href: "/command-center", module: "", icon: LayoutDashboard },
+    { name: "Pipeline", href: "/pipeline", module: "leads", icon: Waypoints },
+    { name: "Inventory", href: "/inventory", module: "inventory", icon: Car },
+    { name: "Customers", href: "/customers", module: "customers", icon: Users },
+  ],
+};
+
 function useNavClusters() {
   const { can, me } = useAuthz();
 
-  const clusters = CLUSTERS.map((c) => ({
+  const fullMenu =
+    !!me && (me.isSuperAdmin || FULL_MENU_ROLES.has(me.roleName ?? ""));
+
+  const source = fullMenu ? CLUSTERS : [MINIMAL_CLUSTER];
+
+  const clusters = source.map((c) => ({
     ...c,
     items: c.items.filter((i) => !i.module || can(i.module, "view")),
   })).filter((c) => c.items.length > 0);

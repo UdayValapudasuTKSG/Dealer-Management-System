@@ -1,3 +1,4 @@
+import { PageHero } from "@/components/layout/page-hero";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -95,15 +96,15 @@ export default function SettingsEmail() {
   };
 
   return (
-    <Page className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Mail className="h-6 w-6 text-primary" /> Email Engine
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Gmail SMTP delivery, branded templates and the outbound queue.
-        </p>
-      </div>
+    <>
+    <PageHero
+      eyebrow="Settings"
+      icon={Mail}
+      title="Email"
+      accent="Engine"
+      subtitle="Gmail SMTP delivery, branded templates and the outbound queue."
+    />
+    <Page className="space-y-5 pt-0">
 
       {/* Status + test send */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -297,6 +298,7 @@ export default function SettingsEmail() {
         onClose={() => setPreviewKey(null)}
       />
     </Page>
+    </>
   );
 }
 
