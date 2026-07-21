@@ -2454,7 +2454,7 @@ export const UpdateDealParams = zod.object({
 
 export const UpdateDealBody = zod.object({
   "customerId": zod.number().optional(),
-  "leadId": zod.number().optional(),
+  "leadId": zod.number().nullish(),
   "vehicleId": zod.number().optional(),
   "customerName": zod.string().optional(),
   "stage": zod.enum(['desking', 'negotiation', 'finance', 'committed', 'delivered', 'lost']).optional(),

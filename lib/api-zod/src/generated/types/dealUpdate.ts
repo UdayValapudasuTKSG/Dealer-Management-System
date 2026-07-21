@@ -9,7 +9,8 @@ import type { DealUpdateStage } from './dealUpdateStage';
 
 export interface DealUpdate {
   customerId?: number;
-  leadId?: number;
+  /** @nullable */
+  leadId?: number | null;
   vehicleId?: number;
   customerName?: string;
   stage?: DealUpdateStage;

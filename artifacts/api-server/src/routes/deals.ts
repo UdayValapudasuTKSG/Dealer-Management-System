@@ -1,6 +1,13 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and } from "drizzle-orm";
-import { db, dealsTable, vehiclesTable, gatesTable } from "@workspace/db";
+import {
+  db,
+  dealsTable,
+  vehiclesTable,
+  gatesTable,
+  leadsTable,
+  timelineEventsTable,
+} from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
 import { idempotent } from "../middlewares/idempotency";
 import {
@@ -40,6 +47,51 @@ const FLOOR_DISCOUNT_RATIO = 0.05;
 
 const money = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+// A deal may only link to a lead in the same dealer. Returns the lead row or
+// null when the id doesn't exist (or belongs to another dealer → treat as 404).
+async function findDealerLead(
+  leadId: number,
+  dealerId: number,
+): Promise<typeof leadsTable.$inferSelect | null> {
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.dealerId, dealerId)));
+  return lead ?? null;
+}
+
+async function logDealLinkEvent(
+  lead: typeof leadsTable.$inferSelect,
+  deal: typeof dealsTable.$inferSelect,
+  kind: "deal_created" | "deal_attached" | "deal_detached",
+  actor: string,
+): Promise<void> {
+  const titles: Record<string, string> = {
+    deal_created: "Deal desked",
+    deal_attached: "Deal attached",
+    deal_detached: "Deal detached",
+  };
+  await db.insert(timelineEventsTable).values({
+    dealerId: lead.dealerId,
+    customerId: lead.customerId,
+    domain: "leads",
+    kind,
+    title: titles[kind]!,
+    detail:
+      kind === "deal_detached"
+        ? `Deal #${deal.id} was unlinked from this lead.`
+        : `Deal #${deal.id} (${money(deal.otdPrice)} OTD, ${deal.stage}) is now linked to this lead.`,
+    actor,
+    isAgent: false,
+    refType: "lead",
+    refId: lead.id,
+  });
+}
+
+const dealActor = (res: {
+  locals: { user?: { name: string | null; email: string | null } };
+}): string => res.locals.user?.name ?? res.locals.user?.email ?? "Staff";
 
 async function raiseBelowFloorGateIfNeeded(
   deal: typeof dealsTable.$inferSelect,
@@ -120,6 +172,17 @@ router.post("/deals", async (req, res): Promise<void> => {
   }
 
   const dealerId = activeDealerId(res);
+
+  // Linking to a lead requires a same-dealer lead (cross-dealer ids → 404).
+  let linkedLead: typeof leadsTable.$inferSelect | null = null;
+  if (parsed.data.leadId != null) {
+    linkedLead = await findDealerLead(parsed.data.leadId, dealerId);
+    if (!linkedLead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+  }
+
   // Stamp the advisor's user ID so briefing scoping matches by ID, not name.
   const salesAdvisorUserId =
     parsed.data.salesAdvisorUserId ??
@@ -153,6 +216,10 @@ router.post("/deals", async (req, res): Promise<void> => {
     .returning();
 
   await raiseBelowFloorGateIfNeeded(deal!);
+
+  if (linkedLead) {
+    await logDealLinkEvent(linkedLead, deal!, "deal_created", dealActor(res));
+  }
 
   res.status(201).json(GetDealResponse.parse(deal));
 });
@@ -213,6 +280,16 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
     .from(dealsTable)
     .where(and(eq(dealsTable.id, params.data.id), eq(dealsTable.dealerId, dealerId)));
 
+  // Attaching to a lead requires a same-dealer lead (cross-dealer ids → 404).
+  let attachLead: typeof leadsTable.$inferSelect | null = null;
+  if (parsed.data.leadId != null) {
+    attachLead = await findDealerLead(parsed.data.leadId, dealerId);
+    if (!attachLead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+  }
+
   if (before && parsed.data.stage && parsed.data.stage !== before.stage) {
     const fromIdx = DEAL_STAGE_ORDER.indexOf(before.stage);
     const toIdx = DEAL_STAGE_ORDER.indexOf(parsed.data.stage);
@@ -263,6 +340,16 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
   }
 
   if (before) onDealStageChanged(before, deal);
+
+  // Lead-link timeline events: attach, detach, or re-attach (both).
+  if (before && parsed.data.leadId !== undefined && before.leadId !== deal.leadId) {
+    const actor = dealActor(res);
+    if (before.leadId != null) {
+      const prevLead = await findDealerLead(before.leadId, dealerId);
+      if (prevLead) await logDealLinkEvent(prevLead, deal, "deal_detached", actor);
+    }
+    if (attachLead) await logDealLinkEvent(attachLead, deal, "deal_attached", actor);
+  }
 
   await raiseBelowFloorGateIfNeeded(deal);
 

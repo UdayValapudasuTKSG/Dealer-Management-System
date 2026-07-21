@@ -16,10 +16,12 @@ import {
   useGenerateLeadQuote,
   useSendLeadQuote,
   useListGates,
+  useCreateDeal,
   getListLeadQuotesQueryKey,
   getGetLeadQueryKey,
   getGetLeadTimelineQueryKey,
   getListLeadsQueryKey,
+  getListDealsQueryKey,
 } from "@workspace/api-client-react";
 import type { Lead, LeadUpdate, Vehicle } from "@workspace/api-client-react";
 import { StageNav, type StageNavStage } from "@/components/lead/stage-nav";
@@ -591,15 +593,33 @@ export default function LeadDetail() {
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [runReviewOpen, setRunReviewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [deskOpen, setDeskOpen] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
 
   const { can } = useAuthz();
   const canEdit = can("leads", "edit");
+  const canDeskDeal = can("deals", "create");
+
+  const createDeal = useCreateDeal({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListDealsQueryKey() });
+        qc.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
+        toast({
+          title: "Deal desked",
+          description: "The deal is linked to this lead — stage gates now see it.",
+        });
+      },
+      onError: () =>
+        toast({ title: "Could not desk the deal", variant: "destructive" }),
+    },
+  });
   const { data: vehicles } = useListVehicles(undefined, {
     query: {
       queryKey: ["lead-edit-vehicles"],
-      enabled: canEdit,
+      enabled: canEdit || canDeskDeal,
     },
   });
   const updateLead = useUpdateLead({
@@ -1019,6 +1039,16 @@ export default function LeadDetail() {
               >
                 <Pencil className="w-3.5 h-3.5" />
                 Edit
+              </Button>
+            )}
+            {canDeskDeal && (
+              <Button
+                variant="outline"
+                onClick={() => setDeskOpen(true)}
+                className="gap-1.5"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Desk deal
               </Button>
             )}
             <Button
@@ -2285,6 +2315,95 @@ export default function LeadDetail() {
 
         {/* Right rail */}
         <div className="space-y-6 lg:sticky lg:top-6">
+          {(() => {
+            const linkedDeals = (allDeals ?? []).filter(
+              (d) => d.leadId === lead.id,
+            );
+            const DEAL_STAGE_LABEL: Record<string, string> = {
+              desking: "Desking",
+              negotiation: "Negotiation",
+              finance: "Finance",
+              committed: "Committed",
+              delivered: "Delivered",
+              lost: "Lost",
+            };
+            return (
+              <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                      <FileText className="w-3.5 h-3.5" />
+                    </span>
+                    <span className="text-sm font-semibold tracking-tight">
+                      Linked Deals
+                    </span>
+                  </div>
+                  {canDeskDeal && (
+                    <button
+                      onClick={() => setDeskOpen(true)}
+                      className="text-xs font-semibold text-primary hover:underline"
+                    >
+                      Desk deal
+                    </button>
+                  )}
+                </div>
+                {linkedDeals.length === 0 ? (
+                  <div className="space-y-2.5">
+                    <p className="text-xs text-muted-foreground">
+                      {lead.phase === "negotiate" || lead.phase === "won"
+                        ? "This lead is in negotiation with no deal on file — desk one now so the numbers are tracked and later stage gates can pass."
+                        : "No deal yet — that's normal at this stage. The sales advisor desks the deal when negotiation starts; if a vehicle is selected, AURA auto-desks a draft deal the moment this lead advances to Negotiation."}
+                    </p>
+                    <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-primary mb-1">
+                        Next step
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {!lead.interestedVehicleId
+                          ? "Select a vehicle of interest first — a deal is always desked against a specific vehicle."
+                          : lead.phase === "negotiate" || lead.phase === "won"
+                            ? "Desk the deal against the selected vehicle, then take a deposit to clear the Sold-stage gates."
+                            : "Complete the current stage checklist. On advancing to Negotiation, a draft deal is created automatically at the listed price for the advisor to refine."}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {linkedDeals.map((d) => (
+                      <Link
+                        key={d.id}
+                        href="/deals"
+                        className="block rounded-xl border border-white/10 bg-foreground/[0.03] px-3 py-2.5 hover:border-primary/40 transition-colors group"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium truncate">
+                            Deal #{d.id}
+                            {d.customerName ? ` · ${d.customerName}` : ""}
+                          </span>
+                          <span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider shrink-0">
+                            {DEAL_STAGE_LABEL[d.stage] ?? d.stage}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between mt-1.5 text-xs text-muted-foreground">
+                          <span>
+                            OTD{" "}
+                            <span className="text-foreground font-semibold">
+                              {money.gyd(d.otdPrice)}
+                            </span>
+                          </span>
+                          <span className="inline-flex items-center gap-1 group-hover:text-primary transition-colors">
+                            Deals
+                            <ArrowUpRight className="w-3 h-3" />
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-3">
               One-Tap Contact
@@ -2548,6 +2667,84 @@ export default function LeadDetail() {
               }
             }
             await updateLead.mutateAsync({ id: lead.id, data: payload as never });
+          }}
+        />
+      )}
+
+      {canDeskDeal && deskOpen && (
+        <CreateRecordDialog
+          title="Desk a Deal for This Lead"
+          description="The deal is created pre-linked to this lead so its stage gates recognize it."
+          trigger={<span />}
+          open={deskOpen}
+          onOpenChange={setDeskOpen}
+          submitLabel="Desk deal"
+          pending={createDeal.isPending}
+          fields={[
+            {
+              name: "vehicleId",
+              label: "Vehicle",
+              type: "select",
+              required: true,
+              span: "full",
+              placeholder: "Select a vehicle",
+              defaultValue: lead.interestedVehicleId
+                ? String(lead.interestedVehicleId)
+                : undefined,
+              options: (vehicles ?? []).map((v) => ({
+                value: String(v.id),
+                label: `${v.year} ${v.make} ${v.model} — ${money.gyd(v.price)}`,
+              })),
+              onChange: (value, setField) => {
+                const v = (vehicles ?? []).find((x) => String(x.id) === value);
+                if (v) setField("vehiclePrice", String(v.price));
+              },
+            },
+            {
+              name: "customerName",
+              label: "Customer",
+              type: "text",
+              span: "full",
+              defaultValue: lead.name,
+            },
+            {
+              name: "vehiclePrice",
+              label: "Vehicle price",
+              type: "number",
+              required: true,
+              span: "half",
+              defaultValue: (() => {
+                const v = (vehicles ?? []).find(
+                  (x) => x.id === lead.interestedVehicleId,
+                );
+                return v ? String(v.price) : undefined;
+              })(),
+            },
+            {
+              name: "discount",
+              label: "Discount",
+              type: "number",
+              span: "half",
+              placeholder: "0",
+            },
+          ]}
+          onSubmit={async (values) => {
+            await createDeal.mutateAsync({
+              data: {
+                vehicleId: Number(values.vehicleId),
+                vehiclePrice: Number(values.vehiclePrice),
+                ...(values.discount != null
+                  ? { discount: Number(values.discount) }
+                  : {}),
+                ...(values.customerName
+                  ? { customerName: String(values.customerName) }
+                  : {}),
+                ...(lead.customerId != null
+                  ? { customerId: lead.customerId }
+                  : {}),
+                leadId: lead.id,
+              },
+            });
           }}
         />
       )}

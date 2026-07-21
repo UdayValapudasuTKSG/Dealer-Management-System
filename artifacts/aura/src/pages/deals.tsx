@@ -5,13 +5,28 @@ import {
   useListGates,
   useListVehicles,
   useListDivisions,
+  useListLeads,
   useCreateDeal,
+  useUpdateDeal,
   getListDealsQueryKey,
+  getGetLeadQueryKey,
+  getGetLeadTimelineQueryKey,
 } from "@workspace/api-client-react";
+import type { Deal } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, FileText } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Plus, FileText, Link2, Loader2, Unlink, User } from "lucide-react";
+import { useAuthz } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page } from "@/components/layout/page";
@@ -35,9 +50,90 @@ export default function Deals() {
   const { data: gates } = useListGates({ status: "pending" });
   const { data: vehicles } = useListVehicles();
   const { data: divisions } = useListDivisions();
+  const { data: leads } = useListLeads();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createDeal = useCreateDeal();
+  const updateDeal = useUpdateDeal();
+  const { can } = useAuthz();
+  const canEditDeals = can("deals", "edit");
+  const canCreateDeals = can("deals", "create");
+
+  const [attachDeal, setAttachDeal] = useState<Deal | null>(null);
+  const [attachLeadId, setAttachLeadId] = useState<string>("");
+  const [attachSearch, setAttachSearch] = useState("");
+
+  const refreshLeadLink = (leadIds: (number | null | undefined)[]) => {
+    queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
+    for (const lid of leadIds) {
+      if (lid != null) {
+        queryClient.invalidateQueries({ queryKey: getGetLeadQueryKey(lid) });
+        queryClient.invalidateQueries({
+          queryKey: getGetLeadTimelineQueryKey(lid),
+        });
+      }
+    }
+  };
+
+  const attachToLead = async () => {
+    if (!attachDeal || !attachLeadId) return;
+    const leadId = Number(attachLeadId);
+    try {
+      await updateDeal.mutateAsync({
+        id: attachDeal.id,
+        data: { leadId },
+      });
+      refreshLeadLink([attachDeal.leadId, leadId]);
+      const lead = (leads ?? []).find((l) => l.id === leadId);
+      toast({
+        title: "Deal attached",
+        description: `Deal #${attachDeal.id} is now linked to ${lead?.name ?? `lead #${leadId}`}.`,
+      });
+      setAttachDeal(null);
+    } catch (err) {
+      toast({
+        title: "Could not attach deal",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const detachFromLead = async () => {
+    if (!attachDeal || attachDeal.leadId == null) return;
+    try {
+      await updateDeal.mutateAsync({
+        id: attachDeal.id,
+        data: { leadId: null },
+      });
+      refreshLeadLink([attachDeal.leadId]);
+      toast({ title: "Deal detached from lead" });
+      setAttachDeal(null);
+    } catch (err) {
+      toast({
+        title: "Could not detach deal",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openAttach = (deal: Deal) => {
+    setAttachLeadId(deal.leadId != null ? String(deal.leadId) : "");
+    setAttachSearch("");
+    setAttachDeal(deal);
+  };
+
+  const leadName = (leadId: number | null | undefined) =>
+    leadId != null
+      ? ((leads ?? []).find((l) => l.id === leadId)?.name ?? `Lead #${leadId}`)
+      : null;
+
+  const filteredLeads = (leads ?? []).filter(
+    (l) =>
+      !attachSearch.trim() ||
+      l.name.toLowerCase().includes(attachSearch.trim().toLowerCase()),
+  );
   const money = useMoney();
   const { density, setDensity, layout, setLayout } = useViewMode("deals");
   const compact = density === "compact";
@@ -81,6 +177,7 @@ export default function Deals() {
             density={density}
             onDensityChange={setDensity}
           />
+          {canCreateDeals && (
           <CreateRecordDialog
             title="Desk a New Deal"
             description="Structure a deal — AURA computes OTD and flags approvals."
@@ -95,6 +192,33 @@ export default function Deals() {
               </Button>
             }
             fields={[
+              {
+                name: "leadId",
+                label: "Lead (optional)",
+                type: "select",
+                span: "full",
+                placeholder: "Link to a pipeline lead",
+                options: (leads ?? []).map((l) => ({
+                  value: String(l.id),
+                  label: `${l.name}${l.phone ? ` · ${l.phone}` : l.email ? ` · ${l.email}` : ""}`,
+                })),
+                onChange: (value, setField) => {
+                  const lead = (leads ?? []).find(
+                    (l) => String(l.id) === value,
+                  );
+                  if (!lead) return;
+                  if (lead.name) setField("customerName", lead.name);
+                  if (lead.interestedVehicleId != null) {
+                    const veh = (vehicles ?? []).find(
+                      (v) => v.id === lead.interestedVehicleId,
+                    );
+                    if (veh) {
+                      setField("vehicleId", String(veh.id));
+                      setField("vehiclePrice", String(veh.price));
+                    }
+                  }
+                },
+              },
               {
                 name: "vehicleId",
                 label: "Vehicle",
@@ -136,11 +260,15 @@ export default function Deals() {
             onSubmit={async (values) => {
               const payload = { ...values };
               if (payload.vehicleId != null) payload.vehicleId = Number(payload.vehicleId);
+              if (payload.leadId != null) payload.leadId = Number(payload.leadId);
               await createDeal.mutateAsync({ data: payload as never });
-              queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
+              refreshLeadLink([
+                payload.leadId != null ? (payload.leadId as number) : null,
+              ]);
               toast({ title: "Deal desked", description: "AURA computed the OTD structure." });
             }}
           />
+          )}
       </div>
 
       {layout === "list" ? (
@@ -155,6 +283,7 @@ export default function Deals() {
                 <th className="px-4 py-3 font-semibold text-right hidden md:table-cell">Discount</th>
                 <th className="px-4 py-3 font-semibold text-center hidden md:table-cell">Deposit</th>
                 <th className="px-4 py-3 font-semibold hidden lg:table-cell">Advisor</th>
+                <th className="px-4 py-3 font-semibold">Lead</th>
               </tr>
             </thead>
             <tbody>
@@ -196,11 +325,43 @@ export default function Deals() {
                   <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
                     {deal.salesAdvisor ?? "—"}
                   </td>
+                  <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                    {deal.leadId != null ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Link
+                          href={`/lead/${deal.leadId}`}
+                          className="inline-flex items-center gap-1 text-primary hover:underline text-xs font-medium"
+                        >
+                          <User className="w-3 h-3" />
+                          {leadName(deal.leadId)}
+                        </Link>
+                        {canEditDeals && (
+                          <button
+                            onClick={() => openAttach(deal)}
+                            aria-label="Change lead link"
+                            className="text-muted-foreground hover:text-primary transition-colors"
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </span>
+                    ) : canEditDeals ? (
+                      <button
+                        onClick={() => openAttach(deal)}
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                        Attach to lead
+                      </button>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
               {(deals ?? []).length === 0 && !isLoading && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                  <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground text-sm">
                     No deals yet.
                   </td>
                 </tr>
@@ -264,10 +425,40 @@ export default function Deals() {
                                 {deal.customerName || "Unknown Customer"}
                               </div>
                             )}
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                              <FileText className="w-4 h-4 text-primary" />
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {canEditDeals && (
+                                <button
+                                  onClick={() => openAttach(deal)}
+                                  aria-label={
+                                    deal.leadId != null
+                                      ? "Change lead link"
+                                      : "Attach to lead"
+                                  }
+                                  title={
+                                    deal.leadId != null
+                                      ? "Change lead link"
+                                      : "Attach to lead"
+                                  }
+                                  className="w-8 h-8 rounded-full bg-foreground/[0.05] flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                >
+                                  <Link2 className="w-4 h-4" />
+                                </button>
+                              )}
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <FileText className="w-4 h-4 text-primary" />
+                              </div>
                             </div>
                           </div>
+
+                          {deal.leadId != null && (
+                            <Link
+                              href={`/lead/${deal.leadId}`}
+                              className="inline-flex items-center gap-1.5 mb-3 text-xs font-medium text-primary bg-primary/10 rounded-full px-2.5 py-1 hover:bg-primary/15 transition-colors"
+                            >
+                              <User className="w-3 h-3" />
+                              {leadName(deal.leadId)}
+                            </Link>
+                          )}
 
                           <div className="font-light text-3xl mb-4 tracking-tight text-primary">
                             {money.dual(deal.otdPrice)}
@@ -321,6 +512,84 @@ export default function Deals() {
         })}
       </div>
       )}
+
+      <Dialog
+        open={attachDeal != null}
+        onOpenChange={(o) => {
+          if (!o) setAttachDeal(null);
+        }}
+      >
+        <DialogContent className="glass-panel border-white/10 sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl tracking-tight">
+              {attachDeal?.leadId != null ? "Change lead link" : "Attach to lead"}
+            </DialogTitle>
+            <DialogDescription>
+              Link deal #{attachDeal?.id}
+              {attachDeal?.customerName ? ` (${attachDeal.customerName})` : ""} to a
+              pipeline lead so its stage checklist recognizes the deal.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <Input
+              placeholder="Search leads…"
+              value={attachSearch}
+              onChange={(e) => setAttachSearch(e.target.value)}
+              className="bg-white/[0.04] border-white/10"
+            />
+            <div className="max-h-64 overflow-y-auto rounded-xl border border-white/10 divide-y divide-white/5">
+              {filteredLeads.length === 0 ? (
+                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  No matching leads.
+                </div>
+              ) : (
+                filteredLeads.map((l) => (
+                  <button
+                    key={l.id}
+                    onClick={() => setAttachLeadId(String(l.id))}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors ${
+                      attachLeadId === String(l.id)
+                        ? "bg-primary/15 text-primary"
+                        : "hover:bg-foreground/[0.04]"
+                    }`}
+                  >
+                    <span className="font-medium truncate">{l.name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {l.phone || l.email || ""}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            {attachDeal?.leadId != null && (
+              <Button
+                variant="outline"
+                onClick={detachFromLead}
+                disabled={updateDeal.isPending}
+                className="gap-1.5"
+              >
+                <Unlink className="w-3.5 h-3.5" />
+                Detach
+              </Button>
+            )}
+            <Button
+              onClick={attachToLead}
+              disabled={
+                !attachLeadId ||
+                attachLeadId === String(attachDeal?.leadId ?? "") ||
+                updateDeal.isPending
+              }
+              className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
+            >
+              {updateDeal.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              <Link2 className="w-4 h-4" />
+              Attach
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Page>
     </>
   );

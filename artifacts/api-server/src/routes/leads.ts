@@ -1426,6 +1426,75 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
     .from(dealsTable)
     .where(and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, lead.id)));
 
+  // AUTO-DESK AGENT: when a lead advances into Negotiation with a vehicle
+  // selected but no deal on file, the sales agent desks a draft deal
+  // automatically (vehicle price, no discount) so the advisor negotiates from
+  // real numbers instead of being blocked by the deal_created gate. Manual
+  // desking by the advisor at any earlier point takes precedence — the agent
+  // only acts when NO deal exists. Governed: per-dealer kill switch + run
+  // record + audit log, per platform agent-governance rules.
+  if (
+    toStage === "negotiation" &&
+    leadDeals.length === 0 &&
+    lead.interestedVehicleId &&
+    (await isAgentEnabled(dealerId, "sales"))
+  ) {
+    const startedAt = Date.now();
+    const [vehicle] = await db
+      .select()
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.id, lead.interestedVehicleId),
+          eq(vehiclesTable.dealerId, dealerId),
+        ),
+      );
+    if (vehicle) {
+      const [autoDeal] = await db
+        .insert(dealsTable)
+        .values({
+          dealerId,
+          leadId: lead.id,
+          customerId: lead.customerId ?? null,
+          customerName: lead.name,
+          vehicleId: vehicle.id,
+          vehiclePrice: vehicle.price,
+          discount: 0,
+          divisionId:
+            vehicle.divisionId ?? (await defaultDivisionId(dealerId)),
+          salesAdvisor: lead.assignedTo ?? null,
+        })
+        .returning();
+      if (autoDeal) {
+        leadDeals.push(autoDeal);
+        await db.insert(timelineEventsTable).values({
+          dealerId,
+          customerId: lead.customerId,
+          domain: "leads",
+          kind: "deal_created",
+          title: "Deal auto-desked by AURA",
+          detail: `Draft deal #${autoDeal.id} created at the vehicle's listed price when the lead entered Negotiation — review and adjust the numbers.`,
+          actor: "AURA Sales Agent",
+          isAgent: true,
+          refType: "lead",
+          refId: lead.id,
+        });
+        await recordAgentRun({
+          dealerId,
+          agentKey: "sales",
+          runType: "auto_desk_deal",
+          inputSource: "stage_advance",
+          inputSummary: `Lead #${lead.id} advanced to Negotiation with no deal on file`,
+          outputSummary: `Drafted deal #${autoDeal.id} at listed price for vehicle #${vehicle.id}`,
+          refType: "deal",
+          refId: autoDeal.id,
+          latencyMs: Date.now() - startedAt,
+          mutation: true,
+        });
+      }
+    }
+  }
+
   // Gate criteria come from the dealer's ACTIVE checklist config (versioned,
   // Settings → Stage Gates). Each item key maps to a built-in check; admins
   // can toggle items on/off and relabel them without a deploy.

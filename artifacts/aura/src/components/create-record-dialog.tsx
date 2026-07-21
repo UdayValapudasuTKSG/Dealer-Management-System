@@ -31,8 +31,9 @@ export type FieldDef = {
   defaultValue?: string;
   span?: "full" | "half";
   render?: (value: string, set: (value: string) => void) => ReactNode;
-  /** Optional observer so pages can react to a field change (e.g. show a dependent field). */
-  onChange?: (value: string) => void;
+  /** Optional observer so pages can react to a field change (e.g. show a
+   * dependent field or prefill sibling fields via setField). */
+  onChange?: (value: string, setField: (name: string, value: string) => void) => void;
 };
 
 type CreateRecordDialogProps = {
@@ -78,9 +79,12 @@ export function CreateRecordDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const set = (name: string, value: string) => {
+  const setField = (name: string, value: string) =>
     setValues((v) => ({ ...v, [name]: value }));
-    fields.find((f) => f.name === name)?.onChange?.(value);
+
+  const set = (name: string, value: string) => {
+    setField(name, value);
+    fields.find((f) => f.name === name)?.onChange?.(value, setField);
   };
 
   const handleSubmit = async () => {

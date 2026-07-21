@@ -6638,7 +6638,7 @@ components:
       type: object
       properties:
         customerId: { type: integer }
-        leadId: { type: integer }
+        leadId: { type: ["integer", "null"] }
         vehicleId: { type: integer }
         customerName: { type: string }
         stage: { type: string, enum: [desking, negotiation, finance, committed, delivered, lost] }

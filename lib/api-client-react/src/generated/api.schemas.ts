@@ -2486,7 +2486,8 @@ export const DealUpdateStage = {
 
 export interface DealUpdate {
   customerId?: number;
-  leadId?: number;
+  /** @nullable */
+  leadId?: number | null;
   vehicleId?: number;
   customerName?: string;
   stage?: DealUpdateStage;
