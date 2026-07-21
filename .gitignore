@@ -50,3 +50,4 @@ Thumbs.db
 artifacts/api-server/uploads/
 
 uploads/
+.gate-dist.*

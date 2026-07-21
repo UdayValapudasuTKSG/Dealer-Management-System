@@ -385,7 +385,7 @@ export default function Leads() {
                 },
                 {
                   name: "interestedVehicleId",
-                  label: "Interested vehicle",
+                  label: "Interested model",
                   type: "custom",
                   required: true,
                   span: "full",
@@ -401,6 +401,7 @@ export default function Leads() {
                         vin: v.vin ?? null,
                         price: v.price,
                       }))}
+                      unitSelection={false}
                       onResolve={(v) => set(v ? String(v.id) : "")}
                     />
                   ),
@@ -463,7 +464,7 @@ export default function Leads() {
                     { value: "low", label: "Low" },
                   ],
                 },
-                { name: "address", label: "Address", type: "text", required: true, span: "full", placeholder: "Lot 12 Main Street, Georgetown" },
+                { name: "address", label: "Address", type: "text", span: "full", placeholder: "Optional — Lot 12 Main Street, Georgetown" },
                 { name: "preferredBranch", label: "Preferred branch", type: "text", span: "half", placeholder: "Optional" },
                 { name: "email", label: "Email", type: "text", span: "half", placeholder: "kojo@email.com" },
                 { name: "phone", label: "Phone", type: "text", span: "half", placeholder: "+233 …" },
@@ -472,15 +473,21 @@ export default function Leads() {
               onSubmit={async (values) => {
                 const payload = { ...values };
                 if (payload.interestedVehicleId != null) {
-                  payload.interestedVehicleId = Number(payload.interestedVehicleId);
                   const v = (vehicles ?? []).find(
-                    (x) => x.id === payload.interestedVehicleId,
+                    (x) => x.id === Number(payload.interestedVehicleId),
                   );
                   if (v) {
                     const version = v.trim || v.variant;
                     if (version) payload.variant = version;
                     payload.color = v.exteriorColor;
+                    payload.selectedModel = [v.make, v.model, version]
+                      .filter(Boolean)
+                      .join(" ");
                   }
+                  // DMS spec: lead capture records only a MODEL of interest;
+                  // the specific unit/VIN is bound at Vehicle Allocated, so
+                  // no unit id is persisted at capture time.
+                  delete payload.interestedVehicleId;
                 }
                 const result = await createLead.mutateAsync({
                   data: payload as never,

@@ -6305,6 +6305,7 @@ components:
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         interestedVehicleId: { type: integer }
+        selectedModel: { type: string }
         variant: { type: string }
         color: { type: string }
         preferredBranch: { type: string }

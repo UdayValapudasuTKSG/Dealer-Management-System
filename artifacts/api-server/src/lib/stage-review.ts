@@ -67,7 +67,10 @@ export function buildStageChecks(
   const deal = leadDeals[0];
   return {
     contact_details: () => Boolean(lead.email || lead.phone),
-    vehicle_selected: () => Boolean(lead.interestedVehicleId),
+    // Capture is model-only per the DMS spec (unit/VIN binds at Vehicle
+    // Allocated), so a recorded model of interest also satisfies this check.
+    vehicle_selected: () =>
+      Boolean(lead.interestedVehicleId || lead.selectedModel),
     budget_discussed: () => Boolean(lead.budgetFinancing),
     test_drive_booked: () => Boolean(lead.testDriveAt),
     licence_on_file: () => Boolean(lead.testDriveLicence),

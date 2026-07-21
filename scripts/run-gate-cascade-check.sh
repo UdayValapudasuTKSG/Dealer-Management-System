@@ -29,15 +29,26 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "==> Building api-server"
-if ! pnpm --filter @workspace/api-server run build; then
+# Build into a private output dir (must live inside the api-server package so
+# externalized deps like nodemailer resolve from its node_modules). The dev
+# workflow rebuilds dist/ on restart; a separate OUTDIR avoids any race.
+RUN_DIR="$(mktemp -d "$REPO_ROOT/artifacts/api-server/.gate-dist.XXXXXX")"
+if [[ -z "$RUN_DIR" || ! -d "$RUN_DIR" ]]; then
+  echo "ERROR: could not create private build dir (mktemp failed)" >&2
+  exit 1
+fi
+cleanup_dist() { rm -rf "$RUN_DIR"; }
+trap 'cleanup; cleanup_dist' EXIT
+
+echo "==> Building api-server (private outdir)"
+if ! OUTDIR="$RUN_DIR" pnpm --filter @workspace/api-server run build; then
   echo "ERROR: api-server build failed" >&2
   exit 1
 fi
 
 echo "==> Starting api-server on port ${PORT}"
 PORT="$PORT" NODE_ENV=development AUTH_BYPASS=1 node --enable-source-maps \
-  artifacts/api-server/dist/index.mjs &
+  "$RUN_DIR/index.mjs" &
 SERVER_PID=$!
 
 echo "==> Waiting for ${BASE}/healthz"

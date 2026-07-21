@@ -194,6 +194,16 @@ export async function applyFinanceStatusEffects(
     } catch (err) {
       logger.error({ err, appId: app.id }, "deal auto-advance failed");
     }
+    // Safety net: approval normally opens the delivery workflow, but if that
+    // trigger failed (restart, transient error) the deal would sit Committed
+    // with no delivery to complete. ensureDeliveryForDeal is idempotent.
+    try {
+      await ensureDeliveryForDeal(app.dealId, {
+        cause: `Finance application #${app.id} disbursed`,
+      });
+    } catch (err) {
+      logger.error({ err, appId: app.id }, "delivery workflow start failed");
+    }
   }
 }
 

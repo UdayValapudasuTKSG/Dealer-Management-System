@@ -24,6 +24,7 @@ export interface LeadInput {
   phase?: LeadInputPhase;
   status?: LeadInputStatus;
   interestedVehicleId?: number;
+  selectedModel?: string;
   variant?: string;
   color?: string;
   preferredBranch?: string;

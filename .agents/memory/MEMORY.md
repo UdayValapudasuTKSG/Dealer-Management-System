@@ -19,3 +19,4 @@
 - [Agent kill switches fail open](agent-governance-kill-switch.md) — per-dealer agent pause only works if that dealer has seeded `agents` rows; seed every dealer or the toggle silently no-ops.
 - [No-dealer request gating](no-dealer-request-gating.md) — sessions with no bound dealership only reach auth/platform; gate always-mounted dealer-scoped widgets/providers on activeDealer or they 403-loop.
 - [Dev persona test bypass](persona-test-bypass.md) — test as any seeded user without Clerk: `?test-user=<email>` in dev (server honors `x-test-user-email` outside production).
+- [Deal delivery progression](deal-delivery-progression.md) — deals have NO manual stage control; finance disbursement commits, the 11-step delivery workflow delivers.

@@ -991,6 +991,7 @@ export const CreateLeadBody = zod.object({
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']).optional(),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']).optional(),
   "interestedVehicleId": zod.number().optional(),
+  "selectedModel": zod.string().optional(),
   "variant": zod.string().optional(),
   "color": zod.string().optional(),
   "preferredBranch": zod.string().optional(),

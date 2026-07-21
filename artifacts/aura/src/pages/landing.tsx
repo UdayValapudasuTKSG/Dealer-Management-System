@@ -146,6 +146,7 @@ function EnquiryDialog({
                   }))}
                   loading={vehiclesLoading}
                   showSummary={false}
+                  unitSelection={false}
                   onResolve={(v) =>
                     setForm((f) => ({ ...f, vehicleId: v ? String(v.id) : "" }))
                   }
@@ -166,8 +167,8 @@ function EnquiryDialog({
                     <div className="font-medium text-white">{selected.color}</div>
                   </div>
                   <div>
-                    <div className="text-[11px] uppercase tracking-wider text-zinc-400">VIN</div>
-                    <div className="font-medium text-white">{selected.vin ?? "On request"}</div>
+                    <div className="text-[11px] uppercase tracking-wider text-zinc-400">Year</div>
+                    <div className="font-medium text-white">{selected.year}</div>
                   </div>
                 </div>
               )}

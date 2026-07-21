@@ -31,11 +31,19 @@ export function VehicleCascade({
   loading,
   onResolve,
   showSummary = true,
+  unitSelection = true,
 }: {
   vehicles: CascadeVehicle[];
   loading?: boolean;
   onResolve: (vehicle: CascadeVehicle | null) => void;
   showSummary?: boolean;
+  /**
+   * When false (DMS-spec lead capture): the cascade stops at model level —
+   * no per-unit picker, no VIN shown. The first matching unit is resolved
+   * internally only to link a model of interest; the actual VIN is bound
+   * later at the Vehicle Allocated stage.
+   */
+  unitSelection?: boolean;
 }) {
   const money = useMoney();
   const [sel, setSel] = useState<Record<Step, string>>({
@@ -91,8 +99,8 @@ export function VehicleCascade({
   const resolved =
     sel.color === ""
       ? null
-      : candidates.length === 1
-        ? candidates[0]
+      : !unitSelection || candidates.length === 1
+        ? (candidates[0] ?? null)
         : (candidates.find((v) => String(v.id) === sel.unit) ?? null);
 
   const resolvedId = resolved?.id ?? null;
@@ -151,7 +159,7 @@ export function VehicleCascade({
         )}
         {stepSelect("color", "Color", colors, !sel.version, "Select color")}
       </div>
-      {sel.color !== "" && candidates.length > 1 && (
+      {unitSelection && sel.color !== "" && candidates.length > 1 && (
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs uppercase tracking-wider text-muted-foreground">
             Specific unit
@@ -181,9 +189,13 @@ export function VehicleCascade({
           </div>
           <div>
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              VIN
+              {unitSelection ? "VIN" : "Unit & VIN"}
             </div>
-            <div className="font-medium">{resolved.vin ?? "On request"}</div>
+            <div className="font-medium">
+              {unitSelection
+                ? (resolved.vin ?? "On request")
+                : "Assigned at allocation"}
+            </div>
           </div>
           <div>
             <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
