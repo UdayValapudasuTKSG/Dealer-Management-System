@@ -5389,9 +5389,11 @@ export const GetCurrentUserResponse = zod.object({
   "status": zod.string(),
   "isSuperAdmin": zod.boolean(),
   "activeDealerId": zod.number().nullish(),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "dealers": zod.array(zod.object({
   "dealerId": zod.number(),
   "dealerName": zod.string(),
+  "dealerStatus": zod.enum(['active', 'suspended']).optional(),
   "roleName": zod.string().nullish(),
   "isGeneralManager": zod.boolean().optional(),
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD for this dealership')
@@ -5444,8 +5446,9 @@ export const ListDealersResponseItem = zod.object({
   "name": zod.string(),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'inactive']),
+  "status": zod.enum(['active', 'suspended']),
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -5464,8 +5467,9 @@ export const CreateDealerBody = zod.object({
   "name": zod.string().min(1),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'inactive']).optional(),
-  "usdExchangeRate": zod.number().gt(createDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD')
+  "status": zod.enum(['active', 'suspended']).optional(),
+  "usdExchangeRate": zod.number().gt(createDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled')
 })
 
 export const CreateDealerResponse = zod.object({
@@ -5473,8 +5477,9 @@ export const CreateDealerResponse = zod.object({
   "name": zod.string(),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'inactive']),
+  "status": zod.enum(['active', 'suspended']),
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -5496,8 +5501,9 @@ export const UpdateDealerBody = zod.object({
   "name": zod.string().min(1),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'inactive']).optional(),
-  "usdExchangeRate": zod.number().gt(updateDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD')
+  "status": zod.enum(['active', 'suspended']).optional(),
+  "usdExchangeRate": zod.number().gt(updateDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled')
 })
 
 export const UpdateDealerResponse = zod.object({
@@ -5505,8 +5511,9 @@ export const UpdateDealerResponse = zod.object({
   "name": zod.string(),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'inactive']),
+  "status": zod.enum(['active', 'suspended']),
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "userCount": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
@@ -5600,6 +5607,90 @@ export const RemoveDealerMemberParams = zod.object({
 })
 
 export const RemoveDealerMemberResponse = zod.void()
+
+
+/**
+ * @summary List a dealer's AI agents with their kill switches (super admin only)
+ */
+export const ListDealerAgentsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListDealerAgentsResponseItem = zod.object({
+  "id": zod.number(),
+  "key": zod.string(),
+  "name": zod.string(),
+  "domain": zod.string(),
+  "description": zod.string(),
+  "status": zod.enum(['active', 'idle', 'paused']),
+  "tasksToday": zod.number(),
+  "successRate": zod.number()
+})
+export const ListDealerAgentsResponse = zod.array(ListDealerAgentsResponseItem)
+
+
+/**
+ * @summary Flip a dealer agent's kill switch (super admin only)
+ */
+export const UpdateDealerAgentParams = zod.object({
+  "id": zod.coerce.number(),
+  "agentId": zod.coerce.number()
+})
+
+export const UpdateDealerAgentBody = zod.object({
+  "status": zod.enum(['active', 'idle', 'paused']).optional()
+})
+
+export const UpdateDealerAgentResponse = zod.object({
+  "id": zod.number(),
+  "key": zod.string(),
+  "name": zod.string(),
+  "domain": zod.string(),
+  "description": zod.string(),
+  "status": zod.enum(['active', 'idle', 'paused']),
+  "tasksToday": zod.number(),
+  "successRate": zod.number()
+})
+
+
+/**
+ * @summary Platform-level audit trail (impersonation, provisioning, suspicious access)
+ */
+export const ListPlatformAuditQueryParams = zod.object({
+  "dealerId": zod.coerce.number().optional(),
+  "limit": zod.coerce.number().optional()
+})
+
+export const ListPlatformAuditResponseItem = zod.object({
+  "id": zod.number(),
+  "actorUserId": zod.number().nullish(),
+  "actorName": zod.string().nullish(),
+  "actorEmail": zod.string().nullish(),
+  "action": zod.string(),
+  "module": zod.string(),
+  "entityType": zod.string().nullish(),
+  "entityId": zod.string().nullish(),
+  "summary": zod.string(),
+  "details": zod.record(zod.string(), zod.unknown()).nullish(),
+  "statusCode": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListPlatformAuditResponse = zod.array(ListPlatformAuditResponseItem)
+
+
+/**
+ * @summary Grant yourself an audited, time-boxed impersonation window for a dealer (super admin only)
+ */
+export const StartImpersonationBody = zod.object({
+  "dealerId": zod.number(),
+  "reason": zod.string().nullish()
+})
+
+export const StartImpersonationResponse = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "expiresAt": zod.coerce.date()
+})
 
 
 /**

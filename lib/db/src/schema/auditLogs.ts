@@ -20,6 +20,11 @@ export const AUDIT_ACTIONS = [
   "reject",
   "assign",
   "export",
+  "impersonate",
+  "suspend",
+  "activate",
+  "access_denied",
+  "provision",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

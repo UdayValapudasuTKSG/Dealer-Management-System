@@ -17,4 +17,5 @@
 - [Date-only fields shift a day in UTC-4](date-only-utc-shift.md) — API serializes date columns as UTC midnight; parse only the date part locally or today-filters miss rows.
 - [Gmail intake relay emails](gmail-intake-relay-emails.md) — form-notification relays are enquiries (extract customer email from body); retrying a skipped email needs ledger row deleted + \Seen cleared.
 - [Agent kill switches fail open](agent-governance-kill-switch.md) — per-dealer agent pause only works if that dealer has seeded `agents` rows; seed every dealer or the toggle silently no-ops.
+- [No-dealer request gating](no-dealer-request-gating.md) — sessions with no bound dealership only reach auth/platform; gate always-mounted dealer-scoped widgets/providers on activeDealer or they 403-loop.
 - [Dev persona test bypass](persona-test-bypass.md) — test as any seeded user without Clerk: `?test-user=<email>` in dev (server honors `x-test-user-email` outside production).

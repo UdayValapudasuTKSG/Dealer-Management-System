@@ -6,6 +6,7 @@ import { SideNav, MobileNav, DealerSwitcher } from "./side-nav";
 import { NotificationBell } from "@/components/notification-bell";
 import { GlobalSearchButton } from "@/components/global-search";
 import { AuraCopilot } from "@/components/copilot/aura-copilot";
+import { useAuthz } from "@/lib/auth";
 
 const CONCIERGE_INSTRUCTIONS =
   "You are the AURA Concierge, the always-on operator of a luxury automotive dealership OS. " +
@@ -16,6 +17,10 @@ const CONCIERGE_INSTRUCTIONS =
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false);
+  // No active dealership (e.g. super admin in the Platform Console) means no
+  // CopilotKit provider is mounted, so the concierge must not render at all.
+  const { activeDealer } = useAuthz();
+  const conciergeAvailable = !!activeDealer;
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden relative selection:bg-primary/30 selection:text-foreground">
@@ -31,8 +36,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <MobileNav />
           <div className="flex-1" />
           <DealerSwitcher />
-          <GlobalSearchButton />
-          <NotificationBell />
+          {conciergeAvailable && (
+            <>
+              <GlobalSearchButton />
+              <NotificationBell />
+            </>
+          )}
         </div>
 
         <div className="flex flex-1 min-h-0 min-w-0">
@@ -42,7 +51,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         {/* Right-docked concierge that pushes content */}
         <AnimatePresence initial={false}>
-          {chatOpen && (
+          {conciergeAvailable && chatOpen && (
             <motion.aside
               key="concierge"
               initial={{ width: 0, opacity: 0 }}
@@ -94,7 +103,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       {/* Floating launcher */}
       <AnimatePresence>
-        {!chatOpen && (
+        {conciergeAvailable && !chatOpen && (
           <motion.button
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -108,7 +117,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         )}
       </AnimatePresence>
 
-      <AuraCopilot />
+      {conciergeAvailable && <AuraCopilot />}
     </div>
   );
 }

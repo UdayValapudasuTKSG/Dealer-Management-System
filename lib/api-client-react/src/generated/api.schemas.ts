@@ -44,9 +44,23 @@ export interface PermissionGrant {
   category: PermissionGrantCategory;
 }
 
+/**
+ * Per-dealer feature flags; a missing key means enabled
+ */
+export interface Entitlements {[key: string]: boolean}
+
+export type DealerMembershipInfoDealerStatus = typeof DealerMembershipInfoDealerStatus[keyof typeof DealerMembershipInfoDealerStatus];
+
+
+export const DealerMembershipInfoDealerStatus = {
+  active: 'active',
+  suspended: 'suspended',
+} as const;
+
 export interface DealerMembershipInfo {
   dealerId: number;
   dealerName: string;
+  dealerStatus?: DealerMembershipInfoDealerStatus;
   /** @nullable */
   roleName?: string | null;
   isGeneralManager?: boolean;
@@ -71,6 +85,7 @@ export interface CurrentUser {
   isSuperAdmin: boolean;
   /** @nullable */
   activeDealerId?: number | null;
+  entitlements?: Entitlements;
   dealers: DealerMembershipInfo[];
   permissions: PermissionGrant[];
 }
@@ -80,7 +95,7 @@ export type DealerStatus = typeof DealerStatus[keyof typeof DealerStatus];
 
 export const DealerStatus = {
   active: 'active',
-  inactive: 'inactive',
+  suspended: 'suspended',
 } as const;
 
 export interface Dealer {
@@ -93,6 +108,7 @@ export interface Dealer {
   status: DealerStatus;
   /** GYD per 1 USD */
   usdExchangeRate?: number;
+  entitlements?: Entitlements;
   userCount?: number;
   createdAt: string;
 }
@@ -102,7 +118,7 @@ export type DealerInputStatus = typeof DealerInputStatus[keyof typeof DealerInpu
 
 export const DealerInputStatus = {
   active: 'active',
-  inactive: 'inactive',
+  suspended: 'suspended',
 } as const;
 
 export interface DealerInput {
@@ -118,6 +134,19 @@ export interface DealerInput {
      * @exclusiveMinimum 0
      */
   usdExchangeRate?: number;
+  entitlements?: Entitlements;
+}
+
+export interface ImpersonationRequest {
+  dealerId: number;
+  /** @nullable */
+  reason?: string | null;
+}
+
+export interface ImpersonationGrant {
+  id: number;
+  dealerId: number;
+  expiresAt: string;
 }
 
 export type DivisionCode = typeof DivisionCode[keyof typeof DivisionCode];
@@ -4822,6 +4851,11 @@ limit?: number;
 
 export type ListGatesParams = {
 status?: string;
+};
+
+export type ListPlatformAuditParams = {
+dealerId?: number;
+limit?: number;
 };
 
 export type GetPermissionMeta200 = {

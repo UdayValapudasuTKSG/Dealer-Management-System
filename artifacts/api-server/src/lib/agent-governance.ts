@@ -4,6 +4,7 @@ import {
   agentsTable,
   agentRunsTable,
   auditLogsTable,
+  dealersTable,
   type AgentRun,
   type AgentRunStatus,
   type AgentRunAutonomy,
@@ -54,6 +55,17 @@ export async function isAgentEnabled(
   agentKey: string,
   opts?: { strict?: boolean },
 ): Promise<boolean> {
+  // Suspended dealers get NO agent activity, regardless of kill switches;
+  // ai_agents entitlement off also disables every agent for the dealer.
+  const [dealer] = await db
+    .select({
+      status: dealersTable.status,
+      entitlements: dealersTable.entitlements,
+    })
+    .from(dealersTable)
+    .where(eq(dealersTable.id, dealerId));
+  if (!dealer || dealer.status === "suspended") return false;
+  if (dealer.entitlements?.ai_agents === false) return false;
   const [agent] = await db
     .select({ status: agentsTable.status })
     .from(agentsTable)

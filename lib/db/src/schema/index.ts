@@ -26,6 +26,7 @@ export * from "./gates";
 export * from "./conversations";
 export * from "./messages";
 export * from "./roles";
+export * from "./rbacDefaults";
 export * from "./users";
 export * from "./auditLogs";
 export * from "./emailLogs";

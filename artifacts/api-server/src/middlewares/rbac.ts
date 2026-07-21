@@ -9,17 +9,22 @@ import {
   auditLogsTable,
   dealersTable,
   dealerUsersTable,
+  impersonationGrantsTable,
   PERMISSION_MODULES,
   PERMISSION_CATEGORIES,
   type User,
   type PermissionModule,
   type PermissionCategory,
+  type DealerEntitlements,
 } from "@workspace/db";
+import { and, gt } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 export type DealerMembership = {
   dealerId: number;
   dealerName: string;
+  dealerStatus: string;
+  entitlements: DealerEntitlements;
   roleId: number;
   roleName: string | null;
   isGeneralManager: boolean;
@@ -39,6 +44,8 @@ declare global {
     interface Locals {
       user?: AuthedUser;
       dealerId?: number;
+      /** Set when the bound dealer is suspended: data plane is frozen. */
+      dealerSuspended?: boolean;
     }
   }
 }
@@ -154,6 +161,8 @@ async function loadMemberships(userId: number): Promise<DealerMembership[]> {
     .select({
       dealerId: dealerUsersTable.dealerId,
       dealerName: dealersTable.name,
+      dealerStatus: dealersTable.status,
+      entitlements: dealersTable.entitlements,
       roleId: dealerUsersTable.roleId,
       roleName: rolesTable.name,
       isGeneralManager: dealerUsersTable.isGeneralManager,
@@ -172,6 +181,8 @@ async function listAllDealers(): Promise<DealerMembership[]> {
     .select({
       id: dealersTable.id,
       name: dealersTable.name,
+      status: dealersTable.status,
+      entitlements: dealersTable.entitlements,
       usdExchangeRate: dealersTable.usdExchangeRate,
     })
     .from(dealersTable)
@@ -179,6 +190,8 @@ async function listAllDealers(): Promise<DealerMembership[]> {
   return rows.map((d) => ({
     dealerId: d.id,
     dealerName: d.name,
+    dealerStatus: d.status,
+    entitlements: d.entitlements,
     roleId: 0,
     roleName: "Super Admin",
     isGeneralManager: false,
@@ -191,6 +204,109 @@ function requestedDealerId(req: Request): number | null {
   if (!raw) return null;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+// ---------------------------------------------------------------------------
+// Super-admin impersonation grants: a super admin may only bind a dealer's
+// workspace (x-dealer-id) while holding an unexpired grant, created via
+// POST /platform/impersonation (audited). Cached briefly to avoid a query on
+// every request.
+const grantCache = new Map<string, { until: number; ts: number }>();
+const GRANT_CACHE_TTL_MS = 15_000;
+
+export function invalidateGrantCache() {
+  grantCache.clear();
+}
+
+async function hasImpersonationGrant(
+  userId: number,
+  dealerId: number,
+): Promise<boolean> {
+  const key = `${userId}:${dealerId}`;
+  const cached = grantCache.get(key);
+  const now = Date.now();
+  if (cached && now - cached.ts < GRANT_CACHE_TTL_MS) return cached.until > now;
+  const [row] = await db
+    .select({ id: impersonationGrantsTable.id })
+    .from(impersonationGrantsTable)
+    .where(
+      and(
+        eq(impersonationGrantsTable.userId, userId),
+        eq(impersonationGrantsTable.dealerId, dealerId),
+        gt(impersonationGrantsTable.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+  grantCache.set(key, { until: row ? now + GRANT_CACHE_TTL_MS : 0, ts: now });
+  return !!row;
+}
+
+// Suspicious-access audit rows are deduped per (user, dealer) for a window so
+// a stale client header doesn't flood the audit trail on every request.
+const suspiciousLogged = new Map<string, number>();
+const SUSPICIOUS_DEDUPE_MS = 5 * 60_000;
+
+function auditSuspiciousAccess(user: User, requestedDealer: number, path: string) {
+  const key = `${user.id}:${requestedDealer}`;
+  const now = Date.now();
+  const last = suspiciousLogged.get(key);
+  if (last && now - last < SUSPICIOUS_DEDUPE_MS) return;
+  suspiciousLogged.set(key, now);
+  db.insert(auditLogsTable)
+    .values({
+      dealerId: null,
+      actorUserId: user.id,
+      actorClerkId: user.clerkId,
+      actorName: user.name,
+      actorEmail: user.email,
+      action: "access_denied",
+      module: "platform",
+      entityType: "dealer",
+      entityId: String(requestedDealer),
+      summary: `${user.name ?? user.email ?? `User #${user.id}`} sent x-dealer-id ${requestedDealer} without a membership (denied with 404)`,
+      details: { requestedDealerId: requestedDealer, path },
+    })
+    .catch((err) => logger.error({ err }, "Failed to write suspicious-access audit row"));
+}
+
+/**
+ * Resolve the active dealer for a request. Sends the response itself on
+ * denial and returns undefined; otherwise returns the membership (or null
+ * when no dealer is bound — client shows the picker / console).
+ */
+async function resolveActiveDealer(
+  req: Request,
+  res: Response,
+  user: User,
+  isSuperAdmin: boolean,
+  dealers: DealerMembership[],
+): Promise<DealerMembership | null | undefined> {
+  const requested = requestedDealerId(req);
+  if (requested != null) {
+    const active = dealers.find((d) => d.dealerId === requested) ?? null;
+    if (!active) {
+      // Opaque 404 for no-membership (per spec): don't leak whether the
+      // dealership exists — and record the attempt for the platform console.
+      auditSuspiciousAccess(user, requested, req.path);
+      res.status(404).json({ error: "Not found" });
+      return undefined;
+    }
+    // Super admins never bind a dealer workspace silently: they need an
+    // explicit, audited impersonation grant from the platform console.
+    if (isSuperAdmin && !(await hasImpersonationGrant(user.id, requested))) {
+      res.status(403).json({
+        error: "Impersonation grant required",
+        code: "impersonation_required",
+      });
+      return undefined;
+    }
+    return active;
+  }
+  // No header: never auto-bind for super admins (they land in the console)
+  // or for multi-dealership users (explicit picker). Single-membership users
+  // bind their only dealership.
+  if (isSuperAdmin) return null;
+  return dealers.length === 1 ? dealers[0]! : null;
 }
 
 export const requireAuth: RequestHandler = async (req, res, next) => {
@@ -213,19 +329,17 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
         const dealers = isSuperAdmin
           ? await listAllDealers()
           : await loadMemberships(user.id);
-        const requested = requestedDealerId(req);
-        let active: DealerMembership | null = null;
-        if (requested != null) {
-          active = dealers.find((d) => d.dealerId === requested) ?? null;
-          if (!active) {
-            // Same opaque 404 as the real auth path: no-membership must not
-            // leak whether the dealership exists.
-            res.status(404).json({ error: "Not found" });
-            return;
-          }
-        } else {
-          active = dealers[0] ?? null;
-        }
+        // Same resolution semantics as the real auth path (opaque 404 on
+        // foreign dealers, impersonation grants for super admins, no silent
+        // auto-bind) so persona testing exercises production behavior.
+        const active = await resolveActiveDealer(
+          req,
+          res,
+          user,
+          isSuperAdmin,
+          dealers,
+        );
+        if (active === undefined) return;
         const permissions = isSuperAdmin
           ? FULL_PERMISSIONS
           : await loadPermissions(active?.roleId ?? null);
@@ -237,7 +351,11 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
           dealerId: active?.dealerId ?? null,
           dealers,
         } as AuthedUser;
-        if (active) res.locals.dealerId = active.dealerId;
+        if (active) {
+          res.locals.dealerId = active.dealerId;
+          if (active.dealerStatus === "suspended")
+            res.locals.dealerSuspended = true;
+        }
         next();
         return;
       }
@@ -284,21 +402,16 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
       ? await listAllDealers()
       : await loadMemberships(user.id);
 
-    // Resolve the active dealer: requested header if valid, else the first
-    // dealer the user belongs to (or the first dealer overall for super admin).
-    const requested = requestedDealerId(req);
-    let active: DealerMembership | null = null;
-    if (requested != null) {
-      active = dealers.find((d) => d.dealerId === requested) ?? null;
-      if (!active) {
-        // Opaque 404 for no-membership (per spec): don't leak whether the
-        // dealership exists. True RBAC/permission denials remain 403.
-        res.status(404).json({ error: "Not found" });
-        return;
-      }
-    } else {
-      active = dealers[0] ?? null;
-    }
+    // Resolve the active dealer: requested header if valid; no silent
+    // auto-bind for multi-membership users or super admins.
+    const active = await resolveActiveDealer(
+      req,
+      res,
+      user,
+      isSuperAdmin,
+      dealers,
+    );
+    if (active === undefined) return;
 
     const permissions = isSuperAdmin
       ? FULL_PERMISSIONS
@@ -315,7 +428,11 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
       dealerId: active?.dealerId ?? null,
       dealers,
     };
-    if (active) res.locals.dealerId = active.dealerId;
+    if (active) {
+      res.locals.dealerId = active.dealerId;
+      if (active.dealerStatus === "suspended")
+        res.locals.dealerSuspended = true;
+    }
     next();
   } catch (err) {
     next(err);
@@ -474,9 +591,25 @@ export const authorize: RequestHandler = (req, res, next) => {
     return next();
   }
   // Without a dealership, only the auth endpoints are reachable — the client
-  // shows the "no dealership assigned" screen off /auth/me.
+  // shows the "no dealership assigned" / dealer picker screen off /auth/me.
+  // Exception: roles are GLOBAL reference data, and the platform console
+  // (super admin, no bound dealer) needs them to assign dealership members.
   if (user.dealerId == null && segment !== "auth") {
-    res.status(403).json({ error: "No dealership assigned" });
+    const globalRolesRead =
+      user.isSuperAdmin && req.method === "GET" && req.path === "/admin/roles";
+    if (!globalRolesRead) {
+      res.status(403).json({ error: "No dealership assigned" });
+      return;
+    }
+    return next();
+  }
+  // Suspended dealership: data plane frozen. Only auth endpoints stay
+  // reachable so the client can render the suspended state.
+  if (res.locals.dealerSuspended && segment !== "auth") {
+    res.status(403).json({
+      error: "Dealership suspended",
+      code: "dealer_suspended",
+    });
     return;
   }
   const required = routePermission(req);
@@ -512,6 +645,8 @@ export const auditTrail: RequestHandler = (req, res, next) => {
   }
   const segment = req.path.replace(/^\/+/, "").split("/")[0] ?? "";
   if (AUTH_ONLY_SEGMENTS.has(segment)) return next();
+  // Platform routes write their own richer audit rows (platformAudit).
+  if (segment === "platform") return next();
 
   res.on("finish", () => {
     if (res.statusCode < 200 || res.statusCode >= 300) return;

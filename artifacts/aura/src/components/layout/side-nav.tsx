@@ -39,7 +39,14 @@ import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuthz } from "@/lib/auth";
 
-type NavItem = { name: string; href: string; module: string; icon: LucideIcon };
+type NavItem = {
+  name: string;
+  href: string;
+  module: string;
+  icon: LucideIcon;
+  /** Per-dealer entitlement flag gating this item (missing = always on). */
+  ent?: string;
+};
 type Cluster = { label: string; items: NavItem[] };
 
 const CLUSTERS: Cluster[] = [
@@ -48,7 +55,7 @@ const CLUSTERS: Cluster[] = [
     items: [
       { name: "My Day", href: "/command-center", module: "", icon: LayoutDashboard },
       { name: "Reports", href: "/reports", module: "", icon: BarChart3 },
-      { name: "AI Agents", href: "/agents", module: "", icon: Bot },
+      { name: "AI Agents", href: "/agents", module: "", icon: Bot, ent: "ai_agents" },
     ],
   },
   {
@@ -63,9 +70,9 @@ const CLUSTERS: Cluster[] = [
     items: [
       { name: "Inventory", href: "/inventory", module: "inventory", icon: Car },
       { name: "Deliveries", href: "/deliveries", module: "deliveries", icon: Truck },
-      { name: "Service", href: "/service", module: "service", icon: Wrench },
-      { name: "Parts", href: "/parts", module: "parts", icon: Package },
-      { name: "Workshop", href: "/workshop", module: "service", icon: Factory },
+      { name: "Service", href: "/service", module: "service", icon: Wrench, ent: "service_module" },
+      { name: "Parts", href: "/parts", module: "parts", icon: Package, ent: "parts_module" },
+      { name: "Workshop", href: "/workshop", module: "service", icon: Factory, ent: "service_module" },
     ],
   },
   {
@@ -74,7 +81,7 @@ const CLUSTERS: Cluster[] = [
   },
   {
     label: "Compliance",
-    items: [{ name: "GRA Filing", href: "/gra", module: "gra", icon: Stamp }],
+    items: [{ name: "GRA Filing", href: "/gra", module: "gra", icon: Stamp, ent: "gra_module" }],
   },
   {
     label: "Settings",
@@ -297,7 +304,7 @@ const MINIMAL_CLUSTER: Cluster = {
 };
 
 function useNavClusters() {
-  const { can, me } = useAuthz();
+  const { can, me, entitled } = useAuthz();
 
   const fullMenu =
     !!me && (me.isSuperAdmin || FULL_MENU_ROLES.has(me.roleName ?? ""));
@@ -306,7 +313,10 @@ function useNavClusters() {
 
   const clusters = source.map((c) => ({
     ...c,
-    items: c.items.filter((i) => !i.module || can(i.module, "view")),
+    items: c.items.filter(
+      (i) =>
+        (!i.module || can(i.module, "view")) && (!i.ent || entitled(i.ent)),
+    ),
   })).filter((c) => c.items.length > 0);
 
   if (me?.isSuperAdmin) {

@@ -4071,11 +4071,17 @@ paths:
               $ref: "#/components/schemas/DealerInput"
       responses:
         "201":
-          description: Created dealer
+          description: Created dealer (fully provisioned with divisions, roles, stage checklists, and agents)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Dealer"
+        "409":
+          description: A dealer with that name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /platform/dealers/{id}:
     patch:
       operationId: updateDealer
@@ -4193,6 +4199,99 @@ paths:
           description: Removed
         "404":
           description: Not found
+  /platform/dealers/{id}/agents:
+    get:
+      operationId: listDealerAgents
+      tags: [platform]
+      summary: List a dealer's AI agents with their kill switches (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Agent"
+        "404":
+          description: Dealer not found
+  /platform/dealers/{id}/agents/{agentId}:
+    patch:
+      operationId: updateDealerAgent
+      tags: [platform]
+      summary: Flip a dealer agent's kill switch (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentUpdate"
+      responses:
+        "200":
+          description: Updated agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "404":
+          description: Not found
+  /platform/audit:
+    get:
+      operationId: listPlatformAudit
+      tags: [platform]
+      summary: Platform-level audit trail (impersonation, provisioning, suspicious access)
+      parameters:
+        - name: dealerId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Audit entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLogEntry"
+  /platform/impersonation:
+    post:
+      operationId: startImpersonation
+      tags: [platform]
+      summary: Grant yourself an audited, time-boxed impersonation window for a dealer (super admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImpersonationRequest"
+      responses:
+        "201":
+          description: Grant created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImpersonationGrant"
+        "404":
+          description: Dealer not found
   /platform/users:
     get:
       operationId: listPlatformUsers
@@ -5315,6 +5414,8 @@ components:
         status: { type: string }
         isSuperAdmin: { type: boolean }
         activeDealerId: { type: ["integer", "null"] }
+        entitlements:
+          $ref: "#/components/schemas/Entitlements"
         dealers:
           type: array
           items:
@@ -5329,9 +5430,14 @@ components:
       properties:
         dealerId: { type: integer }
         dealerName: { type: string }
+        dealerStatus: { type: string, enum: [active, suspended] }
         roleName: { type: ["string", "null"] }
         isGeneralManager: { type: boolean }
         usdExchangeRate: { type: number, description: "GYD per 1 USD for this dealership" }
+    Entitlements:
+      type: object
+      description: "Per-dealer feature flags; a missing key means enabled"
+      additionalProperties: { type: boolean }
     Dealer:
       type: object
       required: [id, name, status, createdAt]
@@ -5340,8 +5446,10 @@ components:
         name: { type: string }
         city: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
-        status: { type: string, enum: [active, inactive] }
+        status: { type: string, enum: [active, suspended] }
         usdExchangeRate: { type: number, description: "GYD per 1 USD" }
+        entitlements:
+          $ref: "#/components/schemas/Entitlements"
         userCount: { type: integer }
         createdAt: { type: string, format: date-time }
     DealerInput:
@@ -5351,8 +5459,23 @@ components:
         name: { type: string, minLength: 1 }
         city: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
-        status: { type: string, enum: [active, inactive] }
+        status: { type: string, enum: [active, suspended] }
         usdExchangeRate: { type: number, exclusiveMinimum: 0, description: "GYD per 1 USD" }
+        entitlements:
+          $ref: "#/components/schemas/Entitlements"
+    ImpersonationRequest:
+      type: object
+      required: [dealerId]
+      properties:
+        dealerId: { type: integer }
+        reason: { type: ["string", "null"] }
+    ImpersonationGrant:
+      type: object
+      required: [id, dealerId, expiresAt]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        expiresAt: { type: string, format: date-time }
     Division:
       type: object
       required: [id, dealerId, name, code]

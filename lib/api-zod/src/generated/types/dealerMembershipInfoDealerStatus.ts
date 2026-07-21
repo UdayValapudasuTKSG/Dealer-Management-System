@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type DealerStatus = typeof DealerStatus[keyof typeof DealerStatus];
+export type DealerMembershipInfoDealerStatus = typeof DealerMembershipInfoDealerStatus[keyof typeof DealerMembershipInfoDealerStatus];
 
 
-export const DealerStatus = {
+export const DealerMembershipInfoDealerStatus = {
   active: 'active',
   suspended: 'suspended',
 } as const;

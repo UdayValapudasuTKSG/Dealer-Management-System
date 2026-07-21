@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DealerMembershipInfo } from './dealerMembershipInfo';
+import type { Entitlements } from './entitlements';
 import type { PermissionGrant } from './permissionGrant';
 
 export interface CurrentUser {
@@ -25,6 +26,7 @@ export interface CurrentUser {
   isSuperAdmin: boolean;
   /** @nullable */
   activeDealerId?: number | null;
+  entitlements?: Entitlements;
   dealers: DealerMembershipInfo[];
   permissions: PermissionGrant[];
 }

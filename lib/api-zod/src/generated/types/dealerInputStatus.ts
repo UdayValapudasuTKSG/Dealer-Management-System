@@ -11,5 +11,5 @@ export type DealerInputStatus = typeof DealerInputStatus[keyof typeof DealerInpu
 
 export const DealerInputStatus = {
   active: 'active',
-  inactive: 'inactive',
+  suspended: 'suspended',
 } as const;

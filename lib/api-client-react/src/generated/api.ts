@@ -124,6 +124,8 @@ import type {
   GraFilingDraft,
   GraFilingSubmission,
   HealthStatus,
+  ImpersonationGrant,
+  ImpersonationRequest,
   InventoryBreakdownItem,
   Invoice,
   InvoiceInput,
@@ -166,6 +168,7 @@ import type {
   ListLeadSourcesParams,
   ListLeadsParams,
   ListPartsParams,
+  ListPlatformAuditParams,
   ListReviewsParams,
   ListServiceInvoicesParams,
   ListServiceOrdersParams,
@@ -12909,7 +12912,7 @@ export const createDealer = async (dealerInput: DealerInput, options?: RequestIn
 
 
 
-export const getCreateDealerMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateDealerMutationOptions = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDealer>>, TError,{data: BodyType<DealerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createDealer>>, TError,{data: BodyType<DealerInput>}, TContext> => {
 
@@ -12938,12 +12941,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateDealerMutationResult = NonNullable<Awaited<ReturnType<typeof createDealer>>>
     export type CreateDealerMutationBody = BodyType<DealerInput>
-    export type CreateDealerMutationError = ErrorType<unknown>
+    export type CreateDealerMutationError = ErrorType<Error>
 
     /**
  * @summary Create a dealer (super admin only)
  */
-export const useCreateDealer = <TError = ErrorType<unknown>,
+export const useCreateDealer = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDealer>>, TError,{data: BodyType<DealerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createDealer>>,
@@ -13320,6 +13323,312 @@ export const useRemoveDealerMember = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRemoveDealerMemberMutationOptions(options));
+    }
+
+export const getListDealerAgentsUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/agents`
+}
+
+/**
+ * @summary List a dealer's AI agents with their kill switches (super admin only)
+ */
+export const listDealerAgents = async (id: number, options?: RequestInit): Promise<Agent[]> => {
+
+  return customFetch<Agent[]>(getListDealerAgentsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDealerAgentsQueryKey = (id: number,) => {
+    return [
+    `/api/platform/dealers/${id}/agents`
+    ] as const;
+    }
+
+
+export const getListDealerAgentsQueryOptions = <TData = Awaited<ReturnType<typeof listDealerAgents>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealerAgents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDealerAgentsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDealerAgents>>> = ({ signal }) => listDealerAgents(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDealerAgents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDealerAgentsQueryResult = NonNullable<Awaited<ReturnType<typeof listDealerAgents>>>
+export type ListDealerAgentsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List a dealer's AI agents with their kill switches (super admin only)
+ */
+
+export function useListDealerAgents<TData = Awaited<ReturnType<typeof listDealerAgents>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealerAgents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDealerAgentsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateDealerAgentUrl = (id: number,
+    agentId: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/agents/${agentId}`
+}
+
+/**
+ * @summary Flip a dealer agent's kill switch (super admin only)
+ */
+export const updateDealerAgent = async (id: number,
+    agentId: number,
+    agentUpdate: AgentUpdate, options?: RequestInit): Promise<Agent> => {
+
+  return customFetch<Agent>(getUpdateDealerAgentUrl(id,agentId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateDealerAgentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerAgent>>, TError,{id: number;agentId: number;data: BodyType<AgentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateDealerAgent>>, TError,{id: number;agentId: number;data: BodyType<AgentUpdate>}, TContext> => {
+
+const mutationKey = ['updateDealerAgent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateDealerAgent>>, {id: number;agentId: number;data: BodyType<AgentUpdate>}> = (props) => {
+          const {id,agentId,data} = props ?? {};
+
+          return  updateDealerAgent(id,agentId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateDealerAgentMutationResult = NonNullable<Awaited<ReturnType<typeof updateDealerAgent>>>
+    export type UpdateDealerAgentMutationBody = BodyType<AgentUpdate>
+    export type UpdateDealerAgentMutationError = ErrorType<void>
+
+    /**
+ * @summary Flip a dealer agent's kill switch (super admin only)
+ */
+export const useUpdateDealerAgent = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerAgent>>, TError,{id: number;agentId: number;data: BodyType<AgentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateDealerAgent>>,
+        TError,
+        {id: number;agentId: number;data: BodyType<AgentUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateDealerAgentMutationOptions(options));
+    }
+
+export const getListPlatformAuditUrl = (params?: ListPlatformAuditParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/platform/audit?${stringifiedParams}` : `/api/platform/audit`
+}
+
+/**
+ * @summary Platform-level audit trail (impersonation, provisioning, suspicious access)
+ */
+export const listPlatformAudit = async (params?: ListPlatformAuditParams, options?: RequestInit): Promise<AuditLogEntry[]> => {
+
+  return customFetch<AuditLogEntry[]>(getListPlatformAuditUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPlatformAuditQueryKey = (params?: ListPlatformAuditParams,) => {
+    return [
+    `/api/platform/audit`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPlatformAuditQueryOptions = <TData = Awaited<ReturnType<typeof listPlatformAudit>>, TError = ErrorType<unknown>>(params?: ListPlatformAuditParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPlatformAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPlatformAuditQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPlatformAudit>>> = ({ signal }) => listPlatformAudit(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPlatformAudit>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPlatformAuditQueryResult = NonNullable<Awaited<ReturnType<typeof listPlatformAudit>>>
+export type ListPlatformAuditQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Platform-level audit trail (impersonation, provisioning, suspicious access)
+ */
+
+export function useListPlatformAudit<TData = Awaited<ReturnType<typeof listPlatformAudit>>, TError = ErrorType<unknown>>(
+ params?: ListPlatformAuditParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPlatformAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPlatformAuditQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getStartImpersonationUrl = () => {
+
+
+
+
+  return `/api/platform/impersonation`
+}
+
+/**
+ * @summary Grant yourself an audited, time-boxed impersonation window for a dealer (super admin only)
+ */
+export const startImpersonation = async (impersonationRequest: ImpersonationRequest, options?: RequestInit): Promise<ImpersonationGrant> => {
+
+  return customFetch<ImpersonationGrant>(getStartImpersonationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(impersonationRequest)
+  }
+);}
+
+
+
+
+
+export const getStartImpersonationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startImpersonation>>, TError,{data: BodyType<ImpersonationRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startImpersonation>>, TError,{data: BodyType<ImpersonationRequest>}, TContext> => {
+
+const mutationKey = ['startImpersonation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startImpersonation>>, {data: BodyType<ImpersonationRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  startImpersonation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartImpersonationMutationResult = NonNullable<Awaited<ReturnType<typeof startImpersonation>>>
+    export type StartImpersonationMutationBody = BodyType<ImpersonationRequest>
+    export type StartImpersonationMutationError = ErrorType<void>
+
+    /**
+ * @summary Grant yourself an audited, time-boxed impersonation window for a dealer (super admin only)
+ */
+export const useStartImpersonation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startImpersonation>>, TError,{data: BodyType<ImpersonationRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startImpersonation>>,
+        TError,
+        {data: BodyType<ImpersonationRequest>},
+        TContext
+      > => {
+      return useMutation(getStartImpersonationMutationOptions(options));
     }
 
 export const getListPlatformUsersUrl = () => {

@@ -50,6 +50,9 @@ router.get("/auth/me", async (_req, res): Promise<void> => {
       status: user.status,
       isSuperAdmin: user.isSuperAdmin,
       activeDealerId: user.dealerId,
+      entitlements:
+        user.dealers.find((d) => d.dealerId === user.dealerId)?.entitlements ??
+        {},
       dealers: user.dealers,
       permissions: user.permissions,
     }),

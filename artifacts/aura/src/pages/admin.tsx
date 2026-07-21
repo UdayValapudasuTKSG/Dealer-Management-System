@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
@@ -8,6 +9,12 @@ import {
   Trash2,
   ShieldCheck,
   Crown,
+  Bot,
+  ScrollText,
+  LogIn,
+  PauseCircle,
+  PlayCircle,
+  Sparkles,
 } from "lucide-react";
 import {
   useListDealers,
@@ -21,12 +28,21 @@ import {
   useRemoveDealerMember,
   useListPlatformUsers,
   useListAdminRoles,
+  useListDealerAgents,
+  getListDealerAgentsQueryKey,
+  useUpdateDealerAgent,
+  useListPlatformAudit,
 } from "@workspace/api-client-react";
-import type { Dealer, DealerMember } from "@workspace/api-client-react";
+import type {
+  Dealer,
+  DealerMember,
+  Entitlements,
+} from "@workspace/api-client-react";
 import { Page } from "@/components/layout/page";
 import { PageHero } from "@/components/layout/page-hero";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +59,20 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useAuthz } from "@/lib/auth";
+import { formatGuyanaDateTime } from "@/lib/format";
+
+/** Feature modules a dealership can be entitled to. Missing key = enabled. */
+const ENTITLEMENT_MODULES: { key: string; label: string; hint: string }[] = [
+  { key: "service_module", label: "Service & Workshop", hint: "Service orders, job cards, workshop board" },
+  { key: "parts_module", label: "Parts & Suppliers", hint: "Parts inventory, purchases, suppliers" },
+  { key: "gra_module", label: "GRA Compliance", hint: "Duty filing and customs workflows" },
+  { key: "ai_agents", label: "AI Agents", hint: "All agentic automations for this dealership" },
+];
+
+function entitlementOn(flags: Entitlements | undefined, key: string) {
+  return flags?.[key] !== false;
+}
 
 function DealerDialog({
   dealer,
@@ -58,7 +88,9 @@ function DealerDialog({
   const [name, setName] = useState(dealer?.name ?? "");
   const [city, setCity] = useState(dealer?.city ?? "");
   const [country, setCountry] = useState(dealer?.country ?? "");
-  const [status, setStatus] = useState(dealer?.status ?? "active");
+  const [status, setStatus] = useState<"active" | "suspended">(
+    dealer?.status ?? "active",
+  );
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: getListDealersQueryKey() });
@@ -67,7 +99,11 @@ function DealerDialog({
     mutation: {
       onSuccess: () => {
         invalidate();
-        toast({ title: "Dealership created" });
+        toast({
+          title: "Dealership created",
+          description:
+            "Divisions, roles, stage checklists, and AI agents were provisioned automatically.",
+        });
         onClose();
       },
       onError: (e: unknown) =>
@@ -99,7 +135,7 @@ function DealerDialog({
       name: name.trim(),
       city: city.trim() || null,
       country: country.trim() || null,
-      status: status as "active" | "inactive",
+      status,
     };
     if (!data.name) return;
     if (dealer) update.mutate({ id: dealer.id, data });
@@ -132,21 +168,39 @@ function DealerDialog({
               />
             </div>
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Status</label>
-            <Select
-              value={status}
-              onValueChange={(v) => setStatus(v as "active" | "inactive")}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {dealer && (
+            <div>
+              <label className="text-xs text-muted-foreground">Status</label>
+              <Select
+                value={status}
+                onValueChange={(v) => setStatus(v as "active" | "suspended")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="suspended">Suspended</SelectItem>
+                </SelectContent>
+              </Select>
+              {status === "suspended" && dealer.status === "active" && (
+                <p className="mt-1.5 text-xs text-amber-500">
+                  Suspending freezes this dealership&apos;s workspace and
+                  pauses all of its AI agents.
+                </p>
+              )}
+            </div>
+          )}
+          {!dealer && (
+            <div className="rounded-lg border border-primary/20 bg-primary/[0.06] px-3 py-2.5 text-xs text-muted-foreground flex items-start gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+              <span>
+                New dealerships are provisioned automatically with default
+                divisions, roles &amp; permissions, stage checklists, and the
+                full AI agent roster.
+              </span>
+            </div>
+          )}
           <Button
             className="w-full"
             onClick={submit}
@@ -157,6 +211,149 @@ function DealerDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function EntitlementsPanel({ dealer }: { dealer: Dealer }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const update = useUpdateDealer({
+    mutation: {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: getListDealersQueryKey(),
+        });
+        toast({ title: "Entitlements updated" });
+      },
+      onError: (e: unknown) =>
+        toast({
+          title: "Could not update entitlements",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+
+  const toggle = (key: string, on: boolean) =>
+    update.mutate({
+      id: dealer.id,
+      data: {
+        name: dealer.name,
+        city: dealer.city ?? null,
+        country: dealer.country ?? null,
+        status: dealer.status,
+        entitlements: { ...(dealer.entitlements ?? {}), [key]: on },
+      },
+    });
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-foreground/[0.02] p-4">
+      <div className="flex items-center gap-2 text-sm font-semibold mb-3">
+        <ShieldCheck className="h-4 w-4 text-primary" /> Feature entitlements
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {ENTITLEMENT_MODULES.map((m) => {
+          const on = entitlementOn(dealer.entitlements, m.key);
+          return (
+            <div
+              key={m.key}
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5 bg-foreground/[0.03] border border-white/[0.06]"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium">{m.label}</div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {m.hint}
+                </div>
+              </div>
+              <Switch
+                checked={on}
+                disabled={update.isPending}
+                onCheckedChange={(v) => toggle(m.key, v)}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AgentsPanel({ dealer }: { dealer: Dealer }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: agents } = useListDealerAgents(dealer.id);
+
+  const patch = useUpdateDealerAgent({
+    mutation: {
+      onSuccess: () =>
+        void queryClient.invalidateQueries({
+          queryKey: getListDealerAgentsQueryKey(dealer.id),
+        }),
+      onError: (e: unknown) =>
+        toast({
+          title: "Could not update agent",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+
+  const aiEntitled = entitlementOn(dealer.entitlements, "ai_agents");
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-foreground/[0.02] p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Bot className="h-4 w-4 text-primary" /> AI agent kill switches
+        </div>
+        {(!aiEntitled || dealer.status === "suspended") && (
+          <Badge variant="secondary" className="text-amber-400">
+            {dealer.status === "suspended"
+              ? "Suspended — all agents halted"
+              : "AI agents disabled by entitlement"}
+          </Badge>
+        )}
+      </div>
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        {(agents ?? []).map((a) => {
+          const running = a.status !== "paused";
+          return (
+            <div
+              key={a.id}
+              className="flex items-center gap-3 rounded-lg px-3 py-2 bg-foreground/[0.03] border border-white/[0.06]"
+            >
+              {running ? (
+                <PlayCircle className="h-4 w-4 text-emerald-400 shrink-0" />
+              ) : (
+                <PauseCircle className="h-4 w-4 text-amber-400 shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">{a.name}</div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {a.domain}
+                </div>
+              </div>
+              <Switch
+                checked={running}
+                disabled={patch.isPending}
+                onCheckedChange={(v) =>
+                  patch.mutate({
+                    id: dealer.id,
+                    agentId: a.id,
+                    data: { status: v ? "active" : "paused" },
+                  })
+                }
+              />
+            </div>
+          );
+        })}
+        {(agents ?? []).length === 0 && (
+          <div className="text-sm text-muted-foreground py-4 text-center sm:col-span-2">
+            No agents provisioned for this dealership.
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -378,30 +575,92 @@ function MembersPanel({ dealer }: { dealer: Dealer }) {
   );
 }
 
+const AUDIT_ACTION_STYLES: Record<string, string> = {
+  provision: "text-emerald-400",
+  suspend: "text-amber-400",
+  activate: "text-emerald-400",
+  impersonate: "text-gold",
+  access_denied: "text-red-400",
+};
+
+function AuditPanel() {
+  const { data: entries } = useListPlatformAudit({ limit: 100 });
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-foreground/[0.02] divide-y divide-white/[0.06]">
+      {(entries ?? []).map((e) => (
+        <div key={e.id} className="flex items-start gap-3 px-4 py-3">
+          <ScrollText className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm leading-snug">{e.summary}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              {e.actorEmail ?? e.actorName ?? "System"} ·{" "}
+              {formatGuyanaDateTime(e.createdAt)}
+            </div>
+          </div>
+          <span
+            className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${
+              AUDIT_ACTION_STYLES[e.action] ?? "text-muted-foreground"
+            }`}
+          >
+            {e.action.replace(/_/g, " ")}
+          </span>
+        </div>
+      ))}
+      {(entries ?? []).length === 0 && (
+        <div className="text-sm text-muted-foreground py-8 text-center">
+          No platform activity yet.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPage() {
   const { data: dealers } = useListDealers();
   const { data: platformUsers } = useListPlatformUsers();
+  const { switchDealer, me } = useAuthz();
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [dialogDealer, setDialogDealer] = useState<Dealer | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [entering, setEntering] = useState(false);
 
   const selected =
     (dealers ?? []).find((d) => d.id === selectedId) ?? (dealers ?? [])[0];
 
+  const enterWorkspace = async (d: Dealer) => {
+    setEntering(true);
+    try {
+      await switchDealer(d.id);
+      if (me?.isSuperAdmin) {
+        toast({
+          title: `Entered ${d.name}`,
+          description:
+            "An audited 8-hour impersonation window was opened for this workspace.",
+        });
+      }
+      navigate("/command-center");
+    } finally {
+      setEntering(false);
+    }
+  };
+
   return (
     <>
     <PageHero
-
       eyebrow="Platform Control"
       title="Platform"
-      accent="Admin"
-      subtitle="Manage dealerships, memberships, and platform users"
+      accent="Console"
+      subtitle="Onboard dealerships, manage entitlements, agents, and access"
     />
     <Page>
       <Tabs defaultValue="dealers" className="space-y-5">
         <TabsList>
           <TabsTrigger value="dealers">Dealerships</TabsTrigger>
           <TabsTrigger value="users">All Users</TabsTrigger>
+          <TabsTrigger value="audit">Platform Audit</TabsTrigger>
         </TabsList>
 
         <TabsContent value="dealers" className="space-y-5">
@@ -420,10 +679,15 @@ export default function AdminPage() {
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {(dealers ?? []).map((d) => (
-              <button
+              <div
                 key={d.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedId(d.id)}
-                className={`text-left rounded-xl border p-4 transition-colors ${
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") setSelectedId(d.id);
+                }}
+                className={`text-left cursor-pointer rounded-xl border p-4 transition-colors ${
                   selected?.id === d.id
                     ? "border-primary/50 bg-primary/[0.06]"
                     : "border-white/10 bg-foreground/[0.02] hover:bg-foreground/[0.04]"
@@ -442,6 +706,9 @@ export default function AdminPage() {
                   <div className="flex flex-col items-end gap-1">
                     <Badge
                       variant={d.status === "active" ? "default" : "secondary"}
+                      className={
+                        d.status === "suspended" ? "text-amber-400" : undefined
+                      }
                     >
                       {d.status}
                     </Badge>
@@ -450,7 +717,23 @@ export default function AdminPage() {
                     </span>
                   </div>
                 </div>
-                <div className="mt-3 flex justify-end">
+                <div className="mt-3 flex items-center justify-end gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={d.status === "suspended" || entering}
+                    title={
+                      d.status === "suspended"
+                        ? "Suspended dealerships cannot be entered"
+                        : "Open this dealership's workspace (audited)"
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void enterWorkspace(d);
+                    }}
+                  >
+                    <LogIn className="h-3.5 w-3.5 mr-1" /> Enter workspace
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -463,10 +746,16 @@ export default function AdminPage() {
                     <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
                   </Button>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
-          {selected && <MembersPanel key={selected.id} dealer={selected} />}
+          {selected && (
+            <div className="space-y-4">
+              <EntitlementsPanel key={`ent-${selected.id}`} dealer={selected} />
+              <AgentsPanel key={`agents-${selected.id}`} dealer={selected} />
+              <MembersPanel key={`members-${selected.id}`} dealer={selected} />
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="users">
@@ -507,6 +796,10 @@ export default function AdminPage() {
             )}
           </div>
         </TabsContent>
+
+        <TabsContent value="audit">
+          <AuditPanel />
+        </TabsContent>
       </Tabs>
 
       {dialogOpen && (
@@ -520,7 +813,8 @@ export default function AdminPage() {
 
       <div className="mt-8 flex items-center gap-2 text-xs text-muted-foreground">
         <ShieldCheck className="h-4 w-4 text-primary" />
-        Platform administration is only visible to the super admin.
+        Platform administration is only visible to the super admin. Workspace
+        entries are audited impersonation windows.
       </div>
     </Page>
     </>

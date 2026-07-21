@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DealerStatus } from './dealerStatus';
+import type { Entitlements } from './entitlements';
 
 export interface Dealer {
   id: number;
@@ -17,6 +18,7 @@ export interface Dealer {
   status: DealerStatus;
   /** GYD per 1 USD */
   usdExchangeRate?: number;
+  entitlements?: Entitlements;
   userCount?: number;
   createdAt: Date;
 }

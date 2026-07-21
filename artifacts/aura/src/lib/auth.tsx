@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useGetCurrentUser } from "@workspace/api-client-react";
+import { useGetCurrentUser, startImpersonation } from "@workspace/api-client-react";
 import type {
   CurrentUser,
   DealerMembershipInfo,
@@ -18,15 +18,18 @@ type AuthContextValue = {
   me: CurrentUser | null;
   isLoading: boolean;
   can: (module: string, category: string) => boolean;
+  /** Per-dealer feature flag: missing key = enabled. */
+  entitled: (key: string) => boolean;
   dealers: DealerMembershipInfo[];
   activeDealer: DealerMembershipInfo | null;
-  switchDealer: (dealerId: number) => void;
+  switchDealer: (dealerId: number) => void | Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue>({
   me: null,
   isLoading: true,
   can: () => false,
+  entitled: () => true,
   dealers: [],
   activeDealer: null,
   switchDealer: () => {},
@@ -34,7 +37,7 @@ const AuthContext = createContext<AuthContextValue>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useGetCurrentUser();
+  const { data, isLoading, error } = useGetCurrentUser();
   const me = data ?? null;
 
   const dealers = me?.dealers ?? [];
@@ -51,8 +54,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [me]);
 
+  // Self-heal a stale x-dealer-id: if the stored dealer no longer resolves
+  // (membership removed → 404, or a super admin's impersonation grant
+  // expired → 403), clear it and retry so the user lands on the picker /
+  // console instead of a dead app.
+  useEffect(() => {
+    if (!error) return;
+    const status = (error as { status?: number }).status;
+    if (
+      (status === 404 || status === 403) &&
+      localStorage.getItem(DEALER_STORAGE_KEY)
+    ) {
+      localStorage.removeItem(DEALER_STORAGE_KEY);
+      void queryClient.resetQueries();
+    }
+  }, [error, queryClient]);
+
   const switchDealer = useCallback(
-    (dealerId: number) => {
+    async (dealerId: number) => {
+      // Super admins need an explicit, audited impersonation grant before
+      // the server will bind them to a dealership workspace.
+      if (me?.isSuperAdmin) {
+        try {
+          await startImpersonation({ dealerId });
+        } catch {
+          return; // grant refused — stay where we are
+        }
+      }
       localStorage.setItem(DEALER_STORAGE_KEY, String(dealerId));
       // All cached data belongs to the previous dealer. resetQueries (NOT
       // clear) drops the data AND refetches every active query so mounted
@@ -60,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // components showing the old dealer's data until a full page reload.
       void queryClient.resetQueries();
     },
-    [queryClient],
+    [queryClient, me?.isSuperAdmin],
   );
 
   const can = (module: string, category: string) =>
@@ -70,9 +98,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (p.category === category || p.category === "admin"),
     );
 
+  // Missing key = enabled (per-dealer entitlements are deny-list flags).
+  const entitled = (key: string) => {
+    const flags = me?.entitlements as Record<string, boolean> | undefined;
+    return flags?.[key] !== false;
+  };
+
   return (
     <AuthContext.Provider
-      value={{ me, isLoading, can, dealers, activeDealer, switchDealer }}
+      value={{ me, isLoading, can, entitled, dealers, activeDealer, switchDealer }}
     >
       {children}
     </AuthContext.Provider>

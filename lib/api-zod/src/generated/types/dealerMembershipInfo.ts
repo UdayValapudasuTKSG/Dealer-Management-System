@@ -5,10 +5,12 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DealerMembershipInfoDealerStatus } from './dealerMembershipInfoDealerStatus';
 
 export interface DealerMembershipInfo {
   dealerId: number;
   dealerName: string;
+  dealerStatus?: DealerMembershipInfoDealerStatus;
   /** @nullable */
   roleName?: string | null;
   isGeneralManager?: boolean;

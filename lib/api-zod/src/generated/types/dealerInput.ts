@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DealerInputStatus } from './dealerInputStatus';
+import type { Entitlements } from './entitlements';
 
 export interface DealerInput {
   /** @minLength 1 */
@@ -20,4 +21,5 @@ export interface DealerInput {
      * @exclusiveMinimum 0
      */
   usdExchangeRate?: number;
+  entitlements?: Entitlements;
 }

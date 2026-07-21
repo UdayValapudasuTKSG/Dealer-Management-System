@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Switch, Route, Redirect, useLocation, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, Show, useClerk } from "@clerk/react";
@@ -41,6 +41,7 @@ import SettingsAudit from "@/pages/settings-audit";
 import NotFound from "@/pages/not-found";
 import AdminPage from "@/pages/admin";
 import NoDealership from "@/pages/no-dealership";
+import DealerPicker, { DealerSuspended } from "@/pages/dealer-picker";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -171,22 +172,39 @@ const testPersonaActive =
     }
   })();
 
+/* CopilotKit needs a dealer-scoped runtime; a super admin browsing the
+   Platform Console without an active workspace would get 403s from the
+   runtime, so skip the wrapper entirely in that state. */
+function MaybeCopilot({ children }: { children: ReactNode }) {
+  const { activeDealer } = useAuthz();
+  if (!activeDealer) return <>{children}</>;
+  return (
+    <CopilotKit
+      runtimeUrl={`${import.meta.env.BASE_URL}api/copilotkit`}
+      headers={
+        testPersonaActive
+          ? {
+              "x-test-user-email":
+                localStorage.getItem("aura-test-user-email") ?? "",
+            }
+          : undefined
+      }
+    >
+      {children}
+    </CopilotKit>
+  );
+}
+
 function AppShell() {
   if (testPersonaActive) {
     return (
       <AuthProvider>
         <DealershipGate>
-          <CopilotKit
-            runtimeUrl={`${import.meta.env.BASE_URL}api/copilotkit`}
-            headers={{
-              "x-test-user-email":
-                localStorage.getItem("aura-test-user-email") ?? "",
-            }}
-          >
+          <MaybeCopilot>
             <Shell>
               <AppRoutes />
             </Shell>
-          </CopilotKit>
+          </MaybeCopilot>
         </DealershipGate>
       </AuthProvider>
     );
@@ -196,11 +214,11 @@ function AppShell() {
       <Show when="signed-in">
         <AuthProvider>
           <DealershipGate>
-          <CopilotKit runtimeUrl={`${import.meta.env.BASE_URL}api/copilotkit`}>
+          <MaybeCopilot>
             <Shell>
               <AppRoutes />
             </Shell>
-          </CopilotKit>
+          </MaybeCopilot>
           </DealershipGate>
         </AuthProvider>
       </Show>
@@ -288,11 +306,27 @@ function AppRoutes() {
 }
 
 // Signed-in users without any dealership membership see a dedicated screen
-// (the first-user-becomes-GM rule is retired). Super admins always pass.
+// (the first-user-becomes-GM rule is retired). Multi-dealership users with
+// no bound workspace pick one explicitly (never silently auto-bound), and a
+// suspended dealership freezes the workspace. Super admins with no active
+// impersonation land on the Platform Console.
 function DealershipGate({ children }: { children: React.ReactNode }) {
-  const { me, isLoading } = useAuthz();
-  if (!isLoading && me && !me.isSuperAdmin && me.activeDealerId == null) {
-    return <NoDealership />;
+  const { me, isLoading, dealers, activeDealer } = useAuthz();
+  const [location] = useLocation();
+  if (isLoading || !me) return <>{children}</>;
+  if (me.isSuperAdmin) {
+    // No bound workspace → the console is the only meaningful destination.
+    if (me.activeDealerId == null && location !== "/admin") {
+      return <Redirect to="/admin" />;
+    }
+    return <>{children}</>;
+  }
+  if (me.activeDealerId == null) {
+    if (dealers.length === 0) return <NoDealership />;
+    return <DealerPicker />;
+  }
+  if (activeDealer?.dealerStatus === "suspended") {
+    return <DealerSuspended dealerName={activeDealer.dealerName} />;
   }
   return <>{children}</>;
 }
