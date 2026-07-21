@@ -21,6 +21,14 @@ import { recordWhatsappMessage } from "./whatsapp-log";
 // Transport
 // ---------------------------------------------------------------------------
 
+/**
+ * Header stamped on every email the server sends. The Gmail intake agent
+ * skips messages carrying it, so system mail (quotes, reminders, lifecycle
+ * emails) sent from the monitored inbox to itself never loops back into leads
+ * — while genuine self-sent human mail is still processed.
+ */
+export const SYSTEM_MAIL_HEADER = "X-AURA-System";
+
 export function smtpConfigured(): boolean {
   return Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
 }
@@ -610,6 +618,9 @@ export async function processQueue(): Promise<void> {
           to: item.recipient,
           subject,
           html,
+          // Marks system-originated mail so the Gmail intake agent never
+          // re-ingests our own outbound (quotes, reminders, tests) as leads.
+          headers: { [SYSTEM_MAIL_HEADER]: "1" },
           ...(attachments ? { attachments } : {}),
           ...(icalEvent ? { icalEvent } : {}),
         });

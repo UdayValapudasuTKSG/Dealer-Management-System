@@ -8,7 +8,7 @@ import {
   timelineEventsTable,
   webhookEventsTable,
 } from "@workspace/db";
-import { notifyUser } from "./email";
+import { notifyUser, SYSTEM_MAIL_HEADER } from "./email";
 import { createInboundLead, matchVehicleByText } from "./lead-intake";
 import { defaultDealerId } from "./tenancy";
 import { logger } from "./logger";
@@ -190,6 +190,10 @@ async function handleEnquiry(opts: {
   extraction: Extraction;
 }): Promise<number | null> {
   const dealerId = await defaultDealerId();
+  // Self-lead edge: when the sender is the monitored inbox itself (self-sent
+  // test/enquiry mail), repeat self-sends fold into the first open self-lead
+  // via this email lookup — same behavior as any repeat sender. Acceptable:
+  // self-sent mail is a testing/notes-to-self path, not distinct customers.
   const existing = await findOpenLeadByEmail(dealerId, opts.fromEmail);
   if (existing) {
     await db.insert(timelineEventsTable).values({
@@ -344,7 +348,16 @@ export async function pollGmailInbox(): Promise<void> {
           }
 
           // Never loop the system's own outbound mail back into leads.
-          if (!fromAddr || fromAddr === cfg.user.trim().toLowerCase()) {
+          // System mail is identified by the X-AURA-System header stamped in
+          // email.ts — NOT by sender address, so genuine self-sent human mail
+          // (e.g. notes-to-self from the monitored inbox) is still processed.
+          // Bounce/daemon senders are also skipped.
+          const isSystemMail = parsed.headers.has(
+            SYSTEM_MAIL_HEADER.toLowerCase(),
+          );
+          const isBounceSender =
+            /^(mailer-daemon|postmaster|no-?reply)@/i.test(fromAddr);
+          if (!fromAddr || isSystemMail || isBounceSender) {
             await recordProcessed(messageId, null);
             await markHandled(client, uid, hasProcessedBox);
             continue;
