@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import Lenis from "lenis";
-import { ArrowRight, Loader2, CircleCheck, CheckCircle2, MapPin, Map, Clock, Truck, ShieldCheck } from "lucide-react";
+import { ArrowRight, Loader2, CircleCheck, Play, Briefcase, FileSignature, CarFront, CheckCircle2, Workflow } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -201,25 +201,57 @@ function EnquiryDialog({
   );
 }
 
-const REGIONS = [
-  { name: "Georgetown & Coast", time: "Same Day / 24 Hours", desc: "Express delivery for the capital and surrounding coastal areas." },
-  { name: "Linden & Region 10", time: "24 - 48 Hours", desc: "Dedicated transport to the mining town and environs." },
-  { name: "New Amsterdam & Berbice", time: "24 - 48 Hours", desc: "Reliable dispatch along the eastern corridor." },
-  { name: "Anna Regina & Essequibo", time: "2 - 3 Days", desc: "Coordinated ferry and road transport to the Essequibo coast." },
-  { name: "Bartica", time: "2 - 3 Days", desc: "Secure barge and road logistics to the gateway of the interior." },
-  { name: "Lethem & Rupununi", time: "3 - 5 Days", desc: "Specialized interior transport via the Lethem trail." },
+const STAGES = [
+  {
+    id: "lead",
+    title: "Intelligence Captured",
+    desc: "Aura identifies high-intent leads across WhatsApp, social, and web. Immediate AI triage ensures zero missed opportunities.",
+    icon: Workflow,
+    video: "office_operations.mp4",
+  },
+  {
+    id: "engage",
+    title: "Advisor Engagement",
+    desc: "A single pane of glass for all customer context. The advisor orchestrates the relationship with full history at their fingertips.",
+    icon: Briefcase,
+    video: "pipeline_sales_floor.mp4",
+  },
+  {
+    id: "testdrive",
+    title: "The Experience",
+    desc: "Seamless test drive scheduling, digital liability waivers, and real-time fleet tracking. The car leaves the showroom, the deal stays on track.",
+    icon: CarFront,
+    video: "red_car_leaving_showroom.mp4",
+  },
+  {
+    id: "finance",
+    title: "Finance & Approvals",
+    desc: "Instant credit checks, automated GRA compliance, and one-click documentation. Turning days of paperwork into minutes.",
+    icon: FileSignature,
+    video: "finance_signing.mp4",
+  },
+  {
+    id: "delivery",
+    title: "Delivery & Handover",
+    desc: "The keys are handed over. Automated post-sale workflows trigger service reminders, CRM updates, and satisfaction surveys.",
+    icon: CheckCircle2,
+    video: "customer_handover.mp4",
+  },
 ];
 
 export default function Landing() {
   const [enquiryOpen, setEnquiryOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const heroRef = useRef<HTMLElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const heroContentRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const carRef = useRef<HTMLImageElement>(null);
+  const pathRef = useRef<SVGPathElement>(null);
+  const prefersReducedMotion = useReducedMotion();
 
-  // Lenis smooth scroll + GSAP scrubbed scroll effects
+  // GSAP Scroll Experience
   useEffect(() => {
-    const lenis = new Lenis({ lerp: 0.09 });
+    if (prefersReducedMotion) return;
+
+    const lenis = new Lenis({ lerp: 0.08 });
     lenis.on("scroll", ScrollTrigger.update);
     const raf = (time: number) => lenis.raf(time * 1000);
     gsap.ticker.add(raf);
@@ -227,50 +259,84 @@ export default function Landing() {
     const restoreLagSmoothing = () => gsap.ticker.lagSmoothing(500, 33);
 
     const ctx = gsap.context(() => {
-      // Pinned hero: video slowly zooms while the copy drifts up and fades
-      gsap.to(videoRef.current, {
-        scale: 1.18,
-        ease: "none",
-        scrollTrigger: {
-          trigger: heroRef.current,
-          start: "top top",
-          end: "+=60%",
-          scrub: true,
-          pin: true,
-          pinSpacing: true,
-        },
+      // Pin the car and animate it along the vertical path
+      const stages = gsap.utils.toArray<HTMLElement>('.pipeline-stage');
+      
+      stages.forEach((stage, i) => {
+        const video = stage.querySelector('video');
+        const content = stage.querySelector('.stage-content');
+        
+        // Stage enter/exit animations
+        gsap.fromTo(content, 
+          { opacity: 0, y: 50 },
+          {
+            opacity: 1, 
+            y: 0,
+            scrollTrigger: {
+              trigger: stage,
+              start: "top center",
+              end: "center center",
+              scrub: true,
+            }
+          }
+        );
+
+        if (video) {
+          ScrollTrigger.create({
+            trigger: stage,
+            start: "top center",
+            end: "bottom center",
+            onEnter: () => video.play().catch(() => {}),
+            onLeave: () => video.pause(),
+            onEnterBack: () => video.play().catch(() => {}),
+            onLeaveBack: () => video.pause(),
+          });
+        }
       });
-      gsap.to(heroContentRef.current, {
-        yPercent: -22,
-        opacity: 0,
-        ease: "none",
-        scrollTrigger: {
-          trigger: heroRef.current,
-          start: "top top",
-          end: "+=45%",
-          scrub: true,
-        },
-      });
-      // Parallax drift on showcase imagery
-      gsap.utils
-        .toArray<HTMLElement>("[data-parallax]")
-        .forEach((el) => {
-          const depth = Number(el.dataset.parallax || 8);
-          gsap.fromTo(
-            el,
-            { yPercent: depth },
-            {
-              yPercent: -depth,
-              ease: "none",
-              scrollTrigger: {
-                trigger: el,
-                start: "top bottom",
-                end: "bottom top",
-                scrub: true,
-              },
-            },
-          );
+
+      // Car progress along path
+      if (carRef.current && containerRef.current) {
+        gsap.to(carRef.current, {
+          y: () => containerRef.current!.offsetHeight - window.innerHeight,
+          ease: "none",
+          scrollTrigger: {
+            trigger: containerRef.current,
+            start: "top top",
+            end: "bottom bottom",
+            scrub: 1,
+          }
         });
+      }
+
+      // Parallax hero
+      const heroVideo = document.querySelector('.hero-video');
+      const heroContent = document.querySelector('.hero-content');
+      
+      if (heroVideo && heroContent) {
+        gsap.to(heroVideo, {
+          scale: 1.15,
+          ease: "none",
+          scrollTrigger: {
+            trigger: ".hero-section",
+            start: "top top",
+            end: "bottom top",
+            scrub: true,
+          }
+        });
+        
+        gsap.to(heroContent, {
+          yPercent: 30,
+          opacity: 0,
+          ease: "none",
+          scrollTrigger: {
+            trigger: ".hero-section",
+            start: "top top",
+            end: "bottom top",
+            scrub: true,
+          }
+        });
+      }
+
     }, rootRef);
 
     return () => {
@@ -279,275 +345,196 @@ export default function Landing() {
       lenis.destroy();
       restoreLagSmoothing();
     };
-  }, []);
+  }, [prefersReducedMotion]);
 
   return (
     <div
       ref={rootRef}
-      className="bg-black text-white selection:bg-primary/30 selection:text-white min-h-[100dvh] font-sans"
+      className="bg-black text-white selection:bg-primary/30 selection:text-white min-h-[100dvh] font-sans overflow-x-hidden"
     >
-      {/* Hero Section */}
-      <section
-        ref={heroRef}
-        className="relative h-[100dvh] w-full overflow-hidden"
+      {/* Navigation */}
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.2 }}
+        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 lg:px-14 h-24 pointer-events-none"
       >
+        <div className="flex items-center gap-3 pointer-events-auto">
+          <span className="text-xl font-bold tracking-[0.2em] uppercase text-white drop-shadow-[0_0_15px_rgba(169,113,66,0.5)]">
+            AURA OS
+          </span>
+        </div>
+        <nav className="hidden md:flex items-center gap-8 bg-black/40 backdrop-blur-xl px-8 py-3 rounded-full border border-white/10 pointer-events-auto shadow-2xl">
+          {QUICK_LINKS.map((l) => (
+            <Link
+              key={l.name}
+              href={l.href}
+              className="text-xs font-semibold tracking-[0.1em] uppercase text-zinc-300 hover:text-white transition-colors"
+            >
+              {l.name}
+            </Link>
+          ))}
+          <div className="w-[1px] h-4 bg-white/20"></div>
+          <Link
+            href="/command-center"
+            className="text-xs font-bold tracking-[0.1em] uppercase text-primary hover:text-primary-foreground transition-colors"
+          >
+            Sign In
+          </Link>
+        </nav>
+      </motion.header>
+
+      {/* Hero Section */}
+      <section className="hero-section relative h-[100dvh] w-full overflow-hidden flex items-center justify-center">
         <video
-          ref={videoRef}
           autoPlay
           muted
           loop
           playsInline
           poster={`${import.meta.env.BASE_URL}vehicles/aura_porsche_taycan.png`}
-          className="absolute inset-0 w-full h-full object-cover will-change-transform"
+          className="hero-video absolute inset-0 w-full h-full object-cover opacity-60"
         >
           <source
             src={`${import.meta.env.BASE_URL}videos/white_luxury_car_showroom_turntable.mp4`}
             type="video/mp4"
           />
         </video>
+        
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black z-10" />
 
-        {/* Cinematic legibility gradients */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/60 z-10" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/20 to-transparent z-10" />
-
-        {/* Top bar */}
-        <motion.header
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-6 md:px-10 lg:px-14 h-24"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-xl font-semibold tracking-widest uppercase text-white">
-              AURA Motors
-            </span>
-          </div>
-          <nav className="hidden md:flex items-center gap-8 bg-white/5 backdrop-blur-md px-8 py-3 rounded-full border border-white/10">
-            {QUICK_LINKS.map((l) => (
-              <Link
-                key={l.name}
-                href={l.href}
-                className="text-sm font-medium tracking-wide text-white/80 hover:text-white transition-colors"
-              >
-                {l.name}
-              </Link>
-            ))}
-          </nav>
-        </motion.header>
-
-        {/* Hero content */}
-        <div
-          ref={heroContentRef}
-          className="relative z-20 h-full flex flex-col justify-center px-6 md:px-10 lg:px-14 pt-20 will-change-transform"
-        >
-          <div className="max-w-4xl">
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.2 }}
-              className="text-5xl md:text-7xl lg:text-[5.5rem] font-light tracking-tight text-white leading-[1.05]"
-            >
-              Your dream car. <br />
-              <span className="font-semibold text-gold">Delivered anywhere in Guyana.</span>
-            </motion.h1>
-
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.35 }}
-              className="mt-8 max-w-xl text-lg md:text-xl text-zinc-300 font-light leading-relaxed"
-            >
-              5,000+ vehicles delivered on time and fully insured — from our Georgetown showroom to the farthest reaches of the Rupununi.
-            </motion.p>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.5 }}
-              className="mt-12 flex flex-wrap items-center gap-4"
-            >
+        <div className="hero-content relative z-20 text-center px-6 max-w-5xl mx-auto mt-20">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <h1 className="text-5xl md:text-7xl lg:text-[6rem] font-light tracking-tighter text-white leading-[1.1] mb-8">
+              The Agentic OS for <br />
+              <span className="font-medium text-transparent bg-clip-text bg-gradient-to-r from-gold via-[#D4A373] to-primary">Premium Dealerships.</span>
+            </h1>
+            <p className="text-xl md:text-2xl text-zinc-400 font-light tracking-wide max-w-2xl mx-auto mb-12 leading-relaxed">
+              From lead capture to handover, run your entire dealership on a single, intelligent platform. Experience the pipeline.
+            </p>
+            
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
               <Link
                 href="/command-center"
-                className="group inline-flex items-center gap-2 h-14 px-8 rounded-full bg-primary text-white text-base font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all duration-300"
+                className="group relative inline-flex items-center justify-center gap-3 h-16 px-10 rounded-full bg-primary/10 border border-primary text-white text-sm font-bold uppercase tracking-[0.15em] overflow-hidden transition-all hover:bg-primary"
               >
-                Go to Daily Briefing
-                <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+                Enter Workspace
+                <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
               </Link>
-              <button
-                onClick={() => setEnquiryOpen(true)}
-                className="inline-flex items-center gap-2 h-14 px-8 rounded-full border border-white/20 text-white text-base font-medium backdrop-blur-md hover:bg-white/10 hover:border-white/40 transition-all duration-300"
-              >
-                Make an Enquiry
-              </button>
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
         </div>
+        
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.5, duration: 1 }}
+          className="absolute bottom-12 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-3"
+        >
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Scroll to explore</span>
+          <div className="w-[1px] h-16 bg-gradient-to-b from-primary/50 to-transparent" />
+        </motion.div>
       </section>
 
-      {/* The Delivery Standard - Track Record */}
-      <section className="py-32 bg-zinc-950 relative border-b border-white/5 overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay"></div>
+      {/* The Journey - Scroll Experience */}
+      <section ref={containerRef} className="relative w-full bg-black py-32">
+        {/* Animated Path / Track */}
+        <div className="absolute left-[15%] md:left-1/2 top-0 bottom-0 w-[2px] -translate-x-1/2 bg-white/5 z-0">
+          <div className="absolute top-0 bottom-0 left-0 w-full bg-gradient-to-b from-primary via-gold to-primary opacity-50 blur-[4px]" />
+        </div>
+
+        {/* Traveling Car */}
+        {!prefersReducedMotion && (
+          <div 
+            ref={carRef}
+            className="absolute left-[15%] md:left-1/2 top-[5%] -translate-x-1/2 -translate-y-1/2 z-30 w-32 md:w-48 pointer-events-none will-change-transform"
+          >
+            <div className="relative">
+              <div className="absolute inset-0 bg-primary/30 blur-2xl rounded-full scale-150" />
+              <img 
+                src={`${import.meta.env.BASE_URL}vehicles/aura_porsche_taycan.png`} 
+                alt="AURA vehicle"
+                className="relative z-10 w-full drop-shadow-2xl rotate-90"
+              />
+            </div>
+          </div>
+        )}
+
         <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-14 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-            <motion.div
-              initial={{ opacity: 0, x: -40 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.8 }}
-            >
-              <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-gold mb-6">Proven Track Record</h2>
-              <h3 className="text-4xl md:text-5xl font-light tracking-tight leading-tight text-white mb-8">
-                Over 5,000 successful <br />
-                <span className="font-semibold text-gold">deliveries completed.</span>
-              </h3>
-              <p className="text-lg text-zinc-400 font-light leading-relaxed mb-10">
-                AURA Motors isn't just a showroom. We operate a sophisticated nationwide logistics network that ensures your vehicle arrives in pristine condition, whether you are in central Georgetown or the deep interior.
-              </p>
-              
-              <div className="grid grid-cols-2 gap-8">
-                <div>
-                  <div className="text-4xl font-light text-white mb-2">5K+</div>
-                  <div className="text-sm text-zinc-500 uppercase tracking-widest font-medium">Vehicles Delivered</div>
-                </div>
-                <div>
-                  <div className="text-4xl font-light text-white mb-2">10</div>
-                  <div className="text-sm text-zinc-500 uppercase tracking-widest font-medium">Regions Covered</div>
-                </div>
-                <div>
-                  <div className="text-4xl font-light text-white mb-2">100%</div>
-                  <div className="text-sm text-zinc-500 uppercase tracking-widest font-medium">Insured Transit</div>
-                </div>
-                <div>
-                  <div className="text-4xl font-light text-white mb-2">24/7</div>
-                  <div className="text-sm text-zinc-500 uppercase tracking-widest font-medium">Logistics Support</div>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.8 }}
-              className="relative"
-            >
-              <div className="aspect-[4/5] rounded-3xl overflow-hidden shadow-2xl shadow-primary/10 border border-white/5">
-                <img 
-                  src={`${import.meta.env.BASE_URL}images/delivery.png`} 
-                  alt="AURA Motors delivery" 
-                  data-parallax="6"
-                  className="w-full h-[112%] object-cover will-change-transform"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              </div>
-              <div className="absolute -bottom-10 -left-10 w-2/3 aspect-square rounded-3xl overflow-hidden shadow-2xl border-8 border-zinc-950 hidden md:block">
-                <img 
-                  src={`${import.meta.env.BASE_URL}images/handshake.png`} 
-                  alt="Client taking delivery of a new vehicle" 
-                  data-parallax="10"
-                  className="w-full h-[115%] object-cover will-change-transform"
-                />
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* Nationwide Coverage & Speed */}
-      <section className="py-32 bg-black relative overflow-hidden">
-        {/* Subtle blueprint grid backdrop */}
-        <div
-          aria-hidden
-          className="absolute inset-0 pointer-events-none opacity-[0.35]"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
-            backgroundSize: "56px 56px",
-            maskImage:
-              "radial-gradient(ellipse 80% 70% at 50% 40%, black, transparent)",
-            WebkitMaskImage:
-              "radial-gradient(ellipse 80% 70% at 50% 40%, black, transparent)",
-          }}
-        />
-        <div className="max-w-7xl mx-auto px-6 md:px-10 lg:px-14 relative">
-          <div className="text-center max-w-3xl mx-auto mb-20">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.8 }}
-            >
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                <Truck className="w-8 h-8 text-primary" />
-              </div>
-              <h2 className="text-3xl md:text-4xl font-light tracking-tight text-white mb-6">Unmatched Delivery Speed</h2>
-              <p className="text-lg text-zinc-400 font-light leading-relaxed">
-                We've mastered Guyanese logistics. From RO-RO ferries to the Linden-Lethem trail, we guarantee secure, timely delivery to every corner of the country.
-              </p>
-            </motion.div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {REGIONS.map((region, i) => (
-              <motion.div
-                key={region.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                className="relative p-8 rounded-2xl bg-white/[0.03] backdrop-blur-xl border border-white/10 hover:border-primary/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-500 group overflow-hidden"
-              >
-                {/* Warm inner glow, AURA red */}
-                <div
-                  aria-hidden
-                  className="absolute inset-0 pointer-events-none opacity-60 group-hover:opacity-100 transition-opacity duration-500"
-                  style={{
-                    background:
-                      "radial-gradient(120% 90% at 15% 110%, rgba(229,9,20,0.28), rgba(229,9,20,0.08) 45%, transparent 70%)",
-                  }}
-                />
-                <div className="relative">
-                  <div className="flex items-center justify-between mb-5">
-                    <h4 className="text-xl font-medium text-white transition-colors">{region.name}</h4>
-                    <MapPin className="w-5 h-5 text-primary opacity-60 group-hover:opacity-100 transition-opacity" />
+          <div className="space-y-[30vh] md:space-y-[50vh] py-[20vh]">
+            {STAGES.map((stage, idx) => {
+              const isEven = idx % 2 === 0;
+              return (
+                <div key={stage.id} className="pipeline-stage relative flex flex-col md:flex-row items-center gap-12 md:gap-24 min-h-[60vh]">
+                  {/* Content */}
+                  <div className={`stage-content flex-1 ${isEven ? 'md:text-right md:order-1' : 'md:text-left md:order-2'} ml-[30%] md:ml-0`}>
+                    <div className={`flex items-center gap-4 mb-6 ${isEven ? 'md:justify-end' : 'md:justify-start'}`}>
+                      <div className="w-12 h-12 rounded-full border border-primary/30 bg-primary/10 flex items-center justify-center backdrop-blur-sm text-primary">
+                        <stage.icon className="w-5 h-5" />
+                      </div>
+                      <span className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Stage 0{idx + 1}</span>
+                    </div>
+                    <h2 className="text-3xl md:text-5xl font-light tracking-tight text-white mb-6">
+                      {stage.title}
+                    </h2>
+                    <p className="text-lg text-zinc-400 font-light leading-relaxed max-w-xl md:ml-auto">
+                      {stage.desc}
+                    </p>
                   </div>
-                  <span className="inline-flex items-center gap-2 mb-4 rounded-full border border-white/15 bg-black/40 px-4 py-1.5 text-sm font-medium text-white/90 shadow-[0_0_20px_rgba(229,9,20,0.15)]">
-                    <Clock className="w-3.5 h-3.5 text-primary" />
-                    {region.time}
-                  </span>
-                  <p className="text-zinc-400 text-sm leading-relaxed">{region.desc}</p>
+
+                  {/* Media */}
+                  <div className={`flex-1 w-full max-w-lg ${isEven ? 'md:order-2' : 'md:order-1'} hidden md:block`}>
+                    <div className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 glass-panel">
+                      <div className="absolute inset-0 bg-primary/10 mix-blend-color z-10 pointer-events-none" />
+                      <video
+                        muted
+                        loop
+                        playsInline
+                        className="absolute inset-0 w-full h-full object-cover"
+                        src={`${import.meta.env.BASE_URL}videos/${stage.video}`}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </motion.div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
 
-
-      {/* Call to Action & Footer */}
-      <section className="py-24 bg-black text-center relative">
-        <div className="max-w-3xl mx-auto px-6 relative z-10">
-          <h2 className="text-3xl md:text-4xl font-light tracking-tight text-white mb-8">Ready to experience AURA?</h2>
-          <div className="flex justify-center gap-4">
-            <button
-              onClick={() => setEnquiryOpen(true)}
-              className="inline-flex items-center gap-2 h-14 px-8 rounded-full bg-primary text-white text-base font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all duration-300"
-            >
-              Start Your Journey
-            </button>
+      {/* Closing CTA */}
+      <section className="relative py-32 bg-zinc-950 overflow-hidden border-t border-white/5">
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none mix-blend-overlay"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-primary/5 to-transparent pointer-events-none" />
+        
+        <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
+          <h2 className="text-4xl md:text-6xl font-light tracking-tight text-white mb-8">
+            The standard is set. <br />
+            <span className="font-medium text-gold">Own the operation.</span>
+          </h2>
+          <p className="text-xl text-zinc-400 font-light mb-12 max-w-2xl mx-auto">
+            AURA Dealership OS is available exclusively to certified automotive partners in Guyana. Elevate your showroom experience today.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
             <Link
               href="/command-center"
-              className="inline-flex items-center gap-2 h-14 px-8 rounded-full border border-white/20 text-white text-base font-medium hover:bg-white/10 transition-all duration-300"
+              className="inline-flex items-center justify-center gap-2 h-14 px-8 rounded-full bg-primary text-white text-sm font-bold uppercase tracking-wider shadow-[0_0_30px_rgba(169,113,66,0.3)] hover:bg-primary/90 hover:scale-105 transition-all"
             >
-              Enter Daily Briefing <ArrowRight className="w-4 h-4" />
+              Sign In to Workspace
             </Link>
+            <button
+              onClick={() => setEnquiryOpen(true)}
+              className="inline-flex items-center justify-center gap-2 h-14 px-8 rounded-full border border-white/20 bg-white/5 backdrop-blur-md text-white text-sm font-bold uppercase tracking-wider hover:bg-white/10 transition-all"
+            >
+              Make an Enquiry
+            </button>
           </div>
         </div>
       </section>
-
-      <footer className="py-12 border-t border-white/10 bg-black text-center text-zinc-500 text-sm">
-        <p>© {new Date().getFullYear()} AURA Motors Guyana. All rights reserved.</p>
-      </footer>
 
       <EnquiryDialog open={enquiryOpen} onOpenChange={setEnquiryOpen} />
     </div>
