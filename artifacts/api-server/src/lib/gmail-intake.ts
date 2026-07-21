@@ -111,6 +111,7 @@ async function recordProcessed(
 type Extraction = {
   isEnquiry: boolean;
   name: string | null;
+  email: string | null;
   phone: string | null;
   vehicle: string | null;
   summary: string | null;
@@ -125,10 +126,14 @@ async function classifyEmail(input: {
   const prompt = `You are the email-intake agent for AURA Motors, a car dealership.
 Classify the email below and extract enquiry details.
 
-An email is a SALES ENQUIRY only when a real person is asking about buying,
+An email is a SALES ENQUIRY when a real person is asking about buying,
 viewing, test-driving, pricing, financing, or availability of a vehicle.
-Newsletters, marketing blasts, automated receipts/notifications, spam,
-job applications, supplier/internal mail are NOT enquiries.
+This INCLUDES automated website-form notifications that relay a customer's
+enquiry (e.g. "Quote request" emails containing structured fields like
+First Name / Phone / Email / Vehicle) — for those, extract the CUSTOMER's
+details from the body, not the sender of the notification.
+Newsletters, marketing blasts, payment/bank receipts, spam, job
+applications, and supplier/internal mail are NOT enquiries.
 
 From: ${input.fromName} <${input.fromEmail}>
 Subject: ${input.subject}
@@ -136,7 +141,7 @@ Body:
 ${guardUntrusted("email_body", input.body)}
 
 Respond with ONLY a JSON object, no markdown fences:
-{"isEnquiry": boolean, "name": string|null (the customer's name), "phone": string|null (phone number mentioned in the body), "vehicle": string|null (the vehicle they mention, e.g. "BMW X5"), "summary": string|null (1-2 sentence summary of what they want)}`;
+{"isEnquiry": boolean, "name": string|null (the customer's name), "email": string|null (the customer's email address if stated in the body, else null), "phone": string|null (phone number mentioned in the body), "vehicle": string|null (the vehicle they mention, e.g. "BMW X5"), "summary": string|null (1-2 sentence summary of what they want)}`;
 
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
@@ -155,6 +160,10 @@ Respond with ONLY a JSON object, no markdown fences:
   return {
     isEnquiry: parsed.isEnquiry === true,
     name: typeof parsed.name === "string" ? parsed.name : null,
+    email:
+      typeof parsed.email === "string" && parsed.email.includes("@")
+        ? parsed.email.trim()
+        : null,
     phone: typeof parsed.phone === "string" ? parsed.phone : null,
     vehicle: typeof parsed.vehicle === "string" ? parsed.vehicle : null,
     summary: typeof parsed.summary === "string" ? parsed.summary : null,
@@ -190,11 +199,14 @@ async function handleEnquiry(opts: {
   extraction: Extraction;
 }): Promise<number | null> {
   const dealerId = await defaultDealerId();
+  // Prefer the customer's email extracted from the body (website-form
+  // notifications relay the enquiry — the SMTP sender is just the relay).
+  const contactEmail = opts.extraction.email || opts.fromEmail;
   // Self-lead edge: when the sender is the monitored inbox itself (self-sent
   // test/enquiry mail), repeat self-sends fold into the first open self-lead
   // via this email lookup — same behavior as any repeat sender. Acceptable:
   // self-sent mail is a testing/notes-to-self path, not distinct customers.
-  const existing = await findOpenLeadByEmail(dealerId, opts.fromEmail);
+  const existing = await findOpenLeadByEmail(dealerId, contactEmail);
   if (existing) {
     await db.insert(timelineEventsTable).values({
       dealerId: existing.dealerId,
@@ -233,8 +245,8 @@ async function handleEnquiry(opts: {
 
   const lead = await createInboundLead({
     dealerId,
-    name: opts.extraction.name || opts.fromName || opts.fromEmail,
-    email: opts.fromEmail,
+    name: opts.extraction.name || opts.fromName || contactEmail,
+    email: contactEmail,
     phone: opts.extraction.phone,
     channel: "email",
     source: "gmail",
