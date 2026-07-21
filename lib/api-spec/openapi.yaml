@@ -7575,6 +7575,15 @@ components:
         mediaType:
           type: string
           enum: [image/png, image/jpeg, image/webp, image/gif]
+    GraTaxLine:
+      type: object
+      required: [code, name, kind, rate, amount]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [percent, fixed] }
+        rate: { type: number }
+        amount: { type: number, description: USD-scale amount computed server-side }
     GraFilingDraft:
       type: object
       required:
@@ -7588,15 +7597,12 @@ components:
         - fuelType
         - hsCode
         - cifValue
-        - importDuty
-        - vat
-        - nhil
-        - getfundLevy
-        - exciseDuty
+        - taxLines
         - totalPayable
+        - uncertainFields
       properties:
         ownerName: { type: string }
-        tin: { type: string, description: Taxpayer Identification Number }
+        tin: { type: string, description: Guyana Taxpayer Identification Number }
         vin: { type: string, description: Chassis / VIN number }
         make: { type: string }
         model: { type: string }
@@ -7604,14 +7610,32 @@ components:
         engineCc: { type: integer, description: Engine capacity in cubic centimetres }
         fuelType: { type: string }
         hsCode: { type: string, description: Harmonised System tariff code }
-        cifValue: { type: number, description: Cost, Insurance & Freight value in GHS }
-        importDuty: { type: number }
-        vat: { type: number }
-        nhil: { type: number, description: National Health Insurance Levy }
-        getfundLevy: { type: number, description: GETFund Levy }
-        exciseDuty: { type: number }
-        totalPayable: { type: number }
+        cifValue: { type: number, description: Cost, Insurance & Freight value, USD-scale }
+        taxLines:
+          type: array
+          description: Deterministic server-computed duty/levy lines from the dealer's tax rules (never AI-computed)
+          items: { $ref: "#/components/schemas/GraTaxLine" }
+        totalPayable: { type: number, description: Sum of taxLines, USD-scale, server-computed }
+        confidence: { type: ["number", "null"], description: Extraction confidence 0-1 reported by the vision model }
+        uncertainFields:
+          type: array
+          description: Extracted fields the model could not clearly read; must be human-verified
+          items: { type: string }
         notes: { type: ["string", "null"] }
+    GraComputeRequest:
+      type: object
+      required: [cifValue]
+      properties:
+        cifValue: { type: number, description: USD-scale CIF value }
+        fuelType: { type: ["string", "null"] }
+    GraComputeResponse:
+      type: object
+      required: [taxLines, totalPayable]
+      properties:
+        taxLines:
+          type: array
+          items: { $ref: "#/components/schemas/GraTaxLine" }
+        totalPayable: { type: number }
     GraFilingSubmission:
       type: object
       required: [draft]
