@@ -22,6 +22,7 @@ export type StageNavStage = {
   label: string;
   caption: string;
   checklist: StageCheckItem[];
+  alert?: boolean;
 };
 
 const STAGE_ICON: Record<string, LucideIcon> = {
@@ -60,6 +61,7 @@ export function StageNav({
           key: s.key,
           label: s.label,
           icon: STAGE_ICON[s.key] ?? CircleDot,
+          alert: s.alert,
         }))}
         activeIndex={currentIndex}
       />

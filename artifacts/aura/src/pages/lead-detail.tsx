@@ -15,6 +15,7 @@ import {
   useListLeadQuotes,
   useGenerateLeadQuote,
   useSendLeadQuote,
+  useListGates,
   getListLeadQuotesQueryKey,
   getGetLeadQueryKey,
   getGetLeadTimelineQueryKey,
@@ -23,11 +24,7 @@ import {
 import type { Lead, LeadUpdate, Vehicle } from "@workspace/api-client-react";
 import { StageNav, type StageNavStage } from "@/components/lead/stage-nav";
 import { AgentBriefPanel } from "@/components/lead/agent-brief";
-import {
-  NextCheckpointCard,
-  LeadApprovalsCard,
-  LeadTasksCard,
-} from "@/components/lead/lead-cockpit";
+import { ActionChain } from "@/components/lead/lead-cockpit";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -574,6 +571,7 @@ export default function LeadDetail() {
   const { data: allDeals } = useListDeals();
   const { data: allDeliveries } = useListDeliveries();
   const { data: calls } = useListLeadCalls(id);
+  const gatesQuery = useListGates();
 
   const [tab, setTab] = useState<Tab>("details");
   const [workflowOpen, setWorkflowOpen] = useState(false);
@@ -806,6 +804,43 @@ export default function LeadDetail() {
       ],
     },
   ];
+
+  const pendingGates = (gatesQuery.data ?? []).filter((g) => {
+    if (g.status !== "pending") return false;
+    if (g.refType === "lead" && g.refId === lead.id) return true;
+    if (g.refType === "deal" && linkedDeal?.id != null && g.refId === linkedDeal.id) return true;
+    if (g.refType === "vehicle" && lead.interestedVehicleId != null && g.refId === lead.interestedVehicleId) return true;
+    return false;
+  });
+
+  const getGateStageKey = (type: string, fallback: string) => {
+    switch (type) {
+      case "below_floor_price": return "payment";
+      case "credit_decline": return "payment";
+      case "capital_order": return "vehicle_allocated";
+      case "gra_filing": return "pre_delivery";
+      case "refund_release": return "payment";
+      default: return fallback;
+    }
+  };
+
+  const currentStageKey = journeyStages[journeyIndex]?.key ?? "new";
+
+  const stagesWithAlerts = journeyStages.map((s) => {
+    const stageGates = pendingGates.filter((g) => getGateStageKey(g.type, currentStageKey) === s.key);
+    return { ...s, alert: stageGates.length > 0 };
+  });
+
+  const chainGates = pendingGates.map((g) => {
+    const stageKey = getGateStageKey(g.type, currentStageKey);
+    return {
+      ...g,
+      chainStageKey: stageKey,
+      chainStageLabel:
+        journeyStages.find((s) => s.key === stageKey)?.label ?? "",
+    };
+  });
+
   const phaseDisplay =
     lead.phase === "lost"
       ? "Lost"
@@ -956,25 +991,24 @@ export default function LeadDetail() {
 
       {/* Journey navigation pane — full width on top */}
       <div className="mb-6">
-        <StageNav stages={journeyStages} currentIndex={journeyIndex} compact />
+        <StageNav stages={stagesWithAlerts} currentIndex={journeyIndex} compact />
       </div>
 
-      {/* Action cockpit — checkpoint, inline reviews, tasks, and AURA
-          recommendations all above the fold */}
+      {/* Action cockpit — chain of actions and AURA recommendations all above the fold */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 items-start">
-        <NextCheckpointCard
-          stage={journeyStages[journeyIndex]}
-          nextStageLabel={
-            lead.phase === "lost"
-              ? null
-              : (journeyStages[journeyIndex + 1]?.label ?? null)
-          }
-          onOpenWorkflow={() => setWorkflowOpen(true)}
-          canEdit={canEdit}
-        />
-        <div className="space-y-6">
-          <LeadApprovalsCard lead={lead} linkedDealId={linkedDeal?.id} />
-          <LeadTasksCard lead={lead} canEdit={canEdit} />
+        <div className="lg:col-span-2 h-full">
+          <ActionChain
+            lead={lead}
+            stage={stagesWithAlerts[journeyIndex]}
+            nextStageLabel={
+              lead.phase === "lost"
+                ? null
+                : (stagesWithAlerts[journeyIndex + 1]?.label ?? null)
+            }
+            onOpenWorkflow={() => setWorkflowOpen(true)}
+            canEdit={canEdit}
+            pendingGates={chainGates}
+          />
         </div>
         <AgentBriefPanel
           leadId={lead.id}

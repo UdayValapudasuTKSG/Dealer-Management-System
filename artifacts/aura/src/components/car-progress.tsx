@@ -9,6 +9,8 @@ export type CarProgressStage = {
   icon: LucideIcon;
   /** Optional count badge shown under the label (pipeline view). */
   count?: number;
+  /** Optional alert dot (e.g. pending gate). */
+  alert?: boolean;
 };
 
 /**
@@ -84,6 +86,9 @@ export function CarProgress({
                 >
                   {done || current ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : null}
                 </span>
+                {s.alert && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-card" />
+                )}
               </div>
             );
           })}

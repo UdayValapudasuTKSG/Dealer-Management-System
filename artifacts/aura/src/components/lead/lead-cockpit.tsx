@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import {
-  useListGates,
   useListTasks,
   useCreateTask,
   useUpdateTask,
@@ -21,9 +20,11 @@ import {
   Plus,
   ShieldCheck,
   Workflow,
+  CheckCircle2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 const GATE_TYPE_LABEL: Record<string, string> = {
   below_floor_price: "Below floor price",
@@ -33,216 +34,26 @@ const GATE_TYPE_LABEL: Record<string, string> = {
   refund_release: "Refund release",
 };
 
-function CockpitCard({
-  icon,
-  title,
-  badge,
-  children,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  badge?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5 flex flex-col min-h-[180px]">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
-          {icon}
-        </span>
-        <span className="text-sm font-semibold tracking-tight">{title}</span>
-        {badge && <span className="ml-auto">{badge}</span>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-/** Next checkpoint: the current stage's requirement checklist + advance CTA. */
-export function NextCheckpointCard({
+export function ActionChain({
+  lead,
   stage,
   nextStageLabel,
   onOpenWorkflow,
   canEdit,
+  pendingGates,
 }: {
+  lead: Lead;
   stage: StageNavStage | undefined;
   nextStageLabel: string | null;
   onOpenWorkflow: () => void;
   canEdit: boolean;
-}) {
-  const items = stage?.checklist ?? [];
-  const unmet = items.filter((c) => !c.done);
-  const ready = unmet.length === 0 && items.length > 0;
-  return (
-    <CockpitCard
-      icon={<Workflow className="w-3.5 h-3.5" />}
-      title="Next Checkpoint"
-      badge={
-        <span
-          className={cn(
-            "text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ring-1",
-            ready
-              ? "bg-emerald-500/15 text-emerald-400 ring-emerald-500/30"
-              : "bg-amber-500/15 text-amber-400 ring-amber-500/30",
-          )}
-        >
-          {ready ? "Ready to advance" : `${unmet.length} to complete`}
-        </span>
-      }
-    >
-      {stage ? (
-        <>
-          <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-            {nextStageLabel
-              ? `Complete these to move from ${stage.label} to ${nextStageLabel}.`
-              : "Final stage — keep the record complete."}
-          </p>
-          <ul className="space-y-2 flex-1">
-            {items.map((c) => (
-              <li key={c.label} className="flex items-start gap-2 text-sm">
-                <span
-                  className={cn(
-                    "mt-0.5 w-4 h-4 rounded-full flex items-center justify-center shrink-0 ring-1",
-                    c.done
-                      ? "bg-emerald-500/20 text-emerald-400 ring-emerald-500/40"
-                      : "bg-foreground/[0.05] text-muted-foreground/40 ring-white/10",
-                  )}
-                >
-                  {c.done && <Check className="w-2.5 h-2.5" />}
-                </span>
-                <span
-                  className={cn(
-                    c.done
-                      ? "text-foreground/55 line-through decoration-foreground/30"
-                      : "text-foreground/90",
-                  )}
-                >
-                  {c.label}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {canEdit && (
-            <Button
-              onClick={onOpenWorkflow}
-              className={cn("mt-4 w-full gap-1.5", ready && "glow-red")}
-              variant={ready ? "default" : "outline"}
-            >
-              <Workflow className="w-4 h-4" />
-              {ready && nextStageLabel
-                ? `Advance to ${nextStageLabel}`
-                : "Open workflow"}
-            </Button>
-          )}
-        </>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          No active checkpoint for this lead.
-        </p>
-      )}
-    </CockpitCard>
-  );
-}
-
-/** Inline reviews: pending approval gates tied to this lead's journey. */
-export function LeadApprovalsCard({
-  lead,
-  linkedDealId,
-}: {
-  lead: Lead;
-  linkedDealId?: number;
-}) {
-  const gates = useListGates();
-  const related = (gates.data ?? []).filter((g) => {
-    if (g.status !== "pending") return false;
-    if (g.refType === "lead" && g.refId === lead.id) return true;
-    if (g.refType === "deal" && linkedDealId != null && g.refId === linkedDealId)
-      return true;
-    if (
-      g.refType === "vehicle" &&
-      lead.interestedVehicleId != null &&
-      g.refId === lead.interestedVehicleId
-    )
-      return true;
-    return false;
-  });
-  return (
-    <CockpitCard
-      icon={<ShieldCheck className="w-3.5 h-3.5" />}
-      title="Reviews & Approvals"
-      badge={
-        related.length > 0 ? (
-          <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ring-1 bg-primary/15 text-primary ring-primary/30">
-            {related.length} pending
-          </span>
-        ) : undefined
-      }
-    >
-      {gates.isLoading ? (
-        <div className="flex items-center justify-center flex-1 py-4">
-          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-        </div>
-      ) : related.length === 0 ? (
-        <div className="flex-1 flex flex-col justify-center py-2">
-          <p className="text-sm text-muted-foreground">
-            Nothing is waiting on a manager decision for this lead.
-          </p>
-          <p className="text-xs text-muted-foreground/70 mt-1">
-            Price exceptions, credit declines, refunds, and GRA filings will
-            appear here when raised.
-          </p>
-        </div>
-      ) : (
-        <ul className="space-y-2.5 flex-1">
-          {related.slice(0, 4).map((g) => (
-            <li key={g.id}>
-              <Link
-                href="/approvals"
-                className="block rounded-xl border border-white/10 bg-foreground/[0.03] hover:border-primary/40 transition-colors p-3 group"
-              >
-                <div className="flex items-center gap-2">
-                  <CircleAlert
-                    className={cn(
-                      "w-3.5 h-3.5 shrink-0",
-                      g.priority === "high" ? "text-primary" : "text-amber-400",
-                    )}
-                  />
-                  <span className="text-sm font-medium truncate">{g.title}</span>
-                  <ArrowUpRight className="w-3 h-3 ml-auto text-muted-foreground group-hover:text-primary shrink-0" />
-                </div>
-                <div className="text-[11px] text-muted-foreground mt-1 pl-5.5">
-                  {GATE_TYPE_LABEL[g.type] ?? g.type} · awaiting review
-                </div>
-              </Link>
-            </li>
-          ))}
-          {related.length > 4 && (
-            <li className="text-xs text-muted-foreground pl-1">
-              <Link href="/approvals" className="text-primary hover:underline">
-                +{related.length - 4} more in the review queue
-              </Link>
-            </li>
-          )}
-        </ul>
-      )}
-    </CockpitCard>
-  );
-}
-
-/** Tasks linked to this lead, with quick add + one-click complete. */
-export function LeadTasksCard({
-  lead,
-  canEdit,
-}: {
-  lead: Lead;
-  canEdit: boolean;
+  pendingGates: any[];
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [title, setTitle] = useState("");
   const tasks = useListTasks({ leadId: lead.id });
-  const invalidate = () =>
-    qc.invalidateQueries({ queryKey: getListTasksQueryKey() });
+  const invalidate = () => qc.invalidateQueries({ queryKey: getListTasksQueryKey() });
   const createTask = useCreateTask({
     mutation: {
       onSuccess: () => {
@@ -250,18 +61,28 @@ export function LeadTasksCard({
         invalidate();
         toast({ title: "Task added to this lead" });
       },
-      onError: () =>
-        toast({ title: "Could not add task", variant: "destructive" }),
+      onError: () => toast({ title: "Could not add task", variant: "destructive" }),
     },
   });
   const updateTask = useUpdateTask({
     mutation: {
       onSuccess: () => invalidate(),
-      onError: () =>
-        toast({ title: "Could not update task", variant: "destructive" }),
+      onError: () => toast({ title: "Could not update task", variant: "destructive" }),
     },
   });
 
+  const items = stage?.checklist ?? [];
+  const unmet = items.filter((c) => !c.done);
+  const ready = unmet.length === 0 && items.length > 0;
+  const gatesPending = pendingGates.length > 0;
+  const sortedGates = [...pendingGates].sort((a, b) => {
+    const here = (g: any) => (g.chainStageKey === stage?.key ? 0 : 1);
+    return here(a) - here(b);
+  });
+  const currentStageBlocked = pendingGates.some(
+    (g) => g.chainStageKey === stage?.key || g.chainStageKey == null,
+  );
+  
   const rows = [...(tasks.data ?? [])].sort((a, b) => {
     const open = (t: Task) => (t.status === "done" ? 1 : 0);
     return open(a) - open(b);
@@ -280,102 +101,226 @@ export function LeadTasksCard({
     });
   };
 
+  const MotionDiv = motion.div;
+
   return (
-    <CockpitCard
-      icon={<ClipboardList className="w-3.5 h-3.5" />}
-      title="Tasks for this Lead"
-      badge={
-        openCount > 0 ? (
-          <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ring-1 bg-amber-500/15 text-amber-400 ring-amber-500/30">
-            {openCount} open
-          </span>
-        ) : undefined
-      }
-    >
-      {tasks.isLoading ? (
-        <div className="flex items-center justify-center flex-1 py-4">
-          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-        </div>
-      ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground flex-1 py-2">
-          No tasks yet — add the next action so nothing slips.
-        </p>
-      ) : (
-        <ul className="space-y-2 flex-1">
-          {rows.slice(0, 5).map((t) => (
-            <li key={t.id} className="flex items-start gap-2.5 text-sm">
-              <button
-                disabled={!canEdit || updateTask.isPending}
-                onClick={() =>
-                  updateTask.mutate({
-                    id: t.id,
-                    data: { status: t.status === "done" ? "open" : "done" },
-                  })
-                }
-                aria-label={
-                  t.status === "done" ? "Reopen task" : "Mark task done"
-                }
-                className={cn(
-                  "mt-0.5 w-4 h-4 rounded-full flex items-center justify-center shrink-0 ring-1 transition-colors",
-                  t.status === "done"
-                    ? "bg-emerald-500/20 text-emerald-400 ring-emerald-500/40"
-                    : "bg-foreground/[0.05] text-transparent ring-white/15 hover:ring-primary/50",
-                )}
-              >
-                <Check className="w-2.5 h-2.5" />
-              </button>
-              <div className="min-w-0">
-                <div
-                  className={cn(
-                    "leading-tight truncate",
-                    t.status === "done"
-                      ? "text-foreground/50 line-through decoration-foreground/30"
-                      : "text-foreground/90",
-                  )}
-                >
-                  {t.title}
-                </div>
-                <div className="text-[11px] text-muted-foreground mt-0.5">
-                  {t.assigneeName ?? "Unassigned"}
-                  {t.dueDate ? ` · due ${t.dueDate}` : ""}
-                </div>
-              </div>
-            </li>
-          ))}
-          {rows.length > 5 && (
-            <li className="text-xs">
-              <Link href="/tasks" className="text-primary hover:underline">
-                +{rows.length - 5} more in Tasks
-              </Link>
-            </li>
+    <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5 lg:p-7 overflow-hidden flex flex-col h-full shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
+      <div className="flex items-center gap-2 mb-8">
+        <span className="w-8 h-8 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0">
+          <Workflow className="w-4 h-4" />
+        </span>
+        <span className="font-semibold tracking-tight text-lg">Action Chain</span>
+      </div>
+
+      <div className="relative pl-7 flex-1">
+        {/* The literal chain running through */}
+        <div className="absolute top-2 bottom-6 left-[13px] w-[2px] bg-white/10" />
+
+        {/* Step 1: Checklist */}
+        <MotionDiv
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1 }}
+          className="relative mb-10"
+        >
+          <div className="absolute -left-[27px] top-0.5 w-6 h-6 rounded-full bg-card border-2 border-primary/30 flex items-center justify-center ring-4 ring-card text-primary shadow-[0_0_12px_rgba(169,113,66,0.3)]">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+          </div>
+          <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
+            {stage?.label} Requirements
+          </div>
+          {items.length === 0 ? (
+            <div className="text-sm text-muted-foreground bg-foreground/[0.02] border border-white/5 rounded-xl px-4 py-3">
+              No specific requirements for this stage.
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {items.map((c) => (
+                <li key={c.label} className="flex items-center gap-3 text-sm bg-foreground/[0.02] border border-white/5 rounded-xl px-4 py-3 hover:bg-foreground/[0.04] transition-colors">
+                  <span
+                    className={cn(
+                      "w-4 h-4 rounded-full flex items-center justify-center shrink-0 ring-1",
+                      c.done
+                        ? "bg-emerald-500/20 text-emerald-400 ring-emerald-500/40"
+                        : "bg-foreground/[0.05] text-muted-foreground/40 ring-white/10"
+                    )}
+                  >
+                    {c.done && <Check className="w-3 h-3" />}
+                  </span>
+                  <span className={cn(c.done ? "text-foreground/50 line-through decoration-foreground/30" : "text-foreground/90 font-medium")}>
+                    {c.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
-        </ul>
-      )}
-      {canEdit && (
-        <div className="flex items-center gap-2 mt-3">
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addTask()}
-            placeholder="Add a task for this lead…"
-            className="h-9 text-sm"
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={addTask}
-            disabled={!title.trim() || createTask.isPending}
-            className="h-9 px-3 shrink-0"
-            aria-label="Add task"
+        </MotionDiv>
+
+        {/* Step 2: Reviews (if any) */}
+        {gatesPending && (
+          <MotionDiv
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            className="relative mb-10"
           >
-            {createTask.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Plus className="w-4 h-4" />
+            <div className="absolute -left-[27px] top-0.5 w-6 h-6 rounded-full bg-card border-2 border-amber-500/50 flex items-center justify-center ring-4 ring-card text-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.3)]">
+              <ShieldCheck className="w-3.5 h-3.5" />
+            </div>
+            <div className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-3">
+              Manager Review Required
+            </div>
+            <ul className="space-y-2">
+              {sortedGates.map((g) => {
+                const atCurrentStage =
+                  g.chainStageKey == null || g.chainStageKey === stage?.key;
+                return (
+                  <li key={g.id}>
+                    <Link
+                      href="/approvals"
+                      className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 hover:border-amber-500/40 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CircleAlert className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span className="font-semibold text-amber-500/90">{g.title}</span>
+                        {!atCurrentStage && g.chainStageLabel && (
+                          <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ring-1 ring-amber-500/30 text-amber-500/80 whitespace-nowrap">
+                            {g.chainStageLabel} stage
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-amber-500/70 sm:ml-auto">
+                        {GATE_TYPE_LABEL[g.type] ?? g.type}
+                      </div>
+                      <ArrowUpRight className="hidden sm:block w-3.5 h-3.5 text-amber-500/50 group-hover:text-amber-500 shrink-0" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </MotionDiv>
+        )}
+
+        {/* Step 3: Tasks */}
+        <MotionDiv
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: gatesPending ? 0.3 : 0.2 }}
+          className="relative mb-10"
+        >
+          <div className="absolute -left-[27px] top-0.5 w-6 h-6 rounded-full bg-card border-2 border-primary/30 flex items-center justify-center ring-4 ring-card text-primary">
+            <ClipboardList className="w-3.5 h-3.5" />
+          </div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              Open Tasks
+            </div>
+            {openCount > 0 && (
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ring-1 bg-amber-500/15 text-amber-400 ring-amber-500/30">
+                {openCount} open
+              </span>
             )}
-          </Button>
-        </div>
-      )}
-    </CockpitCard>
+          </div>
+          
+          <ul className="space-y-2 mb-3">
+            {rows.length === 0 ? (
+              <li className="text-sm text-muted-foreground bg-foreground/[0.02] border border-white/5 rounded-xl px-4 py-3">
+                No tasks yet — add the next action so nothing slips.
+              </li>
+            ) : (
+              rows.slice(0, 5).map((t) => (
+                <li key={t.id} className="flex items-center gap-3 text-sm bg-foreground/[0.02] border border-white/5 rounded-xl px-4 py-2.5 hover:bg-foreground/[0.04] transition-colors">
+                  <button
+                    disabled={!canEdit || updateTask.isPending}
+                    onClick={() =>
+                      updateTask.mutate({
+                        id: t.id,
+                        data: { status: t.status === "done" ? "open" : "done" },
+                      })
+                    }
+                    aria-label={
+                      t.status === "done" ? "Reopen task" : "Mark task done"
+                    }
+                    className={cn(
+                      "w-5 h-5 rounded-full flex items-center justify-center shrink-0 ring-1 transition-colors",
+                      t.status === "done"
+                        ? "bg-emerald-500/20 text-emerald-400 ring-emerald-500/40"
+                        : "bg-foreground/[0.05] text-transparent ring-white/15 hover:ring-primary/50"
+                    )}
+                  >
+                    <Check className="w-3 h-3" />
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <div className={cn("truncate font-medium", t.status === "done" ? "text-foreground/50 line-through decoration-foreground/30" : "text-foreground/90")}>
+                      {t.title}
+                    </div>
+                  </div>
+                </li>
+              ))
+            )}
+            {rows.length > 5 && (
+              <li className="text-xs pl-2 pt-1">
+                <Link href="/tasks" className="text-primary hover:underline font-medium">
+                  +{rows.length - 5} more in Tasks
+                </Link>
+              </li>
+            )}
+          </ul>
+          {canEdit && (
+            <div className="flex items-center gap-2">
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addTask()}
+                placeholder="Add a task for this lead…"
+                className="h-10 text-sm bg-foreground/[0.02] border-white/5 rounded-xl"
+              />
+              <Button
+                variant="outline"
+                onClick={addTask}
+                disabled={!title.trim() || createTask.isPending}
+                className="h-10 px-4 shrink-0 rounded-xl"
+                aria-label="Add task"
+              >
+                {createTask.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+          )}
+        </MotionDiv>
+
+        {/* Step 4: Advance */}
+        <MotionDiv
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: gatesPending ? 0.4 : 0.3 }}
+          className="relative"
+        >
+          <div className="absolute -left-[27px] top-2 w-6 h-6 rounded-full bg-card border-2 border-primary/30 flex items-center justify-center ring-4 ring-card text-primary">
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </div>
+          <div className="pt-0.5">
+            {canEdit && (
+              <Button
+                onClick={onOpenWorkflow}
+                className={cn(
+                  "w-full sm:w-auto gap-2 h-11 px-6 rounded-xl font-semibold shadow-md transition-all",
+                  ready && !currentStageBlocked && "glow-red scale-[1.02]"
+                )}
+                variant={ready && !currentStageBlocked ? "default" : "secondary"}
+              >
+                <Workflow className="w-4 h-4" />
+                {ready && !currentStageBlocked && nextStageLabel
+                  ? `Advance to ${nextStageLabel}`
+                  : "Open workflow"}
+              </Button>
+            )}
+          </div>
+        </MotionDiv>
+      </div>
+    </div>
   );
 }
