@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListTasksParams = {
-status?: string;
-assigneeUserId?: number;
-leadId?: number;
-};
+export interface NotifyOwnerInput {
+  /** @minLength 1 */
+  message: string;
+}

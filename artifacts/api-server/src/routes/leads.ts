@@ -38,6 +38,9 @@ import {
   CreateLeadNoteParams,
   CreateLeadNoteBody,
   CreateLeadNoteResponse,
+  NotifyLeadOwnerParams,
+  NotifyLeadOwnerBody,
+  NotifyLeadOwnerResponse,
   GetLeadQuoteParams,
   GetLeadQuoteResponse,
   DownloadLeadQuotePdfParams,
@@ -288,6 +291,46 @@ router.post("/leads/:id/notes", async (req, res): Promise<void> => {
     .returning();
 
   res.status(201).json(CreateLeadNoteResponse.parse(event));
+});
+
+router.post("/leads/:id/notify-owner", async (req, res): Promise<void> => {
+  const params = NotifyLeadOwnerParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = NotifyLeadOwnerBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const dealerId = activeDealerId(res);
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.dealerId, dealerId)));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+  if (!lead.ownerUserId) {
+    res.status(400).json({ error: "This lead has no assigned owner to notify" });
+    return;
+  }
+
+  const sender =
+    res.locals.user?.name || res.locals.user?.email || "A teammate";
+  await notifyUser({
+    userId: lead.ownerUserId,
+    dealerId,
+    type: "assignment",
+    title: `Action needed on lead: ${lead.name}`,
+    body: `${sender}: ${body.data.message.slice(0, 300)}`,
+    link: `/lead/${lead.id}`,
+  });
+
+  res.json(NotifyLeadOwnerResponse.parse({ ok: true }));
 });
 
 const REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;

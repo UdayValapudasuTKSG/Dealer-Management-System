@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq } from "drizzle-orm";
-import { db, tasksTable, taskCommentsTable, usersTable } from "@workspace/db";
+import { db, tasksTable, taskCommentsTable, usersTable, leadsTable } from "@workspace/db";
 import {
   ListTasksQueryParams,
   ListTasksResponse,
@@ -30,6 +30,18 @@ async function existingUserId(id: number | undefined | null): Promise<number | n
     .from(usersTable)
     .where(eq(usersTable.id, id));
   return row ? row.id : null;
+}
+
+/** A task may only link to a lead that belongs to the active dealership. */
+async function leadBelongsToDealer(
+  leadId: number,
+  dealerId: number,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: leadsTable.id })
+    .from(leadsTable)
+    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.dealerId, dealerId)));
+  return !!row;
 }
 
 async function userNames(): Promise<Map<number, string>> {
@@ -69,6 +81,9 @@ router.get("/tasks", async (req, res): Promise<void> => {
     query.data.assigneeUserId !== undefined
       ? eq(tasksTable.assigneeUserId, query.data.assigneeUserId)
       : undefined,
+    query.data.leadId !== undefined
+      ? eq(tasksTable.leadId, query.data.leadId)
+      : undefined,
   ].filter((f): f is NonNullable<typeof f> => Boolean(f));
   const [rows, names] = await Promise.all([
     db
@@ -92,6 +107,13 @@ router.post("/tasks", async (req, res): Promise<void> => {
     ? new Date(parsed.data.dueDate).toISOString().slice(0, 10)
     : null;
   const dealerId = activeDealerId(res);
+  if (
+    parsed.data.leadId != null &&
+    !(await leadBelongsToDealer(parsed.data.leadId, dealerId))
+  ) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
   const [creatorId, assigneeId] = await Promise.all([
     existingUserId(user?.id),
     existingUserId(parsed.data.assigneeUserId),
@@ -104,6 +126,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
       description: parsed.data.description ?? null,
       assigneeUserId: assigneeId,
       createdByUserId: creatorId,
+      leadId: parsed.data.leadId ?? null,
       dueDate,
       priority: parsed.data.priority ?? "normal",
       attachments: parsed.data.attachments ?? [],
@@ -139,6 +162,13 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
   }
 
   const dealerId = activeDealerId(res);
+  if (
+    parsed.data.leadId != null &&
+    !(await leadBelongsToDealer(parsed.data.leadId, dealerId))
+  ) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
   const [existing] = await db
     .select()
     .from(tasksTable)

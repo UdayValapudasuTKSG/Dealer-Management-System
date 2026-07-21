@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { useGetLeadAgentBrief } from "@workspace/api-client-react";
+import {
+  useGetLeadAgentBrief,
+  useSendLeadWhatsappReply,
+  useNotifyLeadOwner,
+} from "@workspace/api-client-react";
 import {
   Bot,
   RefreshCw,
@@ -8,7 +12,12 @@ import {
   Copy,
   Check,
   Zap,
+  Send,
+  Mail,
+  BellRing,
+  Loader2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 const RISK_STYLE: Record<string, string> = {
@@ -23,16 +32,47 @@ const PRIORITY_DOT: Record<string, string> = {
   low: "bg-muted-foreground/50",
 };
 
-/** Agentic intelligence panel: AI next-best-actions + draft follow-up. */
+/** Agentic intelligence panel: AI next-best-actions + draft follow-up with one-click sends. */
 export function AgentBriefPanel({
   leadId,
   leadPhone,
+  leadEmail,
+  leadSource,
+  hasOwner,
+  compact,
 }: {
   leadId: number;
   leadPhone?: string | null;
+  leadEmail?: string | null;
+  leadSource?: string;
+  hasOwner?: boolean;
+  compact?: boolean;
 }) {
   const brief = useGetLeadAgentBrief(leadId);
+  const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+
+  const sendWhatsapp = useSendLeadWhatsappReply({
+    mutation: {
+      onSuccess: () =>
+        toast({ title: "WhatsApp message sent to the customer" }),
+      onError: () =>
+        toast({
+          title: "Could not send via WhatsApp",
+          description:
+            "The 24-hour reply window may be closed. Use the wa.me link instead.",
+          variant: "destructive",
+        }),
+    },
+  });
+  const notifyOwner = useNotifyLeadOwner({
+    mutation: {
+      onSuccess: () =>
+        toast({ title: "Owner notified", description: "The recommended action was pushed to the lead owner's notifications." }),
+      onError: () =>
+        toast({ title: "Could not notify the owner", variant: "destructive" }),
+    },
+  });
 
   const copyDraft = async () => {
     if (!brief.data) return;
@@ -41,6 +81,12 @@ export function AgentBriefPanel({
     setTimeout(() => setCopied(false), 1800);
   };
 
+  const draft = brief.data?.draftMessage ?? "";
+  const inAppWhatsapp = leadSource === "whatsapp";
+  const waHref = leadPhone
+    ? `https://wa.me/${leadPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(draft)}`
+    : null;
+
   return (
     <div className="rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/[0.07] to-transparent p-5 relative overflow-hidden">
       <div className="flex items-center gap-2 mb-3">
@@ -48,7 +94,7 @@ export function AgentBriefPanel({
           <Bot className="w-3.5 h-3.5" />
         </span>
         <span className="text-sm font-semibold tracking-tight">
-          AURA Agent
+          AURA Recommends
         </span>
         <button
           onClick={() => brief.refetch()}
@@ -107,30 +153,32 @@ export function AgentBriefPanel({
           </p>
 
           <ul className="space-y-2.5">
-            {brief.data.actions.map((a, i) => (
-              <motion.li
-                key={a.title}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.08 }}
-                className="flex items-start gap-2.5"
-              >
-                <span
-                  className={cn(
-                    "mt-1.5 w-1.5 h-1.5 rounded-full shrink-0",
-                    PRIORITY_DOT[a.priority] ?? PRIORITY_DOT.low,
-                  )}
-                />
-                <div>
-                  <div className="text-sm font-medium leading-tight">
-                    {a.title}
+            {brief.data.actions
+              .slice(0, compact ? 2 : undefined)
+              .map((a, i) => (
+                <motion.li
+                  key={a.title}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.08 }}
+                  className="flex items-start gap-2.5"
+                >
+                  <span
+                    className={cn(
+                      "mt-1.5 w-1.5 h-1.5 rounded-full shrink-0",
+                      PRIORITY_DOT[a.priority] ?? PRIORITY_DOT.low,
+                    )}
+                  />
+                  <div>
+                    <div className="text-sm font-medium leading-tight">
+                      {a.title}
+                    </div>
+                    <div className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+                      {a.detail}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground leading-relaxed mt-0.5">
-                    {a.detail}
-                  </div>
-                </div>
-              </motion.li>
-            ))}
+                </motion.li>
+              ))}
           </ul>
 
           <div className="rounded-xl border border-white/10 bg-foreground/[0.03] p-3.5">
@@ -139,9 +187,60 @@ export function AgentBriefPanel({
               Draft follow-up
             </div>
             <p className="text-xs text-foreground/85 leading-relaxed whitespace-pre-wrap">
-              {brief.data.draftMessage}
+              {draft}
             </p>
-            <div className="flex items-center gap-2 mt-2.5">
+            <div className="flex items-center flex-wrap gap-2 mt-3">
+              {inAppWhatsapp ? (
+                <button
+                  onClick={() =>
+                    sendWhatsapp.mutate({ id: leadId, data: { text: draft } })
+                  }
+                  disabled={sendWhatsapp.isPending || !draft}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30 hover:bg-emerald-500/25 transition-colors disabled:opacity-50"
+                >
+                  {sendWhatsapp.isPending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Send className="w-3 h-3" />
+                  )}
+                  Send via WhatsApp
+                </button>
+              ) : waHref ? (
+                <a
+                  href={waHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/30 hover:bg-emerald-500/25 transition-colors"
+                >
+                  <Send className="w-3 h-3" />
+                  Send via WhatsApp
+                </a>
+              ) : null}
+              {leadEmail && (
+                <a
+                  href={`mailto:${leadEmail}?subject=${encodeURIComponent("Following up on your enquiry")}&body=${encodeURIComponent(draft)}`}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-foreground/[0.06] text-foreground/80 ring-1 ring-white/10 hover:bg-foreground/[0.1] transition-colors"
+                >
+                  <Mail className="w-3 h-3" />
+                  Send email
+                </a>
+              )}
+              {hasOwner && (
+                <button
+                  onClick={() =>
+                    notifyOwner.mutate({ id: leadId, data: { message: draft } })
+                  }
+                  disabled={notifyOwner.isPending || !draft}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-foreground/[0.06] text-foreground/80 ring-1 ring-white/10 hover:bg-foreground/[0.1] transition-colors disabled:opacity-50"
+                >
+                  {notifyOwner.isPending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <BellRing className="w-3 h-3" />
+                  )}
+                  Push to owner
+                </button>
+              )}
               <button
                 onClick={copyDraft}
                 className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline"
@@ -151,18 +250,8 @@ export function AgentBriefPanel({
                 ) : (
                   <Copy className="w-3 h-3" />
                 )}
-                {copied ? "Copied" : "Copy message"}
+                {copied ? "Copied" : "Copy"}
               </button>
-              {leadPhone && (
-                <a
-                  href={`https://wa.me/${leadPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(brief.data.draftMessage)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 hover:underline"
-                >
-                  Send via WhatsApp
-                </a>
-              )}
             </div>
           </div>
         </div>

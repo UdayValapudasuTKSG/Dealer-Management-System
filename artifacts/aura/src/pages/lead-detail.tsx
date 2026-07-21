@@ -17,6 +17,11 @@ import {
 import type { Lead, LeadUpdate, Vehicle } from "@workspace/api-client-react";
 import { StageNav, type StageNavStage } from "@/components/lead/stage-nav";
 import { AgentBriefPanel } from "@/components/lead/agent-brief";
+import {
+  NextCheckpointCard,
+  LeadApprovalsCard,
+  LeadTasksCard,
+} from "@/components/lead/lead-cockpit";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -853,14 +858,39 @@ export default function LeadDetail() {
 
       {/* Journey navigation pane — full width on top */}
       <div className="mb-6">
-        <StageNav stages={journeyStages} currentIndex={journeyIndex} />
+        <StageNav stages={journeyStages} currentIndex={journeyIndex} compact />
+      </div>
+
+      {/* Action cockpit — checkpoint, inline reviews, tasks, and AURA
+          recommendations all above the fold */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 items-start">
+        <NextCheckpointCard
+          stage={journeyStages[journeyIndex]}
+          nextStageLabel={
+            lead.phase === "lost"
+              ? null
+              : (journeyStages[journeyIndex + 1]?.label ?? null)
+          }
+          onOpenWorkflow={() => setWorkflowOpen(true)}
+          canEdit={canEdit}
+        />
+        <div className="space-y-6">
+          <LeadApprovalsCard lead={lead} linkedDealId={linkedDeal?.id} />
+          <LeadTasksCard lead={lead} canEdit={canEdit} />
+        </div>
+        <AgentBriefPanel
+          leadId={lead.id}
+          leadPhone={lead.phone}
+          leadEmail={lead.email}
+          leadSource={lead.source}
+          hasOwner={canEdit && !!lead.ownerUserId}
+          compact
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
         {/* Left rail */}
         <div className="space-y-6">
-          <AgentBriefPanel leadId={lead.id} leadPhone={lead.phone} />
-
           <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
             <div className="flex items-center gap-2 mb-3">
               <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">

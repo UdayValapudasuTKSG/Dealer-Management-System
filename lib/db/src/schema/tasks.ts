@@ -10,6 +10,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
+import { leadsTable } from "./leads";
 
 export type TaskAttachment = { name: string; url: string };
 
@@ -25,6 +26,9 @@ export const tasksTable = pgTable("tasks", {
     () => usersTable.id,
     { onDelete: "set null" },
   ),
+  leadId: integer("lead_id").references(() => leadsTable.id, {
+    onDelete: "set null",
+  }),
   dueDate: date("due_date", { mode: "string" }),
   priority: text("priority").notNull().default("normal"),
   status: text("status").notNull().default("open"),

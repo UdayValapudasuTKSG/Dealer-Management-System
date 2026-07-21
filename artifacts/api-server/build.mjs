@@ -124,7 +124,9 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   const pdfkitDataDir = path.dirname(
     globalThis.require.resolve("pdfkit/js/data/Helvetica.afm"),
   );
-  await cp(pdfkitDataDir, path.resolve(distDir, "data"), { recursive: true });
+  const distDataDir = path.resolve(distDir, "data");
+  await rm(distDataDir, { recursive: true, force: true });
+  await cp(pdfkitDataDir, distDataDir, { recursive: true });
 }
 
 buildAll().catch((err) => {

@@ -3756,6 +3756,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/MarkNotificationsReadResult"
 
+  /leads/{id}/notify-owner:
+    post:
+      operationId: notifyLeadOwner
+      tags: [leads]
+      summary: Send an in-app push notification to the lead owner with a suggested action
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotifyOwnerInput"
+      responses:
+        "200":
+          description: Notification queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotifyOwnerResult"
+        "400":
+          description: Lead has no owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /tasks:
     get:
       operationId: listTasks
@@ -3767,6 +3803,10 @@ paths:
           required: false
           schema: { type: string }
         - name: assigneeUserId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: leadId
           in: query
           required: false
           schema: { type: integer }
@@ -6146,6 +6186,17 @@ components:
       properties:
         name: { type: string }
         url: { type: string }
+    NotifyOwnerInput:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1 }
+    NotifyOwnerResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+
     Task:
       type: object
       required: [id, title, priority, status, attachments, createdAt, updatedAt]
@@ -6157,6 +6208,7 @@ components:
         assigneeName: { type: ["string", "null"] }
         createdByUserId: { type: ["integer", "null"] }
         createdByName: { type: ["string", "null"] }
+        leadId: { type: ["integer", "null"] }
         dueDate: { type: ["string", "null"], format: date }
         priority: { type: string, enum: [low, normal, high, urgent] }
         status: { type: string, enum: [open, in_progress, done] }
@@ -6173,6 +6225,7 @@ components:
         title: { type: string, minLength: 1 }
         description: { type: string }
         assigneeUserId: { type: integer }
+        leadId: { type: integer }
         dueDate: { type: string, format: date }
         priority: { type: string, enum: [low, normal, high, urgent] }
         attachments:
@@ -6184,6 +6237,7 @@ components:
         title: { type: string, minLength: 1 }
         description: { type: string }
         assigneeUserId: { type: integer }
+        leadId: { type: ["integer", "null"] }
         dueDate: { type: string, format: date }
         priority: { type: string, enum: [low, normal, high, urgent] }
         status: { type: string, enum: [open, in_progress, done] }

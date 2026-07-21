@@ -4927,11 +4927,31 @@ export const MarkNotificationsReadResponse = zod.object({
 
 
 /**
+ * @summary Send an in-app push notification to the lead owner with a suggested action
+ */
+export const NotifyLeadOwnerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const NotifyLeadOwnerBody = zod.object({
+  "message": zod.string().min(1)
+})
+
+export const NotifyLeadOwnerResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary List tasks
  */
 export const ListTasksQueryParams = zod.object({
   "status": zod.coerce.string().optional(),
-  "assigneeUserId": zod.coerce.number().optional()
+  "assigneeUserId": zod.coerce.number().optional(),
+  "leadId": zod.coerce.number().optional()
 })
 
 export const ListTasksResponseItem = zod.object({
@@ -4942,6 +4962,7 @@ export const ListTasksResponseItem = zod.object({
   "assigneeName": zod.string().nullish(),
   "createdByUserId": zod.number().nullish(),
   "createdByName": zod.string().nullish(),
+  "leadId": zod.number().nullish(),
   "dueDate": zod.coerce.date().nullish(),
   "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
   "status": zod.enum(['open', 'in_progress', 'done']),
@@ -4963,6 +4984,7 @@ export const CreateTaskBody = zod.object({
   "title": zod.string().min(1),
   "description": zod.string().optional(),
   "assigneeUserId": zod.number().optional(),
+  "leadId": zod.number().optional(),
   "dueDate": zod.coerce.date().optional(),
   "priority": zod.enum(['low', 'normal', 'high', 'urgent']).optional(),
   "attachments": zod.array(zod.object({
@@ -4979,6 +5001,7 @@ export const CreateTaskResponse = zod.object({
   "assigneeName": zod.string().nullish(),
   "createdByUserId": zod.number().nullish(),
   "createdByName": zod.string().nullish(),
+  "leadId": zod.number().nullish(),
   "dueDate": zod.coerce.date().nullish(),
   "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
   "status": zod.enum(['open', 'in_progress', 'done']),
@@ -5003,6 +5026,7 @@ export const UpdateTaskBody = zod.object({
   "title": zod.string().min(1).optional(),
   "description": zod.string().optional(),
   "assigneeUserId": zod.number().optional(),
+  "leadId": zod.number().nullish(),
   "dueDate": zod.coerce.date().optional(),
   "priority": zod.enum(['low', 'normal', 'high', 'urgent']).optional(),
   "status": zod.enum(['open', 'in_progress', 'done']).optional(),
@@ -5020,6 +5044,7 @@ export const UpdateTaskResponse = zod.object({
   "assigneeName": zod.string().nullish(),
   "createdByUserId": zod.number().nullish(),
   "createdByName": zod.string().nullish(),
+  "leadId": zod.number().nullish(),
   "dueDate": zod.coerce.date().nullish(),
   "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
   "status": zod.enum(['open', 'in_progress', 'done']),

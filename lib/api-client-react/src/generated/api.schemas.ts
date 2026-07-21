@@ -3237,6 +3237,15 @@ export interface TaskAttachment {
   url: string;
 }
 
+export interface NotifyOwnerInput {
+  /** @minLength 1 */
+  message: string;
+}
+
+export interface NotifyOwnerResult {
+  ok: boolean;
+}
+
 export type TaskPriority = typeof TaskPriority[keyof typeof TaskPriority];
 
 
@@ -3270,6 +3279,8 @@ export interface Task {
   /** @nullable */
   createdByName?: string | null;
   /** @nullable */
+  leadId?: number | null;
+  /** @nullable */
   dueDate?: string | null;
   priority: TaskPriority;
   status: TaskStatus;
@@ -3295,6 +3306,7 @@ export interface TaskInput {
   title: string;
   description?: string;
   assigneeUserId?: number;
+  leadId?: number;
   dueDate?: string;
   priority?: TaskInputPriority;
   attachments?: TaskAttachment[];
@@ -3324,6 +3336,8 @@ export interface TaskUpdate {
   title?: string;
   description?: string;
   assigneeUserId?: number;
+  /** @nullable */
+  leadId?: number | null;
   dueDate?: string;
   priority?: TaskUpdatePriority;
   status?: TaskUpdateStatus;
@@ -3533,5 +3547,6 @@ status?: string;
 export type ListTasksParams = {
 status?: string;
 assigneeUserId?: number;
+leadId?: number;
 };
 

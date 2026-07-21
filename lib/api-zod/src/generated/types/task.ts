@@ -23,6 +23,8 @@ export interface Task {
   /** @nullable */
   createdByName?: string | null;
   /** @nullable */
+  leadId?: number | null;
+  /** @nullable */
   dueDate?: Date | null;
   priority: TaskPriority;
   status: TaskStatus;

@@ -140,6 +140,8 @@ import type {
   MarkNotificationsReadRequest,
   MarkNotificationsReadResult,
   Notification,
+  NotifyOwnerInput,
+  NotifyOwnerResult,
   OutstandingBalance,
   Part,
   PartInput,
@@ -12326,6 +12328,78 @@ export const useMarkNotificationsRead = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getMarkNotificationsReadMutationOptions(options));
+    }
+
+export const getNotifyLeadOwnerUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/notify-owner`
+}
+
+/**
+ * @summary Send an in-app push notification to the lead owner with a suggested action
+ */
+export const notifyLeadOwner = async (id: number,
+    notifyOwnerInput: NotifyOwnerInput, options?: RequestInit): Promise<NotifyOwnerResult> => {
+
+  return customFetch<NotifyOwnerResult>(getNotifyLeadOwnerUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notifyOwnerInput)
+  }
+);}
+
+
+
+
+
+export const getNotifyLeadOwnerMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof notifyLeadOwner>>, TError,{id: number;data: BodyType<NotifyOwnerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof notifyLeadOwner>>, TError,{id: number;data: BodyType<NotifyOwnerInput>}, TContext> => {
+
+const mutationKey = ['notifyLeadOwner'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof notifyLeadOwner>>, {id: number;data: BodyType<NotifyOwnerInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  notifyLeadOwner(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type NotifyLeadOwnerMutationResult = NonNullable<Awaited<ReturnType<typeof notifyLeadOwner>>>
+    export type NotifyLeadOwnerMutationBody = BodyType<NotifyOwnerInput>
+    export type NotifyLeadOwnerMutationError = ErrorType<Error>
+
+    /**
+ * @summary Send an in-app push notification to the lead owner with a suggested action
+ */
+export const useNotifyLeadOwner = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof notifyLeadOwner>>, TError,{id: number;data: BodyType<NotifyOwnerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof notifyLeadOwner>>,
+        TError,
+        {id: number;data: BodyType<NotifyOwnerInput>},
+        TContext
+      > => {
+      return useMutation(getNotifyLeadOwnerMutationOptions(options));
     }
 
 export const getListTasksUrl = (params?: ListTasksParams,) => {

@@ -13,6 +13,7 @@ export interface TaskInput {
   title: string;
   description?: string;
   assigneeUserId?: number;
+  leadId?: number;
   dueDate?: Date;
   priority?: TaskInputPriority;
   attachments?: TaskAttachment[];

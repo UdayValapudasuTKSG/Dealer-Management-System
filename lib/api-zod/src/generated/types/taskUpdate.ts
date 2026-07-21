@@ -14,6 +14,8 @@ export interface TaskUpdate {
   title?: string;
   description?: string;
   assigneeUserId?: number;
+  /** @nullable */
+  leadId?: number | null;
   dueDate?: Date;
   priority?: TaskUpdatePriority;
   status?: TaskUpdateStatus;

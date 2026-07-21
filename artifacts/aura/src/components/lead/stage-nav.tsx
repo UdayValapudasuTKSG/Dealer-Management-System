@@ -43,11 +43,14 @@ const STAGE_ICON: Record<string, LucideIcon> = {
 export function StageNav({
   stages,
   currentIndex,
+  compact,
 }: {
   stages: StageNavStage[];
   currentIndex: number;
+  /** Hide the guidance checklist panel (when the page renders it elsewhere). */
+  compact?: boolean;
 }) {
-  const current = stages[currentIndex];
+  const current = compact ? undefined : stages[currentIndex];
 
   return (
     <div className="space-y-4">
