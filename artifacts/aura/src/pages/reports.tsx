@@ -188,12 +188,12 @@ export default function Reports() {
         title="Reports"
         subtitle="Performance, revenue and pipeline analytics — scoped to your role."
       />
-      <div className="w-full px-5 md:px-8 py-8 space-y-10">
+      <div className="w-full px-5 md:px-8 py-5 space-y-5">
         {/* Persona-aware analytics home: advisors see their own numbers,
             managers see the team, leadership sees divisions. */}
         <PersonaOverview />
 
-        <div className="space-y-6">
+        <div id="detailed-reports" className="space-y-4 scroll-mt-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <h2 className="text-sm font-bold uppercase tracking-widest text-foreground">
             Detailed Reports
@@ -285,7 +285,7 @@ function ReportBody({ report }: { report: Report }) {
       : String(v);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Export bar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
@@ -305,7 +305,7 @@ function ReportBody({ report }: { report: Report }) {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         {report.kpis.map((k, i) => (
           <motion.div
             key={k.label}
@@ -313,16 +313,16 @@ function ReportBody({ report }: { report: Report }) {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05, duration: 0.4 }}
           >
-            <Card className="glass-panel border-none shadow-lg">
-              <CardContent className="p-5">
-                <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+            <Card className="glass-panel border-none shadow-md h-full">
+              <CardContent className="px-3.5 py-3">
+                <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground truncate">
                   {k.label}
                 </p>
-                <h2 className="mt-2 text-2xl font-bold tracking-tight">
+                <h2 className="mt-1 text-lg font-bold tracking-tight leading-none">
                   {k.value}
                 </h2>
                 {k.sub && (
-                  <p className="mt-1 text-xs text-muted-foreground">{k.sub}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground truncate">{k.sub}</p>
                 )}
               </CardContent>
             </Card>
@@ -332,12 +332,12 @@ function ReportBody({ report }: { report: Report }) {
 
       {/* Chart */}
       <Card className="glass-panel border-none shadow-xl">
-        <div className="p-6 pb-3">
-          <h3 className="text-lg font-semibold tracking-wide">
+        <div className="px-4 pt-3 pb-1">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
             {report.chart.valueLabel}
           </h3>
         </div>
-        <CardContent className="p-2 h-[300px]">
+        <CardContent className="p-2 h-[210px]">
           {chartData.length === 0 ? (
             <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
               No data in this range.
@@ -404,7 +404,7 @@ function ReportBody({ report }: { report: Report }) {
 
       {/* Table */}
       <Card className="glass-panel border-none shadow-xl overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[240px] overflow-y-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10">

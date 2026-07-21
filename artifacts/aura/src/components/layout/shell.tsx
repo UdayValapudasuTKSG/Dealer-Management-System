@@ -25,7 +25,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
       <SideNav />
 
-      <div className="flex flex-1 min-h-0 w-full flex-col">
+      <div className="flex flex-1 min-h-0 min-w-0 flex-col">
         {/* Slim utility bar */}
         <div className="flex items-center gap-2 px-5 md:px-8 h-14 shrink-0 relative z-20">
           <MobileNav />
@@ -35,7 +35,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <NotificationBell />
         </div>
 
-        <div className="flex flex-1 min-h-0 w-full">
+        <div className="flex flex-1 min-h-0 min-w-0">
         <main className="flex-1 overflow-y-auto relative z-10 scroll-smooth min-w-0">
           <div className="min-h-full h-full">{children}</div>
         </main>
