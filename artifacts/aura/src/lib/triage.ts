@@ -59,14 +59,16 @@ type GateLike = {
 };
 
 /** Deep-link a pending review to the record it concerns (lead at its stage,
- * deal, delivery…), falling back to the approvals queue. */
+ * deal, delivery…). Gates render inline on those records — there is no
+ * standalone approvals queue. */
 function gateHref(g: GateLike): string {
   if (g.refId != null) {
     if (g.refType === "lead") return `/lead/${g.refId}`;
     if (g.refType === "deal") return "/deals";
     if (g.refType === "delivery") return "/deliveries";
+    if (g.refType === "vehicle") return "/inventory";
   }
-  return "/approvals";
+  return "/deals";
 }
 
 type DeliveryLike = {

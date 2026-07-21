@@ -13,7 +13,6 @@ import {
   X,
   LayoutDashboard,
   BarChart3,
-  ClipboardCheck,
   ListChecks,
   Waypoints,
   Landmark,
@@ -49,7 +48,6 @@ const CLUSTERS: Cluster[] = [
     items: [
       { name: "My Day", href: "/command-center", module: "", icon: LayoutDashboard },
       { name: "Reports", href: "/reports", module: "", icon: BarChart3 },
-      { name: "Approvals", href: "/approvals", module: "approvals", icon: ClipboardCheck },
       { name: "AI Agents", href: "/agents", module: "", icon: Bot },
     ],
   },

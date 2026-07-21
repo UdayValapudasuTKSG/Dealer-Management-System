@@ -29,7 +29,6 @@ import CustomerDetail from "@/pages/customer-detail";
 import LeadDetail from "@/pages/lead-detail";
 import VehicleDetailPage from "@/pages/vehicle-detail";
 import TeamProfile from "@/pages/team-profile";
-import Approvals from "@/pages/approvals";
 import Gra from "@/pages/gra";
 import Agents from "@/pages/agents";
 import SettingsUsers from "@/pages/settings-users";
@@ -227,11 +226,13 @@ function AppRoutes() {
                 <Route path="/inventory" component={Inventory} />
                 <Route path="/deals" component={Deals} />
                 <Route path="/finance" component={Finance} />
+                <Route path="/approvals">
+                  <Redirect to="/deals" />
+                </Route>
                 <Route path="/service" component={Service} />
                 <Route path="/parts" component={Parts} />
                 <Route path="/workshop" component={Workshop} />
                 <Route path="/deliveries" component={Deliveries} />
-                <Route path="/approvals" component={Approvals} />
                 <Route path="/customers" component={Customers} />
                 <Route path="/customers/:id" component={CustomerDetail} />
                 <Route path="/lead/:id" component={LeadDetail} />

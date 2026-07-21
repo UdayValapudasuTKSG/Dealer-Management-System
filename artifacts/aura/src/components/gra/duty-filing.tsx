@@ -220,7 +220,7 @@ export function DutyFiling({
           setSubmittedGateId(gate.id);
           toast({
             title: "Filing routed to a decision gate",
-            description: "A manager can now approve the duty pack in Reviews.",
+            description: "A manager can now approve the duty pack on the deal.",
           });
         },
         onError: () => {
@@ -478,10 +478,10 @@ export function DutyFiling({
 
                   {submittedGateId ? (
                     <Link
-                      href="/approvals"
+                      href="/deals"
                       className="flex items-center justify-center gap-2 w-full rounded-full bg-primary hover:bg-primary/90 text-white h-12 font-medium transition-colors"
                     >
-                      Review in Reviews
+                      Review on the deal
                       <ChevronRight className="w-4 h-4" />
                     </Link>
                   ) : (
