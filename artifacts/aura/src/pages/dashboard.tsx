@@ -7,7 +7,6 @@ import {
   useGetSalesPerformance,
   useGetPipeline,
   useGetInventoryBreakdown,
-  useListTimeline,
   useListGates,
   useListLeads,
   useListDeals,
@@ -74,21 +73,21 @@ import {
   LineChart,
   Line,
   Legend,
-  ScatterChart,
-  Scatter,
-  ZAxis
 } from "recharts";
 import { motion } from "framer-motion";
-import { formatDistanceToNow, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useAuthz } from "@/lib/auth";
+import type { TriageItem } from "@/lib/triage";
 
+/* Mild, muted palette — soft blues/greys so series stay distinguishable
+   without shouting (per the Income Tracker reference). */
 const POWERTRAIN_COLORS: Record<string, string> = {
-  EV: "hsl(var(--primary))",
-  Hybrid: "hsl(216 10% 40%)",
-  Petrol: "hsl(216 10% 60%)",
-  Diesel: "hsl(216 10% 80%)",
+  EV: "#7CA6CE",
+  Hybrid: "#86ABA1",
+  Petrol: "#C2A883",
+  Diesel: "#8494A7",
 };
-const POWERTRAIN_FALLBACK = "hsl(216 10% 80%)";
+const POWERTRAIN_FALLBACK = "#AEB8C2";
 
 const TOOLTIP_STYLE = {
   background: "hsl(var(--popover))",
@@ -106,11 +105,11 @@ function greeting() {
 }
 
 const SERIES_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(216 10% 30%)",
-  "hsl(216 10% 50%)",
-  "hsl(216 10% 70%)",
-  "hsl(216 10% 85%)",
+  "#7CA6CE",
+  "#8494A7",
+  "#86ABA1",
+  "#C2A883",
+  "#A492B0",
 ];
 
 const AXIS_TICK = { fontSize: 12, fill: "hsl(var(--muted-foreground))" } as const;
@@ -160,79 +159,161 @@ function getInitials(name: string) {
   return name.slice(0, 2).toUpperCase();
 }
 
-function TriageCard({ item }: { item: any }) {
+/* Categorized brief: instead of one flat dump of cards, the queue is grouped
+   into clear categories, each capped and forwarding to its owning page. */
+const TRIAGE_CATEGORIES: {
+  key: string;
+  kinds: string[];
+  label: string;
+  icon: any;
+  href: string;
+}[] = [
+  { key: "contacts", kinds: ["contact"], label: "Contacts Due", icon: PhoneCall, href: "/pipeline" },
+  { key: "approvals", kinds: ["gate"], label: "Approvals", icon: ShieldCheck, href: "/approvals" },
+  { key: "testDrives", kinds: ["testDrive"], label: "Test Drives", icon: CalendarClock, href: "/pipeline" },
+  { key: "deliveries", kinds: ["delivery"], label: "Deliveries", icon: Car, href: "/deliveries" },
+  { key: "service", kinds: ["service"], label: "Service", icon: Zap, href: "/service" },
+  { key: "followUps", kinds: ["stalled", "quote", "deposit"], label: "Follow-Ups", icon: AlertCircle, href: "/pipeline" },
+];
+
+const TRIAGE_CAP = 3;
+
+function TriageRow({ item }: { item: TriageItem }) {
   const [, navigate] = useLocation();
   const ui = KIND_UI[item.kind] || KIND_UI.stalled;
-  const isOverdue = item.kind === "contact" && item.slaHoursLeft !== undefined && item.slaHoursLeft <= 0;
-  
+  const isUrgent = item.bucket === "urgent";
+  const isOverdue =
+    item.kind === "contact" &&
+    item.slaHoursLeft !== undefined &&
+    item.slaHoursLeft <= 0;
+
   return (
-    <div className={cn(
-      "group flex flex-col justify-between p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden",
-      item.bucket === "urgent" 
-        ? "bg-foreground text-background border-transparent shadow-xl" 
-        : "bg-card text-card-foreground border-border/60 hover:border-foreground/20 hover:shadow-md"
-    )}>
-      {/* Decorative glass reflection for urgent cards */}
-      {item.bucket === "urgent" && (
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 blur-2xl rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+    <button
+      onClick={() => navigate(item.href)}
+      className={cn(
+        "group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all",
+        isUrgent
+          ? "bg-foreground text-background border-transparent"
+          : "bg-card text-card-foreground border-border/60 hover:border-foreground/20 hover:shadow-sm",
       )}
-      
-      <div className="flex items-start justify-between gap-3 relative z-10">
-        <div className="flex items-center gap-3">
-          <div className={cn(
-            "w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-xs tracking-wider",
-            item.bucket === "urgent" ? "bg-white/20 text-white" : "bg-foreground/5 text-foreground"
-          )}>
-            {getInitials(item.context)}
-          </div>
-          <div>
-            <div className="font-semibold text-sm line-clamp-1">{item.context}</div>
-            <div className={cn(
-              "text-xs mt-0.5 line-clamp-1",
-              item.bucket === "urgent" ? "text-white/70" : "text-muted-foreground"
-            )}>
-              {item.subContext}
-            </div>
-          </div>
-        </div>
-        {isOverdue && (
-          <div className="flex items-center gap-1 bg-red-500/20 text-red-100 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
-            <AlertCircle className="w-3 h-3" />
-            Overdue
-          </div>
+    >
+      <div
+        className={cn(
+          "w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] tracking-wider",
+          isUrgent ? "bg-white/20 text-white" : "bg-foreground/5 text-foreground",
         )}
+      >
+        {getInitials(item.context)}
       </div>
-      
-      <div className="flex items-end justify-between mt-5 relative z-10">
-        <div className={cn(
-          "text-[10px] uppercase tracking-widest font-semibold",
-          item.bucket === "urgent" ? "text-white/50" : "text-muted-foreground/60"
-        )}>
-          {item.assignee ? `w/ ${item.assignee}` : "Unassigned"}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-sm truncate">{item.context}</span>
+          {isOverdue && (
+            <span className="inline-flex items-center gap-1 bg-red-500/20 text-red-500 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
+              Overdue
+            </span>
+          )}
         </div>
-        <button 
-          onClick={() => navigate(item.href)}
+        <div
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all",
-            item.bucket === "urgent" 
-              ? "bg-white text-black hover:bg-white/90" 
-              : "bg-foreground text-background hover:bg-foreground/90"
+            "text-[11px] truncate mt-0.5",
+            isUrgent ? "text-background/60" : "text-muted-foreground",
           )}
         >
-          {ui.action}
-          <ArrowRight className="w-3 h-3" />
-        </button>
+          {item.subContext}
+          {item.assignee ? ` · w/ ${item.assignee}` : ""}
+        </div>
       </div>
+      <span
+        className={cn(
+          "flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest shrink-0",
+          isUrgent ? "text-background/70" : "text-muted-foreground group-hover:text-foreground",
+        )}
+      >
+        {ui.action}
+        <ArrowRight className="w-3 h-3" />
+      </span>
+    </button>
+  );
+}
+
+function TriageBrief({ items }: { items: TriageItem[] }) {
+  const groups = TRIAGE_CATEGORIES.map((cat) => ({
+    ...cat,
+    items: items.filter((i) => cat.kinds.includes(i.kind)),
+  })).filter((g) => g.items.length > 0);
+
+  if (groups.length === 0) {
+    return (
+      <div className="py-12 rounded-3xl border border-dashed border-border flex flex-col items-center justify-center text-muted-foreground">
+        <CheckCircle2 className="w-8 h-8 mb-3 opacity-20" />
+        <p className="text-sm font-medium">All caught up</p>
+        <p className="text-xs mt-1 opacity-70">Nothing needs your attention right now.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+      {groups.map((g, gi) => {
+        const Icon = g.icon;
+        const overflow = g.items.length - TRIAGE_CAP;
+        return (
+          <motion.div
+            key={g.key}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: gi * 0.05 }}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Icon className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-[10px] font-bold uppercase tracking-widest text-foreground">
+                {g.label}
+              </span>
+              <span className="bg-foreground/10 text-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums">
+                {g.items.length}
+              </span>
+              {overflow > 0 && (
+                <Link
+                  href={g.href}
+                  className="ml-auto text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  +{overflow} more
+                </Link>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              {g.items.slice(0, TRIAGE_CAP).map((item) => (
+                <TriageRow key={item.key} item={item} />
+              ))}
+            </div>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }
 
+/* Roles that see the full dealership-wide briefing. Everyone else (advisors,
+   technicians, coordinators) gets a curtailed, personal briefing per the
+   persona feature matrix. */
+const BROAD_VIEW_ROLES = new Set([
+  "General Manager",
+  "Sales Manager",
+  "Service Manager",
+  "Finance Manager",
+]);
+
 export default function Dashboard() {
+  const { me, can } = useAuthz();
+  const isBroadView =
+    !!me && (me.isSuperAdmin || BROAD_VIEW_ROLES.has(me.roleName ?? ""));
+  const myName = me?.name ?? null;
+
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
   const { data: performance, isLoading: isLoadingPerf } = useGetSalesPerformance();
   const { data: pipeline } = useGetPipeline();
   const { data: inventory } = useGetInventoryBreakdown();
-  const { data: timeline } = useListTimeline({ limit: 12 });
   const { data: gates } = useListGates({ status: "pending" });
   const { data: leads } = useListLeads();
   const { data: deals } = useListDeals();
@@ -240,11 +321,56 @@ export default function Dashboard() {
   const { data: deliveries } = useListDeliveries();
   const { data: serviceOrders } = useListServiceOrders();
 
-  const agentEvents = (timeline ?? []).filter((e) => e.isAgent);
+  /* Persona scoping: advisors only triage records assigned to them.
+     Deny-by-default: a non-manager with no display name sees NOTHING
+     dealership-wide, never the unfiltered dataset. */
+  const nameKey = myName?.trim().toLowerCase() ?? null;
+  const matchesMe = (assignee: string | null | undefined) =>
+    nameKey != null && (assignee ?? "").trim().toLowerCase() === nameKey;
+  const scopedLeads = useMemo(
+    () =>
+      isBroadView ? leads : (leads ?? []).filter((l) => matchesMe(l.assignedTo)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [leads, isBroadView, nameKey],
+  );
+  const scopedDeals = useMemo(
+    () =>
+      isBroadView ? deals : (deals ?? []).filter((d) => matchesMe(d.salesAdvisor)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deals, isBroadView, nameKey],
+  );
+  const scopedDeliveries = useMemo(
+    () =>
+      isBroadView
+        ? deliveries
+        : (deliveries ?? []).filter((d) => matchesMe(d.advisorName)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deliveries, isBroadView, nameKey],
+  );
+  const scopedServiceOrders = useMemo(
+    () =>
+      isBroadView
+        ? serviceOrders
+        : (serviceOrders ?? []).filter((s) => matchesMe(s.technician)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [serviceOrders, isBroadView, nameKey],
+  );
+  const scopedGates = can("approvals", "view") ? gates : [];
 
   const { urgent, today, later, total: objectivesCount } = useMemo(
-    () => buildTriage(leads, deals, gates, deliveries, serviceOrders),
-    [leads, deals, gates, deliveries, serviceOrders],
+    () =>
+      buildTriage(
+        scopedLeads,
+        scopedDeals,
+        scopedGates,
+        scopedDeliveries,
+        scopedServiceOrders,
+      ),
+    [scopedLeads, scopedDeals, scopedGates, scopedDeliveries, scopedServiceOrders],
+  );
+  const triageItems = useMemo(
+    () => [...urgent, ...today, ...later],
+    [urgent, today, later],
   );
 
   const revenueTrend = (performance ?? []).map((p) => p.revenue);
@@ -351,30 +477,7 @@ export default function Dashboard() {
                 </span>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {urgent.length > 0 && urgent.map((item, i) => (
-                  <motion.div key={item.key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                    <TriageCard item={item} />
-                  </motion.div>
-                ))}
-                {today.length > 0 && today.map((item, i) => (
-                  <motion.div key={item.key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: (urgent.length + i) * 0.05 }}>
-                    <TriageCard item={item} />
-                  </motion.div>
-                ))}
-                {urgent.length === 0 && today.length === 0 && later.length > 0 && later.map((item, i) => (
-                  <motion.div key={item.key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                    <TriageCard item={item} />
-                  </motion.div>
-                ))}
-                {objectivesCount === 0 && (
-                  <div className="col-span-full py-12 rounded-3xl border border-dashed border-border flex flex-col items-center justify-center text-muted-foreground">
-                    <CheckCircle2 className="w-8 h-8 mb-3 opacity-20" />
-                    <p className="text-sm font-medium">All caught up</p>
-                    <p className="text-xs mt-1 opacity-70">You have no pending tasks right now.</p>
-                  </div>
-                )}
-              </div>
+              <TriageBrief items={triageItems} />
             </div>
 
             <div className="md:col-span-1 xl:col-span-1">
@@ -390,269 +493,284 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* KPI Grid (Refined Stat Cards) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 pt-4">
-          <KPICard
-            title="Monthly Revenue"
-            value={summary ? `$${(summary.monthlyRevenue / 1000).toFixed(1)}k` : "$0"}
-            sub="Delivered this month"
-            icon={TrendingUp}
-            isLoading={isLoadingSummary}
-            delay={0.05}
-            accent
-            delta={revDelta}
-            trend={revenueTrend}
-            href="/deals"
-          />
-          <KPICard
-            title="Active Deals"
-            value={summary?.activeDeals ?? 0}
-            sub={summary ? `${summary.totalLeads} live leads` : "in motion"}
-            icon={GitBranch}
-            isLoading={isLoadingSummary}
-            delay={0.1}
-            href="/deals"
-          />
-          <KPICard
-            title="Conversion"
-            value={summary ? `${summary.conversionRate}%` : "0%"}
-            sub="Lead to delivery"
-            icon={Users}
-            isLoading={isLoadingSummary}
-            delay={0.15}
-            href="/pipeline"
-          />
-          <KPICard
-            title="Handled Autonomously"
-            value={summary?.agentTasksToday ?? 0}
-            sub={summary ? `${summary.avgResponseSeconds}s avg response` : "today"}
-            icon={Bot}
-            isLoading={isLoadingSummary}
-            delay={0.2}
-            href="/tasks"
-          />
-        </div>
-
-        {/* Revenue trajectory + Pipeline (Horizontal Stage Value) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col overflow-hidden">
-            <ChartHeader
+        {/* KPI Grid — dealership-wide for managers, personal for advisors */}
+        {isBroadView ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 pt-4">
+            <KPICard
+              title="Monthly Revenue"
+              value={summary ? `$${(summary.monthlyRevenue / 1000).toFixed(1)}k` : "$0"}
+              sub="Delivered this month"
               icon={TrendingUp}
-              title="Revenue Trajectory"
-              sub="Delivered revenue over recent months"
+              isLoading={isLoadingSummary}
+              delay={0.05}
+              accent
+              delta={revDelta}
+              trend={revenueTrend}
+              href="/deals"
             />
-            <CardContent className="p-0 flex-1 min-h-[260px]">
-              {isLoadingPerf ? (
-                <ChartLoader />
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={performance} margin={{ top: 16, right: 24, left: 8, bottom: 16 }}>
-                    <defs>
-                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--foreground))" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="hsl(var(--foreground))" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val) => `$${val / 1000}k`} width={44} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} formatter={(val: number) => [`$${val.toLocaleString()}`, "Revenue"]} />
-                    <Area type="monotone" dataKey="revenue" stroke="hsl(var(--foreground))" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="glass-panel border-none shadow-xl flex flex-col">
-            <ChartHeader
+            <KPICard
+              title="Active Deals"
+              value={summary?.activeDeals ?? 0}
+              sub={summary ? `${summary.totalLeads} live leads` : "in motion"}
               icon={GitBranch}
-              title="Sales Pipeline"
-              sub="Opportunity value by stage"
+              isLoading={isLoadingSummary}
+              delay={0.1}
+              href="/deals"
             />
-            <CardContent className="px-6 pb-6 pt-0 flex-1">
-              <PipelineFunnel stages={pipeline ?? []} />
-            </CardContent>
-          </Card>
-        </div>
+            <KPICard
+              title="Conversion"
+              value={summary ? `${summary.conversionRate}%` : "0%"}
+              sub="Lead to delivery"
+              icon={Users}
+              isLoading={isLoadingSummary}
+              delay={0.15}
+              href="/pipeline"
+            />
+            <KPICard
+              title="Handled Autonomously"
+              value={summary?.agentTasksToday ?? 0}
+              sub={summary ? `${summary.avgResponseSeconds}s avg response` : "today"}
+              icon={Bot}
+              isLoading={isLoadingSummary}
+              delay={0.2}
+              href="/tasks"
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 pt-4">
+            <KPICard
+              title="My Leads"
+              value={(scopedLeads ?? []).length}
+              sub="Assigned to you"
+              icon={Users}
+              isLoading={!leads}
+              delay={0.05}
+              accent
+              href="/pipeline"
+            />
+            <KPICard
+              title="My Open Deals"
+              value={
+                (scopedDeals ?? []).filter(
+                  (d) => d.stage !== "delivered" && d.stage !== "lost",
+                ).length
+              }
+              sub="In motion"
+              icon={GitBranch}
+              isLoading={!deals}
+              delay={0.1}
+              href="/deals"
+            />
+            <KPICard
+              title="Test Drives"
+              value={triageItems.filter((i) => i.kind === "testDrive").length}
+              sub="Coming up"
+              icon={CalendarClock}
+              isLoading={!leads}
+              delay={0.15}
+              href="/pipeline"
+            />
+            <KPICard
+              title="My Deliveries"
+              value={triageItems.filter((i) => i.kind === "delivery").length}
+              sub="In preparation"
+              icon={Car}
+              isLoading={!deliveries}
+              delay={0.2}
+              href="/deliveries"
+            />
+          </div>
+        )}
 
-        {/* Predictive Intelligence */}
-        <PredictiveSection />
+        {/* Revenue, forecast & projections — merged card row (managers only) */}
+        {isBroadView && (
+          <PredictiveSection
+            monthlyRevenue={summary?.monthlyRevenue ?? null}
+            revDelta={revDelta}
+          />
+        )}
 
-        {/* Customer Sentiment (Advanced Visualization) */}
-        <SentimentSection />
+        {/* Demand & pipeline (managers only) */}
+        {isBroadView && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col overflow-hidden">
+              <ChartHeader
+                icon={LineChartIcon}
+                title="Lead Flow"
+                sub="Weekly leads by top sources"
+              />
+              <CardContent className="p-0 flex-1 min-h-[240px] flex flex-col">
+                {topSources.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-12">
+                    No lead activity yet.
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center gap-2 px-6 pb-3">
+                      {sourceMix.map((s) => (
+                        <span
+                          key={s.name}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-foreground/[0.02] px-2.5 py-1 text-[11px] font-medium text-muted-foreground capitalize"
+                        >
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ background: s.fill }}
+                          />
+                          {s.name}
+                          <span className="tabular-nums font-bold text-foreground">
+                            {s.value}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex-1 min-h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={leadsOverTime} margin={{ top: 8, right: 24, left: 8, bottom: 16 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                          <XAxis dataKey="week" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+                          <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} width={32} />
+                          <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} />
+                          {topSources.map((s, i) => (
+                            <Line
+                              key={s}
+                              type="monotone"
+                              dataKey={s}
+                              name={s.replace(/_/g, " ")}
+                              stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                              strokeWidth={2}
+                              dot={false}
+                            />
+                          ))}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
 
-        {/* Team & product performance */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col">
+            <Card className="glass-panel border-none shadow-xl flex flex-col">
+              <ChartHeader
+                icon={GitBranch}
+                title="Sales Pipeline"
+                sub="Opportunity value by stage"
+              />
+              <CardContent className="px-6 pb-6 pt-0 flex-1">
+                <PipelineFunnel stages={pipeline ?? []} />
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Volume & stock — three dense cards (managers only) */}
+        {isBroadView && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className="glass-panel border-none shadow-xl flex flex-col">
+              <ChartHeader
+                icon={BarChart3}
+                title="Units Delivered"
+                sub="Monthly delivered volume"
+              />
+              <CardContent className="p-0 flex-1 min-h-[260px]">
+                {isLoadingPerf ? (
+                  <ChartLoader />
+                ) : (
+                  <UnitsLollipop
+                    data={(performance ?? []).map((p) => ({
+                      month: p.month,
+                      units: p.units,
+                    }))}
+                    delta={unitsDelta}
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="glass-panel border-none shadow-xl flex flex-col">
+              <ChartHeader
+                icon={Layers}
+                title="Inventory Mix"
+                sub="Showroom stock by powertrain"
+              />
+              <CardContent className="px-6 pb-6 pt-0 flex-1">
+                <InventoryDonut data={inventory ?? []} />
+              </CardContent>
+            </Card>
+
+            <Card className="glass-panel border-none shadow-xl flex flex-col">
+              <ChartHeader
+                icon={Car}
+                title="Sales by Model"
+                sub="Deal value by vehicle"
+              />
+              <CardContent className="px-6 pb-6 pt-0 flex-1">
+                {salesByModel.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground text-sm">
+                    No deal value to chart yet.
+                  </div>
+                ) : (
+                  <div className="space-y-4 pt-1">
+                    {salesByModel.map((m) => {
+                      const max = salesByModel[0]?.value || 1;
+                      return (
+                        <div key={m.model}>
+                          <div className="flex items-center justify-between text-sm mb-1.5">
+                            <span className="font-medium truncate pr-3 text-foreground">{m.model}</span>
+                            <span className="text-muted-foreground tabular-nums shrink-0 text-xs">
+                              ${Math.round(m.value / 1000)}k <span className="opacity-50 mx-1">/</span> {m.units}
+                            </span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-foreground/[0.05] overflow-hidden">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${(m.value / max) * 100}%` }}
+                              transition={{ duration: 0.8, ease: "easeOut" }}
+                              className="h-full rounded-full"
+                              style={{ background: SERIES_COLORS[0] }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Customer Sentiment (managers only) */}
+        {isBroadView && <SentimentSection />}
+
+        {/* Advisor performance (managers only) */}
+        {isBroadView && (
+          <Card className="glass-panel border-none shadow-xl flex flex-col">
             <ChartHeader
               icon={Trophy}
               title="Advisor Performance"
               sub="Delivered and open deals per advisor"
             />
-            <CardContent className="px-4 pb-4 pt-0 flex-1 min-h-[260px]">
+            <CardContent className="px-4 pb-4 pt-0 flex-1 min-h-[240px]">
               {advisorPerf.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground text-sm">
                   No deals recorded yet.
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height={Math.max(200, advisorPerf.length * 44)}>
                   <BarChart data={advisorPerf} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
                     <XAxis type="number" axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} />
                     <YAxis type="category" dataKey="advisor" axisLine={false} tickLine={false} tick={AXIS_TICK} width={120} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} />
                     <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} />
-                    <Bar dataKey="delivered" name="Delivered" stackId="a" fill="hsl(var(--foreground))" maxBarSize={12} radius={[0, 0, 0, 0]} />
-                    <Bar dataKey="open" name="Open" stackId="a" fill="hsl(var(--foreground) / 0.2)" radius={[0, 4, 4, 0]} maxBarSize={12} />
+                    <Bar dataKey="delivered" name="Delivered" stackId="a" fill={SERIES_COLORS[0]} maxBarSize={12} radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="open" name="Open" stackId="a" fill={SERIES_COLORS[1]} fillOpacity={0.45} radius={[0, 4, 4, 0]} maxBarSize={12} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
-
-          <Card className="glass-panel border-none shadow-xl flex flex-col">
-            <ChartHeader
-              icon={Car}
-              title="Sales by Model"
-              sub="Deal value by vehicle"
-            />
-            <CardContent className="px-6 pb-6 pt-0 flex-1">
-              {salesByModel.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground text-sm">
-                  No deal value to chart yet.
-                </div>
-              ) : (
-                <div className="space-y-4 pt-1">
-                  {salesByModel.map((m) => {
-                    const max = salesByModel[0]?.value || 1;
-                    return (
-                      <div key={m.model}>
-                        <div className="flex items-center justify-between text-sm mb-1.5">
-                          <span className="font-medium truncate pr-3 text-foreground">{m.model}</span>
-                          <span className="text-muted-foreground tabular-nums shrink-0 text-xs">
-                            ${Math.round(m.value / 1000)}k <span className="opacity-50 mx-1">/</span> {m.units}
-                          </span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-foreground/[0.05] overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${(m.value / max) * 100}%` }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                            className="h-full rounded-full bg-foreground"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Lead flow + Units delivered */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col overflow-hidden">
-            <ChartHeader
-              icon={LineChartIcon}
-              title="Lead Flow"
-              sub="Weekly leads by top sources"
-            />
-            <CardContent className="p-0 flex-1 min-h-[260px]">
-              {topSources.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-12">
-                  No lead activity yet.
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={leadsOverTime} margin={{ top: 16, right: 24, left: 8, bottom: 16 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="week" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} width={32} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} />
-                    <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} />
-                    {topSources.map((s, i) => (
-                      <Line
-                        key={s}
-                        type="monotone"
-                        dataKey={s}
-                        name={s.replace(/_/g, " ")}
-                        stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="glass-panel border-none shadow-xl flex flex-col">
-            <ChartHeader
-              icon={BarChart3}
-              title="Units Delivered"
-              sub="Monthly delivered volume"
-            />
-            <CardContent className="p-0 flex-1 min-h-[260px]">
-              <UnitsBar
-                data={(performance ?? []).map((p) => ({
-                  month: p.month,
-                  units: p.units,
-                }))}
-              />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Inventory mix + Autonomous activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="glass-panel border-none shadow-xl flex flex-col">
-            <ChartHeader
-              icon={Layers}
-              title="Inventory Mix"
-              sub="Showroom stock by powertrain"
-            />
-            <CardContent className="px-6 pb-6 pt-0 flex-1">
-              <InventoryDonut data={inventory ?? []} />
-            </CardContent>
-          </Card>
-
-          <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col">
-            <ChartHeader
-              icon={Zap}
-              title="Autonomous Activity"
-              sub="Actions handled by AURA agents"
-            />
-            <CardContent className="px-4 pb-4 pt-0 flex-1">
-              {agentEvents.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground text-sm">
-                  No autonomous activity yet.
-                </div>
-              ) : (
-                <div className="divide-y divide-border/50">
-                  {agentEvents.slice(0, 8).map((e) => (
-                    <div key={e.id} className="flex items-start gap-3 py-3">
-                      <div className="w-7 h-7 rounded-full bg-foreground text-background flex items-center justify-center shrink-0 mt-0.5">
-                        <Bot className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-foreground truncate">{e.title}</div>
-                        {e.detail && (
-                          <div className="text-xs text-muted-foreground truncate mt-0.5">{e.detail}</div>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-muted-foreground shrink-0 tabular-nums">
-                        {formatDistanceToNow(new Date(e.createdAt), { addSuffix: true })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -677,17 +795,42 @@ const TREND_META: Record<
   flat: { icon: ArrowRight, className: "text-muted-foreground" },
 };
 
-function PredictiveSection() {
+function PredictiveSection({
+  monthlyRevenue,
+  revDelta,
+}: {
+  monthlyRevenue: number | null;
+  revDelta: number | null;
+}) {
   const { data, isLoading } = useGetPredictiveAnalytics();
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-span-2 glass-panel border-none shadow-xl overflow-hidden bg-gradient-to-br from-card to-card/50">
-        <ChartHeader
-          icon={Brain}
-          title="Predictive Intelligence"
-          sub="Delivered revenue, projected three months ahead"
-        />
+        <div className="p-6 pb-3 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2">
+              <Brain className="w-4 h-4 text-muted-foreground" />
+              <h3 className="text-sm font-bold uppercase tracking-widest text-foreground">
+                Revenue &amp; Forecast
+              </h3>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Delivered revenue with a three-month projection
+            </p>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-light tabular-nums tracking-tight text-foreground">
+              {monthlyRevenue != null
+                ? `$${(monthlyRevenue / 1000).toFixed(1)}k`
+                : "—"}
+            </span>
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              this month
+            </span>
+            {revDelta != null && <TrendBadge delta={revDelta} />}
+          </div>
+        </div>
         <CardContent className="p-0 h-[280px]">
           {isLoading || !data ? (
             <ChartLoader />
@@ -697,7 +840,7 @@ function PredictiveSection() {
         </CardContent>
       </Card>
 
-      <Card className="glass-panel border-none shadow-xl flex flex-col bg-foreground text-background">
+      <Card className="border-none shadow-xl flex flex-col bg-foreground text-background">
         <div className="p-6 pb-3 flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -1144,41 +1287,87 @@ function PipelineFunnel({ stages }: { stages: PipelineStage[] }) {
   );
 }
 
-function UnitsBar({ data }: { data: { month: string; units: number }[] }) {
+/* Lollipop chart styled after the "Income Tracker" reference: headline delta
+   stat, soft-blue dots on thin stems, dark pill on the peak value, and
+   circular month chips along the axis. */
+function UnitsLollipop({
+  data,
+  delta,
+}: {
+  data: { month: string; units: number }[];
+  delta: number | null;
+}) {
   if (data.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+      <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-12">
         No sales data yet.
       </div>
     );
   }
-  
-  // Stem chart style
+
+  const max = Math.max(...data.map((d) => d.units), 1);
+  const peakIdx = data.reduce(
+    (best, d, i, arr) => (d.units > arr[best].units ? i : best),
+    0,
+  );
+  const totalUnits = data.reduce((s, d) => s + d.units, 0);
+
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <ScatterChart margin={{ top: 16, right: 16, left: -24, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
-        <YAxis dataKey="units" axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} />
-        <Tooltip
-          contentStyle={TOOLTIP_STYLE}
-          itemStyle={{ color: "hsl(var(--foreground))" }}
-          labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-          cursor={{ stroke: "hsl(var(--foreground) / 0.1)", strokeWidth: 1, strokeDasharray: "3 3" }}
-          formatter={(val: number) => [`${val}`, "Units"]}
-        />
-        <Scatter data={data} fill="hsl(var(--foreground))" shape={(props: any) => {
-          const { cx, cy, yAxis } = props;
-          const y0 = yAxis.scale(0);
+    <div className="flex flex-col h-full px-6 pb-6">
+      <div className="flex items-baseline gap-3">
+        <span className="text-4xl font-light tabular-nums tracking-tight text-foreground">
+          {delta == null ? "—" : `${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(0)}%`}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          vs prior month · {totalUnits} total
+        </span>
+      </div>
+
+      <div className="flex-1 flex items-stretch justify-between gap-1.5 mt-6 min-h-[150px] pt-8">
+        {data.map((d, i) => {
+          const h = max > 0 ? (d.units / max) * 100 : 0;
+          const isPeak = i === peakIdx && d.units > 0;
           return (
-            <g>
-              <line x1={cx} y1={y0} x2={cx} y2={cy} stroke="hsl(var(--foreground))" strokeWidth="2" opacity="0.2" />
-              <circle cx={cx} cy={cy} r="5" fill="hsl(var(--foreground))" />
-            </g>
+            <div key={d.month} className="flex flex-col items-center flex-1 min-w-0 gap-2">
+              <div className="relative flex-1 w-full">
+                {isPeak && (
+                  <div className="absolute inset-x-1 -top-2 bottom-0 rounded-full bg-foreground/[0.04]" />
+                )}
+                <div
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px bg-foreground/15"
+                  style={{ height: `${h}%` }}
+                />
+                <div
+                  className="absolute left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full"
+                  style={{
+                    bottom: `calc(${h}% - 5px)`,
+                    background: isPeak ? "hsl(var(--foreground))" : SERIES_COLORS[0],
+                  }}
+                />
+                {isPeak && (
+                  <div
+                    className="absolute left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-foreground text-background text-[10px] font-bold whitespace-nowrap tabular-nums shadow-md"
+                    style={{ bottom: `calc(${h}% + 8px)` }}
+                  >
+                    {d.units}
+                  </div>
+                )}
+              </div>
+              <div
+                className={cn(
+                  "h-7 min-w-7 px-1 rounded-full flex items-center justify-center text-[10px] font-semibold uppercase tracking-wide",
+                  isPeak
+                    ? "bg-foreground text-background"
+                    : "bg-foreground/[0.05] text-muted-foreground",
+                )}
+              >
+                {d.month.slice(0, 3)}
+              </div>
+            </div>
           );
-        }} />
-      </ScatterChart>
-    </ResponsiveContainer>
+        })}
+      </div>
+    </div>
   );
 }
 
