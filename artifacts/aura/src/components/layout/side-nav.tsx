@@ -45,7 +45,7 @@ const CLUSTERS: Cluster[] = [
   {
     label: "Insights & Actions",
     items: [
-      { name: "Command Center", href: "/command-center", module: "", icon: LayoutDashboard },
+      { name: "Daily Briefing", href: "/command-center", module: "", icon: LayoutDashboard },
       { name: "Reports", href: "/reports", module: "", icon: BarChart3 },
       { name: "Reviews", href: "/approvals", module: "approvals", icon: ClipboardCheck },
       { name: "Tasks", href: "/tasks", module: "", icon: ListChecks },

@@ -30,6 +30,8 @@ const KIND_UI: Record<
   stalled: { icon: AlertCircle, tone: "text-amber-500", bgTone: "bg-amber-500/10", action: "Nudge" },
   quote: { icon: MailQuestion, tone: "text-violet-500", bgTone: "bg-violet-500/10", action: "Follow" },
   deposit: { icon: Landmark, tone: "text-orange-500", bgTone: "bg-orange-500/10", action: "Open" },
+  delivery: { icon: CheckCircle2, tone: "text-teal-500", bgTone: "bg-teal-500/10", action: "Open" },
+  service: { icon: Clock, tone: "text-rose-500", bgTone: "bg-rose-500/10", action: "Open" },
 };
 
 function getInitials(name: string) {

@@ -280,7 +280,7 @@ function ClerkProviderWithRoutes() {
         signIn: {
           start: {
             title: "Welcome back to AURA",
-            subtitle: "Sign in to enter the command center",
+            subtitle: "Sign in to enter your daily briefing",
           },
         },
         signUp: {

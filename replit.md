@@ -44,10 +44,11 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 - Lead/deal stage advances are gated: `POST /leads/{id}/advance` validates requirement checklists (422 `unmet[]`); deal PATCH enforces an allowed-transition map.
 - Deals stays OUT of the top nav (deliberate) — reachable via dashboard KPI cards and the copilot `deals` route. Journey + Appraisals pages are deleted; Insurance lives in Delivery, not Finance.
 - Sidebar auto-collapses to a 68px icon rail and expands on hover; staged flows use the `CarProgress` order-tracking rail (`components/car-progress.tsx`); AI Agents hub at `/agents` (GET/PATCH `/agents`, `/activity`).
+- Dashboard is labeled "Daily Briefing" (route stays `/command-center`); Triage sits FIRST with a 24h contact SLA (`CONTACT_SLA_HOURS` in `lib/triage.ts` — overdue contacts escalate to urgent) and includes assigned test drives, deliveries, and service orders with assignee names.
 
 ## User preferences
 
-- LIGHT mode default (2026-07 redesign): soft sky-blue canvas + white rounded cards + always-dark left sidebar (NL-Corp-inspired); DARK mode (deep blue + near-black) via Sun/Moon toggle in the sidebar user card (persisted in localStorage).
+- LIGHT mode default (2026-07 redesign): soft neutral warm-white canvas (`--background: 40 20% 97%`, sky-blue retired as too strong) + black-and-white glass cards + always-dark left sidebar; DARK mode via Sun/Moon toggle in the sidebar user card (persisted in localStorage). Dark radial body overlay is gated under `.dark body` in index.css.
 - Strongly car/automotive-themed and aesthetic; use real images. No emojis in the UI.
 - Keep all features end-to-end — no dead-end clicks.
 

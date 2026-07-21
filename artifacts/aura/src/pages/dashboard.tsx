@@ -1,8 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ActionQueue } from "@/components/action-queue";
 import { TodaySchedule } from "@/components/today-schedule";
-import { buildTriage } from "@/lib/triage";
+import { buildTriage, CONTACT_SLA_HOURS } from "@/lib/triage";
 import {
   useGetDashboardSummary,
   useGetSalesPerformance,
@@ -13,6 +12,8 @@ import {
   useListLeads,
   useListDeals,
   useListVehicles,
+  useListDeliveries,
+  useListServiceOrders,
   useGetPredictiveAnalytics,
   useGetSentimentAnalysis,
   getGetSentimentAnalysisQueryKey,
@@ -32,10 +33,7 @@ import {
   Loader2,
   TrendingUp,
   Users,
-  Bot,
   Zap,
-  ShieldAlert,
-  ChevronRight,
   ArrowUpRight,
   ArrowDownRight,
   ArrowRight,
@@ -43,7 +41,6 @@ import {
   Sparkles,
   HeartPulse,
   RefreshCw,
-  CheckCircle2,
   Clock,
   Layers,
   BarChart3,
@@ -52,6 +49,14 @@ import {
   Trophy,
   Car,
   Megaphone,
+  AlertCircle,
+  CheckCircle2,
+  ShieldCheck,
+  PhoneCall,
+  CalendarClock,
+  MailQuestion,
+  Landmark,
+  Bot
 } from "lucide-react";
 import {
   AreaChart,
@@ -69,34 +74,28 @@ import {
   LineChart,
   Line,
   Legend,
+  ScatterChart,
+  Scatter,
+  ZAxis
 } from "recharts";
 import { motion } from "framer-motion";
-import { formatDistanceToNow } from "date-fns";
-
-const GATE_LABEL: Record<string, string> = {
-  below_floor_price: "Below Floor Price",
-  credit_decline: "Credit Decline",
-  capital_order: "Capital Order",
-  gra_filing: "GRA Filing",
-  refund_release: "Refund Release",
-};
-
-const PRIORITY_RANK: Record<string, number> = { high: 0, normal: 1, low: 2 };
+import { formatDistanceToNow, parseISO } from "date-fns";
+import { cn } from "@/lib/utils";
 
 const POWERTRAIN_COLORS: Record<string, string> = {
-  EV: "hsl(218 72% 52%)",
-  Hybrid: "hsl(185 42% 44%)",
-  Petrol: "hsl(0 0% 58%)",
-  Diesel: "hsl(0 0% 38%)",
+  EV: "hsl(var(--primary))",
+  Hybrid: "hsl(216 10% 40%)",
+  Petrol: "hsl(216 10% 60%)",
+  Diesel: "hsl(216 10% 80%)",
 };
-const POWERTRAIN_FALLBACK = "hsl(0 0% 45%)";
+const POWERTRAIN_FALLBACK = "hsl(216 10% 80%)";
 
 const TOOLTIP_STYLE = {
   background: "hsl(var(--popover))",
   border: "1px solid hsl(var(--popover-border))",
   borderRadius: "12px",
   backdropFilter: "blur(10px)",
-  boxShadow: "0 8px 32px rgba(0,0,0,0.35)",
+  boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
 } as const;
 
 function greeting() {
@@ -108,10 +107,10 @@ function greeting() {
 
 const SERIES_COLORS = [
   "hsl(var(--primary))",
-  "hsl(0 0% 62%)",
-  "hsl(0 60% 62%)",
-  "hsl(0 0% 42%)",
-  "hsl(0 30% 50%)",
+  "hsl(216 10% 30%)",
+  "hsl(216 10% 50%)",
+  "hsl(216 10% 70%)",
+  "hsl(216 10% 85%)",
 ];
 
 const AXIS_TICK = { fontSize: 12, fill: "hsl(var(--muted-foreground))" } as const;
@@ -141,6 +140,93 @@ function deltaPct(series: number[]): number | null {
   return ((cur - prev) / prev) * 100;
 }
 
+const KIND_UI: Record<string, { icon: any; tone: string; bgTone: string; action: string }> = {
+  gate: { icon: ShieldCheck, tone: "text-foreground", bgTone: "bg-foreground/10", action: "Review" },
+  contact: { icon: PhoneCall, tone: "text-foreground", bgTone: "bg-foreground/10", action: "Call" },
+  testDrive: { icon: CalendarClock, tone: "text-foreground", bgTone: "bg-foreground/10", action: "Prep" },
+  delivery: { icon: Car, tone: "text-foreground", bgTone: "bg-foreground/10", action: "Deliver" },
+  service: { icon: Zap, tone: "text-foreground", bgTone: "bg-foreground/10", action: "Service" },
+  stalled: { icon: AlertCircle, tone: "text-foreground", bgTone: "bg-foreground/10", action: "Nudge" },
+  quote: { icon: MailQuestion, tone: "text-foreground", bgTone: "bg-foreground/10", action: "Follow" },
+  deposit: { icon: Landmark, tone: "text-foreground", bgTone: "bg-foreground/10", action: "Open" },
+};
+
+function getInitials(name: string) {
+  if (!name) return "?";
+  const parts = name.trim().split(" ");
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
+
+function TriageCard({ item }: { item: any }) {
+  const [, navigate] = useLocation();
+  const ui = KIND_UI[item.kind] || KIND_UI.stalled;
+  const isOverdue = item.kind === "contact" && item.slaHoursLeft !== undefined && item.slaHoursLeft <= 0;
+  
+  return (
+    <div className={cn(
+      "group flex flex-col justify-between p-4 rounded-2xl border transition-all duration-300 relative overflow-hidden",
+      item.bucket === "urgent" 
+        ? "bg-foreground text-background border-transparent shadow-xl" 
+        : "bg-card text-card-foreground border-border/60 hover:border-foreground/20 hover:shadow-md"
+    )}>
+      {/* Decorative glass reflection for urgent cards */}
+      {item.bucket === "urgent" && (
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 blur-2xl rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+      )}
+      
+      <div className="flex items-start justify-between gap-3 relative z-10">
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-xs tracking-wider",
+            item.bucket === "urgent" ? "bg-white/20 text-white" : "bg-foreground/5 text-foreground"
+          )}>
+            {getInitials(item.context)}
+          </div>
+          <div>
+            <div className="font-semibold text-sm line-clamp-1">{item.context}</div>
+            <div className={cn(
+              "text-xs mt-0.5 line-clamp-1",
+              item.bucket === "urgent" ? "text-white/70" : "text-muted-foreground"
+            )}>
+              {item.subContext}
+            </div>
+          </div>
+        </div>
+        {isOverdue && (
+          <div className="flex items-center gap-1 bg-red-500/20 text-red-100 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
+            <AlertCircle className="w-3 h-3" />
+            Overdue
+          </div>
+        )}
+      </div>
+      
+      <div className="flex items-end justify-between mt-5 relative z-10">
+        <div className={cn(
+          "text-[10px] uppercase tracking-widest font-semibold",
+          item.bucket === "urgent" ? "text-white/50" : "text-muted-foreground/60"
+        )}>
+          {item.assignee ? `w/ ${item.assignee}` : "Unassigned"}
+        </div>
+        <button 
+          onClick={() => navigate(item.href)}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold transition-all",
+            item.bucket === "urgent" 
+              ? "bg-white text-black hover:bg-white/90" 
+              : "bg-foreground text-background hover:bg-foreground/90"
+          )}
+        >
+          {ui.action}
+          <ArrowRight className="w-3 h-3" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { data: summary, isLoading: isLoadingSummary } = useGetDashboardSummary();
   const { data: performance, isLoading: isLoadingPerf } = useGetSalesPerformance();
@@ -151,16 +237,14 @@ export default function Dashboard() {
   const { data: leads } = useListLeads();
   const { data: deals } = useListDeals();
   const { data: vehicles } = useListVehicles();
+  const { data: deliveries } = useListDeliveries();
+  const { data: serviceOrders } = useListServiceOrders();
 
-  const sortedGates = [...(gates ?? [])].sort(
-    (a, b) =>
-      (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1),
-  );
   const agentEvents = (timeline ?? []).filter((e) => e.isAgent);
 
-  const objectivesCount = useMemo(
-    () => buildTriage(leads, deals, gates).total,
-    [gates, leads, deals],
+  const { urgent, today, later, total: objectivesCount } = useMemo(
+    () => buildTriage(leads, deals, gates, deliveries, serviceOrders),
+    [leads, deals, gates, deliveries, serviceOrders],
   );
 
   const revenueTrend = (performance ?? []).map((p) => p.revenue);
@@ -235,75 +319,79 @@ export default function Dashboard() {
   }));
 
   return (
-    <div className="h-full overflow-y-auto">
-      {/* Compact cinematic briefing band */}
-      <div className="relative h-[240px] md:h-[280px] w-full bg-black overflow-hidden group">
-        <div className="absolute inset-0 z-0">
-          <video
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="w-full h-full object-cover opacity-60 mix-blend-screen"
-          >
-            <source
-              src={`${import.meta.env.BASE_URL}videos/red_car_leaving_showroom.mp4`}
-              type="video/mp4"
-            />
-          </video>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/25" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent" />
-        </div>
+    <div className="min-h-[100dvh] pb-20">
+      <div className="px-5 md:px-8 pt-8 space-y-10">
         
-        <div className="relative z-10 h-full px-5 md:px-8 flex flex-col justify-end pb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-white/80 mb-3">
-              <Bot className="w-4 h-4" />
-              AURA Command Center
-            </div>
-            <h1 className="text-3xl md:text-5xl font-medium tracking-tight text-white max-w-4xl leading-tight drop-shadow-md">
-              {greeting()}. <br/>
-              <span className="text-white/80 font-light">{briefingLine(summary, objectivesCount, sortedGates.length)}</span>
-            </h1>
-          </motion.div>
-        </div>
-      </div>
-
-      <div className="w-full px-5 md:px-8 pb-14 mt-8 relative z-30 space-y-10">
-        
-        {/* Day Brief: Triage + Schedule */}
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-          <div className="xl:col-span-3">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold tracking-wide">Triage</h2>
-                <p className="text-sm text-muted-foreground mt-1">Actions requiring your attention</p>
+        {/* Compact Greeting & Triage (FIRST SIGHT IMPACT) */}
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground mb-2">
+                <Bot className="w-3.5 h-3.5" />
+                Daily Briefing
               </div>
+              <h1 className="text-3xl md:text-4xl font-light tracking-tight text-foreground">
+                {greeting()}, <span className="font-medium">here is what needs your attention.</span>
+              </h1>
             </div>
-            <ActionQueue />
-          </div>
-          
-          <div className="xl:col-span-1 flex flex-col">
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold tracking-wide">Today's Schedule</h2>
-                <p className="text-sm text-muted-foreground mt-1">Upcoming appointments</p>
-              </div>
-            </div>
-            <div className="relative flex-1 min-h-[320px] max-h-[420px] xl:max-h-none rounded-2xl border border-border/50 bg-foreground/[0.02]">
-              <div className="absolute inset-0 overflow-y-auto p-5">
-                <TodaySchedule />
-              </div>
+            <div className="flex items-center gap-2 bg-foreground/[0.03] border border-border/60 rounded-full px-4 py-1.5">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-widest">
+                Contact leads within 24h
+              </span>
             </div>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="md:col-span-2 xl:col-span-3">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-foreground">Triage Queue</h2>
+                <span className="bg-foreground text-background text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums">
+                  {objectivesCount}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {urgent.length > 0 && urgent.map((item, i) => (
+                  <motion.div key={item.key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+                    <TriageCard item={item} />
+                  </motion.div>
+                ))}
+                {today.length > 0 && today.map((item, i) => (
+                  <motion.div key={item.key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: (urgent.length + i) * 0.05 }}>
+                    <TriageCard item={item} />
+                  </motion.div>
+                ))}
+                {urgent.length === 0 && today.length === 0 && later.length > 0 && later.map((item, i) => (
+                  <motion.div key={item.key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+                    <TriageCard item={item} />
+                  </motion.div>
+                ))}
+                {objectivesCount === 0 && (
+                  <div className="col-span-full py-12 rounded-3xl border border-dashed border-border flex flex-col items-center justify-center text-muted-foreground">
+                    <CheckCircle2 className="w-8 h-8 mb-3 opacity-20" />
+                    <p className="text-sm font-medium">All caught up</p>
+                    <p className="text-xs mt-1 opacity-70">You have no pending tasks right now.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="md:col-span-1 xl:col-span-1">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-foreground">Today's Schedule</h2>
+              </div>
+              <div className="relative min-h-[300px] h-[calc(100%-2rem)] rounded-2xl border border-border/60 bg-card overflow-hidden">
+                <div className="absolute inset-0 overflow-y-auto p-4">
+                  <TodaySchedule />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* KPI Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mt-6">
+        {/* KPI Grid (Refined Stat Cards) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 pt-4">
           <KPICard
             title="Monthly Revenue"
             value={summary ? `$${(summary.monthlyRevenue / 1000).toFixed(1)}k` : "$0"}
@@ -338,46 +426,38 @@ export default function Dashboard() {
             title="Handled Autonomously"
             value={summary?.agentTasksToday ?? 0}
             sub={summary ? `${summary.avgResponseSeconds}s avg response` : "today"}
-            icon={Zap}
+            icon={Bot}
             isLoading={isLoadingSummary}
             delay={0.2}
             href="/tasks"
           />
         </div>
 
-        {/* Revenue trajectory + Inventory mix */}
+        {/* Revenue trajectory + Pipeline (Horizontal Stage Value) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 glass-panel border-none shadow-xl overflow-hidden">
+          <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col overflow-hidden">
             <ChartHeader
               icon={TrendingUp}
               title="Revenue Trajectory"
               sub="Delivered revenue over recent months"
             />
-            <CardContent className="p-0 h-[260px]">
+            <CardContent className="p-0 flex-1 min-h-[260px]">
               {isLoadingPerf ? (
                 <ChartLoader />
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={performance}
-                    margin={{ top: 16, right: 24, left: 8, bottom: 16 }}
-                  >
+                  <AreaChart data={performance} margin={{ top: 16, right: 24, left: 8, bottom: 16 }}>
                     <defs>
                       <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        <stop offset="5%" stopColor="hsl(var(--foreground))" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="hsl(var(--foreground))" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(val) => `$${val / 1000}k`} width={44} />
-                    <Tooltip
-                      contentStyle={TOOLTIP_STYLE}
-                      itemStyle={{ color: "hsl(var(--foreground))" }}
-                      labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-                      formatter={(val: number) => [`$${val.toLocaleString()}`, "Revenue"]}
-                    />
-                    <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val) => `$${val / 1000}k`} width={44} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} formatter={(val: number) => [`$${val.toLocaleString()}`, "Revenue"]} />
+                    <Area type="monotone" dataKey="revenue" stroke="hsl(var(--foreground))" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
@@ -385,26 +465,6 @@ export default function Dashboard() {
           </Card>
 
           <Card className="glass-panel border-none shadow-xl flex flex-col">
-            <ChartHeader
-              icon={Layers}
-              title="Inventory Mix"
-              sub="Showroom stock by powertrain"
-            />
-            <CardContent className="px-6 pb-6 pt-0 flex-1">
-              <InventoryDonut data={inventory ?? []} />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Predictive intelligence */}
-        <PredictiveSection />
-
-        {/* Customer sentiment */}
-        <SentimentSection />
-
-        {/* Pipeline + Units delivered */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col">
             <ChartHeader
               icon={GitBranch}
               title="Sales Pipeline"
@@ -414,101 +474,13 @@ export default function Dashboard() {
               <PipelineFunnel stages={pipeline ?? []} />
             </CardContent>
           </Card>
-
-          <Card className="glass-panel border-none shadow-xl flex flex-col">
-            <ChartHeader
-              icon={BarChart3}
-              title="Units Delivered"
-              sub="Closed deals per month"
-              delta={unitsDelta}
-            />
-            <CardContent className="px-4 pb-4 pt-0 flex-1 min-h-[220px]">
-              <UnitsBar data={performance ?? []} />
-            </CardContent>
-          </Card>
         </div>
 
-        {/* Demand: lead flow over time + source mix */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 glass-panel border-none shadow-xl overflow-hidden">
-            <ChartHeader
-              icon={LineChartIcon}
-              title="Leads Created Over Time"
-              sub="Weekly lead flow by top sources"
-            />
-            <CardContent className="p-0 h-[260px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={leadsOverTime} margin={{ top: 16, right: 24, left: 8, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="week" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={6} />
-                  <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} width={32} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} cursor={{ stroke: "hsl(var(--foreground) / 0.15)" }} />
-                  <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} formatter={(v: string) => v.replace(/_/g, " ")} />
-                  {topSources.map((s, i) => (
-                    <Line
-                      key={s}
-                      type="monotone"
-                      dataKey={s}
-                      name={s.replace(/_/g, " ")}
-                      stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-                      strokeWidth={2}
-                      dot={{ r: 3, strokeWidth: 0, fill: SERIES_COLORS[i % SERIES_COLORS.length] }}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+        {/* Predictive Intelligence */}
+        <PredictiveSection />
 
-          <Card className="glass-panel border-none shadow-xl flex flex-col">
-            <ChartHeader
-              icon={Megaphone}
-              title="Lead Source Mix"
-              sub="Where demand comes from"
-            />
-            <CardContent className="px-6 pb-6 pt-0 flex-1">
-              {sourceMix.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground text-sm">
-                  No leads yet.
-                </div>
-              ) : (
-                <div className="flex flex-col">
-                  <div className="relative w-full h-[176px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={sourceMix} dataKey="value" nameKey="name" innerRadius={58} outerRadius={82} paddingAngle={2} stroke="none">
-                          {sourceMix.map((d, i) => (
-                            <Cell key={i} fill={d.fill} />
-                          ))}
-                        </Pie>
-                        <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ display: "none" }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-3xl font-bold leading-none tabular-nums">
-                        {(leads ?? []).length}
-                      </span>
-                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
-                        Leads
-                      </span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 mt-5">
-                    {sourceMix.map((d) => (
-                      <div key={d.name} className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 min-w-0">
-                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: d.fill }} />
-                          <span className="text-muted-foreground truncate capitalize">{d.name}</span>
-                        </span>
-                        <span className="font-semibold tabular-nums">{d.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        {/* Customer Sentiment (Advanced Visualization) */}
+        <SentimentSection />
 
         {/* Team & product performance */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -531,8 +503,8 @@ export default function Dashboard() {
                     <YAxis type="category" dataKey="advisor" axisLine={false} tickLine={false} tick={AXIS_TICK} width={120} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} />
                     <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} />
-                    <Bar dataKey="delivered" name="Delivered" stackId="a" fill="hsl(var(--primary))" maxBarSize={18} />
-                    <Bar dataKey="open" name="Open" stackId="a" fill="hsl(0 0% 55%)" radius={[0, 4, 4, 0]} maxBarSize={18} />
+                    <Bar dataKey="delivered" name="Delivered" stackId="a" fill="hsl(var(--foreground))" maxBarSize={12} radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="open" name="Open" stackId="a" fill="hsl(var(--foreground) / 0.2)" radius={[0, 4, 4, 0]} maxBarSize={12} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -551,23 +523,23 @@ export default function Dashboard() {
                   No deal value to chart yet.
                 </div>
               ) : (
-                <div className="space-y-3.5 pt-1">
+                <div className="space-y-4 pt-1">
                   {salesByModel.map((m) => {
                     const max = salesByModel[0]?.value || 1;
                     return (
                       <div key={m.model}>
                         <div className="flex items-center justify-between text-sm mb-1.5">
-                          <span className="font-medium truncate pr-3">{m.model}</span>
-                          <span className="text-muted-foreground tabular-nums shrink-0">
-                            ${Math.round(m.value / 1000)}k · {m.units} {m.units === 1 ? "deal" : "deals"}
+                          <span className="font-medium truncate pr-3 text-foreground">{m.model}</span>
+                          <span className="text-muted-foreground tabular-nums shrink-0 text-xs">
+                            ${Math.round(m.value / 1000)}k <span className="opacity-50 mx-1">/</span> {m.units}
                           </span>
                         </div>
-                        <div className="h-2 rounded-full bg-foreground/[0.06] overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-foreground/[0.05] overflow-hidden">
                           <motion.div
                             initial={{ width: 0 }}
                             animate={{ width: `${(m.value / max) * 100}%` }}
-                            transition={{ duration: 0.6 }}
-                            className="h-full rounded-full bg-primary"
+                            transition={{ duration: 0.8, ease: "easeOut" }}
+                            className="h-full rounded-full bg-foreground"
                           />
                         </div>
                       </div>
@@ -579,29 +551,102 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Autonomous activity */}
+        {/* Lead flow + Units delivered */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col">
-            <div className="p-6 pb-4 border-b border-border/50">
-              <div className="flex items-center gap-2">
-                <Bot className="w-4 h-4 text-primary" />
-                <h3 className="text-lg font-semibold tracking-wide">
-                  Autonomous activity
-                </h3>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                What AURA did on its own.
-              </p>
-            </div>
-            <CardContent className="flex-1 p-6 overflow-y-auto max-h-[360px]">
-              {agentEvents.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground text-sm">
-                  No activity yet.
+          <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col overflow-hidden">
+            <ChartHeader
+              icon={LineChartIcon}
+              title="Lead Flow"
+              sub="Weekly leads by top sources"
+            />
+            <CardContent className="p-0 flex-1 min-h-[260px]">
+              {topSources.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-12">
+                  No lead activity yet.
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {agentEvents.slice(0, 6).map((event, i) => (
-                    <ActivityRow key={event.id} event={event} delay={i * 0.04} />
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={leadsOverTime} margin={{ top: 16, right: 24, left: 8, bottom: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="week" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} width={32} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} labelStyle={{ color: "hsl(var(--muted-foreground))" }} />
+                    <Legend wrapperStyle={LEGEND_STYLE} iconType="circle" iconSize={8} />
+                    {topSources.map((s, i) => (
+                      <Line
+                        key={s}
+                        type="monotone"
+                        dataKey={s}
+                        name={s.replace(/_/g, " ")}
+                        stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="glass-panel border-none shadow-xl flex flex-col">
+            <ChartHeader
+              icon={BarChart3}
+              title="Units Delivered"
+              sub="Monthly delivered volume"
+            />
+            <CardContent className="p-0 flex-1 min-h-[260px]">
+              <UnitsBar
+                data={(performance ?? []).map((p) => ({
+                  month: p.month,
+                  units: p.units,
+                }))}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Inventory mix + Autonomous activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="glass-panel border-none shadow-xl flex flex-col">
+            <ChartHeader
+              icon={Layers}
+              title="Inventory Mix"
+              sub="Showroom stock by powertrain"
+            />
+            <CardContent className="px-6 pb-6 pt-0 flex-1">
+              <InventoryDonut data={inventory ?? []} />
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-2 glass-panel border-none shadow-xl flex flex-col">
+            <ChartHeader
+              icon={Zap}
+              title="Autonomous Activity"
+              sub="Actions handled by AURA agents"
+            />
+            <CardContent className="px-4 pb-4 pt-0 flex-1">
+              {agentEvents.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground text-sm">
+                  No autonomous activity yet.
+                </div>
+              ) : (
+                <div className="divide-y divide-border/50">
+                  {agentEvents.slice(0, 8).map((e) => (
+                    <div key={e.id} className="flex items-start gap-3 py-3">
+                      <div className="w-7 h-7 rounded-full bg-foreground text-background flex items-center justify-center shrink-0 mt-0.5">
+                        <Bot className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-foreground truncate">{e.title}</div>
+                        {e.detail && (
+                          <div className="text-xs text-muted-foreground truncate mt-0.5">{e.detail}</div>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground shrink-0 tabular-nums">
+                        {formatDistanceToNow(new Date(e.createdAt), { addSuffix: true })}
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
@@ -627,8 +672,8 @@ const TREND_META: Record<
   MetricPrediction["trend"],
   { icon: typeof ArrowRight; className: string }
 > = {
-  up: { icon: ArrowUpRight, className: "text-emerald-400" },
-  down: { icon: ArrowDownRight, className: "text-red-400" },
+  up: { icon: ArrowUpRight, className: "text-foreground" },
+  down: { icon: ArrowDownRight, className: "text-muted-foreground" },
   flat: { icon: ArrowRight, className: "text-muted-foreground" },
 };
 
@@ -637,7 +682,7 @@ function PredictiveSection() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <Card className="lg:col-span-2 glass-panel border-none shadow-xl overflow-hidden">
+      <Card className="lg:col-span-2 glass-panel border-none shadow-xl overflow-hidden bg-gradient-to-br from-card to-card/50">
         <ChartHeader
           icon={Brain}
           title="Predictive Intelligence"
@@ -652,19 +697,23 @@ function PredictiveSection() {
         </CardContent>
       </Card>
 
-      <Card className="glass-panel border-none shadow-xl flex flex-col">
-        <ChartHeader
-          icon={Sparkles}
-          title="Projected Metrics"
-          sub="Next-month outlook with model confidence"
-        />
+      <Card className="glass-panel border-none shadow-xl flex flex-col bg-foreground text-background">
+        <div className="p-6 pb-3 flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-background/60" />
+              <h3 className="text-lg font-semibold tracking-wide">Projected Metrics</h3>
+            </div>
+            <p className="text-xs text-background/60 mt-1">Next-month outlook</p>
+          </div>
+        </div>
         <CardContent className="px-6 pb-6 pt-0 flex-1">
           {isLoading || !data ? (
             <div className="space-y-3 pt-1">
               {[0, 1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="h-14 rounded-xl bg-white/[0.04] animate-pulse"
+                  className="h-14 rounded-xl bg-background/10 animate-pulse"
                 />
               ))}
             </div>
@@ -687,17 +736,17 @@ function ForecastChart({ data }: { data: ForecastPoint[] }) {
       <AreaChart data={data} margin={{ top: 16, right: 24, left: 8, bottom: 16 }}>
         <defs>
           <linearGradient id="forecastActual" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+            <stop offset="5%" stopColor="hsl(var(--foreground))" stopOpacity={0.15} />
+            <stop offset="95%" stopColor="hsl(var(--foreground))" stopOpacity={0} />
           </linearGradient>
           <linearGradient id="forecastProjected" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.12} />
-            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+            <stop offset="5%" stopColor="hsl(var(--foreground))" stopOpacity={0.05} />
+            <stop offset="95%" stopColor="hsl(var(--foreground))" stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} dy={10} />
-        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(val) => `$${val / 1000}k`} width={44} />
+        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
+        <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} tickFormatter={(val) => `$${val / 1000}k`} width={44} />
         <Tooltip
           contentStyle={TOOLTIP_STYLE}
           itemStyle={{ color: "hsl(var(--foreground))" }}
@@ -710,8 +759,8 @@ function ForecastChart({ data }: { data: ForecastPoint[] }) {
         <Area
           type="monotone"
           dataKey="revenue"
-          stroke="hsl(var(--primary))"
-          strokeWidth={3}
+          stroke="hsl(var(--foreground))"
+          strokeWidth={2}
           fillOpacity={1}
           fill="url(#forecastActual)"
           connectNulls={false}
@@ -719,10 +768,10 @@ function ForecastChart({ data }: { data: ForecastPoint[] }) {
         <Area
           type="monotone"
           dataKey="projectedRevenue"
-          stroke="hsl(var(--primary))"
-          strokeWidth={2.5}
-          strokeDasharray="7 5"
-          strokeOpacity={0.75}
+          stroke="hsl(var(--foreground))"
+          strokeWidth={2}
+          strokeDasharray="4 4"
+          strokeOpacity={0.6}
           fillOpacity={1}
           fill="url(#forecastProjected)"
           connectNulls={false}
@@ -736,31 +785,31 @@ function PredictionTile({ m }: { m: MetricPrediction }) {
   const meta = TREND_META[m.trend];
   const TrendIcon = meta.icon;
   return (
-    <div className="rounded-xl border border-border/60 bg-white/[0.04] px-4 py-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground truncate">
+    <div className="rounded-xl border border-background/10 bg-background/5 px-4 py-3 relative overflow-hidden group">
+      <div className="absolute inset-0 bg-background/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <div className="flex items-center justify-between gap-2 relative z-10">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-background/60 truncate">
           {m.label}
         </span>
-        <TrendIcon className={`w-4 h-4 shrink-0 ${meta.className}`} />
       </div>
-      <div className="flex items-baseline gap-2 mt-1.5">
-        <span className="text-sm text-muted-foreground tabular-nums">
-          {fmtMetric(m.unit, m.current)}
-        </span>
-        <ArrowRight className="w-3 h-3 text-muted-foreground/50" />
-        <span className="text-lg font-bold tabular-nums">
+      <div className="flex items-baseline gap-2 mt-1 relative z-10">
+        <span className="text-xl font-bold tabular-nums text-background">
           {fmtMetric(m.unit, m.predicted)}
         </span>
+        <div className="flex items-center text-[10px] bg-background/20 px-1.5 py-0.5 rounded-full text-background font-medium">
+          <TrendIcon className="w-3 h-3 mr-0.5" />
+          vs {fmtMetric(m.unit, m.current)}
+        </div>
       </div>
-      <div className="flex items-center gap-2 mt-2">
-        <div className="h-1 flex-1 rounded-full bg-foreground/[0.08] overflow-hidden">
+      <div className="flex items-center gap-2 mt-2.5 relative z-10">
+        <div className="h-[3px] flex-1 rounded-full bg-background/20 overflow-hidden">
           <div
-            className="h-full rounded-full bg-primary"
+            className="h-full rounded-full bg-background"
             style={{ width: `${m.confidence}%` }}
           />
         </div>
-        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-          {m.confidence}% confidence
+        <span className="text-[9px] text-background/50 uppercase tracking-widest tabular-nums shrink-0 font-medium">
+          {m.confidence}% CONF
         </span>
       </div>
     </div>
@@ -768,14 +817,9 @@ function PredictionTile({ m }: { m: MetricPrediction }) {
 }
 
 const SENTIMENT_COLOR: Record<string, string> = {
-  positive: "bg-emerald-400",
-  neutral: "bg-slate-400",
-  negative: "bg-red-400",
-};
-const SENTIMENT_TEXT: Record<string, string> = {
-  positive: "text-emerald-400",
-  neutral: "text-slate-300",
-  negative: "text-red-400",
+  positive: "hsl(var(--foreground))",
+  neutral: "hsl(var(--foreground) / 0.4)",
+  negative: "hsl(var(--foreground) / 0.15)",
 };
 
 function SentimentSection() {
@@ -793,7 +837,7 @@ function SentimentSection() {
     <Card className="glass-panel border-none shadow-xl">
       <ChartHeader
         icon={HeartPulse}
-        title="Customer Sentiment"
+        title="Customer Sentiment Analysis"
         sub="AI-read mood across recent conversations and notes"
       />
       <CardContent className="px-6 pb-6 pt-0">
@@ -802,7 +846,7 @@ function SentimentSection() {
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="h-40 rounded-xl bg-white/[0.04] animate-pulse"
+                className="h-40 rounded-xl bg-foreground/5 animate-pulse"
               />
             ))}
           </div>
@@ -814,7 +858,7 @@ function SentimentSection() {
             <button
               onClick={() => refetch()}
               disabled={isFetching}
-              className="mt-4 inline-flex items-center gap-2 rounded-full border border-border/60 bg-white/[0.04] px-4 py-2 text-sm font-medium hover:border-primary/40 hover:text-primary transition-colors disabled:opacity-50"
+              className="mt-4 inline-flex items-center gap-2 rounded-full border border-border/60 bg-foreground/5 px-4 py-2 text-sm font-medium hover:border-foreground/20 hover:text-foreground transition-colors disabled:opacity-50"
             >
               <RefreshCw
                 className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`}
@@ -823,25 +867,45 @@ function SentimentSection() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div>
-              <div className="flex items-end gap-3">
-                <span className="text-5xl font-bold tabular-nums leading-none">
-                  {Math.round(data.overallScore)}
-                </span>
-                <span
-                  className={`text-[11px] font-bold uppercase tracking-widest rounded-full px-2.5 py-1 bg-foreground/[0.06] ${SENTIMENT_TEXT[data.overallLabel]}`}
-                >
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+            <div className="flex flex-col">
+              <div className="flex-1 flex flex-col justify-center items-center text-center p-6 rounded-2xl bg-foreground/[0.02] border border-border/40">
+                <div className="relative">
+                  <svg className="w-32 h-32 transform -rotate-90">
+                    <circle cx="64" cy="64" r="60" stroke="currentColor" strokeWidth="2" fill="none" className="text-foreground/10" />
+                    <motion.circle 
+                      cx="64" cy="64" r="60" 
+                      stroke="currentColor" 
+                      strokeWidth="6" 
+                      fill="none" 
+                      className="text-foreground"
+                      strokeDasharray={377}
+                      initial={{ strokeDashoffset: 377 }}
+                      animate={{ strokeDashoffset: 377 - (377 * data.overallScore) / 100 }}
+                      transition={{ duration: 1.5, ease: "easeOut" }}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-4xl font-light tabular-nums leading-none tracking-tight">
+                      {Math.round(data.overallScore)}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-foreground/5 border border-foreground/10 text-xs font-bold uppercase tracking-widest text-foreground">
                   {data.overallLabel}
-                </span>
+                </div>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-3">
+                  {data.sampleSize} interactions analyzed
+                </p>
               </div>
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-2">
-                Sentiment score · {data.sampleSize} interactions analysed
+            </div>
+
+            <div className="flex flex-col justify-center">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-foreground mb-4">
+                Sentiment Distribution
               </p>
-              <p className="text-sm text-muted-foreground mt-4 leading-relaxed">
-                {data.summary}
-              </p>
-              <div className="space-y-2.5 mt-5">
+              <div className="space-y-5">
                 {(
                   [
                     ["positive", data.distribution.positive],
@@ -849,86 +913,65 @@ function SentimentSection() {
                     ["negative", data.distribution.negative],
                   ] as const
                 ).map(([label, pct]) => (
-                  <div key={label} className="flex items-center gap-3">
-                    <span className="w-16 text-xs text-muted-foreground capitalize shrink-0">
-                      {label}
-                    </span>
-                    <div className="h-2 flex-1 rounded-full bg-foreground/[0.06] overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${pct}%` }}
-                        transition={{ duration: 0.6 }}
-                        className={`h-full rounded-full ${SENTIMENT_COLOR[label]}`}
-                      />
+                  <div key={label} className="group">
+                    <div className="flex items-end justify-between mb-1.5">
+                      <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">
+                        {label}
+                      </span>
+                      <span className="text-sm font-light tabular-nums text-foreground">
+                        {Math.round(pct)}%
+                      </span>
                     </div>
-                    <span className="w-10 text-right text-xs tabular-nums text-muted-foreground shrink-0">
-                      {Math.round(pct)}%
-                    </span>
+                    {/* Tick-mark progress strip style */}
+                    <div className="flex h-2 gap-0.5 w-full">
+                      {Array.from({ length: 20 }).map((_, i) => {
+                        const active = i < Math.round((pct / 100) * 20);
+                        return (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: i * 0.02 }}
+                            className={cn(
+                              "flex-1 rounded-sm transition-colors duration-500",
+                              active ? (label === "positive" ? "bg-foreground" : label === "neutral" ? "bg-foreground/40" : "bg-foreground/15") : "bg-foreground/5"
+                            )}
+                          />
+                        );
+                      })}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
-                What customers talk about
-              </p>
-              {data.themes.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No recurring themes yet.
-                </p>
-              ) : (
-                <div className="space-y-2.5">
-                  {data.themes.map((t: SentimentTheme) => (
-                    <div
-                      key={t.theme}
-                      className="flex items-center justify-between rounded-xl border border-border/60 bg-white/[0.04] px-4 py-2.5"
-                    >
-                      <span className="flex items-center gap-2.5 min-w-0">
-                        <span
-                          className={`w-2 h-2 rounded-full shrink-0 ${SENTIMENT_COLOR[t.sentiment]}`}
-                        />
-                        <span className="text-sm font-medium truncate">
-                          {t.theme}
-                        </span>
-                      </span>
-                      <span className="text-xs text-muted-foreground tabular-nums shrink-0">
-                        {t.mentions} {t.mentions === 1 ? "mention" : "mentions"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">
-                Representative voices
+            <div className="flex flex-col justify-center">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-foreground mb-4">
+                Representative Voices
               </p>
               {data.highlights.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No highlights yet.
                 </p>
               ) : (
-                <div className="space-y-2.5">
-                  {data.highlights.map((h: SentimentHighlight, i: number) => {
+                <div className="space-y-3">
+                  {data.highlights.slice(0, 3).map((h: SentimentHighlight, i: number) => {
                     const body = (
-                      <div className="rounded-xl border border-border/60 bg-white/[0.04] px-4 py-3 hover:border-primary/30 transition-colors">
-                        <p className="text-sm leading-snug">
-                          &ldquo;{h.snippet}&rdquo;
+                      <div className="relative pl-4 py-1 group">
+                        <div className={cn(
+                          "absolute left-0 top-0 bottom-0 w-[3px] rounded-full transition-all duration-300 group-hover:w-1",
+                          h.sentiment === "positive" ? "bg-foreground" : h.sentiment === "neutral" ? "bg-foreground/40" : "bg-foreground/15"
+                        )} />
+                        <p className="text-sm italic text-muted-foreground leading-snug">
+                          "{h.snippet}"
                         </p>
-                        <p
-                          className={`text-xs mt-1.5 flex items-center gap-1.5 ${SENTIMENT_TEXT[h.sentiment]}`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${SENTIMENT_COLOR[h.sentiment]}`}
-                          />
-                          {h.leadName}
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-foreground mt-2 flex items-center gap-1.5">
+                          — {h.leadName}
                         </p>
                       </div>
                     );
                     return h.leadId != null ? (
-                      <Link key={i} href={`/lead/${h.leadId}`}>
+                      <Link key={i} href={`/lead/${h.leadId}`} className="block">
                         {body}
                       </Link>
                     ) : (
@@ -943,26 +986,6 @@ function SentimentSection() {
       </CardContent>
     </Card>
   );
-}
-
-function briefingLine(
-  summary:
-    | {
-        agentTasksToday: number;
-        activeDeals: number;
-      }
-    | undefined,
-  objectivesCount: number,
-  approvalsCount: number,
-): string {
-  if (!summary) return "Bringing the dealership online...";
-  if (objectivesCount === 0)
-    return `${summary.agentTasksToday} tasks handled autonomously — you're all clear.`;
-  const approvals =
-    approvalsCount > 0
-      ? ` — ${approvalsCount} awaiting your sign-off`
-      : "";
-  return `${objectivesCount} objective${objectivesCount > 1 ? "s" : ""} on your desk today${approvals}.`;
 }
 
 function ChartHeader({
@@ -980,8 +1003,8 @@ function ChartHeader({
     <div className="p-6 pb-3 flex items-start justify-between">
       <div>
         <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 text-primary" />
-          <h3 className="text-lg font-semibold tracking-wide">{title}</h3>
+          <Icon className="w-4 h-4 text-muted-foreground" />
+          <h3 className="text-sm font-bold uppercase tracking-widest text-foreground">{title}</h3>
         </div>
         {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
       </div>
@@ -993,7 +1016,7 @@ function ChartHeader({
 function ChartLoader() {
   return (
     <div className="h-full flex items-center justify-center">
-      <Loader2 className="animate-spin text-primary w-8 h-8" />
+      <Loader2 className="animate-spin text-foreground w-8 h-8" />
     </div>
   );
 }
@@ -1002,13 +1025,12 @@ function TrendBadge({ delta, accent }: { delta: number; accent?: boolean }) {
   const up = delta >= 0;
   return (
     <span
-      className={`inline-flex items-center gap-0.5 text-[11px] font-semibold rounded-full px-1.5 py-0.5 tabular-nums shrink-0 ${
+      className={cn(
+        "inline-flex items-center gap-0.5 text-[10px] font-bold rounded-full px-2 py-0.5 tabular-nums shrink-0 uppercase tracking-widest",
         accent
-          ? "bg-white/20 text-white"
-          : up
-            ? "bg-emerald-500/15 text-emerald-400"
-            : "bg-red-500/15 text-red-400"
-      }`}
+          ? "bg-background/20 text-background"
+          : "bg-foreground/5 border border-foreground/10 text-foreground"
+      )}
     >
       {up ? (
         <ArrowUpRight className="w-3 h-3" />
@@ -1017,32 +1039,6 @@ function TrendBadge({ delta, accent }: { delta: number; accent?: boolean }) {
       )}
       {Math.abs(delta).toFixed(0)}%
     </span>
-  );
-}
-
-function Sparkline({ data, accent }: { data: number[]; accent?: boolean }) {
-  const points = data.map((v, i) => ({ i, v }));
-  const stroke = accent ? "rgba(255,255,255,0.9)" : "hsl(var(--primary))";
-  const gradId = accent ? "sparkAccent" : "sparkPrimary";
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={points} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-        <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={stroke} stopOpacity={accent ? 0.4 : 0.3} />
-            <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <Area
-          type="monotone"
-          dataKey="v"
-          stroke={stroke}
-          strokeWidth={2}
-          fill={`url(#${gradId})`}
-          dot={false}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
   );
 }
 
@@ -1055,10 +1051,8 @@ function KPICard({
   delay,
   accent,
   delta,
-  trend,
   href,
 }: any) {
-  const hasTrend = Array.isArray(trend) && trend.length > 1;
   const [, navigate] = useLocation();
   return (
     <motion.div
@@ -1068,44 +1062,41 @@ function KPICard({
     >
       <Card
         onClick={href ? () => navigate(href) : undefined}
-        className={`border-none shadow-lg overflow-hidden group hover:shadow-xl transition-all duration-300 ${
-          href ? "cursor-pointer" : ""
-        } ${accent ? "bg-primary text-white" : "glass-panel"}`}
+        className={cn(
+          "border-none shadow-md overflow-hidden group hover:shadow-lg transition-all duration-300 relative",
+          href && "cursor-pointer",
+          accent ? "bg-foreground text-background" : "bg-card text-card-foreground border border-border/50 hover:border-foreground/20"
+        )}
       >
-        <CardContent className="p-5 relative">
+        {/* Soft glass reflection */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+        
+        <CardContent className="p-5 relative z-10">
           <div className="flex items-start justify-between">
-            <p
-              className={`text-[11px] font-medium uppercase tracking-widest ${
-                accent ? "text-white/80" : "text-muted-foreground"
-              }`}
-            >
+            <p className={cn(
+              "text-[10px] font-bold uppercase tracking-widest",
+              accent ? "text-background/60" : "text-muted-foreground"
+            )}>
               {title}
             </p>
-            <Icon
-              className={`w-4 h-4 ${accent ? "text-white/60" : "text-muted-foreground/50"}`}
-            />
+            <Icon className={cn("w-4 h-4", accent ? "text-background/50" : "text-muted-foreground/40")} />
           </div>
           {isLoading ? (
-            <div className="h-8 w-16 bg-white/[0.05] rounded animate-pulse mt-3" />
+            <div className="h-8 w-16 bg-foreground/10 rounded animate-pulse mt-3" />
           ) : (
             <>
-              <div className="flex items-end gap-2 mt-3">
-                <h2 className="text-3xl font-bold tracking-tight leading-none">
+              <div className="flex items-end gap-3 mt-4">
+                <h2 className="text-3xl font-light tracking-tight leading-none">
                   {value}
                 </h2>
                 {delta != null && <TrendBadge delta={delta} accent={accent} />}
               </div>
-              {hasTrend ? (
-                <div className="h-8 mt-3 -mb-1">
-                  <Sparkline data={trend} accent={accent} />
-                </div>
-              ) : (
-                <p
-                  className={`text-xs mt-2 ${accent ? "text-white/70" : "text-muted-foreground"}`}
-                >
-                  {sub}
-                </p>
-              )}
+              <p className={cn(
+                "text-xs mt-3",
+                accent ? "text-background/60" : "text-muted-foreground"
+              )}>
+                {sub}
+              </p>
             </>
           )}
         </CardContent>
@@ -1125,26 +1116,26 @@ function PipelineFunnel({ stages }: { stages: PipelineStage[] }) {
 
   const max = Math.max(...stages.map((s) => s.value), 1);
   return (
-    <div className="space-y-4 pt-2">
+    <div className="space-y-4 pt-4">
       {stages.map((s) => (
-        <div key={s.phase}>
-          <div className="flex items-center justify-between text-sm mb-1.5">
-            <span className="font-medium capitalize min-w-0 pr-4">
+        <div key={s.phase} className="group">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors min-w-0 pr-4">
               {s.label}
             </span>
             <div className="text-right shrink-0">
-              <span className="font-medium">${Math.round(s.value / 1000)}k</span>
-              <span className="text-muted-foreground text-xs ml-2 tabular-nums">
-                ({s.count})
+              <span className="font-medium text-sm text-foreground">${Math.round(s.value / 1000)}k</span>
+              <span className="text-muted-foreground/50 text-[10px] font-bold ml-2 tabular-nums bg-foreground/5 px-1.5 py-0.5 rounded-full">
+                {s.count}
               </span>
             </div>
           </div>
-          <div className="h-2 rounded-full bg-foreground/[0.06] overflow-hidden">
+          <div className="h-[3px] rounded-full bg-foreground/[0.05] overflow-hidden">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${(s.value / max) * 100}%` }}
-              transition={{ duration: 0.6 }}
-              className="h-full rounded-full bg-primary"
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="h-full rounded-full bg-foreground"
             />
           </div>
         </div>
@@ -1161,21 +1152,32 @@ function UnitsBar({ data }: { data: { month: string; units: number }[] }) {
       </div>
     );
   }
+  
+  // Stem chart style
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 16, right: 8, left: -24, bottom: 0 }}>
+      <ScatterChart margin={{ top: 16, right: 16, left: -24, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
         <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} dy={10} />
-        <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} />
+        <YAxis dataKey="units" axisLine={false} tickLine={false} tick={AXIS_TICK} allowDecimals={false} />
         <Tooltip
           contentStyle={TOOLTIP_STYLE}
           itemStyle={{ color: "hsl(var(--foreground))" }}
           labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-          cursor={{ fill: "hsl(var(--foreground) / 0.04)" }}
+          cursor={{ stroke: "hsl(var(--foreground) / 0.1)", strokeWidth: 1, strokeDasharray: "3 3" }}
           formatter={(val: number) => [`${val}`, "Units"]}
         />
-        <Bar dataKey="units" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={32} />
-      </BarChart>
+        <Scatter data={data} fill="hsl(var(--foreground))" shape={(props: any) => {
+          const { cx, cy, yAxis } = props;
+          const y0 = yAxis.scale(0);
+          return (
+            <g>
+              <line x1={cx} y1={y0} x2={cx} y2={cy} stroke="hsl(var(--foreground))" strokeWidth="2" opacity="0.2" />
+              <circle cx={cx} cy={cy} r="5" fill="hsl(var(--foreground))" />
+            </g>
+          );
+        }} />
+      </ScatterChart>
     </ResponsiveContainer>
   );
 }
@@ -1205,10 +1207,11 @@ function InventoryDonut({ data }: { data: InventoryBreakdownItem[] }) {
               data={chartData}
               dataKey="value"
               nameKey="name"
-              innerRadius={60}
-              outerRadius={86}
+              innerRadius={65}
+              outerRadius={85}
               paddingAngle={2}
               stroke="none"
+              cornerRadius={4}
             >
               {chartData.map((d, i) => (
                 <Cell key={i} fill={d.fill} />
@@ -1222,11 +1225,8 @@ function InventoryDonut({ data }: { data: InventoryBreakdownItem[] }) {
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-3xl font-bold leading-none tabular-nums">
+          <span className="text-4xl font-light leading-none tabular-nums text-foreground">
             {total}
-          </span>
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">
-            Units
           </span>
         </div>
       </div>
@@ -1238,42 +1238,12 @@ function InventoryDonut({ data }: { data: InventoryBreakdownItem[] }) {
                 className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ background: d.fill }}
               />
-              <span className="text-muted-foreground truncate">{d.name}</span>
+              <span className="text-muted-foreground truncate font-medium text-xs uppercase tracking-wider">{d.name}</span>
             </span>
-            <span className="font-semibold tabular-nums">{d.value}</span>
+            <span className="font-semibold tabular-nums text-foreground">{d.value}</span>
           </div>
         ))}
       </div>
     </div>
-  );
-}
-
-function ActivityRow({ event, delay }: { event: TimelineEvent; delay: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay, duration: 0.3 }}
-      className="flex gap-4 group"
-    >
-      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
-        <Bot className="w-4 h-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <h4 className="font-medium text-sm text-foreground truncate">
-            {event.title}
-          </h4>
-          <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-            {formatDistanceToNow(new Date(event.createdAt), {
-              addSuffix: true,
-            })}
-          </span>
-        </div>
-        <p className="text-sm text-muted-foreground mt-0.5 leading-snug line-clamp-2">
-          {event.detail ?? event.title}
-        </p>
-      </div>
-    </motion.div>
   );
 }

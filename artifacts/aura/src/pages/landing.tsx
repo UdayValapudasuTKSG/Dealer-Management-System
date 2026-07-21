@@ -367,10 +367,10 @@ export default function Landing() {
               className="mt-12 flex flex-wrap items-center gap-4"
             >
               <Link
-                href="/inventory"
+                href="/command-center"
                 className="group inline-flex items-center gap-2 h-14 px-8 rounded-full bg-primary text-white text-base font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-all duration-300"
               >
-                Explore the Collection
+                Go to Daily Briefing
                 <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
               </Link>
               <button
@@ -539,7 +539,7 @@ export default function Landing() {
               href="/command-center"
               className="inline-flex items-center gap-2 h-14 px-8 rounded-full border border-white/20 text-white text-base font-medium hover:bg-white/10 transition-all duration-300"
             >
-              Enter Command Center <ArrowRight className="w-4 h-4" />
+              Enter Daily Briefing <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
         </div>

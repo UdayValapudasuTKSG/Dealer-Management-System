@@ -1,9 +1,13 @@
 export const SLA_DAYS = 5;
+/** Leads must be contacted within 24 hours of showing interest. */
+export const CONTACT_SLA_HOURS = 24;
 
 export type TriageKind =
   | "gate"
   | "contact"
   | "testDrive"
+  | "delivery"
+  | "service"
   | "stalled"
   | "quote"
   | "deposit";
@@ -17,6 +21,10 @@ export type TriageItem = {
   key: string;
   context: string;
   subContext: string;
+  /** Assigned advisor / technician, when known. */
+  assignee?: string | null;
+  /** Hours remaining on the 24h contact SLA (negative = overdue). Only for kind "contact". */
+  slaHoursLeft?: number;
   href: string;
   rank: number;
 };
@@ -28,6 +36,7 @@ type LeadLike = {
   status: string;
   contactedDate?: string | null;
   testDriveAt?: string | null;
+  assignedTo?: string | null;
   quotationSent?: boolean | null;
   stageEnteredAt?: string | null;
   createdAt: string;
@@ -46,12 +55,33 @@ type GateLike = {
   priority: string;
 };
 
+type DeliveryLike = {
+  id: number;
+  status: string;
+  advisorName?: string | null;
+  customerName?: string | null;
+  appointmentAt?: string | null;
+};
+
+type ServiceOrderLike = {
+  id: number;
+  status: string;
+  vehicleInfo: string;
+  technician?: string | null;
+  scheduledDate: string;
+};
+
 export function daysSince(iso: string | null | undefined): number {
   if (!iso) return 0;
   return Math.max(
     0,
     Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000),
   );
+}
+
+export function hoursSince(iso: string | null | undefined): number {
+  if (!iso) return 0;
+  return Math.max(0, (Date.now() - new Date(iso).getTime()) / 3_600_000);
 }
 
 export function isTodayLocal(iso: string | null | undefined): boolean {
@@ -65,10 +95,21 @@ export function isTodayLocal(iso: string | null | undefined): boolean {
   );
 }
 
+/** Parse a date-only string (YYYY-MM-DD) as LOCAL midnight to avoid UTC day-shift. */
+export function isTodayDateOnly(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const datePart = iso.slice(0, 10);
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return datePart === today;
+}
+
 export function buildTriage(
   leads: LeadLike[] | undefined,
   deals: DealLike[] | undefined,
   gates: GateLike[] | undefined,
+  deliveries?: DeliveryLike[],
+  serviceOrders?: ServiceOrderLike[],
 ): { urgent: TriageItem[]; today: TriageItem[]; later: TriageItem[]; total: number } {
   const urgent: TriageItem[] = [];
   const today: TriageItem[] = [];
@@ -96,16 +137,24 @@ export function buildTriage(
       !lead.contactedDate &&
       (lead.status === "new" || lead.status === "assigned")
     ) {
-      today.push({
+      const elapsed = hoursSince(lead.createdAt);
+      const left = CONTACT_SLA_HOURS - elapsed;
+      const overdue = left <= 0;
+      const item: TriageItem = {
         kind: "contact",
-        bucket: "today",
+        bucket: overdue ? "urgent" : "today",
         id: lead.id.toString(),
         key: `contact-${lead.id}`,
         context: lead.name,
-        subContext: "New lead",
+        subContext: overdue
+          ? `Contact overdue ${Math.floor(-left)}h past SLA`
+          : `Contact within ${Math.max(1, Math.floor(left))}h`,
+        assignee: lead.assignedTo ?? null,
+        slaHoursLeft: left,
         href: `/lead/${lead.id}`,
-        rank: 1,
-      });
+        rank: overdue ? 1 : 1,
+      };
+      (overdue ? urgent : today).push(item);
       handled = true;
     }
 
@@ -117,6 +166,7 @@ export function buildTriage(
         key: `td-${lead.id}`,
         context: lead.name,
         subContext: "Test drive today",
+        assignee: lead.assignedTo ?? null,
         href: `/lead/${lead.id}`,
         rank: 0,
       });
@@ -133,6 +183,7 @@ export function buildTriage(
           key: `sla-${lead.id}`,
           context: lead.name,
           subContext: `Stalled ${inStage}d`,
+          assignee: lead.assignedTo ?? null,
           href: `/lead/${lead.id}`,
           rank: 3,
         });
@@ -144,6 +195,7 @@ export function buildTriage(
           key: `quote-${lead.id}`,
           context: lead.name,
           subContext: "Quote sent",
+          assignee: lead.assignedTo ?? null,
           href: `/lead/${lead.id}`,
           rank: 4,
         });
@@ -164,6 +216,52 @@ export function buildTriage(
         context: d.customerName ?? "Deal",
         subContext: "Awaiting deposit",
         href: "/deals",
+        rank: 2,
+      });
+    }
+  }
+
+  for (const del of deliveries ?? []) {
+    if (del.status !== "in_progress") continue;
+    const isToday = isTodayLocal(del.appointmentAt);
+    (isToday ? today : later).push({
+      kind: "delivery",
+      bucket: isToday ? "today" : "later",
+      id: del.id.toString(),
+      key: `delivery-${del.id}`,
+      context: del.customerName ?? `Delivery #${del.id}`,
+      subContext: isToday ? "Delivery today" : "Delivery in progress",
+      assignee: del.advisorName ?? null,
+      href: "/deliveries",
+      rank: isToday ? 1 : 5,
+    });
+  }
+
+  for (const so of serviceOrders ?? []) {
+    if (so.status === "completed" || so.status === "delivered") continue;
+    if (so.status === "awaiting_approval") {
+      urgent.push({
+        kind: "service",
+        bucket: "urgent",
+        id: so.id.toString(),
+        key: `service-${so.id}`,
+        context: so.vehicleInfo,
+        subContext: "Service awaiting approval",
+        assignee: so.technician ?? null,
+        href: "/service",
+        rank: 2,
+      });
+    } else if (isTodayDateOnly(so.scheduledDate)) {
+      today.push({
+        kind: "service",
+        bucket: "today",
+        id: so.id.toString(),
+        key: `service-${so.id}`,
+        context: so.vehicleInfo,
+        subContext:
+          so.status === "scheduled" ? "Service due today" : "Service in bay",
+        assignee: so.technician ?? null,
+        href: "/service",
         rank: 2,
       });
     }

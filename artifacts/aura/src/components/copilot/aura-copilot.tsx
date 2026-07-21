@@ -5,6 +5,7 @@ import { useGetDashboardSummary, useListGates } from "@workspace/api-client-reac
 const ROUTE_MAP: Record<string, string> = {
   home: "/command-center",
   "command center": "/command-center",
+  "daily briefing": "/command-center",
   dashboard: "/command-center",
   // journey is shelved from the nav for now
   approvals: "/approvals",
@@ -27,7 +28,7 @@ const ROUTE_MAP: Record<string, string> = {
 };
 
 const ROUTE_LABEL: Record<string, string> = {
-  "/command-center": "Command Center",
+  "/command-center": "Daily Briefing",
   "/approvals": "Approvals",
   "/inventory": "Inventory",
   "/pipeline": "Pipeline",
@@ -53,7 +54,7 @@ export function AuraCopilot() {
 
   useCopilotReadable({
     description:
-      "Live dealership KPIs from the AURA command center (dashboard summary).",
+      "Live dealership KPIs from the AURA daily briefing (dashboard summary).",
     value: summary ?? "loading",
   });
 
@@ -81,7 +82,7 @@ export function AuraCopilot() {
         name: "destination",
         type: "string",
         description:
-          "One of: command center, approvals, inventory, leads, deals, finance, service, customers, gra filing.",
+          "One of: daily briefing, approvals, inventory, leads, deals, finance, service, customers, gra filing.",
         required: true,
       },
     ],
