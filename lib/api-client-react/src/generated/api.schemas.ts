@@ -399,6 +399,7 @@ export interface DealerTaxRule {
   rate: number;
   /** @nullable */
   thresholdAmount?: number | null;
+  excludeEv?: boolean;
   effectiveFrom: string;
   active: boolean;
   sortOrder: number;
@@ -423,6 +424,7 @@ export interface DealerTaxInput {
   rate: number;
   /** @nullable */
   thresholdAmount?: number | null;
+  excludeEv?: boolean;
   effectiveFrom?: string;
   active?: boolean;
   sortOrder?: number;
@@ -446,6 +448,7 @@ export interface DealerTaxUpdate {
   rate?: number;
   /** @nullable */
   thresholdAmount?: number | null;
+  excludeEv?: boolean;
   effectiveFrom?: string;
   active?: boolean;
   sortOrder?: number;
@@ -1564,6 +1567,84 @@ export interface LeadQuoteInfo {
   issuedOn?: string | null;
   /** @nullable */
   sentAt?: string | null;
+}
+
+export type QuoteTaxLineKind = typeof QuoteTaxLineKind[keyof typeof QuoteTaxLineKind];
+
+
+export const QuoteTaxLineKind = {
+  percent: 'percent',
+  fixed: 'fixed',
+} as const;
+
+export interface QuoteTaxLine {
+  code: string;
+  name: string;
+  kind: QuoteTaxLineKind;
+  rate: number;
+  amount: number;
+}
+
+export type QuoteStatus = typeof QuoteStatus[keyof typeof QuoteStatus];
+
+
+export const QuoteStatus = {
+  current: 'current',
+  superseded: 'superseded',
+} as const;
+
+export interface Quote {
+  id: number;
+  leadId: number;
+  /** @nullable */
+  vehicleId?: number | null;
+  quoteNumber: string;
+  version: number;
+  status: QuoteStatus;
+  customerName: string;
+  /** @nullable */
+  customerAddress?: string | null;
+  modelYear: number;
+  vehicleLine: string;
+  /** @nullable */
+  trim?: string | null;
+  /** @nullable */
+  color?: string | null;
+  manufacturer: string;
+  /** @nullable */
+  mfgDate?: string | null;
+  quantity: number;
+  basePrice: number;
+  taxLines: QuoteTaxLine[];
+  totalTax: number;
+  total: number;
+  issuedOn: string;
+  validUntil: string;
+  trigger: string;
+  createdBy: string;
+  isAgent: boolean;
+  /** @nullable */
+  sentAt?: string | null;
+  /** @nullable */
+  sentVia?: string | null;
+  createdAt: string;
+}
+
+export type SendQuoteInputChannel = typeof SendQuoteInputChannel[keyof typeof SendQuoteInputChannel];
+
+
+export const SendQuoteInputChannel = {
+  email: 'email',
+  whatsapp: 'whatsapp',
+} as const;
+
+export interface SendQuoteInput {
+  channel: SendQuoteInputChannel;
+}
+
+export interface SendQuoteResult {
+  ok: boolean;
+  channel: string;
 }
 
 export interface EnquiryInput {

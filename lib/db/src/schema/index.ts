@@ -41,3 +41,4 @@ export * from "./fieldPermissions";
 export * from "./leadSources";
 export * from "./stageChecklists";
 export * from "./taxes";
+export * from "./quotes";

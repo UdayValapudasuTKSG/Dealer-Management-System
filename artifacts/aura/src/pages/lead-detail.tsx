@@ -12,6 +12,10 @@ import {
   useListDeals,
   useListDeliveries,
   useListLeadCalls,
+  useListLeadQuotes,
+  useGenerateLeadQuote,
+  useSendLeadQuote,
+  getListLeadQuotesQueryKey,
   getGetLeadQueryKey,
   getGetLeadTimelineQueryKey,
   getListLeadsQueryKey,
@@ -563,6 +567,7 @@ export default function LeadDetail() {
   const { data: divisions } = useListDivisions();
   const { data: timeline } = useGetLeadTimeline(id);
   const { data: quote } = useGetLeadQuote(id);
+  const { data: quoteVersions } = useListLeadQuotes(id);
   const { data: allDeals } = useListDeals();
   const { data: allDeliveries } = useListDeliveries();
   const { data: calls } = useListLeadCalls(id);
@@ -591,6 +596,46 @@ export default function LeadDetail() {
       },
       onError: () =>
         toast({ title: "Could not update lead", variant: "destructive" }),
+    },
+  });
+
+  const generateQuote = useGenerateLeadQuote({
+    mutation: {
+      onSuccess: (q) => {
+        qc.invalidateQueries({ queryKey: getListLeadQuotesQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
+        toast({
+          title: `Code ${q.quoteNumber} generated`,
+          description: `Revision ${q.version} priced with current taxes.`,
+        });
+      },
+      onError: (err: unknown) =>
+        toast({
+          title: "Could not generate Code",
+          description:
+            (err as { error?: string })?.error ??
+            "Add a vehicle of interest first.",
+          variant: "destructive",
+        }),
+    },
+  });
+
+  const sendQuote = useSendLeadQuote({
+    mutation: {
+      onSuccess: (r) => {
+        qc.invalidateQueries({ queryKey: getListLeadQuotesQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });
+        toast({
+          title: r.channel === "email" ? "Code emailed" : "Code sent on WhatsApp",
+        });
+      },
+      onError: (err: unknown) =>
+        toast({
+          title: "Could not send Code",
+          description: (err as { error?: string })?.error ?? undefined,
+          variant: "destructive",
+        }),
     },
   });
 
@@ -1546,6 +1591,129 @@ export default function LeadDetail() {
 
               {tab === "files" && (
                 <div className="space-y-4">
+                  {/* Quotation Codes — versioned, deterministic tax engine */}
+                  <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-semibold">Quotation Codes</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Sequential estimates priced from inventory with dealer
+                          taxes applied. Every revision is kept.
+                        </div>
+                      </div>
+                      {canEdit && (
+                        <Button
+                          size="sm"
+                          disabled={generateQuote.isPending}
+                          onClick={() => generateQuote.mutate({ id: lead.id })}
+                        >
+                          {generateQuote.isPending ? (
+                            <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                          ) : (
+                            <FileText className="w-4 h-4 mr-1.5" />
+                          )}
+                          {quoteVersions && quoteVersions.length > 0
+                            ? "Regenerate Code"
+                            : "Generate Code"}
+                        </Button>
+                      )}
+                    </div>
+
+                    {quoteVersions && quoteVersions.length > 0 ? (
+                      <div className="space-y-2">
+                        {quoteVersions.map((q) => (
+                          <div
+                            key={q.id}
+                            className="rounded-xl border border-white/10 bg-foreground/[0.03] p-3"
+                          >
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <span className="font-mono text-sm font-semibold">
+                                {q.quoteNumber}
+                              </span>
+                              <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full border border-white/10 text-muted-foreground">
+                                Rev {q.version}
+                              </span>
+                              {q.status === "current" ? (
+                                <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500">
+                                  Current
+                                </span>
+                              ) : (
+                                <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-foreground/10 text-muted-foreground">
+                                  Superseded
+                                </span>
+                              )}
+                              <span className="text-xs text-muted-foreground ml-auto">
+                                {q.issuedOn}
+                                {q.sentAt
+                                  ? ` · Sent ${formatGuyanaDate(q.sentAt)}${q.sentVia ? ` via ${q.sentVia}` : ""}`
+                                  : " · Not sent"}
+                              </span>
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1.5">
+                              {q.modelYear} {q.vehicleLine}
+                              {q.color ? ` · ${q.color}` : ""} · Base{" "}
+                              {money.gyd(q.basePrice)} · Taxes{" "}
+                              {money.gyd(q.totalTax)}
+                            </div>
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                              <span className="text-sm font-semibold mr-auto">
+                                Total {money.dual(q.total)}
+                              </span>
+                              <a
+                                href={`${import.meta.env.BASE_URL}api/leads/${lead.id}/quotes/${q.id}/pdf`}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                <Button variant="outline" size="sm">
+                                  View PDF
+                                </Button>
+                              </a>
+                              {canEdit && q.status === "current" && (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={sendQuote.isPending || !lead.email}
+                                    onClick={() =>
+                                      sendQuote.mutate({
+                                        id: lead.id,
+                                        quoteId: q.id,
+                                        data: { channel: "email" },
+                                      })
+                                    }
+                                  >
+                                    <Mail className="w-3.5 h-3.5 mr-1.5" />
+                                    Email
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={sendQuote.isPending || !lead.phone}
+                                    onClick={() =>
+                                      sendQuote.mutate({
+                                        id: lead.id,
+                                        quoteId: q.id,
+                                        data: { channel: "whatsapp" },
+                                      })
+                                    }
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+                                    WhatsApp
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground rounded-xl border border-dashed border-white/10 p-4 text-center">
+                        No Code yet — it is generated automatically when a lead
+                        arrives with a vehicle of interest, or generate one now.
+                      </div>
+                    )}
+                  </div>
+
                   {quote?.available ? (
                     <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-foreground/[0.03] p-4">
                       <span className="w-11 h-11 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">

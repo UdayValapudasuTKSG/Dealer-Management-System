@@ -13,6 +13,7 @@ import {
   dealsTable,
   callLogsTable,
   agentsTable,
+  quotesTable,
   SOCIAL_SUB_PLATFORMS,
   type Lead,
   type ChecklistStage,
@@ -48,6 +49,14 @@ import {
   GetLeadQuoteParams,
   GetLeadQuoteResponse,
   DownloadLeadQuotePdfParams,
+  ListLeadQuotesParams,
+  ListLeadQuotesResponse,
+  GenerateLeadQuoteParams,
+  GenerateLeadQuoteResponse,
+  DownloadLeadQuoteVersionPdfParams,
+  SendLeadQuoteParams,
+  SendLeadQuoteBody,
+  SendLeadQuoteResponse,
   GetLeadWhatsappThreadParams,
   GetLeadWhatsappThreadResponse,
   SendLeadWhatsappReplyParams,
@@ -84,7 +93,14 @@ import {
   testDriveCalendarFields,
 } from "../lib/calendar";
 import { buildQuotePdf } from "../lib/quote-pdf";
-import { whatsappConfig } from "../lib/whatsapp";
+import {
+  autoQuoteOnLeadCreated,
+  autoQuoteOnLeadUpdated,
+  generateQuoteForLead,
+  quoteById,
+  quotePdfPayload,
+} from "../lib/quotes";
+import { sendWhatsappText, whatsappConfig } from "../lib/whatsapp";
 import { ensureLeadSources } from "../lib/lead-sources";
 import { getActiveChecklist } from "../lib/stage-checklists";
 import {
@@ -270,6 +286,8 @@ router.post("/leads", async (req, res): Promise<void> => {
     .returning();
 
   if (lead) onLeadCreated(lead);
+  // Quote agent (A3): auto-generate the Code from inventory + tax config.
+  if (lead) autoQuoteOnLeadCreated(lead);
 
   await logLeadEvent(
     lead!,
@@ -876,6 +894,188 @@ router.get("/leads/:id/quote.pdf", async (req, res): Promise<void> => {
     .setHeader("Content-Disposition", `inline; filename="${safeName}"`)
     .send(pdf);
 });
+
+// ————— Quotation "Codes" (versioned, deterministic tax engine) —————
+// (leadForDealer helper is declared further down with the call-log routes.)
+
+router.get("/leads/:id/quotes", async (req, res): Promise<void> => {
+  const params = ListLeadQuotesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const lead = await leadForDealer(params.data.id, activeDealerId(res));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(quotesTable)
+    .where(
+      and(
+        eq(quotesTable.dealerId, lead.dealerId),
+        eq(quotesTable.leadId, lead.id),
+      ),
+    )
+    .orderBy(desc(quotesTable.version));
+  res.json(ListLeadQuotesResponse.parse(rows));
+});
+
+router.post("/leads/:id/quotes", async (req, res): Promise<void> => {
+  const params = GenerateLeadQuoteParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const lead = await leadForDealer(params.data.id, activeDealerId(res));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+  const quote = await generateQuoteForLead(lead, {
+    actor: actorName(res),
+    isAgent: false,
+    trigger: "manual",
+  });
+  if (!quote) {
+    res.status(422).json({
+      error:
+        "This lead has no vehicle of interest on file — pick a vehicle first, then generate the Code.",
+    });
+    return;
+  }
+  res.status(201).json(GenerateLeadQuoteResponse.parse(quote));
+});
+
+router.get(
+  "/leads/:id/quotes/:quoteId/pdf",
+  async (req, res): Promise<void> => {
+    const params = DownloadLeadQuoteVersionPdfParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const lead = await leadForDealer(params.data.id, activeDealerId(res));
+    if (!lead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const quote = await quoteById(lead.dealerId, lead.id, params.data.quoteId);
+    if (!quote) {
+      res.status(404).json({ error: "Quote not found" });
+      return;
+    }
+    const pdf = await buildQuotePdf(quotePdfPayload(quote));
+    const safeName =
+      `${quote.customerName} - ${quote.quoteNumber}-R${quote.version}.pdf`.replace(
+        /[^\w .-]+/g,
+        "",
+      );
+    res
+      .setHeader("Content-Type", "application/pdf")
+      .setHeader("Content-Disposition", `inline; filename="${safeName}"`)
+      .send(pdf);
+  },
+);
+
+router.post(
+  "/leads/:id/quotes/:quoteId/send",
+  async (req, res): Promise<void> => {
+    const params = SendLeadQuoteParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const body = SendLeadQuoteBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.message });
+      return;
+    }
+    const lead = await leadForDealer(params.data.id, activeDealerId(res));
+    if (!lead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const quote = await quoteById(lead.dealerId, lead.id, params.data.quoteId);
+    if (!quote) {
+      res.status(404).json({ error: "Quote not found" });
+      return;
+    }
+
+    const channel = body.data.channel;
+    if (channel === "email") {
+      if (!lead.email) {
+        res
+          .status(422)
+          .json({ error: "This lead has no email address on file." });
+        return;
+      }
+      // Rides the existing vehicle_quote path — branded email + PDF attachment.
+      await enqueueEmail({
+        template: "vehicle_quote",
+        to: lead.email,
+        dealerId: lead.dealerId,
+        customerId: lead.customerId,
+        data: quotePdfPayload(quote),
+      });
+    } else {
+      const to = waDigits(lead.phone ?? "");
+      if (!to) {
+        res
+          .status(422)
+          .json({ error: "This lead has no phone number for WhatsApp." });
+        return;
+      }
+      const cfg = whatsappConfig();
+      if (!cfg) {
+        res.status(422).json({
+          error: "WhatsApp sending is not configured for this dealership.",
+        });
+        return;
+      }
+      const taxText =
+        quote.taxLines.length > 0
+          ? quote.taxLines
+              .map((l) => `• ${l.name}: $${l.amount.toLocaleString("en-US")}`)
+              .join("\n")
+          : "• No taxes applicable";
+      const text =
+        `Hi ${quote.customerName}, here is your estimate ${quote.quoteNumber} (rev ${quote.version}) from AURA:\n\n` +
+        `${quote.modelYear} ${quote.vehicleLine}${quote.color ? ` — ${quote.color}` : ""}\n` +
+        `Base price: $${quote.basePrice.toLocaleString("en-US")}\n${taxText}\n` +
+        `Total: $${quote.total.toLocaleString("en-US")}\n\n` +
+        `Valid until ${quote.validUntil}. Reply here with any questions!`;
+      try {
+        await sendWhatsappText(cfg, to, text);
+      } catch {
+        res.status(502).json({
+          error: "WhatsApp could not deliver the message. Try again.",
+        });
+        return;
+      }
+    }
+
+    await db
+      .update(quotesTable)
+      .set({ sentAt: new Date(), sentVia: channel })
+      .where(eq(quotesTable.id, quote.id));
+    await db
+      .update(leadsTable)
+      .set({ quotationSent: true })
+      .where(
+        and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)),
+      );
+    await logLeadEvent(
+      lead,
+      "quote_sent",
+      `Code ${quote.quoteNumber} sent via ${channel === "email" ? "email" : "WhatsApp"}`,
+      `Rev ${quote.version} — total $${quote.total.toLocaleString("en-US")} sent to the customer.`,
+      actorName(res),
+    );
+    res.json(SendLeadQuoteResponse.parse({ ok: true, channel }));
+  },
+);
 
 router.post("/leads/:id/assign", async (req, res): Promise<void> => {
   const params = AssignLeadParams.safeParse(req.params);
@@ -1497,6 +1697,9 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
   }
 
   if (before) onLeadUpdated(before, lead);
+  // Quote agent (A3): regenerate the Code when a pricing-relevant field
+  // (vehicle, color, variant, financing) changed and a Code already exists.
+  if (before && lead) autoQuoteOnLeadUpdated(before, lead);
 
   res.json(UpdateLeadResponse.parse(lead));
 });

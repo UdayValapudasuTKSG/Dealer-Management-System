@@ -1414,6 +1414,127 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /leads/{id}/quotes:
+    get:
+      operationId: listLeadQuotes
+      tags: [leads]
+      summary: List all quotation Code versions for this lead (newest first)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Quote versions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Quote"
+        "404":
+          description: Lead not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: generateLeadQuote
+      tags: [leads]
+      summary: Generate (or regenerate) the Code for this lead from inventory + tax config
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "201":
+          description: Newly generated quote version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+        "404":
+          description: Lead not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Lead has no vehicle of interest to price
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /leads/{id}/quotes/{quoteId}/pdf:
+    get:
+      operationId: downloadLeadQuoteVersionPdf
+      tags: [leads]
+      summary: Download a specific Code version as a branded PDF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: quoteId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Quotation PDF
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Lead or quote not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /leads/{id}/quotes/{quoteId}/send:
+    post:
+      operationId: sendLeadQuote
+      tags: [leads]
+      summary: Send or re-send a Code version to the customer (email or WhatsApp)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: quoteId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendQuoteInput"
+      responses:
+        "200":
+          description: Send result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendQuoteResult"
+        "404":
+          description: Lead or quote not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Cannot send via the requested channel
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /leads/{id}/calls:
     get:
       operationId: listLeadCalls
@@ -4949,6 +5070,7 @@ components:
         kind: { type: string, enum: [percent, fixed] }
         rate: { type: number }
         thresholdAmount: { type: ["number", "null"] }
+        excludeEv: { type: boolean }
         effectiveFrom: { type: string, format: date }
         active: { type: boolean }
         sortOrder: { type: integer }
@@ -4962,6 +5084,7 @@ components:
         kind: { type: string, enum: [percent, fixed] }
         rate: { type: number, minimum: 0 }
         thresholdAmount: { type: ["number", "null"] }
+        excludeEv: { type: boolean }
         effectiveFrom: { type: string, format: date }
         active: { type: boolean }
         sortOrder: { type: integer }
@@ -4973,6 +5096,7 @@ components:
         kind: { type: string, enum: [percent, fixed] }
         rate: { type: number, minimum: 0 }
         thresholdAmount: { type: ["number", "null"] }
+        excludeEv: { type: boolean }
         effectiveFrom: { type: string, format: date }
         active: { type: boolean }
         sortOrder: { type: integer }
@@ -5589,6 +5713,82 @@ components:
         vehicle: { type: ["string", "null"] }
         issuedOn: { type: ["string", "null"] }
         sentAt: { type: ["string", "null"], format: date-time }
+    QuoteTaxLine:
+      type: object
+      required: [code, name, kind, rate, amount]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [percent, fixed] }
+        rate: { type: number }
+        amount: { type: number }
+    Quote:
+      type: object
+      required:
+        [
+          id,
+          leadId,
+          quoteNumber,
+          version,
+          status,
+          customerName,
+          modelYear,
+          vehicleLine,
+          manufacturer,
+          quantity,
+          basePrice,
+          taxLines,
+          totalTax,
+          total,
+          issuedOn,
+          validUntil,
+          trigger,
+          createdBy,
+          isAgent,
+          createdAt,
+        ]
+      properties:
+        id: { type: integer }
+        leadId: { type: integer }
+        vehicleId: { type: ["integer", "null"] }
+        quoteNumber: { type: string }
+        version: { type: integer }
+        status: { type: string, enum: [current, superseded] }
+        customerName: { type: string }
+        customerAddress: { type: ["string", "null"] }
+        modelYear: { type: integer }
+        vehicleLine: { type: string }
+        trim: { type: ["string", "null"] }
+        color: { type: ["string", "null"] }
+        manufacturer: { type: string }
+        mfgDate: { type: ["string", "null"] }
+        quantity: { type: integer }
+        basePrice: { type: number }
+        taxLines:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuoteTaxLine"
+        totalTax: { type: number }
+        total: { type: number }
+        issuedOn: { type: string }
+        validUntil: { type: string }
+        trigger: { type: string }
+        createdBy: { type: string }
+        isAgent: { type: boolean }
+        sentAt: { type: ["string", "null"], format: date-time }
+        sentVia: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    SendQuoteInput:
+      type: object
+      required: [channel]
+      properties:
+        channel: { type: string, enum: [email, whatsapp] }
+    SendQuoteResult:
+      type: object
+      required: [ok, channel]
+      properties:
+        ok: { type: boolean }
+        channel: { type: string }
     EnquiryInput:
       type: object
       required: [name]

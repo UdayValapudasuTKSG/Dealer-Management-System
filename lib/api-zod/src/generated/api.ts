@@ -1924,6 +1924,124 @@ export const DownloadLeadQuotePdfResponse = zod.unknown()
 
 
 /**
+ * @summary List all quotation Code versions for this lead (newest first)
+ */
+export const ListLeadQuotesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListLeadQuotesResponseItem = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "quoteNumber": zod.string(),
+  "version": zod.number(),
+  "status": zod.enum(['current', 'superseded']),
+  "customerName": zod.string(),
+  "customerAddress": zod.string().nullish(),
+  "modelYear": zod.number(),
+  "vehicleLine": zod.string(),
+  "trim": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "manufacturer": zod.string(),
+  "mfgDate": zod.string().nullish(),
+  "quantity": zod.number(),
+  "basePrice": zod.number(),
+  "taxLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})),
+  "totalTax": zod.number(),
+  "total": zod.number(),
+  "issuedOn": zod.string(),
+  "validUntil": zod.string(),
+  "trigger": zod.string(),
+  "createdBy": zod.string(),
+  "isAgent": zod.boolean(),
+  "sentAt": zod.coerce.date().nullish(),
+  "sentVia": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListLeadQuotesResponse = zod.array(ListLeadQuotesResponseItem)
+
+
+/**
+ * @summary Generate (or regenerate) the Code for this lead from inventory + tax config
+ */
+export const GenerateLeadQuoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GenerateLeadQuoteResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "quoteNumber": zod.string(),
+  "version": zod.number(),
+  "status": zod.enum(['current', 'superseded']),
+  "customerName": zod.string(),
+  "customerAddress": zod.string().nullish(),
+  "modelYear": zod.number(),
+  "vehicleLine": zod.string(),
+  "trim": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "manufacturer": zod.string(),
+  "mfgDate": zod.string().nullish(),
+  "quantity": zod.number(),
+  "basePrice": zod.number(),
+  "taxLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})),
+  "totalTax": zod.number(),
+  "total": zod.number(),
+  "issuedOn": zod.string(),
+  "validUntil": zod.string(),
+  "trigger": zod.string(),
+  "createdBy": zod.string(),
+  "isAgent": zod.boolean(),
+  "sentAt": zod.coerce.date().nullish(),
+  "sentVia": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Download a specific Code version as a branded PDF
+ */
+export const DownloadLeadQuoteVersionPdfParams = zod.object({
+  "id": zod.coerce.number(),
+  "quoteId": zod.coerce.number()
+})
+
+export const DownloadLeadQuoteVersionPdfResponse = zod.unknown()
+
+
+/**
+ * @summary Send or re-send a Code version to the customer (email or WhatsApp)
+ */
+export const SendLeadQuoteParams = zod.object({
+  "id": zod.coerce.number(),
+  "quoteId": zod.coerce.number()
+})
+
+export const SendLeadQuoteBody = zod.object({
+  "channel": zod.enum(['email', 'whatsapp'])
+})
+
+export const SendLeadQuoteResponse = zod.object({
+  "ok": zod.boolean(),
+  "channel": zod.string()
+})
+
+
+/**
  * @summary Call log history for this lead
  */
 export const ListLeadCallsParams = zod.object({
@@ -5448,6 +5566,7 @@ export const ListDealerTaxesResponseItem = zod.object({
   "kind": zod.enum(['percent', 'fixed']),
   "rate": zod.number(),
   "thresholdAmount": zod.number().nullish(),
+  "excludeEv": zod.boolean().optional(),
   "effectiveFrom": zod.coerce.date(),
   "active": zod.boolean(),
   "sortOrder": zod.number(),
@@ -5470,6 +5589,7 @@ export const CreateDealerTaxBody = zod.object({
   "kind": zod.enum(['percent', 'fixed']),
   "rate": zod.number().min(createDealerTaxBodyRateMin),
   "thresholdAmount": zod.number().nullish(),
+  "excludeEv": zod.boolean().optional(),
   "effectiveFrom": zod.coerce.date().optional(),
   "active": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
@@ -5484,6 +5604,7 @@ export const CreateDealerTaxResponse = zod.object({
   "kind": zod.enum(['percent', 'fixed']),
   "rate": zod.number(),
   "thresholdAmount": zod.number().nullish(),
+  "excludeEv": zod.boolean().optional(),
   "effectiveFrom": zod.coerce.date(),
   "active": zod.boolean(),
   "sortOrder": zod.number(),
@@ -5508,6 +5629,7 @@ export const UpdateDealerTaxBody = zod.object({
   "kind": zod.enum(['percent', 'fixed']).optional(),
   "rate": zod.number().min(updateDealerTaxBodyRateMin).optional(),
   "thresholdAmount": zod.number().nullish(),
+  "excludeEv": zod.boolean().optional(),
   "effectiveFrom": zod.coerce.date().optional(),
   "active": zod.boolean().optional(),
   "sortOrder": zod.number().optional(),
@@ -5522,6 +5644,7 @@ export const UpdateDealerTaxResponse = zod.object({
   "kind": zod.enum(['percent', 'fixed']),
   "rate": zod.number(),
   "thresholdAmount": zod.number().nullish(),
+  "excludeEv": zod.boolean().optional(),
   "effectiveFrom": zod.coerce.date(),
   "active": zod.boolean(),
   "sortOrder": zod.number(),

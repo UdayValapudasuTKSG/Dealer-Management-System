@@ -16,6 +16,7 @@ export interface DealerTaxInput {
   rate: number;
   /** @nullable */
   thresholdAmount?: number | null;
+  excludeEv?: boolean;
   effectiveFrom?: Date;
   active?: boolean;
   sortOrder?: number;

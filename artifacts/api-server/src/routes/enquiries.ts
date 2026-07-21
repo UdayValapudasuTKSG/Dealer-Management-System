@@ -14,6 +14,7 @@ import {
 import { notifyUsers } from "../lib/email";
 import { onLeadCreated } from "../lib/email-triggers";
 import { autoAssignLead } from "../lib/lead-assignment";
+import { autoQuoteOnLeadCreated } from "../lib/quotes";
 import { findOpenDuplicate, mergeIntoExistingLead } from "../lib/lead-dedup";
 import { defaultDealerId, dealerStaffIdsByRole } from "../lib/tenancy";
 
@@ -181,6 +182,8 @@ router.post("/enquiries", async (req, res): Promise<void> => {
 
   // Quote (when a vehicle was matched to inventory) or welcome email.
   if (lead) onLeadCreated(lead, vehicleName?.trim() || undefined);
+  // Quote agent (A3): auto-generate the versioned Code.
+  if (lead) autoQuoteOnLeadCreated(lead);
 
   // Sales agent routes the enquiry to the least-loaded advisor automatically.
   const assigned = lead ? await autoAssignLead(lead) : null;

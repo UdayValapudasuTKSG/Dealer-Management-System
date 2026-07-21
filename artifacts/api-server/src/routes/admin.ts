@@ -16,10 +16,10 @@ import {
   PERMISSION_CATEGORIES,
   FIELD_GROUPS,
   FIELD_GROUP_KEYS,
-  DEFAULT_DEALER_TAXES,
   CHECKLIST_STAGES,
   type ChecklistStage,
 } from "@workspace/db";
+import { ensureDealerTaxes } from "../lib/taxes";
 import {
   ListAdminUsersResponse,
   AddAdminUserBody,
@@ -710,35 +710,6 @@ router.put("/admin/stage-checklists/:stage", async (req, res): Promise<void> => 
 
 // ————— Dealer taxes (deterministic config) —————
 
-async function ensureDealerTaxes(dealerId: number) {
-  const rows = await db
-    .select()
-    .from(dealerTaxesTable)
-    .where(eq(dealerTaxesTable.dealerId, dealerId))
-    .orderBy(asc(dealerTaxesTable.sortOrder), asc(dealerTaxesTable.id));
-  if (rows.length > 0) return rows;
-  const today = new Date().toISOString().slice(0, 10);
-  await db.insert(dealerTaxesTable).values(
-    DEFAULT_DEALER_TAXES.map((t, i) => ({
-      dealerId,
-      name: t.name,
-      code: t.code,
-      kind: t.kind,
-      rate: t.rate,
-      thresholdAmount: t.thresholdAmount,
-      effectiveFrom: today,
-      active: true,
-      sortOrder: i,
-      createdBy: "system",
-    })),
-  );
-  return db
-    .select()
-    .from(dealerTaxesTable)
-    .where(eq(dealerTaxesTable.dealerId, dealerId))
-    .orderBy(asc(dealerTaxesTable.sortOrder), asc(dealerTaxesTable.id));
-}
-
 router.get("/admin/taxes", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
   const rows = await ensureDealerTaxes(dealerId);
@@ -774,6 +745,7 @@ router.post("/admin/taxes", async (req, res): Promise<void> => {
       kind: body.data.kind,
       rate: body.data.rate,
       thresholdAmount: body.data.thresholdAmount ?? null,
+      excludeEv: body.data.excludeEv ?? false,
       effectiveFrom:
         toDateOnly(body.data.effectiveFrom) ??
         new Date().toISOString().slice(0, 10),
@@ -807,6 +779,9 @@ router.patch("/admin/taxes/:id", async (req, res): Promise<void> => {
       ...(body.data.rate !== undefined ? { rate: body.data.rate } : {}),
       ...(body.data.thresholdAmount !== undefined
         ? { thresholdAmount: body.data.thresholdAmount }
+        : {}),
+      ...(body.data.excludeEv !== undefined
+        ? { excludeEv: body.data.excludeEv }
         : {}),
       ...(effectiveFrom !== undefined ? { effectiveFrom } : {}),
       ...(body.data.active !== undefined ? { active: body.data.active } : {}),

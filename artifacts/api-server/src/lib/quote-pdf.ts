@@ -75,7 +75,16 @@ export function buildQuotePdf(data: QuotePdfData): Promise<Buffer> {
       .fontSize(13)
       .fillColor("#111111")
       .text(val(data, "name", "Valued Customer"), left, y);
-    y += 30;
+    y += 18;
+    if (data.address && data.address.trim()) {
+      doc
+        .font("Helvetica")
+        .fontSize(9.5)
+        .fillColor("#555555")
+        .text(data.address.trim(), left, y, { width: contentW });
+      y += 16;
+    }
+    y += 12;
 
     // ---- Vehicle details ---------------------------------------------------
     doc
@@ -88,8 +97,11 @@ export function buildQuotePdf(data: QuotePdfData): Promise<Buffer> {
     const rows: [string, string][] = [
       ["Vehicle", val(data, "vehicle")],
       ["Model", val(data, "model")],
+      ["Model Year", val(data, "modelYear")],
       ["Version", val(data, "version")],
       ["Color", val(data, "color")],
+      ["Manufacturer", val(data, "manufacturer")],
+      ["Mfg. Date", val(data, "mfgDate")],
     ];
     const rowH = 24;
     for (let i = 0; i < rows.length; i++) {
@@ -150,11 +162,43 @@ export function buildQuotePdf(data: QuotePdfData): Promise<Buffer> {
         width: 80,
         align: "right",
       })
-      .text(val(data, "total"), colAmt, y + 9, {
+      .text(val(data, "subtotal", val(data, "total")), colAmt, y + 9, {
         width: 90 - 12,
         align: "right",
       });
     y += 30;
+
+    // ---- Tax breakdown (deterministic engine output) -----------------------
+    let taxLines: { name: string; amount: string }[] = [];
+    try {
+      taxLines = data.taxLines ? JSON.parse(data.taxLines) : [];
+    } catch {
+      taxLines = [];
+    }
+    if (taxLines.length > 0) {
+      for (const line of taxLines) {
+        doc
+          .font("Helvetica")
+          .fontSize(9.5)
+          .fillColor("#555555")
+          .text(line.name, left + 12, y + 6, { width: colAmt - left - 24 })
+          .text(line.amount, colAmt, y + 6, {
+            width: 90 - 12,
+            align: "right",
+          });
+        y += 20;
+      }
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(9.5)
+        .fillColor("#333333")
+        .text("Total taxes & fees", left + 12, y + 6)
+        .text(val(data, "totalTax"), colAmt, y + 6, {
+          width: 90 - 12,
+          align: "right",
+        });
+      y += 24;
+    }
 
     doc
       .moveTo(left, y)

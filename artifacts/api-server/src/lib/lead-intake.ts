@@ -9,6 +9,7 @@ import {
 import { notifyUsers } from "./email";
 import { onLeadCreated } from "./email-triggers";
 import { autoAssignLead } from "./lead-assignment";
+import { autoQuoteOnLeadCreated } from "./quotes";
 import { dealerStaffIdsByRole } from "./tenancy";
 import { logger } from "./logger";
 
@@ -103,6 +104,8 @@ export async function createInboundLead(opts: {
 
   // Quote (when a vehicle was matched to inventory) or welcome email.
   onLeadCreated(lead!);
+  // Quote agent (A3): auto-generate the versioned Code.
+  autoQuoteOnLeadCreated(lead!);
 
   // Sales agent routes the lead to the least-loaded advisor automatically.
   const assigned = await autoAssignLead(lead!);

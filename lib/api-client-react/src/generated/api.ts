@@ -176,6 +176,7 @@ import type {
   PipelineSuggestions,
   PlatformUser,
   PredictiveAnalytics,
+  Quote,
   Receipt,
   ReceiveMetaWebhook200,
   RemindAck,
@@ -187,6 +188,8 @@ import type {
   RoleWithPermissions,
   SalesPoint,
   SearchResults,
+  SendQuoteInput,
+  SendQuoteResult,
   SentimentAnalysis,
   ServiceInvoice,
   ServiceInvoiceUpdate,
@@ -4284,6 +4287,310 @@ export function useDownloadLeadQuotePdf<TData = Awaited<ReturnType<typeof downlo
 
 
 
+
+export const getListLeadQuotesUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/quotes`
+}
+
+/**
+ * @summary List all quotation Code versions for this lead (newest first)
+ */
+export const listLeadQuotes = async (id: number, options?: RequestInit): Promise<Quote[]> => {
+
+  return customFetch<Quote[]>(getListLeadQuotesUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLeadQuotesQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/quotes`
+    ] as const;
+    }
+
+
+export const getListLeadQuotesQueryOptions = <TData = Awaited<ReturnType<typeof listLeadQuotes>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadQuotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLeadQuotesQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLeadQuotes>>> = ({ signal }) => listLeadQuotes(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLeadQuotes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLeadQuotesQueryResult = NonNullable<Awaited<ReturnType<typeof listLeadQuotes>>>
+export type ListLeadQuotesQueryError = ErrorType<Error>
+
+
+/**
+ * @summary List all quotation Code versions for this lead (newest first)
+ */
+
+export function useListLeadQuotes<TData = Awaited<ReturnType<typeof listLeadQuotes>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadQuotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLeadQuotesQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGenerateLeadQuoteUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/quotes`
+}
+
+/**
+ * @summary Generate (or regenerate) the Code for this lead from inventory + tax config
+ */
+export const generateLeadQuote = async (id: number, options?: RequestInit): Promise<Quote> => {
+
+  return customFetch<Quote>(getGenerateLeadQuoteUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getGenerateLeadQuoteMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateLeadQuote>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateLeadQuote>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['generateLeadQuote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateLeadQuote>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  generateLeadQuote(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateLeadQuoteMutationResult = NonNullable<Awaited<ReturnType<typeof generateLeadQuote>>>
+
+    export type GenerateLeadQuoteMutationError = ErrorType<Error>
+
+    /**
+ * @summary Generate (or regenerate) the Code for this lead from inventory + tax config
+ */
+export const useGenerateLeadQuote = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateLeadQuote>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateLeadQuote>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getGenerateLeadQuoteMutationOptions(options));
+    }
+
+export const getDownloadLeadQuoteVersionPdfUrl = (id: number,
+    quoteId: number,) => {
+
+
+
+
+  return `/api/leads/${id}/quotes/${quoteId}/pdf`
+}
+
+/**
+ * @summary Download a specific Code version as a branded PDF
+ */
+export const downloadLeadQuoteVersionPdf = async (id: number,
+    quoteId: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadLeadQuoteVersionPdfUrl(id,quoteId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadLeadQuoteVersionPdfQueryKey = (id: number,
+    quoteId: number,) => {
+    return [
+    `/api/leads/${id}/quotes/${quoteId}/pdf`
+    ] as const;
+    }
+
+
+export const getDownloadLeadQuoteVersionPdfQueryOptions = <TData = Awaited<ReturnType<typeof downloadLeadQuoteVersionPdf>>, TError = ErrorType<Error>>(id: number,
+    quoteId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadLeadQuoteVersionPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadLeadQuoteVersionPdfQueryKey(id,quoteId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadLeadQuoteVersionPdf>>> = ({ signal }) => downloadLeadQuoteVersionPdf(id,quoteId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && quoteId !== null && quoteId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadLeadQuoteVersionPdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadLeadQuoteVersionPdfQueryResult = NonNullable<Awaited<ReturnType<typeof downloadLeadQuoteVersionPdf>>>
+export type DownloadLeadQuoteVersionPdfQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Download a specific Code version as a branded PDF
+ */
+
+export function useDownloadLeadQuoteVersionPdf<TData = Awaited<ReturnType<typeof downloadLeadQuoteVersionPdf>>, TError = ErrorType<Error>>(
+ id: number,
+    quoteId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadLeadQuoteVersionPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadLeadQuoteVersionPdfQueryOptions(id,quoteId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSendLeadQuoteUrl = (id: number,
+    quoteId: number,) => {
+
+
+
+
+  return `/api/leads/${id}/quotes/${quoteId}/send`
+}
+
+/**
+ * @summary Send or re-send a Code version to the customer (email or WhatsApp)
+ */
+export const sendLeadQuote = async (id: number,
+    quoteId: number,
+    sendQuoteInput: SendQuoteInput, options?: RequestInit): Promise<SendQuoteResult> => {
+
+  return customFetch<SendQuoteResult>(getSendLeadQuoteUrl(id,quoteId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendQuoteInput)
+  }
+);}
+
+
+
+
+
+export const getSendLeadQuoteMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendLeadQuote>>, TError,{id: number;quoteId: number;data: BodyType<SendQuoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendLeadQuote>>, TError,{id: number;quoteId: number;data: BodyType<SendQuoteInput>}, TContext> => {
+
+const mutationKey = ['sendLeadQuote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendLeadQuote>>, {id: number;quoteId: number;data: BodyType<SendQuoteInput>}> = (props) => {
+          const {id,quoteId,data} = props ?? {};
+
+          return  sendLeadQuote(id,quoteId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendLeadQuoteMutationResult = NonNullable<Awaited<ReturnType<typeof sendLeadQuote>>>
+    export type SendLeadQuoteMutationBody = BodyType<SendQuoteInput>
+    export type SendLeadQuoteMutationError = ErrorType<Error>
+
+    /**
+ * @summary Send or re-send a Code version to the customer (email or WhatsApp)
+ */
+export const useSendLeadQuote = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendLeadQuote>>, TError,{id: number;quoteId: number;data: BodyType<SendQuoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendLeadQuote>>,
+        TError,
+        {id: number;quoteId: number;data: BodyType<SendQuoteInput>},
+        TContext
+      > => {
+      return useMutation(getSendLeadQuoteMutationOptions(options));
+    }
 
 export const getListLeadCallsUrl = (id: number,) => {
 

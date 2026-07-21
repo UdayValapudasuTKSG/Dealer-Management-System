@@ -33,6 +33,8 @@ export const dealerTaxesTable = pgTable("dealer_taxes", {
   rate: doublePrecision("rate").notNull().default(0),
   /** Only applies when the taxable base exceeds this USD amount (e.g. duty threshold). */
   thresholdAmount: doublePrecision("threshold_amount"),
+  /** When true, electric vehicles are exempt from this rule (configurable EV exclusion). */
+  excludeEv: boolean("exclude_ev").notNull().default(false),
   effectiveFrom: date("effective_from", { mode: "string" }).notNull(),
   active: boolean("active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
@@ -57,10 +59,13 @@ export const DEFAULT_DEALER_TAXES: readonly {
   kind: TaxKind;
   rate: number;
   thresholdAmount: number | null;
+  excludeEv: boolean;
 }[] = [
-  { code: "vat", name: "VAT", kind: "percent", rate: 14, thresholdAmount: null },
-  { code: "import_duty", name: "Import Duty", kind: "percent", rate: 45, thresholdAmount: 30000 },
-  { code: "excise", name: "Excise Tax", kind: "percent", rate: 10, thresholdAmount: null },
-  { code: "environmental", name: "Environmental Levy", kind: "fixed", rate: 25, thresholdAmount: null },
-  { code: "registration", name: "Registration Fee", kind: "fixed", rate: 75, thresholdAmount: null },
+  // Guyana zero-rates electric vehicles for VAT, duty and excise — hence the
+  // configurable EV exclusion default on those rules.
+  { code: "vat", name: "VAT", kind: "percent", rate: 14, thresholdAmount: null, excludeEv: true },
+  { code: "import_duty", name: "Import Duty", kind: "percent", rate: 45, thresholdAmount: 30000, excludeEv: true },
+  { code: "excise", name: "Excise Tax", kind: "percent", rate: 10, thresholdAmount: null, excludeEv: true },
+  { code: "environmental", name: "Environmental Levy", kind: "fixed", rate: 25, thresholdAmount: null, excludeEv: false },
+  { code: "registration", name: "Registration Fee", kind: "fixed", rate: 75, thresholdAmount: null, excludeEv: false },
 ] as const;
