@@ -226,6 +226,14 @@ export interface AdminUser {
   roleName?: string | null;
   status: AdminUserStatus;
   /** @nullable */
+  reportingManagerUserId?: number | null;
+  /** @nullable */
+  reportingManagerName?: string | null;
+  /** @nullable */
+  divisionId?: number | null;
+  /** @nullable */
+  divisionName?: string | null;
+  /** @nullable */
   lastLoginAt?: string | null;
   createdAt: string;
 }
@@ -242,11 +250,29 @@ export interface AdminUserUpdate {
   /** @nullable */
   roleId?: number | null;
   status?: AdminUserUpdateStatus;
+  /** @nullable */
+  reportingManagerUserId?: number | null;
+  /** @nullable */
+  divisionId?: number | null;
 }
 
 export interface AdminUserAdd {
   email: string;
   roleId: number;
+}
+
+export type FieldAccessGrantAccess = typeof FieldAccessGrantAccess[keyof typeof FieldAccessGrantAccess];
+
+
+export const FieldAccessGrantAccess = {
+  hidden: 'hidden',
+  view: 'view',
+  edit: 'edit',
+} as const;
+
+export interface FieldAccessGrant {
+  fieldGroup: string;
+  access: FieldAccessGrantAccess;
 }
 
 export interface RoleWithPermissions {
@@ -257,11 +283,174 @@ export interface RoleWithPermissions {
   isSystem: boolean;
   userCount: number;
   permissions: PermissionGrant[];
+  fieldPermissions?: FieldAccessGrant[];
   createdAt: string;
 }
 
 export interface RolePermissionsInput {
   grants: PermissionGrant[];
+}
+
+export interface FieldGroupMeta {
+  key: string;
+  label: string;
+  module: string;
+  fields: string[];
+}
+
+export interface RoleFieldPermissionsInput {
+  grants: FieldAccessGrant[];
+}
+
+export interface LeadSourceConfig {
+  id: number;
+  dealerId: number;
+  code: string;
+  name: string;
+  isSocial: boolean;
+  active: boolean;
+  sortOrder: number;
+}
+
+export interface LeadSourceInput {
+  /** @minLength 1 */
+  name: string;
+  /** Defaults to a slug of the name */
+  code?: string;
+  isSocial?: boolean;
+  active?: boolean;
+  sortOrder?: number;
+}
+
+export interface LeadSourceUpdate {
+  /** @minLength 1 */
+  name?: string;
+  isSocial?: boolean;
+  active?: boolean;
+  sortOrder?: number;
+}
+
+export type ChecklistItemConfigKey = typeof ChecklistItemConfigKey[keyof typeof ChecklistItemConfigKey];
+
+
+export const ChecklistItemConfigKey = {
+  contact_details: 'contact_details',
+  vehicle_selected: 'vehicle_selected',
+  budget_discussed: 'budget_discussed',
+  test_drive_booked: 'test_drive_booked',
+  licence_on_file: 'licence_on_file',
+  waiver_signed: 'waiver_signed',
+  vehicle_available: 'vehicle_available',
+  test_drive_completed: 'test_drive_completed',
+  deal_created: 'deal_created',
+  deal_exists: 'deal_exists',
+  deposit_taken: 'deposit_taken',
+  finance_approved: 'finance_approved',
+} as const;
+
+export interface ChecklistItemConfig {
+  key: ChecklistItemConfigKey;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  label: string;
+  enabled: boolean;
+}
+
+export type StageChecklistConfigStage = typeof StageChecklistConfigStage[keyof typeof StageChecklistConfigStage];
+
+
+export const StageChecklistConfigStage = {
+  qualified: 'qualified',
+  test_drive: 'test_drive',
+  negotiation: 'negotiation',
+  sold: 'sold',
+} as const;
+
+export interface StageChecklistConfig {
+  stage: StageChecklistConfigStage;
+  version: number;
+  items: ChecklistItemConfig[];
+  /** @nullable */
+  updatedBy?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+}
+
+export interface StageChecklistInput {
+  items: ChecklistItemConfig[];
+}
+
+export type DealerTaxRuleKind = typeof DealerTaxRuleKind[keyof typeof DealerTaxRuleKind];
+
+
+export const DealerTaxRuleKind = {
+  percent: 'percent',
+  fixed: 'fixed',
+} as const;
+
+export interface DealerTaxRule {
+  id: number;
+  dealerId: number;
+  name: string;
+  code: string;
+  kind: DealerTaxRuleKind;
+  rate: number;
+  /** @nullable */
+  thresholdAmount?: number | null;
+  effectiveFrom: string;
+  active: boolean;
+  sortOrder: number;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export type DealerTaxInputKind = typeof DealerTaxInputKind[keyof typeof DealerTaxInputKind];
+
+
+export const DealerTaxInputKind = {
+  percent: 'percent',
+  fixed: 'fixed',
+} as const;
+
+export interface DealerTaxInput {
+  /** @minLength 1 */
+  name: string;
+  code?: string;
+  kind: DealerTaxInputKind;
+  /** @minimum 0 */
+  rate: number;
+  /** @nullable */
+  thresholdAmount?: number | null;
+  effectiveFrom?: string;
+  active?: boolean;
+  sortOrder?: number;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export type DealerTaxUpdateKind = typeof DealerTaxUpdateKind[keyof typeof DealerTaxUpdateKind];
+
+
+export const DealerTaxUpdateKind = {
+  percent: 'percent',
+  fixed: 'fixed',
+} as const;
+
+export interface DealerTaxUpdate {
+  /** @minLength 1 */
+  name?: string;
+  kind?: DealerTaxUpdateKind;
+  /** @minimum 0 */
+  rate?: number;
+  /** @nullable */
+  thresholdAmount?: number | null;
+  effectiveFrom?: string;
+  active?: boolean;
+  sortOrder?: number;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export interface RoleInput {
@@ -873,20 +1062,6 @@ export const LeadChannel = {
   email: 'email',
 } as const;
 
-export type LeadSource = typeof LeadSource[keyof typeof LeadSource];
-
-
-export const LeadSource = {
-  website: 'website',
-  walk_in: 'walk_in',
-  phone: 'phone',
-  facebook: 'facebook',
-  instagram: 'instagram',
-  whatsapp: 'whatsapp',
-  referral: 'referral',
-  gmail: 'gmail',
-} as const;
-
 export type LeadPriority = typeof LeadPriority[keyof typeof LeadPriority];
 
 
@@ -956,7 +1131,9 @@ export interface Lead {
   /** @nullable */
   phone?: string | null;
   channel: LeadChannel;
-  source: LeadSource;
+  source: string;
+  /** @nullable */
+  sourceDetail?: string | null;
   priority: LeadPriority;
   phase: LeadPhase;
   status: LeadStatus;
@@ -1032,20 +1209,6 @@ export const LeadInputChannel = {
   email: 'email',
 } as const;
 
-export type LeadInputSource = typeof LeadInputSource[keyof typeof LeadInputSource];
-
-
-export const LeadInputSource = {
-  website: 'website',
-  walk_in: 'walk_in',
-  phone: 'phone',
-  facebook: 'facebook',
-  instagram: 'instagram',
-  whatsapp: 'whatsapp',
-  referral: 'referral',
-  gmail: 'gmail',
-} as const;
-
 export type LeadInputPriority = typeof LeadInputPriority[keyof typeof LeadInputPriority];
 
 
@@ -1090,7 +1253,9 @@ export interface LeadInput {
   email?: string;
   phone?: string;
   channel: LeadInputChannel;
-  source?: LeadInputSource;
+  /** @minLength 1 */
+  source?: string;
+  sourceDetail?: string;
   priority?: LeadInputPriority;
   phase?: LeadInputPhase;
   status?: LeadInputStatus;
@@ -1117,20 +1282,6 @@ export const LeadUpdateChannel = {
   mobile: 'mobile',
   walkin: 'walkin',
   email: 'email',
-} as const;
-
-export type LeadUpdateSource = typeof LeadUpdateSource[keyof typeof LeadUpdateSource];
-
-
-export const LeadUpdateSource = {
-  website: 'website',
-  walk_in: 'walk_in',
-  phone: 'phone',
-  facebook: 'facebook',
-  instagram: 'instagram',
-  whatsapp: 'whatsapp',
-  referral: 'referral',
-  gmail: 'gmail',
 } as const;
 
 export type LeadUpdatePriority = typeof LeadUpdatePriority[keyof typeof LeadUpdatePriority];
@@ -1194,7 +1345,10 @@ export interface LeadUpdate {
   email?: string;
   phone?: string;
   channel?: LeadUpdateChannel;
-  source?: LeadUpdateSource;
+  /** @minLength 1 */
+  source?: string;
+  /** @nullable */
+  sourceDetail?: string | null;
   priority?: LeadUpdatePriority;
   phase?: LeadUpdatePhase;
   status?: LeadUpdateStatus;
@@ -1405,26 +1559,13 @@ export interface LeadQuoteInfo {
   sentAt?: string | null;
 }
 
-export type EnquiryInputSource = typeof EnquiryInputSource[keyof typeof EnquiryInputSource];
-
-
-export const EnquiryInputSource = {
-  website: 'website',
-  walk_in: 'walk_in',
-  phone: 'phone',
-  facebook: 'facebook',
-  instagram: 'instagram',
-  whatsapp: 'whatsapp',
-  referral: 'referral',
-  gmail: 'gmail',
-} as const;
-
 export interface EnquiryInput {
   /** @minLength 1 */
   name: string;
   email?: string;
   phone?: string;
-  source?: EnquiryInputSource;
+  /** @minLength 1 */
+  source?: string;
   vehicleId?: number;
   vehicleName?: string;
   variant?: string;
@@ -3762,6 +3903,10 @@ status?: string;
 divisionId?: number;
 };
 
+export type ListLeadSourcesParams = {
+includeInactive?: boolean;
+};
+
 export type ListDealsParams = {
 stage?: string;
 };
@@ -3859,6 +4004,7 @@ status?: string;
 export type GetPermissionMeta200 = {
   modules: string[];
   categories: string[];
+  fieldGroups?: FieldGroupMeta[];
 };
 
 export type ListAuditLogsParams = {

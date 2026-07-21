@@ -1007,6 +1007,26 @@ paths:
                 items:
                   $ref: "#/components/schemas/LeadAdvisor"
 
+  /leads/sources:
+    get:
+      operationId: listLeadSources
+      tags: [leads]
+      summary: List the active dealership's configured lead sources
+      parameters:
+        - name: includeInactive
+          in: query
+          required: false
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Configured lead sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeadSourceConfig"
+
   /leads/{id}/assign:
     post:
       operationId: assignLead
@@ -3843,6 +3863,216 @@ paths:
                   categories:
                     type: array
                     items: { type: string }
+                  fieldGroups:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FieldGroupMeta"
+  /admin/roles/{id}/field-permissions:
+    put:
+      operationId: setRoleFieldPermissions
+      tags: [admin]
+      summary: Replace the field-level access grants for a role
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleFieldPermissionsInput"
+      responses:
+        "200":
+          description: Updated role with permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleWithPermissions"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/lead-sources:
+    get:
+      operationId: listAdminLeadSources
+      tags: [admin]
+      summary: List all lead sources (including inactive) for the active dealership
+      responses:
+        "200":
+          description: Lead sources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeadSourceConfig"
+    post:
+      operationId: createAdminLeadSource
+      tags: [admin]
+      summary: Add a lead source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadSourceInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadSourceConfig"
+        "409":
+          description: Duplicate code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/lead-sources/{id}:
+    patch:
+      operationId: updateAdminLeadSource
+      tags: [admin]
+      summary: Edit or deactivate a lead source
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadSourceUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadSourceConfig"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /admin/stage-checklists:
+    get:
+      operationId: listStageChecklists
+      tags: [admin]
+      summary: Active advance-gate checklist per pipeline stage (latest version)
+      responses:
+        "200":
+          description: Active checklist config for each gated stage
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StageChecklistConfig"
+  /admin/stage-checklists/{stage}:
+    put:
+      operationId: setStageChecklist
+      tags: [admin]
+      summary: Save a new version of a stage's checklist (history preserved)
+      parameters:
+        - name: stage
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [qualified, test_drive, negotiation, sold]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StageChecklistInput"
+      responses:
+        "200":
+          description: New active version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StageChecklistConfig"
+  /admin/taxes:
+    get:
+      operationId: listDealerTaxes
+      tags: [admin]
+      summary: List the active dealership's tax rules
+      responses:
+        "200":
+          description: Tax rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DealerTaxRule"
+    post:
+      operationId: createDealerTax
+      tags: [admin]
+      summary: Add a tax rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealerTaxInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealerTaxRule"
+  /admin/taxes/{id}:
+    patch:
+      operationId: updateDealerTax
+      tags: [admin]
+      summary: Edit a tax rule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealerTaxUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealerTaxRule"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteDealerTax
+      tags: [admin]
+      summary: Remove a tax rule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
 
   /audit-logs:
     get:
@@ -4490,6 +4720,10 @@ components:
         roleId: { type: ["integer", "null"] }
         roleName: { type: ["string", "null"] }
         status: { type: string, enum: [active, suspended] }
+        reportingManagerUserId: { type: ["integer", "null"] }
+        reportingManagerName: { type: ["string", "null"] }
+        divisionId: { type: ["integer", "null"] }
+        divisionName: { type: ["string", "null"] }
         lastLoginAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     AdminUserUpdate:
@@ -4497,6 +4731,8 @@ components:
       properties:
         roleId: { type: ["integer", "null"] }
         status: { type: string, enum: [active, suspended] }
+        reportingManagerUserId: { type: ["integer", "null"] }
+        divisionId: { type: ["integer", "null"] }
     AdminUserAdd:
       type: object
       required: [email, roleId]
@@ -4516,6 +4752,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PermissionGrant"
+        fieldPermissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldAccessGrant"
         createdAt: { type: string, format: date-time }
     RolePermissionsInput:
       type: object
@@ -4525,6 +4765,125 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PermissionGrant"
+    FieldAccessGrant:
+      type: object
+      required: [fieldGroup, access]
+      properties:
+        fieldGroup: { type: string }
+        access: { type: string, enum: [hidden, view, edit] }
+    FieldGroupMeta:
+      type: object
+      required: [key, label, module, fields]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        module: { type: string }
+        fields:
+          type: array
+          items: { type: string }
+    RoleFieldPermissionsInput:
+      type: object
+      required: [grants]
+      properties:
+        grants:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldAccessGrant"
+    LeadSourceConfig:
+      type: object
+      required: [id, dealerId, code, name, isSocial, active, sortOrder]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        code: { type: string }
+        name: { type: string }
+        isSocial: { type: boolean }
+        active: { type: boolean }
+        sortOrder: { type: integer }
+    LeadSourceInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+        code: { type: string, description: "Defaults to a slug of the name" }
+        isSocial: { type: boolean }
+        active: { type: boolean }
+        sortOrder: { type: integer }
+    LeadSourceUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        isSocial: { type: boolean }
+        active: { type: boolean }
+        sortOrder: { type: integer }
+    ChecklistItemConfig:
+      type: object
+      required: [key, label, enabled]
+      properties:
+        key:
+          type: string
+          enum: [contact_details, vehicle_selected, budget_discussed, test_drive_booked, licence_on_file, waiver_signed, vehicle_available, test_drive_completed, deal_created, deal_exists, deposit_taken, finance_approved]
+        label: { type: string, minLength: 1, maxLength: 200 }
+        enabled: { type: boolean }
+    StageChecklistConfig:
+      type: object
+      required: [stage, version, items]
+      properties:
+        stage: { type: string, enum: [qualified, test_drive, negotiation, sold] }
+        version: { type: integer }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChecklistItemConfig"
+        updatedBy: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"], format: date-time }
+    StageChecklistInput:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChecklistItemConfig"
+    DealerTaxRule:
+      type: object
+      required: [id, dealerId, name, code, kind, rate, effectiveFrom, active, sortOrder]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        name: { type: string }
+        code: { type: string }
+        kind: { type: string, enum: [percent, fixed] }
+        rate: { type: number }
+        thresholdAmount: { type: ["number", "null"] }
+        effectiveFrom: { type: string, format: date }
+        active: { type: boolean }
+        sortOrder: { type: integer }
+        notes: { type: ["string", "null"] }
+    DealerTaxInput:
+      type: object
+      required: [name, kind, rate]
+      properties:
+        name: { type: string, minLength: 1 }
+        code: { type: string }
+        kind: { type: string, enum: [percent, fixed] }
+        rate: { type: number, minimum: 0 }
+        thresholdAmount: { type: ["number", "null"] }
+        effectiveFrom: { type: string, format: date }
+        active: { type: boolean }
+        sortOrder: { type: integer }
+        notes: { type: ["string", "null"] }
+    DealerTaxUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        kind: { type: string, enum: [percent, fixed] }
+        rate: { type: number, minimum: 0 }
+        thresholdAmount: { type: ["number", "null"] }
+        effectiveFrom: { type: string, format: date }
+        active: { type: boolean }
+        sortOrder: { type: integer }
+        notes: { type: ["string", "null"] }
     RoleInput:
       type: object
       required: [name]
@@ -4944,7 +5303,8 @@ components:
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
         channel: { type: string, enum: [web, social, mobile, walkin, email] }
-        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral, gmail] }
+        source: { type: string }
+        sourceDetail: { type: ["string", "null"] }
         priority: { type: string, enum: [high, medium, low] }
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
@@ -4993,7 +5353,8 @@ components:
         email: { type: string }
         phone: { type: string }
         channel: { type: string, enum: [web, social, mobile, walkin, email] }
-        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral, gmail] }
+        source: { type: string, minLength: 1 }
+        sourceDetail: { type: string }
         priority: { type: string, enum: [high, medium, low] }
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
@@ -5017,7 +5378,8 @@ components:
         email: { type: string }
         phone: { type: string }
         channel: { type: string, enum: [web, social, mobile, walkin, email] }
-        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral, gmail] }
+        source: { type: string, minLength: 1 }
+        sourceDetail: { type: ["string", "null"] }
         priority: { type: string, enum: [high, medium, low] }
         phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
@@ -5139,7 +5501,7 @@ components:
         name: { type: string, minLength: 1 }
         email: { type: string }
         phone: { type: string }
-        source: { type: string, enum: [website, walk_in, phone, facebook, instagram, whatsapp, referral, gmail] }
+        source: { type: string, minLength: 1 }
         vehicleId: { type: integer }
         vehicleName: { type: string }
         variant: { type: string }

@@ -21,6 +21,10 @@ import {
   ImportVehiclesResponse,
 } from "@workspace/api-zod";
 import { activeDealerId } from "../middlewares/rbac";
+import {
+  findBlockedEditField,
+  redactHiddenFields,
+} from "../lib/field-permissions";
 import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
 
 const router: IRouter = Router();
@@ -73,7 +77,8 @@ router.get("/vehicles", async (req, res): Promise<void> => {
     .where(filters.length ? and(...filters) : undefined)
     .orderBy(desc(vehiclesTable.featured), desc(vehiclesTable.createdAt));
 
-  res.json(ListVehiclesResponse.parse(rows));
+  const visible = await redactHiddenFields(res.locals.user, "inventory", rows);
+  res.json(ListVehiclesResponse.parse(visible));
 });
 
 router.post("/vehicles", async (req, res): Promise<void> => {
@@ -443,7 +448,10 @@ router.get("/vehicles/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(GetVehicleResponse.parse(vehicle));
+  const [visible] = await redactHiddenFields(res.locals.user, "inventory", [
+    vehicle,
+  ]);
+  res.json(GetVehicleResponse.parse(visible));
 });
 
 router.patch("/vehicles/:id", async (req, res): Promise<void> => {
@@ -457,6 +465,19 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
   if (!parsed.success) {
     res.status(400).json({
       error: vehicleIdentifierError(req.body ?? {}) ?? parsed.error.message,
+    });
+    return;
+  }
+
+  // Field-level permissions: reject edits to restricted field groups.
+  const blocked = await findBlockedEditField(
+    res.locals.user,
+    "inventory",
+    parsed.data,
+  );
+  if (blocked) {
+    res.status(403).json({
+      error: `Your role cannot edit ${blocked.groupLabel} (field: ${blocked.field})`,
     });
     return;
   }

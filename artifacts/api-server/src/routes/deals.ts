@@ -3,6 +3,10 @@ import { eq, desc, and } from "drizzle-orm";
 import { db, dealsTable, vehiclesTable, gatesTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
 import {
+  findBlockedEditField,
+  redactHiddenFields,
+} from "../lib/field-permissions";
+import {
   CreateDealBody,
   UpdateDealBody,
   GetDealParams,
@@ -103,7 +107,8 @@ router.get("/deals", async (req, res): Promise<void> => {
     )
     .orderBy(desc(dealsTable.createdAt));
 
-  res.json(ListDealsResponse.parse(rows));
+  const visible = await redactHiddenFields(res.locals.user, "deals", rows);
+  res.json(ListDealsResponse.parse(visible));
 });
 
 router.post("/deals", async (req, res): Promise<void> => {
@@ -173,7 +178,8 @@ router.get("/deals/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(GetDealResponse.parse(deal));
+  const [visible] = await redactHiddenFields(res.locals.user, "deals", [deal]);
+  res.json(GetDealResponse.parse(visible));
 });
 
 router.patch("/deals/:id", async (req, res): Promise<void> => {
@@ -186,6 +192,15 @@ router.patch("/deals/:id", async (req, res): Promise<void> => {
   const parsed = UpdateDealBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  // Field-level permissions: reject edits to restricted field groups.
+  const blocked = await findBlockedEditField(res.locals.user, "deals", parsed.data);
+  if (blocked) {
+    res.status(403).json({
+      error: `Your role cannot edit ${blocked.groupLabel} (field: ${blocked.field})`,
+    });
     return;
   }
 

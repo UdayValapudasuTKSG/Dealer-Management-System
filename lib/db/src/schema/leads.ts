@@ -37,6 +37,8 @@ export const leadsTable = pgTable("leads", {
   phone: text("phone"),
   channel: text("channel").notNull().default("web"),
   source: text("source").notNull().default("website"),
+  // Social sub-platform (facebook/instagram/tiktok/…) when source is social.
+  sourceDetail: text("source_detail"),
   priority: text("priority").notNull().default("medium"),
   phase: text("phase").notNull().default("aware"),
   status: text("status").notNull().default("new"),

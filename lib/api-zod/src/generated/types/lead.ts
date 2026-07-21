@@ -11,7 +11,6 @@ import type { LeadChannel } from './leadChannel';
 import type { LeadPhase } from './leadPhase';
 import type { LeadPriority } from './leadPriority';
 import type { LeadPurchaseType } from './leadPurchaseType';
-import type { LeadSource } from './leadSource';
 import type { LeadStatus } from './leadStatus';
 
 export interface Lead {
@@ -24,7 +23,9 @@ export interface Lead {
   /** @nullable */
   phone?: string | null;
   channel: LeadChannel;
-  source: LeadSource;
+  source: string;
+  /** @nullable */
+  sourceDetail?: string | null;
   priority: LeadPriority;
   phase: LeadPhase;
   status: LeadStatus;

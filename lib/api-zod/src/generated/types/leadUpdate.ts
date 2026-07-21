@@ -11,7 +11,6 @@ import type { LeadUpdateChannel } from './leadUpdateChannel';
 import type { LeadUpdatePhase } from './leadUpdatePhase';
 import type { LeadUpdatePriority } from './leadUpdatePriority';
 import type { LeadUpdatePurchaseType } from './leadUpdatePurchaseType';
-import type { LeadUpdateSource } from './leadUpdateSource';
 import type { LeadUpdateStatus } from './leadUpdateStatus';
 
 export interface LeadUpdate {
@@ -22,7 +21,10 @@ export interface LeadUpdate {
   email?: string;
   phone?: string;
   channel?: LeadUpdateChannel;
-  source?: LeadUpdateSource;
+  /** @minLength 1 */
+  source?: string;
+  /** @nullable */
+  sourceDetail?: string | null;
   priority?: LeadUpdatePriority;
   phase?: LeadUpdatePhase;
   status?: LeadUpdateStatus;

@@ -37,3 +37,7 @@ export * from "./deliveries";
 export * from "./dealers";
 export * from "./divisions";
 export * from "./callLogs";
+export * from "./fieldPermissions";
+export * from "./leadSources";
+export * from "./stageChecklists";
+export * from "./taxes";

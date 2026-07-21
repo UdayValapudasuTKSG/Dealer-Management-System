@@ -5,8 +5,10 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { FieldGroupMeta } from './fieldGroupMeta';
 
 export type GetPermissionMeta200 = {
   modules: string[];
   categories: string[];
+  fieldGroups?: FieldGroupMeta[];
 };

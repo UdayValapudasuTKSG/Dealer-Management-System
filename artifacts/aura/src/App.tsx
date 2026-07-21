@@ -36,6 +36,9 @@ import Agents from "@/pages/agents";
 import SettingsUsers from "@/pages/settings-users";
 import SettingsEmail from "@/pages/settings-email";
 import SettingsRoles from "@/pages/settings-roles";
+import SettingsSources from "@/pages/settings-sources";
+import SettingsStages from "@/pages/settings-stages";
+import SettingsTaxes from "@/pages/settings-taxes";
 import SettingsAudit from "@/pages/settings-audit";
 import NotFound from "@/pages/not-found";
 import AdminPage from "@/pages/admin";
@@ -188,6 +191,21 @@ function AppShell() {
                 <Route path="/settings/roles">
                   <RequireSettings>
                     <SettingsRoles />
+                  </RequireSettings>
+                </Route>
+                <Route path="/settings/sources">
+                  <RequireSettings>
+                    <SettingsSources />
+                  </RequireSettings>
+                </Route>
+                <Route path="/settings/stages">
+                  <RequireSettings>
+                    <SettingsStages />
+                  </RequireSettings>
+                </Route>
+                <Route path="/settings/taxes">
+                  <RequireSettings>
+                    <SettingsTaxes />
                   </RequireSettings>
                 </Route>
                 <Route path="/settings/audit">

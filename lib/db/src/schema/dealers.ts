@@ -48,6 +48,10 @@ export const dealerUsersTable = pgTable(
     lastLeadAssignedAt: timestamp("last_lead_assigned_at", {
       withTimezone: true,
     }),
+    // Employee master: who this member reports to (users.id of a manager in
+    // the same dealership) and which business division they belong to.
+    reportingManagerUserId: integer("reporting_manager_user_id"),
+    divisionId: integer("division_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

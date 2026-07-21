@@ -22,6 +22,14 @@ export interface AdminUser {
   roleName?: string | null;
   status: AdminUserStatus;
   /** @nullable */
+  reportingManagerUserId?: number | null;
+  /** @nullable */
+  reportingManagerName?: string | null;
+  /** @nullable */
+  divisionId?: number | null;
+  /** @nullable */
+  divisionName?: string | null;
+  /** @nullable */
   lastLoginAt?: Date | null;
   createdAt: Date;
 }

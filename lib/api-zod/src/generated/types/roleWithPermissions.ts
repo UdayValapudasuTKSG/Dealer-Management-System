@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { FieldAccessGrant } from './fieldAccessGrant';
 import type { PermissionGrant } from './permissionGrant';
 
 export interface RoleWithPermissions {
@@ -15,5 +16,6 @@ export interface RoleWithPermissions {
   isSystem: boolean;
   userCount: number;
   permissions: PermissionGrant[];
+  fieldPermissions?: FieldAccessGrant[];
   createdAt: Date;
 }

@@ -13,7 +13,9 @@ import {
   dealsTable,
   callLogsTable,
   agentsTable,
+  SOCIAL_SUB_PLATFORMS,
   type Lead,
+  type ChecklistStage,
 } from "@workspace/db";
 import {
   CreateLeadBody,
@@ -62,6 +64,8 @@ import {
   SuggestCallSentimentParams,
   SuggestCallSentimentBody,
   SuggestCallSentimentResponse,
+  ListLeadSourcesQueryParams,
+  ListLeadSourcesResponse,
 } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
@@ -78,6 +82,12 @@ import {
 } from "../lib/calendar";
 import { buildQuotePdf } from "../lib/quote-pdf";
 import { sendWhatsappText, whatsappConfig } from "../lib/whatsapp";
+import { ensureLeadSources } from "../lib/lead-sources";
+import { getActiveChecklist } from "../lib/stage-checklists";
+import {
+  findBlockedEditField,
+  redactHiddenFields,
+} from "../lib/field-permissions";
 
 const router: IRouter = Router();
 
@@ -147,7 +157,20 @@ router.get("/leads", async (req, res): Promise<void> => {
     .where(filters.length ? and(...filters) : undefined)
     .orderBy(desc(leadsTable.aiScore), desc(leadsTable.createdAt));
 
-  res.json(ListLeadsResponse.parse(rows));
+  const visible = await redactHiddenFields(user, "leads", rows);
+  res.json(ListLeadsResponse.parse(visible));
+});
+
+// NOTE: must be declared before /leads/:id so "sources" isn't parsed as an id.
+router.get("/leads/sources", async (req, res): Promise<void> => {
+  const query = ListLeadSourcesQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
+  const rows = await ensureLeadSources(activeDealerId(res));
+  const result = query.data.includeInactive ? rows : rows.filter((r) => r.active);
+  res.json(ListLeadSourcesResponse.parse(result));
 });
 
 // NOTE: must be declared before /leads/:id so "advisors" isn't parsed as an id.
@@ -204,6 +227,19 @@ router.post("/leads", async (req, res): Promise<void> => {
   }
   if (divisionId == null) divisionId = await defaultDivisionId(dealerId);
 
+  // Social sources require a sub-platform; validated against the dealer's
+  // configured source list (unknown codes from intake agents pass through).
+  if (parsed.data.source) {
+    const sources = await ensureLeadSources(dealerId);
+    const cfg = sources.find((s) => s.code === parsed.data.source);
+    if (cfg?.isSocial && !parsed.data.sourceDetail) {
+      res.status(422).json({
+        error: `Source "${cfg.name}" is a social channel — pick the sub-platform (${SOCIAL_SUB_PLATFORMS.join(", ")})`,
+      });
+      return;
+    }
+  }
+
   // Dedup agent (A1): a matching open lead absorbs this enquiry instead of
   // spawning a duplicate record.
   const duplicate = await findOpenDuplicate(dealerId, parsed.data);
@@ -215,7 +251,9 @@ router.post("/leads", async (req, res): Promise<void> => {
     );
     res
       .status(201)
-      .json(CreateLeadResponse.parse({ lead, merged: true, mergeNotice: notice }));
+      .json(
+        CreateLeadResponse.parse({ lead, merged: true, mergeNotice: notice }),
+      );
     return;
   }
 
@@ -268,7 +306,8 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(GetLeadResponse.parse(lead));
+  const [visible] = await redactHiddenFields(res.locals.user, "leads", [lead]);
+  res.json(GetLeadResponse.parse(visible));
 });
 
 router.get("/leads/:id/timeline", async (req, res): Promise<void> => {
@@ -853,15 +892,20 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
     .from(dealsTable)
     .where(and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, lead.id)));
 
-  if (toStage === "qualified") {
-    if (!lead.email && !lead.phone) unmet.push("Contact details (email or phone) captured");
-    if (!lead.interestedVehicleId) unmet.push("Vehicle of interest selected");
-    if (!lead.budgetFinancing) unmet.push("Budget / financing discussed");
-  } else if (toStage === "test_drive") {
-    if (!lead.testDriveAt) unmet.push("Test-drive slot booked");
-    if (!lead.testDriveLicence) unmet.push("Driver's licence number on file");
-    if (!lead.testDriveWaiver) unmet.push("Test-drive waiver signed");
-    if (lead.interestedVehicleId) {
+  // Gate criteria come from the dealer's ACTIVE checklist config (versioned,
+  // Settings → Stage Gates). Each item key maps to a built-in check; admins
+  // can toggle items on/off and relabel them without a deploy.
+  const checklist = await getActiveChecklist(dealerId, toStage as ChecklistStage);
+  const deal = leadDeals[0];
+  const checks: Record<string, () => Promise<boolean> | boolean> = {
+    contact_details: () => Boolean(lead.email || lead.phone),
+    vehicle_selected: () => Boolean(lead.interestedVehicleId),
+    budget_discussed: () => Boolean(lead.budgetFinancing),
+    test_drive_booked: () => Boolean(lead.testDriveAt),
+    licence_on_file: () => Boolean(lead.testDriveLicence),
+    waiver_signed: () => Boolean(lead.testDriveWaiver),
+    vehicle_available: async () => {
+      if (!lead.interestedVehicleId) return true;
       const [v] = await db
         .select({ status: vehiclesTable.status })
         .from(vehiclesTable)
@@ -871,19 +915,21 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
             eq(vehiclesTable.dealerId, dealerId),
           ),
         );
-      if (v && v.status !== "available" && v.status !== "reserved")
-        unmet.push("Interested vehicle is not available for a drive");
-    }
-  } else if (toStage === "negotiation") {
-    if (!lead.testDriveAt) unmet.push("Test drive completed (or explicitly booked)");
-    if (leadDeals.length === 0) unmet.push("Draft deal numbers entered (create a deal)");
-  } else if (toStage === "sold") {
-    const deal = leadDeals[0];
-    if (!deal) unmet.push("A deal must exist before marking sold");
-    if (deal && !deal.depositPaid && !lead.reservationFeePaid)
-      unmet.push("Deposit taken (deal deposit or reservation fee)");
-    if (!lead.financingQualified && lead.purchaseType !== "cash")
-      unmet.push("Finance approved or cash purchase verified");
+      return !v || v.status === "available" || v.status === "reserved";
+    },
+    test_drive_completed: () => Boolean(lead.testDriveAt),
+    deal_created: () => leadDeals.length > 0,
+    deal_exists: () => Boolean(deal),
+    deposit_taken: () =>
+      Boolean((deal && deal.depositPaid) || lead.reservationFeePaid),
+    finance_approved: () =>
+      Boolean(lead.financingQualified || lead.purchaseType === "cash"),
+  };
+  for (const item of checklist.items) {
+    if (!item.enabled) continue;
+    const check = checks[item.key];
+    if (!check) continue;
+    if (!(await check())) unmet.push(item.label);
   }
 
   if (unmet.length > 0) {
@@ -1236,6 +1282,15 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
   const parsed = UpdateLeadBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  // Field-level permissions: reject edits to restricted field groups.
+  const blocked = await findBlockedEditField(res.locals.user, "leads", parsed.data);
+  if (blocked) {
+    res.status(403).json({
+      error: `Your role cannot edit ${blocked.groupLabel} (field: ${blocked.field})`,
+    });
     return;
   }
 

@@ -7,9 +7,18 @@ import {
   useUpdateAdminRole,
   useDeleteAdminRole,
   useSetRolePermissions,
+  useSetRoleFieldPermissions,
   getListAdminRolesQueryKey,
   type RoleWithPermissions,
+  type FieldAccessGrantAccess,
 } from "@workspace/api-client-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +46,11 @@ export default function SettingsRoles() {
   const [newDesc, setNewDesc] = useState("");
   // Local draft of the permission matrix keyed by "module:category"
   const [draft, setDraft] = useState<Set<string> | null>(null);
+  // Local draft of field-group access keyed by fieldGroup key ("edit" default)
+  const [fieldDraft, setFieldDraft] = useState<Record<
+    string,
+    FieldAccessGrantAccess
+  > | null>(null);
 
   const selected: RoleWithPermissions | undefined = useMemo(
     () => (roles ?? []).find((r) => r.id === selectedId) ?? (roles ?? [])[0],
@@ -49,6 +63,13 @@ export default function SettingsRoles() {
       (selected?.permissions ?? []).map((p) => `${p.module}:${p.category}`),
     );
   }, [draft, selected]);
+
+  const fieldAccess = useMemo(() => {
+    if (fieldDraft) return fieldDraft;
+    const map: Record<string, FieldAccessGrantAccess> = {};
+    for (const g of selected?.fieldPermissions ?? []) map[g.fieldGroup] = g.access;
+    return map;
+  }, [fieldDraft, selected]);
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: getListAdminRolesQueryKey() });
@@ -94,6 +115,16 @@ export default function SettingsRoles() {
         invalidate();
         setDraft(null);
         toast({ title: "Permissions saved" });
+      },
+      onError,
+    },
+  });
+  const saveFieldPerms = useSetRoleFieldPermissions({
+    mutation: {
+      onSuccess: () => {
+        invalidate();
+        setFieldDraft(null);
+        toast({ title: "Field access saved" });
       },
       onError,
     },
@@ -150,6 +181,7 @@ export default function SettingsRoles() {
                 onClick={() => {
                   setSelectedId(r.id);
                   setDraft(null);
+                  setFieldDraft(null);
                 }}
                 className={cn(
                   "w-full text-left rounded-xl border px-4 py-3 transition-colors",
@@ -237,6 +269,77 @@ export default function SettingsRoles() {
                 The <span className="text-foreground">admin</span> category grants every
                 action within its module.
               </p>
+
+              {/* Field-level access: per field group, hidden / view / edit */}
+              {(meta?.fieldGroups ?? []).length > 0 && (
+                <div className="pt-4 border-t border-white/10 space-y-3">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <h3 className="font-semibold">Field-level access</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Fine-grained control over sensitive field groups. Default
+                        is full edit access.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (!selected) return;
+                        saveFieldPerms.mutate({
+                          id: selected.id,
+                          data: {
+                            grants: Object.entries(fieldAccess)
+                              .filter(([, access]) => access !== "edit")
+                              .map(([fieldGroup, access]) => ({
+                                fieldGroup,
+                                access,
+                              })),
+                          },
+                        });
+                      }}
+                      disabled={!fieldDraft || saveFieldPerms.isPending}
+                    >
+                      {saveFieldPerms.isPending && (
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      )}
+                      Save field access
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    {(meta?.fieldGroups ?? []).map((g) => (
+                      <div
+                        key={g.key}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-medium text-sm">{g.label}</div>
+                          <div className="text-[11px] text-muted-foreground capitalize truncate">
+                            {g.module} · {g.fields.join(", ")}
+                          </div>
+                        </div>
+                        <Select
+                          value={fieldAccess[g.key] ?? "edit"}
+                          onValueChange={(v) =>
+                            setFieldDraft({
+                              ...fieldAccess,
+                              [g.key]: v as FieldAccessGrantAccess,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-28 shrink-0 bg-white/[0.03] border-white/10">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="edit">Edit</SelectItem>
+                            <SelectItem value="view">View only</SelectItem>
+                            <SelectItem value="hidden">Hidden</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

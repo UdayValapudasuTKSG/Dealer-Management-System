@@ -11,4 +11,8 @@ export interface AdminUserUpdate {
   /** @nullable */
   roleId?: number | null;
   status?: AdminUserUpdateStatus;
+  /** @nullable */
+  reportingManagerUserId?: number | null;
+  /** @nullable */
+  divisionId?: number | null;
 }

@@ -77,6 +77,9 @@ import type {
   DealerInput,
   DealerMember,
   DealerMemberInput,
+  DealerTaxInput,
+  DealerTaxRule,
+  DealerTaxUpdate,
   Delivery,
   DeliveryAdvanceInput,
   DeliveryAdvisor,
@@ -128,6 +131,9 @@ import type {
   LeadInput,
   LeadNoteInput,
   LeadQuoteInfo,
+  LeadSourceConfig,
+  LeadSourceInput,
+  LeadSourceUpdate,
   LeadTestDriveInput,
   LeadUpdate,
   ListActivityParams,
@@ -141,6 +147,7 @@ import type {
   ListGatesParams,
   ListInvoicesParams,
   ListJobCardsParams,
+  ListLeadSourcesParams,
   ListLeadsParams,
   ListPartsParams,
   ListServiceInvoicesParams,
@@ -169,6 +176,7 @@ import type {
   ReceiveMetaWebhook200,
   RemindAck,
   Report,
+  RoleFieldPermissionsInput,
   RoleInput,
   RolePermissionsInput,
   RoleUpdate,
@@ -181,6 +189,8 @@ import type {
   ServiceOrder,
   ServiceOrderInput,
   ServiceOrderUpdate,
+  StageChecklistConfig,
+  StageChecklistInput,
   Supplier,
   SupplierInput,
   Task,
@@ -3245,6 +3255,90 @@ export function useListLeadAdvisors<TData = Awaited<ReturnType<typeof listLeadAd
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListLeadAdvisorsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListLeadSourcesUrl = (params?: ListLeadSourcesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/leads/sources?${stringifiedParams}` : `/api/leads/sources`
+}
+
+/**
+ * @summary List the active dealership's configured lead sources
+ */
+export const listLeadSources = async (params?: ListLeadSourcesParams, options?: RequestInit): Promise<LeadSourceConfig[]> => {
+
+  return customFetch<LeadSourceConfig[]>(getListLeadSourcesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLeadSourcesQueryKey = (params?: ListLeadSourcesParams,) => {
+    return [
+    `/api/leads/sources`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListLeadSourcesQueryOptions = <TData = Awaited<ReturnType<typeof listLeadSources>>, TError = ErrorType<unknown>>(params?: ListLeadSourcesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLeadSourcesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLeadSources>>> = ({ signal }) => listLeadSources(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLeadSources>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLeadSourcesQueryResult = NonNullable<Awaited<ReturnType<typeof listLeadSources>>>
+export type ListLeadSourcesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the active dealership's configured lead sources
+ */
+
+export function useListLeadSources<TData = Awaited<ReturnType<typeof listLeadSources>>, TError = ErrorType<unknown>>(
+ params?: ListLeadSourcesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeadSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLeadSourcesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -12399,6 +12493,738 @@ export function useGetPermissionMeta<TData = Awaited<ReturnType<typeof getPermis
 
 
 
+
+export const getSetRoleFieldPermissionsUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/roles/${id}/field-permissions`
+}
+
+/**
+ * @summary Replace the field-level access grants for a role
+ */
+export const setRoleFieldPermissions = async (id: number,
+    roleFieldPermissionsInput: RoleFieldPermissionsInput, options?: RequestInit): Promise<RoleWithPermissions> => {
+
+  return customFetch<RoleWithPermissions>(getSetRoleFieldPermissionsUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(roleFieldPermissionsInput)
+  }
+);}
+
+
+
+
+
+export const getSetRoleFieldPermissionsMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setRoleFieldPermissions>>, TError,{id: number;data: BodyType<RoleFieldPermissionsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setRoleFieldPermissions>>, TError,{id: number;data: BodyType<RoleFieldPermissionsInput>}, TContext> => {
+
+const mutationKey = ['setRoleFieldPermissions'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setRoleFieldPermissions>>, {id: number;data: BodyType<RoleFieldPermissionsInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  setRoleFieldPermissions(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetRoleFieldPermissionsMutationResult = NonNullable<Awaited<ReturnType<typeof setRoleFieldPermissions>>>
+    export type SetRoleFieldPermissionsMutationBody = BodyType<RoleFieldPermissionsInput>
+    export type SetRoleFieldPermissionsMutationError = ErrorType<Error>
+
+    /**
+ * @summary Replace the field-level access grants for a role
+ */
+export const useSetRoleFieldPermissions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setRoleFieldPermissions>>, TError,{id: number;data: BodyType<RoleFieldPermissionsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setRoleFieldPermissions>>,
+        TError,
+        {id: number;data: BodyType<RoleFieldPermissionsInput>},
+        TContext
+      > => {
+      return useMutation(getSetRoleFieldPermissionsMutationOptions(options));
+    }
+
+export const getListAdminLeadSourcesUrl = () => {
+
+
+
+
+  return `/api/admin/lead-sources`
+}
+
+/**
+ * @summary List all lead sources (including inactive) for the active dealership
+ */
+export const listAdminLeadSources = async ( options?: RequestInit): Promise<LeadSourceConfig[]> => {
+
+  return customFetch<LeadSourceConfig[]>(getListAdminLeadSourcesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminLeadSourcesQueryKey = () => {
+    return [
+    `/api/admin/lead-sources`
+    ] as const;
+    }
+
+
+export const getListAdminLeadSourcesQueryOptions = <TData = Awaited<ReturnType<typeof listAdminLeadSources>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLeadSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminLeadSourcesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminLeadSources>>> = ({ signal }) => listAdminLeadSources({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminLeadSources>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminLeadSourcesQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminLeadSources>>>
+export type ListAdminLeadSourcesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all lead sources (including inactive) for the active dealership
+ */
+
+export function useListAdminLeadSources<TData = Awaited<ReturnType<typeof listAdminLeadSources>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLeadSources>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminLeadSourcesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateAdminLeadSourceUrl = () => {
+
+
+
+
+  return `/api/admin/lead-sources`
+}
+
+/**
+ * @summary Add a lead source
+ */
+export const createAdminLeadSource = async (leadSourceInput: LeadSourceInput, options?: RequestInit): Promise<LeadSourceConfig> => {
+
+  return customFetch<LeadSourceConfig>(getCreateAdminLeadSourceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(leadSourceInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAdminLeadSourceMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminLeadSource>>, TError,{data: BodyType<LeadSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminLeadSource>>, TError,{data: BodyType<LeadSourceInput>}, TContext> => {
+
+const mutationKey = ['createAdminLeadSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminLeadSource>>, {data: BodyType<LeadSourceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminLeadSource(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminLeadSourceMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminLeadSource>>>
+    export type CreateAdminLeadSourceMutationBody = BodyType<LeadSourceInput>
+    export type CreateAdminLeadSourceMutationError = ErrorType<Error>
+
+    /**
+ * @summary Add a lead source
+ */
+export const useCreateAdminLeadSource = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminLeadSource>>, TError,{data: BodyType<LeadSourceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminLeadSource>>,
+        TError,
+        {data: BodyType<LeadSourceInput>},
+        TContext
+      > => {
+      return useMutation(getCreateAdminLeadSourceMutationOptions(options));
+    }
+
+export const getUpdateAdminLeadSourceUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/lead-sources/${id}`
+}
+
+/**
+ * @summary Edit or deactivate a lead source
+ */
+export const updateAdminLeadSource = async (id: number,
+    leadSourceUpdate: LeadSourceUpdate, options?: RequestInit): Promise<LeadSourceConfig> => {
+
+  return customFetch<LeadSourceConfig>(getUpdateAdminLeadSourceUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(leadSourceUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminLeadSourceMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminLeadSource>>, TError,{id: number;data: BodyType<LeadSourceUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminLeadSource>>, TError,{id: number;data: BodyType<LeadSourceUpdate>}, TContext> => {
+
+const mutationKey = ['updateAdminLeadSource'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminLeadSource>>, {id: number;data: BodyType<LeadSourceUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAdminLeadSource(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminLeadSourceMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminLeadSource>>>
+    export type UpdateAdminLeadSourceMutationBody = BodyType<LeadSourceUpdate>
+    export type UpdateAdminLeadSourceMutationError = ErrorType<Error>
+
+    /**
+ * @summary Edit or deactivate a lead source
+ */
+export const useUpdateAdminLeadSource = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminLeadSource>>, TError,{id: number;data: BodyType<LeadSourceUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminLeadSource>>,
+        TError,
+        {id: number;data: BodyType<LeadSourceUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAdminLeadSourceMutationOptions(options));
+    }
+
+export const getListStageChecklistsUrl = () => {
+
+
+
+
+  return `/api/admin/stage-checklists`
+}
+
+/**
+ * @summary Active advance-gate checklist per pipeline stage (latest version)
+ */
+export const listStageChecklists = async ( options?: RequestInit): Promise<StageChecklistConfig[]> => {
+
+  return customFetch<StageChecklistConfig[]>(getListStageChecklistsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStageChecklistsQueryKey = () => {
+    return [
+    `/api/admin/stage-checklists`
+    ] as const;
+    }
+
+
+export const getListStageChecklistsQueryOptions = <TData = Awaited<ReturnType<typeof listStageChecklists>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStageChecklists>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStageChecklistsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStageChecklists>>> = ({ signal }) => listStageChecklists({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStageChecklists>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStageChecklistsQueryResult = NonNullable<Awaited<ReturnType<typeof listStageChecklists>>>
+export type ListStageChecklistsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Active advance-gate checklist per pipeline stage (latest version)
+ */
+
+export function useListStageChecklists<TData = Awaited<ReturnType<typeof listStageChecklists>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStageChecklists>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStageChecklistsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSetStageChecklistUrl = (stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold',) => {
+
+
+
+
+  return `/api/admin/stage-checklists/${stage}`
+}
+
+/**
+ * @summary Save a new version of a stage's checklist (history preserved)
+ */
+export const setStageChecklist = async (stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold',
+    stageChecklistInput: StageChecklistInput, options?: RequestInit): Promise<StageChecklistConfig> => {
+
+  return customFetch<StageChecklistConfig>(getSetStageChecklistUrl(stage),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(stageChecklistInput)
+  }
+);}
+
+
+
+
+
+export const getSetStageChecklistMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setStageChecklist>>, TError,{stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setStageChecklist>>, TError,{stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}, TContext> => {
+
+const mutationKey = ['setStageChecklist'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setStageChecklist>>, {stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}> = (props) => {
+          const {stage,data} = props ?? {};
+
+          return  setStageChecklist(stage,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetStageChecklistMutationResult = NonNullable<Awaited<ReturnType<typeof setStageChecklist>>>
+    export type SetStageChecklistMutationBody = BodyType<StageChecklistInput>
+    export type SetStageChecklistMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save a new version of a stage's checklist (history preserved)
+ */
+export const useSetStageChecklist = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setStageChecklist>>, TError,{stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setStageChecklist>>,
+        TError,
+        {stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>},
+        TContext
+      > => {
+      return useMutation(getSetStageChecklistMutationOptions(options));
+    }
+
+export const getListDealerTaxesUrl = () => {
+
+
+
+
+  return `/api/admin/taxes`
+}
+
+/**
+ * @summary List the active dealership's tax rules
+ */
+export const listDealerTaxes = async ( options?: RequestInit): Promise<DealerTaxRule[]> => {
+
+  return customFetch<DealerTaxRule[]>(getListDealerTaxesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDealerTaxesQueryKey = () => {
+    return [
+    `/api/admin/taxes`
+    ] as const;
+    }
+
+
+export const getListDealerTaxesQueryOptions = <TData = Awaited<ReturnType<typeof listDealerTaxes>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealerTaxes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDealerTaxesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDealerTaxes>>> = ({ signal }) => listDealerTaxes({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDealerTaxes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDealerTaxesQueryResult = NonNullable<Awaited<ReturnType<typeof listDealerTaxes>>>
+export type ListDealerTaxesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the active dealership's tax rules
+ */
+
+export function useListDealerTaxes<TData = Awaited<ReturnType<typeof listDealerTaxes>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealerTaxes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDealerTaxesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateDealerTaxUrl = () => {
+
+
+
+
+  return `/api/admin/taxes`
+}
+
+/**
+ * @summary Add a tax rule
+ */
+export const createDealerTax = async (dealerTaxInput: DealerTaxInput, options?: RequestInit): Promise<DealerTaxRule> => {
+
+  return customFetch<DealerTaxRule>(getCreateDealerTaxUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dealerTaxInput)
+  }
+);}
+
+
+
+
+
+export const getCreateDealerTaxMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDealerTax>>, TError,{data: BodyType<DealerTaxInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createDealerTax>>, TError,{data: BodyType<DealerTaxInput>}, TContext> => {
+
+const mutationKey = ['createDealerTax'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createDealerTax>>, {data: BodyType<DealerTaxInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createDealerTax(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateDealerTaxMutationResult = NonNullable<Awaited<ReturnType<typeof createDealerTax>>>
+    export type CreateDealerTaxMutationBody = BodyType<DealerTaxInput>
+    export type CreateDealerTaxMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add a tax rule
+ */
+export const useCreateDealerTax = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createDealerTax>>, TError,{data: BodyType<DealerTaxInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createDealerTax>>,
+        TError,
+        {data: BodyType<DealerTaxInput>},
+        TContext
+      > => {
+      return useMutation(getCreateDealerTaxMutationOptions(options));
+    }
+
+export const getUpdateDealerTaxUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/taxes/${id}`
+}
+
+/**
+ * @summary Edit a tax rule
+ */
+export const updateDealerTax = async (id: number,
+    dealerTaxUpdate: DealerTaxUpdate, options?: RequestInit): Promise<DealerTaxRule> => {
+
+  return customFetch<DealerTaxRule>(getUpdateDealerTaxUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dealerTaxUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateDealerTaxMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerTax>>, TError,{id: number;data: BodyType<DealerTaxUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateDealerTax>>, TError,{id: number;data: BodyType<DealerTaxUpdate>}, TContext> => {
+
+const mutationKey = ['updateDealerTax'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateDealerTax>>, {id: number;data: BodyType<DealerTaxUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateDealerTax(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateDealerTaxMutationResult = NonNullable<Awaited<ReturnType<typeof updateDealerTax>>>
+    export type UpdateDealerTaxMutationBody = BodyType<DealerTaxUpdate>
+    export type UpdateDealerTaxMutationError = ErrorType<Error>
+
+    /**
+ * @summary Edit a tax rule
+ */
+export const useUpdateDealerTax = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerTax>>, TError,{id: number;data: BodyType<DealerTaxUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateDealerTax>>,
+        TError,
+        {id: number;data: BodyType<DealerTaxUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateDealerTaxMutationOptions(options));
+    }
+
+export const getDeleteDealerTaxUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/taxes/${id}`
+}
+
+/**
+ * @summary Remove a tax rule
+ */
+export const deleteDealerTax = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteDealerTaxUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteDealerTaxMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDealerTax>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteDealerTax>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteDealerTax'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteDealerTax>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteDealerTax(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteDealerTaxMutationResult = NonNullable<Awaited<ReturnType<typeof deleteDealerTax>>>
+
+    export type DeleteDealerTaxMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Remove a tax rule
+ */
+export const useDeleteDealerTax = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteDealerTax>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteDealerTax>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteDealerTaxMutationOptions(options));
+    }
 
 export const getListAuditLogsUrl = (params?: ListAuditLogsParams,) => {
   const normalizedParams = new URLSearchParams();

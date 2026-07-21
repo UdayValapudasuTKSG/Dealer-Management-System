@@ -28,6 +28,8 @@ import {
   ShieldCheck,
   ScrollText,
   Mail,
+  Megaphone,
+  Percent,
   Shield,
   Bot,
   type LucideIcon,
@@ -82,6 +84,9 @@ const CLUSTERS: Cluster[] = [
     items: [
       { name: "Users", href: "/settings/users", module: "settings", icon: UserCog },
       { name: "Roles & Permissions", href: "/settings/roles", module: "settings", icon: ShieldCheck },
+      { name: "Lead Sources", href: "/settings/sources", module: "settings", icon: Megaphone },
+      { name: "Stage Checklists", href: "/settings/stages", module: "settings", icon: ListChecks },
+      { name: "Taxes", href: "/settings/taxes", module: "settings", icon: Percent },
       { name: "Audit Logs", href: "/settings/audit", module: "settings", icon: ScrollText },
       { name: "Email Engine", href: "/settings/email", module: "settings", icon: Mail },
     ],

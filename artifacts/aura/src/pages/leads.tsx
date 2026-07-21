@@ -6,6 +6,7 @@ import {
   useListVehicles,
   useCreateLead,
   useGetPipelineSuggestions,
+  useListLeadSources,
   getListLeadsQueryKey,
 } from "@workspace/api-client-react";
 import type { GetPipelineSuggestionsPhase } from "@workspace/api-client-react";
@@ -121,7 +122,17 @@ const SOURCE_LABEL: Record<string, string> = {
   instagram: "Instagram",
   whatsapp: "WhatsApp",
   referral: "Referral",
+  social_media: "Social Media",
 };
+
+const SOCIAL_SUB_PLATFORMS = [
+  { value: "facebook", label: "Facebook" },
+  { value: "instagram", label: "Instagram" },
+  { value: "tiktok", label: "TikTok" },
+  { value: "youtube", label: "YouTube" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "other", label: "Other" },
+];
 
 const STATUS_LABEL: Record<string, string> = {
   new: "New",
@@ -163,6 +174,14 @@ export default function Leads() {
   const { toast } = useToast();
   const money = useMoney();
   const createLead = useCreateLead();
+  const { data: leadSources } = useListLeadSources();
+  // Social sub-platform lives outside the dialog's own field state because
+  // its visibility depends on the selected source (config-driven).
+  const [newSource, setNewSource] = useState<string>("");
+  const [sourceDetail, setSourceDetail] = useState<string>("");
+  const selectedSourceCfg = (leadSources ?? []).find(
+    (s) => s.code === (newSource || "website"),
+  );
   const { density, setDensity, layout, setLayout } = useViewMode("pipeline");
 
   const { data: deals } = useListDeals();
@@ -366,11 +385,46 @@ export default function Leads() {
                 type: "select",
                 span: "half",
                 defaultValue: "website",
-                options: Object.entries(SOURCE_LABEL).map(([value, label]) => ({
-                  value,
-                  label,
-                })),
+                options:
+                  leadSources && leadSources.length > 0
+                    ? leadSources.map((s) => ({ value: s.code, label: s.name }))
+                    : Object.entries(SOURCE_LABEL).map(([value, label]) => ({
+                        value,
+                        label,
+                      })),
+                onChange: (v: string) => {
+                  setNewSource(v);
+                  setSourceDetail("");
+                },
               },
+              ...(selectedSourceCfg?.isSocial
+                ? [
+                    {
+                      name: "sourceDetail",
+                      label: "Social platform",
+                      type: "custom" as const,
+                      required: true,
+                      span: "half" as const,
+                      render: (_value: string, set: (v: string) => void) => (
+                        <select
+                          value={sourceDetail}
+                          onChange={(e) => {
+                            setSourceDetail(e.target.value);
+                            set(e.target.value);
+                          }}
+                          className="w-full h-10 rounded-md bg-white/[0.04] border border-white/10 px-3 text-sm focus:outline-none focus:border-primary/50"
+                        >
+                          <option value="">Pick a platform…</option>
+                          {SOCIAL_SUB_PLATFORMS.map((p) => (
+                            <option key={p.value} value={p.value}>
+                              {p.label}
+                            </option>
+                          ))}
+                        </select>
+                      ),
+                    },
+                  ]
+                : []),
               {
                 name: "priority",
                 label: "Priority",

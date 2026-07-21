@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useListAdminUsers,
   useListAdminRoles,
+  useListDivisions,
   useUpdateAdminUser,
   useAddAdminUser,
   getListAdminUsersQueryKey,
@@ -36,6 +37,7 @@ export default function SettingsUsers() {
   const qc = useQueryClient();
   const { data: users, isLoading } = useListAdminUsers();
   const { data: roles } = useListAdminRoles();
+  const { data: divisions } = useListDivisions();
   const [addOpen, setAddOpen] = useState(false);
   const [addEmail, setAddEmail] = useState("");
   const [addRoleId, setAddRoleId] = useState<string | undefined>(undefined);
@@ -159,6 +161,8 @@ export default function SettingsUsers() {
               <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <th className="px-5 py-3">Member</th>
                 <th className="px-5 py-3">Role</th>
+                <th className="px-5 py-3">Reports to</th>
+                <th className="px-5 py-3">Division</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Last sign-in</th>
                 <th className="px-5 py-3 text-right">Actions</th>
@@ -204,6 +208,63 @@ export default function SettingsUsers() {
                           {(roles ?? []).map((r) => (
                             <SelectItem key={r.id} value={String(r.id)}>
                               {r.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="px-5 py-3">
+                      <Select
+                        value={
+                          u.reportingManagerUserId != null
+                            ? String(u.reportingManagerUserId)
+                            : "none"
+                        }
+                        onValueChange={(v) =>
+                          update.mutate({
+                            id: u.id,
+                            data: {
+                              reportingManagerUserId:
+                                v === "none" ? null : Number(v),
+                            },
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-44 bg-white/[0.03] border-white/10">
+                          <SelectValue placeholder="No manager" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No manager</SelectItem>
+                          {(users ?? [])
+                            .filter((m) => m.id !== u.id)
+                            .map((m) => (
+                              <SelectItem key={m.id} value={String(m.id)}>
+                                {m.name ?? m.email ?? `User #${m.id}`}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td className="px-5 py-3">
+                      <Select
+                        value={
+                          u.divisionId != null ? String(u.divisionId) : "none"
+                        }
+                        onValueChange={(v) =>
+                          update.mutate({
+                            id: u.id,
+                            data: { divisionId: v === "none" ? null : Number(v) },
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-40 bg-white/[0.03] border-white/10">
+                          <SelectValue placeholder="No division" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No division</SelectItem>
+                          {(divisions ?? []).map((d) => (
+                            <SelectItem key={d.id} value={String(d.id)}>
+                              {d.name}
                             </SelectItem>
                           ))}
                         </SelectContent>

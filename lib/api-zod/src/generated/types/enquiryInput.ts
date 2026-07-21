@@ -5,14 +5,14 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
-import type { EnquiryInputSource } from './enquiryInputSource';
 
 export interface EnquiryInput {
   /** @minLength 1 */
   name: string;
   email?: string;
   phone?: string;
-  source?: EnquiryInputSource;
+  /** @minLength 1 */
+  source?: string;
   vehicleId?: number;
   vehicleName?: string;
   variant?: string;

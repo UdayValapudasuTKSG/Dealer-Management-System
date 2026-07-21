@@ -8,7 +8,6 @@
 import type { LeadInputChannel } from './leadInputChannel';
 import type { LeadInputPhase } from './leadInputPhase';
 import type { LeadInputPriority } from './leadInputPriority';
-import type { LeadInputSource } from './leadInputSource';
 import type { LeadInputStatus } from './leadInputStatus';
 
 export interface LeadInput {
@@ -18,7 +17,9 @@ export interface LeadInput {
   email?: string;
   phone?: string;
   channel: LeadInputChannel;
-  source?: LeadInputSource;
+  /** @minLength 1 */
+  source?: string;
+  sourceDetail?: string;
   priority?: LeadInputPriority;
   phase?: LeadInputPhase;
   status?: LeadInputStatus;

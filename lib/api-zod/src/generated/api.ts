@@ -921,7 +921,8 @@ export const ListLeadsResponseItem = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
@@ -969,13 +970,15 @@ export const ListLeadsResponse = zod.array(ListLeadsResponseItem)
 
 
 
+
 export const CreateLeadBody = zod.object({
   "divisionId": zod.number().optional(),
   "name": zod.string().min(1),
   "email": zod.string().optional(),
   "phone": zod.string().optional(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']).optional(),
+  "source": zod.string().min(1).optional(),
+  "sourceDetail": zod.string().optional(),
   "priority": zod.enum(['high', 'medium', 'low']).optional(),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']).optional(),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']).optional(),
@@ -1005,7 +1008,8 @@ export const CreateLeadResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
@@ -1067,7 +1071,8 @@ export const GetLeadResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
@@ -1120,13 +1125,15 @@ export const UpdateLeadParams = zod.object({
 
 
 
+
 export const UpdateLeadBody = zod.object({
   "divisionId": zod.number().nullish(),
   "name": zod.string().min(1).optional(),
   "email": zod.string().optional(),
   "phone": zod.string().optional(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']).optional(),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']).optional(),
+  "source": zod.string().min(1).optional(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']).optional(),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']).optional(),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']).optional(),
@@ -1172,7 +1179,8 @@ export const UpdateLeadResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
@@ -1229,11 +1237,12 @@ export const DeleteLeadResponse = zod.void()
 
 
 
+
 export const CreateEnquiryBody = zod.object({
   "name": zod.string().min(1),
   "email": zod.string().optional(),
   "phone": zod.string().optional(),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']).optional(),
+  "source": zod.string().min(1).optional(),
   "vehicleId": zod.number().optional(),
   "vehicleName": zod.string().optional(),
   "variant": zod.string().optional(),
@@ -1253,7 +1262,8 @@ export const CreateEnquiryResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
@@ -1388,6 +1398,25 @@ export const ListLeadAdvisorsResponseItem = zod.object({
 export const ListLeadAdvisorsResponse = zod.array(ListLeadAdvisorsResponseItem)
 
 
+/**
+ * @summary List the active dealership's configured lead sources
+ */
+export const ListLeadSourcesQueryParams = zod.object({
+  "includeInactive": zod.coerce.boolean().optional()
+})
+
+export const ListLeadSourcesResponseItem = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "isSocial": zod.boolean(),
+  "active": zod.boolean(),
+  "sortOrder": zod.number()
+})
+export const ListLeadSourcesResponse = zod.array(ListLeadSourcesResponseItem)
+
+
 export const AssignLeadParams = zod.object({
   "id": zod.coerce.number()
 })
@@ -1407,7 +1436,8 @@ export const AssignLeadResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
@@ -1494,7 +1524,8 @@ export const AdvanceLeadStageResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
@@ -1564,7 +1595,8 @@ export const ScheduleTestDriveResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
@@ -1623,7 +1655,8 @@ export const CheckLeadAvailabilityResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
@@ -1686,7 +1719,8 @@ export const RecordLeadDecisionResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
@@ -4007,7 +4041,8 @@ export const GetCustomerOverviewResponse = zod.object({
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
   "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
-  "source": zod.enum(['website', 'walk_in', 'phone', 'facebook', 'instagram', 'whatsapp', 'referral', 'gmail']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
   "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
@@ -5000,6 +5035,10 @@ export const ListAdminUsersResponseItem = zod.object({
   "roleId": zod.number().nullish(),
   "roleName": zod.string().nullish(),
   "status": zod.enum(['active', 'suspended']),
+  "reportingManagerUserId": zod.number().nullish(),
+  "reportingManagerName": zod.string().nullish(),
+  "divisionId": zod.number().nullish(),
+  "divisionName": zod.string().nullish(),
   "lastLoginAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -5023,6 +5062,10 @@ export const AddAdminUserResponse = zod.object({
   "roleId": zod.number().nullish(),
   "roleName": zod.string().nullish(),
   "status": zod.enum(['active', 'suspended']),
+  "reportingManagerUserId": zod.number().nullish(),
+  "reportingManagerName": zod.string().nullish(),
+  "divisionId": zod.number().nullish(),
+  "divisionName": zod.string().nullish(),
   "lastLoginAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -5037,7 +5080,9 @@ export const UpdateAdminUserParams = zod.object({
 
 export const UpdateAdminUserBody = zod.object({
   "roleId": zod.number().nullish(),
-  "status": zod.enum(['active', 'suspended']).optional()
+  "status": zod.enum(['active', 'suspended']).optional(),
+  "reportingManagerUserId": zod.number().nullish(),
+  "divisionId": zod.number().nullish()
 })
 
 export const UpdateAdminUserResponse = zod.object({
@@ -5049,6 +5094,10 @@ export const UpdateAdminUserResponse = zod.object({
   "roleId": zod.number().nullish(),
   "roleName": zod.string().nullish(),
   "status": zod.enum(['active', 'suspended']),
+  "reportingManagerUserId": zod.number().nullish(),
+  "reportingManagerName": zod.string().nullish(),
+  "divisionId": zod.number().nullish(),
+  "divisionName": zod.string().nullish(),
   "lastLoginAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -5067,6 +5116,10 @@ export const ListAdminRolesResponseItem = zod.object({
   "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
+  "fieldPermissions": zod.array(zod.object({
+  "fieldGroup": zod.string(),
+  "access": zod.enum(['hidden', 'view', 'edit'])
+})).optional(),
   "createdAt": zod.coerce.date()
 })
 export const ListAdminRolesResponse = zod.array(ListAdminRolesResponseItem)
@@ -5090,6 +5143,10 @@ export const CreateAdminRoleResponse = zod.object({
   "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
+  "fieldPermissions": zod.array(zod.object({
+  "fieldGroup": zod.string(),
+  "access": zod.enum(['hidden', 'view', 'edit'])
+})).optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -5116,6 +5173,10 @@ export const UpdateAdminRoleResponse = zod.object({
   "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
+  "fieldPermissions": zod.array(zod.object({
+  "fieldGroup": zod.string(),
+  "access": zod.enum(['hidden', 'view', 'edit'])
+})).optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -5151,6 +5212,10 @@ export const SetRolePermissionsResponse = zod.object({
   "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
+  "fieldPermissions": zod.array(zod.object({
+  "fieldGroup": zod.string(),
+  "access": zod.enum(['hidden', 'view', 'edit'])
+})).optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -5160,8 +5225,273 @@ export const SetRolePermissionsResponse = zod.object({
  */
 export const GetPermissionMetaResponse = zod.object({
   "modules": zod.array(zod.string()),
-  "categories": zod.array(zod.string())
+  "categories": zod.array(zod.string()),
+  "fieldGroups": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "module": zod.string(),
+  "fields": zod.array(zod.string())
+})).optional()
 })
+
+
+/**
+ * @summary Replace the field-level access grants for a role
+ */
+export const SetRoleFieldPermissionsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SetRoleFieldPermissionsBody = zod.object({
+  "grants": zod.array(zod.object({
+  "fieldGroup": zod.string(),
+  "access": zod.enum(['hidden', 'view', 'edit'])
+}))
+})
+
+export const SetRoleFieldPermissionsResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "isSystem": zod.boolean(),
+  "userCount": zod.number(),
+  "permissions": zod.array(zod.object({
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
+  "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
+})),
+  "fieldPermissions": zod.array(zod.object({
+  "fieldGroup": zod.string(),
+  "access": zod.enum(['hidden', 'view', 'edit'])
+})).optional(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List all lead sources (including inactive) for the active dealership
+ */
+export const ListAdminLeadSourcesResponseItem = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "isSocial": zod.boolean(),
+  "active": zod.boolean(),
+  "sortOrder": zod.number()
+})
+export const ListAdminLeadSourcesResponse = zod.array(ListAdminLeadSourcesResponseItem)
+
+
+/**
+ * @summary Add a lead source
+ */
+
+
+
+export const CreateAdminLeadSourceBody = zod.object({
+  "name": zod.string().min(1),
+  "code": zod.string().optional().describe('Defaults to a slug of the name'),
+  "isSocial": zod.boolean().optional(),
+  "active": zod.boolean().optional(),
+  "sortOrder": zod.number().optional()
+})
+
+export const CreateAdminLeadSourceResponse = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "isSocial": zod.boolean(),
+  "active": zod.boolean(),
+  "sortOrder": zod.number()
+})
+
+
+/**
+ * @summary Edit or deactivate a lead source
+ */
+export const UpdateAdminLeadSourceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const UpdateAdminLeadSourceBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "isSocial": zod.boolean().optional(),
+  "active": zod.boolean().optional(),
+  "sortOrder": zod.number().optional()
+})
+
+export const UpdateAdminLeadSourceResponse = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "code": zod.string(),
+  "name": zod.string(),
+  "isSocial": zod.boolean(),
+  "active": zod.boolean(),
+  "sortOrder": zod.number()
+})
+
+
+/**
+ * @summary Active advance-gate checklist per pipeline stage (latest version)
+ */
+export const listStageChecklistsResponseItemsItemLabelMax = 200;
+
+
+
+export const ListStageChecklistsResponseItem = zod.object({
+  "stage": zod.enum(['qualified', 'test_drive', 'negotiation', 'sold']),
+  "version": zod.number(),
+  "items": zod.array(zod.object({
+  "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'deposit_taken', 'finance_approved']),
+  "label": zod.string().min(1).max(listStageChecklistsResponseItemsItemLabelMax),
+  "enabled": zod.boolean()
+})),
+  "updatedBy": zod.string().nullish(),
+  "updatedAt": zod.coerce.date().nullish()
+})
+export const ListStageChecklistsResponse = zod.array(ListStageChecklistsResponseItem)
+
+
+/**
+ * @summary Save a new version of a stage's checklist (history preserved)
+ */
+export const SetStageChecklistParams = zod.object({
+  "stage": zod.enum(['qualified', 'test_drive', 'negotiation', 'sold'])
+})
+
+export const setStageChecklistBodyItemsItemLabelMax = 200;
+
+
+
+export const SetStageChecklistBody = zod.object({
+  "items": zod.array(zod.object({
+  "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'deposit_taken', 'finance_approved']),
+  "label": zod.string().min(1).max(setStageChecklistBodyItemsItemLabelMax),
+  "enabled": zod.boolean()
+}))
+})
+
+export const setStageChecklistResponseItemsItemLabelMax = 200;
+
+
+
+export const SetStageChecklistResponse = zod.object({
+  "stage": zod.enum(['qualified', 'test_drive', 'negotiation', 'sold']),
+  "version": zod.number(),
+  "items": zod.array(zod.object({
+  "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'deposit_taken', 'finance_approved']),
+  "label": zod.string().min(1).max(setStageChecklistResponseItemsItemLabelMax),
+  "enabled": zod.boolean()
+})),
+  "updatedBy": zod.string().nullish(),
+  "updatedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary List the active dealership's tax rules
+ */
+export const ListDealerTaxesResponseItem = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "name": zod.string(),
+  "code": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "thresholdAmount": zod.number().nullish(),
+  "effectiveFrom": zod.coerce.date(),
+  "active": zod.boolean(),
+  "sortOrder": zod.number(),
+  "notes": zod.string().nullish()
+})
+export const ListDealerTaxesResponse = zod.array(ListDealerTaxesResponseItem)
+
+
+/**
+ * @summary Add a tax rule
+ */
+
+export const createDealerTaxBodyRateMin = 0;
+
+
+
+export const CreateDealerTaxBody = zod.object({
+  "name": zod.string().min(1),
+  "code": zod.string().optional(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number().min(createDealerTaxBodyRateMin),
+  "thresholdAmount": zod.number().nullish(),
+  "effectiveFrom": zod.coerce.date().optional(),
+  "active": zod.boolean().optional(),
+  "sortOrder": zod.number().optional(),
+  "notes": zod.string().nullish()
+})
+
+export const CreateDealerTaxResponse = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "name": zod.string(),
+  "code": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "thresholdAmount": zod.number().nullish(),
+  "effectiveFrom": zod.coerce.date(),
+  "active": zod.boolean(),
+  "sortOrder": zod.number(),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Edit a tax rule
+ */
+export const UpdateDealerTaxParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const updateDealerTaxBodyRateMin = 0;
+
+
+
+export const UpdateDealerTaxBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "kind": zod.enum(['percent', 'fixed']).optional(),
+  "rate": zod.number().min(updateDealerTaxBodyRateMin).optional(),
+  "thresholdAmount": zod.number().nullish(),
+  "effectiveFrom": zod.coerce.date().optional(),
+  "active": zod.boolean().optional(),
+  "sortOrder": zod.number().optional(),
+  "notes": zod.string().nullish()
+})
+
+export const UpdateDealerTaxResponse = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "name": zod.string(),
+  "code": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "thresholdAmount": zod.number().nullish(),
+  "effectiveFrom": zod.coerce.date(),
+  "active": zod.boolean(),
+  "sortOrder": zod.number(),
+  "notes": zod.string().nullish()
+})
+
+
+/**
+ * @summary Remove a tax rule
+ */
+export const DeleteDealerTaxParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteDealerTaxResponse = zod.void()
 
 
 /**
