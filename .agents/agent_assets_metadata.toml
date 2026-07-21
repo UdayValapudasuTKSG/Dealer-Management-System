@@ -102,6 +102,24 @@ uri = "file://artifacts/aura/public/images/team_at_work.png"
 type = "image"
 title = "Team at Work"
 
+[[generated]]
+id = "sSzB5vriG-BK6rtKkPMOs"
+uri = "file://artifacts/aura/public/vehicles/cutout_tesla_side.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "USTnY14QZAnVP8swANNsZ"
+uri = "file://artifacts/aura/public/vehicles/cutout_byd_side.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "gbQylXPz3VsmJqaILNtHw"
+uri = "file://artifacts/aura/public/vehicles/cutout_foton_side.png"
+type = "image"
+title = "generated_image"
+
 [[outputs]]
 id = "OVThM-BLvdGYiJWriQ3Qm"
 uri = "file://docs/AURA_WALKTHROUGH.md"

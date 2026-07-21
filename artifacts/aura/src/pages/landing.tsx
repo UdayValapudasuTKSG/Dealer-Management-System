@@ -201,6 +201,12 @@ function EnquiryDialog({
   );
 }
 
+const BRAND_CARS = [
+  { brand: "Tesla", file: "cutout_tesla_side.png" },
+  { brand: "BYD", file: "cutout_byd_side.png" },
+  { brand: "FOTON", file: "cutout_foton_side.png" },
+];
+
 const STAGES = [
   {
     id: "lead",
@@ -219,7 +225,7 @@ const STAGES = [
   {
     id: "testdrive",
     title: "The Experience",
-    desc: "Seamless test drive scheduling, digital liability waivers, and real-time fleet tracking. The car leaves the showroom, the deal stays on track.",
+    desc: "Seamless test drive scheduling, digital liability waivers, and real-time fleet tracking. The BYD Seal leaves the showroom, the deal stays on track.",
     icon: CarFront,
     video: "red_car_leaving_showroom.mp4",
   },
@@ -233,7 +239,7 @@ const STAGES = [
   {
     id: "delivery",
     title: "Delivery & Handover",
-    desc: "The keys are handed over. Automated post-sale workflows trigger service reminders, CRM updates, and satisfaction surveys.",
+    desc: "The keys are handed over — from a Tesla sedan to a FOTON workhorse. Automated post-sale workflows trigger service reminders, CRM updates, and satisfaction surveys.",
     icon: CheckCircle2,
     video: "customer_handover.mp4",
   },
@@ -304,6 +310,15 @@ export default function Landing() {
             start: "top top",
             end: "bottom bottom",
             scrub: 1,
+            onUpdate: (self) => {
+              const active = Math.min(2, Math.floor(self.progress * 3));
+              carRef.current
+                ?.querySelectorAll<HTMLImageElement>(".brand-car")
+                .forEach((img) => {
+                  img.style.opacity =
+                    Number(img.dataset.brandIndex) === active ? "1" : "0";
+                });
+            },
           }
         });
       }
@@ -391,7 +406,7 @@ export default function Landing() {
           muted
           loop
           playsInline
-          poster={`${import.meta.env.BASE_URL}vehicles/aura_porsche_taycan.png`}
+          poster={`${import.meta.env.BASE_URL}vehicles/aura_tesla_model_y.png`}
           className="hero-video absolute inset-0 w-full h-full object-cover opacity-60"
         >
           <source
@@ -426,6 +441,9 @@ export default function Landing() {
                 <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>
+            <p className="mt-10 text-[11px] font-semibold uppercase tracking-[0.35em] text-zinc-500">
+              Tesla · BYD · FOTON
+            </p>
           </motion.div>
         </div>
         
@@ -435,8 +453,8 @@ export default function Landing() {
           transition={{ delay: 1.5, duration: 1 }}
           className="absolute bottom-12 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-3"
         >
-          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Scroll to explore</span>
-          <div className="w-[1px] h-16 bg-gradient-to-b from-primary/50 to-transparent" />
+          <span className="hidden [@media(min-height:800px)]:inline text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Scroll to explore</span>
+          <div className="hidden [@media(min-height:800px)]:block w-[1px] h-16 bg-gradient-to-b from-primary/50 to-transparent" />
         </motion.div>
       </section>
 
@@ -453,13 +471,19 @@ export default function Landing() {
             ref={carRef}
             className="absolute left-[15%] md:left-1/2 top-[5%] -translate-x-1/2 -translate-y-1/2 z-30 w-32 md:w-48 pointer-events-none will-change-transform"
           >
-            <div className="relative">
+            <div className="relative rotate-90">
               <div className="absolute inset-0 bg-primary/30 blur-2xl rounded-full scale-150" />
-              <img 
-                src={`${import.meta.env.BASE_URL}vehicles/aura_porsche_taycan.png`} 
-                alt="AURA vehicle"
-                className="relative z-10 w-full drop-shadow-2xl rotate-90"
-              />
+              {BRAND_CARS.map((car, i) => (
+                <img
+                  key={car.brand}
+                  src={`${import.meta.env.BASE_URL}vehicles/${car.file}`}
+                  alt={`${car.brand} vehicle`}
+                  className={`brand-car w-full drop-shadow-2xl transition-opacity duration-700 ${
+                    i === 0 ? "relative z-10 opacity-100" : "absolute inset-0 z-10 opacity-0"
+                  }`}
+                  data-brand-index={i}
+                />
+              ))}
             </div>
           </div>
         )}
