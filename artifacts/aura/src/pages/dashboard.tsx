@@ -43,11 +43,11 @@ function greeting() {
 const KIND_UI: Record<string, { icon: any; action: string }> = {
   gate: { icon: ShieldCheck, action: "Review" },
   contact: { icon: PhoneCall, action: "Call" },
-  testDrive: { icon: CalendarClock, action: "Prep" },
+  testDrive: { icon: CalendarClock, action: "Prepare" },
   delivery: { icon: Car, action: "Deliver" },
   service: { icon: Zap, action: "Service" },
-  stalled: { icon: AlertCircle, action: "Nudge" },
-  quote: { icon: MailQuestion, action: "Follow" },
+  stalled: { icon: AlertCircle, action: "Check in" },
+  quote: { icon: MailQuestion, action: "Follow up" },
   deposit: { icon: Landmark, action: "Open" },
 };
 
@@ -91,32 +91,16 @@ function TriageRow({ item }: { item: TriageItem }) {
   return (
     <button
       onClick={() => navigate(item.href)}
-      className={cn(
-        "group relative w-full flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-xl border text-left overflow-hidden transition-all",
-        "bg-card text-card-foreground hover:shadow-md hover:-translate-y-px",
-        isOverdue
-          ? "border-red-500/25 hover:border-red-500/40"
-          : isUrgent
-            ? "border-gold/30 hover:border-gold/50"
-            : "border-border/60 hover:border-foreground/20",
-      )}
+      className="group w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-left transition-all bg-foreground text-background hover:shadow-lg hover:-translate-y-px"
     >
-      {/* Urgency accent edge */}
-      <span
-        aria-hidden
-        className={cn(
-          "absolute left-0 top-0 bottom-0 w-[3px]",
-          isOverdue ? "bg-red-500" : isUrgent ? "bg-gold" : "bg-transparent",
-        )}
-      />
       <div
         className={cn(
-          "w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] tracking-wider ring-1",
+          "w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] tracking-wider",
           isOverdue
-            ? "bg-red-500/10 text-red-600 dark:text-red-400 ring-red-500/20"
+            ? "bg-red-400/20 text-red-300"
             : isUrgent
-              ? "bg-gold/10 text-gold ring-gold/25"
-              : "bg-foreground/5 text-foreground ring-border/50",
+              ? "bg-gold/25 text-gold"
+              : "bg-background/15 text-background",
         )}
       >
         {getInitials(item.context)}
@@ -125,24 +109,20 @@ function TriageRow({ item }: { item: TriageItem }) {
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm truncate">{item.context}</span>
           {isOverdue && (
-            <span className="inline-flex items-center bg-red-500/10 text-red-600 dark:text-red-400 ring-1 ring-red-500/25 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
-              Overdue
+            <span className="inline-flex items-center bg-red-400/15 text-red-300 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
+              Past due
             </span>
           )}
         </div>
-        <div className="text-[11px] truncate mt-0.5 text-muted-foreground">
+        <div className="text-[11px] truncate mt-0.5 text-background/60">
           {item.subContext}
-          {item.assignee ? ` · w/ ${item.assignee}` : ""}
+          {item.assignee ? ` · with ${item.assignee}` : ""}
         </div>
       </div>
       <span
         className={cn(
           "flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest shrink-0 transition-colors",
-          isOverdue
-            ? "text-red-600 dark:text-red-400"
-            : isUrgent
-              ? "text-gold"
-              : "text-muted-foreground group-hover:text-gold",
+          isOverdue ? "text-red-300" : "text-gold",
         )}
       >
         {ui.action}
@@ -168,43 +148,63 @@ function TriageBrief({ items }: { items: TriageItem[] }) {
     );
   }
 
+  /* Balance the category panels into two columns by visible row count so the
+     board always looks deliberate — no ragged empty space. */
+  const columns: (typeof groups)[] = [[], []];
+  const heights = [0, 0];
+  for (const g of groups) {
+    const h = Math.min(g.items.length, TRIAGE_CAP) + 1;
+    const target = heights[0] <= heights[1] ? 0 : 1;
+    columns[target].push(g);
+    heights[target] += h;
+  }
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
-      {groups.map((g, gi) => {
-        const Icon = g.icon;
-        const overflow = g.items.length - TRIAGE_CAP;
-        return (
-          <motion.div
-            key={g.key}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: gi * 0.05 }}
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-foreground">
-                {g.label}
-              </span>
-              <span className="bg-foreground/10 text-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums">
-                {g.items.length}
-              </span>
-              {overflow > 0 && (
-                <Link
-                  href={g.href}
-                  className="ml-auto text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors"
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+      {columns
+        .filter((col) => col.length > 0)
+        .map((col, ci) => (
+          <div key={ci} className="space-y-5">
+            {col.map((g, gi) => {
+              const Icon = g.icon;
+              const overflow = g.items.length - TRIAGE_CAP;
+              return (
+                <motion.div
+                  key={g.key}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: (ci * 3 + gi) * 0.05 }}
+                  className="rounded-3xl border border-border/60 bg-card/60 p-3.5"
                 >
-                  +{overflow} more
-                </Link>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              {g.items.slice(0, TRIAGE_CAP).map((item) => (
-                <TriageRow key={item.key} item={item} />
-              ))}
-            </div>
-          </motion.div>
-        );
-      })}
+                  <div className="flex items-center gap-2.5 px-1 pb-3">
+                    <span className="w-7 h-7 rounded-xl bg-gold/10 text-gold flex items-center justify-center shrink-0">
+                      <Icon className="w-3.5 h-3.5" />
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-foreground">
+                      {g.label}
+                    </span>
+                    <span className="bg-foreground/10 text-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums">
+                      {g.items.length}
+                    </span>
+                    {overflow > 0 && (
+                      <Link
+                        href={g.href}
+                        className="ml-auto text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-gold transition-colors"
+                      >
+                        +{overflow} more
+                      </Link>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {g.items.slice(0, TRIAGE_CAP).map((item) => (
+                      <TriageRow key={item.key} item={item} />
+                    ))}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        ))}
     </div>
   );
 }

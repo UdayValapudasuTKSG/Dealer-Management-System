@@ -84,6 +84,14 @@ type ServiceOrderLike = {
   scheduledDate: string;
 };
 
+/** Render an hour count as a friendly duration ("3h", "2 days", "10 days"). */
+export function humanHours(hours: number): string {
+  const h = Math.max(1, Math.floor(hours));
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? "1 day" : `${d} days`;
+}
+
 export function daysSince(iso: string | null | undefined): number {
   if (!iso) return 0;
   return Math.max(
@@ -135,7 +143,7 @@ export function buildTriage(
       id: g.id.toString(),
       key: `gate-${g.id}`,
       context: g.title,
-      subContext: "Approval required",
+      subContext: "Ready for your review",
       href: gateHref(g),
       rank: g.priority === "high" ? 0 : 2,
     });
@@ -160,8 +168,8 @@ export function buildTriage(
         key: `contact-${lead.id}`,
         context: lead.name,
         subContext: overdue
-          ? `Contact overdue ${Math.floor(-left)}h past SLA`
-          : `Contact within ${Math.max(1, Math.floor(left))}h`,
+          ? `Waiting ${humanHours(-left)} for a first call`
+          : `First call due within ${Math.max(1, Math.floor(left))}h`,
         assignee: lead.assignedTo ?? null,
         slaHoursLeft: left,
         href: `/lead/${lead.id}`,
@@ -195,7 +203,7 @@ export function buildTriage(
           id: lead.id.toString(),
           key: `sla-${lead.id}`,
           context: lead.name,
-          subContext: `Stalled ${inStage}d`,
+          subContext: `Quiet for ${inStage} days — time to check in`,
           assignee: lead.assignedTo ?? null,
           href: `/lead/${lead.id}`,
           rank: 3,
@@ -207,7 +215,7 @@ export function buildTriage(
           id: lead.id.toString(),
           key: `quote-${lead.id}`,
           context: lead.name,
-          subContext: "Quote sent",
+          subContext: "Quote sent — awaiting their reply",
           assignee: lead.assignedTo ?? null,
           href: `/lead/${lead.id}`,
           rank: 4,
@@ -227,7 +235,7 @@ export function buildTriage(
         id: d.id.toString(),
         key: `deal-${d.id}`,
         context: d.customerName ?? "Deal",
-        subContext: "Awaiting deposit",
+        subContext: "Deposit still to come",
         href: "/deals",
         rank: 2,
       });
@@ -259,7 +267,7 @@ export function buildTriage(
         id: so.id.toString(),
         key: `service-${so.id}`,
         context: so.vehicleInfo,
-        subContext: "Service awaiting approval",
+        subContext: "Waiting on the customer's go-ahead",
         assignee: so.technician ?? null,
         href: "/service",
         rank: 2,
