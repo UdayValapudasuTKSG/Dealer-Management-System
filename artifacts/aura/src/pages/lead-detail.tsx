@@ -444,14 +444,6 @@ const TABS = [
   { key: "activity", label: "Activity" },
 ] as const;
 
-const MACRO_PHASES = ["Lead", "Pre-Booking", "Payment", "Delivery"] as const;
-
-function macroPhaseFor(journeyIndex: number): number {
-  if (journeyIndex >= 6) return 3;
-  if (journeyIndex >= 5) return 2;
-  if (journeyIndex >= 3) return 1;
-  return 0;
-}
 type Tab = (typeof TABS)[number]["key"];
 
 const CALL_STATUS_LABEL: Record<string, string> = {
@@ -871,7 +863,6 @@ export default function LeadDetail() {
   };
 
   const currentStageKey = journeyStages[journeyIndex]?.key ?? "new";
-  const macroPhaseIndex = macroPhaseFor(journeyIndex);
 
   const daysInStage = lead.stageEnteredAt
     ? Math.max(
@@ -1078,59 +1069,13 @@ export default function LeadDetail() {
         onOpenChange={setCallOpen}
       />
 
-      {/* Macro phase bar — Lead → Pre-Booking → Payment → Delivery */}
-      <div className="mb-6 rounded-2xl border border-white/10 bg-foreground/[0.03] p-2">
-        <div className="grid grid-cols-4 gap-2">
-          {MACRO_PHASES.map((phase, i) => {
-            const state =
-              i < macroPhaseIndex
-                ? "done"
-                : i === macroPhaseIndex
-                  ? "current"
-                  : "upcoming";
-            return (
-              <div
-                key={phase}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-colors",
-                  state === "current"
-                    ? "bg-primary/[0.08] ring-1 ring-primary/30"
-                    : "bg-transparent",
-                )}
-              >
-                <span
-                  className={cn(
-                    "w-6 h-6 rounded-full flex items-center justify-center ring-1 text-[11px] font-semibold shrink-0",
-                    state === "done"
-                      ? "bg-emerald-500/20 text-emerald-500 ring-emerald-500/40"
-                      : state === "current"
-                        ? "bg-primary text-primary-foreground ring-primary"
-                        : "bg-foreground/[0.05] text-muted-foreground ring-white/10",
-                  )}
-                >
-                  {state === "done" ? <Check className="w-3.5 h-3.5" /> : i + 1}
-                </span>
-                <span
-                  className={cn(
-                    "text-sm font-semibold tracking-tight truncate",
-                    state === "upcoming"
-                      ? "text-muted-foreground"
-                      : "text-foreground",
-                  )}
-                >
-                  {phase}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+      {/* Journey rail — single source of stage truth */}
+      <div className="mb-6">
+        <StageNav stages={stagesWithAlerts} currentIndex={journeyIndex} compact />
       </div>
 
-      {/* KPI strip */}
-      <div className="mb-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiTile label="AI Score">
-          <span className="text-primary">{lead.aiScore}</span>
-        </KpiTile>
+      {/* Stage facts strip */}
+      <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiTile label="Days in Stage">
           {daysInStage != null ? `${daysInStage}d` : "—"}
         </KpiTile>
@@ -1148,7 +1093,7 @@ export default function LeadDetail() {
       </div>
 
       {/* AI next-steps strip */}
-      <div className="mb-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
+      <div className="mb-6">
         <AgentBriefPanel
           leadId={lead.id}
           leadPhone={lead.phone}
@@ -1157,28 +1102,6 @@ export default function LeadDetail() {
           hasOwner={canEdit && !!lead.ownerUserId}
           compact
         />
-        <div className="flex lg:flex-col gap-2 lg:w-44 shrink-0">
-          <Button
-            onClick={() => setRunReviewOpen(true)}
-            className="gap-1.5 w-full"
-          >
-            <ShieldCheck className="w-4 h-4" />
-            Run Review
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setWorkflowOpen(true)}
-            className="gap-1.5 w-full"
-          >
-            <Workflow className="w-4 h-4" />
-            Workflow
-          </Button>
-        </div>
-      </div>
-
-      {/* Journey navigation pane — full width on top */}
-      <div className="mb-6">
-        <StageNav stages={stagesWithAlerts} currentIndex={journeyIndex} compact />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">

@@ -1,0 +1,56 @@
+Lead capture (New)
+🤖 Captured by source — Walk-in/Referral (manual), Website/Campaign QR (web-to-lead), Social Media (bulk import). Fields: Address (mandatory), combined Source+sub-platform, Lead Type, 3 Interested Models each with financing (Y/N) + test-drive (Y/N).
+🤖 Duplicate check on email+phone → appends Atto 3 to his existing lead (no duplicate). ✋ SA approves merge.
+🤖 Round-robin assigns Priya (timestamp). Notes/Chatter/Reminders/Tasks are enabled on the record.
+🤖 Code auto-generated (GT format, taxes applied). ✋ SA approves send. (Optional 🅱️ Manager quote-review if enabled — the BRD's draft→review→return loop.)
+2 · Contacted (24h SLA)
+🚦 Cannot advance until a call is logged within 24h. 🤖 Click-to-call → conversation notes + overall sentiment written as an Activity. ✋ SA approves the summary.
+🤖 SLA breach → visual flag to SA + Manager (no escalation).
+3 · Engaged (test drive / financing / negotiation)
+Test-drive wizard (separate tab, 4 screens): ① select vehicle (model + interior & exterior color + trim) → ② time slot + the resource who'll run it → ③ review → ④ confirm. 🤖 Checks customer + vehicle availability; soft-locks a single-unit model. ✋ SA confirms. 🤖 24h reminder (Yes/No).
+🤖 Financing doc uploaded → extracts → Financing Qualified = true (editable; "blind-eye" override allowed). ✋ SA approves pre-fill.
+Unresponsive path (BRD cadence): call 24h → +3 days → +3 days → +7 days → close with Reason-for-Lead-Closure (No Response / Unable to Reach / Not Interested / Unqualified / Revisit) + optional "Revisit Lead in 3 Months."
+🔀 Edge A — no-show at test drive
+Reply "No"/no-show → 🤖 release the soft-lock, propose reschedule (re-check customer + vehicle). ✋ SA confirms. One follow-up per SLA, else revert.
+
+🔀 Edge B — skips test drive, buys direct
+Test drive is optional → SA moves Contacted → Engaged → Pre-Book directly. 🤖 STP can auto-advance the low-touch steps; gates still apply.
+
+4 · Pre-Book (= Order Confirmed)
+🚦 Reservation fee mandatory — OR Trusted-customer bypass (Deposit Paid? = No + Reservation Comment with the reason). ✋ Manager may review a bypass.
+🤖 On payment: Account + Contact created (or linked for a repeat buyer — ✋ SA approves the match*)**, and lead-convert equivalent runs internally (Account/Contact/"Opportunity" record). Selected Model = Dolphin set (Seal/Atto 3 retained in history).
+🚦 Guidance-for-Success shows reservation fee as the mandatory field to advance.
+5 · Vehicle Allocated
+🤖 Auto-suggests a VIN unit from Selected Model. ✋ SA accepts. 🚦 VIN = 17 chars, Engine # captured; unit soft-locked (reserved, not sold). Fields: VIN, Engine, Trim, Color, Expected Delivery Date.
+6 · Payment (= Payment in Progress)
+Fields: Payment Method, Invoice Sent?, Upload Invoice, Total Amount, Receipt Number; reservation + final methods (Bank Financing/Cash/Cheque); negotiated final amount captured.
+🤖 Invoice at reservation and at final payment (two touchpoints). ✋ Finance/SA approve each send (WhatsApp/Email); re-sendable. ✋ Manager approves discount above threshold.
+7 · Pre-Delivery (= Ready for Delivery) → 🔁 to Delivery Advisor
+🤖 PDI (Pre-Delivery Inspection): a PDI Work Order with an intake checklist prepares the car; PDI Complete set.
+Registration number entered once the third-party registration completes (status field only — no integration).
+🤖 Pre-filled handover PDF generated. ✋ Delivery Advisor reviews/prints.
+🚦 Document checklist: signed handover + registration + warranty + insurance-confirmed tracked as sent/received. 🔁 Ownership → Dave (Delivery Advisor).
+8 · Delivered (Closed Won) → 🔁 to Service Advisor
+Dave delivers; customer inspects & signs; Dave scans & uploads signed handover + registration + warranty.
+🚦 Actual Delivery Date entered (distinct from Expected) → closes the deal. 🤖 Vehicle becomes an Asset on the Account; 🤖 sub-task created for the Service team; 🤖 thank-you + survey email within 24h. 🔁 Ownership → Sam (Service Advisor).
+9 · Cancellation & Refund (branch, any time after Pre-Book)
+Cancel Reservation button (on Order Confirmed / Payment in Progress) → status Pending Cancellation + reason + reservation-fee amount. ✋ Sales Manager approves → Approved for Refund.
+🤖 Finance notified → refund (bank/cheque) → upload refund confirmation → status Cancelled – Refunded → customer email. Lead Closed Lost with "Cancelled Reservation"; vehicle lock released; full history retained (incl. Seal/Atto 3).
+(Lead-stage cancellation before conversion = simple manual close; deposit fully refundable until registration begins, handled offline.)
+10 · Service — Scheduled (feature-flagged)
+🤖 Introduction call within 5 business days of delivery; SA explains the cadence/milestones; sets a follow-up reminder.
+🤖 Milestone approaching → reminder. SA validates customer info (Email / VIN / Registration) → creates a Case (Types of Service, Concern, Cause, Correction, Current Mileage, Requested Completion Date, Is-Off-Road). ✋ SA confirms with customer.
+🤖 Notify Service Manager → 🅱️ Manager reviews Case, consults Technician for scope, records notes, instructs SA to open a Work Order.
+🤖 SA notified (email + in-app) → reviews Manager's notes → updates notes → CLOSES the Case → OPENS a Work Order.
+SA books appointment (calendar: Customer + Technician + Duration); 🤖 24h drop-off reminder. Customer drops off → SA completes the intake checklist, uploads to WO. SA tells technician (offline). Technician inspects → parts needed?
+Parts NOT needed: add Work Order Line Items → prepare quotation → ✋ customer approves → repair → schedule pickup → outtake list → invoice → payment → customer collects → outtake list + receipt reference added to WO.
+Parts needed: SA contacts Parts Advisor; WO On Hold until part/technician available → then the same WOLI → quote → approve → repair → outtake → invoice → pickup.
+🚦 Only one active Work Order per asset. WO statuses: New → Pending Manager Review → In Progress → On Hold → Completed → Invoice → Closed. Pay Type: Warranty / Customer Pay / Rectify / Goodwill. Generate Quotation / Generate Invoice produce the same PDF (Subtotal + VAT + Total) with only the heading differing. Entry added to Service History; Warranty/Claim tracked where applicable.
+11 · Service — Unscheduled
+Customer contacts SA → SA validates info → creates Case → triages on the call: resolved → close Case with notes; not resolved → same Manager review → Work Order path as scheduled.
+12 · Other Case types (not just repairs)
+Cases also cover Feedback, Profile Update / Information Change (with Reason-for-Change: Relocated/Correction/Other), and Escalation — each with its own fields and Open/Pending/Closed status.
+
+Personas that also appear (BRD)
+Marketing Manager/Coordinator (leads by source/campaign, conversion), Finance Manager (refunds/approvals), Parts Advisor, Technician, plus persona-specific Reports & Dashboards and the full Emails & Notifications matrix.
+
