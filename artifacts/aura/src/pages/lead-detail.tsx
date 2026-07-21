@@ -2502,14 +2502,6 @@ export default function LeadDetail() {
                 <Car className="w-4 h-4 text-primary" />
                 Book Test Drive
               </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-2"
-                onClick={() => setRunReviewOpen(true)}
-              >
-                <ShieldCheck className="w-4 h-4 text-primary" />
-                Run Review
-              </Button>
             </div>
           </div>
 

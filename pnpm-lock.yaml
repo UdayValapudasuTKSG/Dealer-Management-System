@@ -170,6 +170,9 @@ importers:
 
   artifacts/api-server:
     dependencies:
+      '@ai-sdk/anthropic':
+        specifier: ^3.0.95
+        version: 3.0.95(zod@3.25.76)
       '@clerk/express':
         specifier: ^2.1.40
         version: 2.1.40(express@5.2.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)

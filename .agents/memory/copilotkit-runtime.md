@@ -5,9 +5,22 @@ description: Non-obvious constraints for running CopilotKit runtime behind the R
 
 # CopilotKit runtime (AG-UI concierge)
 
-CopilotKit runtime is mounted at `/api/copilotkit` in the Express api-server, using
-`AnthropicAdapter` over the Replit-managed Anthropic client (no own key). The web app
+CopilotKit runtime is mounted at `/api/copilotkit` in the Express api-server. The web app
 wraps everything in `<CopilotKit runtimeUrl>` and renders a persistent `CopilotSidebar`.
+
+## Client 1.62+ requires the v2 single-route runtime, not the v1 GraphQL endpoint
+**Rule:** With `@copilotkit/react-*` >= 1.62, the server must mount the v2 runtime
+(`createCopilotExpressHandler` from `@copilotkit/runtime/v2`, `mode: "single-route"`)
+with an agent named `default`. Do NOT use the legacy `copilotRuntimeNodeExpressEndpoint`
+GraphQL endpoint.
+**Why:** The 1.62 `<CopilotKit>` compat wrapper defaults `useSingleEndpoint ?? true`, so
+the client POSTs JSON envelopes (`{method:"info"|"run"...}`) to the runtime URL. The v1
+GraphQL endpoint 400s these ("Invalid JSON payload") → a red "Runtime info request failed
+with status 400" banner on every page + "Agent default not found", and chat is broken.
+**How to apply:** Build the agent with `new BuiltInAgent({ model })` where model comes
+from `createAnthropic({ baseURL: AI_INTEGRATIONS_ANTHROPIC_BASE_URL + "/v1", apiKey })`
+(`@ai-sdk/anthropic`, same major as the runtime's dep). The AI SDK needs the `/v1`
+suffix on the Replit proxy base URL; the Anthropic SDK does not.
 
 ## Streaming is cut by the proxy unless you disable buffering
 **Rule:** On the copilotkit endpoint you MUST set `Cache-Control: no-cache, no-transform`

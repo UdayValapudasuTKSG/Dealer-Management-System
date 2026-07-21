@@ -37,9 +37,9 @@ app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
 app.use(cors({ credentials: true, origin: true }));
 
-// CopilotKit's runtime endpoint is served by GraphQL Yoga, which reads the raw
-// request stream itself. Skip Express body-parsing for that path, or the parser
-// drains the stream and Yoga hangs.
+// CopilotKit's v2 runtime handler reads the raw request stream itself (it
+// bridges to a fetch Request). Skip Express body-parsing for that path, or
+// the parser drains the stream and the runtime hangs.
 const jsonParser = express.json();
 const urlencodedParser = express.urlencoded({ extended: true });
 const isCopilotKit = (url: string): boolean =>

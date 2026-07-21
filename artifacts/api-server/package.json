@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.95",
     "@clerk/express": "^2.1.40",
     "@clerk/shared": "^4.25.2",
     "@copilotkit/runtime": "^1.62.3",

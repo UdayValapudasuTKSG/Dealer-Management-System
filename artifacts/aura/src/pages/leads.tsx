@@ -463,6 +463,7 @@ export default function Leads() {
                     { value: "low", label: "Low" },
                   ],
                 },
+                { name: "address", label: "Address", type: "text", required: true, span: "full", placeholder: "Lot 12 Main Street, Georgetown" },
                 { name: "preferredBranch", label: "Preferred branch", type: "text", span: "half", placeholder: "Optional" },
                 { name: "email", label: "Email", type: "text", span: "half", placeholder: "kojo@email.com" },
                 { name: "phone", label: "Phone", type: "text", span: "half", placeholder: "+233 …" },

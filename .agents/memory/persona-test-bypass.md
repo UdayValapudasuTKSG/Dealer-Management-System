@@ -10,4 +10,4 @@ description: How to test the AURA web app as any seeded user without Clerk sign-
 
 **Why:** e2e Clerk sign-in flows via testClerkAuth kept hitting the 600s timeout; persona-by-header lets screenshots/curl verify role-scoped UI instantly.
 
-**How to apply:** screenshot `/command-center?test-user=<seeded user email>` using any email from the `users` table (query the DB for seeded personas per dealer/role). CopilotKit `info` handshake 400/405 toast is pre-existing noise, not an auth failure.
+**How to apply:** screenshot `/command-center?test-user=<seeded user email>` using any email from the `users` table (query the DB for seeded personas per dealer/role).

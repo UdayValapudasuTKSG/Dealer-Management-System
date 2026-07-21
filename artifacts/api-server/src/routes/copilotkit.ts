@@ -1,25 +1,45 @@
 import { Router, type IRouter } from "express";
 import {
   CopilotRuntime,
-  AnthropicAdapter,
-  copilotRuntimeNodeExpressEndpoint,
-} from "@copilotkit/runtime";
-import { anthropic } from "@workspace/integrations-anthropic-ai";
+  BuiltInAgent,
+  createCopilotExpressHandler,
+} from "@copilotkit/runtime/v2";
+import { createAnthropic } from "@ai-sdk/anthropic";
+
+// The 1.62 web client speaks the v2 "single-route" envelope protocol
+// (POST { method: "info" | "run" | ... } to the runtime URL). The legacy
+// v1 GraphQL endpoint cannot answer those requests (every probe 400s with
+// "Invalid JSON payload" and the UI shows a red runtime-error banner), so
+// the server mounts the matching v2 runtime instead.
+const anthropicProvider = createAnthropic({
+  // The Anthropic SDK treats the base URL as the API root; the AI SDK
+  // expects the versioned prefix included.
+  baseURL: `${process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL}/v1`,
+  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+});
+
+const runtime = new CopilotRuntime({
+  agents: {
+    // The client requests the agent named "default".
+    default: new BuiltInAgent({
+      model: anthropicProvider("claude-sonnet-4-6"),
+      maxSteps: 5,
+      prompt:
+        "You are the AURA Concierge, the in-app assistant for an automotive dealership operating system. " +
+        "Be concise and professional. Use the provided readable context (current page, live KPIs, pending decision gates) " +
+        "to answer questions, and use the available frontend tools to navigate or open records when the user asks. " +
+        "Never invent data that is not in the provided context.",
+    }),
+  },
+});
+
+const handler = createCopilotExpressHandler({
+  runtime,
+  basePath: "/api/copilotkit",
+  mode: "single-route",
+});
 
 const router: IRouter = Router();
-
-const serviceAdapter = new AnthropicAdapter({
-  anthropic,
-  model: "claude-sonnet-4-6",
-});
-
-const runtime = new CopilotRuntime();
-
-const handler = copilotRuntimeNodeExpressEndpoint({
-  endpoint: "/api/copilotkit",
-  runtime,
-  serviceAdapter,
-});
 
 router.use("/copilotkit", (req, res, next) => {
   req.url = req.originalUrl;
@@ -28,7 +48,7 @@ router.use("/copilotkit", (req, res, next) => {
   // the stream is cut and the browser sees ERR_INCOMPLETE_CHUNKED_ENCODING.
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("X-Accel-Buffering", "no");
-  Promise.resolve(handler(req, res)).catch(next);
+  handler(req, res, next);
 });
 
 export default router;
