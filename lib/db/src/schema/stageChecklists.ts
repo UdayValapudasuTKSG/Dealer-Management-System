@@ -95,7 +95,7 @@ export const DEFAULT_STAGE_CHECKLISTS: Record<ChecklistStage, StageChecklistItem
     ],
     negotiation: [
       { key: "test_drive_completed", label: "Test drive completed (or explicitly booked)", enabled: true },
-      { key: "deal_created", label: "Draft deal numbers entered (create a deal)", enabled: true },
+      { key: "deal_created", label: "Draft deal numbers entered (create a deal)", enabled: false },
     ],
     sold: [
       { key: "deal_exists", label: "A deal must exist before marking sold", enabled: true },
