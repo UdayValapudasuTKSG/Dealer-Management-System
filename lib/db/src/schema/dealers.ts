@@ -3,6 +3,7 @@ import {
   serial,
   text,
   integer,
+  doublePrecision,
   boolean,
   timestamp,
   uniqueIndex,
@@ -18,6 +19,8 @@ export const dealersTable = pgTable("dealers", {
   city: text("city"),
   country: text("country"),
   status: text("status").notNull().default("active"),
+  // GYD per 1 USD — used to show USD equivalents next to GYD amounts.
+  usdExchangeRate: doublePrecision("usd_exchange_rate").notNull().default(209),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

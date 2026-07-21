@@ -16,7 +16,18 @@ export interface VehicleUpdate {
   model?: string;
   trim?: string;
   year?: number;
+  /**
+     * @minLength 17
+     * @maxLength 17
+     */
   vin?: string;
+  /**
+     * @minLength 17
+     * @maxLength 17
+     */
+  engineNumber?: string;
+  /** @pattern ^[A-Z]{3}[0-9]{1,4}$ */
+  registration?: string;
   variant?: string;
   engine?: string;
   transmission?: string;

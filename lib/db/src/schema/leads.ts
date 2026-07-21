@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { divisionsTable } from "./divisions";
 
 export const LEAD_SOURCES = [
   "website",
@@ -30,6 +31,7 @@ export type LeadAttachment = { name: string; url: string };
 export const leadsTable = pgTable("leads", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
+  divisionId: integer("division_id").references(() => divisionsTable.id),
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),

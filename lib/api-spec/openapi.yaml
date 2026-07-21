@@ -2531,6 +2531,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /divisions:
+    get:
+      operationId: listDivisions
+      tags: [admin]
+      responses:
+        "200":
+          description: Divisions of the active dealer
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Division"
   /agents:
     get:
       operationId: listAgents
@@ -4118,6 +4131,15 @@ components:
         dealerName: { type: string }
         roleName: { type: ["string", "null"] }
         isGeneralManager: { type: boolean }
+        usdExchangeRate: { type: number, description: "GYD per 1 USD for this dealer" }
+    Division:
+      type: object
+      required: [id, dealerId, code, name]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        code: { type: string }
+        name: { type: string }
     Dealer:
       type: object
       required: [id, name, status, createdAt]
@@ -4396,11 +4418,14 @@ components:
       required: [id, make, model, year, price, powertrain, mileageKm, exteriorColor, status, bodyType, featured, createdAt]
       properties:
         id: { type: integer }
+        divisionId: { type: ["integer", "null"] }
         make: { type: string }
         model: { type: string }
         trim: { type: ["string", "null"] }
         year: { type: integer }
         vin: { type: ["string", "null"] }
+        engineNumber: { type: ["string", "null"] }
+        registration: { type: ["string", "null"] }
         variant: { type: ["string", "null"] }
         engine: { type: ["string", "null"] }
         transmission: { type: ["string", "null"] }
@@ -4439,7 +4464,9 @@ components:
         model: { type: string, minLength: 1 }
         trim: { type: string }
         year: { type: integer }
-        vin: { type: string }
+        vin: { type: string, minLength: 17, maxLength: 17, description: "VIN must be exactly 17 characters" }
+        engineNumber: { type: string, minLength: 17, maxLength: 17, description: "Engine number must be exactly 17 characters" }
+        registration: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$", description: "3 uppercase letters followed by 1-4 digits" }
         variant: { type: string }
         engine: { type: string }
         transmission: { type: string }
@@ -4470,7 +4497,9 @@ components:
         model: { type: string, minLength: 1 }
         trim: { type: string }
         year: { type: integer }
-        vin: { type: string }
+        vin: { type: string, minLength: 17, maxLength: 17 }
+        engineNumber: { type: string, minLength: 17, maxLength: 17 }
+        registration: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$" }
         variant: { type: string }
         engine: { type: string }
         transmission: { type: string }
@@ -4650,6 +4679,7 @@ components:
       required: [id, name, channel, source, priority, phase, status, attachments, aiScore, createdAt, isRetailCustomer, quotationSent, reservationFeePaid, financingQualified, revisitIn3Months]
       properties:
         id: { type: integer }
+        divisionId: { type: ["integer", "null"] }
         name: { type: string }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
@@ -5074,6 +5104,7 @@ components:
       required: [id, vehicleId, stage, vehiclePrice, discount, tradeInValue, accessories, otdPrice, depositPaid, createdAt]
       properties:
         id: { type: integer }
+        divisionId: { type: ["integer", "null"] }
         customerId: { type: ["integer", "null"] }
         leadId: { type: ["integer", "null"] }
         vehicleId: { type: integer }

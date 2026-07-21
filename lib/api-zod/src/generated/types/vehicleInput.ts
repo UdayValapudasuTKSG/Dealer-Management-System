@@ -16,7 +16,23 @@ export interface VehicleInput {
   model: string;
   trim?: string;
   year: number;
+  /**
+     * VIN must be exactly 17 characters
+     * @minLength 17
+     * @maxLength 17
+     */
   vin?: string;
+  /**
+     * Engine number must be exactly 17 characters
+     * @minLength 17
+     * @maxLength 17
+     */
+  engineNumber?: string;
+  /**
+     * 3 uppercase letters followed by 1-4 digits
+     * @pattern ^[A-Z]{3}[0-9]{1,4}$
+     */
+  registration?: string;
   variant?: string;
   engine?: string;
   transmission?: string;

@@ -10,6 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { divisionsTable } from "./divisions";
 
 export const VEHICLE_STATUSES = [
   "available",
@@ -39,14 +40,22 @@ export const vehicleDocumentSchema = z.object({
 });
 export type VehicleDocument = z.infer<typeof vehicleDocumentSchema>;
 
+/** DMS spec: VIN and Engine # are exactly 17 characters. */
+export const VIN_LENGTH = 17;
+/** DMS spec: registration plates are 3 letters followed by 1-4 digits. */
+export const REGISTRATION_PATTERN = /^[A-Z]{3}[0-9]{1,4}$/;
+
 export const vehiclesTable = pgTable("vehicles", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
+  divisionId: integer("division_id").references(() => divisionsTable.id),
   make: text("make").notNull(),
   model: text("model").notNull(),
   trim: text("trim"),
   year: integer("year").notNull(),
   vin: text("vin"),
+  engineNumber: text("engine_number"),
+  registration: text("registration"),
   variant: text("variant"),
   engine: text("engine"),
   transmission: text("transmission"),
@@ -76,6 +85,9 @@ export const insertVehicleSchema = createInsertSchema(vehiclesTable, {
   images: z.array(z.string()),
   accessories: z.array(z.string()),
   documents: z.array(vehicleDocumentSchema),
+  vin: z.string().length(VIN_LENGTH).nullable().optional(),
+  engineNumber: z.string().length(VIN_LENGTH).nullable().optional(),
+  registration: z.string().regex(REGISTRATION_PATTERN).nullable().optional(),
 }).omit({ dealerId: true,
   id: true,
   createdAt: true,

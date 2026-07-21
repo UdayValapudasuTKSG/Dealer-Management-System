@@ -14,6 +14,7 @@ import { CreateRecordDialog, type FieldDef } from "@/components/create-record-di
 import { ImportVehiclesDialog } from "@/components/inventory/import-vehicles-dialog";
 import { Button } from "@/components/ui/button";
 import { useAuthz } from "@/lib/auth";
+import { useMoney } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -129,7 +130,9 @@ function vehicleFields(existing?: Vehicle): FieldDef[] {
     { name: "model", label: "Model", type: "text", required: true, span: "half", placeholder: "i7", defaultValue: existing?.model },
     { name: "trim", label: "Trim", type: "text", span: "half", placeholder: "xDrive60 M Sport", defaultValue: existing?.trim ?? undefined },
     { name: "year", label: "Year", type: "number", required: true, span: "half", placeholder: "2026", defaultValue: existing ? String(existing.year) : undefined },
-    { name: "vin", label: "VIN", type: "text", span: "half", placeholder: "WBY73AW0XPCK00000", defaultValue: existing?.vin ?? undefined },
+    { name: "vin", label: "VIN (17 characters)", type: "text", span: "half", placeholder: "WBY73AW0XPCK00000A", defaultValue: existing?.vin ?? undefined },
+    { name: "engineNumber", label: "Engine Number (17 characters)", type: "text", span: "half", placeholder: "ENG1234567890ABCD", defaultValue: existing?.engineNumber ?? undefined },
+    { name: "registration", label: "Registration (e.g. PAB1234)", type: "text", span: "half", placeholder: "PAB1234", defaultValue: existing?.registration ?? undefined },
     { name: "price", label: "Price ($)", type: "number", required: true, span: "half", placeholder: "125000", defaultValue: existing ? String(existing.price) : undefined },
     {
       name: "powertrain",
@@ -174,6 +177,7 @@ function vehicleFields(existing?: Vehicle): FieldDef[] {
 export default function Inventory() {
   const { data: vehicles, isLoading } = useListVehicles();
   const { can } = useAuthz();
+  const { gyd } = useMoney();
   const qc = useQueryClient();
   const { toast } = useToast();
   const createVehicle = useCreateVehicle();
@@ -434,7 +438,7 @@ export default function Inventory() {
                       </span>
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums font-semibold">
-                      ${vehicle.price.toLocaleString()}
+                      {gyd(vehicle.price)}
                     </td>
                   </tr>
                 ))}
@@ -508,6 +512,7 @@ function VehicleCard({
   delay: number;
   onSelect: () => void;
 }) {
+  const { gyd, usd } = useMoney();
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -586,7 +591,10 @@ function VehicleCard({
                 Price
               </p>
               <p className="text-2xl font-light tracking-tight">
-                ${vehicle.price.toLocaleString()}
+                {gyd(vehicle.price)}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                {usd(vehicle.price)}
               </p>
             </div>
             <div className="w-11 h-11 rounded-full bg-white/[0.06] group-hover:bg-primary group-hover:text-white flex items-center justify-center transition-all duration-300">
@@ -618,6 +626,7 @@ function VehicleDetail({
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { gyd, usd } = useMoney();
   const updateVehicle = useUpdateVehicle();
   const { uploadFile } = useUpload();
 
@@ -839,10 +848,10 @@ function VehicleDetail({
 
               <div className="flex items-baseline gap-2 mt-6">
                 <span className="text-3xl font-light tracking-tight">
-                  ${vehicle.price.toLocaleString()}
+                  {gyd(vehicle.price)}
                 </span>
                 <span className="text-xs uppercase tracking-widest text-muted-foreground">
-                  OTD est.
+                  {usd(vehicle.price)} OTD est.
                 </span>
               </div>
 

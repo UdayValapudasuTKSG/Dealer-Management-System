@@ -23,6 +23,7 @@ export type DealerMembership = {
   roleId: number;
   roleName: string | null;
   isGeneralManager: boolean;
+  usdExchangeRate: number;
 };
 
 export type AuthedUser = User & {
@@ -156,6 +157,7 @@ async function loadMemberships(userId: number): Promise<DealerMembership[]> {
       roleId: dealerUsersTable.roleId,
       roleName: rolesTable.name,
       isGeneralManager: dealerUsersTable.isGeneralManager,
+      usdExchangeRate: dealersTable.usdExchangeRate,
     })
     .from(dealerUsersTable)
     .innerJoin(dealersTable, eq(dealerUsersTable.dealerId, dealersTable.id))
@@ -167,7 +169,11 @@ async function loadMemberships(userId: number): Promise<DealerMembership[]> {
 
 async function listAllDealers(): Promise<DealerMembership[]> {
   const rows = await db
-    .select({ id: dealersTable.id, name: dealersTable.name })
+    .select({
+      id: dealersTable.id,
+      name: dealersTable.name,
+      usdExchangeRate: dealersTable.usdExchangeRate,
+    })
     .from(dealersTable)
     .orderBy(dealersTable.id);
   return rows.map((d) => ({
@@ -176,6 +182,7 @@ async function listAllDealers(): Promise<DealerMembership[]> {
     roleId: 0,
     roleName: "Super Admin",
     isGeneralManager: false,
+    usdExchangeRate: d.usdExchangeRate,
   }));
 }
 
@@ -369,6 +376,8 @@ const AUTH_ONLY_SEGMENTS = new Set([
   "search",
   // team member profiles are viewable by every signed-in staff member
   "team",
+  // divisions are read-only reference data for every signed-in user
+  "divisions",
   // object storage: presigned upload URLs + object serving for any signed-in
   // staff member; feature-level gating (e.g. inventory edit) happens in the UI
   // and on the record mutation that stores the object path.

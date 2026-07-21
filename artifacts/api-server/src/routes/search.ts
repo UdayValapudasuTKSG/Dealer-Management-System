@@ -87,6 +87,7 @@ router.get("/search", async (req, res): Promise<void> => {
               ilike(vehiclesTable.make, like),
               ilike(vehiclesTable.model, like),
               ilike(vehiclesTable.vin, like),
+              ilike(vehiclesTable.registration, like),
               idMatch(vehiclesTable.id),
             ),
           ),

@@ -50,6 +50,8 @@ export interface DealerMembershipInfo {
   /** @nullable */
   roleName?: string | null;
   isGeneralManager?: boolean;
+  /** GYD per 1 USD for this dealer */
+  usdExchangeRate?: number;
 }
 
 export interface CurrentUser {
@@ -71,6 +73,13 @@ export interface CurrentUser {
   activeDealerId?: number | null;
   dealers: DealerMembershipInfo[];
   permissions: PermissionGrant[];
+}
+
+export interface Division {
+  id: number;
+  dealerId: number;
+  code: string;
+  name: string;
 }
 
 export type DealerStatus = typeof DealerStatus[keyof typeof DealerStatus];
@@ -378,6 +387,8 @@ export interface VehicleDocument {
 
 export interface Vehicle {
   id: number;
+  /** @nullable */
+  divisionId?: number | null;
   make: string;
   model: string;
   /** @nullable */
@@ -385,6 +396,10 @@ export interface Vehicle {
   year: number;
   /** @nullable */
   vin?: string | null;
+  /** @nullable */
+  engineNumber?: string | null;
+  /** @nullable */
+  registration?: string | null;
   /** @nullable */
   variant?: string | null;
   /** @nullable */
@@ -440,7 +455,23 @@ export interface VehicleInput {
   model: string;
   trim?: string;
   year: number;
+  /**
+     * VIN must be exactly 17 characters
+     * @minLength 17
+     * @maxLength 17
+     */
   vin?: string;
+  /**
+     * Engine number must be exactly 17 characters
+     * @minLength 17
+     * @maxLength 17
+     */
+  engineNumber?: string;
+  /**
+     * 3 uppercase letters followed by 1-4 digits
+     * @pattern ^[A-Z]{3}[0-9]{1,4}$
+     */
+  registration?: string;
   variant?: string;
   engine?: string;
   transmission?: string;
@@ -489,7 +520,18 @@ export interface VehicleUpdate {
   model?: string;
   trim?: string;
   year?: number;
+  /**
+     * @minLength 17
+     * @maxLength 17
+     */
   vin?: string;
+  /**
+     * @minLength 17
+     * @maxLength 17
+     */
+  engineNumber?: string;
+  /** @pattern ^[A-Z]{3}[0-9]{1,4}$ */
+  registration?: string;
   variant?: string;
   engine?: string;
   transmission?: string;
@@ -873,6 +915,8 @@ export const LeadPurchaseType = {
 
 export interface Lead {
   id: number;
+  /** @nullable */
+  divisionId?: number | null;
   name: string;
   /** @nullable */
   email?: string | null;
@@ -1649,6 +1693,8 @@ export const DealStage = {
 
 export interface Deal {
   id: number;
+  /** @nullable */
+  divisionId?: number | null;
   /** @nullable */
   customerId?: number | null;
   /** @nullable */

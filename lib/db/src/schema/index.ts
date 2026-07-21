@@ -33,3 +33,4 @@ export * from "./whatsappConversations";
 export * from "./whatsappMessages";
 export * from "./deliveries";
 export * from "./dealers";
+export * from "./divisions";

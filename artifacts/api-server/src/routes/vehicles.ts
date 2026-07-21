@@ -21,6 +21,7 @@ import {
   ImportVehiclesResponse,
 } from "@workspace/api-zod";
 import { activeDealerId } from "../middlewares/rbac";
+import { defaultDivisionId } from "../lib/divisions";
 
 const router: IRouter = Router();
 
@@ -46,6 +47,8 @@ router.get("/vehicles", async (req, res): Promise<void> => {
       ilike(vehiclesTable.make, term),
       ilike(vehiclesTable.model, term),
       ilike(vehiclesTable.bodyType, term),
+      ilike(vehiclesTable.vin, term),
+      ilike(vehiclesTable.registration, term),
     );
     if (searchClause) filters.push(searchClause);
   }
@@ -66,9 +69,14 @@ router.post("/vehicles", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const [vehicle] = await db
     .insert(vehiclesTable)
-    .values({ ...parsed.data, dealerId: activeDealerId(res) })
+    .values({
+      ...parsed.data,
+      dealerId,
+      divisionId: await defaultDivisionId(dealerId),
+    })
     .returning();
 
   res.status(201).json(GetVehicleResponse.parse(vehicle));
@@ -318,7 +326,11 @@ router.post(
     let created = 0;
     for (const { row, data } of validRows) {
       try {
-        await db.insert(vehiclesTable).values({ ...data, dealerId });
+        await db.insert(vehiclesTable).values({
+          ...data,
+          dealerId,
+          divisionId: await defaultDivisionId(dealerId),
+        });
         created += 1;
       } catch (err) {
         req.log.error({ err, row }, "vehicle import row insert failed");

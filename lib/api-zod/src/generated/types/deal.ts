@@ -10,6 +10,8 @@ import type { DealStage } from './dealStage';
 export interface Deal {
   id: number;
   /** @nullable */
+  divisionId?: number | null;
+  /** @nullable */
   customerId?: number | null;
   /** @nullable */
   leadId?: number | null;

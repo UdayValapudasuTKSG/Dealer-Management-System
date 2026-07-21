@@ -58,6 +58,7 @@ import { autoAssignLead } from "../lib/lead-assignment";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
 import { activeDealerId } from "../middlewares/rbac";
+import { defaultDivisionId } from "../lib/divisions";
 import {
   ownerCalendarContact,
   testDriveCalendarFields,
@@ -177,9 +178,14 @@ router.post("/leads", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const [lead] = await db
     .insert(leadsTable)
-    .values({ ...parsed.data, dealerId: activeDealerId(res) })
+    .values({
+      ...parsed.data,
+      dealerId,
+      divisionId: await defaultDivisionId(dealerId),
+    })
     .returning();
 
   if (lead) onLeadCreated(lead);

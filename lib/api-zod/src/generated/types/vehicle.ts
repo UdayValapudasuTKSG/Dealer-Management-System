@@ -11,6 +11,8 @@ import type { VehicleStatus } from './vehicleStatus';
 
 export interface Vehicle {
   id: number;
+  /** @nullable */
+  divisionId?: number | null;
   make: string;
   model: string;
   /** @nullable */
@@ -18,6 +20,10 @@ export interface Vehicle {
   year: number;
   /** @nullable */
   vin?: string | null;
+  /** @nullable */
+  engineNumber?: string | null;
+  /** @nullable */
+  registration?: string | null;
   /** @nullable */
   variant?: string | null;
   /** @nullable */

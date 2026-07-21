@@ -74,6 +74,7 @@ import type {
   DeliveryInput,
   DeliveryPdiInput,
   DeliveryUpdate,
+  Division,
   EmailLog,
   EmailSettings,
   EmailTemplateInfo,
@@ -7969,6 +7970,77 @@ export const useCreatePartPurchase = <TError = ErrorType<Error>,
       > => {
       return useMutation(getCreatePartPurchaseMutationOptions(options));
     }
+
+export const getListDivisionsUrl = () => {
+
+
+
+
+  return `/api/divisions`
+}
+
+export const listDivisions = async ( options?: RequestInit): Promise<Division[]> => {
+
+  return customFetch<Division[]>(getListDivisionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDivisionsQueryKey = () => {
+    return [
+    `/api/divisions`
+    ] as const;
+    }
+
+
+export const getListDivisionsQueryOptions = <TData = Awaited<ReturnType<typeof listDivisions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDivisions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDivisionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDivisions>>> = ({ signal }) => listDivisions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDivisions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDivisionsQueryResult = NonNullable<Awaited<ReturnType<typeof listDivisions>>>
+export type ListDivisionsQueryError = ErrorType<unknown>
+
+
+
+export function useListDivisions<TData = Awaited<ReturnType<typeof listDivisions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDivisions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDivisionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListAgentsUrl = () => {
 

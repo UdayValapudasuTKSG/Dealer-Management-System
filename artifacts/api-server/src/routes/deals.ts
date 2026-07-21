@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc, and } from "drizzle-orm";
 import { db, dealsTable, vehiclesTable, gatesTable } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
+import { defaultDivisionId } from "../lib/divisions";
 import {
   CreateDealBody,
   UpdateDealBody,
@@ -120,7 +121,12 @@ router.post("/deals", async (req, res): Promise<void> => {
 
   const [deal] = await db
     .insert(dealsTable)
-    .values({ ...parsed.data, salesAdvisorUserId, dealerId })
+    .values({
+      ...parsed.data,
+      salesAdvisorUserId,
+      dealerId,
+      divisionId: await defaultDivisionId(dealerId),
+    })
     .returning();
 
   await raiseBelowFloorGateIfNeeded(deal!);

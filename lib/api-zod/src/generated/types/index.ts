@@ -104,6 +104,7 @@ export * from './deliveryStepState';
 export * from './deliveryStepStateKey';
 export * from './deliveryStepStateStatus';
 export * from './deliveryUpdate';
+export * from './division';
 export * from './emailLog';
 export * from './emailLogChannel';
 export * from './emailLogStatus';

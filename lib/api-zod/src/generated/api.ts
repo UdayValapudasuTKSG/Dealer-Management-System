@@ -148,11 +148,14 @@ export const ListVehiclesQueryParams = zod.object({
 
 export const ListVehiclesResponseItem = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "make": zod.string(),
   "model": zod.string(),
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "engineNumber": zod.string().nullish(),
+  "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
@@ -182,6 +185,13 @@ export const ListVehiclesResponse = zod.array(ListVehiclesResponseItem)
  */
 
 
+export const createVehicleBodyVinMin = 17;
+export const createVehicleBodyVinMax = 17;
+
+export const createVehicleBodyEngineNumberMin = 17;
+export const createVehicleBodyEngineNumberMax = 17;
+
+export const createVehicleBodyRegistrationRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
 
 
 
@@ -191,7 +201,9 @@ export const CreateVehicleBody = zod.object({
   "model": zod.string().min(1),
   "trim": zod.string().optional(),
   "year": zod.number(),
-  "vin": zod.string().optional(),
+  "vin": zod.string().min(createVehicleBodyVinMin).max(createVehicleBodyVinMax).optional().describe('VIN must be exactly 17 characters'),
+  "engineNumber": zod.string().min(createVehicleBodyEngineNumberMin).max(createVehicleBodyEngineNumberMax).optional().describe('Engine number must be exactly 17 characters'),
+  "registration": zod.string().regex(createVehicleBodyRegistrationRegExp).optional().describe('3 uppercase letters followed by 1-4 digits'),
   "variant": zod.string().optional(),
   "engine": zod.string().optional(),
   "transmission": zod.string().optional(),
@@ -219,11 +231,14 @@ export const CreateVehicleBody = zod.object({
 
 export const CreateVehicleResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "make": zod.string(),
   "model": zod.string(),
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "engineNumber": zod.string().nullish(),
+  "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
@@ -257,11 +272,14 @@ export const GetVehicleParams = zod.object({
 
 export const GetVehicleResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "make": zod.string(),
   "model": zod.string(),
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "engineNumber": zod.string().nullish(),
+  "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
@@ -291,6 +309,13 @@ export const UpdateVehicleParams = zod.object({
 
 
 
+export const updateVehicleBodyVinMin = 17;
+export const updateVehicleBodyVinMax = 17;
+
+export const updateVehicleBodyEngineNumberMin = 17;
+export const updateVehicleBodyEngineNumberMax = 17;
+
+export const updateVehicleBodyRegistrationRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
 
 
 
@@ -300,7 +325,9 @@ export const UpdateVehicleBody = zod.object({
   "model": zod.string().min(1).optional(),
   "trim": zod.string().optional(),
   "year": zod.number().optional(),
-  "vin": zod.string().optional(),
+  "vin": zod.string().min(updateVehicleBodyVinMin).max(updateVehicleBodyVinMax).optional(),
+  "engineNumber": zod.string().min(updateVehicleBodyEngineNumberMin).max(updateVehicleBodyEngineNumberMax).optional(),
+  "registration": zod.string().regex(updateVehicleBodyRegistrationRegExp).optional(),
   "variant": zod.string().optional(),
   "engine": zod.string().optional(),
   "transmission": zod.string().optional(),
@@ -328,11 +355,14 @@ export const UpdateVehicleBody = zod.object({
 
 export const UpdateVehicleResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "make": zod.string(),
   "model": zod.string(),
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "engineNumber": zod.string().nullish(),
+  "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
@@ -862,6 +892,7 @@ export const ListLeadsQueryParams = zod.object({
 
 export const ListLeadsResponseItem = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -942,6 +973,7 @@ export const CreateLeadBody = zod.object({
 
 export const CreateLeadResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -999,6 +1031,7 @@ export const GetLeadParams = zod.object({
 
 export const GetLeadResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -1100,6 +1133,7 @@ export const UpdateLeadBody = zod.object({
 
 export const UpdateLeadResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -1179,6 +1213,7 @@ export const CreateEnquiryBody = zod.object({
 
 export const CreateEnquiryResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -1331,6 +1366,7 @@ export const AssignLeadBody = zod.object({
 
 export const AssignLeadResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -1416,6 +1452,7 @@ export const AdvanceLeadStageBody = zod.object({
 
 export const AdvanceLeadStageResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -1484,6 +1521,7 @@ export const ScheduleTestDriveBody = zod.object({
 
 export const ScheduleTestDriveResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -1541,6 +1579,7 @@ export const CheckLeadAvailabilityParams = zod.object({
 
 export const CheckLeadAvailabilityResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -1602,6 +1641,7 @@ export const RecordLeadDecisionBody = zod.object({
 
 export const RecordLeadDecisionResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -1926,6 +1966,7 @@ export const ListDealsQueryParams = zod.object({
 
 export const ListDealsResponseItem = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
@@ -1964,6 +2005,7 @@ export const CreateDealBody = zod.object({
 
 export const CreateDealResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
@@ -1988,6 +2030,7 @@ export const GetDealParams = zod.object({
 
 export const GetDealResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
@@ -2029,6 +2072,7 @@ export const UpdateDealBody = zod.object({
 
 export const UpdateDealResponse = zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
@@ -3279,6 +3323,15 @@ export const CreatePartPurchaseResponse = zod.object({
 })
 
 
+export const ListDivisionsResponseItem = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "code": zod.string(),
+  "name": zod.string()
+})
+export const ListDivisionsResponse = zod.array(ListDivisionsResponseItem)
+
+
 export const ListAgentsResponseItem = zod.object({
   "id": zod.number(),
   "key": zod.string(),
@@ -3594,11 +3647,14 @@ export const GetCustomerOverviewResponse = zod.object({
   "aiRecommendationReason": zod.string().nullish(),
   "aiRecommendedVehicle": zod.union([zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "make": zod.string(),
   "model": zod.string(),
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "engineNumber": zod.string().nullish(),
+  "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
@@ -3642,11 +3698,14 @@ export const GetCustomerOverviewResponse = zod.object({
 })),
   "ownedVehicles": zod.array(zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "make": zod.string(),
   "model": zod.string(),
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "engineNumber": zod.string().nullish(),
+  "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
@@ -3670,6 +3729,7 @@ export const GetCustomerOverviewResponse = zod.object({
 })),
   "activeDeal": zod.union([zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
@@ -3688,6 +3748,7 @@ export const GetCustomerOverviewResponse = zod.object({
 }),zod.null()]).optional(),
   "deals": zod.array(zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
@@ -3769,6 +3830,7 @@ export const GetCustomerOverviewResponse = zod.object({
 })),
   "leads": zod.array(zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "name": zod.string(),
   "email": zod.string().nullish(),
   "phone": zod.string().nullish(),
@@ -3888,11 +3950,14 @@ export const GetCustomerPersonaResponse = zod.object({
   "aiRecommendationReason": zod.string().nullish(),
   "aiRecommendedVehicle": zod.union([zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "make": zod.string(),
   "model": zod.string(),
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "engineNumber": zod.string().nullish(),
+  "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
@@ -3972,11 +4037,14 @@ export const UpsertCustomerPersonaResponse = zod.object({
   "aiRecommendationReason": zod.string().nullish(),
   "aiRecommendedVehicle": zod.union([zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "make": zod.string(),
   "model": zod.string(),
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "engineNumber": zod.string().nullish(),
+  "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
@@ -4037,11 +4105,14 @@ export const RecommendCustomerVehicleResponse = zod.object({
   "aiRecommendationReason": zod.string().nullish(),
   "aiRecommendedVehicle": zod.union([zod.object({
   "id": zod.number(),
+  "divisionId": zod.number().nullish(),
   "make": zod.string(),
   "model": zod.string(),
   "trim": zod.string().nullish(),
   "year": zod.number(),
   "vin": zod.string().nullish(),
+  "engineNumber": zod.string().nullish(),
+  "registration": zod.string().nullish(),
   "variant": zod.string().nullish(),
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
@@ -4374,7 +4445,8 @@ export const GetCurrentUserResponse = zod.object({
   "dealerId": zod.number(),
   "dealerName": zod.string(),
   "roleName": zod.string().nullish(),
-  "isGeneralManager": zod.boolean().optional()
+  "isGeneralManager": zod.boolean().optional(),
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD for this dealer')
 })),
   "permissions": zod.array(zod.object({
   "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),

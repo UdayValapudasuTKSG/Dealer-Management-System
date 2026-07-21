@@ -9,10 +9,12 @@ import {
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { divisionsTable } from "./divisions";
 
 export const dealsTable = pgTable("deals", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
+  divisionId: integer("division_id").references(() => divisionsTable.id),
   customerId: integer("customer_id"),
   leadId: integer("lead_id"),
   vehicleId: integer("vehicle_id").notNull(),
