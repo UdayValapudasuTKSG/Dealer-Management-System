@@ -14,7 +14,7 @@ import { SignInPage, SignUpPage } from "@/pages/auth-pages";
 
 import Landing from "@/pages/landing";
 import BookTestDrive from "@/pages/book-test-drive";
-import RoleDashboard from "@/pages/role-dashboard";
+import Dashboard from "@/pages/dashboard";
 import Reports from "@/pages/reports";
 import Inventory from "@/pages/inventory";
 import Leads from "@/pages/leads";
@@ -166,7 +166,7 @@ function AppShell() {
                 </Route>
                 <Route path="/pipeline" component={Leads} />
                 <Route path="/leads" component={Leads} />
-                <Route path="/command-center" component={RoleDashboard} />
+                <Route path="/command-center" component={Dashboard} />
                 <Route path="/reports" component={Reports} />
                 <Route path="/inventory" component={Inventory} />
                 <Route path="/deals" component={Deals} />

@@ -53,7 +53,20 @@ type GateLike = {
   id: number;
   title: string;
   priority: string;
+  refType?: string | null;
+  refId?: number | null;
 };
+
+/** Deep-link a pending review to the record it concerns (lead at its stage,
+ * deal, delivery…), falling back to the approvals queue. */
+function gateHref(g: GateLike): string {
+  if (g.refId != null) {
+    if (g.refType === "lead") return `/lead/${g.refId}`;
+    if (g.refType === "deal") return "/deals";
+    if (g.refType === "delivery") return "/deliveries";
+  }
+  return "/approvals";
+}
 
 type DeliveryLike = {
   id: number;
@@ -123,7 +136,7 @@ export function buildTriage(
       key: `gate-${g.id}`,
       context: g.title,
       subContext: "Approval required",
-      href: "/approvals",
+      href: gateHref(g),
       rank: g.priority === "high" ? 0 : 2,
     });
   }

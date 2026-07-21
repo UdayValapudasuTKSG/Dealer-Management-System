@@ -1,10 +1,14 @@
 # Domain Modules
 
-## Command Center dashboard (`/command-center`)
-- Viz-forward: trimmed cinematic hero + 4 clickable KPI cards (deep-link to deals/pipeline/tasks) with revenue sparkline, Revenue Trajectory area chart, Inventory Mix donut (`useGetInventoryBreakdown` — powertrain mix), Sales Pipeline funnel with total open value, Units Delivered bar chart (sales-performance `units`).
-- Predictive Intelligence row: `GET /dashboard/predictions` — linear-regression 3-month forecast; dashed projection connects to the solid actual line via a dual-valued boundary month; metric tiles with trend + confidence.
-- Customer Sentiment panel: `GET /dashboard/sentiment` — Anthropic reads recent lead notes/messages, 10-min server cache, `?refresh=true` busts it, empty-corpus 200 fallback, 502 + retry button on LLM failure; highlights link to `/lead/:id`.
-- Action Queue ("Your day") sits above the charts.
+## Daily Briefing (`/command-center`) — LEAN by design (2026-07)
+- Exactly three sections, nothing else: categorized Triage brief (24h contact SLA; gate reviews deep-link into the lead via `refType`/`refId` in `lib/triage.ts`), Today's Schedule, and a compact Call Sentiment digest (positive/neutral/negative counts + notable negative highlights from `GET /dashboard/sentiment`).
+- All charts, KPIs, funnels and analytics were MOVED to Reports. `pages/role-dashboard.tsx` is deleted; every persona lands on `pages/dashboard.tsx`, with triage scoped to their own assignments unless they hold a `BROAD_VIEW_ROLES` manager role.
+- Sentiment endpoint: `GET /dashboard/sentiment` — Anthropic reads recent lead notes/messages, 10-min server cache, `?refresh=true` busts it, empty-corpus 200 fallback, 502 + retry button on LLM failure; highlights link to `/lead/:id`.
+
+## Reports (`/reports`) — persona-aware analytics home
+- `components/reports/persona-overview.tsx` (client-computed from existing list endpoints, no new data): Advisor persona sees My Performance (own funnel/conversion/response time/delivered revenue); Sales/Service/Finance Managers see Team Performance (pipeline by advisor, 24h SLA compliance, top performers); GM/super-admin adds Leadership View (division performance table Lead→Pre-Book→Delivered, channel performance, sentiment analytics, lost leads).
+- BRD Operational Reports for all personas (permission-gated cards): Leads by Source, Quote-to-Order, Avg Response Time, Reservation Conversion (bookings→converted), Pending Invoices.
+- Below sits the server-driven "Detailed Reports" engine (`GET /reports`, 10 report types, PDF/Excel/CSV export, `can(module,"view")` gating).
 
 ## Inventory (`pages/inventory.tsx`)
 - Vehicle click opens `VehicleDetail` dialog: Photo/360° toggle (360 = turntable video) + full spec grid. Staff with inventory create/update permission get "Add Vehicle" (header) and "Edit" (dialog) via `CreateRecordDialog` with shared `vehicleFields()`; edit status options constrained client-side to the same `VEHICLE_STATUS_TRANSITIONS` the server enforces (422 otherwise).

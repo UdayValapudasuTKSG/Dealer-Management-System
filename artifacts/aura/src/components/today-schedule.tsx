@@ -1,20 +1,27 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
-import {
-  useListLeads,
-  useListDeliveries,
-  useListServiceOrders,
-  useListVehicles,
-} from "@workspace/api-client-react";
+import { useListVehicles } from "@workspace/api-client-react";
+import type { Lead, Delivery, ServiceOrder } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { CalendarClock, Car, PenTool, Truck } from "lucide-react";
 import { format, isToday, parseISO, startOfDay, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
-export function TodaySchedule() {
-  const { data: leads, isLoading: leadsLoading } = useListLeads();
-  const { data: deliveries, isLoading: deliveriesLoading } = useListDeliveries();
-  const { data: serviceOrders, isLoading: serviceLoading } = useListServiceOrders();
+/* The schedule does NOT fetch its own data: the parent (Daily Briefing) passes
+   in datasets that are already persona-scoped (advisors only see their own
+   assignments), so this component can never leak dealership-wide appointments
+   to non-manager roles. */
+export function TodaySchedule({
+  leads,
+  deliveries,
+  serviceOrders,
+  isLoading,
+}: {
+  leads: Lead[] | undefined;
+  deliveries: Delivery[] | undefined;
+  serviceOrders: ServiceOrder[] | undefined;
+  isLoading: boolean;
+}) {
   const { data: vehicles } = useListVehicles();
 
   const schedule = useMemo(() => {
@@ -117,7 +124,7 @@ export function TodaySchedule() {
     return items.sort((a, b) => a.time.getTime() - b.time.getTime());
   }, [leads, deliveries, serviceOrders, vehicles]);
 
-  if (leadsLoading || deliveriesLoading || serviceLoading) {
+  if (isLoading) {
     return (
       <div className="space-y-3">
         {[...Array(3)].map((_, i) => (

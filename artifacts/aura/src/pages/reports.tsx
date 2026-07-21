@@ -40,6 +40,7 @@ import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { PageHero } from "@/components/layout/page-hero";
+import { PersonaOverview } from "@/components/reports/persona-overview";
 
 type ReportType =
   | "lead-conversion"
@@ -185,10 +186,18 @@ export default function Reports() {
 
         eyebrow="Intelligence"
         title="Reports"
-        subtitle="Performance, revenue and pipeline analytics."
+        subtitle="Performance, revenue and pipeline analytics — scoped to your role."
       />
-      <div className="w-full px-5 md:px-8 py-8 space-y-6">
-        <div className="flex flex-wrap items-end justify-end gap-4">
+      <div className="w-full px-5 md:px-8 py-8 space-y-10">
+        {/* Persona-aware analytics home: advisors see their own numbers,
+            managers see the team, leadership sees divisions. */}
+        <PersonaOverview />
+
+        <div className="space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-foreground">
+            Detailed Reports
+          </h2>
           <div className="flex items-end gap-3">
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
               From
@@ -254,6 +263,7 @@ export default function Reports() {
         ) : (
           <ReportBody report={report} />
         )}
+        </div>
       </div>
     </div>
   );
