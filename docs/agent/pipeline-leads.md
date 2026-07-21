@@ -13,7 +13,7 @@
 - Lead sources are config-driven too: dealer-scoped `lead_sources` (lazy-seeded defaults, `api-server/src/lib/lead-sources.ts`); `GET /leads/sources` feeds the New Lead form dropdown; sources flagged `isSocial` REQUIRE `sourceDetail` (facebook/instagram/tiktok/youtube/whatsapp/other) — POST /leads 422s without it. Admin CRUD at Settings → Lead Sources (`/admin/lead-sources`).
 - Per-dealer tax rules: `dealer_taxes` (percent|fixed, optional threshold, effectiveFrom, sortOrder; lazy-seeded VAT/duty/excise defaults) managed at Settings → Taxes (`/admin/taxes` CRUD). Deterministic config only — quote-side tax application is downstream.
 - Deal stage transitions in `PATCH /deals/:id` are guarded by an allowed-transition map; out-of-order jumps 422. Deposit required before Sold; VIN double-sell blocked; licence + waiver captured before test drive; below-floor discounts need manager approval (Reviews).
-- Approvals page is relabelled "Reviews", grouped Needs-your-approval (below_floor_price, capital_order, refund_release) vs Exceptions.
+- Approvals page is relabelled "Reviews", grouped Needs-your-approval (below_floor_price, capital_order, refund_release) vs Exceptions. `stage_advance` gates are lead-local: they are EXCLUDED from /approvals and instead render as actionable GateCards (Approve/Dismiss inline) in the lead workbench's Action Chain, tagged to that lead.
 - `components/action-queue.tsx` ("Your day" ranked queue, cap 6) mounts on Pipeline + dashboard; dashboard KPI cards deep-link (deals/pipeline/tasks).
 
 ## Lead detail (`pages/lead-detail.tsx`, route `/lead/:id`)

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "wouter";
 import {
   useListTasks,
   useCreateTask,
@@ -14,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import {
   ArrowUpRight,
   Check,
-  CircleAlert,
   ClipboardList,
   Loader2,
   Plus,
@@ -25,15 +23,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-
-const GATE_TYPE_LABEL: Record<string, string> = {
-  below_floor_price: "Below floor price",
-  credit_decline: "Credit decline",
-  capital_order: "Capital order",
-  gra_filing: "GRA filing",
-  refund_release: "Refund release",
-  stage_advance: "Stage advance",
-};
+import { GateCard, GATE_LABEL } from "@/components/gate-card";
 
 export function ActionChain({
   lead,
@@ -42,6 +32,7 @@ export function ActionChain({
   onOpenWorkflow,
   canEdit,
   pendingGates,
+  onGateResolved,
 }: {
   lead: Lead;
   stage: StageNavStage | undefined;
@@ -49,6 +40,7 @@ export function ActionChain({
   onOpenWorkflow: () => void;
   canEdit: boolean;
   pendingGates: any[];
+  onGateResolved?: () => void;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -171,30 +163,23 @@ export function ActionChain({
             <div className="text-xs font-bold uppercase tracking-widest text-amber-500 mb-3">
               Manager Review Required
             </div>
-            <ul className="space-y-2">
+            <ul className="space-y-3">
               {sortedGates.map((g) => {
                 const atCurrentStage =
                   g.chainStageKey == null || g.chainStageKey === stage?.key;
                 return (
-                  <li key={g.id}>
-                    <Link
-                      href="/approvals"
-                      className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 hover:border-amber-500/40 transition-colors group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <CircleAlert className="w-4 h-4 text-amber-500 shrink-0" />
-                        <span className="font-semibold text-amber-500/90">{g.title}</span>
-                        {!atCurrentStage && g.chainStageLabel && (
-                          <span className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ring-1 ring-amber-500/30 text-amber-500/80 whitespace-nowrap">
-                            {g.chainStageLabel} stage
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-amber-500/70 sm:ml-auto">
-                        {GATE_TYPE_LABEL[g.type] ?? g.type}
-                      </div>
-                      <ArrowUpRight className="hidden sm:block w-3.5 h-3.5 text-amber-500/50 group-hover:text-amber-500 shrink-0" />
-                    </Link>
+                  <li key={g.id} className="space-y-1.5">
+                    {!atCurrentStage && g.chainStageLabel && (
+                      <span className="inline-flex text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full ring-1 ring-amber-500/30 text-amber-500/80 whitespace-nowrap">
+                        {g.chainStageLabel} stage
+                      </span>
+                    )}
+                    <GateCard
+                      gate={g}
+                      label={GATE_LABEL[g.type]}
+                      showCustomerLink={false}
+                      onResolved={onGateResolved}
+                    />
                   </li>
                 );
               })}

@@ -1161,6 +1161,12 @@ export default function LeadDetail() {
                     onOpenWorkflow={() => setWorkflowOpen(true)}
                     canEdit={canEdit}
                     pendingGates={chainGates}
+                    onGateResolved={() => {
+                      qc.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });
+                      qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
+                      qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+                      qc.invalidateQueries({ queryKey: getListDealsQueryKey() });
+                    }}
                   />
 
                   <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
@@ -2455,13 +2461,13 @@ export default function LeadDetail() {
             <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-5">
               <div className="flex items-center gap-2 mb-3 text-amber-500">
                 <span className="text-sm font-semibold tracking-tight">
-                  Pending Manager Gates
+                  Pending Manager Reviews
                 </span>
                 <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20">
                   {pendingGates.length}
                 </span>
               </div>
-              <ul className="space-y-2 mb-3">
+              <ul className="space-y-1.5 mb-3">
                 {pendingGates.map((g) => (
                   <li
                     key={g.id}
@@ -2471,13 +2477,13 @@ export default function LeadDetail() {
                   </li>
                 ))}
               </ul>
-              <Link
-                href="/approvals"
+              <button
+                onClick={() => setTab("overview")}
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
               >
-                Review in Approvals
+                Review in the Action Chain
                 <ArrowUpRight className="w-3 h-3" />
-              </Link>
+              </button>
             </div>
           )}
 

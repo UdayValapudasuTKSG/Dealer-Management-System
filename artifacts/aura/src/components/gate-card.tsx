@@ -61,10 +61,12 @@ export function GateCard({
   gate,
   label,
   showCustomerLink = true,
+  onResolved,
 }: {
   gate: Gate;
   label?: string;
   showCustomerLink?: boolean;
+  onResolved?: () => void;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -94,6 +96,7 @@ export function GateCard({
           title: `Decision ${verb}`,
           description: "The connected process has been advanced.",
         });
+        onResolved?.();
       },
       onError: () => {
         toast({

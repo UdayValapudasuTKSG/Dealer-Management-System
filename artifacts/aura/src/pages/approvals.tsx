@@ -10,16 +10,19 @@ const APPROVAL_TYPES = new Set([
   "below_floor_price",
   "capital_order",
   "refund_release",
-  "stage_advance",
 ]);
 
 export default function Approvals() {
-  const { data: gates, isLoading } = useListGates({ status: "pending" });
+  const { data: allGates, isLoading } = useListGates({ status: "pending" });
 
-  const total = gates?.length ?? 0;
-  const highCount = gates?.filter((g) => g.priority === "high").length ?? 0;
-  const approvals = (gates ?? []).filter((g) => APPROVAL_TYPES.has(g.type));
-  const exceptions = (gates ?? []).filter((g) => !APPROVAL_TYPES.has(g.type));
+  // Stage advances are reviewed on the lead itself (lead workbench Action
+  // Chain) — they are lead-specific, not standalone sign-offs.
+  const gates = (allGates ?? []).filter((g) => g.type !== "stage_advance");
+
+  const total = gates.length;
+  const highCount = gates.filter((g) => g.priority === "high").length;
+  const approvals = gates.filter((g) => APPROVAL_TYPES.has(g.type));
+  const exceptions = gates.filter((g) => !APPROVAL_TYPES.has(g.type));
 
   return (
     <>
