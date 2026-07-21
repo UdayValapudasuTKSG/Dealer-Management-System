@@ -10,6 +10,7 @@ const APPROVAL_TYPES = new Set([
   "below_floor_price",
   "capital_order",
   "refund_release",
+  "stage_advance",
 ]);
 
 export default function Approvals() {

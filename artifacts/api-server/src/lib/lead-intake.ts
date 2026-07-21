@@ -9,6 +9,7 @@ import {
 import { notifyUsers } from "./email";
 import { onLeadCreated } from "./email-triggers";
 import { autoAssignLead } from "./lead-assignment";
+import { runIntakeOrchestration } from "./intake-orchestration";
 import { autoQuoteOnLeadCreated } from "./quotes";
 import { dealerStaffIdsByRole } from "./tenancy";
 import { logger } from "./logger";
@@ -109,6 +110,9 @@ export async function createInboundLead(opts: {
 
   // Sales agent routes the lead to the least-loaded advisor automatically.
   const assigned = await autoAssignLead(lead!);
+
+  // Intake agent: nearest showroom + WhatsApp quote share (fire-and-forget).
+  runIntakeOrchestration(assigned ?? lead!);
 
   try {
     const coordinatorIds = await dealerStaffIdsByRole(opts.dealerId, [

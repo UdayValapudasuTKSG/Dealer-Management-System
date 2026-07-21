@@ -30,6 +30,7 @@ export const GATE_LABEL: Record<string, string> = {
   capital_order: "Capital Order",
   gra_filing: "GRA Filing",
   refund_release: "Refund Release",
+  stage_advance: "Stage Advance",
 };
 
 const PRIORITY_META: Record<

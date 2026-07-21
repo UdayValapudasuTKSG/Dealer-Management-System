@@ -12,6 +12,7 @@ import {
 import { mapTwilioDialStatus, twilioVoiceConfig } from "../lib/telephony";
 import { notifyUser } from "../lib/email";
 import { logger } from "../lib/logger";
+import { autoAnalyzeCall } from "../lib/call-analysis";
 import {
   createInboundLead,
   matchVehicleByText,
@@ -737,6 +738,10 @@ router.post(
               refType: "lead",
               refId: lead.id,
             });
+
+            // Sentiment loop: score the finished call automatically and note
+            // the summary on the lead (kill-switch aware, fire-and-forget).
+            if (status === "completed") autoAnalyzeCall(call.id);
           }
         }
       }

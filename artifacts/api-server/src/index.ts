@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startEmailWorker } from "./lib/email";
 import { startGmailIntakeWorker } from "./lib/gmail-intake";
+import { startAdvanceProposalWorker } from "./lib/advance-proposals";
 import { migrateLegacyAttachments } from "./lib/documents-migrate";
 import { startMetricsFlusher } from "./lib/metrics";
 import { logPendingInfraSeams } from "./lib/infra-seams";
@@ -29,6 +30,7 @@ app.listen(port, (err) => {
   logger.info({ port }, "Server listening");
   startEmailWorker();
   startGmailIntakeWorker();
+  startAdvanceProposalWorker();
   void migrateLegacyAttachments();
   startMetricsFlusher();
   logPendingInfraSeams();

@@ -335,3 +335,35 @@
 
 /* Light-mode legibility for violet status text */
 :root.light [class~="text-violet-400"] { color: #7c3aed; }
+
+/* AI document scan animation (extraction in progress) */
+@keyframes aura-doc-scan {
+  0% { top: -10%; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { top: 105%; opacity: 0; }
+}
+@keyframes aura-doc-scan-glow {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.6; }
+}
+.aura-scan-frame { position: relative; overflow: hidden; }
+.aura-scan-frame::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 34%;
+  top: -10%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(169, 113, 66, 0.16) 42%,
+    rgba(169, 113, 66, 0.55) 50%,
+    rgba(169, 113, 66, 0.16) 58%,
+    transparent
+  );
+  animation: aura-doc-scan 2.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.aura-scan-glow { animation: aura-doc-scan-glow 2.2s ease-in-out infinite; }

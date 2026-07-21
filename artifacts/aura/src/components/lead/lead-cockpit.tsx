@@ -32,6 +32,7 @@ const GATE_TYPE_LABEL: Record<string, string> = {
   capital_order: "Capital order",
   gra_filing: "GRA filing",
   refund_release: "Refund release",
+  stage_advance: "Stage advance",
 };
 
 export function ActionChain({

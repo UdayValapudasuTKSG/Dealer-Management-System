@@ -6,9 +6,15 @@ import {
   dealsTable,
   financeApplicationsTable,
   vehiclesTable,
+  leadsTable,
   timelineEventsTable,
   type Gate,
 } from "@workspace/db";
+import {
+  ADVANCE_TARGET_PHASE,
+  REVIEW_STAGE_LABEL,
+  type AdvanceStage,
+} from "../lib/stage-review";
 import { activeDealerId } from "../middlewares/rbac";
 import {
   ListGatesQueryParams,
@@ -195,6 +201,52 @@ async function applyCascade(
         detail: `Reservation deposit of $${effectiveAmount.toLocaleString()} released to the customer${
           vinReturned ? "; the VIN is back in available stock" : ""
         }.`,
+      };
+    }
+    case "stage_advance": {
+      // One-click pipeline progression proposed by the Pipeline agent: the
+      // target stage is carried in the gate's evidence.
+      const stage = gate.evidence.find((e) => e.label === "targetStage")
+        ?.value as AdvanceStage | undefined;
+      const targetPhase = stage ? ADVANCE_TARGET_PHASE[stage] : undefined;
+      if (gate.refType === "lead" && gate.refId && stage && targetPhase) {
+        const [lead] = await tx
+          .select()
+          .from(leadsTable)
+          .where(
+            and(
+              eq(leadsTable.id, gate.refId),
+              eq(leadsTable.dealerId, gate.dealerId),
+            ),
+          );
+        if (lead) {
+          await tx
+            .update(leadsTable)
+            .set({
+              phase: targetPhase,
+              stageEnteredAt: new Date(),
+              ...(stage === "sold" ? { status: "converted" } : {}),
+            })
+            .where(eq(leadsTable.id, lead.id));
+          // Sold locks the VIN — mirror the manual advance endpoint.
+          if (stage === "sold" && lead.interestedVehicleId) {
+            await tx
+              .update(vehiclesTable)
+              .set({ status: "reserved" })
+              .where(
+                and(
+                  eq(vehiclesTable.id, lead.interestedVehicleId),
+                  eq(vehiclesTable.dealerId, gate.dealerId),
+                  eq(vehiclesTable.status, "available"),
+                ),
+              );
+          }
+        }
+      }
+      const stageLabel = stage ? (REVIEW_STAGE_LABEL[stage] ?? stage) : "next stage";
+      return {
+        title: `Stage advance approved — ${stageLabel}`,
+        detail: `${gate.customerName ?? "The lead"} moved forward to ${stageLabel}; every checklist criterion had been verified by the Pipeline agent.`,
       };
     }
     default:

@@ -15,4 +15,5 @@ export const GateType = {
   capital_order: 'capital_order',
   gra_filing: 'gra_filing',
   refund_release: 'refund_release',
+  stage_advance: 'stage_advance',
 } as const;

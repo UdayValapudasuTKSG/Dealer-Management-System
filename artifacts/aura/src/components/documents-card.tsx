@@ -80,7 +80,13 @@ function DocumentRow({
         isHistory && "opacity-70",
       )}
     >
-      <span className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+      <span
+        className={cn(
+          "w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0",
+          doc.extractionStatus === "pending" &&
+            "aura-scan-frame ring-1 ring-primary/40",
+        )}
+      >
         <FileText className="w-4 h-4" />
       </span>
       <div className="min-w-0 flex-1">
@@ -90,8 +96,8 @@ function DocumentRow({
             v{doc.version}
           </span>
           {doc.extractionStatus === "pending" && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-primary shrink-0">
-              <Loader2 className="w-3 h-3 animate-spin" /> A5 reading…
+            <span className="aura-scan-glow inline-flex items-center gap-1 text-[10px] font-semibold text-primary shrink-0 px-1.5 py-0.5 rounded-full bg-primary/10 ring-1 ring-primary/30">
+              <Bot className="w-3 h-3" /> AI scanning document…
             </span>
           )}
         </div>

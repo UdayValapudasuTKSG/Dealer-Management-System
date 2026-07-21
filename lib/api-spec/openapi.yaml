@@ -7537,7 +7537,7 @@ components:
       required: [id, type, status, priority, title, summary, evidence, createdAt]
       properties:
         id: { type: integer }
-        type: { type: string, enum: [below_floor_price, credit_decline, capital_order, gra_filing, refund_release] }
+        type: { type: string, enum: [below_floor_price, credit_decline, capital_order, gra_filing, refund_release, stage_advance] }
         status: { type: string, enum: [pending, approved, adjusted, dismissed] }
         priority: { type: string, enum: [high, normal, low] }
         customerId: { type: ["integer", "null"] }
