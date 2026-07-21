@@ -73,7 +73,7 @@ export function statusBadgeClass(status: string): string {
     case "under_review":
       return "bg-amber-500/15 text-amber-400";
     case "submitted":
-      return "bg-sky-500/15 text-sky-400";
+      return "bg-violet-500/15 text-violet-400";
     default:
       return "bg-foreground/10 text-muted-foreground";
   }

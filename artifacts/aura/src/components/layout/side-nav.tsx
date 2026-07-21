@@ -124,7 +124,7 @@ function ThemeToggle() {
             animate={{ y: 0, opacity: 1, rotate: 0 }}
             exit={{ y: -14, opacity: 0, rotate: 90 }}
             transition={{ duration: 0.25 }}
-            className="relative text-sky-300"
+            className="relative text-gold"
           >
             <Moon className="h-4 w-4" />
           </motion.span>
@@ -237,7 +237,7 @@ function UserCard({ collapsed = false }: { collapsed?: boolean }) {
       className="h-9 w-9 rounded-full object-cover shrink-0"
     />
   ) : (
-    <span className="h-9 w-9 rounded-full bg-primary/25 text-sky-200 flex items-center justify-center text-sm font-bold shrink-0">
+    <span className="h-9 w-9 rounded-full bg-primary/25 text-gold flex items-center justify-center text-sm font-bold shrink-0">
       {initial}
     </span>
   );
@@ -321,12 +321,12 @@ function NavContent({
         )}
       >
         <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/20 ring-1 ring-primary/30 transition-transform group-hover:scale-105">
-          <Sparkles className="h-5 w-5 text-sky-300" />
+          <Sparkles className="h-5 w-5 text-gold" />
         </span>
         {!collapsed && (
           <div className="flex flex-col leading-none whitespace-nowrap overflow-hidden">
             <span className="text-lg font-bold tracking-tight text-white">
-              AURA<span className="text-sky-300">.OS</span>
+              AURA<span className="text-gold">.OS</span>
             </span>
             <span className="mt-1 text-[9px] font-medium uppercase tracking-[0.22em] text-white/40">
               Dealership OS

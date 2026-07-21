@@ -36,7 +36,7 @@ const MODULES = [
 
 const ACTION_COLORS: Record<string, string> = {
   create: "border-emerald-500/40 text-emerald-400",
-  update: "border-sky-500/40 text-sky-400",
+  update: "border-violet-500/40 text-violet-400",
   delete: "border-red-500/40 text-red-400",
   approve: "border-emerald-500/40 text-emerald-400",
   reject: "border-red-500/40 text-red-400",

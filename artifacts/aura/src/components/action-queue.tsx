@@ -26,7 +26,7 @@ const KIND_UI: Record<
 > = {
   gate: { icon: ShieldCheck, tone: "text-destructive", bgTone: "bg-destructive/10", action: "Review" },
   contact: { icon: PhoneCall, tone: "text-emerald-500", bgTone: "bg-emerald-500/10", action: "Call" },
-  testDrive: { icon: CalendarClock, tone: "text-sky-500", bgTone: "bg-sky-500/10", action: "Prep" },
+  testDrive: { icon: CalendarClock, tone: "text-fuchsia-500", bgTone: "bg-fuchsia-500/10", action: "Prep" },
   stalled: { icon: AlertCircle, tone: "text-amber-500", bgTone: "bg-amber-500/10", action: "Nudge" },
   quote: { icon: MailQuestion, tone: "text-violet-500", bgTone: "bg-violet-500/10", action: "Follow" },
   deposit: { icon: Landmark, tone: "text-orange-500", bgTone: "bg-orange-500/10", action: "Open" },

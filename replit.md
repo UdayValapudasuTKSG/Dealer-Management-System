@@ -53,7 +53,7 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 
 ## User preferences
 
-- LIGHT mode default (2026-07 redesign): soft neutral warm-white canvas (`--background: 40 20% 97%`, sky-blue retired as too strong) + black-and-white glass cards + always-dark left sidebar; DARK mode via Sun/Moon toggle in the sidebar user card (persisted in localStorage). Dark radial body overlay is gated under `.dark body` in index.css.
+- Metallic Bronze theme (2026-07): brand accent is Metallic Bronze #A97142 (`--primary: 27 44% 46%`); blue is fully retired from the UI (kept only in chart SERIES_COLORS). LIGHT mode default: warm ivory canvas with faint bronze radial glows + white glass cards + always-dark sidebar; DARK mode is near-black glass with bronze glows, toggled via Sun/Moon in the sidebar user card (localStorage). `--gold` token = polished bronze highlight, used for brand/status accents (replaces old sky/indigo classes). Clerk appearance colors live in `App.tsx` (`clerkAppearance`).
 - Strongly car/automotive-themed and aesthetic; use real images. No emojis in the UI.
 - Keep all features end-to-end — no dead-end clicks.
 

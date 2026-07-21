@@ -34,7 +34,7 @@ import {
 const STATUS_STYLE: Record<string, string> = {
   sent: "border-emerald-500/40 text-emerald-400",
   queued: "border-amber-500/40 text-amber-400",
-  sending: "border-sky-500/40 text-sky-400",
+  sending: "border-violet-500/40 text-violet-400",
   failed: "border-red-500/50 text-red-400",
 };
 

@@ -144,7 +144,7 @@ export default function CustomerDetail() {
                 {customer.loyaltyTier}
               </div>
               {customer.accountType === "business" && (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-indigo-500/10 text-indigo-500">
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest bg-gold/15 text-gold">
                   <Building2 className="w-3.5 h-3.5" />
                   Business
                 </div>

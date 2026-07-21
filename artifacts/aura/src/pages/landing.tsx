@@ -348,7 +348,7 @@ export default function Landing() {
               className="text-5xl md:text-7xl lg:text-[5.5rem] font-light tracking-tight text-white leading-[1.05]"
             >
               Your dream car. <br />
-              <span className="font-semibold text-[#B4D6E3]">Delivered anywhere in Guyana.</span>
+              <span className="font-semibold text-gold">Delivered anywhere in Guyana.</span>
             </motion.h1>
 
             <motion.p
@@ -395,10 +395,10 @@ export default function Landing() {
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 0.8 }}
             >
-              <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-[#7F9DB1] mb-6">Proven Track Record</h2>
+              <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-gold mb-6">Proven Track Record</h2>
               <h3 className="text-4xl md:text-5xl font-light tracking-tight leading-tight text-white mb-8">
                 Over 5,000 successful <br />
-                <span className="font-semibold text-[#B4D6E3]">deliveries completed.</span>
+                <span className="font-semibold text-gold">deliveries completed.</span>
               </h3>
               <p className="text-lg text-zinc-400 font-light leading-relaxed mb-10">
                 AURA Motors isn't just a showroom. We operate a sophisticated nationwide logistics network that ensures your vehicle arrives in pristine condition, whether you are in central Georgetown or the deep interior.

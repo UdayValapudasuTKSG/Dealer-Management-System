@@ -18,7 +18,7 @@ import { ViewControls } from "@/components/view-controls";
 
 const TypeBadge = ({ type }: { type?: string }) =>
   type === "business" ? (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-500 shrink-0">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gold/15 text-gold shrink-0">
       <Building2 className="w-3 h-3" />
       Business
     </span>

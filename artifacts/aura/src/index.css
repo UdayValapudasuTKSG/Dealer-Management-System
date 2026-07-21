@@ -56,51 +56,51 @@
 }
 
 :root {
-  /* Deep Blue Dark Mode (trust + premium) */
-  --background: 216 20% 5%;
-  --foreground: 0 0% 96%;
+  /* Metallic Bronze Dark Mode (#A97142 on near-black glass) */
+  --background: 24 12% 4%;
+  --foreground: 30 8% 96%;
 
-  --card: 216 20% 8% / 0.72;
-  --card-foreground: 0 0% 96%;
-  --card-border: 0 0% 100% / 0.08;
+  --card: 26 14% 8% / 0.72;
+  --card-foreground: 30 8% 96%;
+  --card-border: 30 40% 80% / 0.09;
 
-  --popover: 216 20% 7% / 0.96;
-  --popover-foreground: 0 0% 96%;
-  --popover-border: 0 0% 100% / 0.1;
+  --popover: 26 14% 7% / 0.96;
+  --popover-foreground: 30 8% 96%;
+  --popover-border: 30 40% 80% / 0.12;
 
-  /* Classic Deep Blue (#0D3B66) */
-  --primary: 209 78% 23%;
+  /* Metallic Bronze (#A97142) */
+  --primary: 27 44% 46%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 216 20% 13%;
-  --secondary-foreground: 0 0% 96%;
+  --secondary: 26 12% 13%;
+  --secondary-foreground: 30 8% 96%;
 
-  --muted: 216 20% 15%;
-  --muted-foreground: 0 0% 62%;
+  --muted: 26 12% 15%;
+  --muted-foreground: 30 6% 63%;
 
-  /* Dusty Blue Accent (#7F9DB1) */
-  --accent: 204 26% 60% / 0.16;
-  --accent-foreground: 204 26% 75%;
+  /* Warm bronze accent */
+  --accent: 27 44% 55% / 0.16;
+  --accent-foreground: 30 55% 72%;
 
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 0 0% 100% / 0.09;
-  --input: 0 0% 100% / 0.1;
-  --ring: 209 78% 23%;
+  --border: 30 40% 85% / 0.1;
+  --input: 30 40% 85% / 0.11;
+  --ring: 27 44% 46%;
 
-  --sidebar: 216 20% 6% / 0.85;
-  --sidebar-foreground: 0 0% 92%;
-  --sidebar-border: 0 0% 100% / 0.07;
-  --sidebar-primary: 209 78% 23%;
+  --sidebar: 24 14% 5% / 0.88;
+  --sidebar-foreground: 30 8% 92%;
+  --sidebar-border: 30 40% 80% / 0.08;
+  --sidebar-primary: 27 44% 46%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 204 26% 60% / 0.16;
-  --sidebar-accent-foreground: 204 26% 75%;
-  --sidebar-ring: 209 78% 23%;
+  --sidebar-accent: 27 44% 55% / 0.16;
+  --sidebar-accent-foreground: 30 55% 72%;
+  --sidebar-ring: 27 44% 46%;
 
-  /* Soft Sky Highlights (#B4D6E3) */
-  --gold: 197 45% 80%;
-  --gold-foreground: 216 20% 10%;
+  /* Polished bronze highlight */
+  --gold: 32 58% 68%;
+  --gold-foreground: 24 12% 8%;
 
   --app-font-sans: 'Outfit', sans-serif;
   --app-font-mono: 'JetBrains Mono', monospace;
@@ -109,71 +109,71 @@
 
 /* .dark kept in sync so `dark` class usage stays consistent */
 .dark {
-  --background: 216 20% 5%;
-  --foreground: 0 0% 96%;
-  --card: 216 20% 8% / 0.72;
-  --card-foreground: 0 0% 96%;
-  --card-border: 0 0% 100% / 0.08;
-  --popover: 216 20% 7% / 0.96;
-  --popover-foreground: 0 0% 96%;
-  --popover-border: 0 0% 100% / 0.1;
-  --primary: 209 78% 23%;
+  --background: 24 12% 4%;
+  --foreground: 30 8% 96%;
+  --card: 26 14% 8% / 0.72;
+  --card-foreground: 30 8% 96%;
+  --card-border: 30 40% 80% / 0.09;
+  --popover: 26 14% 7% / 0.96;
+  --popover-foreground: 30 8% 96%;
+  --popover-border: 30 40% 80% / 0.12;
+  --primary: 27 44% 46%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 216 20% 13%;
-  --secondary-foreground: 0 0% 96%;
-  --muted: 216 20% 15%;
-  --muted-foreground: 0 0% 62%;
-  --accent: 204 26% 60% / 0.16;
-  --accent-foreground: 204 26% 75%;
+  --secondary: 26 12% 13%;
+  --secondary-foreground: 30 8% 96%;
+  --muted: 26 12% 15%;
+  --muted-foreground: 30 6% 63%;
+  --accent: 27 44% 55% / 0.16;
+  --accent-foreground: 30 55% 72%;
   --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
-  --border: 0 0% 100% / 0.09;
-  --input: 0 0% 100% / 0.1;
-  --ring: 209 78% 23%;
-  --sidebar: 216 20% 6% / 0.85;
-  --sidebar-foreground: 0 0% 92%;
-  --sidebar-border: 0 0% 100% / 0.07;
-  --sidebar-primary: 209 78% 23%;
+  --border: 30 40% 85% / 0.1;
+  --input: 30 40% 85% / 0.11;
+  --ring: 27 44% 46%;
+  --sidebar: 24 14% 5% / 0.88;
+  --sidebar-foreground: 30 8% 92%;
+  --sidebar-border: 30 40% 80% / 0.08;
+  --sidebar-primary: 27 44% 46%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 204 26% 60% / 0.16;
-  --sidebar-accent-foreground: 204 26% 75%;
-  --sidebar-ring: 209 78% 23%;
-  --gold: 197 45% 80%;
-  --gold-foreground: 216 20% 10%;
+  --sidebar-accent: 27 44% 55% / 0.16;
+  --sidebar-accent-foreground: 30 55% 72%;
+  --sidebar-ring: 27 44% 46%;
+  --gold: 32 58% 68%;
+  --gold-foreground: 24 12% 8%;
 }
 
-/* Light mode (DEFAULT) — elegant soft cream canvas with high-contrast elements */
+/* Light mode (DEFAULT) — warm ivory canvas, bronze accents, white glass */
 :root.light {
-  --background: 40 20% 97%;
-  --foreground: 216 10% 8%;
-  --card: 0 0% 100% / 0.95;
-  --card-foreground: 216 10% 8%;
-  --card-border: 210 5% 15% / 0.05;
-  --popover: 0 0% 100% / 0.98;
-  --popover-foreground: 216 10% 8%;
-  --popover-border: 210 5% 15% / 0.08;
-  --primary: 216 10% 8%;
+  --background: 36 30% 96%;
+  --foreground: 24 12% 9%;
+  --card: 0 0% 100% / 0.82;
+  --card-foreground: 24 12% 9%;
+  --card-border: 27 30% 25% / 0.08;
+  --popover: 0 0% 100% / 0.97;
+  --popover-foreground: 24 12% 9%;
+  --popover-border: 27 30% 25% / 0.1;
+  --primary: 27 48% 40%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 40 10% 92%;
-  --secondary-foreground: 216 10% 12%;
-  --muted: 40 10% 90%;
-  --muted-foreground: 215 10% 45%;
-  --accent: 40 15% 90% / 0.5;
-  --accent-foreground: 216 10% 8%;
+  --secondary: 34 24% 91%;
+  --secondary-foreground: 24 12% 12%;
+  --muted: 34 20% 89%;
+  --muted-foreground: 26 8% 42%;
+  --accent: 30 40% 88% / 0.6;
+  --accent-foreground: 27 48% 32%;
   --destructive: 0 74% 46%;
   --destructive-foreground: 0 0% 100%;
-  --border: 0 0% 0% / 0.06;
-  --input: 0 0% 0% / 0.08;
-  --ring: 216 10% 8%;
-  --sidebar: 0 0% 100%;
-  --sidebar-foreground: 216 20% 20%;
-  --sidebar-border: 0 0% 0% / 0.08;
-  --sidebar-primary: 216 10% 8%;
+  --border: 27 30% 20% / 0.09;
+  --input: 27 30% 20% / 0.11;
+  --ring: 27 48% 40%;
+  --sidebar: 24 14% 5% / 0.95;
+  --sidebar-foreground: 30 8% 92%;
+  --sidebar-border: 30 40% 80% / 0.08;
+  --sidebar-primary: 27 44% 46%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 40 15% 90% / 0.5;
-  --sidebar-accent-foreground: 216 10% 8%;
-  --sidebar-ring: 216 10% 8%;
-  --gold: 35 30% 65%;
+  --sidebar-accent: 27 44% 55% / 0.16;
+  --sidebar-accent-foreground: 30 55% 72%;
+  --sidebar-ring: 27 44% 46%;
+  --gold: 28 52% 38%;
   --gold-foreground: 0 0% 100%;
 }
 
@@ -185,11 +185,11 @@
     @apply font-sans antialiased bg-background text-foreground selection:bg-primary/30 selection:text-foreground;
   }
   .dark body {
-    background-color: hsl(0 0% 4%);
+    background-color: hsl(20 10% 3%);
     background-image:
-      radial-gradient(circle at 12% 8%, rgba(127, 157, 177, 0.08) 0%, transparent 42%),
-      radial-gradient(circle at 88% 92%, rgba(127, 157, 177, 0.06) 0%, transparent 45%),
-      radial-gradient(circle at 50% 50%, rgba(20, 20, 20, 0.6) 0%, transparent 60%);
+      radial-gradient(ellipse at 15% 0%, rgba(169, 113, 66, 0.14) 0%, transparent 45%),
+      radial-gradient(ellipse at 85% 100%, rgba(169, 113, 66, 0.1) 0%, transparent 48%),
+      radial-gradient(circle at 50% 50%, rgba(18, 14, 10, 0.6) 0%, transparent 60%);
     background-attachment: fixed;
   }
 }
@@ -216,17 +216,17 @@
 .glow-brand,
 .glow-red,
 .glow-copper {
-  box-shadow: 0 0 0 1px rgba(127, 157, 177, 0.25), 0 12px 40px -12px rgba(127, 157, 177, 0.55);
+  box-shadow: 0 0 0 1px rgba(169, 113, 66, 0.3), 0 12px 40px -12px rgba(169, 113, 66, 0.6);
 }
 .text-glow {
-  text-shadow: 0 0 24px rgba(127, 157, 177, 0.35);
+  text-shadow: 0 0 24px rgba(169, 113, 66, 0.4);
 }
 
 /* CopilotKit — copper / black premium dark theme */
 .copilotKitSidebar,
 .copilotKitPopup,
 .copilotKitWindow {
-  --copilot-kit-primary-color: hsl(209 65% 42%);
+  --copilot-kit-primary-color: hsl(27 44% 46%);
   --copilot-kit-contrast-color: hsl(0 0% 100%);
   --copilot-kit-background-color: rgba(14, 14, 14, 0.94);
   --copilot-kit-secondary-color: rgba(28, 28, 28, 0.9);
@@ -240,7 +240,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 1.25rem !important;
   overflow: hidden;
-  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(127, 157, 177, 0.15);
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(169, 113, 66, 0.2);
 }
 
 /* ============================================================
@@ -250,10 +250,11 @@
    overlays so surfaces and hairlines stay legible on white.
    ============================================================ */
 :root.light body {
-  background-color: hsl(202 45% 92%);
+  background-color: hsl(36 30% 96%);
   background-image:
-    radial-gradient(circle at 12% 8%, rgba(180, 214, 227, 0.5) 0%, transparent 42%),
-    radial-gradient(circle at 88% 92%, rgba(180, 214, 227, 0.35) 0%, transparent 45%);
+    radial-gradient(ellipse at 15% 0%, rgba(169, 113, 66, 0.1) 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 100%, rgba(169, 113, 66, 0.07) 0%, transparent 48%);
+  background-attachment: fixed;
 }
 
 :root.light .glass {
@@ -273,7 +274,7 @@
 :root.light .glow-brand,
 :root.light .glow-red,
 :root.light .glow-copper {
-  box-shadow: 0 0 0 1px rgba(127, 157, 177, 0.2), 0 12px 40px -12px rgba(127, 157, 177, 0.35);
+  box-shadow: 0 0 0 1px rgba(169, 113, 66, 0.22), 0 12px 40px -12px rgba(169, 113, 66, 0.4);
 }
 
 /* Faint white surface overlays -> faint dark surface overlays */
@@ -310,7 +311,7 @@
 :root.light [class~="text-red-400/80"] { color: rgb(220 38 38 / 0.85); }
 :root.light [class~="text-amber-300"],
 :root.light [class~="text-amber-400"] { color: #d97706; }
-:root.light [class~="text-sky-400"] { color: #0284c7; }
+:root.light [class~="text-sky-400"] { color: #a16207; }
 :root.light [class~="text-orange-400"] { color: #ea580c; }
 :root.light [class~="text-slate-400"] { color: #475569; }
 :root.light [class~="hover:text-emerald-300"]:hover { color: #047857; }
@@ -329,5 +330,8 @@
 :root.light .copilotKitWindow {
   background: rgba(255, 255, 255, 0.97);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(127, 157, 177, 0.1);
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(169, 113, 66, 0.12);
 }
+
+/* Light-mode legibility for violet status text */
+:root.light [class~="text-violet-400"] { color: #7c3aed; }

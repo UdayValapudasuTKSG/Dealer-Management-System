@@ -476,7 +476,7 @@ export default function Finance() {
                         inv.status === "paid" ? "bg-emerald-500/15 text-emerald-400"
                           : inv.status === "partially_paid" ? "bg-amber-500/15 text-amber-400"
                           : inv.status === "void" ? "bg-foreground/10 text-muted-foreground"
-                          : "bg-sky-500/15 text-sky-400"
+                          : "bg-violet-500/15 text-violet-400"
                       }`}>
                         {inv.status.replace("_", " ")}
                       </Badge>

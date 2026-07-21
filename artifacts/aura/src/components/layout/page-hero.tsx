@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 /**
  * Compact page header used at the top of module pages (2026-07 light
  * redesign — the old full-bleed black cinematic band is gone). Renders a
- * slim title row that sits on the sky-blue canvas: eyebrow + icon chip,
+ * slim title row that sits on the warm ivory canvas: eyebrow + icon chip,
  * title, subtitle, and an optional action slot on the right.
  *
  * The `video` prop is accepted for backwards compatibility but IGNORED —
