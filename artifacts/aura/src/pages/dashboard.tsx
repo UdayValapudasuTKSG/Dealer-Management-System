@@ -92,16 +92,31 @@ function TriageRow({ item }: { item: TriageItem }) {
     <button
       onClick={() => navigate(item.href)}
       className={cn(
-        "group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all",
-        isUrgent
-          ? "bg-foreground text-background border-transparent"
-          : "bg-card text-card-foreground border-border/60 hover:border-foreground/20 hover:shadow-sm",
+        "group relative w-full flex items-center gap-3 pl-4 pr-3 py-2.5 rounded-xl border text-left overflow-hidden transition-all",
+        "bg-card text-card-foreground hover:shadow-md hover:-translate-y-px",
+        isOverdue
+          ? "border-red-500/25 hover:border-red-500/40"
+          : isUrgent
+            ? "border-gold/30 hover:border-gold/50"
+            : "border-border/60 hover:border-foreground/20",
       )}
     >
+      {/* Urgency accent edge */}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute left-0 top-0 bottom-0 w-[3px]",
+          isOverdue ? "bg-red-500" : isUrgent ? "bg-gold" : "bg-transparent",
+        )}
+      />
       <div
         className={cn(
-          "w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] tracking-wider",
-          isUrgent ? "bg-white/20 text-white" : "bg-foreground/5 text-foreground",
+          "w-9 h-9 rounded-full flex items-center justify-center shrink-0 font-bold text-[10px] tracking-wider ring-1",
+          isOverdue
+            ? "bg-red-500/10 text-red-600 dark:text-red-400 ring-red-500/20"
+            : isUrgent
+              ? "bg-gold/10 text-gold ring-gold/25"
+              : "bg-foreground/5 text-foreground ring-border/50",
         )}
       >
         {getInitials(item.context)}
@@ -110,29 +125,28 @@ function TriageRow({ item }: { item: TriageItem }) {
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm truncate">{item.context}</span>
           {isOverdue && (
-            <span className="inline-flex items-center gap-1 bg-red-500/20 text-red-500 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
+            <span className="inline-flex items-center bg-red-500/10 text-red-600 dark:text-red-400 ring-1 ring-red-500/25 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider whitespace-nowrap">
               Overdue
             </span>
           )}
         </div>
-        <div
-          className={cn(
-            "text-[11px] truncate mt-0.5",
-            isUrgent ? "text-background/60" : "text-muted-foreground",
-          )}
-        >
+        <div className="text-[11px] truncate mt-0.5 text-muted-foreground">
           {item.subContext}
           {item.assignee ? ` · w/ ${item.assignee}` : ""}
         </div>
       </div>
       <span
         className={cn(
-          "flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest shrink-0",
-          isUrgent ? "text-background/70" : "text-muted-foreground group-hover:text-foreground",
+          "flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest shrink-0 transition-colors",
+          isOverdue
+            ? "text-red-600 dark:text-red-400"
+            : isUrgent
+              ? "text-gold"
+              : "text-muted-foreground group-hover:text-gold",
         )}
       >
         {ui.action}
-        <ArrowRight className="w-3 h-3" />
+        <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
       </span>
     </button>
   );
