@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, isNotNull, ne, sql, type SQL } from "drizzle-orm";
+import { eq, desc, and, isNotNull, ne, sql, inArray, type SQL } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -13,6 +13,7 @@ import {
   dealsTable,
   callLogsTable,
   agentsTable,
+  gatesTable,
   quotesTable,
   SOCIAL_SUB_PLATFORMS,
   type Lead,
@@ -35,6 +36,8 @@ import {
   ScheduleTestDriveBody,
   AdvanceLeadStageParams,
   AdvanceLeadStageBody,
+  GetLeadReviewParams,
+  GetLeadReviewResponse,
   CheckLeadAvailabilityParams,
   RecordLeadDecisionParams,
   RecordLeadDecisionBody,
@@ -1192,6 +1195,193 @@ const ADVANCE_TARGET_PHASE = {
   sold: "won",
 } as const;
 const PHASE_ORDER = ["aware", "consider", "engage", "negotiate", "won"];
+const REVIEW_STAGE_LABEL: Record<string, string> = {
+  qualified: "Qualification",
+  test_drive: "Test Drive",
+  negotiation: "Negotiation",
+  sold: "Booking Confirmed",
+};
+// Who is accountable for clearing each checklist item — shown as owner chips
+// in the Run Review stepper.
+const CHECK_OWNER: Record<string, string> = {
+  contact_details: "Sales Advisor",
+  vehicle_selected: "Sales Advisor",
+  budget_discussed: "Sales Advisor",
+  test_drive_booked: "Sales Advisor",
+  licence_on_file: "Customer",
+  waiver_signed: "Customer",
+  vehicle_available: "Inventory",
+  test_drive_completed: "Sales Advisor",
+  deal_created: "Sales Manager",
+  deal_exists: "Sales Manager",
+  deposit_taken: "Finance",
+  finance_approved: "Finance",
+};
+
+// Built-in check implementations, keyed by checklist item key. Shared by the
+// gated advance and the Run Review evaluation so both always agree.
+function buildStageChecks(
+  lead: Lead,
+  dealerId: number,
+  leadDeals: { depositPaid: boolean | null }[],
+): Record<string, () => Promise<boolean> | boolean> {
+  const deal = leadDeals[0];
+  return {
+    contact_details: () => Boolean(lead.email || lead.phone),
+    vehicle_selected: () => Boolean(lead.interestedVehicleId),
+    budget_discussed: () => Boolean(lead.budgetFinancing),
+    test_drive_booked: () => Boolean(lead.testDriveAt),
+    licence_on_file: () => Boolean(lead.testDriveLicence),
+    waiver_signed: () => Boolean(lead.testDriveWaiver),
+    vehicle_available: async () => {
+      if (!lead.interestedVehicleId) return true;
+      const [v] = await db
+        .select({ status: vehiclesTable.status })
+        .from(vehiclesTable)
+        .where(
+          and(
+            eq(vehiclesTable.id, lead.interestedVehicleId),
+            eq(vehiclesTable.dealerId, dealerId),
+          ),
+        );
+      return !v || v.status === "available" || v.status === "reserved";
+    },
+    test_drive_completed: () => Boolean(lead.testDriveAt),
+    deal_created: () => leadDeals.length > 0,
+    deal_exists: () => Boolean(deal),
+    deposit_taken: () =>
+      Boolean((deal && deal.depositPaid) || lead.reservationFeePaid),
+    finance_approved: () =>
+      Boolean(lead.financingQualified || lead.purchaseType === "cash"),
+  };
+}
+
+// Phase-wise review: evaluate every stage gate's checklist for this lead so
+// the client can run a stepper review (pass / needs attention + owners).
+router.get("/leads/:id/review", async (req, res): Promise<void> => {
+  const params = GetLeadReviewParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const dealerId = activeDealerId(res);
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.dealerId, dealerId)));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const leadDeals = await db
+    .select()
+    .from(dealsTable)
+    .where(and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, lead.id)));
+  const checks = buildStageChecks(lead, dealerId, leadDeals);
+
+  const fromIdx = PHASE_ORDER.indexOf(lead.phase);
+  const stageKeys = Object.keys(ADVANCE_TARGET_PHASE) as (keyof typeof ADVANCE_TARGET_PHASE)[];
+  const stages = [];
+  for (const stage of stageKeys) {
+    const targetPhase = ADVANCE_TARGET_PHASE[stage];
+    const toIdx = PHASE_ORDER.indexOf(targetPhase);
+    const checklist = await getActiveChecklist(dealerId, stage as ChecklistStage);
+    const items = [];
+    for (const item of checklist.items) {
+      if (!item.enabled) continue;
+      const check = checks[item.key];
+      items.push({
+        key: item.key,
+        label: item.label,
+        met: check ? Boolean(await check()) : true,
+        owner: CHECK_OWNER[item.key] ?? "Sales Advisor",
+      });
+    }
+    stages.push({
+      stage,
+      label: REVIEW_STAGE_LABEL[stage] ?? stage,
+      targetPhase,
+      state:
+        toIdx <= fromIdx
+          ? ("passed" as const)
+          : toIdx === fromIdx + 1
+            ? ("current" as const)
+            : ("upcoming" as const),
+      items,
+    });
+  }
+
+  // Delivery phase: not a lead-stage advance (deals own delivery), but the
+  // review must surface delivery readiness — GRA duty filing included.
+  const dealIds = leadDeals.map((d) => d.id);
+  const graGates =
+    dealIds.length > 0
+      ? await db
+          .select({ status: gatesTable.status })
+          .from(gatesTable)
+          .where(
+            and(
+              eq(gatesTable.dealerId, dealerId),
+              eq(gatesTable.type, "gra_filing"),
+              eq(gatesTable.refType, "deal"),
+              inArray(gatesTable.refId, dealIds),
+            ),
+          )
+      : [];
+  const graFiled = graGates.some(
+    (g) => g.status === "approved" || g.status === "adjusted",
+  );
+  const primaryDeal = leadDeals[0];
+  const paymentSettled = Boolean(
+    primaryDeal &&
+      (primaryDeal.stage === "committed" || primaryDeal.stage === "delivered"),
+  );
+  const delivered = Boolean(primaryDeal && primaryDeal.stage === "delivered");
+  stages.push({
+    stage: "delivery",
+    label: "Delivery",
+    targetPhase: "won",
+    state: delivered
+      ? ("passed" as const)
+      : lead.phase === "won"
+        ? ("current" as const)
+        : ("upcoming" as const),
+    items: [
+      {
+        key: "gra_duty_filed",
+        label: "GRA duty filing approved",
+        met: graFiled,
+        owner: "GRA / Compliance",
+      },
+      {
+        key: "payment_settled",
+        label: "Payment settled (deal committed)",
+        met: paymentSettled,
+        owner: "Finance",
+      },
+      {
+        key: "vehicle_delivered",
+        label: "Vehicle handed over to the customer",
+        met: delivered,
+        owner: "Sales Advisor",
+      },
+    ],
+  });
+
+  const next = stages.find(
+    (s) => s.state === "current" && s.stage !== "delivery",
+  );
+  res.json(
+    GetLeadReviewResponse.parse({
+      leadId: lead.id,
+      phase: lead.phase,
+      nextStage: next ? next.stage : null,
+      stages,
+    }),
+  );
+});
 
 router.post("/leads/:id/advance", async (req, res): Promise<void> => {
   const params = AdvanceLeadStageParams.safeParse(req.params);
@@ -1240,35 +1430,7 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
   // Settings → Stage Gates). Each item key maps to a built-in check; admins
   // can toggle items on/off and relabel them without a deploy.
   const checklist = await getActiveChecklist(dealerId, toStage as ChecklistStage);
-  const deal = leadDeals[0];
-  const checks: Record<string, () => Promise<boolean> | boolean> = {
-    contact_details: () => Boolean(lead.email || lead.phone),
-    vehicle_selected: () => Boolean(lead.interestedVehicleId),
-    budget_discussed: () => Boolean(lead.budgetFinancing),
-    test_drive_booked: () => Boolean(lead.testDriveAt),
-    licence_on_file: () => Boolean(lead.testDriveLicence),
-    waiver_signed: () => Boolean(lead.testDriveWaiver),
-    vehicle_available: async () => {
-      if (!lead.interestedVehicleId) return true;
-      const [v] = await db
-        .select({ status: vehiclesTable.status })
-        .from(vehiclesTable)
-        .where(
-          and(
-            eq(vehiclesTable.id, lead.interestedVehicleId),
-            eq(vehiclesTable.dealerId, dealerId),
-          ),
-        );
-      return !v || v.status === "available" || v.status === "reserved";
-    },
-    test_drive_completed: () => Boolean(lead.testDriveAt),
-    deal_created: () => leadDeals.length > 0,
-    deal_exists: () => Boolean(deal),
-    deposit_taken: () =>
-      Boolean((deal && deal.depositPaid) || lead.reservationFeePaid),
-    finance_approved: () =>
-      Boolean(lead.financingQualified || lead.purchaseType === "cash"),
-  };
+  const checks = buildStageChecks(lead, dealerId, leadDeals);
   for (const item of checklist.items) {
     if (!item.enabled) continue;
     const check = checks[item.key];
@@ -1684,6 +1846,35 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
       ),
     )
     .returning();
+
+  // Pre-booking blocks the unit: taking the reservation fee reserves the
+  // interested vehicle so it can't be double-sold from inventory.
+  if (
+    parsed.data.reservationFeePaid === true &&
+    !before.reservationFeePaid &&
+    lead?.interestedVehicleId
+  ) {
+    const [reserved] = await db
+      .update(vehiclesTable)
+      .set({ status: "reserved" })
+      .where(
+        and(
+          eq(vehiclesTable.id, lead.interestedVehicleId),
+          eq(vehiclesTable.dealerId, activeDealerId(res)),
+          eq(vehiclesTable.status, "available"),
+        ),
+      )
+      .returning({ id: vehiclesTable.id });
+    if (reserved) {
+      await logLeadEvent(
+        lead,
+        "vehicle_reserved",
+        "Unit blocked in inventory",
+        `${actorName(res)} recorded the reservation fee — the interested vehicle is now reserved.`,
+        actorName(res),
+      );
+    }
+  }
 
   if (parsed.data.status && parsed.data.status !== before.status) {
     await logLeadEvent(

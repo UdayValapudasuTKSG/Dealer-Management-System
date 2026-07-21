@@ -140,6 +140,7 @@ import type {
   LeadInput,
   LeadNoteInput,
   LeadQuoteInfo,
+  LeadReview,
   LeadSourceConfig,
   LeadSourceInput,
   LeadSourceUpdate,
@@ -3583,6 +3584,83 @@ export const useAdvanceLeadStage = <TError = ErrorType<Error | LeadAdvanceUnmet>
       > => {
       return useMutation(getAdvanceLeadStageMutationOptions(options));
     }
+
+export const getGetLeadReviewUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/review`
+}
+
+/**
+ * @summary Phase-wise review — every stage gate's checklist evaluated for this lead
+ */
+export const getLeadReview = async (id: number, options?: RequestInit): Promise<LeadReview> => {
+
+  return customFetch<LeadReview>(getGetLeadReviewUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLeadReviewQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/review`
+    ] as const;
+    }
+
+
+export const getGetLeadReviewQueryOptions = <TData = Awaited<ReturnType<typeof getLeadReview>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadReview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLeadReviewQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLeadReview>>> = ({ signal }) => getLeadReview(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLeadReview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLeadReviewQueryResult = NonNullable<Awaited<ReturnType<typeof getLeadReview>>>
+export type GetLeadReviewQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Phase-wise review — every stage gate's checklist evaluated for this lead
+ */
+
+export function useGetLeadReview<TData = Awaited<ReturnType<typeof getLeadReview>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadReview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLeadReviewQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getScheduleTestDriveUrl = (id: number,) => {
 

@@ -1125,6 +1125,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /leads/{id}/review:
+    get:
+      operationId: getLeadReview
+      tags: [leads]
+      summary: Phase-wise review — every stage gate's checklist evaluated for this lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Stage-by-stage checklist evaluation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadReview"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /leads/{id}/test-drive:
     post:
       operationId: scheduleTestDrive
@@ -6278,6 +6302,43 @@ components:
         unmet:
           type: array
           items: { type: string }
+    LeadReviewItem:
+      type: object
+      required: [key, label, met, owner]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        met: { type: boolean }
+        owner: { type: string }
+    LeadReviewStage:
+      type: object
+      required: [stage, label, targetPhase, state, items]
+      properties:
+        stage:
+          type: string
+          enum: [qualified, test_drive, negotiation, sold, delivery]
+        label: { type: string }
+        targetPhase: { type: string }
+        state:
+          type: string
+          enum: [passed, current, upcoming]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeadReviewItem"
+    LeadReview:
+      type: object
+      required: [leadId, phase, nextStage, stages]
+      properties:
+        leadId: { type: integer }
+        phase: { type: string }
+        nextStage:
+          type: ["string", "null"]
+          enum: [qualified, test_drive, negotiation, sold, null]
+        stages:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeadReviewStage"
     LeadDecisionInput:
       type: object
       required: [choice]

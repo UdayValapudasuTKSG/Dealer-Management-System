@@ -1577,6 +1577,32 @@ export const AdvanceLeadStageResponse = zod.object({
 })
 
 
+/**
+ * @summary Phase-wise review — every stage gate's checklist evaluated for this lead
+ */
+export const GetLeadReviewParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLeadReviewResponse = zod.object({
+  "leadId": zod.number(),
+  "phase": zod.string(),
+  "nextStage": zod.union([zod.literal('qualified'),zod.literal('test_drive'),zod.literal('negotiation'),zod.literal('sold'),zod.literal(null)]).nullable(),
+  "stages": zod.array(zod.object({
+  "stage": zod.enum(['qualified', 'test_drive', 'negotiation', 'sold', 'delivery']),
+  "label": zod.string(),
+  "targetPhase": zod.string(),
+  "state": zod.enum(['passed', 'current', 'upcoming']),
+  "items": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "met": zod.boolean(),
+  "owner": zod.string()
+}))
+}))
+})
+
+
 export const ScheduleTestDriveParams = zod.object({
   "id": zod.coerce.number()
 })

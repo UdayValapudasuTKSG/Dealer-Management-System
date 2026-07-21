@@ -5,11 +5,9 @@ import {
   useListLeads,
   useListVehicles,
   useCreateLead,
-  useGetPipelineSuggestions,
   useListLeadSources,
   getListLeadsQueryKey,
 } from "@workspace/api-client-react";
-import type { GetPipelineSuggestionsPhase } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,39 +16,21 @@ import {
   Mail,
   ArrowUpRight,
   Car,
-  Sparkles,
-  Zap,
-  AlertCircle,
-  RefreshCw,
-  Loader2,
-  ChevronRight,
-  Check,
   Clock,
   UserCheck,
   Search,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Page } from "@/components/layout/page";
 import { PageHero } from "@/components/layout/page-hero";
-import { CarProgress } from "@/components/car-progress";
-import type { LucideIcon } from "lucide-react";
-import {
-  UserPlus,
-  PhoneCall,
-  MessagesSquare,
-  CalendarCheck,
-  KeySquare,
-  CreditCard,
-  ClipboardList,
-  Flag,
-} from "lucide-react";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { VehicleCascade } from "@/components/vehicle-cascade";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { useMoney } from "@/lib/format";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
+import { useAuthz } from "@/lib/auth";
+import { CONTACT_SLA_HOURS, hoursSince, humanHours } from "@/lib/triage";
 
 const STAGES = [
   "new_lead",
@@ -75,45 +55,28 @@ const STAGE_LABEL: Record<Stage, string> = {
   delivered: "Delivered",
 };
 
-const STAGE_ICON: Record<Stage, LucideIcon> = {
-  new_lead: UserPlus,
-  contacted: PhoneCall,
-  engaged: MessagesSquare,
-  pre_book: CalendarCheck,
-  vehicle_allocated: KeySquare,
-  payment: CreditCard,
-  pre_delivery: ClipboardList,
-  delivered: Flag,
+// Four master phases drive the queue tabs; the 8 rail stages fold into them.
+type Macro = "lead" | "prebooking" | "payment" | "delivery";
+
+const MACRO_OF: Record<Stage, Macro> = {
+  new_lead: "lead",
+  contacted: "lead",
+  engaged: "lead",
+  pre_book: "prebooking",
+  vehicle_allocated: "prebooking",
+  payment: "payment",
+  pre_delivery: "delivery",
+  delivered: "delivery",
 };
 
-const STAGE_CAPTION: Record<Stage, string> = {
-  new_lead: "Fresh interest — code generated, advisor assigned",
-  contacted: "First call inside the 24-hour SLA window",
-  engaged: "Test drives, financing checks, negotiation",
-  pre_book: "Reservation fee paid — order confirmed",
-  vehicle_allocated: "VIN and engine number locked to the order",
-  payment: "Reservation and final invoices settled",
-  pre_delivery: "Docs, duty pack, and handover checklist",
-  delivered: "Keys handed over — asset on the account",
+const MACRO_LABEL: Record<Macro, string> = {
+  lead: "Lead",
+  prebooking: "Pre-Booking",
+  payment: "Payment",
+  delivery: "Delivery",
 };
 
-// Rail stage → underlying lead phase (drives AURA suggestions)
-const STAGE_PHASE: Record<Stage, GetPipelineSuggestionsPhase> = {
-  new_lead: "aware",
-  contacted: "consider",
-  engaged: "engage",
-  pre_book: "negotiate",
-  vehicle_allocated: "won",
-  payment: "won",
-  pre_delivery: "won",
-  delivered: "won",
-};
-
-const PRIORITY_STYLE: Record<string, string> = {
-  high: "bg-primary/15 text-primary ring-primary/30",
-  medium: "bg-amber-500/15 text-amber-400 ring-amber-500/30",
-  low: "bg-emerald-500/15 text-emerald-400 ring-emerald-500/30",
-};
+const MACRO_ORDER: Macro[] = ["lead", "prebooking", "payment", "delivery"];
 
 const SOURCE_LABEL: Record<string, string> = {
   website: "Website",
@@ -148,34 +111,45 @@ const STATUS_LABEL: Record<string, string> = {
   lost: "Lost",
 };
 
-const NEXT_ACTION: Record<Stage, string> = {
-  new_lead: "Call within 24h — log the first contact",
-  contacted: "Qualify interest, book a test drive",
-  engaged: "Drive, finance check, close the negotiation",
-  pre_book: "Collect reservation fee, confirm the order",
-  vehicle_allocated: "Validate VIN & engine, soft-lock the unit",
-  payment: "Issue final invoice, capture payment",
-  pre_delivery: "Complete docs, duty pack & handover prep",
-  delivered: "Send feedback survey, hand off to service",
+const PRIORITY_STYLE: Record<string, string> = {
+  high: "bg-primary/15 text-primary ring-primary/30",
+  medium: "bg-amber-500/15 text-amber-400 ring-amber-500/30",
+  low: "bg-emerald-500/15 text-emerald-400 ring-emerald-500/30",
 };
 
 const withBase = (url: string) =>
   `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`;
 
-function daysInStage(lead: { stageEnteredAt?: string | null; createdAt: string }) {
-  const since = lead.stageEnteredAt ?? lead.createdAt;
-  const ms = Date.now() - new Date(since).getTime();
-  return Math.max(0, Math.floor(ms / 86_400_000));
+/** Contact SLA: 24h from createdAt until the lead is contacted. Null once
+ * contacted (or past the contacted status). */
+function contactSla(lead: {
+  status: string;
+  contactedDate?: Date | string | null;
+  createdAt: Date | string;
+}): { left: number; overdue: boolean } | null {
+  const contacted =
+    !!lead.contactedDate ||
+    (lead.status !== "new" && lead.status !== "assigned");
+  if (contacted) return null;
+  const elapsed = hoursSince(String(lead.createdAt));
+  const left = CONTACT_SLA_HOURS - elapsed;
+  return { left, overdue: left <= 0 };
 }
+
+type TabKey = "all" | "mine" | Macro | "lost";
 
 export default function Leads() {
   const { data: leads, isLoading } = useListLeads();
   const { data: vehicles } = useListVehicles();
+  const { data: deals } = useListDeals();
+  const { data: leadSources } = useListLeadSources();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const money = useMoney();
   const createLead = useCreateLead();
-  const { data: leadSources } = useListLeadSources();
+  const { me } = useAuthz();
+  const { density, setDensity, layout, setLayout } = useViewMode("pipeline");
+  const [, navigate] = useLocation();
+
   // Social sub-platform lives outside the dialog's own field state because
   // its visibility depends on the selected source (config-driven).
   const [newSource, setNewSource] = useState<string>("");
@@ -183,12 +157,17 @@ export default function Leads() {
   const selectedSourceCfg = (leadSources ?? []).find(
     (s) => s.code === (newSource || "website"),
   );
-  const { density, setDensity, layout, setLayout } = useViewMode("pipeline");
 
-  const { data: deals } = useListDeals();
+  const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<TabKey>("all");
+
+  const compact = density === "compact";
+  const myId = me?.id ?? null;
+  const myName = me?.name?.trim().toLowerCase() ?? null;
 
   // Derive the rail stage for a lead: pre-sale stages map 1:1 from the lead
-  // phase; won leads split into Sold / Pre-Delivery / Delivered by deal stage.
+  // phase; won leads split into Vehicle Allocated / Payment / Pre-Delivery /
+  // Delivered by their furthest-along linked deal. Lost leads → null.
   const stageOf = useMemo(() => {
     const rank = (stage: string) =>
       stage === "delivered"
@@ -212,7 +191,11 @@ export default function Leads() {
           dealByCustomer.set(d.customerId, d.stage);
       }
     }
-    return (l: { id: number; phase: string; customerId?: number | null }): Stage | null => {
+    return (l: {
+      id: number;
+      phase: string;
+      customerId?: number | null;
+    }): Stage | null => {
       switch (l.phase) {
         case "aware":
           return "new_lead";
@@ -225,669 +208,499 @@ export default function Leads() {
         case "won": {
           const dealStage =
             dealByLead.get(l.id) ??
-            (l.customerId != null ? dealByCustomer.get(l.customerId) : undefined);
+            (l.customerId != null
+              ? dealByCustomer.get(l.customerId)
+              : undefined);
           if (dealStage === "delivered") return "delivered";
           if (dealStage === "committed") return "pre_delivery";
           if (dealStage === "finance") return "payment";
           return "vehicle_allocated";
         }
         default:
-          return null; // lost — not shown on the rail
+          return null; // lost
       }
     };
   }, [deals]);
 
-  const counts = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const s of STAGES) map[s] = 0;
-    for (const l of leads ?? []) {
-      const s = stageOf(l);
-      if (s) map[s] += 1;
-    }
-    return map;
-  }, [leads, stageOf]);
+  const isMine = (l: {
+    ownerUserId?: number | null;
+    assignedTo?: string | null;
+  }) =>
+    (myId != null && l.ownerUserId === myId) ||
+    (l.ownerUserId == null &&
+      myName != null &&
+      (l.assignedTo ?? "").trim().toLowerCase() === myName);
 
-  const [selectedStage, setSelectedStage] = useState<Stage>("engaged");
-  const [, navigate] = useLocation();
-
-  const stageLeads = (leads ?? []).filter((l) => stageOf(l) === selectedStage);
-
-  // Full-pipeline table (list layout): search, stage filter, sortable columns.
-  const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState<"all" | Stage>("all");
-  const [sort, setSort] = useState<{
-    key: "name" | "stage" | "owner" | "value" | "days" | "ai";
-    dir: "asc" | "desc";
-  }>({ key: "days", dir: "desc" });
-
-  const dealValueByLead = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const d of deals ?? []) {
-      if (d.leadId != null) {
-        const v = d.otdPrice || d.vehiclePrice - d.discount;
-        const prev = map.get(d.leadId);
-        if (prev === undefined || v > prev) map.set(d.leadId, v);
-      }
-    }
-    return map;
-  }, [deals]);
-
-  const tableRows = useMemo(() => {
+  // Enrich every lead once with its stage, macro phase, vehicle and SLA.
+  const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const rows = (leads ?? [])
+    return (leads ?? [])
       .map((lead) => {
         const stage = stageOf(lead);
-        if (!stage) return null;
-        const vehicle = vehicles?.find((v) => v.id === lead.interestedVehicleId);
-        const value =
-          dealValueByLead.get(lead.id) ?? (vehicle ? vehicle.price : null);
-        return { lead, stage, vehicle, value, days: daysInStage(lead) };
+        const macro = stage ? MACRO_OF[stage] : null;
+        const vehicle = vehicles?.find(
+          (v) => v.id === lead.interestedVehicleId,
+        );
+        const model = vehicle
+          ? `${vehicle.make} ${vehicle.model}`
+          : lead.selectedModel ?? null;
+        const sla = contactSla(lead);
+        return { lead, stage, macro, vehicle, model, sla };
       })
-      .filter((r): r is NonNullable<typeof r> => r !== null)
-      .filter((r) => stageFilter === "all" || r.stage === stageFilter)
-      .filter(
-        (r) =>
-          !q ||
-          r.lead.name.toLowerCase().includes(q) ||
-          (r.lead.assignedTo ?? "").toLowerCase().includes(q) ||
-          (r.vehicle
-            ? `${r.vehicle.make} ${r.vehicle.model}`.toLowerCase().includes(q)
-            : false),
-      );
-    const dir = sort.dir === "asc" ? 1 : -1;
-    rows.sort((a, b) => {
-      switch (sort.key) {
-        case "name":
-          return a.lead.name.localeCompare(b.lead.name) * dir;
-        case "stage":
-          return (STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage)) * dir;
-        case "owner":
-          return (a.lead.assignedTo ?? "").localeCompare(b.lead.assignedTo ?? "") * dir;
-        case "value":
-          return ((a.value ?? 0) - (b.value ?? 0)) * dir;
-        case "days":
-          return (a.days - b.days) * dir;
-        case "ai":
-          return (a.lead.aiScore - b.lead.aiScore) * dir;
+      .filter((r) => {
+        if (!q) return true;
+        const l = r.lead;
+        return (
+          l.name.toLowerCase().includes(q) ||
+          (r.model ?? "").toLowerCase().includes(q) ||
+          (l.phone ?? "").toLowerCase().includes(q) ||
+          (l.email ?? "").toLowerCase().includes(q) ||
+          (l.assignedTo ?? "").toLowerCase().includes(q)
+        );
+      });
+  }, [leads, vehicles, stageOf, search]);
+
+  const counts = useMemo(() => {
+    const c: Record<TabKey, number> = {
+      all: 0,
+      mine: 0,
+      lead: 0,
+      prebooking: 0,
+      payment: 0,
+      delivery: 0,
+      lost: 0,
+    };
+    for (const r of rows) {
+      c.all += 1;
+      if (isMine(r.lead)) c.mine += 1;
+      if (r.macro) c[r.macro] += 1;
+      else c.lost += 1;
+    }
+    return c;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, myId, myName]);
+
+  const visible = useMemo(() => {
+    return rows.filter((r) => {
+      switch (tab) {
+        case "all":
+          return true;
+        case "mine":
+          return isMine(r.lead);
+        case "lost":
+          return r.macro === null;
+        default:
+          return r.macro === tab;
       }
     });
-    return rows;
-  }, [leads, vehicles, stageOf, dealValueByLead, search, stageFilter, sort]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, tab, myId, myName]);
 
-  const suggestions = useGetPipelineSuggestions({
-    phase: STAGE_PHASE[selectedStage],
-  });
+  const TABS: { key: TabKey; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "mine", label: "Mine" },
+    ...MACRO_ORDER.map((m) => ({ key: m as TabKey, label: MACRO_LABEL[m] })),
+    { key: "lost", label: "Lost" },
+  ];
 
-  const compact = density === "compact";
+  function SlaChip({ sla }: { sla: { left: number; overdue: boolean } | null }) {
+    if (!sla) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+          <Clock className="w-3 h-3" />
+          Contacted
+        </span>
+      );
+    }
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full",
+          sla.overdue
+            ? "text-red-400 bg-red-500/10"
+            : "text-amber-400 bg-amber-500/10",
+        )}
+      >
+        <Clock className="w-3 h-3" />
+        {sla.overdue
+          ? `Overdue ${humanHours(-sla.left)}`
+          : `${Math.max(1, Math.floor(sla.left))}h left`}
+      </span>
+    );
+  }
 
   return (
     <>
-    <PageHero
-      eyebrow="Sales"
-      title="Pipeline"
-      subtitle="Every lead, from first enquiry to delivery."
-    />
-    <Page className="space-y-5 pt-0">
-      {/* Compact command row: view controls + primary action. */}
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <ViewControls
-          layout={layout}
-          onLayoutChange={setLayout}
-          density={density}
-          onDensityChange={setDensity}
-        />
-        <CreateRecordDialog
-            title="New Lead"
-            description="Capture a prospect — AURA scores and routes it instantly."
-            pending={createLead.isPending}
-            submitLabel="Add to pipeline"
-            trigger={
-              <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-                <Plus className="w-5 h-5" />
-                New Lead
-              </Button>
-            }
-            fields={[
-              { name: "name", label: "Name", type: "text", required: true, span: "full", placeholder: "Kojo Asante" },
-              {
-                name: "channel",
-                label: "Channel",
-                type: "select",
-                required: true,
-                span: "half",
-                defaultValue: "web",
-                options: [
-                  { value: "web", label: "Web" },
-                  { value: "social", label: "Social" },
-                  { value: "mobile", label: "Mobile" },
-                  { value: "walkin", label: "Walk-in" },
-                ],
-              },
-              {
-                name: "interestedVehicleId",
-                label: "Interested vehicle",
-                type: "custom",
-                required: true,
-                span: "full",
-                render: (_value, set) => (
-                  <VehicleCascade
-                    vehicles={(vehicles ?? []).map((v) => ({
-                      id: v.id,
-                      brand: v.make,
-                      model: v.model,
-                      version: v.trim || v.variant || "Standard specification",
-                      color: v.exteriorColor,
-                      year: v.year,
-                      vin: v.vin ?? null,
-                      price: v.price,
-                    }))}
-                    onResolve={(v) => set(v ? String(v.id) : "")}
-                  />
-                ),
-              },
-              {
-                name: "source",
-                label: "Source",
-                type: "select",
-                span: "half",
-                defaultValue: "website",
-                options:
-                  leadSources && leadSources.length > 0
-                    ? leadSources.map((s) => ({ value: s.code, label: s.name }))
-                    : Object.entries(SOURCE_LABEL).map(([value, label]) => ({
-                        value,
-                        label,
-                      })),
-                onChange: (v: string) => {
-                  setNewSource(v);
-                  setSourceDetail("");
-                },
-              },
-              ...(selectedSourceCfg?.isSocial
-                ? [
-                    {
-                      name: "sourceDetail",
-                      label: "Social platform",
-                      type: "custom" as const,
-                      required: true,
-                      span: "half" as const,
-                      render: (_value: string, set: (v: string) => void) => (
-                        <select
-                          value={sourceDetail}
-                          onChange={(e) => {
-                            setSourceDetail(e.target.value);
-                            set(e.target.value);
-                          }}
-                          className="w-full h-10 rounded-md bg-white/[0.04] border border-white/10 px-3 text-sm focus:outline-none focus:border-primary/50"
-                        >
-                          <option value="">Pick a platform…</option>
-                          {SOCIAL_SUB_PLATFORMS.map((p) => (
-                            <option key={p.value} value={p.value}>
-                              {p.label}
-                            </option>
-                          ))}
-                        </select>
-                      ),
-                    },
-                  ]
-                : []),
-              {
-                name: "priority",
-                label: "Priority",
-                type: "select",
-                span: "half",
-                defaultValue: "medium",
-                options: [
-                  { value: "high", label: "High" },
-                  { value: "medium", label: "Medium" },
-                  { value: "low", label: "Low" },
-                ],
-              },
-              { name: "preferredBranch", label: "Preferred branch", type: "text", span: "half", placeholder: "Optional" },
-              { name: "email", label: "Email", type: "text", span: "half", placeholder: "kojo@email.com" },
-              { name: "phone", label: "Phone", type: "text", span: "half", placeholder: "+233 …" },
-              { name: "notes", label: "Notes", type: "textarea", span: "full", placeholder: "What are they looking for?" },
-            ]}
-            onSubmit={async (values) => {
-              const payload = { ...values };
-              if (payload.interestedVehicleId != null) {
-                payload.interestedVehicleId = Number(payload.interestedVehicleId);
-                const v = (vehicles ?? []).find(
-                  (x) => x.id === payload.interestedVehicleId,
-                );
-                if (v) {
-                  const version = v.trim || v.variant;
-                  if (version) payload.variant = version;
-                  payload.color = v.exteriorColor;
-                }
-              }
-              const result = await createLead.mutateAsync({
-                data: payload as never,
-              });
-              queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
-              if (result.merged) {
-                toast({
-                  title: "Merged into an existing lead",
-                  description:
-                    result.mergeNotice ??
-                    "This enquiry matched an open lead, so it was merged instead of creating a duplicate.",
-                });
-              } else {
-                toast({ title: "Lead captured", description: "AURA is scoring and routing this prospect." });
-              }
-            }}
-          />
-      </div>
-
-      {layout === "list" ? (
-        /* Full-pipeline table: every non-lost lead, searchable + stage filter */
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[220px] max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search client, vehicle or advisor…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-full bg-foreground/[0.04] border border-white/10 pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-primary/50"
-              />
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                onClick={() => setStageFilter("all")}
-                className={cn(
-                  "rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors",
-                  stageFilter === "all"
-                    ? "bg-primary text-white"
-                    : "bg-foreground/[0.05] text-muted-foreground hover:text-foreground",
-                )}
-              >
-                All
-              </button>
-              {STAGES.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setStageFilter(s)}
-                  className={cn(
-                    "rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors",
-                    stageFilter === s
-                      ? "bg-primary text-white"
-                      : "bg-foreground/[0.05] text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {STAGE_LABEL[s]}
-                  <span className="ml-1.5 tabular-nums opacity-70">{counts[s] ?? 0}</span>
-                </button>
-              ))}
-            </div>
+      <PageHero
+        eyebrow="Sales"
+        title="Pipeline"
+        subtitle="Every lead, from first enquiry to delivery."
+      />
+      <Page className="space-y-5 pt-0">
+        {/* Command row: search + view toggle + New Lead */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search name, model, phone or email…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-full bg-foreground/[0.04] border border-white/10 pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-primary/50"
+            />
           </div>
+          <div className="flex items-center gap-3 ml-auto">
+            <ViewControls
+              layout={layout}
+              onLayoutChange={setLayout}
+              density={density}
+              onDensityChange={setDensity}
+            />
+            <CreateRecordDialog
+              title="New Lead"
+              description="Capture a prospect — AURA scores and routes it instantly."
+              pending={createLead.isPending}
+              submitLabel="Add to pipeline"
+              trigger={
+                <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
+                  <Plus className="w-5 h-5" />
+                  New Lead
+                </Button>
+              }
+              fields={[
+                { name: "name", label: "Name", type: "text", required: true, span: "full", placeholder: "Kojo Asante" },
+                {
+                  name: "channel",
+                  label: "Channel",
+                  type: "select",
+                  required: true,
+                  span: "half",
+                  defaultValue: "web",
+                  options: [
+                    { value: "web", label: "Web" },
+                    { value: "social", label: "Social" },
+                    { value: "mobile", label: "Mobile" },
+                    { value: "walkin", label: "Walk-in" },
+                  ],
+                },
+                {
+                  name: "interestedVehicleId",
+                  label: "Interested vehicle",
+                  type: "custom",
+                  required: true,
+                  span: "full",
+                  render: (_value, set) => (
+                    <VehicleCascade
+                      vehicles={(vehicles ?? []).map((v) => ({
+                        id: v.id,
+                        brand: v.make,
+                        model: v.model,
+                        version: v.trim || v.variant || "Standard specification",
+                        color: v.exteriorColor,
+                        year: v.year,
+                        vin: v.vin ?? null,
+                        price: v.price,
+                      }))}
+                      onResolve={(v) => set(v ? String(v.id) : "")}
+                    />
+                  ),
+                },
+                {
+                  name: "source",
+                  label: "Source",
+                  type: "select",
+                  span: "half",
+                  defaultValue: "website",
+                  options:
+                    leadSources && leadSources.length > 0
+                      ? leadSources.map((s) => ({ value: s.code, label: s.name }))
+                      : Object.entries(SOURCE_LABEL).map(([value, label]) => ({
+                          value,
+                          label,
+                        })),
+                  onChange: (v: string) => {
+                    setNewSource(v);
+                    setSourceDetail("");
+                  },
+                },
+                ...(selectedSourceCfg?.isSocial
+                  ? [
+                      {
+                        name: "sourceDetail",
+                        label: "Social platform",
+                        type: "custom" as const,
+                        required: true,
+                        span: "half" as const,
+                        render: (_value: string, set: (v: string) => void) => (
+                          <select
+                            value={sourceDetail}
+                            onChange={(e) => {
+                              setSourceDetail(e.target.value);
+                              set(e.target.value);
+                            }}
+                            className="w-full h-10 rounded-md bg-white/[0.04] border border-white/10 px-3 text-sm focus:outline-none focus:border-primary/50"
+                          >
+                            <option value="">Pick a platform…</option>
+                            {SOCIAL_SUB_PLATFORMS.map((p) => (
+                              <option key={p.value} value={p.value}>
+                                {p.label}
+                              </option>
+                            ))}
+                          </select>
+                        ),
+                      },
+                    ]
+                  : []),
+                {
+                  name: "priority",
+                  label: "Priority",
+                  type: "select",
+                  span: "half",
+                  defaultValue: "medium",
+                  options: [
+                    { value: "high", label: "High" },
+                    { value: "medium", label: "Medium" },
+                    { value: "low", label: "Low" },
+                  ],
+                },
+                { name: "preferredBranch", label: "Preferred branch", type: "text", span: "half", placeholder: "Optional" },
+                { name: "email", label: "Email", type: "text", span: "half", placeholder: "kojo@email.com" },
+                { name: "phone", label: "Phone", type: "text", span: "half", placeholder: "+233 …" },
+                { name: "notes", label: "Notes", type: "textarea", span: "full", placeholder: "What are they looking for?" },
+              ]}
+              onSubmit={async (values) => {
+                const payload = { ...values };
+                if (payload.interestedVehicleId != null) {
+                  payload.interestedVehicleId = Number(payload.interestedVehicleId);
+                  const v = (vehicles ?? []).find(
+                    (x) => x.id === payload.interestedVehicleId,
+                  );
+                  if (v) {
+                    const version = v.trim || v.variant;
+                    if (version) payload.variant = version;
+                    payload.color = v.exteriorColor;
+                  }
+                }
+                const result = await createLead.mutateAsync({
+                  data: payload as never,
+                });
+                queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+                if (result.merged) {
+                  toast({
+                    title: "Merged into an existing lead",
+                    description:
+                      result.mergeNotice ??
+                      "This enquiry matched an open lead, so it was merged instead of creating a duplicate.",
+                  });
+                } else {
+                  toast({ title: "Lead captured", description: "AURA is scoring and routing this prospect." });
+                }
+              }}
+            />
+          </div>
+        </div>
 
+        {/* Tab strip with counts */}
+        <div className="flex flex-wrap gap-1.5">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={cn(
+                "rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors",
+                tab === t.key
+                  ? "bg-primary text-white"
+                  : "bg-foreground/[0.05] text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label}
+              <span className="ml-1.5 tabular-nums opacity-70">
+                {counts[t.key] ?? 0}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="h-16 rounded-2xl bg-foreground/[0.04] animate-pulse"
+              />
+            ))}
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="flex items-center justify-center h-40 rounded-2xl border-2 border-dashed border-border/60 text-muted-foreground/60 text-sm uppercase tracking-widest font-semibold">
+            No leads in this view
+          </div>
+        ) : layout === "list" ? (
+          /* List view — dense table */
           <div className="glass-panel rounded-2xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  {(
-                    [
-                      ["name", "Client"],
-                      ["stage", "Stage"],
-                      ["owner", "Advisor"],
-                      ["value", "Value"],
-                      ["days", "Days in stage"],
-                      ["ai", "AI"],
-                    ] as const
-                  ).map(([key, label]) => (
-                    <th
-                      key={key}
-                      onClick={() =>
-                        setSort((prev) =>
-                          prev.key === key
-                            ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
-                            : { key, dir: "asc" },
-                        )
-                      }
-                      className={cn(
-                        "px-4 py-3 font-semibold cursor-pointer select-none hover:text-foreground whitespace-nowrap",
-                        (key === "value" || key === "days" || key === "ai") && "text-right",
-                      )}
-                    >
-                      {label}
-                      {sort.key === key && (sort.dir === "asc" ? " ↑" : " ↓")}
-                    </th>
-                  ))}
-                  <th className="px-4 py-3 font-semibold">Next action</th>
+                  <th className="px-4 py-3 font-semibold">Client</th>
+                  <th className="px-4 py-3 font-semibold">Model</th>
+                  <th className="px-4 py-3 font-semibold">Phase</th>
+                  <th className="px-4 py-3 font-semibold">Advisor</th>
+                  <th className="px-4 py-3 font-semibold">Contact SLA</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {tableRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground text-sm">
-                      No leads match this view
+                {visible.map((r) => (
+                  <tr
+                    key={r.lead.id}
+                    onClick={() => navigate(`/lead/${r.lead.id}`)}
+                    className={cn(
+                      "border-b border-white/5 last:border-0 cursor-pointer hover:bg-foreground/[0.04] transition-colors",
+                      compact ? "h-11" : "h-14",
+                    )}
+                  >
+                    <td className="px-4 py-2">
+                      <div className="font-medium truncate max-w-[200px]">
+                        {r.lead.name}
+                      </div>
+                      {!compact && (
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+                          {r.lead.phone && (
+                            <span className="inline-flex items-center gap-1">
+                              <Phone className="w-3 h-3" />
+                              {r.lead.phone}
+                            </span>
+                          )}
+                          {r.lead.email && (
+                            <span className="inline-flex items-center gap-1 truncate max-w-[160px]">
+                              <Mail className="w-3 h-3" />
+                              {r.lead.email}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-muted-foreground truncate max-w-[180px]">
+                      {r.model ?? SOURCE_LABEL[r.lead.source] ?? r.lead.source}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {r.stage ? (
+                        <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                          {STAGE_LABEL[r.stage]}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-foreground/[0.06] px-2 py-0.5 rounded-full">
+                          Lost
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-muted-foreground truncate max-w-[150px]">
+                      {r.lead.assignedTo || (
+                        <span className="text-amber-400">Needs advisor</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      <SlaChip sla={r.sla} />
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-foreground/70 bg-foreground/[0.06] px-2 py-0.5 rounded-full">
+                        {STATUS_LABEL[r.lead.status] ?? r.lead.status}
+                      </span>
                     </td>
                   </tr>
-                ) : (
-                  tableRows.map((row) => (
-                    <tr
-                      key={row.lead.id}
-                      onClick={() => navigate(`/lead/${row.lead.id}`)}
-                      className={cn(
-                        "border-b border-white/5 last:border-0 cursor-pointer hover:bg-foreground/[0.04] transition-colors",
-                        compact ? "h-10" : "h-12",
-                      )}
-                    >
-                      <td className="px-4 py-2">
-                        <div className="font-medium truncate max-w-[200px]">{row.lead.name}</div>
-                        {!compact && (
-                          <div className="text-[11px] text-muted-foreground truncate max-w-[220px]">
-                            {row.vehicle ? `${row.vehicle.make} ${row.vehicle.model}` : SOURCE_LABEL[row.lead.source] ?? row.lead.source}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap">
-                        <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                          {STAGE_LABEL[row.stage]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-muted-foreground truncate max-w-[150px]">
-                        {row.lead.assignedTo || <span className="text-amber-400">Needs advisor</span>}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">
-                        {row.value != null ? money.gyd(row.value) : "—"}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-4 py-2 text-right tabular-nums",
-                          row.days >= 7 ? "text-amber-400 font-semibold" : "text-muted-foreground",
-                        )}
-                      >
-                        {row.days}d
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums font-medium text-primary">
-                        {row.lead.aiScore}
-                      </td>
-                      <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                        {NEXT_ACTION[row.stage]}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>
-        </div>
-      ) : (
-        <>
-      {/* Stage rail — order-tracking journey with a car driving to the selected stage */}
-      <CarProgress
-        stages={STAGES.map((s) => ({
-          key: s,
-          label: STAGE_LABEL[s],
-          icon: STAGE_ICON[s],
-          count: counts[s] ?? 0,
-        }))}
-        activeIndex={STAGES.indexOf(selectedStage)}
-        onSelect={(key) => setSelectedStage(key as Stage)}
-      />
-
-      {/* Detail — animated per stage */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={selectedStage}
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.3 }}
-          className="grid grid-cols-1 lg:grid-cols-5 gap-6"
-        >
-          {/* Leads in stage */}
-          <div className="lg:col-span-3 space-y-4">
-            <div className="flex items-baseline justify-between">
-              <div>
-                <h2 className="text-2xl font-light tracking-tight">
-                  {STAGE_LABEL[selectedStage]}
-                </h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {STAGE_CAPTION[selectedStage]}
-                </p>
-              </div>
-              <span className="text-sm font-semibold text-primary shrink-0">
-                {stageLeads.length} client{stageLeads.length === 1 ? "" : "s"}
-              </span>
-            </div>
-
-            {isLoading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="h-20 rounded-2xl bg-foreground/[0.04] animate-pulse"
-                  />
-                ))}
-              </div>
-            ) : stageLeads.length === 0 ? (
-              <div className="flex items-center justify-center h-32 rounded-2xl border-2 border-dashed border-border/60 text-muted-foreground/60 text-sm uppercase tracking-widest font-semibold">
-                No clients in this stage
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {stageLeads.map((lead, i) => {
-                  const vehicle = vehicles?.find(
-                    (v) => v.id === lead.interestedVehicleId,
-                  );
-                  const days = daysInStage(lead);
-                  return (
-                    <motion.div
-                      key={lead.id}
-                      initial={{ opacity: 0, x: -12 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: Math.min(i * 0.04, 0.4) }}
-                      onClick={() => navigate(`/lead/${lead.id}`)}
-                      className={cn(
-                        "group flex items-center gap-4 rounded-2xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:border-primary/30 transition-all duration-300 cursor-pointer",
-                        compact ? "p-2.5 pr-3" : "p-3 pr-4",
-                      )}
-                    >
-                      <div
-                        className={cn(
-                          "shrink-0 rounded-xl overflow-hidden bg-foreground/[0.04] flex items-center justify-center",
-                          compact ? "w-12 h-12" : "w-16 h-16",
-                        )}
-                      >
-                        {vehicle?.imageUrl ? (
-                          <img
-                            src={withBase(vehicle.imageUrl)}
-                            alt={`${vehicle.make} ${vehicle.model}`}
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                          />
-                        ) : (
-                          <Car className="w-6 h-6 text-muted-foreground/30" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-semibold text-base leading-tight truncate group-hover:text-primary transition-colors">
-                            {lead.name}
-                          </span>
-                          {vehicle && (
-                            <span className="text-xs text-muted-foreground truncate hidden sm:inline">
-                              · {vehicle.make} {vehicle.model}
-                            </span>
-                          )}
-                        </div>
-                        <div className={cn("flex items-center gap-2 flex-wrap", compact ? "mt-1" : "mt-2")}>
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                            {SOURCE_LABEL[lead.source] ?? lead.source}
-                          </span>
-                          <span
-                            className={cn(
-                              "inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ring-1",
-                              PRIORITY_STYLE[lead.priority] ?? PRIORITY_STYLE.low,
-                            )}
-                          >
-                            {lead.priority}
-                          </span>
-                          {!compact && (
-                            <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-foreground/70 bg-foreground/[0.06] px-2 py-0.5 rounded-full">
-                              {STATUS_LABEL[lead.status] ?? lead.status}
-                            </span>
-                          )}
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full",
-                              days >= 7
-                                ? "text-amber-400 bg-amber-500/10"
-                                : "text-muted-foreground bg-foreground/[0.05]",
-                            )}
-                          >
-                            <Clock className="w-3 h-3" />
-                            {days}d in stage
-                          </span>
-                          {lead.assignedTo ? (
-                            !compact && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-foreground/[0.05] px-2 py-0.5 rounded-full">
-                                <UserCheck className="w-3 h-3" />
-                                {lead.assignedTo}
-                              </span>
-                            )
-                          ) : (
-                            <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">
-                              Needs advisor
-                            </span>
-                          )}
-                          {lead.email && (
-                            <Mail className="w-3.5 h-3.5 text-muted-foreground/70" />
-                          )}
-                          {lead.phone && (
-                            <Phone className="w-3.5 h-3.5 text-muted-foreground/70" />
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <div className="text-right hidden sm:block">
-                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                            AI Score
-                          </div>
-                          <div className={cn("font-light text-primary", compact ? "text-base" : "text-lg")}>
-                            {lead.aiScore}
-                          </div>
-                        </div>
-                        {lead.customerId && (
-                          <Link
-                            href={`/customers/${lead.customerId}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-[10px] font-bold uppercase tracking-wider text-primary inline-flex items-center gap-0.5 hover:underline"
-                          >
-                            Account
-                            <ArrowUpRight className="w-3 h-3" />
-                          </Link>
-                        )}
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* AURA suggestions */}
-          <div className="lg:col-span-2">
-            <div className="sticky top-4 rounded-3xl border border-primary/20 bg-gradient-to-b from-primary/[0.06] to-foreground/[0.02] shadow-[0_18px_48px_-28px_rgba(0,0,0,0.6)] overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
-                <span className="relative w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-primary" />
-                  {suggestions.isFetching && (
-                    <span className="absolute inset-0 rounded-full ring-2 ring-primary/40 animate-ping" />
-                  )}
-                </span>
-                <div>
-                  <div className="text-sm font-semibold tracking-tight">
-                    AURA recommends
+        ) : (
+          /* Card view — compact cards */
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {visible.map((r, i) => (
+              <motion.div
+                key={r.lead.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(i * 0.03, 0.3) }}
+                onClick={() => navigate(`/lead/${r.lead.id}`)}
+                className="group rounded-2xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:border-primary/30 transition-all duration-300 cursor-pointer p-4"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="shrink-0 w-12 h-12 rounded-xl overflow-hidden bg-foreground/[0.04] flex items-center justify-center">
+                    {r.vehicle?.imageUrl ? (
+                      <img
+                        src={withBase(r.vehicle.imageUrl)}
+                        alt={`${r.vehicle.make} ${r.vehicle.model}`}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      <Car className="w-5 h-5 text-muted-foreground/30" />
+                    )}
                   </div>
-                  <div className="text-[10px] uppercase tracking-widest text-primary">
-                    {suggestions.isFetching ? "Reading the stage…" : "Live"}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold leading-tight truncate group-hover:text-primary transition-colors">
+                      {r.lead.name}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate mt-0.5">
+                      {r.model ??
+                        SOURCE_LABEL[r.lead.source] ??
+                        r.lead.source}
+                    </div>
+                  </div>
+                  {r.lead.customerId && (
+                    <Link
+                      href={`/customers/${r.lead.customerId}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[10px] font-bold uppercase tracking-wider text-primary inline-flex items-center gap-0.5 hover:underline shrink-0"
+                    >
+                      Account
+                      <ArrowUpRight className="w-3 h-3" />
+                    </Link>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap mt-3">
+                  {r.stage ? (
+                    <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                      {STAGE_LABEL[r.stage]}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-foreground/[0.06] px-2 py-0.5 rounded-full">
+                      Lost
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      "inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ring-1",
+                      PRIORITY_STYLE[r.lead.priority] ?? PRIORITY_STYLE.low,
+                    )}
+                  >
+                    {r.lead.priority}
+                  </span>
+                  <SlaChip sla={r.sla} />
+                </div>
+
+                <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-white/5">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+                    {r.lead.assignedTo ? (
+                      <>
+                        <UserCheck className="w-3.5 h-3.5" />
+                        {r.lead.assignedTo}
+                      </>
+                    ) : (
+                      <span className="text-amber-400 font-semibold uppercase tracking-wider text-[10px]">
+                        Needs advisor
+                      </span>
+                    )}
+                  </span>
+                  <div className="flex items-center gap-2 text-muted-foreground/70 shrink-0">
+                    {r.lead.phone && <Phone className="w-3.5 h-3.5" />}
+                    {r.lead.email && <Mail className="w-3.5 h-3.5" />}
                   </div>
                 </div>
-              </div>
-
-              <div className="p-5 space-y-4">
-                {suggestions.isLoading ? (
-                  <div className="flex items-center gap-3 text-muted-foreground text-sm py-8 justify-center">
-                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                    Thinking through {(STAGE_LABEL[selectedStage] ?? "this stage").toLowerCase()}…
-                  </div>
-                ) : suggestions.isError ? (
-                  <div className="text-center py-8 space-y-3">
-                    <AlertCircle className="w-6 h-6 text-muted-foreground/50 mx-auto" />
-                    <p className="text-sm text-muted-foreground">
-                      The concierge is unavailable right now.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => suggestions.refetch()}
-                      className="rounded-full gap-2"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      Retry
-                    </Button>
-                  </div>
-                ) : suggestions.data ? (
-                  <>
-                    <p className="text-sm font-light leading-relaxed text-foreground/90">
-                      {suggestions.data.headline}
-                    </p>
-                    <div className="space-y-3">
-                      {suggestions.data.actions.map((action, i) => (
-                        <motion.div
-                          key={i}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.08 }}
-                          className="rounded-2xl bg-foreground/[0.04] border border-white/10 p-4"
-                        >
-                          <div className="flex items-start gap-3">
-                            <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                              <Zap className="w-3.5 h-3.5" />
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold text-sm">
-                                  {action.title}
-                                </span>
-                                <span
-                                  className={cn(
-                                    "text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ring-1",
-                                    PRIORITY_STYLE[action.priority] ??
-                                      PRIORITY_STYLE.low,
-                                  )}
-                                >
-                                  {action.priority}
-                                </span>
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                                {action.detail}
-                              </p>
-                              {action.leadName && (
-                                <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-primary">
-                                  <ChevronRight className="w-3 h-3" />
-                                  {action.leadName}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            </div>
+              </motion.div>
+            ))}
           </div>
-        </motion.div>
-      </AnimatePresence>
-        </>
-      )}
-    </Page>
+        )}
+      </Page>
     </>
   );
 }

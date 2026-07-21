@@ -349,7 +349,7 @@ function taskToTriage(t: Task): TriageItem {
         : t.dueDate
           ? `Due ${t.dueDate.slice(0, 10)}`
           : "Open task",
-    href: "/tasks",
+    href: t.leadId ? `/lead/${t.leadId}` : "/command-center",
     rank: overdue ? 1 : 4,
   };
 }

@@ -228,7 +228,7 @@ export function ActionChain({
                 No tasks yet — add the next action so nothing slips.
               </li>
             ) : (
-              rows.slice(0, 5).map((t) => (
+              rows.map((t) => (
                 <li key={t.id} className="flex items-center gap-3 text-sm bg-foreground/[0.02] border border-white/5 rounded-xl px-4 py-2.5 hover:bg-foreground/[0.04] transition-colors">
                   <button
                     disabled={!canEdit || updateTask.isPending}
@@ -257,13 +257,6 @@ export function ActionChain({
                   </div>
                 </li>
               ))
-            )}
-            {rows.length > 5 && (
-              <li className="text-xs pl-2 pt-1">
-                <Link href="/tasks" className="text-primary hover:underline font-medium">
-                  +{rows.length - 5} more in Tasks
-                </Link>
-              </li>
             )}
           </ul>
           {canEdit && (

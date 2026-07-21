@@ -31,7 +31,6 @@ import VehicleDetailPage from "@/pages/vehicle-detail";
 import TeamProfile from "@/pages/team-profile";
 import Approvals from "@/pages/approvals";
 import Gra from "@/pages/gra";
-import Tasks from "@/pages/tasks";
 import Agents from "@/pages/agents";
 import SettingsUsers from "@/pages/settings-users";
 import SettingsEmail from "@/pages/settings-email";
@@ -238,7 +237,6 @@ function AppRoutes() {
                 <Route path="/lead/:id" component={LeadDetail} />
                 <Route path="/vehicle/:id" component={VehicleDetailPage} />
                 <Route path="/team/:id" component={TeamProfile} />
-                <Route path="/tasks" component={Tasks} />
                 {/* Calendar is merged into My Day (2026-07) */}
                 <Route path="/calendar">
                   <Redirect to="/command-center" />

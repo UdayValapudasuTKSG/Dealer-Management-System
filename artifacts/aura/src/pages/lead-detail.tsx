@@ -39,8 +39,9 @@ import {
   ChevronDown,
   CircleCheck,
   Compass,
+  Facebook,
   FileText,
-  KeyRound,
+  Instagram,
   Loader2,
   Mail,
   MessageSquare,
@@ -49,6 +50,7 @@ import {
   PhoneIncoming,
   PhoneOutgoing,
   Send,
+  ShieldCheck,
   User,
   Workflow,
   X,
@@ -56,6 +58,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Page } from "@/components/layout/page";
 import { LeadWorkflowDialog } from "@/components/lead-workflow-dialog";
+import { RunReviewDialog } from "@/components/lead/run-review-dialog";
 import {
   CreateRecordDialog,
   type FieldDef,
@@ -215,7 +218,7 @@ function Bool({ value }: { value: boolean }) {
   );
 }
 
-function Field({
+function KpiTile({
   label,
   children,
 }: {
@@ -223,12 +226,12 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="py-3 border-b border-white/5 last:border-0">
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+    <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] px-4 py-3">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
         {label}
       </div>
-      <div className="text-sm text-foreground break-words">
-        {children ?? <span className="text-muted-foreground/60">—</span>}
+      <div className="text-lg font-semibold tracking-tight mt-1 truncate">
+        {children}
       </div>
     </div>
   );
@@ -431,13 +434,23 @@ function Section({
 }
 
 const TABS = [
+  { key: "overview", label: "Overview" },
   { key: "details", label: "Details" },
-  { key: "files", label: "Quotes & Files" },
-  { key: "calls", label: "Calls" },
+  { key: "documents", label: "Documents" },
+  { key: "correspondence", label: "Correspondence" },
+  { key: "notes", label: "Notes" },
   { key: "activity", label: "Activity" },
 ] as const;
-const WHATSAPP_TAB = { key: "whatsapp", label: "WhatsApp" } as const;
-type Tab = (typeof TABS)[number]["key"] | typeof WHATSAPP_TAB.key;
+
+const MACRO_PHASES = ["Lead", "Pre-Booking", "Payment", "Delivery"] as const;
+
+function macroPhaseFor(journeyIndex: number): number {
+  if (journeyIndex >= 6) return 3;
+  if (journeyIndex >= 5) return 2;
+  if (journeyIndex >= 3) return 1;
+  return 0;
+}
+type Tab = (typeof TABS)[number]["key"];
 
 const CALL_STATUS_LABEL: Record<string, string> = {
   completed: "Completed",
@@ -573,8 +586,10 @@ export default function LeadDetail() {
   const { data: calls } = useListLeadCalls(id);
   const gatesQuery = useListGates();
 
-  const [tab, setTab] = useState<Tab>("details");
+  const [tab, setTab] = useState<Tab>("overview");
+  const [corrView, setCorrView] = useState<"calls" | "whatsapp">("calls");
   const [workflowOpen, setWorkflowOpen] = useState(false);
+  const [runReviewOpen, setRunReviewOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
@@ -649,6 +664,17 @@ export default function LeadDetail() {
       },
       onError: () =>
         toast({ title: "Could not post note", variant: "destructive" }),
+    },
+  });
+
+  const logTouch = useCreateLeadNote({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
+        toast({ title: "Touch logged" });
+      },
+      onError: () =>
+        toast({ title: "Could not log touch", variant: "destructive" }),
     },
   });
 
@@ -825,6 +851,31 @@ export default function LeadDetail() {
   };
 
   const currentStageKey = journeyStages[journeyIndex]?.key ?? "new";
+  const macroPhaseIndex = macroPhaseFor(journeyIndex);
+
+  const daysInStage = lead.stageEnteredAt
+    ? Math.max(
+        0,
+        Math.floor(
+          (Date.now() - new Date(lead.stageEnteredAt).getTime()) / 86_400_000,
+        ),
+      )
+    : null;
+  const currentQuote =
+    (quoteVersions ?? []).find((q) => q.status === "current") ??
+    (quoteVersions ?? [])[0];
+
+  const oneTap = (
+    href: string,
+    label: string,
+    sameTab: boolean = false,
+  ) => {
+    logTouch.mutate({ id: lead.id, data: { text: label } });
+    if (typeof window !== "undefined") {
+      if (sameTab) window.location.href = href;
+      else window.open(href, "_blank", "noopener");
+    }
+  };
 
   const stagesWithAlerts = journeyStages.map((s) => {
     const stageGates = pendingGates.filter((g) => getGateStageKey(g.type, currentStageKey) === s.key);
@@ -971,6 +1022,14 @@ export default function LeadDetail() {
               </Button>
             )}
             <Button
+              variant="outline"
+              onClick={() => setRunReviewOpen(true)}
+              className="gap-1.5"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Run Review
+            </Button>
+            <Button
               onClick={() => setWorkflowOpen(true)}
               className="gap-1.5 glow-red"
             >
@@ -989,27 +1048,77 @@ export default function LeadDetail() {
         onOpenChange={setCallOpen}
       />
 
-      {/* Journey navigation pane — full width on top */}
-      <div className="mb-6">
-        <StageNav stages={stagesWithAlerts} currentIndex={journeyIndex} compact />
+      {/* Macro phase bar — Lead → Pre-Booking → Payment → Delivery */}
+      <div className="mb-6 rounded-2xl border border-white/10 bg-foreground/[0.03] p-2">
+        <div className="grid grid-cols-4 gap-2">
+          {MACRO_PHASES.map((phase, i) => {
+            const state =
+              i < macroPhaseIndex
+                ? "done"
+                : i === macroPhaseIndex
+                  ? "current"
+                  : "upcoming";
+            return (
+              <div
+                key={phase}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-colors",
+                  state === "current"
+                    ? "bg-primary/[0.08] ring-1 ring-primary/30"
+                    : "bg-transparent",
+                )}
+              >
+                <span
+                  className={cn(
+                    "w-6 h-6 rounded-full flex items-center justify-center ring-1 text-[11px] font-semibold shrink-0",
+                    state === "done"
+                      ? "bg-emerald-500/20 text-emerald-500 ring-emerald-500/40"
+                      : state === "current"
+                        ? "bg-primary text-primary-foreground ring-primary"
+                        : "bg-foreground/[0.05] text-muted-foreground ring-white/10",
+                  )}
+                >
+                  {state === "done" ? <Check className="w-3.5 h-3.5" /> : i + 1}
+                </span>
+                <span
+                  className={cn(
+                    "text-sm font-semibold tracking-tight truncate",
+                    state === "upcoming"
+                      ? "text-muted-foreground"
+                      : "text-foreground",
+                  )}
+                >
+                  {phase}
+                </span>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Action cockpit — chain of actions and AURA recommendations all above the fold */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 items-start">
-        <div className="lg:col-span-2 h-full">
-          <ActionChain
-            lead={lead}
-            stage={stagesWithAlerts[journeyIndex]}
-            nextStageLabel={
-              lead.phase === "lost"
-                ? null
-                : (stagesWithAlerts[journeyIndex + 1]?.label ?? null)
-            }
-            onOpenWorkflow={() => setWorkflowOpen(true)}
-            canEdit={canEdit}
-            pendingGates={chainGates}
-          />
-        </div>
+      {/* KPI strip */}
+      <div className="mb-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <KpiTile label="AI Score">
+          <span className="text-primary">{lead.aiScore}</span>
+        </KpiTile>
+        <KpiTile label="Days in Stage">
+          {daysInStage != null ? `${daysInStage}d` : "—"}
+        </KpiTile>
+        <KpiTile label="Quote Total">
+          {currentQuote ? money.gyd(currentQuote.total) : "—"}
+        </KpiTile>
+        <KpiTile label="Test Drive">
+          {lead.testDriveAt ? formatGuyanaDate(lead.testDriveAt) : "Not set"}
+        </KpiTile>
+        <KpiTile label="Reservation Fee">
+          <span className={lead.reservationFeePaid ? "text-emerald-500" : "text-amber-500"}>
+            {lead.reservationFeePaid ? "Paid" : "Pending"}
+          </span>
+        </KpiTile>
+      </div>
+
+      {/* AI next-steps strip */}
+      <div className="mb-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
         <AgentBriefPanel
           leadId={lead.id}
           leadPhone={lead.phone}
@@ -1018,124 +1127,35 @@ export default function LeadDetail() {
           hasOwner={canEdit && !!lead.ownerUserId}
           compact
         />
+        <div className="flex lg:flex-col gap-2 lg:w-44 shrink-0">
+          <Button
+            onClick={() => setRunReviewOpen(true)}
+            className="gap-1.5 w-full"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            Run Review
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setWorkflowOpen(true)}
+            className="gap-1.5 w-full"
+          >
+            <Workflow className="w-4 h-4" />
+            Workflow
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
-        {/* Left rail */}
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-                <KeyRound className="w-3.5 h-3.5" />
-              </span>
-              <span className="text-sm font-semibold tracking-tight">
-                Key Fields
-              </span>
-            </div>
-            <Field label="Lead Source">
-              {SOURCE_LABEL[lead.source] ?? lead.source}
-            </Field>
-            {lead.divisionId != null && (
-              <Field label="Division">
-                {divisions?.find((d) => d.id === lead.divisionId)?.name ?? "—"}
-              </Field>
-            )}
-            <Field label="Sales Advisor">{ownerDisplay}</Field>
-            <Field label="Phone">
-              {lead.phone ? (
-                <a
-                  href={`tel:${lead.phone}`}
-                  className="inline-flex items-center gap-1.5 hover:text-primary transition-colors"
-                >
-                  <Phone className="w-3.5 h-3.5 text-muted-foreground" />
-                  {lead.phone}
-                </a>
-              ) : null}
-            </Field>
-            <Field label="Email">
-              {lead.email ? (
-                <a
-                  href={`mailto:${lead.email}`}
-                  className="inline-flex items-center gap-1.5 hover:text-primary transition-colors break-all"
-                >
-                  <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                  {lead.email}
-                </a>
-              ) : null}
-            </Field>
-          </div>
+      {/* Journey navigation pane — full width on top */}
+      <div className="mb-6">
+        <StageNav stages={stagesWithAlerts} currentIndex={journeyIndex} compact />
+      </div>
 
-          <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-                <Compass className="w-3.5 h-3.5" />
-              </span>
-              <span className="text-sm font-semibold tracking-tight">
-                Guidance for Success
-              </span>
-            </div>
-            <p className="text-sm text-foreground/90 leading-relaxed mb-3">
-              {guidance.headline}
-            </p>
-            <ul className="space-y-2">
-              {guidance.steps.map((step) => (
-                <li
-                  key={step}
-                  className="flex items-start gap-2 text-sm text-muted-foreground"
-                >
-                  <CircleCheck className="w-4 h-4 text-primary/70 shrink-0 mt-0.5" />
-                  {step}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {vehicle && (
-            <Link
-              href={`/vehicle/${vehicle.id}`}
-              className="block rounded-2xl border border-white/10 bg-foreground/[0.03] overflow-hidden hover:border-primary/40 transition-colors group"
-            >
-              <div className="h-36 bg-foreground/[0.04]">
-                {vehicle.imageUrl ? (
-                  <img
-                    src={
-                      vehicle.imageUrl.startsWith("http")
-                        ? vehicle.imageUrl
-                        : `${import.meta.env.BASE_URL}${vehicle.imageUrl.replace(/^\//, "")}`
-                    }
-                    alt={`${vehicle.make} ${vehicle.model}`}
-                    className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Car className="w-8 h-8 text-muted-foreground/30" />
-                  </div>
-                )}
-              </div>
-              <div className="p-4">
-                <div className="font-semibold flex items-center gap-1.5">
-                  {vehicle.year} {vehicle.make} {vehicle.model}
-                  <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  {vehicle.trim || vehicle.variant || "Standard specification"}
-                  {vehicle.exteriorColor ? ` · ${vehicle.exteriorColor}` : ""}
-                </div>
-                <div className="text-lg font-light text-primary mt-2">
-                  {money.gyd(vehicle.price)}
-                </div>
-              </div>
-            </Link>
-          )}
-        </div>
-
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
         {/* Main column */}
         <div className="rounded-2xl border border-white/10 bg-foreground/[0.02]">
-          <div className="flex items-center gap-1 border-b border-white/10 px-4 pt-3">
-            {(lead.source === "whatsapp"
-              ? [...TABS, WHATSAPP_TAB]
-              : [...TABS]
-            ).map((t) => (
+          <div className="flex items-center gap-1 border-b border-white/10 px-4 pt-3 overflow-x-auto">
+            {TABS.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
@@ -1175,6 +1195,132 @@ export default function LeadDetail() {
               transition={{ duration: 0.18 }}
               className="p-6"
             >
+              {tab === "overview" && (
+                <div className="space-y-5">
+                  <ActionChain
+                    lead={lead}
+                    stage={stagesWithAlerts[journeyIndex]}
+                    nextStageLabel={
+                      lead.phase === "lost"
+                        ? null
+                        : (stagesWithAlerts[journeyIndex + 1]?.label ?? null)
+                    }
+                    onOpenWorkflow={() => setWorkflowOpen(true)}
+                    canEdit={canEdit}
+                    pendingGates={chainGates}
+                  />
+
+                  <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                        <CircleCheck className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="text-sm font-semibold tracking-tight">
+                        {journeyStages[journeyIndex]?.label ?? "Current"} — Stage
+                        Checklist
+                      </span>
+                    </div>
+                    <ul className="space-y-2">
+                      {(journeyStages[journeyIndex]?.checklist ?? []).map((c) => (
+                        <li
+                          key={c.label}
+                          className="flex items-start gap-2.5 text-sm"
+                        >
+                          <span
+                            className={cn(
+                              "mt-0.5 w-4 h-4 rounded-full flex items-center justify-center shrink-0 ring-1",
+                              c.done
+                                ? "bg-emerald-500/20 text-emerald-500 ring-emerald-500/40"
+                                : "bg-foreground/[0.05] text-muted-foreground ring-white/15",
+                            )}
+                          >
+                            {c.done ? <Check className="w-2.5 h-2.5" /> : null}
+                          </span>
+                          <span
+                            className={
+                              c.done ? "text-foreground/70" : "text-foreground/90"
+                            }
+                          >
+                            {c.label}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
+                      <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2">
+                        Linked Deal
+                      </div>
+                      {linkedDeal ? (
+                        <Link href="/deals" className="block group">
+                          <div className="font-semibold flex items-center gap-1.5 group-hover:text-primary transition-colors">
+                            Deal #{linkedDeal.id}
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1 capitalize">
+                            {linkedDeal.stage} · {money.gyd(linkedDeal.otdPrice)}
+                          </div>
+                        </Link>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          No linked deal yet.
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
+                      <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2">
+                        Current Quote
+                      </div>
+                      {currentQuote ? (
+                        <button
+                          onClick={() => setTab("documents")}
+                          className="text-left w-full group"
+                        >
+                          <div className="font-mono text-sm font-semibold group-hover:text-primary transition-colors">
+                            {currentQuote.quoteNumber}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Total {money.gyd(currentQuote.total)} · Rev{" "}
+                            {currentQuote.version}
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="text-sm text-muted-foreground">
+                          No quote generated yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                        <Compass className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="text-sm font-semibold tracking-tight">
+                        Guidance for Success
+                      </span>
+                    </div>
+                    <p className="text-sm text-foreground/90 leading-relaxed mb-3">
+                      {guidance.headline}
+                    </p>
+                    <ul className="space-y-2">
+                      {guidance.steps.map((step) => (
+                        <li
+                          key={step}
+                          className="flex items-start gap-2 text-sm text-muted-foreground"
+                        >
+                          <CircleCheck className="w-4 h-4 text-primary/70 shrink-0 mt-0.5" />
+                          {step}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
               {tab === "details" && (
                 <div className="space-y-4">
                   <Section title="Lead Information">
@@ -1584,39 +1730,6 @@ export default function LeadDetail() {
                     </InlineField>
                   </Section>
 
-                  <Section title="Additional Information">
-                    <InlineField
-                      label="Description"
-                      canEdit={canEdit}
-                      full
-                      editor={{
-                        kind: "textarea",
-                        value: lead.description ?? "",
-                      }}
-                      onSave={(v) => patchField({ description: textOrNull(v) })}
-                    >
-                      {lead.description}
-                    </InlineField>
-                    <InlineField
-                      label="Notes"
-                      canEdit={canEdit}
-                      full
-                      editor={{ kind: "textarea", value: lead.notes ?? "" }}
-                      onSave={(v) => patchField({ notes: textOrNull(v) })}
-                    >
-                      {lead.notes}
-                    </InlineField>
-                    <InlineField
-                      label="Address"
-                      canEdit={canEdit}
-                      full
-                      editor={{ kind: "textarea", value: lead.address ?? "" }}
-                      onSave={(v) => patchField({ address: textOrNull(v) })}
-                    >
-                      {lead.address}
-                    </InlineField>
-                  </Section>
-
                   <Section title="System Information">
                     <InlineField label="Created">
                       {formatGuyanaDateTime(lead.createdAt)}
@@ -1630,7 +1743,7 @@ export default function LeadDetail() {
                 </div>
               )}
 
-              {tab === "files" && (
+              {tab === "documents" && (
                 <div className="space-y-4">
                   {/* Quotation Codes — versioned, deterministic tax engine */}
                   <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-4 space-y-3">
@@ -1811,8 +1924,37 @@ export default function LeadDetail() {
                 </div>
               )}
 
-              {tab === "calls" && (
+              {tab === "correspondence" && (
                 <div className="space-y-5">
+                  <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-foreground/[0.02] p-1 w-fit">
+                    <button
+                      onClick={() => setCorrView("calls")}
+                      className={cn(
+                        "px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors",
+                        corrView === "calls"
+                          ? "bg-primary/[0.12] text-foreground ring-1 ring-primary/30"
+                          : "text-muted-foreground hover:text-foreground/80",
+                      )}
+                    >
+                      Calls
+                    </button>
+                    <button
+                      onClick={() => setCorrView("whatsapp")}
+                      className={cn(
+                        "px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors",
+                        corrView === "whatsapp"
+                          ? "bg-primary/[0.12] text-foreground ring-1 ring-primary/30"
+                          : "text-muted-foreground hover:text-foreground/80",
+                      )}
+                    >
+                      WhatsApp
+                    </button>
+                  </div>
+
+                  {corrView === "whatsapp" ? (
+                    <WhatsappPanel leadId={lead.id} canReply={canEdit} />
+                  ) : (
+                  <div className="space-y-5">
                   <div className="flex items-center justify-between">
                     <div className="grid grid-cols-3 gap-3 flex-1">
                       <div className="rounded-xl border border-white/10 bg-foreground/[0.03] p-3">
@@ -1932,10 +2074,124 @@ export default function LeadDetail() {
                     </div>
                   )}
                 </div>
+                  )}
+                </div>
               )}
 
-              {tab === "whatsapp" && (
-                <WhatsappPanel leadId={lead.id} canReply={canEdit} />
+              {tab === "notes" && (
+                <div className="space-y-5">
+                  <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-4">
+                    <Textarea
+                      value={noteText}
+                      onChange={(e) => setNoteText(e.target.value)}
+                      placeholder="Post a note — call outcome, customer comment, next step…"
+                      className="bg-transparent border-white/10 resize-none min-h-[72px]"
+                    />
+                    <div className="flex justify-end mt-3">
+                      <Button
+                        size="sm"
+                        className="gap-1.5"
+                        disabled={!noteText.trim() || createNote.isPending}
+                        onClick={() =>
+                          createNote.mutate({
+                            id: lead.id,
+                            data: { text: noteText.trim() },
+                          })
+                        }
+                      >
+                        {createNote.isPending ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Send className="w-3.5 h-3.5" />
+                        )}
+                        Post Note
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Section title="Lead Notes & Context">
+                    <InlineField
+                      label="Description"
+                      canEdit={canEdit}
+                      full
+                      editor={{
+                        kind: "textarea",
+                        value: lead.description ?? "",
+                      }}
+                      onSave={(v) => patchField({ description: textOrNull(v) })}
+                    >
+                      {lead.description}
+                    </InlineField>
+                    <InlineField
+                      label="Notes"
+                      canEdit={canEdit}
+                      full
+                      editor={{ kind: "textarea", value: lead.notes ?? "" }}
+                      onSave={(v) => patchField({ notes: textOrNull(v) })}
+                    >
+                      {lead.notes}
+                    </InlineField>
+                    <InlineField
+                      label="Address"
+                      canEdit={canEdit}
+                      full
+                      editor={{ kind: "textarea", value: lead.address ?? "" }}
+                      onSave={(v) => patchField({ address: textOrNull(v) })}
+                    >
+                      {lead.address}
+                    </InlineField>
+                  </Section>
+
+                  {(() => {
+                    const notes = (timeline ?? []).filter(
+                      (e) => e.kind === "note",
+                    );
+                    return notes.length > 0 ? (
+                      <div className="space-y-3">
+                        {notes.map((e) => (
+                          <div
+                            key={e.id}
+                            className="flex items-start gap-3 rounded-xl border border-white/5 bg-foreground/[0.02] p-4"
+                          >
+                            <span
+                              className={cn(
+                                "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+                                e.isAgent
+                                  ? "bg-primary/15 text-primary"
+                                  : "bg-foreground/[0.06] text-muted-foreground",
+                              )}
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-baseline justify-between gap-3">
+                                <span className="text-sm font-semibold truncate">
+                                  {e.title}
+                                </span>
+                                <span className="text-[11px] text-muted-foreground shrink-0">
+                                  {formatGuyanaDateTime(e.createdAt)}
+                                </span>
+                              </div>
+                              {e.detail && (
+                                <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap break-words">
+                                  {e.detail}
+                                </p>
+                              )}
+                              <div className="text-[11px] text-muted-foreground/70 mt-1.5">
+                                {e.actor}
+                                {e.isAgent ? " · AI agent" : ""}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground text-center py-8">
+                        No notes yet.
+                      </div>
+                    );
+                  })()}
+                </div>
               )}
 
               {tab === "activity" && (
@@ -2026,12 +2282,246 @@ export default function LeadDetail() {
             </motion.div>
           </AnimatePresence>
         </div>
+
+        {/* Right rail */}
+        <div className="space-y-6 lg:sticky lg:top-6">
+          <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-3">
+              One-Tap Contact
+            </div>
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                disabled={!lead.phone}
+                onClick={() => {
+                  logTouch.mutate({
+                    id: lead.id,
+                    data: { text: "One-tap call to customer" },
+                  });
+                  if (canEdit) setCallOpen(true);
+                  else if (lead.phone)
+                    window.location.href = `tel:${lead.phone}`;
+                }}
+              >
+                <Phone className="w-4 h-4 text-primary" />
+                Call
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                disabled={!lead.phone}
+                onClick={() =>
+                  oneTap(
+                    `https://wa.me/${(lead.phone ?? "").replace(/\D/g, "")}`,
+                    "One-tap WhatsApp to customer",
+                  )
+                }
+              >
+                <MessageSquare className="w-4 h-4 text-primary" />
+                WhatsApp
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                disabled={!lead.email}
+                onClick={() =>
+                  oneTap(
+                    `mailto:${lead.email}`,
+                    "One-tap email to customer",
+                    true,
+                  )
+                }
+              >
+                <Mail className="w-4 h-4 text-primary" />
+                Email
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={() =>
+                  oneTap(
+                    "https://www.facebook.com/messages",
+                    "One-tap Facebook message to customer",
+                  )
+                }
+              >
+                <Facebook className="w-4 h-4 text-primary" />
+                Facebook
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={() =>
+                  oneTap(
+                    "https://www.instagram.com/direct/inbox/",
+                    "One-tap Instagram message to customer",
+                  )
+                }
+              >
+                <Instagram className="w-4 h-4 text-primary" />
+                Instagram
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                <User className="w-3.5 h-3.5" />
+              </span>
+              <span className="text-sm font-semibold tracking-tight">
+                Sales Advisor
+              </span>
+            </div>
+            <div className="text-sm">{ownerDisplay}</div>
+            {lead.divisionId != null && (
+              <div className="text-xs text-muted-foreground mt-2">
+                {divisions?.find((d) => d.id === lead.divisionId)?.name ?? "—"}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                <Car className="w-3.5 h-3.5" />
+              </span>
+              <span className="text-sm font-semibold tracking-tight">
+                Test Drive
+              </span>
+            </div>
+            {lead.testDriveAt ? (
+              <div className="space-y-1">
+                <div className="text-sm font-medium">
+                  {formatGuyanaDateTime(lead.testDriveAt)}
+                </div>
+                {lead.testDriveBranch && (
+                  <div className="text-xs text-muted-foreground">
+                    {lead.testDriveBranch}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                No test drive scheduled.
+              </div>
+            )}
+          </div>
+
+          {pendingGates.length > 0 && (
+            <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-5">
+              <div className="flex items-center gap-2 mb-3 text-amber-500">
+                <span className="text-sm font-semibold tracking-tight">
+                  Pending Manager Gates
+                </span>
+                <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20">
+                  {pendingGates.length}
+                </span>
+              </div>
+              <ul className="space-y-2 mb-3">
+                {pendingGates.map((g) => (
+                  <li
+                    key={g.id}
+                    className="text-sm text-foreground/90 capitalize"
+                  >
+                    {g.type.replace(/_/g, " ")}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href="/approvals"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+              >
+                Review in Approvals
+                <ArrowUpRight className="w-3 h-3" />
+              </Link>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-3">
+              Quick Actions
+            </div>
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={() => setTab("documents")}
+              >
+                <FileText className="w-4 h-4 text-primary" />
+                Build Quote
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={() => setWorkflowOpen(true)}
+              >
+                <Car className="w-4 h-4 text-primary" />
+                Book Test Drive
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                onClick={() => setRunReviewOpen(true)}
+              >
+                <ShieldCheck className="w-4 h-4 text-primary" />
+                Run Review
+              </Button>
+            </div>
+          </div>
+
+          {vehicle && (
+            <Link
+              href={`/vehicle/${vehicle.id}`}
+              className="block rounded-2xl border border-white/10 bg-foreground/[0.03] overflow-hidden hover:border-primary/40 transition-colors group"
+            >
+              <div className="h-36 bg-foreground/[0.04]">
+                {vehicle.imageUrl ? (
+                  <img
+                    src={
+                      vehicle.imageUrl.startsWith("http")
+                        ? vehicle.imageUrl
+                        : `${import.meta.env.BASE_URL}${vehicle.imageUrl.replace(/^\//, "")}`
+                    }
+                    alt={`${vehicle.make} ${vehicle.model}`}
+                    className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Car className="w-8 h-8 text-muted-foreground/30" />
+                  </div>
+                )}
+              </div>
+              <div className="p-4">
+                <div className="font-semibold flex items-center gap-1.5">
+                  {vehicle.year} {vehicle.make} {vehicle.model}
+                  <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {vehicle.trim || vehicle.variant || "Standard specification"}
+                  {vehicle.exteriorColor ? ` · ${vehicle.exteriorColor}` : ""}
+                </div>
+                <div className="text-lg font-light text-primary mt-2">
+                  {money.gyd(vehicle.price)}
+                </div>
+              </div>
+            </Link>
+          )}
+        </div>
       </div>
 
       <LeadWorkflowDialog
         leadId={workflowOpen ? lead.id : null}
         open={workflowOpen}
         onOpenChange={setWorkflowOpen}
+      />
+
+      <RunReviewDialog
+        leadId={lead.id}
+        open={runReviewOpen}
+        onOpenChange={setRunReviewOpen}
+        canEdit={canEdit}
       />
 
       {canEdit && editOpen && (

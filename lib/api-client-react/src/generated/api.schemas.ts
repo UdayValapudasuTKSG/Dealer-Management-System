@@ -1905,6 +1905,62 @@ export interface LeadAdvanceUnmet {
   unmet: string[];
 }
 
+export interface LeadReviewItem {
+  key: string;
+  label: string;
+  met: boolean;
+  owner: string;
+}
+
+export type LeadReviewStageStage = typeof LeadReviewStageStage[keyof typeof LeadReviewStageStage];
+
+
+export const LeadReviewStageStage = {
+  qualified: 'qualified',
+  test_drive: 'test_drive',
+  negotiation: 'negotiation',
+  sold: 'sold',
+  delivery: 'delivery',
+} as const;
+
+export type LeadReviewStageState = typeof LeadReviewStageState[keyof typeof LeadReviewStageState];
+
+
+export const LeadReviewStageState = {
+  passed: 'passed',
+  current: 'current',
+  upcoming: 'upcoming',
+} as const;
+
+export interface LeadReviewStage {
+  stage: LeadReviewStageStage;
+  label: string;
+  targetPhase: string;
+  state: LeadReviewStageState;
+  items: LeadReviewItem[];
+}
+
+/**
+ * @nullable
+ */
+export type LeadReviewNextStage = typeof LeadReviewNextStage[keyof typeof LeadReviewNextStage] | null;
+
+
+export const LeadReviewNextStage = {
+  qualified: 'qualified',
+  test_drive: 'test_drive',
+  negotiation: 'negotiation',
+  sold: 'sold',
+} as const;
+
+export interface LeadReview {
+  leadId: number;
+  phase: string;
+  /** @nullable */
+  nextStage: LeadReviewNextStage;
+  stages: LeadReviewStage[];
+}
+
 export type LeadDecisionInputChoice = typeof LeadDecisionInputChoice[keyof typeof LeadDecisionInputChoice];
 
 
