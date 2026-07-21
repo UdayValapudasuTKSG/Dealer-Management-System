@@ -11,6 +11,7 @@ import {
   useListVehicles,
   useListDeals,
   useListDeliveries,
+  useListLeadCalls,
   getGetLeadQueryKey,
   getGetLeadTimelineQueryKey,
   getListLeadsQueryKey,
@@ -45,6 +46,8 @@ import {
   Paperclip,
   Pencil,
   Phone,
+  PhoneIncoming,
+  PhoneOutgoing,
   Send,
   User,
   Workflow,
@@ -426,10 +429,32 @@ function Section({
 const TABS = [
   { key: "details", label: "Details" },
   { key: "files", label: "Quotes & Files" },
+  { key: "calls", label: "Calls" },
   { key: "activity", label: "Activity" },
 ] as const;
 const WHATSAPP_TAB = { key: "whatsapp", label: "WhatsApp" } as const;
 type Tab = (typeof TABS)[number]["key"] | typeof WHATSAPP_TAB.key;
+
+const CALL_STATUS_LABEL: Record<string, string> = {
+  completed: "Completed",
+  no_answer: "No answer",
+  busy: "Busy",
+  voicemail: "Voicemail",
+};
+
+const CALL_SENTIMENT_STYLE: Record<string, string> = {
+  positive: "bg-emerald-500/15 text-emerald-500 ring-emerald-500/30",
+  neutral: "bg-foreground/[0.06] text-foreground/70 ring-white/15",
+  negative: "bg-primary/15 text-primary ring-primary/30",
+};
+
+function formatCallDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return "";
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins === 0) return `${secs}s`;
+  return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+}
 
 function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
   return [
@@ -540,6 +565,7 @@ export default function LeadDetail() {
   const { data: quote } = useGetLeadQuote(id);
   const { data: allDeals } = useListDeals();
   const { data: allDeliveries } = useListDeliveries();
+  const { data: calls } = useListLeadCalls(id);
 
   const [tab, setTab] = useState<Tab>("details");
   const [workflowOpen, setWorkflowOpen] = useState(false);
@@ -1582,6 +1608,129 @@ export default function LeadDetail() {
                           <span className="text-sm truncate">{a.name}</span>
                         </a>
                       ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {tab === "calls" && (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between">
+                    <div className="grid grid-cols-3 gap-3 flex-1">
+                      <div className="rounded-xl border border-white/10 bg-foreground/[0.03] p-3">
+                        <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                          Total calls
+                        </div>
+                        <div className="text-xl font-semibold mt-0.5">
+                          {calls?.length ?? 0}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-foreground/[0.03] p-3">
+                        <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                          Connected
+                        </div>
+                        <div className="text-xl font-semibold mt-0.5">
+                          {calls?.filter((c) => c.status === "completed")
+                            .length ?? 0}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-foreground/[0.03] p-3">
+                        <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                          Talk time
+                        </div>
+                        <div className="text-xl font-semibold mt-0.5">
+                          {formatCallDuration(
+                            (calls ?? []).reduce(
+                              (sum, c) => sum + (c.durationSeconds ?? 0),
+                              0,
+                            ),
+                          ) || "0m"}
+                        </div>
+                      </div>
+                    </div>
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        className="gap-1.5 ml-4 shrink-0"
+                        onClick={() => setCallOpen(true)}
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        Log call
+                      </Button>
+                    )}
+                  </div>
+
+                  {calls && calls.length > 0 ? (
+                    <div className="space-y-3">
+                      {calls.map((c) => (
+                        <div
+                          key={c.id}
+                          className="rounded-xl border border-white/5 bg-foreground/[0.02] p-4"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={cn(
+                                "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1",
+                                c.direction === "inbound"
+                                  ? "bg-emerald-500/10 text-emerald-500 ring-emerald-500/25"
+                                  : "bg-primary/10 text-primary ring-primary/25",
+                              )}
+                            >
+                              {c.direction === "inbound" ? (
+                                <PhoneIncoming className="w-3.5 h-3.5" />
+                              ) : (
+                                <PhoneOutgoing className="w-3.5 h-3.5" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-semibold capitalize">
+                                  {c.direction} call
+                                </span>
+                                <span
+                                  className={cn(
+                                    "rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1",
+                                    c.status === "completed"
+                                      ? "bg-emerald-500/15 text-emerald-500 ring-emerald-500/30"
+                                      : "bg-foreground/[0.06] text-foreground/70 ring-white/15",
+                                  )}
+                                >
+                                  {CALL_STATUS_LABEL[c.status] ?? c.status}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ring-1",
+                                    CALL_SENTIMENT_STYLE[c.sentiment] ??
+                                      "bg-foreground/[0.06] text-foreground/70 ring-white/15",
+                                  )}
+                                >
+                                  {c.sentiment}
+                                </span>
+                                {c.durationSeconds != null && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {formatCallDuration(c.durationSeconds)}
+                                  </span>
+                                )}
+                              </div>
+                              {c.notes && (
+                                <p className="text-sm text-muted-foreground mt-1.5 whitespace-pre-wrap">
+                                  {c.notes}
+                                </p>
+                              )}
+                              <div className="text-xs text-muted-foreground mt-1.5">
+                                {formatGuyanaDateTime(c.createdAt)} · {c.actor}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground rounded-2xl border border-dashed border-white/10 p-8 text-center">
+                      No calls logged yet
+                      {canEdit
+                        ? " — use Log call to record the first conversation."
+                        : "."}
                     </div>
                   )}
                 </div>
