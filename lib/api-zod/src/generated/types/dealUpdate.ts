@@ -21,4 +21,6 @@ export interface DealUpdate {
   monthlyPayment?: number;
   depositPaid?: boolean;
   salesAdvisor?: string;
+  /** @nullable */
+  salesAdvisorUserId?: number | null;
 }

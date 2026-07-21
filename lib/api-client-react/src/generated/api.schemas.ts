@@ -1667,6 +1667,8 @@ export interface Deal {
   depositPaid: boolean;
   /** @nullable */
   salesAdvisor?: string | null;
+  /** @nullable */
+  salesAdvisorUserId?: number | null;
   createdAt: string;
 }
 
@@ -1696,6 +1698,7 @@ export interface DealInput {
   monthlyPayment?: number;
   depositPaid?: boolean;
   salesAdvisor?: string;
+  salesAdvisorUserId?: number;
 }
 
 export type DealUpdateStage = typeof DealUpdateStage[keyof typeof DealUpdateStage];
@@ -1724,6 +1727,8 @@ export interface DealUpdate {
   monthlyPayment?: number;
   depositPaid?: boolean;
   salesAdvisor?: string;
+  /** @nullable */
+  salesAdvisorUserId?: number | null;
 }
 
 export type AppraisalCondition = typeof AppraisalCondition[keyof typeof AppraisalCondition];
@@ -2265,6 +2270,8 @@ export interface ServiceOrder {
   odometer?: number | null;
   /** @nullable */
   technician?: string | null;
+  /** @nullable */
+  technicianUserId?: number | null;
   estimatedCost: number;
   jobs: string[];
   createdAt: string;
@@ -2304,6 +2311,7 @@ export interface ServiceOrderInput {
   complaint?: string;
   odometer?: number;
   technician?: string;
+  technicianUserId?: number;
   estimatedCost?: number;
   jobs?: string[];
 }
@@ -2338,6 +2346,8 @@ export interface ServiceOrderUpdate {
   complaint?: string;
   odometer?: number;
   technician?: string;
+  /** @nullable */
+  technicianUserId?: number | null;
   estimatedCost?: number;
   jobs?: string[];
 }

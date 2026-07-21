@@ -10,6 +10,7 @@
     "migrate-dealers": "tsx ./src/migrate-dealers.ts",
     "seed-persona-users": "tsx ./src/seed-persona-users.ts",
     "verify-gate-cascades": "tsx ./src/verify-gate-cascades.ts",
+    "backfill-assignee-user-ids": "tsx ./src/backfill-assignee-user-ids.ts",
     "check-gate-cascades": "bash ./run-gate-cascade-check.sh",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

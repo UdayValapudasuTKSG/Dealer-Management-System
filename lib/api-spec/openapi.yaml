@@ -5047,6 +5047,7 @@ components:
         monthlyPayment: { type: ["number", "null"] }
         depositPaid: { type: boolean }
         salesAdvisor: { type: ["string", "null"] }
+        salesAdvisorUserId: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
     DealInput:
       type: object
@@ -5065,6 +5066,7 @@ components:
         monthlyPayment: { type: number }
         depositPaid: { type: boolean }
         salesAdvisor: { type: string }
+        salesAdvisorUserId: { type: integer }
     DealUpdate:
       type: object
       properties:
@@ -5081,6 +5083,7 @@ components:
         monthlyPayment: { type: number }
         depositPaid: { type: boolean }
         salesAdvisor: { type: string }
+        salesAdvisorUserId: { type: ["integer", "null"] }
 
     Appraisal:
       type: object
@@ -5382,6 +5385,7 @@ components:
         complaint: { type: ["string", "null"] }
         odometer: { type: ["integer", "null"] }
         technician: { type: ["string", "null"] }
+        technicianUserId: { type: ["integer", "null"] }
         estimatedCost: { type: number }
         jobs:
           type: array
@@ -5400,6 +5404,7 @@ components:
         complaint: { type: string }
         odometer: { type: integer }
         technician: { type: string }
+        technicianUserId: { type: integer }
         estimatedCost: { type: number }
         jobs:
           type: array
@@ -5413,6 +5418,7 @@ components:
         complaint: { type: string }
         odometer: { type: integer }
         technician: { type: string }
+        technicianUserId: { type: ["integer", "null"] }
         estimatedCost: { type: number }
         jobs:
           type: array

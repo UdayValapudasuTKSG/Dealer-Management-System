@@ -1939,6 +1939,7 @@ export const ListDealsResponseItem = zod.object({
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
   "salesAdvisor": zod.string().nullish(),
+  "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListDealsResponse = zod.array(ListDealsResponseItem)
@@ -1957,7 +1958,8 @@ export const CreateDealBody = zod.object({
   "otdPrice": zod.number().optional(),
   "monthlyPayment": zod.number().optional(),
   "depositPaid": zod.boolean().optional(),
-  "salesAdvisor": zod.string().optional()
+  "salesAdvisor": zod.string().optional(),
+  "salesAdvisorUserId": zod.number().optional()
 })
 
 export const CreateDealResponse = zod.object({
@@ -1975,6 +1977,7 @@ export const CreateDealResponse = zod.object({
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
   "salesAdvisor": zod.string().nullish(),
+  "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -1998,6 +2001,7 @@ export const GetDealResponse = zod.object({
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
   "salesAdvisor": zod.string().nullish(),
+  "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -2019,7 +2023,8 @@ export const UpdateDealBody = zod.object({
   "otdPrice": zod.number().optional(),
   "monthlyPayment": zod.number().optional(),
   "depositPaid": zod.boolean().optional(),
-  "salesAdvisor": zod.string().optional()
+  "salesAdvisor": zod.string().optional(),
+  "salesAdvisorUserId": zod.number().nullish()
 })
 
 export const UpdateDealResponse = zod.object({
@@ -2037,6 +2042,7 @@ export const UpdateDealResponse = zod.object({
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
   "salesAdvisor": zod.string().nullish(),
+  "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -2717,6 +2723,7 @@ export const ListServiceOrdersResponseItem = zod.object({
   "complaint": zod.string().nullish(),
   "odometer": zod.number().nullish(),
   "technician": zod.string().nullish(),
+  "technicianUserId": zod.number().nullish(),
   "estimatedCost": zod.number(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
@@ -2737,6 +2744,7 @@ export const CreateServiceOrderBody = zod.object({
   "complaint": zod.string().optional(),
   "odometer": zod.number().optional(),
   "technician": zod.string().optional(),
+  "technicianUserId": zod.number().optional(),
   "estimatedCost": zod.number().optional(),
   "jobs": zod.array(zod.string()).optional()
 })
@@ -2752,6 +2760,7 @@ export const CreateServiceOrderResponse = zod.object({
   "complaint": zod.string().nullish(),
   "odometer": zod.number().nullish(),
   "technician": zod.string().nullish(),
+  "technicianUserId": zod.number().nullish(),
   "estimatedCost": zod.number(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
@@ -2769,6 +2778,7 @@ export const UpdateServiceOrderBody = zod.object({
   "complaint": zod.string().optional(),
   "odometer": zod.number().optional(),
   "technician": zod.string().optional(),
+  "technicianUserId": zod.number().nullish(),
   "estimatedCost": zod.number().optional(),
   "jobs": zod.array(zod.string()).optional()
 })
@@ -2784,6 +2794,7 @@ export const UpdateServiceOrderResponse = zod.object({
   "complaint": zod.string().nullish(),
   "odometer": zod.number().nullish(),
   "technician": zod.string().nullish(),
+  "technicianUserId": zod.number().nullish(),
   "estimatedCost": zod.number(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
@@ -3672,6 +3683,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
   "salesAdvisor": zod.string().nullish(),
+  "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 }),zod.null()]).optional(),
   "deals": zod.array(zod.object({
@@ -3689,6 +3701,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
   "salesAdvisor": zod.string().nullish(),
+  "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "appraisals": zod.array(zod.object({
@@ -3749,6 +3762,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "complaint": zod.string().nullish(),
   "odometer": zod.number().nullish(),
   "technician": zod.string().nullish(),
+  "technicianUserId": zod.number().nullish(),
   "estimatedCost": zod.number(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()

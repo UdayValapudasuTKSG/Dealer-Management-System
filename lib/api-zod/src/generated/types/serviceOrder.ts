@@ -24,6 +24,8 @@ export interface ServiceOrder {
   odometer?: number | null;
   /** @nullable */
   technician?: string | null;
+  /** @nullable */
+  technicianUserId?: number | null;
   estimatedCost: number;
   jobs: string[];
   createdAt: Date;

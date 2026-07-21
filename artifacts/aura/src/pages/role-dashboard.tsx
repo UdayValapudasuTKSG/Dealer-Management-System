@@ -720,12 +720,18 @@ function SalesAdvisorDashboard() {
   const { data: leads } = useListLeads();
   const { data: deals } = useListDeals();
 
+  /* Match by user ID; the display-name fallback only applies to legacy
+     records that carry no ID (avoids duplicate-name collisions). */
   const mine = (leads ?? []).filter(
-    (l) => l.ownerUserId === me?.id || (!!me?.name && l.assignedTo === me.name),
+    (l) =>
+      (me?.id != null && l.ownerUserId === me.id) ||
+      (l.ownerUserId == null && !!me?.name && l.assignedTo === me.name),
   );
   const activeLeads = mine.filter((l) => l.phase !== "won" && l.phase !== "lost");
   const myDeals = (deals ?? []).filter(
-    (d) => !!me?.name && d.salesAdvisor === me.name,
+    (d) =>
+      (me?.id != null && d.salesAdvisorUserId === me.id) ||
+      (d.salesAdvisorUserId == null && !!me?.name && d.salesAdvisor === me.name),
   );
   const openDeals = myDeals.filter((d) => d.stage !== "delivered" && d.stage !== "lost");
   const hot = activeLeads.filter((l) => l.aiScore >= 75);

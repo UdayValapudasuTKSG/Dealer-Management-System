@@ -21,4 +21,5 @@ export interface DealInput {
   monthlyPayment?: number;
   depositPaid?: boolean;
   salesAdvisor?: string;
+  salesAdvisorUserId?: number;
 }

@@ -14,6 +14,7 @@ import {
 } from "@workspace/api-zod";
 import { onDealStageChanged } from "../lib/email-triggers";
 import { ensureDeliveryForDeal } from "../lib/delivery";
+import { resolveDealerUserIdByName } from "../lib/user-lookup";
 
 const router: IRouter = Router();
 
@@ -111,9 +112,15 @@ router.post("/deals", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
+  // Stamp the advisor's user ID so briefing scoping matches by ID, not name.
+  const salesAdvisorUserId =
+    parsed.data.salesAdvisorUserId ??
+    (await resolveDealerUserIdByName(dealerId, parsed.data.salesAdvisor));
+
   const [deal] = await db
     .insert(dealsTable)
-    .values({ ...parsed.data, dealerId: activeDealerId(res) })
+    .values({ ...parsed.data, salesAdvisorUserId, dealerId })
     .returning();
 
   await raiseBelowFloorGateIfNeeded(deal!);
@@ -186,9 +193,26 @@ router.patch("/deals/:id", async (req, res): Promise<void> => {
     }
   }
 
+  // Keep the advisor user ID in sync when the advisor name changes without
+  // an explicit ID (legacy callers send only the display name). Explicitly
+  // clear the ID when the new name doesn't resolve, so a stale ID from the
+  // previous advisor never survives a rename.
+  const updateValues: Partial<typeof dealsTable.$inferInsert> = {
+    ...parsed.data,
+  };
+  if (
+    parsed.data.salesAdvisor !== undefined &&
+    parsed.data.salesAdvisorUserId === undefined
+  ) {
+    updateValues.salesAdvisorUserId = await resolveDealerUserIdByName(
+      dealerId,
+      parsed.data.salesAdvisor,
+    );
+  }
+
   const [deal] = await db
     .update(dealsTable)
-    .set(parsed.data)
+    .set(updateValues)
     .where(and(eq(dealsTable.id, params.data.id), eq(dealsTable.dealerId, dealerId)))
     .returning();
 

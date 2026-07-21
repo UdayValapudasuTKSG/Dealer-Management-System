@@ -19,6 +19,7 @@ export interface ServiceOrderInput {
   complaint?: string;
   odometer?: number;
   technician?: string;
+  technicianUserId?: number;
   estimatedCost?: number;
   jobs?: string[];
 }

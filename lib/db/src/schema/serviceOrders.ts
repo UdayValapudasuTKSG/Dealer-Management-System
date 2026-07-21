@@ -22,6 +22,7 @@ export const serviceOrdersTable = pgTable("service_orders", {
   complaint: text("complaint"),
   odometer: integer("odometer"),
   technician: text("technician"),
+  technicianUserId: integer("technician_user_id"),
   estimatedCost: doublePrecision("estimated_cost").notNull().default(0),
   jobs: text("jobs").array().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true })

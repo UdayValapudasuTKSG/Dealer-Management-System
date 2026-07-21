@@ -15,6 +15,8 @@ export interface ServiceOrderUpdate {
   complaint?: string;
   odometer?: number;
   technician?: string;
+  /** @nullable */
+  technicianUserId?: number | null;
   estimatedCost?: number;
   jobs?: string[];
 }

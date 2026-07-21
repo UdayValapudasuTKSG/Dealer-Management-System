@@ -26,6 +26,7 @@ export const dealsTable = pgTable("deals", {
   monthlyPayment: doublePrecision("monthly_payment"),
   depositPaid: boolean("deposit_paid").notNull().default(false),
   salesAdvisor: text("sales_advisor"),
+  salesAdvisorUserId: integer("sales_advisor_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -56,6 +56,7 @@ import {
 import { onServiceOrderCompleted } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { activeDealerId } from "../middlewares/rbac";
+import { resolveDealerUserIdByName } from "../lib/user-lookup";
 
 const router: IRouter = Router();
 
@@ -116,11 +117,18 @@ router.post("/service-orders", async (req, res): Promise<void> => {
     return;
   }
 
+  const createDealerId = activeDealerId(res);
+  // Stamp the technician's user ID so briefing scoping matches by ID, not name.
+  const technicianUserId =
+    parsed.data.technicianUserId ??
+    (await resolveDealerUserIdByName(createDealerId, parsed.data.technician));
+
   const [order] = await db
     .insert(serviceOrdersTable)
     .values({
       ...parsed.data,
-      dealerId: activeDealerId(res),
+      technicianUserId,
+      dealerId: createDealerId,
       scheduledDate: toDateString(parsed.data.scheduledDate)!,
     })
     .returning();
@@ -173,9 +181,23 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
       ),
     );
 
+  // Keep the technician user ID in sync when only the display name is sent.
+  // Clear the ID explicitly when the new name doesn't resolve, so a stale ID
+  // from the previous technician never survives a rename.
+  const updateValues: Partial<typeof serviceOrdersTable.$inferInsert> = {
+    ...rest,
+  };
+  if (rest.technician !== undefined && rest.technicianUserId === undefined) {
+    updateValues.technicianUserId = await resolveDealerUserIdByName(
+      dealerId,
+      rest.technician,
+    );
+  }
+  if (dateStr) updateValues.scheduledDate = dateStr;
+
   const [order] = await db
     .update(serviceOrdersTable)
-    .set(dateStr ? { ...rest, scheduledDate: dateStr } : rest)
+    .set(updateValues)
     .where(
       and(
         eq(serviceOrdersTable.id, params.data.id),

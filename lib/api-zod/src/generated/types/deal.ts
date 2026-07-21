@@ -27,5 +27,7 @@ export interface Deal {
   depositPaid: boolean;
   /** @nullable */
   salesAdvisor?: string | null;
+  /** @nullable */
+  salesAdvisorUserId?: number | null;
   createdAt: Date;
 }

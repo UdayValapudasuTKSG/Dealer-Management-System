@@ -325,35 +325,54 @@ export default function Dashboard() {
      Deny-by-default: a non-manager with no display name sees NOTHING
      dealership-wide, never the unfiltered dataset. */
   const nameKey = myName?.trim().toLowerCase() ?? null;
-  const matchesMe = (assignee: string | null | undefined) =>
-    nameKey != null && (assignee ?? "").trim().toLowerCase() === nameKey;
+  const myId = me?.id ?? null;
+  /* Match by user ID first (robust to renames and duplicate names); fall
+     back to the legacy display-name match for records that predate IDs. */
+  const matchesMe = (
+    assigneeUserId: number | null | undefined,
+    assigneeName: string | null | undefined,
+  ) =>
+    (myId != null && assigneeUserId === myId) ||
+    (assigneeUserId == null &&
+      nameKey != null &&
+      (assigneeName ?? "").trim().toLowerCase() === nameKey);
   const scopedLeads = useMemo(
     () =>
-      isBroadView ? leads : (leads ?? []).filter((l) => matchesMe(l.assignedTo)),
+      isBroadView
+        ? leads
+        : (leads ?? []).filter((l) => matchesMe(l.ownerUserId, l.assignedTo)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [leads, isBroadView, nameKey],
+    [leads, isBroadView, nameKey, myId],
   );
   const scopedDeals = useMemo(
     () =>
-      isBroadView ? deals : (deals ?? []).filter((d) => matchesMe(d.salesAdvisor)),
+      isBroadView
+        ? deals
+        : (deals ?? []).filter((d) =>
+            matchesMe(d.salesAdvisorUserId, d.salesAdvisor),
+          ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [deals, isBroadView, nameKey],
+    [deals, isBroadView, nameKey, myId],
   );
   const scopedDeliveries = useMemo(
     () =>
       isBroadView
         ? deliveries
-        : (deliveries ?? []).filter((d) => matchesMe(d.advisorName)),
+        : (deliveries ?? []).filter((d) =>
+            matchesMe(d.advisorUserId, d.advisorName),
+          ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [deliveries, isBroadView, nameKey],
+    [deliveries, isBroadView, nameKey, myId],
   );
   const scopedServiceOrders = useMemo(
     () =>
       isBroadView
         ? serviceOrders
-        : (serviceOrders ?? []).filter((s) => matchesMe(s.technician)),
+        : (serviceOrders ?? []).filter((s) =>
+            matchesMe(s.technicianUserId, s.technician),
+          ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [serviceOrders, isBroadView, nameKey],
+    [serviceOrders, isBroadView, nameKey, myId],
   );
   const scopedGates = can("approvals", "view") ? gates : [];
 
