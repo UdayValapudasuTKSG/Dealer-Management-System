@@ -618,6 +618,13 @@ export interface Vehicle {
   exteriorColor: string;
   bodyType: string;
   status: VehicleStatus;
+  /**
+     * Soft lock — held around a booked test drive (single-unit models)
+     * @nullable
+     */
+  holdUntil?: string | null;
+  /** @nullable */
+  holdReason?: string | null;
   /** @nullable */
   imageUrl?: string | null;
   images?: string[];
@@ -3654,6 +3661,8 @@ export interface EmailLog {
   id: number;
   /** @nullable */
   customerId?: number | null;
+  /** @nullable */
+  leadId?: number | null;
   recipient: string;
   subject: string;
   template: string;
@@ -3663,8 +3672,89 @@ export interface EmailLog {
   /** @nullable */
   lastError?: string | null;
   /** @nullable */
+  nextAttemptAt?: string | null;
+  /** @nullable */
   sentAt?: string | null;
   createdAt: string;
+}
+
+/**
+ * Omit to auto-pick — WhatsApp-first, email fallback
+ */
+export type OutreachInputChannel = typeof OutreachInputChannel[keyof typeof OutreachInputChannel];
+
+
+export const OutreachInputChannel = {
+  whatsapp: 'whatsapp',
+  email: 'email',
+} as const;
+
+export interface OutreachInput {
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  message: string;
+  /** Omit to auto-pick — WhatsApp-first, email fallback */
+  channel?: OutreachInputChannel;
+  /**
+     * Email subject (email channel only)
+     * @maxLength 200
+     */
+  subject?: string;
+}
+
+export type OutreachResultChannel = typeof OutreachResultChannel[keyof typeof OutreachResultChannel];
+
+
+export const OutreachResultChannel = {
+  whatsapp: 'whatsapp',
+  email: 'email',
+} as const;
+
+export interface OutreachResult {
+  ok: boolean;
+  channel: OutreachResultChannel;
+  outboxId: number;
+  recipient?: string;
+}
+
+export type CalendarEventKind = typeof CalendarEventKind[keyof typeof CalendarEventKind];
+
+
+export const CalendarEventKind = {
+  test_drive: 'test_drive',
+  delivery: 'delivery',
+  service: 'service',
+  follow_up: 'follow_up',
+} as const;
+
+export interface CalendarEvent {
+  id: string;
+  kind: CalendarEventKind;
+  title: string;
+  /** @nullable */
+  detail?: string | null;
+  startsAt: string;
+  allDay: boolean;
+  /** @nullable */
+  assigneeName?: string | null;
+  /** @nullable */
+  link?: string | null;
+  refId?: number;
+}
+
+export type CalendarResponseScope = typeof CalendarResponseScope[keyof typeof CalendarResponseScope];
+
+
+export const CalendarResponseScope = {
+  own: 'own',
+  all: 'all',
+} as const;
+
+export interface CalendarResponse {
+  events: CalendarEvent[];
+  scope: CalendarResponseScope;
 }
 
 export type NotificationType = typeof NotificationType[keyof typeof NotificationType];
@@ -4017,6 +4107,12 @@ limit?: number;
 export type ListEmailLogsParams = {
 customerId?: number;
 status?: string;
+channel?: string;
+};
+
+export type GetCalendarParams = {
+from: string;
+to: string;
 };
 
 export type ListTasksParams = {

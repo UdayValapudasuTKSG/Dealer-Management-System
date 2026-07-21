@@ -9,10 +9,13 @@ import {
   EMAIL_TEMPLATES,
   type EmailTemplate,
   type EmailLog,
+  type WhatsappKind,
 } from "@workspace/db";
 import { logger } from "./logger";
 import { buildQuotePdf } from "./quote-pdf";
 import { testDriveIcsFromPayload } from "./calendar";
+import { whatsappConfig, sendWhatsappText } from "./whatsapp";
+import { recordWhatsappMessage } from "./whatsapp-log";
 
 // ---------------------------------------------------------------------------
 // Transport
@@ -248,6 +251,20 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       `${d(x, "message", "It has been a privilege to look after you. From everyone at AURA, thank you for your trust — we're here whenever you need us.")}`,
     sample: { name: "Alex", message: "It has been a privilege to look after you this month. From everyone at AURA — thank you." },
   },
+  outreach: {
+    label: "Personal Outreach",
+    description: "A personal note from the advisor, drafted with AI and approved before sending.",
+    subject: (x) => d(x, "subject", `A note from ${d(x, "advisor", "your AURA advisor")}`),
+    heading: (x) => `Hello ${d(x, "name", "there")}`,
+    body: (x) =>
+      `${d(x, "message", "Your advisor has an update for you.").replace(/\n/g, "<br/>")}`,
+    cta: (x) => ({ label: d(x, "advisor", "Your AURA advisor") }),
+    sample: {
+      name: "Alex Mensah",
+      advisor: "Nana Adjei",
+      message: "Great news — the i7 you asked about arrives this Friday. Shall I hold a viewing slot for you?",
+    },
+  },
   smtp_test: {
     label: "SMTP Test",
     description: "Verifies the Gmail SMTP configuration.",
@@ -321,22 +338,33 @@ export function renderEmail(
 }
 
 // ---------------------------------------------------------------------------
-// Queue — DB-backed with retry
+// Outbox — DB-backed queue with retry/backoff + idempotency for every
+// outbound email AND WhatsApp message.
 // ---------------------------------------------------------------------------
 
 const MAX_ATTEMPTS = 3;
+
+/** Exponential backoff: 1 min, 2 min, 4 min… after each failed attempt. */
+function backoffDate(attempts: number): Date {
+  return new Date(Date.now() + Math.pow(2, Math.max(0, attempts - 1)) * 60_000);
+}
 
 export type EnqueueOptions = {
   template: EmailTemplate;
   to: string;
   dealerId: number;
   customerId?: number | null;
+  leadId?: number | null;
   data?: TemplateData;
+  /** Idempotency — a second enqueue with the same key is a no-op. */
+  dedupeKey?: string;
+  /** Scheduled send: worker won't touch the item before this time. */
+  sendAt?: Date;
 };
 
 /**
  * Typed event API for other modules: enqueue a templated email.
- * The queue worker delivers it, retries on failure, and logs everything.
+ * The queue worker delivers it, retries with backoff, and logs everything.
  */
 export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
   const { subject } = renderEmail(opts.template, opts.data ?? {});
@@ -345,17 +373,83 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
     .values({
       dealerId: opts.dealerId,
       customerId: opts.customerId ?? null,
+      leadId: opts.leadId ?? null,
       recipient: opts.to,
       subject,
       template: opts.template,
       channel: "email",
       status: "queued",
       payload: opts.data ?? {},
+      dedupeKey: opts.dedupeKey ?? null,
+      nextAttemptAt: opts.sendAt ?? null,
     })
+    .onConflictDoNothing({ target: emailLogsTable.dedupeKey })
     .returning();
+  if (!row) {
+    // Duplicate dedupeKey — return the existing item (idempotent enqueue).
+    const [existing] = await db
+      .select()
+      .from(emailLogsTable)
+      .where(eq(emailLogsTable.dedupeKey, opts.dedupeKey!));
+    return existing!;
+  }
   // Kick the worker soon so sends feel immediate.
   setTimeout(() => void processQueue(), 50);
-  return row!;
+  return row;
+}
+
+export type EnqueueWhatsappOptions = {
+  kind: WhatsappKind;
+  to: string; // digits-only phone
+  body: string;
+  dealerId: number;
+  leadId?: number | null;
+  customerId?: number | null;
+  /** Shown in the outbox log ("subject" column). */
+  summary?: string;
+  /** Recorded as the transcript actor once delivered (default "AURA Outbox"). */
+  actor?: string;
+  dedupeKey?: string;
+  sendAt?: Date;
+};
+
+/**
+ * Enqueue an outbound WhatsApp message through the same DB-backed outbox.
+ * The worker sends it via the Meta transport, records the transcript, and
+ * retries with backoff on failure — failures stay visible in the outbox log.
+ */
+export async function enqueueWhatsapp(
+  opts: EnqueueWhatsappOptions,
+): Promise<EmailLog> {
+  const [row] = await db
+    .insert(emailLogsTable)
+    .values({
+      dealerId: opts.dealerId,
+      customerId: opts.customerId ?? null,
+      leadId: opts.leadId ?? null,
+      recipient: opts.to.replace(/\D/g, ""),
+      subject: opts.summary ?? opts.body.slice(0, 140),
+      template: opts.kind,
+      channel: "whatsapp",
+      status: "queued",
+      payload: {
+        body: opts.body,
+        ...(opts.actor ? { actor: opts.actor } : {}),
+      },
+      dedupeKey: opts.dedupeKey ?? null,
+      nextAttemptAt: opts.sendAt ?? null,
+    })
+    .onConflictDoNothing({ target: emailLogsTable.dedupeKey })
+    .returning();
+  if (!row) {
+    const [existing] = await db
+      .select()
+      .from(emailLogsTable)
+      .where(eq(emailLogsTable.dedupeKey, opts.dedupeKey!));
+    return existing!;
+  }
+  setTimeout(() => void processQueue(), 50);
+  return row;
 }
 
 export function isKnownTemplate(key: string): key is EmailTemplate {
@@ -364,25 +458,97 @@ export function isKnownTemplate(key: string): key is EmailTemplate {
 
 let processing = false;
 
+/** Items ready for a (re)try: queued or retryable-failed, past their backoff time. */
+function readyFilter(channel: "email" | "whatsapp") {
+  return and(
+    or(
+      eq(emailLogsTable.status, "queued"),
+      and(
+        eq(emailLogsTable.status, "failed"),
+        lt(emailLogsTable.attempts, MAX_ATTEMPTS),
+      ),
+    ),
+    eq(emailLogsTable.channel, channel),
+    or(
+      isNull(emailLogsTable.nextAttemptAt),
+      lte(emailLogsTable.nextAttemptAt, new Date()),
+    ),
+  );
+}
+
+/** Mark an item failed and schedule its next retry with exponential backoff. */
+async function markFailed(itemId: number, attempts: number, message: string) {
+  await db
+    .update(emailLogsTable)
+    .set({
+      status: "failed",
+      lastError: message,
+      nextAttemptAt: attempts < MAX_ATTEMPTS ? backoffDate(attempts) : null,
+    })
+    .where(eq(emailLogsTable.id, itemId));
+}
+
+async function processWhatsappQueue(): Promise<void> {
+  const pending = await db
+    .select()
+    .from(emailLogsTable)
+    .where(readyFilter("whatsapp"))
+    .limit(10);
+  if (pending.length === 0) return;
+
+  const cfg = whatsappConfig();
+  for (const item of pending) {
+    const attempts = item.attempts + 1;
+    await db
+      .update(emailLogsTable)
+      .set({ status: "sending", attempts })
+      .where(eq(emailLogsTable.id, item.id));
+    if (!cfg) {
+      await markFailed(
+        item.id,
+        attempts,
+        "WhatsApp sending is not configured (Meta Cloud API credentials missing).",
+      );
+      continue;
+    }
+    try {
+      const body = item.payload?.body ?? "";
+      await sendWhatsappText(cfg, item.recipient, body);
+      await db
+        .update(emailLogsTable)
+        .set({ status: "sent", sentAt: new Date(), lastError: null })
+        .where(eq(emailLogsTable.id, item.id));
+      await recordWhatsappMessage({
+        phone: item.recipient,
+        direction: "out",
+        body,
+        dealerId: item.dealerId,
+        leadId: item.leadId,
+        actor: item.payload?.["actor"] ?? "AURA Outbox",
+      });
+      logger.info({ id: item.id, kind: item.template }, "whatsapp sent");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await markFailed(item.id, attempts, message);
+      logger.error({ err, id: item.id }, "whatsapp send failed");
+    }
+  }
+}
+
 export async function processQueue(): Promise<void> {
-  if (processing || !smtpConfigured()) return;
+  if (processing) return;
   processing = true;
   try {
+    await processWhatsappQueue();
+  } catch (err) {
+    logger.error({ err }, "whatsapp outbox pass failed");
+  }
+  try {
+    if (!smtpConfigured()) return;
     const pending = await db
       .select()
       .from(emailLogsTable)
-      .where(
-        and(
-          or(
-            eq(emailLogsTable.status, "queued"),
-            and(
-              eq(emailLogsTable.status, "failed"),
-              lt(emailLogsTable.attempts, MAX_ATTEMPTS),
-            ),
-          ),
-          eq(emailLogsTable.channel, "email"),
-        ),
-      )
+      .where(readyFilter("email"))
       .limit(10);
     if (pending.length === 0) return;
 
@@ -468,10 +634,7 @@ export async function processQueue(): Promise<void> {
         logger.info({ id: item.id, template: item.template }, "email sent");
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        await db
-          .update(emailLogsTable)
-          .set({ status: "failed", lastError: message })
-          .where(eq(emailLogsTable.id, item.id));
+        await markFailed(item.id, item.attempts + 1, message);
         logger.error({ err, id: item.id }, "email send failed");
       }
     }

@@ -179,6 +179,8 @@ export const ListVehiclesResponseItem = zod.object({
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
   "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
+  "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "images": zod.array(zod.string()).optional(),
   "accessories": zod.array(zod.string()).optional(),
@@ -266,6 +268,8 @@ export const CreateVehicleResponse = zod.object({
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
   "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
+  "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "images": zod.array(zod.string()).optional(),
   "accessories": zod.array(zod.string()).optional(),
@@ -307,6 +311,8 @@ export const GetVehicleResponse = zod.object({
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
   "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
+  "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "images": zod.array(zod.string()).optional(),
   "accessories": zod.array(zod.string()).optional(),
@@ -394,6 +400,8 @@ export const UpdateVehicleResponse = zod.object({
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
   "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
+  "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "images": zod.array(zod.string()).optional(),
   "accessories": zod.array(zod.string()).optional(),
@@ -1858,6 +1866,33 @@ export const SendLeadWhatsappReplyResponse = zod.object({
   "body": zod.string(),
   "actor": zod.string().nullish(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary A7 — approve and send an outreach draft (WhatsApp-first, email fallback)
+ */
+export const SendLeadOutreachParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const sendLeadOutreachBodyMessageMax = 4000;
+
+export const sendLeadOutreachBodySubjectMax = 200;
+
+
+
+export const SendLeadOutreachBody = zod.object({
+  "message": zod.string().min(1).max(sendLeadOutreachBodyMessageMax),
+  "channel": zod.enum(['whatsapp', 'email']).optional().describe('Omit to auto-pick — WhatsApp-first, email fallback'),
+  "subject": zod.string().max(sendLeadOutreachBodySubjectMax).optional().describe('Email subject (email channel only)')
+})
+
+export const SendLeadOutreachResponse = zod.object({
+  "ok": zod.boolean(),
+  "channel": zod.enum(['whatsapp', 'email']),
+  "outboxId": zod.number(),
+  "recipient": zod.string().optional()
 })
 
 
@@ -3871,6 +3906,8 @@ export const GetCustomerOverviewResponse = zod.object({
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
   "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
+  "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "images": zod.array(zod.string()).optional(),
   "accessories": zod.array(zod.string()).optional(),
@@ -3922,6 +3959,8 @@ export const GetCustomerOverviewResponse = zod.object({
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
   "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
+  "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "images": zod.array(zod.string()).optional(),
   "accessories": zod.array(zod.string()).optional(),
@@ -4321,6 +4360,8 @@ export const GetCustomerPersonaResponse = zod.object({
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
   "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
+  "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "images": zod.array(zod.string()).optional(),
   "accessories": zod.array(zod.string()).optional(),
@@ -4408,6 +4449,8 @@ export const UpsertCustomerPersonaResponse = zod.object({
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
   "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
+  "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "images": zod.array(zod.string()).optional(),
   "accessories": zod.array(zod.string()).optional(),
@@ -4476,6 +4519,8 @@ export const RecommendCustomerVehicleResponse = zod.object({
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
   "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
+  "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "images": zod.array(zod.string()).optional(),
   "accessories": zod.array(zod.string()).optional(),
@@ -5590,6 +5635,7 @@ export const EnqueueEmailBody = zod.object({
 export const EnqueueEmailResponse = zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
   "recipient": zod.string(),
   "subject": zod.string(),
   "template": zod.string(),
@@ -5597,6 +5643,7 @@ export const EnqueueEmailResponse = zod.object({
   "status": zod.enum(['queued', 'sending', 'sent', 'failed']),
   "attempts": zod.number(),
   "lastError": zod.string().nullish(),
+  "nextAttemptAt": zod.coerce.date().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -5607,12 +5654,14 @@ export const EnqueueEmailResponse = zod.object({
  */
 export const ListEmailLogsQueryParams = zod.object({
   "customerId": zod.coerce.number().optional(),
-  "status": zod.coerce.string().optional()
+  "status": zod.coerce.string().optional(),
+  "channel": zod.coerce.string().optional()
 })
 
 export const ListEmailLogsResponseItem = zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
   "recipient": zod.string(),
   "subject": zod.string(),
   "template": zod.string(),
@@ -5620,10 +5669,59 @@ export const ListEmailLogsResponseItem = zod.object({
   "status": zod.enum(['queued', 'sending', 'sent', 'failed']),
   "attempts": zod.number(),
   "lastError": zod.string().nullish(),
+  "nextAttemptAt": zod.coerce.date().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListEmailLogsResponse = zod.array(ListEmailLogsResponseItem)
+
+
+/**
+ * @summary Re-queue a failed outbox item for immediate retry
+ */
+export const RetryEmailLogParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RetryEmailLogResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
+  "recipient": zod.string(),
+  "subject": zod.string(),
+  "template": zod.string(),
+  "channel": zod.enum(['email', 'sms', 'whatsapp']),
+  "status": zod.enum(['queued', 'sending', 'sent', 'failed']),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "nextAttemptAt": zod.coerce.date().nullish(),
+  "sentAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Dealership calendar — test drives, deliveries, service appointments, and follow-ups due
+ */
+export const GetCalendarQueryParams = zod.object({
+  "from": zod.date(),
+  "to": zod.date()
+})
+
+export const GetCalendarResponse = zod.object({
+  "events": zod.array(zod.object({
+  "id": zod.string(),
+  "kind": zod.enum(['test_drive', 'delivery', 'service', 'follow_up']),
+  "title": zod.string(),
+  "detail": zod.string().nullish(),
+  "startsAt": zod.coerce.date(),
+  "allDay": zod.boolean(),
+  "assigneeName": zod.string().nullish(),
+  "link": zod.string().nullish(),
+  "refId": zod.number().optional()
+})),
+  "scope": zod.enum(['own', 'all'])
+})
 
 
 /**
@@ -5841,6 +5939,7 @@ export const GetCustomerCommunicationsResponse = zod.object({
   "emails": zod.array(zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
+  "leadId": zod.number().nullish(),
   "recipient": zod.string(),
   "subject": zod.string(),
   "template": zod.string(),
@@ -5848,6 +5947,7 @@ export const GetCustomerCommunicationsResponse = zod.object({
   "status": zod.enum(['queued', 'sending', 'sent', 'failed']),
   "attempts": zod.number(),
   "lastError": zod.string().nullish(),
+  "nextAttemptAt": zod.coerce.date().nullish(),
   "sentAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })),

@@ -22,6 +22,8 @@ import {
   recordingTransport,
 } from "./whatsapp-log";
 import { logger } from "./logger";
+import { rescheduleLink } from "./test-drive-scheduler";
+import type { Lead } from "@workspace/db";
 
 // ---------------------------------------------------------------------------
 // WhatsApp guided lead-capture bot — deterministic state machine, shared by
@@ -309,6 +311,99 @@ async function completeFlow(
   await linkWhatsappMessagesToLead(convo.phone, lead);
 }
 
+// ---------------------------------------------------------------------------
+// A10 — test-drive reminder Yes/No replies. When a lead with an upcoming
+// test drive answers the 24h reminder, consume the message here instead of
+// treating it as a generic note.
+// ---------------------------------------------------------------------------
+
+const YES_RE = /^\s*(yes|yeah|yep|y|confirm(ed)?|ok(ay)?|sure)\s*[.!]*\s*$/i;
+const NO_RE = /^\s*(no|nope|n|can'?t|cannot|cancel|reschedule)\s*[.!]*\s*$/i;
+
+async function handleTestDriveReminderReply(
+  t: WhatsappTransport,
+  lead: Lead,
+  msg: InboundWhatsappMessage,
+): Promise<boolean> {
+  const text = (msg.text ?? msg.replyTitle ?? "").trim();
+  if (!text) return false;
+  const upcoming =
+    lead.testDriveAt && lead.testDriveAt.getTime() > Date.now();
+  if (!upcoming) return false;
+  const isYes = YES_RE.test(text);
+  const isNo = NO_RE.test(text);
+  if (!isYes && !isNo) return false;
+
+  const whenLabel = lead.testDriveAt!.toLocaleString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  if (isYes) {
+    await db.insert(timelineEventsTable).values({
+      dealerId: lead.dealerId,
+      customerId: lead.customerId,
+      domain: "leads",
+      kind: "test_drive_confirmed",
+      title: `${lead.name} confirmed their test drive`,
+      detail: `Replied YES to the WhatsApp reminder for ${whenLabel}.`,
+      actor: "WhatsApp",
+      isAgent: true,
+      refType: "lead",
+      refId: lead.id,
+    });
+    if (lead.ownerUserId) {
+      await notifyUser({
+        userId: lead.ownerUserId,
+        dealerId: lead.dealerId,
+        type: "system",
+        title: `Test drive confirmed: ${lead.name}`,
+        body: `Customer replied YES for ${whenLabel}. Have the car ready.`,
+        link: `/lead/${lead.id}`,
+      });
+    }
+    await t.sendText(
+      msg.from,
+      `Perfect — you're confirmed for ${whenLabel}. The car will be detailed and waiting. See you then!`,
+    );
+  } else {
+    const link = rescheduleLink(lead);
+    await db.insert(timelineEventsTable).values({
+      dealerId: lead.dealerId,
+      customerId: lead.customerId,
+      domain: "leads",
+      kind: "test_drive_reschedule_requested",
+      title: `${lead.name} asked to reschedule their test drive`,
+      detail: `Replied NO to the WhatsApp reminder for ${whenLabel}. Reschedule link sent.`,
+      actor: "WhatsApp",
+      isAgent: true,
+      refType: "lead",
+      refId: lead.id,
+    });
+    if (lead.ownerUserId) {
+      await notifyUser({
+        userId: lead.ownerUserId,
+        dealerId: lead.dealerId,
+        type: "system",
+        title: `Reschedule requested: ${lead.name}`,
+        body: `Customer replied NO to the test-drive reminder for ${whenLabel}.`,
+        link: `/lead/${lead.id}`,
+      });
+    }
+    await t.sendText(
+      msg.from,
+      link
+        ? `No problem — you can pick a new time here (takes under a minute): ${link}`
+        : `No problem — your advisor will reach out shortly to find a new time.`,
+    );
+  }
+  await linkWhatsappMessagesToLead(msg.from, lead);
+  return true;
+}
+
 /** Open-lead repeat message: append to the file instead of restarting. */
 async function appendToOpenLead(
   t: WhatsappTransport,
@@ -378,6 +473,7 @@ export async function handleWhatsappMessage(
       // instead of restarting the guided flow.
       const existing = await findOpenLeadByPhone(dealerId, phone);
       if (existing) {
+        if (await handleTestDriveReminderReply(t, existing, msg)) return;
         await appendToOpenLead(t, existing, msg);
         return;
       }
@@ -528,6 +624,7 @@ export async function handleWhatsappOneShot(
     });
     const existing = await findOpenLeadByPhone(dealerId, msg.from);
     if (existing) {
+      if (await handleTestDriveReminderReply(t, existing, msg)) return;
       await appendToOpenLead(t, existing, msg);
       return;
     }

@@ -12,6 +12,8 @@ export interface EmailLog {
   id: number;
   /** @nullable */
   customerId?: number | null;
+  /** @nullable */
+  leadId?: number | null;
   recipient: string;
   subject: string;
   template: string;
@@ -20,6 +22,8 @@ export interface EmailLog {
   attempts: number;
   /** @nullable */
   lastError?: string | null;
+  /** @nullable */
+  nextAttemptAt?: Date | null;
   /** @nullable */
   sentAt?: Date | null;
   createdAt: Date;

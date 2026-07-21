@@ -46,6 +46,7 @@ import type {
   Booking,
   BookingInput,
   BookingUpdate,
+  CalendarResponse,
   CallLog,
   CallLogInput,
   CallSentimentSuggestInput,
@@ -103,6 +104,7 @@ import type {
   FinanceDocument,
   Gate,
   GateResolution,
+  GetCalendarParams,
   GetPermissionMeta200,
   GetPipelineSuggestionsParams,
   GetReportParams,
@@ -160,6 +162,8 @@ import type {
   Notification,
   NotifyOwnerInput,
   NotifyOwnerResult,
+  OutreachInput,
+  OutreachResult,
   OutstandingBalance,
   Part,
   PartInput,
@@ -4053,6 +4057,78 @@ export const useSendLeadWhatsappReply = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getSendLeadWhatsappReplyMutationOptions(options));
+    }
+
+export const getSendLeadOutreachUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/outreach`
+}
+
+/**
+ * @summary A7 — approve and send an outreach draft (WhatsApp-first, email fallback)
+ */
+export const sendLeadOutreach = async (id: number,
+    outreachInput: OutreachInput, options?: RequestInit): Promise<OutreachResult> => {
+
+  return customFetch<OutreachResult>(getSendLeadOutreachUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(outreachInput)
+  }
+);}
+
+
+
+
+
+export const getSendLeadOutreachMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendLeadOutreach>>, TError,{id: number;data: BodyType<OutreachInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendLeadOutreach>>, TError,{id: number;data: BodyType<OutreachInput>}, TContext> => {
+
+const mutationKey = ['sendLeadOutreach'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendLeadOutreach>>, {id: number;data: BodyType<OutreachInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  sendLeadOutreach(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendLeadOutreachMutationResult = NonNullable<Awaited<ReturnType<typeof sendLeadOutreach>>>
+    export type SendLeadOutreachMutationBody = BodyType<OutreachInput>
+    export type SendLeadOutreachMutationError = ErrorType<Error>
+
+    /**
+ * @summary A7 — approve and send an outreach draft (WhatsApp-first, email fallback)
+ */
+export const useSendLeadOutreach = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendLeadOutreach>>, TError,{id: number;data: BodyType<OutreachInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendLeadOutreach>>,
+        TError,
+        {id: number;data: BodyType<OutreachInput>},
+        TContext
+      > => {
+      return useMutation(getSendLeadOutreachMutationOptions(options));
     }
 
 export const getGetLeadQuoteUrl = (id: number,) => {
@@ -13755,6 +13831,161 @@ export function useListEmailLogs<TData = Awaited<ReturnType<typeof listEmailLogs
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListEmailLogsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRetryEmailLogUrl = (id: number,) => {
+
+
+
+
+  return `/api/emails/logs/${id}/retry`
+}
+
+/**
+ * @summary Re-queue a failed outbox item for immediate retry
+ */
+export const retryEmailLog = async (id: number, options?: RequestInit): Promise<EmailLog> => {
+
+  return customFetch<EmailLog>(getRetryEmailLogUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryEmailLogMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryEmailLog>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryEmailLog>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['retryEmailLog'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryEmailLog>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryEmailLog(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryEmailLogMutationResult = NonNullable<Awaited<ReturnType<typeof retryEmailLog>>>
+
+    export type RetryEmailLogMutationError = ErrorType<Error>
+
+    /**
+ * @summary Re-queue a failed outbox item for immediate retry
+ */
+export const useRetryEmailLog = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryEmailLog>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryEmailLog>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRetryEmailLogMutationOptions(options));
+    }
+
+export const getGetCalendarUrl = (params: GetCalendarParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/calendar?${stringifiedParams}` : `/api/calendar`
+}
+
+/**
+ * @summary Dealership calendar — test drives, deliveries, service appointments, and follow-ups due
+ */
+export const getCalendar = async (params: GetCalendarParams, options?: RequestInit): Promise<CalendarResponse> => {
+
+  return customFetch<CalendarResponse>(getGetCalendarUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCalendarQueryKey = (params?: GetCalendarParams,) => {
+    return [
+    `/api/calendar`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCalendarQueryOptions = <TData = Awaited<ReturnType<typeof getCalendar>>, TError = ErrorType<unknown>>(params: GetCalendarParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendar>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCalendarQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCalendar>>> = ({ signal }) => getCalendar(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCalendar>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCalendarQueryResult = NonNullable<Awaited<ReturnType<typeof getCalendar>>>
+export type GetCalendarQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Dealership calendar — test drives, deliveries, service appointments, and follow-ups due
+ */
+
+export function useGetCalendar<TData = Awaited<ReturnType<typeof getCalendar>>, TError = ErrorType<unknown>>(
+ params: GetCalendarParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCalendar>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCalendarQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

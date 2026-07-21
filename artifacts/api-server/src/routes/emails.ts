@@ -2,6 +2,8 @@ import { Router, type IRouter } from "express";
 import { and, desc, eq, count } from "drizzle-orm";
 import { db, emailLogsTable, EMAIL_TEMPLATES } from "@workspace/db";
 import {
+  RetryEmailLogParams,
+  RetryEmailLogResponse,
   GetEmailSettingsResponse,
   SendTestEmailBody,
   SendTestEmailResponse,
@@ -19,6 +21,7 @@ import {
   renderEmail,
   enqueueEmail,
   isKnownTemplate,
+  processQueue,
   TEMPLATE_DEFS,
 } from "../lib/email";
 import { activeDealerId } from "../middlewares/rbac";
@@ -127,6 +130,9 @@ router.get("/emails/logs", async (req, res): Promise<void> => {
     query.data.status !== undefined
       ? eq(emailLogsTable.status, query.data.status)
       : undefined,
+    query.data.channel !== undefined
+      ? eq(emailLogsTable.channel, query.data.channel)
+      : undefined,
   ].filter((f): f is NonNullable<typeof f> => Boolean(f));
   const rows = await db
     .select()
@@ -135,6 +141,39 @@ router.get("/emails/logs", async (req, res): Promise<void> => {
     .orderBy(desc(emailLogsTable.createdAt))
     .limit(200);
   res.json(ListEmailLogsResponse.parse(rows));
+});
+
+// Admin: re-queue a failed outbox item for an immediate retry.
+router.post("/emails/logs/:id/retry", async (req, res): Promise<void> => {
+  const params = RetryEmailLogParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(emailLogsTable)
+    .where(
+      and(
+        eq(emailLogsTable.id, params.data.id),
+        eq(emailLogsTable.dealerId, activeDealerId(res)),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "Outbox item not found" });
+    return;
+  }
+  if (row.status === "sent") {
+    res.status(422).json({ error: "This message was already delivered." });
+    return;
+  }
+  const [updated] = await db
+    .update(emailLogsTable)
+    .set({ status: "queued", attempts: 0, nextAttemptAt: null, lastError: null })
+    .where(eq(emailLogsTable.id, row.id))
+    .returning();
+  setTimeout(() => void processQueue(), 50);
+  res.json(RetryEmailLogResponse.parse(updated));
 });
 
 export default router;

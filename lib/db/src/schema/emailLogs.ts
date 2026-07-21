@@ -27,15 +27,27 @@ export const EMAIL_TEMPLATES = [
   "warranty_reminder",
   "feedback_request",
   "thank_you",
+  "outreach",
   "smtp_test",
 ] as const;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 
-// channel leaves room for future SMS / WhatsApp providers
+/** Non-email outbox kinds (channel = "whatsapp"); stored in the same `template` column. */
+export const WHATSAPP_KINDS = [
+  "whatsapp_message",
+  "test_drive_reminder",
+  "outreach",
+] as const;
+export type WhatsappKind = (typeof WHATSAPP_KINDS)[number];
+
+// The outbox: every outbound email AND WhatsApp message goes through this
+// DB-backed queue with retry/backoff (next_attempt_at) and idempotency
+// (dedupe_key). channel = "email" | "whatsapp".
 export const emailLogsTable = pgTable("email_logs", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
   customerId: integer("customer_id"),
+  leadId: integer("lead_id"),
   recipient: text("recipient").notNull(),
   subject: text("subject").notNull(),
   template: text("template").notNull(),
@@ -44,6 +56,10 @@ export const emailLogsTable = pgTable("email_logs", {
   attempts: integer("attempts").notNull().default(0),
   lastError: text("last_error"),
   payload: jsonb("payload").$type<Record<string, string>>().notNull().default({}),
+  /** Earliest time the worker may (re)try this item — backoff & scheduled sends. */
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+  /** Idempotency key — a second enqueue with the same key is a no-op. */
+  dedupeKey: text("dedupe_key").unique(),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

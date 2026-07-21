@@ -38,6 +38,13 @@ export interface Vehicle {
   exteriorColor: string;
   bodyType: string;
   status: VehicleStatus;
+  /**
+     * Soft lock — held around a booked test drive (single-unit models)
+     * @nullable
+     */
+  holdUntil?: Date | null;
+  /** @nullable */
+  holdReason?: string | null;
   /** @nullable */
   imageUrl?: string | null;
   images?: string[];

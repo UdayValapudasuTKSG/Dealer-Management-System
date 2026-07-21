@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListEmailLogsParams = {
-customerId?: number;
-status?: string;
-channel?: string;
+export type GetCalendarParams = {
+from: Date;
+to: Date;
 };

@@ -6,6 +6,7 @@ import {
   useListEmailTemplates,
   usePreviewEmailTemplate,
   useListEmailLogs,
+  useRetryEmailLog,
   getListEmailLogsQueryKey,
   getGetEmailSettingsQueryKey,
 } from "@workspace/api-client-react";
@@ -43,9 +44,27 @@ export default function SettingsEmail() {
   const qc = useQueryClient();
   const { data: settings } = useGetEmailSettings();
   const { data: templates } = useListEmailTemplates();
-  const { data: logs, isLoading: logsLoading } = useListEmailLogs();
+  const [channel, setChannel] = useState<"all" | "email" | "whatsapp">("all");
+  const { data: logs, isLoading: logsLoading } = useListEmailLogs(
+    channel === "all" ? {} : { channel },
+  );
   const [testTo, setTestTo] = useState("");
   const [previewKey, setPreviewKey] = useState<string | null>(null);
+
+  const retryLog = useRetryEmailLog({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Message re-queued", description: "It will retry on the next queue pass." });
+        qc.invalidateQueries({ queryKey: getListEmailLogsQueryKey() });
+      },
+      onError: (e) =>
+        toast({
+          title: "Could not retry",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
 
   const testSend = useSendTestEmail({
     mutation: {
@@ -172,8 +191,26 @@ export default function SettingsEmail() {
       {/* Logs */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
-            Delivery Log
+          <div className="flex items-center gap-3">
+            <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+              Outbox
+            </div>
+            <div className="flex items-center gap-1">
+              {(["all", "email", "whatsapp"] as const).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setChannel(c)}
+                  className={cn(
+                    "text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors",
+                    channel === c
+                      ? "bg-primary/15 text-primary ring-1 ring-primary/30"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {c === "all" ? "All" : c === "email" ? "Email" : "WhatsApp"}
+                </button>
+              ))}
+            </div>
           </div>
           <button
             onClick={refreshLogs}
@@ -189,7 +226,7 @@ export default function SettingsEmail() {
             </div>
           ) : (logs ?? []).length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              No emails sent yet.
+              Nothing in the outbox yet.
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -201,6 +238,7 @@ export default function SettingsEmail() {
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Attempts</th>
                   <th className="px-5 py-3">Time</th>
+                  <th className="px-5 py-3"></th>
                 </tr>
               </thead>
               <tbody>
@@ -224,10 +262,27 @@ export default function SettingsEmail() {
                       >
                         {l.status}
                       </Badge>
+                      {l.status === "failed" && l.lastError && (
+                        <div className="mt-1 text-[11px] text-red-400/80 max-w-[220px] truncate" title={l.lastError}>
+                          {l.lastError}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">{l.attempts}</td>
                     <td className="px-5 py-3 text-xs text-muted-foreground">
                       {new Date(l.createdAt).toLocaleString()}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      {(l.status === "failed" || l.status === "queued") && (
+                        <button
+                          onClick={() => retryLog.mutate({ id: l.id })}
+                          disabled={retryLog.isPending}
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline disabled:opacity-50"
+                        >
+                          <RefreshCw className={cn("h-3 w-3", retryLog.isPending && "animate-spin")} />
+                          Retry
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

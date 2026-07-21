@@ -53,6 +53,9 @@ import {
   SendLeadWhatsappReplyParams,
   SendLeadWhatsappReplyBody,
   SendLeadWhatsappReplyResponse,
+  SendLeadOutreachParams,
+  SendLeadOutreachBody,
+  SendLeadOutreachResponse,
   GetLeadAgentBriefParams,
   GetLeadAgentBriefResponse,
   CreateLeadResponse,
@@ -72,7 +75,7 @@ import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
 import { autoAssignLead, stampLeadAssignment } from "../lib/lead-assignment";
 import { findOpenDuplicate, mergeIntoExistingLead } from "../lib/lead-dedup";
 import { telephonyAdapter } from "../lib/telephony";
-import { enqueueEmail, notifyUser } from "../lib/email";
+import { enqueueEmail, enqueueWhatsapp, notifyUser } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
 import { activeDealerId } from "../middlewares/rbac";
 import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
@@ -81,13 +84,17 @@ import {
   testDriveCalendarFields,
 } from "../lib/calendar";
 import { buildQuotePdf } from "../lib/quote-pdf";
-import { sendWhatsappText, whatsappConfig } from "../lib/whatsapp";
+import { whatsappConfig } from "../lib/whatsapp";
 import { ensureLeadSources } from "../lib/lead-sources";
 import { getActiveChecklist } from "../lib/stage-checklists";
 import {
   findBlockedEditField,
   redactHiddenFields,
 } from "../lib/field-permissions";
+import {
+  afterTestDriveBooked,
+  vehicleAvailabilityError,
+} from "../lib/test-drive-scheduler";
 
 const router: IRouter = Router();
 
@@ -544,26 +551,18 @@ router.post("/leads/:id/whatsapp", async (req, res): Promise<void> => {
   }
 
   const actor = actorName(res);
-  try {
-    await sendWhatsappText(cfg, to, body.data.text);
-  } catch {
-    res
-      .status(502)
-      .json({ error: "WhatsApp could not deliver the message. Try again." });
-    return;
-  }
-
-  const [saved] = await db
-    .insert(whatsappMessagesTable)
-    .values({
-      dealerId: lead.dealerId,
-      leadId: lead.id,
-      phone: to,
-      direction: "out",
-      body: body.data.text,
-      actor,
-    })
-    .returning();
+  // Through the outbox: the worker delivers, retries with backoff, and
+  // records the transcript row (with this actor) once actually sent.
+  const queued = await enqueueWhatsapp({
+    kind: "whatsapp_message",
+    to,
+    body: body.data.text,
+    dealerId: lead.dealerId,
+    leadId: lead.id,
+    customerId: lead.customerId,
+    summary: `Reply to ${lead.name}`,
+    actor,
+  });
 
   await logLeadEvent(
     lead,
@@ -575,11 +574,148 @@ router.post("/leads/:id/whatsapp", async (req, res): Promise<void> => {
 
   res.status(201).json(
     SendLeadWhatsappReplyResponse.parse({
-      id: saved!.id,
-      direction: saved!.direction,
-      body: saved!.body,
-      actor: saved!.actor,
-      createdAt: saved!.createdAt,
+      id: queued.id,
+      direction: "out",
+      body: body.data.text,
+      actor,
+      createdAt: queued.createdAt,
+    }),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// A7 — Customer Outreach: approve-and-send a drafted message. WhatsApp-first
+// with email fallback; everything goes through the outbox and is logged as
+// an A7 activity on the lead timeline.
+// ---------------------------------------------------------------------------
+router.post("/leads/:id/outreach", async (req, res): Promise<void> => {
+  const params = SendLeadOutreachParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const body = SendLeadOutreachBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+      ),
+    );
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const phone = (lead.phone ?? "").replace(/\D/g, "");
+  const email = lead.email?.trim() || null;
+
+  // WhatsApp-first, email fallback — unless the advisor forced a channel.
+  let channel: "whatsapp" | "email";
+  if (body.data.channel) {
+    channel = body.data.channel;
+    if (channel === "whatsapp" && !phone) {
+      res.status(422).json({ error: "This lead has no phone number for WhatsApp." });
+      return;
+    }
+    if (channel === "email" && !email) {
+      res.status(422).json({ error: "This lead has no email address." });
+      return;
+    }
+  } else if (phone) {
+    channel = "whatsapp";
+  } else if (email) {
+    channel = "email";
+  } else {
+    res.status(422).json({
+      error: "This lead has no phone or email — add contact details first.",
+    });
+    return;
+  }
+
+  const actor = actorName(res);
+  let outboxId: number;
+  let recipient: string;
+  if (channel === "whatsapp") {
+    const queued = await enqueueWhatsapp({
+      kind: "outreach",
+      to: phone,
+      body: body.data.message,
+      dealerId: lead.dealerId,
+      leadId: lead.id,
+      customerId: lead.customerId,
+      summary: `Outreach to ${lead.name}`,
+      actor,
+    });
+    outboxId = queued.id;
+    recipient = phone;
+  } else {
+    const queued = await enqueueEmail({
+      template: "outreach",
+      to: email!,
+      dealerId: lead.dealerId,
+      customerId: lead.customerId,
+      leadId: lead.id,
+      data: {
+        name: lead.name,
+        advisor: actor,
+        message: body.data.message,
+        ...(body.data.subject ? { subject: body.data.subject } : {}),
+      },
+    });
+    outboxId = queued.id;
+    recipient = email!;
+  }
+
+  // A7 activity: timeline + agent activity feed.
+  await logLeadEvent(
+    lead,
+    "outreach_sent",
+    `Outreach ${channel === "whatsapp" ? "WhatsApp" : "email"} approved & queued`,
+    body.data.message,
+    actor,
+    true,
+  );
+  try {
+    const [agent] = await db
+      .select()
+      .from(agentsTable)
+      .where(
+        and(
+          eq(agentsTable.dealerId, lead.dealerId),
+          eq(agentsTable.key, "A7"),
+        ),
+      );
+    if (agent) {
+      await db.insert(timelineEventsTable).values({
+        dealerId: lead.dealerId,
+        customerId: lead.customerId,
+        domain: "agents",
+        kind: "agent_activity",
+        title: `A7 outreach ${channel} queued for ${lead.name}`,
+        detail: body.data.message.slice(0, 280),
+        actor,
+        isAgent: true,
+        refType: "lead",
+        refId: lead.id,
+      });
+    }
+  } catch (err) {
+    req.log.error({ err }, "failed to record A7 activity");
+  }
+
+  res.status(201).json(
+    SendLeadOutreachResponse.parse({
+      ok: true,
+      channel,
+      outboxId,
+      recipient,
     }),
   );
 });
@@ -1028,6 +1164,20 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
     return;
   }
 
+  // A10 — the vehicle itself must still be available for a drive.
+  {
+    const checkLead = {
+      ...existing,
+      interestedVehicleId:
+        parsed.data.vehicleId ?? existing.interestedVehicleId,
+    };
+    const vehicleError = await vehicleAvailabilityError(checkLead);
+    if (vehicleError) {
+      res.status(409).json({ error: vehicleError });
+      return;
+    }
+  }
+
   const [lead] = await db
     .update(leadsTable)
     .set({
@@ -1123,6 +1273,9 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
       link: "/pipeline",
     });
   }
+
+  // A10 — soft-lock single-unit models + queue the 24h WhatsApp reminder.
+  await afterTestDriveBooked(lead!, when, vehicle);
 
   res.json(GetLeadResponse.parse(lead));
 });

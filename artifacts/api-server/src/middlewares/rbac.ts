@@ -378,6 +378,9 @@ const AUTH_ONLY_SEGMENTS = new Set([
   "team",
   // divisions are a read-only lookup every signed-in user needs for filters
   "divisions",
+  // calendar: derived read-only schedule view — visibility scoping (own vs
+  // all) happens inside the route based on the user's role.
+  "calendar",
   // object storage: presigned upload URLs + object serving for any signed-in
   // staff member; feature-level gating (e.g. inventory edit) happens in the UI
   // and on the record mutation that stores the object path.

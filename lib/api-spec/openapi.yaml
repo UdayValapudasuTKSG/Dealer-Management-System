@@ -58,6 +58,7 @@ tags:
     description: Task management
   - name: webhooks
     description: Public signature-verified inbound webhooks (Meta Lead Ads, Twilio WhatsApp)
+  - name: calendar
   - name: Storage
     description: Object storage upload and serving endpoints.
 paths:
@@ -1323,6 +1324,42 @@ paths:
                 $ref: "#/components/schemas/Error"
         "502":
           description: WhatsApp send failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /leads/{id}/outreach:
+    post:
+      operationId: sendLeadOutreach
+      tags: [leads]
+      summary: A7 — approve and send an outreach draft (WhatsApp-first, email fallback)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OutreachInput"
+      responses:
+        "201":
+          description: Outreach queued through the outbox
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OutreachResult"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: No usable contact channel for this lead
           content:
             application/json:
               schema:
@@ -4211,6 +4248,10 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: channel
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
           description: Email logs
@@ -4220,6 +4261,58 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/EmailLog"
+
+  /emails/logs/{id}/retry:
+    post:
+      operationId: retryEmailLog
+      tags: [emails]
+      summary: Re-queue a failed outbox item for immediate retry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Item re-queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailLog"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Item is not in a retryable state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /calendar:
+    get:
+      operationId: getCalendar
+      tags: [calendar]
+      summary: Dealership calendar — test drives, deliveries, service appointments, and follow-ups due
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Events in range, role-scoped (advisors see their own)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarResponse"
 
   /notifications:
     get:
@@ -5052,6 +5145,8 @@ components:
         exteriorColor: { type: string }
         bodyType: { type: string }
         status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service] }
+        holdUntil: { type: ["string", "null"], format: date-time, description: "Soft lock — held around a booked test drive (single-unit models)" }
+        holdReason: { type: ["string", "null"] }
         imageUrl: { type: ["string", "null"] }
         images:
           type: array
@@ -6929,6 +7024,7 @@ components:
       properties:
         id: { type: integer }
         customerId: { type: ["integer", "null"] }
+        leadId: { type: ["integer", "null"] }
         recipient: { type: string }
         subject: { type: string }
         template: { type: string }
@@ -6936,8 +7032,48 @@ components:
         status: { type: string, enum: [queued, sending, sent, failed] }
         attempts: { type: integer }
         lastError: { type: ["string", "null"] }
+        nextAttemptAt: { type: ["string", "null"], format: date-time }
         sentAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+
+    OutreachInput:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 4000 }
+        channel: { type: string, enum: [whatsapp, email], description: "Omit to auto-pick — WhatsApp-first, email fallback" }
+        subject: { type: string, maxLength: 200, description: "Email subject (email channel only)" }
+    OutreachResult:
+      type: object
+      required: [ok, channel, outboxId]
+      properties:
+        ok: { type: boolean }
+        channel: { type: string, enum: [whatsapp, email] }
+        outboxId: { type: integer }
+        recipient: { type: string }
+
+    CalendarEvent:
+      type: object
+      required: [id, kind, title, startsAt, allDay]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [test_drive, delivery, service, follow_up] }
+        title: { type: string }
+        detail: { type: ["string", "null"] }
+        startsAt: { type: string, format: date-time }
+        allDay: { type: boolean }
+        assigneeName: { type: ["string", "null"] }
+        link: { type: ["string", "null"] }
+        refId: { type: integer }
+    CalendarResponse:
+      type: object
+      required: [events, scope]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarEvent"
+        scope: { type: string, enum: [own, all] }
 
     Notification:
       type: object

@@ -66,6 +66,9 @@ export const vehiclesTable = pgTable("vehicles", {
   exteriorColor: text("exterior_color").notNull(),
   bodyType: text("body_type").notNull(),
   status: text("status").notNull().default("available"),
+  /** Soft lock: single-unit models are held around a booked test drive. */
+  holdUntil: timestamp("hold_until", { withTimezone: true }),
+  holdReason: text("hold_reason"),
   imageUrl: text("image_url"),
   images: jsonb("images").$type<string[]>().notNull().default([]),
   accessories: jsonb("accessories").$type<string[]>().notNull().default([]),

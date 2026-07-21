@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import {
   useGetLeadAgentBrief,
   useSendLeadWhatsappReply,
+  useSendLeadOutreach,
   useNotifyLeadOwner,
 } from "@workspace/api-client-react";
 import {
@@ -61,6 +62,22 @@ export function AgentBriefPanel({
           title: "Could not send via WhatsApp",
           description:
             "The 24-hour reply window may be closed. Use the wa.me link instead.",
+          variant: "destructive",
+        }),
+    },
+  });
+  const outreach = useSendLeadOutreach({
+    mutation: {
+      onSuccess: (res) =>
+        toast({
+          title: `Outreach queued via ${res.channel === "whatsapp" ? "WhatsApp" : "email"}`,
+          description:
+            "The message is in the outbox and will be delivered automatically.",
+        }),
+      onError: (e) =>
+        toast({
+          title: "Could not queue the outreach",
+          description: e instanceof Error ? e.message : undefined,
           variant: "destructive",
         }),
     },
@@ -190,6 +207,22 @@ export function AgentBriefPanel({
               {draft}
             </p>
             <div className="flex items-center flex-wrap gap-2 mt-3">
+              {(leadPhone || leadEmail) && (
+                <button
+                  onClick={() =>
+                    outreach.mutate({ id: leadId, data: { message: draft } })
+                  }
+                  disabled={outreach.isPending || !draft}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {outreach.isPending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Zap className="w-3 h-3" />
+                  )}
+                  Approve &amp; Send
+                </button>
+              )}
               {inAppWhatsapp ? (
                 <button
                   onClick={() =>

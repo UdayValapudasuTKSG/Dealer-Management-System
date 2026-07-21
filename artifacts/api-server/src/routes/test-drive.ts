@@ -21,6 +21,10 @@ import {
   ownerCalendarContact,
   testDriveCalendarFields,
 } from "../lib/calendar";
+import {
+  afterTestDriveBooked,
+  vehicleAvailabilityError,
+} from "../lib/test-drive-scheduler";
 
 // ---------------------------------------------------------------------------
 // PUBLIC self-service test-drive booking — reached from the unique link
@@ -214,6 +218,13 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
     return;
   }
 
+  // A10 — the vehicle itself must still be available for a drive.
+  const vehicleError = await vehicleAvailabilityError(lead);
+  if (vehicleError) {
+    res.status(409).json({ error: vehicleError });
+    return;
+  }
+
   const [updated] = await db
     .update(leadsTable)
     .set({
@@ -338,6 +349,9 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
   } catch (err) {
     req.log.error({ err }, "Failed to notify staff of self-booked test drive");
   }
+
+  // A10 — soft-lock single-unit models + queue the 24h WhatsApp reminder.
+  await afterTestDriveBooked(updated!, when, vehicle);
 
   res.json(BookTestDriveSlotResponse.parse(await buildInvite(updated!)));
 });
