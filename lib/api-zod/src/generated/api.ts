@@ -988,6 +988,16 @@ export const GetDeliveryInvoicePdfResponse = zod.unknown()
 
 
 /**
+ * @summary Download the pre-filled vehicle handover form as a PDF
+ */
+export const GetDeliveryHandoverPdfParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetDeliveryHandoverPdfResponse = zod.unknown()
+
+
+/**
  * @summary List users assignable as delivery advisors
  */
 export const ListDeliveryAdvisorsResponseItem = zod.object({
@@ -3367,6 +3377,16 @@ export const GetReceiptResponse = zod.object({
 
 
 /**
+ * @summary Download a printable payment receipt as a PDF
+ */
+export const GetReceiptPdfParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetReceiptPdfResponse = zod.unknown()
+
+
+/**
  * @summary Open invoices with amounts paid and balances due
  */
 export const ListOutstandingBalancesResponseItem = zod.object({
@@ -3715,6 +3735,16 @@ export const UpdateServiceInvoiceResponse = zod.object({
 })
 
 
+/**
+ * @summary Download a printable service invoice as a PDF
+ */
+export const GetServiceInvoicePdfParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetServiceInvoicePdfResponse = zod.unknown()
+
+
 export const ListCoveragePlansQueryParams = zod.object({
   "type": zod.coerce.string().optional()
 })
@@ -3789,6 +3819,16 @@ export const UpdateCoveragePlanResponse = zod.object({
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Download a printable warranty / AMC certificate as a PDF
+ */
+export const GetCoveragePlanPdfParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetCoveragePlanPdfResponse = zod.unknown()
 
 
 /**

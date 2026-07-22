@@ -59,6 +59,7 @@ import {
   issueInvoice,
   logPaymentEvent,
 } from "../lib/invoicing";
+import { buildReceiptPdf } from "../lib/document-pdfs";
 import { storage } from "../lib/storage";
 import { getLosConnector } from "../lib/los";
 import { activeDealerId } from "../middlewares/rbac";
@@ -764,6 +765,35 @@ router.get("/receipts/:id", async (req, res): Promise<void> => {
     return;
   }
   res.json(GetReceiptResponse.parse(receipt));
+});
+
+router.get("/receipts/:id/pdf", async (req, res): Promise<void> => {
+  const params = GetReceiptParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [receipt] = await db
+    .select()
+    .from(receiptsTable)
+    .where(
+      and(
+        eq(receiptsTable.id, params.data.id),
+        eq(receiptsTable.dealerId, activeDealerId(res)),
+      ),
+    );
+  if (!receipt) {
+    res.status(404).json({ error: "Receipt not found" });
+    return;
+  }
+  const pdf = await buildReceiptPdf(receipt);
+  res
+    .setHeader("Content-Type", "application/pdf")
+    .setHeader(
+      "Content-Disposition",
+      `inline; filename="${receipt.receiptNumber}.pdf"`,
+    )
+    .send(pdf);
 });
 
 router.get("/outstanding-balances", async (_req, res): Promise<void> => {

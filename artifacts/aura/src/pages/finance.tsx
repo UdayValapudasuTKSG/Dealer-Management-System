@@ -656,6 +656,14 @@ function ReceiptDetailDialog({
                 </div>
               )}
             </div>
+            <a
+              href={`${import.meta.env.BASE_URL}api/receipts/${receipt.id}/pdf`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex w-full items-center justify-center gap-2 h-10 rounded-full border border-border/60 text-sm font-medium hover:bg-muted/40 transition-colors"
+            >
+              <FileText className="w-4 h-4" /> Download Receipt PDF
+            </a>
           </div>
         )}
       </DialogContent>

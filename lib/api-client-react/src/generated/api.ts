@@ -2583,6 +2583,83 @@ export function useGetDeliveryInvoicePdf<TData = Awaited<ReturnType<typeof getDe
 
 
 
+export const getGetDeliveryHandoverPdfUrl = (id: number,) => {
+
+
+
+
+  return `/api/deliveries/${id}/handover.pdf`
+}
+
+/**
+ * @summary Download the pre-filled vehicle handover form as a PDF
+ */
+export const getDeliveryHandoverPdf = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetDeliveryHandoverPdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDeliveryHandoverPdfQueryKey = (id: number,) => {
+    return [
+    `/api/deliveries/${id}/handover.pdf`
+    ] as const;
+    }
+
+
+export const getGetDeliveryHandoverPdfQueryOptions = <TData = Awaited<ReturnType<typeof getDeliveryHandoverPdf>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDeliveryHandoverPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDeliveryHandoverPdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDeliveryHandoverPdf>>> = ({ signal }) => getDeliveryHandoverPdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDeliveryHandoverPdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDeliveryHandoverPdfQueryResult = NonNullable<Awaited<ReturnType<typeof getDeliveryHandoverPdf>>>
+export type GetDeliveryHandoverPdfQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Download the pre-filled vehicle handover form as a PDF
+ */
+
+export function useGetDeliveryHandoverPdf<TData = Awaited<ReturnType<typeof getDeliveryHandoverPdf>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDeliveryHandoverPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDeliveryHandoverPdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListDeliveryAdvisorsUrl = () => {
 
 
@@ -7622,6 +7699,83 @@ export function useGetReceipt<TData = Awaited<ReturnType<typeof getReceipt>>, TE
 
 
 
+export const getGetReceiptPdfUrl = (id: number,) => {
+
+
+
+
+  return `/api/receipts/${id}/pdf`
+}
+
+/**
+ * @summary Download a printable payment receipt as a PDF
+ */
+export const getReceiptPdf = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetReceiptPdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReceiptPdfQueryKey = (id: number,) => {
+    return [
+    `/api/receipts/${id}/pdf`
+    ] as const;
+    }
+
+
+export const getGetReceiptPdfQueryOptions = <TData = Awaited<ReturnType<typeof getReceiptPdf>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReceiptPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReceiptPdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReceiptPdf>>> = ({ signal }) => getReceiptPdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReceiptPdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReceiptPdfQueryResult = NonNullable<Awaited<ReturnType<typeof getReceiptPdf>>>
+export type GetReceiptPdfQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Download a printable payment receipt as a PDF
+ */
+
+export function useGetReceiptPdf<TData = Awaited<ReturnType<typeof getReceiptPdf>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReceiptPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReceiptPdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListOutstandingBalancesUrl = () => {
 
 
@@ -8623,6 +8777,83 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getUpdateServiceInvoiceMutationOptions(options));
     }
 
+export const getGetServiceInvoicePdfUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-invoices/${id}/pdf`
+}
+
+/**
+ * @summary Download a printable service invoice as a PDF
+ */
+export const getServiceInvoicePdf = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetServiceInvoicePdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetServiceInvoicePdfQueryKey = (id: number,) => {
+    return [
+    `/api/service-invoices/${id}/pdf`
+    ] as const;
+    }
+
+
+export const getGetServiceInvoicePdfQueryOptions = <TData = Awaited<ReturnType<typeof getServiceInvoicePdf>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServiceInvoicePdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetServiceInvoicePdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getServiceInvoicePdf>>> = ({ signal }) => getServiceInvoicePdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getServiceInvoicePdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetServiceInvoicePdfQueryResult = NonNullable<Awaited<ReturnType<typeof getServiceInvoicePdf>>>
+export type GetServiceInvoicePdfQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Download a printable service invoice as a PDF
+ */
+
+export function useGetServiceInvoicePdf<TData = Awaited<ReturnType<typeof getServiceInvoicePdf>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServiceInvoicePdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetServiceInvoicePdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListCoveragePlansUrl = (params?: ListCoveragePlansParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -8831,6 +9062,83 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getUpdateCoveragePlanMutationOptions(options));
     }
+
+export const getGetCoveragePlanPdfUrl = (id: number,) => {
+
+
+
+
+  return `/api/coverage/${id}/pdf`
+}
+
+/**
+ * @summary Download a printable warranty / AMC certificate as a PDF
+ */
+export const getCoveragePlanPdf = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetCoveragePlanPdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCoveragePlanPdfQueryKey = (id: number,) => {
+    return [
+    `/api/coverage/${id}/pdf`
+    ] as const;
+    }
+
+
+export const getGetCoveragePlanPdfQueryOptions = <TData = Awaited<ReturnType<typeof getCoveragePlanPdf>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCoveragePlanPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCoveragePlanPdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCoveragePlanPdf>>> = ({ signal }) => getCoveragePlanPdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCoveragePlanPdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCoveragePlanPdfQueryResult = NonNullable<Awaited<ReturnType<typeof getCoveragePlanPdf>>>
+export type GetCoveragePlanPdfQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Download a printable warranty / AMC certificate as a PDF
+ */
+
+export function useGetCoveragePlanPdf<TData = Awaited<ReturnType<typeof getCoveragePlanPdf>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCoveragePlanPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCoveragePlanPdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getSendCoverageReminderUrl = (id: number,) => {
 

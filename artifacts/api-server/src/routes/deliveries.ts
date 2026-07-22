@@ -38,9 +38,11 @@ import {
   UpdateDeliveryPdiBody,
   UpdateDeliveryPdiResponse,
   GetDeliveryInvoicePdfParams,
+  GetDeliveryHandoverPdfParams,
   ListDeliveryAdvisorsResponse,
 } from "@workspace/api-zod";
 import { ensureDeliveryForDeal } from "../lib/delivery";
+import { buildHandoverPdf } from "../lib/document-pdfs";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { onDealStageChanged } from "../lib/email-triggers";
 import { logger } from "../lib/logger";
@@ -808,6 +810,44 @@ router.get("/deliveries/:id/invoice.pdf", async (req, res): Promise<void> => {
     );
 
   doc.end();
+});
+
+router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
+  const params = GetDeliveryHandoverPdfParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const delivery = await loadDelivery(params.data.id, activeDealerId(res));
+  if (!delivery) {
+    res.status(404).json({ error: "Delivery not found" });
+    return;
+  }
+  const [vehicle] = await db
+    .select()
+    .from(vehiclesTable)
+    .where(
+      and(
+        eq(vehiclesTable.id, delivery.vehicleId),
+        eq(vehiclesTable.dealerId, delivery.dealerId),
+      ),
+    );
+  let advisorName: string | null = null;
+  if (delivery.advisorUserId) {
+    const [advisor] = await db
+      .select({ name: usersTable.name, email: usersTable.email })
+      .from(usersTable)
+      .where(eq(usersTable.id, delivery.advisorUserId));
+    advisorName = advisor?.name ?? advisor?.email ?? null;
+  }
+  const pdf = await buildHandoverPdf(delivery, vehicle, advisorName);
+  res
+    .setHeader("Content-Type", "application/pdf")
+    .setHeader(
+      "Content-Disposition",
+      `inline; filename="handover-delivery-${delivery.id}.pdf"`,
+    )
+    .send(pdf);
 });
 
 router.get("/delivery-advisors", async (_req, res): Promise<void> => {

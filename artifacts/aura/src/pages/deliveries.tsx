@@ -520,6 +520,14 @@ function DeliveryDetail({
                 <FileText className="w-4 h-4" /> Invoice PDF
               </a>
             )}
+            <a
+              href={`${import.meta.env.BASE_URL}api/deliveries/${delivery.id}/handover.pdf`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-white/15 text-sm font-medium hover:bg-white/[0.05] transition-colors"
+            >
+              <FileText className="w-4 h-4" /> Handover Form
+            </a>
           </div>
 
           {/* Steps */}

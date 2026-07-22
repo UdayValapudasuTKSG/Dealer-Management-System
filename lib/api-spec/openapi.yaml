@@ -803,6 +803,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /deliveries/{id}/handover.pdf:
+    get:
+      operationId: getDeliveryHandoverPdf
+      tags: [deliveries]
+      summary: Download the pre-filled vehicle handover form as a PDF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Handover form PDF
+          content:
+            application/pdf: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /delivery-advisors:
     get:
       operationId: listDeliveryAdvisors
@@ -2494,6 +2515,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /receipts/{id}/pdf:
+    get:
+      operationId: getReceiptPdf
+      tags: [finance]
+      summary: Download a printable payment receipt as a PDF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Receipt PDF
+          content:
+            application/pdf: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /outstanding-balances:
     get:
       operationId: listOutstandingBalances
@@ -2815,6 +2857,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /service-invoices/{id}/pdf:
+    get:
+      operationId: getServiceInvoicePdf
+      tags: [service]
+      summary: Download a printable service invoice as a PDF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Service invoice PDF
+          content:
+            application/pdf: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /coverage:
     get:
@@ -2872,6 +2935,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CoveragePlan"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /coverage/{id}/pdf:
+    get:
+      operationId: getCoveragePlanPdf
+      tags: [service]
+      summary: Download a printable warranty / AMC certificate as a PDF
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Warranty certificate PDF
+          content:
+            application/pdf: {}
         "404":
           description: Not found
           content:

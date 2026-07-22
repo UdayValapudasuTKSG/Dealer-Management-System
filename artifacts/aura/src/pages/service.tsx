@@ -883,6 +883,14 @@ function InvoicesTab() {
                   {inv.status}
                 </Badge>
               </div>
+              <a
+                href={`${import.meta.env.BASE_URL}api/service-invoices/${inv.id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-white/15 text-xs font-medium hover:bg-white/[0.05] transition-colors shrink-0"
+              >
+                <FileText className="w-3.5 h-3.5" /> PDF
+              </a>
               {inv.status === "issued" && (
                 <div className="flex flex-col gap-2">
                   <Button
@@ -1029,6 +1037,14 @@ function CoverageTab() {
               >
                 <Mail className="w-3.5 h-3.5" /> Remind
               </Button>
+              <a
+                href={`${import.meta.env.BASE_URL}api/coverage/${plan.id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-white/15 text-xs font-medium hover:bg-white/[0.05] transition-colors shrink-0"
+              >
+                <FileText className="w-3.5 h-3.5" /> Certificate
+              </a>
             </CardContent>
           </Card>
         );

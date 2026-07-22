@@ -1,4 +1,9 @@
 import { Router, type IRouter } from "express";
+import {
+  buildCoverageCertificatePdf,
+  buildServiceInvoicePdf,
+} from "../lib/document-pdfs";
+import { dealerExchangeRate } from "../lib/invoicing";
 import { and, desc, eq, sql } from "drizzle-orm";
 import {
   db,
@@ -652,6 +657,36 @@ router.patch("/service-invoices/:id", async (req, res): Promise<void> => {
   res.json(UpdateServiceInvoiceResponse.parse(invoice));
 });
 
+router.get("/service-invoices/:id/pdf", async (req, res): Promise<void> => {
+  const params = UpdateServiceInvoiceParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [invoice] = await db
+    .select()
+    .from(serviceInvoicesTable)
+    .where(
+      and(
+        eq(serviceInvoicesTable.id, params.data.id),
+        eq(serviceInvoicesTable.dealerId, activeDealerId(res)),
+      ),
+    );
+  if (!invoice) {
+    res.status(404).json({ error: "Service invoice not found" });
+    return;
+  }
+  const rate = await dealerExchangeRate(invoice.dealerId);
+  const pdf = await buildServiceInvoicePdf(invoice, rate);
+  res
+    .setHeader("Content-Type", "application/pdf")
+    .setHeader(
+      "Content-Disposition",
+      `inline; filename="SV-${String(invoice.id).padStart(5, "0")}.pdf"`,
+    )
+    .send(pdf);
+});
+
 // ---------------------------------------------------------------------------
 // Warranty / AMC coverage
 // ---------------------------------------------------------------------------
@@ -693,6 +728,35 @@ router.post("/coverage", async (req, res): Promise<void> => {
     })
     .returning();
   res.status(201).json(CreateCoveragePlanResponse.parse(plan));
+});
+
+router.get("/coverage/:id/pdf", async (req, res): Promise<void> => {
+  const params = UpdateCoveragePlanParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [plan] = await db
+    .select()
+    .from(coveragePlansTable)
+    .where(
+      and(
+        eq(coveragePlansTable.id, params.data.id),
+        eq(coveragePlansTable.dealerId, activeDealerId(res)),
+      ),
+    );
+  if (!plan) {
+    res.status(404).json({ error: "Coverage plan not found" });
+    return;
+  }
+  const pdf = await buildCoverageCertificatePdf(plan);
+  res
+    .setHeader("Content-Type", "application/pdf")
+    .setHeader(
+      "Content-Disposition",
+      `inline; filename="CP-${String(plan.id).padStart(5, "0")}-certificate.pdf"`,
+    )
+    .send(pdf);
 });
 
 router.patch("/coverage/:id", async (req, res): Promise<void> => {
