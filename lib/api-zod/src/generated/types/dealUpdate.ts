@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DealUpdateFinalPaymentMethod } from './dealUpdateFinalPaymentMethod';
 import type { DealUpdateStage } from './dealUpdateStage';
 
 export interface DealUpdate {
@@ -21,6 +22,7 @@ export interface DealUpdate {
   otdPrice?: number;
   monthlyPayment?: number;
   depositPaid?: boolean;
+  finalPaymentMethod?: DealUpdateFinalPaymentMethod;
   salesAdvisor?: string;
   /** @nullable */
   salesAdvisorUserId?: number | null;

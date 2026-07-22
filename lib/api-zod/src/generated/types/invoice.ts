@@ -5,7 +5,9 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { InvoiceKind } from './invoiceKind';
 import type { InvoiceStatus } from './invoiceStatus';
+import type { InvoiceTaxLine } from './invoiceTaxLine';
 
 export interface Invoice {
   id: number;
@@ -20,7 +22,12 @@ export interface Invoice {
   /** @nullable */
   description?: string | null;
   amount: number;
+  kind: InvoiceKind;
   status: InvoiceStatus;
+  taxLines: InvoiceTaxLine[];
+  currency: string;
+  /** @nullable */
+  exchangeRate?: number | null;
   /** @nullable */
   dueDate?: string | null;
   createdAt: Date;

@@ -2551,6 +2551,7 @@ export const ListDealsResponseItem = zod.object({
   "otdPrice": zod.number(),
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
+  "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
@@ -2572,6 +2573,7 @@ export const CreateDealBody = zod.object({
   "otdPrice": zod.number().optional(),
   "monthlyPayment": zod.number().optional(),
   "depositPaid": zod.boolean().optional(),
+  "finalPaymentMethod": zod.enum(['cash', 'bank_financing', 'cheque']).optional(),
   "salesAdvisor": zod.string().optional(),
   "salesAdvisorUserId": zod.number().optional()
 })
@@ -2591,6 +2593,7 @@ export const CreateDealResponse = zod.object({
   "otdPrice": zod.number(),
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
+  "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
@@ -2616,6 +2619,7 @@ export const GetDealResponse = zod.object({
   "otdPrice": zod.number(),
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
+  "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
@@ -2639,6 +2643,7 @@ export const UpdateDealBody = zod.object({
   "otdPrice": zod.number().optional(),
   "monthlyPayment": zod.number().optional(),
   "depositPaid": zod.boolean().optional(),
+  "finalPaymentMethod": zod.enum(['cash', 'bank_financing', 'cheque']).optional(),
   "salesAdvisor": zod.string().optional(),
   "salesAdvisorUserId": zod.number().nullish()
 })
@@ -2658,6 +2663,7 @@ export const UpdateDealResponse = zod.object({
   "otdPrice": zod.number(),
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
+  "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
@@ -3196,7 +3202,17 @@ export const ListInvoicesResponseItem = zod.object({
   "applicationId": zod.number().nullish(),
   "description": zod.string().nullish(),
   "amount": zod.number(),
+  "kind": zod.enum(['reservation', 'final']),
   "status": zod.enum(['issued', 'partially_paid', 'paid', 'void']),
+  "taxLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})),
+  "currency": zod.string(),
+  "exchangeRate": zod.number().nullish(),
   "dueDate": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -3213,6 +3229,7 @@ export const CreateInvoiceBody = zod.object({
   "applicationId": zod.number().optional(),
   "description": zod.string().optional(),
   "amount": zod.number(),
+  "kind": zod.enum(['reservation', 'final']).optional(),
   "dueDate": zod.string().optional()
 })
 
@@ -3225,7 +3242,17 @@ export const CreateInvoiceResponse = zod.object({
   "applicationId": zod.number().nullish(),
   "description": zod.string().nullish(),
   "amount": zod.number(),
+  "kind": zod.enum(['reservation', 'final']),
   "status": zod.enum(['issued', 'partially_paid', 'paid', 'void']),
+  "taxLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})),
+  "currency": zod.string(),
+  "exchangeRate": zod.number().nullish(),
   "dueDate": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -3251,7 +3278,17 @@ export const UpdateInvoiceResponse = zod.object({
   "applicationId": zod.number().nullish(),
   "description": zod.string().nullish(),
   "amount": zod.number(),
+  "kind": zod.enum(['reservation', 'final']),
   "status": zod.enum(['issued', 'partially_paid', 'paid', 'void']),
+  "taxLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})),
+  "currency": zod.string(),
+  "exchangeRate": zod.number().nullish(),
   "dueDate": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -3301,10 +3338,32 @@ export const ListReceiptsResponseItem = zod.object({
   "customerName": zod.string(),
   "amount": zod.number(),
   "method": zod.string(),
+  "currency": zod.string(),
+  "exchangeRate": zod.number().nullish(),
   "issuedBy": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListReceiptsResponse = zod.array(ListReceiptsResponseItem)
+
+
+export const GetReceiptParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetReceiptResponse = zod.object({
+  "id": zod.number(),
+  "receiptNumber": zod.string(),
+  "paymentId": zod.number(),
+  "invoiceId": zod.number(),
+  "invoiceNumber": zod.string(),
+  "customerName": zod.string(),
+  "amount": zod.number(),
+  "method": zod.string(),
+  "currency": zod.string(),
+  "exchangeRate": zod.number().nullish(),
+  "issuedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**
@@ -4719,6 +4778,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "otdPrice": zod.number(),
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
+  "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
@@ -4738,6 +4798,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "otdPrice": zod.number(),
   "monthlyPayment": zod.number().nullish(),
   "depositPaid": zod.boolean(),
+  "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
   "createdAt": zod.coerce.date()

@@ -69,6 +69,7 @@ import type {
   CoveragePlan,
   CoveragePlanInput,
   CoveragePlanUpdate,
+  CreatePayment422,
   CreatedDealerWithSaga,
   CurrentUser,
   Customer,
@@ -7432,7 +7433,7 @@ export const createPayment = async (paymentInput: PaymentInput, options?: Reques
 
 
 
-export const getCreatePaymentMutationOptions = <TError = ErrorType<Error>,
+export const getCreatePaymentMutationOptions = <TError = ErrorType<Error | CreatePayment422>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPayment>>, TError,{data: BodyType<PaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createPayment>>, TError,{data: BodyType<PaymentInput>}, TContext> => {
 
@@ -7461,12 +7462,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreatePaymentMutationResult = NonNullable<Awaited<ReturnType<typeof createPayment>>>
     export type CreatePaymentMutationBody = BodyType<PaymentInput>
-    export type CreatePaymentMutationError = ErrorType<Error>
+    export type CreatePaymentMutationError = ErrorType<Error | CreatePayment422>
 
     /**
  * @summary Record a payment against an invoice — auto-issues a receipt
  */
-export const useCreatePayment = <TError = ErrorType<Error>,
+export const useCreatePayment = <TError = ErrorType<Error | CreatePayment422>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPayment>>, TError,{data: BodyType<PaymentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createPayment>>,
@@ -7536,6 +7537,77 @@ export function useListReceipts<TData = Awaited<ReturnType<typeof listReceipts>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListReceiptsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetReceiptUrl = (id: number,) => {
+
+
+
+
+  return `/api/receipts/${id}`
+}
+
+export const getReceipt = async (id: number, options?: RequestInit): Promise<Receipt> => {
+
+  return customFetch<Receipt>(getGetReceiptUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReceiptQueryKey = (id: number,) => {
+    return [
+    `/api/receipts/${id}`
+    ] as const;
+    }
+
+
+export const getGetReceiptQueryOptions = <TData = Awaited<ReturnType<typeof getReceipt>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReceipt>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReceiptQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReceipt>>> = ({ signal }) => getReceipt(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReceipt>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReceiptQueryResult = NonNullable<Awaited<ReturnType<typeof getReceipt>>>
+export type GetReceiptQueryError = ErrorType<Error>
+
+
+
+export function useGetReceipt<TData = Awaited<ReturnType<typeof getReceipt>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReceipt>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReceiptQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

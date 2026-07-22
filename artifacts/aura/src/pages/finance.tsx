@@ -17,6 +17,7 @@ import {
   getListPaymentsQueryKey,
   useListReceipts,
   getListReceiptsQueryKey,
+  useGetReceipt,
   useListOutstandingBalances,
   getListOutstandingBalancesQueryKey,
   useListLeads,
@@ -36,6 +37,12 @@ import {
   Wifi,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page } from "@/components/layout/page";
@@ -68,6 +75,7 @@ export default function Finance() {
   const { density, setDensity, layout, setLayout } = useViewMode("finance");
   const compactRow = density === "compact" ? "py-2.5" : "py-3.5";
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [receiptId, setReceiptId] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const rawMoney = useMoney();
@@ -467,8 +475,22 @@ export default function Finance() {
                 {invoices?.map((inv) => (
                   <div key={inv.id} className="glass-panel rounded-2xl px-5 py-4 flex items-center gap-4">
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold">{inv.customerName}</div>
+                      <div className="font-semibold flex items-center gap-2">
+                        {inv.customerName}
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${
+                          inv.kind === "reservation"
+                            ? "bg-sky-500/15 text-sky-400"
+                            : "bg-primary/10 text-primary"
+                        }`}>
+                          {inv.kind === "reservation" ? "Reservation" : "Final"}
+                        </span>
+                      </div>
                       <div className="text-xs text-muted-foreground font-mono">{inv.invoiceNumber}{inv.description ? ` · ${inv.description}` : ""}</div>
+                      {(inv.taxLines ?? []).length > 0 && (
+                        <div className="text-[10px] text-muted-foreground mt-1">
+                          Taxes: {(inv.taxLines ?? []).map((t) => `${t.name} ${money(t.amount)}`).join(" · ")}
+                        </div>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <div className="font-light text-lg">{money(inv.amount)}</div>
@@ -514,7 +536,11 @@ export default function Finance() {
         <div className="space-y-3 max-w-3xl">
           {receipts?.length === 0 && <p className="text-sm text-muted-foreground italic">No receipts issued yet — receipts are generated automatically when payments are recorded.</p>}
           {receipts?.map((r) => (
-            <div key={r.id} className="glass-panel rounded-2xl px-5 py-4 flex items-center gap-4">
+            <button
+              key={r.id}
+              onClick={() => setReceiptId(r.id)}
+              className="w-full text-left glass-panel rounded-2xl px-5 py-4 flex items-center gap-4 hover:border-primary/40 transition-colors"
+            >
               <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
                 <ReceiptIcon className="w-4 h-4 text-emerald-400" />
               </div>
@@ -528,10 +554,12 @@ export default function Finance() {
                   {r.method.replace("_", " ")} · {formatGuyanaDate(r.createdAt)}
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
+
+      <ReceiptDetailDialog receiptId={receiptId} onClose={() => setReceiptId(null)} />
 
       {tab === "outstanding" && (
         <div className="space-y-3 max-w-4xl">
@@ -566,5 +594,71 @@ export default function Finance() {
       <ApplicationDetailDialog appId={detailId} onClose={() => setDetailId(null)} />
     </Page>
     </>
+  );
+}
+
+function ReceiptDetailDialog({
+  receiptId,
+  onClose,
+}: {
+  receiptId: number | null;
+  onClose: () => void;
+}) {
+  const { data: receipt } = useGetReceipt(receiptId ?? 0, {
+    query: { enabled: receiptId != null, queryKey: ["receipt-detail", receiptId] },
+  });
+
+  return (
+    <Dialog open={receiptId != null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ReceiptIcon className="w-4 h-4 text-emerald-400" />
+            {receipt?.receiptNumber ?? "Receipt"}
+          </DialogTitle>
+        </DialogHeader>
+        {receipt && (
+          <div className="space-y-4">
+            <div className="text-center py-4 border-y border-border/50">
+              <div className="text-3xl font-light tracking-tight">
+                GY$
+                {Math.round(
+                  receipt.amount * (receipt.exchangeRate ?? 209),
+                ).toLocaleString("en-US")}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1 tabular-nums">
+                US${receipt.amount.toLocaleString("en-US")} ·{" "}
+                {receipt.currency ?? "USD"} @ rate{" "}
+                {(receipt.exchangeRate ?? 209).toLocaleString("en-US")} (snapshot)
+              </div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground uppercase tracking-wider text-xs">Customer</span>
+                <span className="font-medium">{receipt.customerName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground uppercase tracking-wider text-xs">Invoice</span>
+                <span className="font-mono text-xs">{receipt.invoiceNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground uppercase tracking-wider text-xs">Method</span>
+                <span className="capitalize">{receipt.method.replace(/_/g, " ")}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground uppercase tracking-wider text-xs">Issued</span>
+                <span>{formatGuyanaDate(receipt.createdAt)}</span>
+              </div>
+              {receipt.issuedBy && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground uppercase tracking-wider text-xs">Issued by</span>
+                  <span>{receipt.issuedBy}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

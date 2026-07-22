@@ -49,8 +49,16 @@ import {
   CreatePaymentBody,
   CreatePaymentResponse,
   ListReceiptsResponse,
+  GetReceiptParams,
+  GetReceiptResponse,
   ListOutstandingBalancesResponse,
 } from "@workspace/api-zod";
+import {
+  applyPayment,
+  invoicePaidTotal,
+  issueInvoice,
+  logPaymentEvent,
+} from "../lib/invoicing";
 import { storage } from "../lib/storage";
 import { getLosConnector } from "../lib/los";
 import { activeDealerId } from "../middlewares/rbac";
@@ -617,19 +625,16 @@ router.post("/invoices", idempotent("invoices.create"), async (req, res): Promis
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const invoice = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .insert(invoicesTable)
-      .values({ ...parsed.data, dealerId: activeDealerId(res), invoiceNumber: "PENDING" })
-      .returning();
-    const [numbered] = await tx
-      .update(invoicesTable)
-      .set({
-        invoiceNumber: `INV-${new Date().getFullYear()}-${String(row!.id).padStart(4, "0")}`,
-      })
-      .where(eq(invoicesTable.id, row!.id))
-      .returning();
-    return numbered!;
+  const invoice = await issueInvoice({
+    dealerId: activeDealerId(res),
+    kind: parsed.data.kind ?? "final",
+    customerName: parsed.data.customerName,
+    amount: parsed.data.amount,
+    customerId: parsed.data.customerId,
+    dealId: parsed.data.dealId,
+    applicationId: parsed.data.applicationId,
+    description: parsed.data.description,
+    dueDate: parsed.data.dueDate,
   });
   res.status(201).json(CreateInvoiceResponse.parse(invoice));
 });
@@ -695,60 +700,39 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
     return;
   }
   if (invoice.status === "void") {
-    res.status(400).json({ error: "Cannot pay a void invoice" });
+    res.status(409).json({ error: "invoice_void" });
     return;
   }
   if (invoice.status === "paid") {
-    res.status(400).json({ error: "Invoice is already fully paid" });
+    res.status(409).json({ error: "invoice_already_paid" });
+    return;
+  }
+
+  // Overpayment guard: applied + amount must not exceed the invoice total.
+  const alreadyPaid = await invoicePaidTotal(invoice.id);
+  const excess =
+    Math.round((alreadyPaid + parsed.data.amount - invoice.amount) * 100) / 100;
+  if (excess > 0) {
+    res.status(422).json({ error: "overpayment", excess });
     return;
   }
 
   const receivedBy = res.locals.user?.name ?? res.locals.user?.email ?? null;
-
-  const payment = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .insert(paymentsTable)
-      .values({
-        dealerId: invoice.dealerId,
-        invoiceId: invoice.id,
-        customerName: invoice.customerName,
-        amount: parsed.data.amount,
-        method: parsed.data.method,
-        reference: parsed.data.reference ?? null,
-        receivedBy,
-      })
-      .returning();
-
-    const [{ paid }] = await tx
-      .select({
-        paid: sql<number>`coalesce(sum(${paymentsTable.amount}), 0)::float`,
-      })
-      .from(paymentsTable)
-      .where(eq(paymentsTable.invoiceId, invoice.id));
-
-    await tx
-      .update(invoicesTable)
-      .set({
-        status: paid >= invoice.amount ? "paid" : "partially_paid",
-      })
-      .where(eq(invoicesTable.id, invoice.id));
-
-    await tx.insert(receiptsTable).values({
-      dealerId: invoice.dealerId,
-      receiptNumber: `RCT-${new Date().getFullYear()}-${String(row!.id).padStart(4, "0")}`,
-      paymentId: row!.id,
-      invoiceId: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      customerName: invoice.customerName,
-      amount: row!.amount,
-      method: row!.method,
-      issuedBy: receivedBy,
-    });
-
-    return row!;
+  const result = await applyPayment({
+    invoice,
+    amount: parsed.data.amount,
+    method: parsed.data.method,
+    reference: parsed.data.reference ?? null,
+    receivedBy,
   });
+  await logPaymentEvent(
+    invoice,
+    result.payment.amount,
+    result.payment.method,
+    result.receipt.receiptNumber,
+  );
 
-  res.status(201).json(CreatePaymentResponse.parse(payment));
+  res.status(201).json(CreatePaymentResponse.parse(result.payment));
 });
 
 router.get("/receipts", async (_req, res): Promise<void> => {
@@ -758,6 +742,28 @@ router.get("/receipts", async (_req, res): Promise<void> => {
     .where(eq(receiptsTable.dealerId, activeDealerId(res)))
     .orderBy(desc(receiptsTable.createdAt));
   res.json(ListReceiptsResponse.parse(rows));
+});
+
+router.get("/receipts/:id", async (req, res): Promise<void> => {
+  const params = GetReceiptParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [receipt] = await db
+    .select()
+    .from(receiptsTable)
+    .where(
+      and(
+        eq(receiptsTable.id, params.data.id),
+        eq(receiptsTable.dealerId, activeDealerId(res)),
+      ),
+    );
+  if (!receipt) {
+    res.status(404).json({ error: "Receipt not found" });
+    return;
+  }
+  res.json(GetReceiptResponse.parse(receipt));
 });
 
 router.get("/outstanding-balances", async (_req, res): Promise<void> => {

@@ -2443,6 +2443,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "409":
+          description: Invoice void or already fully paid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Overpayment — amount exceeds outstanding balance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, excess]
+                properties:
+                  error: { type: string }
+                  excess: { type: number }
   /receipts:
     get:
       operationId: listReceipts
@@ -2456,6 +2472,28 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Receipt"
+  /receipts/{id}:
+    get:
+      operationId: getReceipt
+      tags: [finance]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Receipt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /outstanding-balances:
     get:
       operationId: listOutstandingBalances
@@ -7445,6 +7483,7 @@ components:
         otdPrice: { type: number }
         monthlyPayment: { type: ["number", "null"] }
         depositPaid: { type: boolean }
+        finalPaymentMethod: { type: ["string", "null"], enum: [cash, bank_financing, cheque, null] }
         salesAdvisor: { type: ["string", "null"] }
         salesAdvisorUserId: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
@@ -7465,6 +7504,7 @@ components:
         otdPrice: { type: number }
         monthlyPayment: { type: number }
         depositPaid: { type: boolean }
+        finalPaymentMethod: { type: string, enum: [cash, bank_financing, cheque] }
         salesAdvisor: { type: string }
         salesAdvisorUserId: { type: integer }
     DealUpdate:
@@ -7482,6 +7522,7 @@ components:
         otdPrice: { type: number }
         monthlyPayment: { type: number }
         depositPaid: { type: boolean }
+        finalPaymentMethod: { type: string, enum: [cash, bank_financing, cheque] }
         salesAdvisor: { type: string }
         salesAdvisorUserId: { type: ["integer", "null"] }
 
@@ -7689,9 +7730,18 @@ components:
         baseApr: { type: number }
         maxTermMonths: { type: integer }
         active: { type: boolean }
+    InvoiceTaxLine:
+      type: object
+      required: [code, name, kind, rate, amount]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [percent, fixed] }
+        rate: { type: number }
+        amount: { type: number }
     Invoice:
       type: object
-      required: [id, invoiceNumber, customerName, amount, status, createdAt]
+      required: [id, invoiceNumber, customerName, amount, kind, status, taxLines, currency, createdAt]
       properties:
         id: { type: integer }
         invoiceNumber: { type: string }
@@ -7701,7 +7751,13 @@ components:
         applicationId: { type: ["integer", "null"] }
         description: { type: ["string", "null"] }
         amount: { type: number }
+        kind: { type: string, enum: [reservation, final] }
         status: { type: string, enum: [issued, partially_paid, paid, void] }
+        taxLines:
+          type: array
+          items: { $ref: "#/components/schemas/InvoiceTaxLine" }
+        currency: { type: string }
+        exchangeRate: { type: ["number", "null"] }
         dueDate: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
     InvoiceInput:
@@ -7714,6 +7770,7 @@ components:
         applicationId: { type: integer }
         description: { type: string }
         amount: { type: number }
+        kind: { type: string, enum: [reservation, final] }
         dueDate: { type: string }
     InvoiceUpdate:
       type: object
@@ -7744,7 +7801,7 @@ components:
         reference: { type: string }
     Receipt:
       type: object
-      required: [id, receiptNumber, paymentId, invoiceId, invoiceNumber, customerName, amount, method, createdAt]
+      required: [id, receiptNumber, paymentId, invoiceId, invoiceNumber, customerName, amount, method, currency, createdAt]
       properties:
         id: { type: integer }
         receiptNumber: { type: string }
@@ -7754,6 +7811,8 @@ components:
         customerName: { type: string }
         amount: { type: number }
         method: { type: string }
+        currency: { type: string }
+        exchangeRate: { type: ["number", "null"] }
         issuedBy: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
     OutstandingBalance:

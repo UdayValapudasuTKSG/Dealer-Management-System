@@ -54,6 +54,9 @@ export const receiptsTable = pgTable("receipts", {
   customerName: text("customer_name").notNull(),
   amount: doublePrecision("amount").notNull(),
   method: text("method").notNull(),
+  /** USD-scale amount; GYD display reproducible via the snapshot rate. */
+  currency: text("currency").notNull().default("USD"),
+  exchangeRate: doublePrecision("exchange_rate"),
   issuedBy: text("issued_by"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

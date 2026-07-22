@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { InvoiceInputKind } from './invoiceInputKind';
 
 export interface InvoiceInput {
   customerId?: number;
@@ -14,5 +15,6 @@ export interface InvoiceInput {
   applicationId?: number;
   description?: string;
   amount: number;
+  kind?: InvoiceInputKind;
   dueDate?: string;
 }

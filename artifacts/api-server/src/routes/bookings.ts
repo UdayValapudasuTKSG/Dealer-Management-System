@@ -25,6 +25,7 @@ import {
 import { enqueueEmail } from "../lib/email";
 import { logger } from "../lib/logger";
 import { ensureAccountForLead } from "../lib/accounts";
+import { applyPayment, issueInvoice, logPaymentEvent } from "../lib/invoicing";
 import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
@@ -272,6 +273,44 @@ router.post("/bookings", async (req, res): Promise<void> => {
         eq(vehiclesTable.dealerId, dealerId),
       ),
     );
+
+  // Dual-invoice #1 (L6): every reservation with a fee issues a reservation
+  // invoice; anything paid up-front is applied immediately (payment + receipt).
+  if (booking!.bookingAmount > 0) {
+    try {
+      const vehicleName = await vehicleLabel(booking!.vehicleId, dealerId);
+      const invoice = await issueInvoice({
+        dealerId,
+        kind: "reservation",
+        customerName: booking!.customerName,
+        amount: booking!.bookingAmount,
+        customerId: booking!.customerId,
+        dealId: booking!.dealId,
+        description: `Reservation fee — ${vehicleName} (booking #${booking!.id})`,
+      });
+      if (paid > 0) {
+        const applied = Math.min(paid, booking!.bookingAmount);
+        const result = await applyPayment({
+          invoice,
+          amount: applied,
+          method: "cash",
+          reference: `booking-${booking!.id}`,
+          receivedBy: booking!.createdBy,
+        });
+        await logPaymentEvent(
+          invoice,
+          applied,
+          "cash",
+          result.receipt.receiptNumber,
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { err, bookingId: booking!.id },
+        "reservation invoice issuance failed",
+      );
+    }
+  }
 
   void (async () => {
     const { email, name } = await bookingRecipient(booking!);

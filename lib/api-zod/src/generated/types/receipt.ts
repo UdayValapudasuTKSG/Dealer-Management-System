@@ -15,6 +15,9 @@ export interface Receipt {
   customerName: string;
   amount: number;
   method: string;
+  currency: string;
+  /** @nullable */
+  exchangeRate?: number | null;
   /** @nullable */
   issuedBy?: string | null;
   createdAt: Date;

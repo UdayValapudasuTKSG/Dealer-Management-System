@@ -21,6 +21,14 @@ export const DEAL_STAGES = [
 ] as const;
 export type DealStage = (typeof DEAL_STAGES)[number];
 
+/** Final Amount Payment Method (L6): how the balance settles. */
+export const DEAL_PAYMENT_METHODS = [
+  "cash",
+  "bank_financing",
+  "cheque",
+] as const;
+export type DealPaymentMethod = (typeof DEAL_PAYMENT_METHODS)[number];
+
 export const dealsTable = pgTable("deals", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
@@ -37,6 +45,7 @@ export const dealsTable = pgTable("deals", {
   otdPrice: doublePrecision("otd_price").notNull().default(0),
   monthlyPayment: doublePrecision("monthly_payment"),
   depositPaid: boolean("deposit_paid").notNull().default(false),
+  finalPaymentMethod: text("final_payment_method"),
   salesAdvisor: text("sales_advisor"),
   salesAdvisorUserId: integer("sales_advisor_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -46,6 +55,7 @@ export const dealsTable = pgTable("deals", {
 
 export const insertDealSchema = createInsertSchema(dealsTable, {
   stage: z.enum(DEAL_STAGES),
+  finalPaymentMethod: z.enum(DEAL_PAYMENT_METHODS).nullable().optional(),
 }).omit({ dealerId: true,
   id: true,
   createdAt: true,

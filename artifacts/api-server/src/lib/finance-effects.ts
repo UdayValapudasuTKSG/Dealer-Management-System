@@ -14,6 +14,7 @@ import {
 import { onFinanceStatusChanged, onDealStageChanged } from "./email-triggers";
 import { notifyUsers } from "./email";
 import { ensureDeliveryForDeal } from "./delivery";
+import { ensureFinalInvoiceForDeal } from "./invoicing";
 import { logger } from "./logger";
 
 const money = (n: number) =>
@@ -175,6 +176,16 @@ export async function applyFinanceStatusEffects(
           .where(eq(dealsTable.id, deal.id))
           .returning();
         if (updated) {
+          // Dual-invoice #2 (L6): auto-commit must also generate the final
+          // settlement invoice, same as the manual PATCH commit path.
+          try {
+            await ensureFinalInvoiceForDeal(updated);
+          } catch (err) {
+            logger.error(
+              { err, dealId: updated.id },
+              "final invoice generation failed on auto-commit",
+            );
+          }
           onDealStageChanged(deal, updated);
           await db.insert(timelineEventsTable).values({
             dealerId: app.dealerId,

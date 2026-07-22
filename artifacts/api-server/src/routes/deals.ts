@@ -26,6 +26,10 @@ import {
 } from "@workspace/api-zod";
 import { onDealStageChanged } from "../lib/email-triggers";
 import { ensureDeliveryForDeal } from "../lib/delivery";
+import {
+  approvedFinanceAppForDeal,
+  ensureFinalInvoiceForDeal,
+} from "../lib/invoicing";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
 import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
 
@@ -303,6 +307,22 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
       });
       return;
     }
+    // Financed settle gate (L6): a bank-financed deal can only commit once
+    // its finance application is approved or disbursed by the LOS.
+    const method =
+      parsed.data.finalPaymentMethod ?? before.finalPaymentMethod;
+    if (parsed.data.stage === "committed" && method === "bank_financing") {
+      const app = await approvedFinanceAppForDeal(before);
+      if (!app) {
+        res.status(422).json({
+          error: "financing_not_approved",
+          unmet: [
+            "A finance application linked to this deal must be approved or disbursed before a bank-financed deal can commit",
+          ],
+        });
+        return;
+      }
+    }
   }
 
   // Keep the advisor user ID in sync when the advisor name changes without
@@ -375,6 +395,13 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
 
   // Cash decision / commitment → kick off the delivery workflow.
   if (before && before.stage !== "committed" && deal.stage === "committed") {
+    // Dual-invoice #2 (L6): the final settlement invoice is generated at
+    // commit time (otd − reservation − trade-in − financed portion).
+    try {
+      await ensureFinalInvoiceForDeal(deal);
+    } catch (err) {
+      req.log.error({ err, dealId: deal.id }, "final invoice generation failed");
+    }
     void ensureDeliveryForDeal(deal.id, {
       cause: `Deal #${deal.id} committed`,
     }).catch(() => undefined);

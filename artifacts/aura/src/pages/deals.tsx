@@ -37,6 +37,12 @@ import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
 import { useMoney } from "@/lib/format";
 
+const METHOD_LABEL: Record<string, string> = {
+  cash: "Cash",
+  bank_financing: "Bank Financing",
+  cheque: "Cheque",
+};
+
 const STAGE_LABEL: Record<string, string> = {
   desking: "Desking",
   negotiation: "Negotiation",
@@ -247,11 +253,23 @@ export default function Deals() {
                 name: "stage",
                 label: "Stage",
                 type: "select",
-                span: "full",
+                span: "half",
                 defaultValue: "desking",
                 options: [
                   { value: "desking", label: "Desking" },
                   { value: "committed", label: "Committed" },
+                ],
+              },
+              {
+                name: "finalPaymentMethod",
+                label: "Payment method",
+                type: "select",
+                span: "half",
+                defaultValue: "cash",
+                options: [
+                  { value: "cash", label: "Cash" },
+                  { value: "bank_financing", label: "Bank Financing" },
+                  { value: "cheque", label: "Cheque" },
                 ],
               },
             ]}
@@ -280,6 +298,7 @@ export default function Deals() {
                 <th className="px-4 py-3 font-semibold text-right">OTD</th>
                 <th className="px-4 py-3 font-semibold text-right hidden md:table-cell">Discount</th>
                 <th className="px-4 py-3 font-semibold text-center hidden md:table-cell">Deposit</th>
+                <th className="px-4 py-3 font-semibold hidden lg:table-cell">Method</th>
                 <th className="px-4 py-3 font-semibold hidden lg:table-cell">Advisor</th>
                 <th className="px-4 py-3 font-semibold">Lead</th>
               </tr>
@@ -321,6 +340,11 @@ export default function Deals() {
                     )}
                   </td>
                   <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
+                    {deal.finalPaymentMethod
+                      ? METHOD_LABEL[deal.finalPaymentMethod]
+                      : "—"}
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
                     {deal.salesAdvisor ?? "—"}
                   </td>
                   <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
@@ -359,7 +383,7 @@ export default function Deals() {
               ))}
               {(deals ?? []).length === 0 && !isLoading && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                  <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground text-sm">
                     No deals yet.
                   </td>
                 </tr>
@@ -476,6 +500,48 @@ export default function Deals() {
                                 Discount
                               </span>
                               <span>-{money.gyd(deal.discount)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="uppercase tracking-wider text-xs">
+                                Settlement
+                              </span>
+                              {canEditDeals && deal.stage === "desking" ? (
+                                <select
+                                  value={deal.finalPaymentMethod ?? "cash"}
+                                  onChange={async (e) => {
+                                    try {
+                                      await updateDeal.mutateAsync({
+                                        id: deal.id,
+                                        data: {
+                                          finalPaymentMethod: e.target
+                                            .value as "cash" | "bank_financing" | "cheque",
+                                        },
+                                      });
+                                      queryClient.invalidateQueries({
+                                        queryKey: getListDealsQueryKey(),
+                                      });
+                                    } catch (err) {
+                                      toast({
+                                        title: "Could not update payment method",
+                                        description:
+                                          err instanceof Error ? err.message : undefined,
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                  className="bg-transparent border border-border/60 rounded-full px-2.5 py-1 text-xs font-semibold text-foreground focus:outline-none focus:border-primary/60"
+                                >
+                                  <option value="cash">Cash</option>
+                                  <option value="bank_financing">Bank Financing</option>
+                                  <option value="cheque">Cheque</option>
+                                </select>
+                              ) : (
+                                <span className="text-foreground">
+                                  {deal.finalPaymentMethod
+                                    ? METHOD_LABEL[deal.finalPaymentMethod]
+                                    : "—"}
+                                </span>
+                              )}
                             </div>
                             {deal.monthlyPayment && (
                               <div className="flex justify-between items-center pt-2">

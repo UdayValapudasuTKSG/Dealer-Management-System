@@ -2648,6 +2648,18 @@ export const DealStage = {
   lost: 'lost',
 } as const;
 
+/**
+ * @nullable
+ */
+export type DealFinalPaymentMethod = typeof DealFinalPaymentMethod[keyof typeof DealFinalPaymentMethod] | null;
+
+
+export const DealFinalPaymentMethod = {
+  cash: 'cash',
+  bank_financing: 'bank_financing',
+  cheque: 'cheque',
+} as const;
+
 export interface Deal {
   id: number;
   /** @nullable */
@@ -2669,6 +2681,8 @@ export interface Deal {
   monthlyPayment?: number | null;
   depositPaid: boolean;
   /** @nullable */
+  finalPaymentMethod?: DealFinalPaymentMethod;
+  /** @nullable */
   salesAdvisor?: string | null;
   /** @nullable */
   salesAdvisorUserId?: number | null;
@@ -2686,6 +2700,15 @@ export const DealInputStage = {
   lost: 'lost',
 } as const;
 
+export type DealInputFinalPaymentMethod = typeof DealInputFinalPaymentMethod[keyof typeof DealInputFinalPaymentMethod];
+
+
+export const DealInputFinalPaymentMethod = {
+  cash: 'cash',
+  bank_financing: 'bank_financing',
+  cheque: 'cheque',
+} as const;
+
 export interface DealInput {
   divisionId?: number;
   customerId?: number;
@@ -2700,6 +2723,7 @@ export interface DealInput {
   otdPrice?: number;
   monthlyPayment?: number;
   depositPaid?: boolean;
+  finalPaymentMethod?: DealInputFinalPaymentMethod;
   salesAdvisor?: string;
   salesAdvisorUserId?: number;
 }
@@ -2713,6 +2737,15 @@ export const DealUpdateStage = {
   delivered: 'delivered',
   cancelled: 'cancelled',
   lost: 'lost',
+} as const;
+
+export type DealUpdateFinalPaymentMethod = typeof DealUpdateFinalPaymentMethod[keyof typeof DealUpdateFinalPaymentMethod];
+
+
+export const DealUpdateFinalPaymentMethod = {
+  cash: 'cash',
+  bank_financing: 'bank_financing',
+  cheque: 'cheque',
 } as const;
 
 export interface DealUpdate {
@@ -2729,6 +2762,7 @@ export interface DealUpdate {
   otdPrice?: number;
   monthlyPayment?: number;
   depositPaid?: boolean;
+  finalPaymentMethod?: DealUpdateFinalPaymentMethod;
   salesAdvisor?: string;
   /** @nullable */
   salesAdvisorUserId?: number | null;
@@ -3104,6 +3138,30 @@ export interface BankUpdate {
   active?: boolean;
 }
 
+export type InvoiceTaxLineKind = typeof InvoiceTaxLineKind[keyof typeof InvoiceTaxLineKind];
+
+
+export const InvoiceTaxLineKind = {
+  percent: 'percent',
+  fixed: 'fixed',
+} as const;
+
+export interface InvoiceTaxLine {
+  code: string;
+  name: string;
+  kind: InvoiceTaxLineKind;
+  rate: number;
+  amount: number;
+}
+
+export type InvoiceKind = typeof InvoiceKind[keyof typeof InvoiceKind];
+
+
+export const InvoiceKind = {
+  reservation: 'reservation',
+  final: 'final',
+} as const;
+
 export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus];
 
 
@@ -3127,11 +3185,24 @@ export interface Invoice {
   /** @nullable */
   description?: string | null;
   amount: number;
+  kind: InvoiceKind;
   status: InvoiceStatus;
+  taxLines: InvoiceTaxLine[];
+  currency: string;
+  /** @nullable */
+  exchangeRate?: number | null;
   /** @nullable */
   dueDate?: string | null;
   createdAt: string;
 }
+
+export type InvoiceInputKind = typeof InvoiceInputKind[keyof typeof InvoiceInputKind];
+
+
+export const InvoiceInputKind = {
+  reservation: 'reservation',
+  final: 'final',
+} as const;
 
 export interface InvoiceInput {
   customerId?: number;
@@ -3141,6 +3212,7 @@ export interface InvoiceInput {
   applicationId?: number;
   description?: string;
   amount: number;
+  kind?: InvoiceInputKind;
   dueDate?: string;
 }
 
@@ -3214,6 +3286,9 @@ export interface Receipt {
   customerName: string;
   amount: number;
   method: string;
+  currency: string;
+  /** @nullable */
+  exchangeRate?: number | null;
   /** @nullable */
   issuedBy?: string | null;
   createdAt: string;
@@ -4976,6 +5051,11 @@ status?: string;
 
 export type ListInvoicesParams = {
 status?: string;
+};
+
+export type CreatePayment422 = {
+  error: string;
+  excess: number;
 };
 
 export type ListServiceOrdersParams = {
