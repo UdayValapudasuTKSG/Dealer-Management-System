@@ -125,6 +125,8 @@ import type {
   GetReportParams,
   GetSentimentAnalysisParams,
   GlobalSearchParams,
+  GraComputeRequest,
+  GraComputeResponse,
   GraExtractRequest,
   GraFiling,
   GraFilingDraft,
@@ -12979,6 +12981,77 @@ export const useSubmitGraFiling = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getSubmitGraFilingMutationOptions(options));
+    }
+
+export const getComputeGraDutyUrl = () => {
+
+
+
+
+  return `/api/gra/compute`
+}
+
+/**
+ * @summary Recompute the GRA duty breakdown server-side from officer-edited draft inputs
+ */
+export const computeGraDuty = async (graComputeRequest: GraComputeRequest, options?: RequestInit): Promise<GraComputeResponse> => {
+
+  return customFetch<GraComputeResponse>(getComputeGraDutyUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(graComputeRequest)
+  }
+);}
+
+
+
+
+
+export const getComputeGraDutyMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof computeGraDuty>>, TError,{data: BodyType<GraComputeRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof computeGraDuty>>, TError,{data: BodyType<GraComputeRequest>}, TContext> => {
+
+const mutationKey = ['computeGraDuty'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof computeGraDuty>>, {data: BodyType<GraComputeRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  computeGraDuty(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ComputeGraDutyMutationResult = NonNullable<Awaited<ReturnType<typeof computeGraDuty>>>
+    export type ComputeGraDutyMutationBody = BodyType<GraComputeRequest>
+    export type ComputeGraDutyMutationError = ErrorType<Error>
+
+    /**
+ * @summary Recompute the GRA duty breakdown server-side from officer-edited draft inputs
+ */
+export const useComputeGraDuty = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof computeGraDuty>>, TError,{data: BodyType<GraComputeRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof computeGraDuty>>,
+        TError,
+        {data: BodyType<GraComputeRequest>},
+        TContext
+      > => {
+      return useMutation(getComputeGraDutyMutationOptions(options));
     }
 
 export const getGetGraFilingPdfUrl = (id: number,) => {

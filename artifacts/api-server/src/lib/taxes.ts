@@ -72,44 +72,11 @@ export function computeServiceTax(
   };
 }
 
-/**
- * GRA vehicle-duty computation from the dealer's configured tax rules.
- * Deterministic, server-side — the AI never computes amounts. Duty/excise/
- * levies are assessed on the CIF value; VAT is assessed on (CIF + duty +
- * other levies), matching customs practice. Rules are matched by code:
- * import_duty, excise, vat; any other active rules land in `otherLevies`.
- */
-export function computeGraDuty(
-  cifValue: number,
-  taxes: DealerTax[],
-  opts: { isEv?: boolean } = {},
-): {
-  importDuty: number;
-  exciseDuty: number;
-  vat: number;
-  otherLevies: TaxLine[];
-  /** Every assessed line (duty, excise, levies, then VAT) in display order. */
-  lines: TaxLine[];
-  totalPayable: number;
-} {
-  const powertrain = opts.isEv ? "ev" : null;
-  const nonVat = taxes.filter((t) => t.code !== "vat");
-  const preVat = computeTaxes(cifValue, nonVat, { powertrain });
-  const importDuty =
-    preVat.lines.find((l) => l.code === "import_duty")?.amount ?? 0;
-  const exciseDuty = preVat.lines.find((l) => l.code === "excise")?.amount ?? 0;
-  const otherLevies = preVat.lines.filter(
-    (l) => l.code !== "import_duty" && l.code !== "excise",
-  );
-  const vatBase = Math.round((cifValue + preVat.totalTax) * 100) / 100;
-  const vatRules = taxes.filter((t) => t.code === "vat");
-  const vatResult = computeTaxes(vatBase, vatRules, { powertrain });
-  const vat = vatResult.totalTax;
-  const lines = [...preVat.lines, ...vatResult.lines];
-  const totalPayable =
-    Math.round((preVat.totalTax + vat) * 100) / 100;
-  return { importDuty, exciseDuty, vat, otherLevies, lines, totalPayable };
-}
+// NOTE: GRA vehicle import duty is NO LONGER computed from dealer_taxes.
+// The real GRA rule engine lives in @workspace/gra-duty (age bands, fuel/cc
+// excise bands, importer-type bases, flat-rate 4+ tables, 14% VAT formula
+// and the Feb 2026 exemptions). dealer_taxes still drives quotes, vehicle
+// price lines and invoices (computeTaxes / computeServiceTax unchanged).
 
 /** Fetch the dealer's tax rules, seeding the Guyana defaults on first read. */
 export async function ensureDealerTaxes(dealerId: number): Promise<DealerTax[]> {

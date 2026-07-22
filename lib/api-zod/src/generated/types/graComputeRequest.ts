@@ -11,4 +11,18 @@ export interface GraComputeRequest {
   cifValue: number;
   /** @nullable */
   fuelType?: string | null;
+  /** @nullable */
+  engineCc?: number | null;
+  /** @nullable */
+  yearOfManufacture?: number | null;
+  /** @nullable */
+  yearOfImport?: number | null;
+  /** @nullable */
+  importerType?: string | null;
+  /** @nullable */
+  bodyType?: string | null;
+  /** @nullable */
+  isHybrid?: boolean | null;
+  /** @nullable */
+  retailPrice?: number | null;
 }

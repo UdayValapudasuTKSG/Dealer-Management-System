@@ -16,6 +16,7 @@ import {
   REVIEW_STAGE_LABEL,
   type AdvanceStage,
 } from "../lib/stage-review";
+import { computeDraftDuty } from "../lib/gra-duty";
 import { activeDealerId } from "../middlewares/rbac";
 import {
   ListGatesQueryParams,
@@ -301,6 +302,51 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
   }
 
   const { action, note, adjustedAmount, resolvedBy } = parsed.data;
+
+  // GRA filings can only be approved when the snapshot still passes the real
+  // GRA rule engine: no missing inputs, no unresolved rule-gap flags, and the
+  // stored total matches a fresh recompute (fail-closed, never rubber-stamp).
+  if (gate.type === "gra_filing" && action !== "dismiss") {
+    const [filing] = await db
+      .select()
+      .from(graFilingsTable)
+      .where(
+        and(
+          eq(graFilingsTable.gateId, gate.id),
+          eq(graFilingsTable.dealerId, gate.dealerId),
+          eq(graFilingsTable.status, "pending_gate"),
+        ),
+      );
+    if (filing) {
+      const duty = computeDraftDuty(
+        {
+          cifValue: filing.cifValue,
+          engineCc: filing.engineCc,
+          fuelType: filing.fuelType,
+          year: filing.year,
+          yearOfImport: filing.yearOfImport,
+          importerType: filing.importerType,
+          bodyType: filing.bodyType,
+          isHybrid: filing.isHybrid,
+          retailPrice: filing.retailPrice,
+        },
+        filing.exchangeRate,
+      );
+      const unmet = [...duty.missingInputs, ...duty.reviewFlags];
+      if (Math.abs(duty.totalPayable - filing.totalPayable) > 0.01) {
+        unmet.push("total_mismatch_with_gra_engine");
+      }
+      if (unmet.length > 0) {
+        res.status(422).json({
+          error:
+            "This GRA filing cannot be approved — the duty computation is incomplete or no longer matches the GRA rules. Resubmit the draft.",
+          unmet,
+        });
+        return;
+      }
+    }
+  }
+
   const status =
     action === "approve"
       ? "approved"

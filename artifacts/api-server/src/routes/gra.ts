@@ -16,8 +16,10 @@ import {
   recordAgentRun,
   MIN_AGENT_CONFIDENCE,
 } from "../lib/agent-governance";
-import { computeGraDuty, ensureDealerTaxes } from "../lib/taxes";
+import { computeDraftDuty, dealerExchangeRate } from "../lib/gra-duty";
 import {
+  ComputeGraDutyBody,
+  ComputeGraDutyResponse,
   ExtractGraFilingBody,
   ExtractGraFilingResponse,
   SubmitGraFilingBody,
@@ -184,13 +186,28 @@ router.post("/gra/extract", async (req, res): Promise<void> => {
     if (dropped.has("hsCode")) x.hsCode = null;
     if (dropped.has("cifValue")) x.cifValue = null;
 
-    // Deterministic server-side duty computation from the dealer's configured
-    // tax rules (dealer_taxes) — the model never computes amounts. Every
-    // active rule lands in taxLines and totalPayable is their exact sum.
+    // Deterministic server-side duty computation from the REAL GRA rule set
+    // (@workspace/gra-duty) — the model never computes amounts. Inputs the
+    // document cannot supply (importer type, body type, retail price) stay
+    // blank for the officer; the engine reports them as missingInputs
+    // instead of guessing a formula path.
     const cifValue = x.cifValue ?? 0;
-    const isEv = (x.fuelType ?? "").toLowerCase() === "electric";
-    const taxRules = await ensureDealerTaxes(dealerId);
-    const duty = computeGraDuty(cifValue, taxRules, { isEv });
+    const exchangeRate = await dealerExchangeRate(dealerId);
+    const yearOfImport = new Date().getFullYear();
+    const duty = computeDraftDuty(
+      {
+        cifValue,
+        engineCc: x.engineCc,
+        fuelType: x.fuelType,
+        year: x.year,
+        yearOfImport,
+        importerType: null,
+        bodyType: null,
+        isHybrid: null,
+        retailPrice: null,
+      },
+      exchangeRate,
+    );
 
     const reviewNote =
       needsReview.length > 0
@@ -219,8 +236,16 @@ router.post("/gra/extract", async (req, res): Promise<void> => {
       fuelType: x.fuelType ?? "",
       hsCode: x.hsCode ?? "",
       cifValue,
-      taxLines: duty.lines,
+      importerType: null,
+      bodyType: null,
+      isHybrid: null,
+      yearOfImport,
+      retailPrice: null,
+      taxLines: duty.taxLines,
       totalPayable: duty.totalPayable,
+      breakdown: duty.breakdown,
+      reviewFlags: duty.reviewFlags,
+      missingInputs: duty.missingInputs,
       confidence: avgConfidence,
       uncertainFields: needsReview.map((k) => FIELD_LABELS[k]),
       notes,
@@ -264,29 +289,43 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
 
   const dealerId = activeDealerId(res);
 
-  // Never trust client-submitted amounts: recompute every duty/levy/VAT line
-  // and the total server-side from the dealer's configured tax rules and the
-  // (possibly officer-corrected) CIF value + fuel type in the draft.
+  // Never trust client-submitted amounts: recompute every duty/excise/VAT
+  // line and the total server-side with the REAL GRA rule engine from the
+  // (possibly officer-corrected) inputs in the draft. The exchange rate is
+  // snapshotted here so later rate drift never retro-changes a filed duty.
   const submitted = parsed.data.draft;
-  const isEv = (submitted.fuelType ?? "").toLowerCase() === "electric";
-  const taxRules = await ensureDealerTaxes(dealerId);
-  const duty = computeGraDuty(submitted.cifValue, taxRules, { isEv });
+  const exchangeRate = await dealerExchangeRate(dealerId);
+  const duty = computeDraftDuty(submitted, exchangeRate);
+  const isEv = duty.isEv;
+
+  // Required inputs still blank, or a rule gap needing human resolution
+  // (e.g. the diesel 1800-2000cc band) — the filing cannot be computed.
+  if (duty.missingInputs.length > 0 || duty.reviewFlags.length > 0) {
+    res.status(422).json({
+      error:
+        duty.missingInputs.length > 0
+          ? "Required duty inputs are missing — fill them in before submitting the filing."
+          : "This vehicle falls in a GRA rule gap that must be resolved with the authority before filing.",
+      unmet: [...duty.missingInputs, ...duty.reviewFlags],
+    });
+    return;
+  }
 
   // Spec R9 D-GRA-1: if the client posts tax lines that do not match the
   // deterministic server recompute, reject the filing and return the
   // server-computed lines — the app never accepts a fabricated duty figure.
   const mismatch =
-    submitted.taxLines.length !== duty.lines.length ||
+    submitted.taxLines.length !== duty.taxLines.length ||
     Math.abs(submitted.totalPayable - duty.totalPayable) > 0.01 ||
     submitted.taxLines.some((l, i) => {
-      const s = duty.lines[i];
+      const s = duty.taxLines[i];
       return !s || s.code !== l.code || Math.abs(s.amount - l.amount) > 0.01;
     });
   if (mismatch) {
     res.status(422).json({
       error:
-        "Submitted tax lines do not match the server-computed duty. Refresh the draft — duty is always computed server-side from the dealer's tax rules.",
-      serverTaxLines: duty.lines,
+        "Submitted tax lines do not match the server-computed duty. Refresh the draft — duty is always computed server-side from the GRA rules.",
+      serverTaxLines: duty.taxLines,
       serverTotalPayable: duty.totalPayable,
     });
     return;
@@ -294,17 +333,9 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
 
   const d = {
     ...submitted,
-    taxLines: duty.lines,
+    taxLines: duty.taxLines,
     totalPayable: duty.totalPayable,
   };
-
-  // Snapshot the dealer's exchange rate at submit time so later rate drift
-  // never retro-changes a filed duty (17-mB step 4).
-  const [dealer] = await db
-    .select()
-    .from(dealersTable)
-    .where(eq(dealersTable.id, dealerId));
-  const exchangeRate = dealer?.usdExchangeRate ?? 209;
   const both = (n: number) =>
     `US$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })} / ${gyd(n * exchangeRate)}`;
 
@@ -364,9 +395,16 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
         fuelType: d.fuelType,
         hsCode: d.hsCode,
         cifValue: d.cifValue,
+        importerType: d.importerType ?? null,
+        bodyType: d.bodyType ?? null,
+        isHybrid: d.isHybrid ?? null,
+        yearOfImport: d.yearOfImport ?? null,
+        retailPrice: d.retailPrice ?? null,
+        breakdown: duty.breakdown,
+        reviewFlags: duty.reviewFlags,
         exchangeRate,
         evExcluded: isEv,
-        taxLines: duty.lines,
+        taxLines: duty.taxLines,
         totalPayable: duty.totalPayable,
         sourceNotes: d.notes ?? null,
         createdBy: res.locals.user?.email ?? "system",
@@ -381,6 +419,43 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
     "GRA filing draft submitted; awaiting gra_filing gate",
   );
   res.json(SubmitGraFilingResponse.parse(gate));
+});
+
+// Live recompute for the officer while editing the draft: pure, no writes.
+// Always 200 with missingInputs/reviewFlags so the UI can render exactly
+// what is still needed — never a guessed duty figure.
+router.post("/gra/compute", async (req, res): Promise<void> => {
+  const parsed = ComputeGraDutyBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const exchangeRate = await dealerExchangeRate(dealerId);
+  const b = parsed.data;
+  const duty = computeDraftDuty(
+    {
+      cifValue: b.cifValue,
+      engineCc: b.engineCc,
+      fuelType: b.fuelType,
+      year: b.yearOfManufacture,
+      yearOfImport: b.yearOfImport,
+      importerType: b.importerType,
+      bodyType: b.bodyType,
+      isHybrid: b.isHybrid,
+      retailPrice: b.retailPrice,
+    },
+    exchangeRate,
+  );
+  res.json(
+    ComputeGraDutyResponse.parse({
+      taxLines: duty.taxLines,
+      totalPayable: duty.totalPayable,
+      breakdown: duty.breakdown,
+      reviewFlags: duty.reviewFlags,
+      missingInputs: duty.missingInputs,
+    }),
+  );
 });
 
 router.get("/gra/filings", async (req, res): Promise<void> => {

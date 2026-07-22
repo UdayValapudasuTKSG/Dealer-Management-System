@@ -5,6 +5,8 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { GraDutyBreakdown } from './graDutyBreakdown';
+import type { GraFilingDraftImporterType } from './graFilingDraftImporterType';
 import type { GraTaxLine } from './graTaxLine';
 
 export interface GraFilingDraft {
@@ -36,4 +38,34 @@ export interface GraFilingDraft {
   uncertainFields: string[];
   /** @nullable */
   notes?: string | null;
+  /**
+     * GRA importer category — drives the excise base formula
+     * @nullable
+     */
+  importerType?: GraFilingDraftImporterType;
+  /**
+     * e.g. double_cab_pickup (drives the VAT exemption)
+     * @nullable
+     */
+  bodyType?: string | null;
+  /** @nullable */
+  isHybrid?: boolean | null;
+  /** @nullable */
+  yearOfImport?: number | null;
+  /**
+     * USD retail price — required for new_vehicle_trader importers
+     * @nullable
+     */
+  retailPrice?: number | null;
+  breakdown?: GraDutyBreakdown | null;
+  /**
+     * Human-review blockers (e.g. diesel_cc_gap_1800_2000); approval is blocked while set
+     * @nullable
+     */
+  reviewFlags?: string[] | null;
+  /**
+     * Required duty inputs still blank — the officer must fill them before submission
+     * @nullable
+     */
+  missingInputs?: string[] | null;
 }

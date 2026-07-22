@@ -21,3 +21,4 @@
 - [Storage ACL fail-closed](storage-acl-fail-closed.md) — never LIKE-match user-supplied storage keys in reference checks; use eq / jsonb `@>` containment or `%`/`_` widens the match.
 - [Deal delivery progression](deal-delivery-progression.md) — deals have NO manual stage control; finance disbursement commits, the 9-step delivery workflow delivers.
 - [Idempotency replay middleware](idempotency-replay-middleware.md) — atomic insert claim; only res.json+2xx marks completed, client aborts must release the claim or retries replay null.
+- [GRA duty engine conventions](gra-duty-engine.md) — engine never guesses: missing inputs return missingInputs[], unpublished bands become blocking reviewFlags; server recomputes at submit and gate approval.

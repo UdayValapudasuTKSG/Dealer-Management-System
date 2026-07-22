@@ -4532,6 +4532,42 @@ export interface GraTaxLine {
   amount: number;
 }
 
+/**
+ * GRA importer category — drives the excise base formula
+ * @nullable
+ */
+export type GraFilingDraftImporterType = typeof GraFilingDraftImporterType[keyof typeof GraFilingDraftImporterType] | null;
+
+
+export const GraFilingDraftImporterType = {
+  private: 'private',
+  dealer_used: 'dealer_used',
+  new_vehicle_trader: 'new_vehicle_trader',
+} as const;
+
+export type GraDutyBreakdownAgeCategory = typeof GraDutyBreakdownAgeCategory[keyof typeof GraDutyBreakdownAgeCategory];
+
+
+export const GraDutyBreakdownAgeCategory = {
+  under_4: 'under_4',
+  four_plus: 'four_plus',
+} as const;
+
+export interface GraDutyBreakdown {
+  ageCategory: GraDutyBreakdownAgeCategory;
+  ccBand: string;
+  importerType: string;
+  /** @nullable */
+  exciseBaseUsd?: number | null;
+  formulaPath: string;
+  /** @nullable */
+  exemptionApplied?: string | null;
+  dutyRatePct: number;
+  /** @nullable */
+  exciseRatePct?: number | null;
+  vatRatePct: number;
+}
+
 export interface GraFilingDraft {
   ownerName: string;
   /** Guyana Taxpayer Identification Number */
@@ -4561,6 +4597,36 @@ export interface GraFilingDraft {
   uncertainFields: string[];
   /** @nullable */
   notes?: string | null;
+  /**
+     * GRA importer category — drives the excise base formula
+     * @nullable
+     */
+  importerType?: GraFilingDraftImporterType;
+  /**
+     * e.g. double_cab_pickup (drives the VAT exemption)
+     * @nullable
+     */
+  bodyType?: string | null;
+  /** @nullable */
+  isHybrid?: boolean | null;
+  /** @nullable */
+  yearOfImport?: number | null;
+  /**
+     * USD retail price — required for new_vehicle_trader importers
+     * @nullable
+     */
+  retailPrice?: number | null;
+  breakdown?: GraDutyBreakdown | null;
+  /**
+     * Human-review blockers (e.g. diesel_cc_gap_1800_2000); approval is blocked while set
+     * @nullable
+     */
+  reviewFlags?: string[] | null;
+  /**
+     * Required duty inputs still blank — the officer must fill them before submission
+     * @nullable
+     */
+  missingInputs?: string[] | null;
 }
 
 export interface GraComputeRequest {
@@ -4568,11 +4634,28 @@ export interface GraComputeRequest {
   cifValue: number;
   /** @nullable */
   fuelType?: string | null;
+  /** @nullable */
+  engineCc?: number | null;
+  /** @nullable */
+  yearOfManufacture?: number | null;
+  /** @nullable */
+  yearOfImport?: number | null;
+  /** @nullable */
+  importerType?: string | null;
+  /** @nullable */
+  bodyType?: string | null;
+  /** @nullable */
+  isHybrid?: boolean | null;
+  /** @nullable */
+  retailPrice?: number | null;
 }
 
 export interface GraComputeResponse {
   taxLines: GraTaxLine[];
   totalPayable: number;
+  breakdown?: GraDutyBreakdown | null;
+  reviewFlags: string[];
+  missingInputs: string[];
 }
 
 export interface GraFilingSubmission {
@@ -4604,6 +4687,19 @@ export interface GraFiling {
   hsCode: string;
   /** USD-scale */
   cifValue: number;
+  /** @nullable */
+  importerType?: string | null;
+  /** @nullable */
+  bodyType?: string | null;
+  /** @nullable */
+  isHybrid?: boolean | null;
+  /** @nullable */
+  yearOfImport?: number | null;
+  /** @nullable */
+  retailPrice?: number | null;
+  breakdown?: GraDutyBreakdown | null;
+  /** @nullable */
+  reviewFlags?: string[] | null;
   /** usdExchangeRate snapshot at submit time */
   exchangeRate: number;
   evExcluded: boolean;

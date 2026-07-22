@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   useExtractGraFiling,
   useSubmitGraFiling,
   useListGraFilings,
+  useComputeGraDuty,
   getListGraFilingsQueryKey,
   getGetGraFilingPdfUrl,
   type GraFilingDraft,
@@ -117,7 +118,65 @@ export function DutyFiling({
 
   const extract = useExtractGraFiling();
   const submit = useSubmitGraFiling();
+  const compute = useComputeGraDuty();
   const money = useMoney();
+
+  // Debounced server-side recompute: whenever the officer edits a duty input,
+  // POST /gra/compute refreshes the lines/total/breakdown/flags. The client
+  // never computes duty itself.
+  const computeRef = useRef(compute.mutate);
+  computeRef.current = compute.mutate;
+  const dutyInputs = draft
+    ? [
+        draft.cifValue,
+        draft.engineCc,
+        draft.fuelType,
+        draft.year,
+        draft.yearOfImport,
+        draft.importerType,
+        draft.bodyType,
+        draft.isHybrid,
+        draft.retailPrice,
+      ].join("|")
+    : null;
+  useEffect(() => {
+    if (!draft || submittedGateId) return;
+    const t = setTimeout(() => {
+      computeRef.current(
+        {
+          data: {
+            cifValue: draft.cifValue ?? 0,
+            engineCc: draft.engineCc ?? null,
+            fuelType: draft.fuelType ?? null,
+            yearOfManufacture: draft.year ?? null,
+            yearOfImport: draft.yearOfImport ?? null,
+            importerType: draft.importerType ?? null,
+            bodyType: draft.bodyType ?? null,
+            isHybrid: draft.isHybrid ?? null,
+            retailPrice: draft.retailPrice ?? null,
+          },
+        },
+        {
+          onSuccess: (r) => {
+            setDraft((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    taxLines: r.taxLines,
+                    totalPayable: r.totalPayable,
+                    breakdown: r.breakdown ?? null,
+                    reviewFlags: r.reviewFlags,
+                    missingInputs: r.missingInputs,
+                  }
+                : prev,
+            );
+          },
+        },
+      );
+    }, 450);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dutyInputs, submittedGateId]);
 
   // After submission, watch the filing so the PDF unlocks the moment the
   // human gate is approved (server flips pending_gate → filed).
@@ -200,7 +259,9 @@ export function DutyFiling({
       const isNumeric =
         key === "year" ||
         key === "engineCc" ||
-        key === "cifValue";
+        key === "cifValue" ||
+        key === "yearOfImport" ||
+        key === "retailPrice";
       return {
         ...prev,
         [key]: isNumeric ? Number(value.replace(/[^0-9.]/g, "")) || 0 : value,
@@ -436,7 +497,7 @@ export function DutyFiling({
                     ))}
                   </div>
 
-                  {/* Duty breakdown */}
+                  {/* Duty inputs — the document can't supply these; the officer must */}
                   <div className="pt-2">
                     <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
                       Duty & levies
@@ -451,6 +512,68 @@ export function DutyFiling({
                           onChange={(v) => updateField(f.key, v)}
                         />
                       ))}
+                      <div className="space-y-1.5">
+                        <label className="text-xs uppercase tracking-widest text-muted-foreground">
+                          Importer type
+                        </label>
+                        <select
+                          value={draft.importerType ?? ""}
+                          onChange={(e) =>
+                            setDraft((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    importerType: (e.target.value ||
+                                      null) as GraFilingDraft["importerType"],
+                                  }
+                                : prev,
+                            )
+                          }
+                          className="w-full h-9 rounded-md border border-border bg-white/[0.04] px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+                        >
+                          <option value="">Select…</option>
+                          <option value="private">Private individual</option>
+                          <option value="dealer_used">Dealer (used vehicle)</option>
+                          <option value="new_vehicle_trader">New-vehicle trader</option>
+                        </select>
+                      </div>
+                      <ScanField
+                        index={IDENTITY_FIELDS.length + MONEY_FIELDS.length}
+                        label="Year of import"
+                        value={String(draft.yearOfImport ?? "")}
+                        onChange={(v) => updateField("yearOfImport", v)}
+                      />
+                      <ScanField
+                        index={IDENTITY_FIELDS.length + MONEY_FIELDS.length + 1}
+                        label="Body type (e.g. double cab pickup)"
+                        value={draft.bodyType ?? ""}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, bodyType: v || null } : prev,
+                          )
+                        }
+                      />
+                      {draft.importerType === "new_vehicle_trader" && (
+                        <ScanField
+                          index={IDENTITY_FIELDS.length + MONEY_FIELDS.length + 2}
+                          label="Retail price (US$)"
+                          value={String(draft.retailPrice ?? "")}
+                          onChange={(v) => updateField("retailPrice", v)}
+                        />
+                      )}
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground pt-6 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={draft.isHybrid ?? false}
+                          onChange={(e) =>
+                            setDraft((prev) =>
+                              prev ? { ...prev, isHybrid: e.target.checked } : prev,
+                            )
+                          }
+                          className="h-4 w-4 rounded border-border accent-[#A97142]"
+                        />
+                        Hybrid vehicle
+                      </label>
                     </div>
                     {/* Server-computed duty lines (dealer tax rules) — read-only */}
                     <div className="mt-4 rounded-xl border border-border bg-white/[0.03] divide-y divide-border">
@@ -481,11 +604,61 @@ export function DutyFiling({
                       ))}
                       {draft.taxLines.length === 0 && (
                         <div className="px-4 py-2.5 text-sm text-muted-foreground">
-                          No duty assessed — check the CIF value.
+                          {compute.isPending
+                            ? "Computing duty…"
+                            : "No duty assessed yet — complete the inputs above."}
                         </div>
                       )}
                     </div>
+                    {draft.breakdown && (
+                      <div className="mt-2 text-xs text-muted-foreground px-1">
+                        {[
+                          draft.breakdown.ageCategory === "under_4"
+                            ? "Under 4 years"
+                            : "4 years & older",
+                          draft.breakdown.ccBand,
+                          draft.breakdown.exemptionApplied
+                            ? `VAT exemption: ${draft.breakdown.exemptionApplied.replaceAll("_", " ")}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    )}
                   </div>
+
+                  {(draft.missingInputs?.length ?? 0) > 0 && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-300">
+                      Required before filing:{" "}
+                      {(draft.missingInputs ?? [])
+                        .map((f) =>
+                          f === "cifValue"
+                            ? "CIF value"
+                            : f === "importerType"
+                              ? "importer type"
+                              : f === "yearOfManufacture"
+                                ? "year"
+                                : f === "yearOfImport"
+                                  ? "year of import"
+                                  : f === "retailPrice"
+                                    ? "retail price"
+                                    : f === "engineCc"
+                                      ? "engine cc"
+                                      : f === "fuelType"
+                                        ? "fuel type (gasoline / diesel / electric)"
+                                        : f,
+                        )
+                        .join(", ")}
+                      .
+                    </div>
+                  )}
+                  {(draft.reviewFlags?.length ?? 0) > 0 && (
+                    <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
+                      {draft.reviewFlags?.includes("diesel_cc_gap_1800_2000")
+                        ? "Diesel 1800–2000cc has no published GRA excise band — this must be resolved with the GRA before filing."
+                        : "This filing needs human resolution before it can be computed."}
+                    </div>
+                  )}
 
                   {draft.uncertainFields.length > 0 && (
                     <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-300">
@@ -550,7 +723,12 @@ export function DutyFiling({
                   ) : (
                     <Button
                       onClick={handleSubmit}
-                      disabled={submit.isPending}
+                      disabled={
+                        submit.isPending ||
+                        compute.isPending ||
+                        (draft.missingInputs?.length ?? 0) > 0 ||
+                        (draft.reviewFlags?.length ?? 0) > 0
+                      }
                       className="w-full h-12 rounded-full bg-primary hover:bg-primary/90 text-white gap-2 text-base"
                     >
                       {submit.isPending ? (

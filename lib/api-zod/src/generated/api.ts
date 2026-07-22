@@ -5592,7 +5592,25 @@ export const ExtractGraFilingResponse = zod.object({
   "totalPayable": zod.number().describe('Sum of taxLines'),
   "confidence": zod.number().nullish().describe('Extraction confidence 0-1 reported by the vision model'),
   "uncertainFields": zod.array(zod.string()).describe('Extracted fields the model could not clearly read; must be human-verified'),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "importerType": zod.union([zod.literal('private'),zod.literal('dealer_used'),zod.literal('new_vehicle_trader'),zod.literal(null)]).nullish().describe('GRA importer category — drives the excise base formula'),
+  "bodyType": zod.string().nullish().describe('e.g. double_cab_pickup (drives the VAT exemption)'),
+  "isHybrid": zod.boolean().nullish(),
+  "yearOfImport": zod.number().nullish(),
+  "retailPrice": zod.number().nullish().describe('USD retail price — required for new_vehicle_trader importers'),
+  "breakdown": zod.union([zod.object({
+  "ageCategory": zod.enum(['under_4', 'four_plus']),
+  "ccBand": zod.string(),
+  "importerType": zod.string(),
+  "exciseBaseUsd": zod.number().nullish(),
+  "formulaPath": zod.string(),
+  "exemptionApplied": zod.string().nullish(),
+  "dutyRatePct": zod.number(),
+  "exciseRatePct": zod.number().nullish(),
+  "vatRatePct": zod.number()
+}),zod.null()]).optional(),
+  "reviewFlags": zod.array(zod.string()).nullish().describe('Human-review blockers (e.g. diesel_cc_gap_1800_2000); approval is blocked while set'),
+  "missingInputs": zod.array(zod.string()).nullish().describe('Required duty inputs still blank — the officer must fill them before submission')
 })
 
 
@@ -5621,6 +5639,23 @@ export const ListGraFilingsResponseItem = zod.object({
   "fuelType": zod.string(),
   "hsCode": zod.string(),
   "cifValue": zod.number().describe('USD-scale'),
+  "importerType": zod.string().nullish(),
+  "bodyType": zod.string().nullish(),
+  "isHybrid": zod.boolean().nullish(),
+  "yearOfImport": zod.number().nullish(),
+  "retailPrice": zod.number().nullish(),
+  "breakdown": zod.union([zod.object({
+  "ageCategory": zod.enum(['under_4', 'four_plus']),
+  "ccBand": zod.string(),
+  "importerType": zod.string(),
+  "exciseBaseUsd": zod.number().nullish(),
+  "formulaPath": zod.string(),
+  "exemptionApplied": zod.string().nullish(),
+  "dutyRatePct": zod.number(),
+  "exciseRatePct": zod.number().nullish(),
+  "vatRatePct": zod.number()
+}),zod.null()]).optional(),
+  "reviewFlags": zod.array(zod.string()).nullish(),
   "exchangeRate": zod.number().describe('usdExchangeRate snapshot at submit time'),
   "evExcluded": zod.boolean(),
   "taxLines": zod.array(zod.object({
@@ -5665,7 +5700,25 @@ export const SubmitGraFilingBody = zod.object({
   "totalPayable": zod.number().describe('Sum of taxLines'),
   "confidence": zod.number().nullish().describe('Extraction confidence 0-1 reported by the vision model'),
   "uncertainFields": zod.array(zod.string()).describe('Extracted fields the model could not clearly read; must be human-verified'),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "importerType": zod.union([zod.literal('private'),zod.literal('dealer_used'),zod.literal('new_vehicle_trader'),zod.literal(null)]).nullish().describe('GRA importer category — drives the excise base formula'),
+  "bodyType": zod.string().nullish().describe('e.g. double_cab_pickup (drives the VAT exemption)'),
+  "isHybrid": zod.boolean().nullish(),
+  "yearOfImport": zod.number().nullish(),
+  "retailPrice": zod.number().nullish().describe('USD retail price — required for new_vehicle_trader importers'),
+  "breakdown": zod.union([zod.object({
+  "ageCategory": zod.enum(['under_4', 'four_plus']),
+  "ccBand": zod.string(),
+  "importerType": zod.string(),
+  "exciseBaseUsd": zod.number().nullish(),
+  "formulaPath": zod.string(),
+  "exemptionApplied": zod.string().nullish(),
+  "dutyRatePct": zod.number(),
+  "exciseRatePct": zod.number().nullish(),
+  "vatRatePct": zod.number()
+}),zod.null()]).optional(),
+  "reviewFlags": zod.array(zod.string()).nullish().describe('Human-review blockers (e.g. diesel_cc_gap_1800_2000); approval is blocked while set'),
+  "missingInputs": zod.array(zod.string()).nullish().describe('Required duty inputs still blank — the officer must fill them before submission')
 }),
   "vehicleId": zod.number().nullish().describe('Imported vehicle this filing clears')
 })
@@ -5692,6 +5745,46 @@ export const SubmitGraFilingResponse = zod.object({
   "resolvedBy": zod.string().nullish(),
   "resolvedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Recompute the GRA duty breakdown server-side from officer-edited draft inputs
+ */
+export const ComputeGraDutyBody = zod.object({
+  "cifValue": zod.number().describe('USD-scale CIF value'),
+  "fuelType": zod.string().nullish(),
+  "engineCc": zod.number().nullish(),
+  "yearOfManufacture": zod.number().nullish(),
+  "yearOfImport": zod.number().nullish(),
+  "importerType": zod.string().nullish(),
+  "bodyType": zod.string().nullish(),
+  "isHybrid": zod.boolean().nullish(),
+  "retailPrice": zod.number().nullish()
+})
+
+export const ComputeGraDutyResponse = zod.object({
+  "taxLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number().describe('USD-scale amount computed server-side')
+})),
+  "totalPayable": zod.number(),
+  "breakdown": zod.union([zod.object({
+  "ageCategory": zod.enum(['under_4', 'four_plus']),
+  "ccBand": zod.string(),
+  "importerType": zod.string(),
+  "exciseBaseUsd": zod.number().nullish(),
+  "formulaPath": zod.string(),
+  "exemptionApplied": zod.string().nullish(),
+  "dutyRatePct": zod.number(),
+  "exciseRatePct": zod.number().nullish(),
+  "vatRatePct": zod.number()
+}),zod.null()]).optional(),
+  "reviewFlags": zod.array(zod.string()),
+  "missingInputs": zod.array(zod.string())
 })
 
 

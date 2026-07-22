@@ -5,9 +5,13 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { GraDutyBreakdown } from './graDutyBreakdown';
 import type { GraTaxLine } from './graTaxLine';
 
 export interface GraComputeResponse {
   taxLines: GraTaxLine[];
   totalPayable: number;
+  breakdown?: GraDutyBreakdown | null;
+  reviewFlags: string[];
+  missingInputs: string[];
 }

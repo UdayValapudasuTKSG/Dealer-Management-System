@@ -197,6 +197,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/gra-duty':
+        specifier: workspace:*
+        version: link:../../lib/gra-duty
       '@workspace/integrations-anthropic-ai':
         specifier: workspace:*
         version: link:../../lib/integrations-anthropic-ai
@@ -948,6 +951,12 @@ importers:
         specifier: ^0.31.10
         version: 0.31.10
 
+  lib/gra-duty:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.9.4
+
   lib/integrations-anthropic-ai:
     dependencies:
       '@anthropic-ai/sdk':
@@ -1007,6 +1016,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../lib/db
+      '@workspace/gra-duty':
+        specifier: workspace:*
+        version: link:../lib/gra-duty
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(pg@8.22.0)

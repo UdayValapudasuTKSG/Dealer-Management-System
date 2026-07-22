@@ -1,0 +1,13 @@
+{
+  "name": "@workspace/gra-duty",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {},
+  "devDependencies": {
+    "@types/node": "catalog:"
+  }
+}

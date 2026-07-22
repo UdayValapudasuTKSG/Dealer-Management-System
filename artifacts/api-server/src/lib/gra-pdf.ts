@@ -162,10 +162,36 @@ export function buildGraDutyPackPdf(
       .font("Helvetica-Bold")
       .fontSize(8)
       .fillColor("#A97142")
-      .text("DUTY & TAX ASSESSMENT — SERVER-COMPUTED FROM DEALER TAX RULES", left, y, {
+      .text("DUTY & TAX ASSESSMENT — SERVER-COMPUTED FROM THE GRA RULE SET", left, y, {
         characterSpacing: 1.2,
       });
     y += 16;
+
+    // Rule-path summary from the immutable breakdown snapshot (real GRA rules).
+    const bd = filing.breakdown;
+    if (bd) {
+      const importerLabel =
+        bd.importerType === "dealer_used"
+          ? "Dealer (used vehicle)"
+          : bd.importerType === "new_vehicle_trader"
+            ? "New-vehicle trader"
+            : "Private individual";
+      const parts = [
+        `Age category: ${bd.ageCategory === "under_4" ? "Under 4 years" : "4 years & older"}`,
+        `Band: ${bd.ccBand}`,
+        `Importer: ${importerLabel}`,
+        bd.exciseBaseUsd != null ? `Excise base: ${usd(bd.exciseBaseUsd)}` : null,
+        `Formula: ${bd.formulaPath}`,
+        bd.exemptionApplied ? `VAT exemption: ${bd.exemptionApplied}` : null,
+      ].filter(Boolean);
+      doc.rect(left, y, contentW, 26).fill("#f7f5f2");
+      doc
+        .font("Helvetica")
+        .fontSize(7.6)
+        .fillColor("#4a4a4a")
+        .text(parts.join("   ·   "), left + 8, y + 6, { width: contentW - 16 });
+      y += 32;
+    }
 
     // Table header
     doc.rect(left, y, contentW, 20).fill("#0a0a0a");
@@ -199,12 +225,24 @@ export function buildGraDutyPackPdf(
       y += 18;
     };
 
+    const basisFor = (code: string): string => {
+      if (code === "import_duty") return "CIF value";
+      if (code === "excise") {
+        if (!bd) return "Excise base";
+        if (bd.ageCategory === "four_plus")
+          return bd.exciseRatePct == null ? "GRA flat rate (GY$800,000)" : "GRA 4+ yr formula";
+        if (bd.importerType === "dealer_used") return "1.5 × CIF + duty";
+        if (bd.importerType === "new_vehicle_trader") return "Retail price + duty";
+        return "CIF + duty";
+      }
+      if (code === "vat") return "CIF + duty + excise";
+      return "CIF value";
+    };
     filing.taxLines.forEach((l, i) => {
-      const isVat = l.code === "vat";
       row(
         l.name,
-        isVat ? "CIF + duty & levies" : "CIF value",
-        l.kind === "percent" ? `${l.rate}%` : "fixed",
+        basisFor(l.code),
+        l.kind === "percent" ? `${l.rate}%` : "flat",
         l.amount,
         i % 2 === 1,
       );
@@ -271,7 +309,7 @@ export function buildGraDutyPackPdf(
       .fillColor("#4a4a4a")
       .text(
         [
-          `Duty lines server-computed from dealer_taxes; AI-extracted fields human-confirmed. Nothing on this document was AI-generated.`,
+          `Duty lines server-computed from the GRA rule set (age bands, fuel/cc excise bands, importer-type bases, 14% VAT); AI-extracted fields human-confirmed. Nothing on this document was AI-generated.`,
           `Gate #${filing.gateId} resolved by ${ctx.gateResolvedBy ?? filing.filedBy ?? "officer"}${ctx.gateResolution ? ` — "${ctx.gateResolution}"` : ""}.`,
           `Filed by ${filing.filedBy ?? "—"} on ${guyanaDate(filing.filedAt)} (America/Guyana).`,
           `Exchange rate snapshot: US$1 = GY$${rate} (locked at submission; later rate changes do not alter this filing).`,

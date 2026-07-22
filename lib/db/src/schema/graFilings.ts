@@ -17,6 +17,19 @@ export type GraFilingTaxLine = {
   amount: number;
 };
 
+/** Snapshot of the GRA rule path used to compute this filing's duty. */
+export type GraFilingBreakdown = {
+  ageCategory: "under_4" | "four_plus";
+  ccBand: string;
+  importerType: string;
+  exciseBaseUsd: number | null;
+  formulaPath: string;
+  exemptionApplied: string | null;
+  dutyRatePct: number;
+  exciseRatePct: number | null;
+  vatRatePct: number;
+};
+
 /**
  * Immutable GRA (Guyana Revenue Authority) duty filing snapshot. Created in
  * "pending_gate" state when the officer submits a draft (which raises the
@@ -43,6 +56,14 @@ export const graFilingsTable = pgTable("gra_filings", {
   fuelType: text("fuel_type").notNull(),
   hsCode: text("hs_code").notNull(),
   cifValue: doublePrecision("cif_value").notNull(),
+  // Real-GRA-rules inputs (nullable so legacy rows still serialize).
+  importerType: text("importer_type"), // private | dealer_used | new_vehicle_trader
+  bodyType: text("body_type"),
+  isHybrid: boolean("is_hybrid"),
+  yearOfImport: integer("year_of_import"),
+  retailPrice: doublePrecision("retail_price"),
+  breakdown: jsonb("breakdown").$type<GraFilingBreakdown | null>(),
+  reviewFlags: jsonb("review_flags").$type<string[] | null>(),
   exchangeRate: doublePrecision("exchange_rate").notNull(),
   evExcluded: boolean("ev_excluded").notNull().default(false),
   taxLines: jsonb("tax_lines").$type<GraFilingTaxLine[]>().notNull().default([]),

@@ -4147,6 +4147,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /gra/compute:
+    post:
+      operationId: computeGraDuty
+      tags: [gra]
+      summary: Recompute the GRA duty breakdown server-side from officer-edited draft inputs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GraComputeRequest"
+      responses:
+        "200":
+          description: Server-computed duty lines, breakdown, flags and missing inputs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GraComputeResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /gra/filings/{id}/pdf:
     get:
       operationId: getGraFilingPdf
@@ -8658,20 +8683,70 @@ components:
           description: Extracted fields the model could not clearly read; must be human-verified
           items: { type: string }
         notes: { type: ["string", "null"] }
+        importerType:
+          type: ["string", "null"]
+          enum: [private, dealer_used, new_vehicle_trader, null]
+          description: GRA importer category — drives the excise base formula
+        bodyType: { type: ["string", "null"], description: e.g. double_cab_pickup (drives the VAT exemption) }
+        isHybrid: { type: ["boolean", "null"] }
+        yearOfImport: { type: ["integer", "null"] }
+        retailPrice: { type: ["number", "null"], description: USD retail price — required for new_vehicle_trader importers }
+        breakdown:
+          oneOf:
+            - $ref: "#/components/schemas/GraDutyBreakdown"
+            - type: "null"
+        reviewFlags:
+          type: ["array", "null"]
+          description: Human-review blockers (e.g. diesel_cc_gap_1800_2000); approval is blocked while set
+          items: { type: string }
+        missingInputs:
+          type: ["array", "null"]
+          description: Required duty inputs still blank — the officer must fill them before submission
+          items: { type: string }
+    GraDutyBreakdown:
+      type: object
+      required: [ageCategory, ccBand, importerType, formulaPath, dutyRatePct, vatRatePct]
+      properties:
+        ageCategory: { type: string, enum: [under_4, four_plus] }
+        ccBand: { type: string }
+        importerType: { type: string }
+        exciseBaseUsd: { type: ["number", "null"] }
+        formulaPath: { type: string }
+        exemptionApplied: { type: ["string", "null"] }
+        dutyRatePct: { type: number }
+        exciseRatePct: { type: ["number", "null"] }
+        vatRatePct: { type: number }
     GraComputeRequest:
       type: object
       required: [cifValue]
       properties:
         cifValue: { type: number, description: USD-scale CIF value }
         fuelType: { type: ["string", "null"] }
+        engineCc: { type: ["integer", "null"] }
+        yearOfManufacture: { type: ["integer", "null"] }
+        yearOfImport: { type: ["integer", "null"] }
+        importerType: { type: ["string", "null"] }
+        bodyType: { type: ["string", "null"] }
+        isHybrid: { type: ["boolean", "null"] }
+        retailPrice: { type: ["number", "null"] }
     GraComputeResponse:
       type: object
-      required: [taxLines, totalPayable]
+      required: [taxLines, totalPayable, reviewFlags, missingInputs]
       properties:
         taxLines:
           type: array
           items: { $ref: "#/components/schemas/GraTaxLine" }
         totalPayable: { type: number }
+        breakdown:
+          oneOf:
+            - $ref: "#/components/schemas/GraDutyBreakdown"
+            - type: "null"
+        reviewFlags:
+          type: array
+          items: { type: string }
+        missingInputs:
+          type: array
+          items: { type: string }
     GraFilingSubmission:
       type: object
       required: [draft]
@@ -8718,6 +8793,18 @@ components:
         fuelType: { type: string }
         hsCode: { type: string }
         cifValue: { type: number, description: USD-scale, human-confirmed }
+        importerType: { type: ["string", "null"] }
+        bodyType: { type: ["string", "null"] }
+        isHybrid: { type: ["boolean", "null"] }
+        yearOfImport: { type: ["integer", "null"] }
+        retailPrice: { type: ["number", "null"] }
+        breakdown:
+          oneOf:
+            - $ref: "#/components/schemas/GraDutyBreakdown"
+            - type: "null"
+        reviewFlags:
+          type: ["array", "null"]
+          items: { type: string }
         exchangeRate: { type: number, description: usdExchangeRate snapshot at submit time }
         evExcluded: { type: boolean }
         taxLines:

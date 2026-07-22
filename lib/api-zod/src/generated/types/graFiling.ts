@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { GraDutyBreakdown } from './graDutyBreakdown';
 import type { GraTaxLine } from './graTaxLine';
 
 export interface GraFiling {
@@ -27,6 +28,19 @@ export interface GraFiling {
   hsCode: string;
   /** USD-scale */
   cifValue: number;
+  /** @nullable */
+  importerType?: string | null;
+  /** @nullable */
+  bodyType?: string | null;
+  /** @nullable */
+  isHybrid?: boolean | null;
+  /** @nullable */
+  yearOfImport?: number | null;
+  /** @nullable */
+  retailPrice?: number | null;
+  breakdown?: GraDutyBreakdown | null;
+  /** @nullable */
+  reviewFlags?: string[] | null;
   /** usdExchangeRate snapshot at submit time */
   exchangeRate: number;
   evExcluded: boolean;
