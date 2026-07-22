@@ -322,7 +322,18 @@ async function resolveActiveDealer(
     }
     // Super admins never bind a dealer workspace silently: they need an
     // explicit, audited impersonation grant from the platform console (NC-10).
+    // EXCEPTION: a super admin who is ALSO a genuine staff member of the
+    // requested dealer (a real dealer_users row) binds via that membership
+    // like any other employee — no grant needed, but they get ONLY that
+    // role's permissions in the workspace (never platform FULL_PERMISSIONS).
     if (isSuperAdmin) {
+      const direct = (await loadMemberships(user.id)).find(
+        (d) => d.dealerId === requested,
+      );
+      if (direct) {
+        res.locals.boundViaMembership = true;
+        return direct;
+      }
       const mode = await impersonationGrantMode(user.id, requested);
       if (!mode) {
         res.status(403).json({
@@ -337,8 +348,16 @@ async function resolveActiveDealer(
   }
   // No header: never auto-bind for super admins (they land in the console)
   // or for multi-dealership users (explicit picker). Single-membership users
-  // bind their only dealership.
-  if (isSuperAdmin) return null;
+  // bind their only dealership. A super admin with exactly one REAL staff
+  // membership auto-binds it, same as any other single-dealership employee.
+  if (isSuperAdmin) {
+    const memberships = await loadMemberships(user.id);
+    if (memberships.length === 1) {
+      res.locals.boundViaMembership = true;
+      return memberships[0]!;
+    }
+    return null;
+  }
   return dealers.length === 1 ? dealers[0]! : null;
 }
 
@@ -384,12 +403,14 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
           dealers,
         );
         if (active === undefined) return;
-        const permissions = isSuperAdmin
+        const asPlatform =
+          isSuperAdmin && res.locals.boundViaMembership !== true;
+        const permissions = asPlatform
           ? FULL_PERMISSIONS
           : await loadPermissions(active?.roleId ?? null);
         res.locals.user = {
           ...user,
-          roleName: isSuperAdmin ? "Super Admin" : (active?.roleName ?? null),
+          roleName: asPlatform ? "Super Admin" : (active?.roleName ?? null),
           permissions,
           isSuperAdmin,
           dealerId: active?.dealerId ?? null,
@@ -459,10 +480,11 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     );
     if (active === undefined) return;
 
-    const permissions = isSuperAdmin
+    const asPlatform = isSuperAdmin && res.locals.boundViaMembership !== true;
+    const permissions = asPlatform
       ? FULL_PERMISSIONS
       : await loadPermissions(active?.roleId ?? null);
-    const roleName = isSuperAdmin
+    const roleName = asPlatform
       ? "Super Admin"
       : (active?.roleName ?? null);
 

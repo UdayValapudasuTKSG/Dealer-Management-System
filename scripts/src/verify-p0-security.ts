@@ -74,15 +74,39 @@ async function clearGrants(userEmail: string) {
 }
 
 async function main() {
+  // The impersonation tests need a super admin WITHOUT a real dealer_users
+  // membership (a direct membership legitimately bypasses impersonation).
   const superRow = await pool
-    .query(`SELECT email FROM users WHERE lower(email) = ANY($1) LIMIT 1`, [
-      SUPER_CANDIDATES,
-    ])
+    .query(
+      `SELECT email FROM users
+       WHERE lower(email) = ANY($1)
+         AND id NOT IN (SELECT user_id FROM dealer_users)
+       LIMIT 1`,
+      [SUPER_CANDIDATES],
+    )
     .then((r) => r.rows[0]);
-  if (!superRow) {
-    throw new Error("No seeded super-admin user found for persona testing");
+  let SUPER: string;
+  let tempSuperEmail: string | null = null;
+  if (superRow) {
+    SUPER = superRow.email as string;
+  } else {
+    // No membership-free super admin exists in users: temporarily seed one
+    // from the candidate list (deleted again in the finally block).
+    const candidate = await pool
+      .query(`SELECT email FROM (SELECT unnest($1::text[]) AS email) c WHERE email NOT IN (SELECT lower(email) FROM users) LIMIT 1`, [SUPER_CANDIDATES])
+      .then((r) => r.rows[0]?.email as string | undefined);
+    if (!candidate) {
+      throw new Error(
+        "No super-admin candidate without a dealer membership available for impersonation testing",
+      );
+    }
+    await pool.query(
+      `INSERT INTO users (clerk_id, email, name) VALUES ($1, $2, 'P0 Test Super Admin')`,
+      [`p0-test-${Date.now()}`, candidate],
+    );
+    SUPER = candidate;
+    tempSuperEmail = candidate;
   }
-  const SUPER = superRow.email as string;
 
   // ---- fixtures --------------------------------------------------------
   const [foreignVehicle] = await db
@@ -199,9 +223,62 @@ async function main() {
         `got ${money.status} ${JSON.stringify(money.json)}`,
       );
     }
+
+    console.log("\n5. Super admin with a REAL dealer membership");
+    {
+      // A genuine dealer_users row takes precedence over impersonation:
+      // no grant needed, but the workspace permissions are the ROLE's, not
+      // platform FULL_PERMISSIONS. Verify with the most limited seed role.
+      await clearGrants(SUPER);
+      const techRoleId = await pool
+        .query(`SELECT id FROM roles WHERE name = 'Technician' LIMIT 1`)
+        .then((r) => r.rows[0]?.id as number | undefined);
+      const superUserId = await pool
+        .query(`SELECT id FROM users WHERE lower(email) = lower($1)`, [SUPER])
+        .then((r) => r.rows[0]?.id as number);
+      await pool.query(
+        `INSERT INTO dealer_users (dealer_id, user_id, role_id) VALUES (2, $1, $2)`,
+        [superUserId, techRoleId ?? null],
+      );
+      try {
+        const read = await call("GET", "/vehicles", SUPER, 2);
+        check(
+          "member super admin binds without impersonation grant",
+          read.json?.code !== "impersonation_required",
+          `got ${read.status} ${JSON.stringify(read.json)}`,
+        );
+        const me = await call("GET", "/auth/me", SUPER, 2);
+        check(
+          "member super admin gets ROLE identity, not Super Admin",
+          me.status === 200 && me.json?.roleName === "Technician",
+          `got ${me.status} roleName=${me.json?.roleName}`,
+        );
+        const write = await call("POST", "/vehicles", SUPER, 2, {
+          make: "X",
+          model: "Y",
+          year: 2026,
+          price: 1,
+        });
+        check(
+          "member super admin is limited to role permissions → 403",
+          write.status === 403,
+          `got ${write.status} ${JSON.stringify(write.json)}`,
+        );
+      } finally {
+        await pool.query(
+          `DELETE FROM dealer_users WHERE dealer_id = 2 AND user_id = $1`,
+          [superUserId],
+        );
+      }
+    }
   } finally {
     await db.delete(vehiclesTable).where(eq(vehiclesTable.id, foreignVehicleId));
     await clearGrants(SUPER);
+    if (tempSuperEmail) {
+      await pool.query(`DELETE FROM users WHERE lower(email) = $1`, [
+        tempSuperEmail,
+      ]);
+    }
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);
