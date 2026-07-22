@@ -16,6 +16,7 @@ import { buildQuotePdf } from "./quote-pdf";
 import { testDriveIcsFromPayload } from "./calendar";
 import {
   whatsappConfig,
+  whatsappProvider,
   sendWhatsappText,
   twilioWhatsappConfig,
   sendTwilioWhatsappText,
@@ -530,6 +531,8 @@ async function processWhatsappQueue(): Promise<void> {
 
   const metaCfg = whatsappConfig();
   const twilioCfg = twilioWhatsappConfig();
+  // Explicit WHATSAPP_PROVIDER wins; fall back to whichever is configured.
+  const preferTwilio = whatsappProvider() === "twilio" && twilioCfg !== null;
   for (const item of pending) {
     const attempts = item.attempts + 1;
     await db
@@ -546,7 +549,7 @@ async function processWhatsappQueue(): Promise<void> {
     }
     try {
       const body = item.payload?.body ?? "";
-      if (metaCfg) {
+      if (!preferTwilio && metaCfg) {
         await sendWhatsappText(metaCfg, item.recipient, body);
       } else if (twilioCfg) {
         await sendTwilioWhatsappText(twilioCfg, item.recipient, body);
