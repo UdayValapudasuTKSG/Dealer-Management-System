@@ -368,7 +368,11 @@ async function main() {
         const results = await Promise.all(
           Array.from({ length: 50 }, () =>
             fetch(`${BASE}/auth/me`, {
-              headers: { "x-test-user-email": GM, "x-dealer-id": "2" },
+              headers: {
+                "x-test-user-email": GM,
+                "x-dealer-id": "2",
+                "x-rate-limit-probe": "1",
+              },
             }),
           ),
         );

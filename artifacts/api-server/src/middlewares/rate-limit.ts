@@ -13,6 +13,16 @@ import { incrementMetric } from "../lib/metrics";
 
 type Bucket = { count: number; windowStart: number };
 
+function isLoopbackAddr(ip: string | undefined): boolean {
+  if (!ip) return false;
+  return (
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    ip === "::ffff:127.0.0.1" ||
+    ip.startsWith("127.")
+  );
+}
+
 function makeLimiter(opts: {
   windowMs: number;
   max: number;
@@ -31,6 +41,18 @@ function makeLimiter(opts: {
   sweeper.unref?.();
 
   return (req, res, next) => {
+    // Dev-only: loopback test-persona traffic (regression suites, curl checks)
+    // is exempt so back-to-back suite runs don't starve each other — UNLESS the
+    // request opts back in with `x-rate-limit-probe` (used by the flood test).
+    if (
+      process.env.NODE_ENV !== "production" &&
+      req.headers["x-test-user-email"] &&
+      !req.headers["x-rate-limit-probe"] &&
+      isLoopbackAddr(req.ip)
+    ) {
+      next();
+      return;
+    }
     const key = opts.keyFor(req, res);
     const now = Date.now();
     let bucket = buckets.get(key);
