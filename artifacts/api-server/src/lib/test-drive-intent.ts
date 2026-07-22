@@ -38,8 +38,11 @@ import { logger } from "./logger";
 //   • intent but no clear/plausible time, low confidence, vehicle
 //     unavailable, or slot conflict → send the tokenized self-service
 //     booking link instead and flag the advisor ("time needed").
-//   • already-booked upcoming drive → never duplicate; reference the
-//     existing booking and offer the reschedule link.
+//   • already-booked upcoming drive + a NEW clear, confident, plausible time
+//     → auto-RESCHEDULE the existing drive (update the booking, re-confirm
+//     by email/WhatsApp with the new time, alert the advisor).
+//   • already-booked upcoming drive with no clear new time → never
+//     duplicate; reference the existing booking and offer the reschedule link.
 // Idempotent per call (agent_runs is the ledger), kill-switch aware (the
 // caller checks isAgentEnabled before analysis runs at all), and every
 // outcome lands on the lead timeline + agent governance.
@@ -79,6 +82,12 @@ function plausibleDriveTime(timeText: string | null): Date | null {
   if (when.getTime() < now + 30 * 60_000) return null; // past / too soon
   if (when.getTime() > now + MAX_DAYS_AHEAD * 24 * 60 * 60_000) return null;
   return when;
+}
+
+/** Google Maps directions link for the showroom branch. */
+export function showroomMapsUrl(branch: string | null | undefined): string {
+  const query = `AURA Dealership ${branch ?? "Main Showroom"}, Georgetown, Guyana`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
 const guyanaLabel = (d: Date) =>
@@ -270,6 +279,158 @@ async function attemptAutoAdvance(
   return { advanced: ADVANCE_STAGE_LABEL[stage] ?? stage, unmet: [] };
 }
 
+type RunBase = {
+  dealerId: number;
+  agentKey: string;
+  runType: string;
+  inputSource: string;
+  inputSummary: string;
+  refType: "call_log";
+  refId: number;
+};
+
+/** Auto-reschedule an existing upcoming drive to the newly stated time. */
+async function rescheduleDrive(
+  lead: Lead,
+  call: CallLog,
+  vehicle: string | null,
+  when: Date,
+  previousAt: Date,
+  runBase: RunBase,
+  started: number,
+): Promise<void> {
+  const [updated] = await db
+    .update(leadsTable)
+    .set({ testDriveAt: when })
+    .where(
+      and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)),
+    )
+    .returning();
+  if (!updated) return;
+
+  // First-class record: supersede the scheduled drive, insert the new slot.
+  await db
+    .update(testDrivesTable)
+    .set({ status: "cancelled", cancelledAt: new Date() })
+    .where(
+      and(
+        eq(testDrivesTable.dealerId, updated.dealerId),
+        eq(testDrivesTable.leadId, updated.id),
+        eq(testDrivesTable.status, "scheduled"),
+      ),
+    );
+  const [drive] = await db
+    .insert(testDrivesTable)
+    .values({
+      dealerId: updated.dealerId,
+      leadId: updated.id,
+      vehicleId: updated.interestedVehicleId ?? null,
+      customerId: updated.customerId ?? null,
+      status: "scheduled",
+      scheduledAt: when,
+      branch: updated.testDriveBranch,
+      licenceNumber: updated.testDriveLicence,
+      waiverAccepted: updated.testDriveWaiver ?? false,
+      bookedVia: "agent",
+    })
+    .returning();
+
+  const prevLabel = guyanaLabel(previousAt);
+  const whenLabel = guyanaLabel(when);
+  const dateStr = when.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "America/Guyana",
+  });
+  const timeStr = when.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/Guyana",
+  });
+  const mapsLink = showroomMapsUrl(updated.testDriveBranch);
+
+  // Updated confirmation with a fresh .ics (calendars replace the event).
+  const email = await leadEmailAddress(updated);
+  const phone = (updated.phone ?? "").replace(/\D/g, "") || null;
+  const owner = await ownerCalendarContact(updated.ownerUserId);
+  const calendarFields = testDriveCalendarFields(updated, vehicle, owner);
+  if (email) {
+    await enqueueEmail({
+      dealerId: updated.dealerId,
+      template: "test_drive_confirmation",
+      to: email,
+      customerId: updated.customerId,
+      leadId: updated.id,
+      data: {
+        vehicle: vehicle ?? "",
+        date: dateStr,
+        time: timeStr,
+        rescheduled: "true",
+        previousLabel: prevLabel,
+        mapsLink,
+        ...calendarFields,
+      },
+      dedupeKey: `tdintent:${call.id}:resched-email`,
+    });
+  }
+  if (phone) {
+    await enqueueWhatsapp({
+      kind: "whatsapp_message",
+      to: phone,
+      body:
+        `Hi ${updated.name.split(/\s+/)[0]}! As discussed on the call, your test drive` +
+        `${vehicle ? ` of the ${vehicle}` : ""} has been moved to ${whenLabel} (Guyana time), ` +
+        `previously ${prevLabel}. An updated calendar invite is on its way to your email. ` +
+        `Directions to the showroom: ${mapsLink}`,
+      dealerId: updated.dealerId,
+      leadId: updated.id,
+      customerId: updated.customerId,
+      actor: AGENT_ACTOR,
+      summary: `Test drive auto-rescheduled — ${updated.name}, ${whenLabel}`,
+      dedupeKey: `tdintent:${call.id}:resched-wa`,
+    });
+  }
+  const skipped = channelReport(email, phone);
+
+  // Advisor heads-up about the change.
+  if (updated.ownerUserId) {
+    await notifyUser({
+      userId: updated.ownerUserId,
+      dealerId: updated.dealerId,
+      type: "task",
+      title: `Test drive rescheduled: ${updated.name} — now ${dateStr}`,
+      body: `Moved from ${prevLabel} to ${timeStr} by AURA from the call transcript. Customer was notified by email/WhatsApp.`,
+      link: `/lead/${updated.id}`,
+    });
+  }
+
+  // Re-lock the unit + move the 24h reminder to the new slot.
+  await afterTestDriveBooked(updated, when, vehicle);
+
+  await logTimeline(
+    updated,
+    call,
+    "test_drive_scheduled",
+    `Test drive rescheduled to ${dateStr}`,
+    `AURA detected a reschedule request on call #${call.id} and moved the test drive from ${prevLabel} to ${whenLabel} (Guyana time). Updated confirmation sent${email ? " by email (with calendar invite)" : ""}${email && phone ? " and" : ""}${phone ? " by WhatsApp" : ""}, and the advisor was notified.${skipped}`,
+  );
+
+  await recordAgentRun({
+    ...runBase,
+    outputSummary: `Auto-rescheduled test drive #${drive?.id ?? "?"} from ${prevLabel} to ${whenLabel} from the call transcript`,
+    confidence: null,
+    latencyMs: Date.now() - started,
+    mutation: true,
+    changeSummary: `Call #${call.id} → test drive moved ${prevLabel} → ${whenLabel}; customer + advisor notified`,
+    affectedEntities: [
+      { type: "test_drive", id: drive?.id ?? 0 },
+      { type: "lead", id: updated.id },
+      { type: "call_log", id: call.id },
+    ],
+  });
+}
+
 /**
  * Act on the extracted test-drive intent for an analyzed call.
  * The caller has already verified the agent kill switch. Never throws.
@@ -331,32 +492,6 @@ export async function handleTestDriveIntent(
 
     const vehicle = await vehicleLabelFor(lead);
 
-    // ---- Already has an upcoming drive → never duplicate -------------------
-    if (lead.testDriveAt && lead.testDriveAt.getTime() > Date.now()) {
-      const existingLabel = guyanaLabel(lead.testDriveAt);
-      const skipped = await sendSelectionLink(
-        lead,
-        call,
-        vehicle,
-        "",
-        { reschedule: true },
-      );
-      await recordAgentRun({
-        ...runBase,
-        outputSummary: `Intent detected but a test drive is already booked for ${existingLabel} — reschedule link offered instead`,
-        confidence: extraction.timeConfidence,
-        latencyMs: Date.now() - started,
-      });
-      await logTimeline(
-        lead,
-        call,
-        "call_intent",
-        "Test-drive intent on call — booking already exists",
-        `The customer mentioned a test drive on call #${call.id}. An upcoming drive is already booked for ${existingLabel}; a reschedule link was sent instead of a duplicate booking.${skipped}`,
-      );
-      return;
-    }
-
     // ---- Deterministic time guardrails -------------------------------------
     const confident =
       extraction.timeConfidence != null &&
@@ -380,6 +515,49 @@ export async function handleTestDriveIntent(
           ),
         );
       slotTaken = Boolean(conflict);
+    }
+
+    // ---- Already has an upcoming drive -------------------------------------
+    const hasUpcoming =
+      lead.testDriveAt != null && lead.testDriveAt.getTime() > Date.now();
+    if (hasUpcoming) {
+      const existingAt = lead.testDriveAt!;
+      const existingLabel = guyanaLabel(existingAt);
+      const sameTime =
+        when != null && Math.abs(when.getTime() - existingAt.getTime()) < 60_000;
+
+      // New clear, confident, plausible time → auto-RESCHEDULE the drive.
+      if (when && !sameTime && !slotTaken && !vehicleProblem) {
+        await rescheduleDrive(lead, call, vehicle, when, existingAt, runBase, started);
+        return;
+      }
+
+      // Customer just confirmed the existing slot, or no usable new time →
+      // never duplicate; offer the self-service reschedule link instead.
+      const summary = sameTime
+        ? `Customer re-confirmed the existing test drive for ${existingLabel} — no change needed`
+        : `Intent detected but a test drive is already booked for ${existingLabel} — reschedule link offered instead`;
+      const skipped = sameTime
+        ? ""
+        : await sendSelectionLink(lead, call, vehicle, "", { reschedule: true });
+      await recordAgentRun({
+        ...runBase,
+        outputSummary: summary,
+        confidence: extraction.timeConfidence,
+        latencyMs: Date.now() - started,
+      });
+      await logTimeline(
+        lead,
+        call,
+        "call_intent",
+        sameTime
+          ? "Test drive re-confirmed on call"
+          : "Test-drive intent on call — booking already exists",
+        sameTime
+          ? `The customer confirmed the upcoming test drive for ${existingLabel} on call #${call.id}. No changes were made.`
+          : `The customer mentioned a test drive on call #${call.id}. An upcoming drive is already booked for ${existingLabel}; a reschedule link was sent instead of a duplicate booking.${skipped}`,
+      );
+      return;
     }
 
     if (!when || vehicleProblem || slotTaken) {
@@ -485,6 +663,7 @@ export async function handleTestDriveIntent(
           vehicle: vehicle ?? "",
           date: dateStr,
           time: timeStr,
+          mapsLink: showroomMapsUrl(updated.testDriveBranch),
           ...calendarFields,
         },
         dedupeKey: `tdintent:${call.id}:confirm-email`,
@@ -498,7 +677,8 @@ export async function handleTestDriveIntent(
         body:
           `Hi ${updated.name.split(/\s+/)[0]}! Following up on your call — your test drive` +
           `${vehicle ? ` of the ${vehicle}` : ""} is booked for ${whenLabel} (Guyana time). ` +
-          `A calendar invite is on its way to your email.` +
+          `A calendar invite is on its way to your email. ` +
+          `Directions to the showroom: ${showroomMapsUrl(updated.testDriveBranch)}` +
           `${link ? ` Need a different time? Pick one here: ${link}` : ""}`,
         dealerId: updated.dealerId,
         leadId: updated.id,

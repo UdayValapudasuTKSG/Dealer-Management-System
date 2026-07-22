@@ -8926,7 +8926,7 @@ components:
         subject: { type: string }
         template: { type: string }
         channel: { type: string, enum: [email, sms, whatsapp] }
-        status: { type: string, enum: [queued, sending, sent, failed] }
+        status: { type: string, enum: [queued, sending, sent, failed, cancelled] }
         attempts: { type: integer }
         lastError: { type: ["string", "null"] }
         nextAttemptAt: { type: ["string", "null"], format: date-time }

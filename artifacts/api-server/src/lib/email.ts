@@ -123,11 +123,20 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
   test_drive_confirmation: {
     label: "Test Drive Confirmation",
     description: "Confirms a scheduled test drive appointment.",
-    subject: (x) => `Your test drive is confirmed — ${d(x, "vehicle", "your vehicle")}`,
-    heading: () => "Your test drive is confirmed",
+    subject: (x) =>
+      x.rescheduled === "true"
+        ? `Your test drive has been rescheduled — ${d(x, "vehicle", "your vehicle")}`
+        : `Your test drive is confirmed — ${d(x, "vehicle", "your vehicle")}`,
+    heading: (x) =>
+      x.rescheduled === "true"
+        ? "Your test drive has been rescheduled"
+        : "Your test drive is confirmed",
     body: (x) =>
-      `We look forward to hosting you on <strong>${d(x, "date", "your scheduled date")}</strong> at ${d(x, "time", "the agreed time")}. The <strong>${d(x, "vehicle", "vehicle")}</strong> will be detailed, charged/fuelled and waiting at the showroom entrance.`,
-    cta: () => ({ label: "Showroom concierge will greet you" }),
+      `${x.rescheduled === "true" && x.previousLabel ? `As discussed, your test drive has been moved from ${x.previousLabel}. ` : ""}We look forward to hosting you on <strong>${d(x, "date", "your scheduled date")}</strong> at ${d(x, "time", "the agreed time")}. The <strong>${d(x, "vehicle", "vehicle")}</strong> will be detailed, charged/fuelled and waiting at the showroom entrance.${x.mapsLink ? ` <a href="${x.mapsLink}">Get directions to the showroom</a>.` : ""}`,
+    cta: (x) =>
+      x.mapsLink
+        ? { label: "Directions to the showroom", href: x.mapsLink }
+        : { label: "Showroom concierge will greet you" },
     sample: { vehicle: "2026 BMW i7", date: "Friday, July 18", time: "10:30 AM" },
   },
   test_drive_owner_invite: {

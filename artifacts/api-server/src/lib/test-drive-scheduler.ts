@@ -1,5 +1,11 @@
 import { and, eq, ne } from "drizzle-orm";
-import { db, leadsTable, vehiclesTable, type Lead } from "@workspace/db";
+import {
+  db,
+  emailLogsTable,
+  leadsTable,
+  vehiclesTable,
+  type Lead,
+} from "@workspace/db";
 import { enqueueWhatsapp } from "./email";
 import { testDriveBookingUrl } from "./email-triggers";
 import { logger } from "./logger";
@@ -81,10 +87,24 @@ async function softLockSingleUnit(lead: Lead, when: Date): Promise<void> {
   );
 }
 
-/** Queue the 24h-before WhatsApp reminder (idempotent per lead+slot). */
+/** Queue the 24h-before WhatsApp reminder (idempotent per lead+slot).
+ * Any still-queued reminder for a DIFFERENT slot is superseded first, so a
+ * reschedule never leaves the customer with two conflicting reminders. */
 async function queueReminder(lead: Lead, when: Date, vehicle: string | null) {
   const phone = (lead.phone ?? "").replace(/\D/g, "");
   if (!phone) return;
+  await db
+    .update(emailLogsTable)
+    .set({ status: "cancelled" })
+    .where(
+      and(
+        eq(emailLogsTable.dealerId, lead.dealerId),
+        eq(emailLogsTable.leadId, lead.id),
+        eq(emailLogsTable.template, "test_drive_reminder"),
+        eq(emailLogsTable.status, "queued"),
+        ne(emailLogsTable.dedupeKey, `tdrem:${lead.id}:${when.getTime()}`),
+      ),
+    );
   const sendAt = new Date(when.getTime() - REMINDER_LEAD_MS);
   if (sendAt.getTime() <= Date.now()) return; // drive is under 24h away
   const timeLabel = when.toLocaleString("en-US", {
@@ -93,6 +113,7 @@ async function queueReminder(lead: Lead, when: Date, vehicle: string | null) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "America/Guyana",
   });
   const body =
     `Hi ${lead.name.split(" ")[0]}! Friendly reminder from AURA: your test drive` +

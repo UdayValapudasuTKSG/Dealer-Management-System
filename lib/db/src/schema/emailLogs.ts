@@ -70,7 +70,7 @@ export const emailLogsTable = pgTable("email_logs", {
 export const insertEmailLogSchema = createInsertSchema(emailLogsTable, {
   template: z.enum(EMAIL_TEMPLATES),
   channel: z.enum(["email", "sms", "whatsapp"]),
-  status: z.enum(["queued", "sending", "sent", "failed"]),
+  status: z.enum(["queued", "sending", "sent", "failed", "cancelled"]),
 }).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertEmailLog = z.infer<typeof insertEmailLogSchema>;
 export type EmailLog = typeof emailLogsTable.$inferSelect;

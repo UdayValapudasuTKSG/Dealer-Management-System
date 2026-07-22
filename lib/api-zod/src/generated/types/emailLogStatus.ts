@@ -14,4 +14,5 @@ export const EmailLogStatus = {
   sending: 'sending',
   sent: 'sent',
   failed: 'failed',
+  cancelled: 'cancelled',
 } as const;
