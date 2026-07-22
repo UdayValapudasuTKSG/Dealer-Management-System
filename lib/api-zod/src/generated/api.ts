@@ -5619,7 +5619,8 @@ export const ExtractGraFilingResponse = zod.object({
  */
 export const ListGraFilingsQueryParams = zod.object({
   "gateId": zod.coerce.number().optional(),
-  "vehicleId": zod.coerce.number().optional()
+  "vehicleId": zod.coerce.number().optional(),
+  "dealId": zod.coerce.number().optional()
 })
 
 export const ListGraFilingsResponseItem = zod.object({
@@ -5627,6 +5628,7 @@ export const ListGraFilingsResponseItem = zod.object({
   "dealerId": zod.number(),
   "gateId": zod.number(),
   "vehicleId": zod.number().nullish(),
+  "dealId": zod.number().nullish(),
   "filingRef": zod.string(),
   "status": zod.string().describe('pending_gate | filed | rejected'),
   "ownerName": zod.string(),
@@ -5720,7 +5722,8 @@ export const SubmitGraFilingBody = zod.object({
   "reviewFlags": zod.array(zod.string()).nullish().describe('Human-review blockers (e.g. diesel_cc_gap_1800_2000); approval is blocked while set'),
   "missingInputs": zod.array(zod.string()).nullish().describe('Required duty inputs still blank — the officer must fill them before submission')
 }),
-  "vehicleId": zod.number().nullish().describe('Imported vehicle this filing clears')
+  "vehicleId": zod.number().nullish().describe('Imported vehicle this filing clears'),
+  "dealId": zod.number().nullish().describe('Deal this filing clears customs for')
 })
 
 export const SubmitGraFilingResponse = zod.object({

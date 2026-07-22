@@ -103,11 +103,17 @@ function XrayScanOverlay() {
 export function DutyFiling({
   compact = false,
   prefillNotes,
+  vehicleId,
+  dealId,
 }: {
   /** compact = embedded in a dialog (delivery process) */
   compact?: boolean;
   /** context stamped into the filing notes, e.g. the delivery/customer ref */
   prefillNotes?: string;
+  /** vehicle this filing clears (tags the immutable snapshot) */
+  vehicleId?: number | null;
+  /** deal this filing clears customs for (transaction-level tag) */
+  dealId?: number | null;
 }) {
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -272,7 +278,13 @@ export function DutyFiling({
   const handleSubmit = () => {
     if (!draft) return;
     submit.mutate(
-      { data: { draft } },
+      {
+        data: {
+          draft,
+          vehicleId: vehicleId ?? null,
+          dealId: dealId ?? null,
+        },
+      },
       {
         onSuccess: (gate) => {
           setSubmittedGateId(gate.id);

@@ -4108,6 +4108,9 @@ paths:
         - in: query
           name: vehicleId
           schema: { type: integer }
+        - in: query
+          name: dealId
+          schema: { type: integer }
       responses:
         "200":
           description: Filings
@@ -8753,6 +8756,7 @@ components:
       properties:
         draft: { $ref: "#/components/schemas/GraFilingDraft" }
         vehicleId: { type: ["integer", "null"], description: Imported vehicle this filing clears }
+        dealId: { type: ["integer", "null"], description: Deal this filing clears customs for }
     GraFiling:
       type: object
       required:
@@ -8781,6 +8785,7 @@ components:
         dealerId: { type: integer }
         gateId: { type: integer }
         vehicleId: { type: ["integer", "null"] }
+        dealId: { type: ["integer", "null"] }
         filingRef: { type: string }
         status: { type: string, description: pending_gate | filed | rejected }
         ownerName: { type: string }

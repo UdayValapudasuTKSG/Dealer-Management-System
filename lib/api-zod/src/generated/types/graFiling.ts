@@ -14,6 +14,8 @@ export interface GraFiling {
   gateId: number;
   /** @nullable */
   vehicleId?: number | null;
+  /** @nullable */
+  dealId?: number | null;
   filingRef: string;
   /** pending_gate | filed | rejected */
   status: string;

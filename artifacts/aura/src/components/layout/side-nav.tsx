@@ -22,7 +22,6 @@ import {
   Package,
   Handshake,
   Users,
-  Stamp,
   UserCog,
   ShieldCheck,
   ScrollText,
@@ -78,10 +77,6 @@ const CLUSTERS: Cluster[] = [
   {
     label: "Accounts",
     items: [{ name: "Accounts", href: "/customers", module: "customers", icon: Users }],
-  },
-  {
-    label: "Compliance",
-    items: [{ name: "GRA Filing", href: "/gra", module: "gra", icon: Stamp, ent: "gra_module" }],
   },
   {
     label: "Settings",

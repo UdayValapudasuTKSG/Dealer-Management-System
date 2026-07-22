@@ -4665,6 +4665,11 @@ export interface GraFilingSubmission {
      * @nullable
      */
   vehicleId?: number | null;
+  /**
+     * Deal this filing clears customs for
+     * @nullable
+     */
+  dealId?: number | null;
 }
 
 export interface GraFiling {
@@ -4673,6 +4678,8 @@ export interface GraFiling {
   gateId: number;
   /** @nullable */
   vehicleId?: number | null;
+  /** @nullable */
+  dealId?: number | null;
   filingRef: string;
   /** pending_gate | filed | rejected */
   status: string;
@@ -5295,6 +5302,7 @@ status?: string;
 export type ListGraFilingsParams = {
 gateId?: number;
 vehicleId?: number;
+dealId?: number;
 };
 
 export type ListPlatformAuditParams = {

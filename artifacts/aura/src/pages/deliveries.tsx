@@ -555,6 +555,7 @@ function DeliveryDetail({
                 <div className="px-5 pb-5">
                   <DutyFiling
                     compact
+                    dealId={delivery.dealId}
                     prefillNotes={`Delivery #${delivery.id} · Deal #${delivery.dealId} · ${delivery.customerName ?? "Customer"}`}
                   />
                 </div>

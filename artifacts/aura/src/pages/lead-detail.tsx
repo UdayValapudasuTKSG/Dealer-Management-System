@@ -52,11 +52,13 @@ import {
   PhoneIncoming,
   PhoneOutgoing,
   Send,
+  ShieldCheck,
   User,
   Workflow,
   X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { DutyFiling } from "@/components/gra/duty-filing";
 import { Page } from "@/components/layout/page";
 import { LeadWorkflowDialog } from "@/components/lead-workflow-dialog";
 import {
@@ -579,12 +581,16 @@ export default function LeadDetail() {
   const { data: calls } = useListLeadCalls(id);
   const gatesQuery = useListGates();
 
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t && TABS.some((x) => x.key === t) ? (t as Tab) : "overview";
+  });
   const [corrView, setCorrView] = useState<"calls" | "whatsapp">("calls");
   const [workflowOpen, setWorkflowOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deskOpen, setDeskOpen] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
+  const [showDuty, setShowDuty] = useState(false);
   const [noteText, setNoteText] = useState("");
 
   const { can } = useAuthz();
@@ -1875,6 +1881,35 @@ export default function LeadDetail() {
                     entityId={lead.id}
                     canEdit={canEdit}
                   />
+
+                  {/* Customs duty pack — surfaces in the pipeline once the
+                      unit is allocated (deal committed), tagged to the deal. */}
+                  {vinAllocated && linkedDeal && (
+                    <div className="rounded-2xl border border-white/10 bg-foreground/[0.02]">
+                      <button
+                        onClick={() => setShowDuty((v) => !v)}
+                        className="w-full flex items-center justify-between px-5 py-4"
+                      >
+                        <span className="flex items-center gap-2.5 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                          Customs duty pack (GRA)
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {showDuty ? "Hide" : "Scan import document"}
+                        </span>
+                      </button>
+                      {showDuty && (
+                        <div className="px-5 pb-5">
+                          <DutyFiling
+                            compact
+                            vehicleId={linkedDeal.vehicleId}
+                            dealId={linkedDeal.id}
+                            prefillNotes={`Lead #${lead.id} · Deal #${linkedDeal.id} · ${lead.name}`}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

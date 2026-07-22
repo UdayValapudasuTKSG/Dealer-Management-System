@@ -7,6 +7,7 @@ import {
   gatesTable,
   graFilingsTable,
   dealersTable,
+  dealsTable,
   divisionsTable,
 } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
@@ -331,6 +332,39 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
     return;
   }
 
+  // Deal tag: validate the deal belongs to this dealer (404 on foreign ids)
+  // and, when both are supplied, that it is for the same vehicle.
+  let vehicleId: number | null = parsed.data.vehicleId ?? null;
+  let dealId: number | null = null;
+  if (parsed.data.dealId != null) {
+    const [deal] = await db
+      .select()
+      .from(dealsTable)
+      .where(
+        and(
+          eq(dealsTable.id, parsed.data.dealId),
+          eq(dealsTable.dealerId, dealerId),
+        ),
+      );
+    if (!deal) {
+      res.status(404).json({ error: "Deal not found" });
+      return;
+    }
+    if (
+      vehicleId != null &&
+      deal.vehicleId !== vehicleId
+    ) {
+      res.status(422).json({
+        error: "The deal is for a different vehicle than this filing.",
+      });
+      return;
+    }
+    dealId = deal.id;
+    // Delivery context passes only the deal — inherit its vehicle so the
+    // gate and filing still link back to the imported unit.
+    if (vehicleId == null && deal.vehicleId != null) vehicleId = deal.vehicleId;
+  }
+
   const d = {
     ...submitted,
     taxLines: duty.taxLines,
@@ -349,7 +383,7 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
         priority: "high",
         customerName: d.ownerName,
         refType: "vehicle",
-        refId: parsed.data.vehicleId ?? null,
+        refId: vehicleId,
         title: `GRA duty filing — ${d.year} ${d.make} ${d.model}`,
         summary: `AI-extracted fields (legible values only) with a server-computed Guyana Revenue Authority duty sheet for the ${d.year} ${d.make} ${d.model} (VIN ${d.vin}). Total assessed duty ${both(
           d.totalPayable,
@@ -382,7 +416,8 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
       .values({
         dealerId,
         gateId: gateRow.id,
-        vehicleId: parsed.data.vehicleId ?? null,
+        vehicleId,
+        dealId,
         filingRef: `GRA-${new Date().getFullYear()}-${String(gateRow.id).padStart(5, "0")}`,
         status: "pending_gate",
         ownerName: d.ownerName,
@@ -466,6 +501,9 @@ router.get("/gra/filings", async (req, res): Promise<void> => {
   if (gateId && Number.isFinite(gateId)) conds.push(eq(graFilingsTable.gateId, gateId));
   if (vehicleId && Number.isFinite(vehicleId))
     conds.push(eq(graFilingsTable.vehicleId, vehicleId));
+  const dealIdQ = req.query.dealId ? Number(req.query.dealId) : undefined;
+  if (dealIdQ && Number.isFinite(dealIdQ))
+    conds.push(eq(graFilingsTable.dealId, dealIdQ));
   const rows = await db
     .select()
     .from(graFilingsTable)

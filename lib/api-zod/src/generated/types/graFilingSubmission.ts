@@ -14,4 +14,9 @@ export interface GraFilingSubmission {
      * @nullable
      */
   vehicleId?: number | null;
+  /**
+     * Deal this filing clears customs for
+     * @nullable
+     */
+  dealId?: number | null;
 }

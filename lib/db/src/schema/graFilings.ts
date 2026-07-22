@@ -44,6 +44,9 @@ export const graFilingsTable = pgTable("gra_filings", {
   dealerId: integer("dealer_id").notNull(),
   gateId: integer("gate_id").notNull(),
   vehicleId: integer("vehicle_id"),
+  // Deal this filing clears customs for — the transaction-level tag so the
+  // duty pack travels with the deal, not just the unit.
+  dealId: integer("deal_id"),
   filingRef: text("filing_ref").notNull(),
   status: text("status").notNull().default("pending_gate"), // pending_gate | filed | rejected
   ownerName: text("owner_name").notNull(),

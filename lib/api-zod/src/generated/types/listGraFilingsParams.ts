@@ -9,4 +9,5 @@
 export type ListGraFilingsParams = {
 gateId?: number;
 vehicleId?: number;
+dealId?: number;
 };
