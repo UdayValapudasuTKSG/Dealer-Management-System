@@ -131,6 +131,7 @@ import {
   CHECK_OWNER,
   buildStageChecks,
 } from "../lib/stage-review";
+import { computeLeadBrief } from "../lib/lead-brief";
 import { runIntakeOrchestration } from "../lib/intake-orchestration";
 import { autoAnalyzeCall } from "../lib/call-analysis";
 
@@ -2012,18 +2013,12 @@ router.post("/leads/:id/restore", async (req, res): Promise<void> => {
 });
 
 // ---------------------------------------------------------------------------
-// AI agent brief — per-lead next best actions + draft follow-up
+// AI agent brief — per-lead next best actions + draft follow-up.
+// Actions + risk are DETERMINISTIC (computed in lib/lead-brief.ts from the
+// same per-dealer stage checklist that gates POST /leads/{id}/advance); the
+// LLM only phrases the headline + customer draft, with deterministic
+// fallbacks so the brief can never contradict the pipeline's real gates.
 // ---------------------------------------------------------------------------
-const BRIEF_STAGE_GOAL: Record<string, string> = {
-  new: "make first contact within 24 hours and qualify interest",
-  contacted: "log the first call, capture budget and financing preference",
-  qualified: "book the test drive, qualify financing, and send the quotation",
-  proposal: "present the quotation and align on the offer",
-  negotiation: "secure the reservation fee and lock the selected model",
-  won: "allocate the unit, clear payment, and deliver flawlessly",
-  lost: "understand the loss and plan re-engagement",
-};
-
 router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
   const params = GetLeadAgentBriefParams.safeParse(req.params);
   if (!params.success) {
@@ -2092,19 +2087,32 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
     return;
   }
 
-  const stageGoal = BRIEF_STAGE_GOAL[lead.phase] ?? "advance the relationship";
+  // 1) Deterministic core: actions + risk from the REAL advance checklist.
+  const lastActivityAt = timeline[0]?.createdAt ?? null;
+  const brief = await computeLeadBrief(
+    lead,
+    dealerId,
+    deals,
+    vehicle,
+    lastActivityAt,
+    await isAgentEnabled(dealerId, "sales"),
+  );
+  const { stageGoal } = brief;
+
+  // 2) LLM is phrasing-only: headline + customer draft. Any failure or drift
+  //    falls back to the deterministic templates — never a 502, never an
+  //    action or risk level the pipeline doesn't agree with.
   const facts = [
-    `Name: ${lead.name}; phase: ${lead.phase}; status: ${lead.status}; AI score: ${lead.aiScore}; priority: ${lead.priority}; channel: ${lead.channel}.`,
+    `Name: ${lead.name}; phase: ${lead.phase}; status: ${lead.status}; channel: ${lead.channel}.`,
     `Assigned to: ${lead.assignedTo ?? "UNASSIGNED"}.`,
     `First contact logged: ${lead.contactedDate ? "yes" : "NO"}; test drive: ${lead.testDriveAt ? `booked ${lead.testDriveAt.toISOString().slice(0, 10)}` : "not booked"}.`,
-    `Financing qualified: ${lead.financingQualified ? "yes" : "no"}; budget/financing preference: ${lead.budgetFinancing ?? "unknown"}.`,
-    `Quotation sent: ${lead.quotationSent ? "yes" : "no"}; reservation fee paid: ${lead.reservationFeePaid ? "yes" : "no"}.`,
     vehicle
-      ? `Interested vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model} at ${vehicle.price}.`
-      : `No vehicle of interest recorded.`,
-    deals.length
-      ? `Linked deal stage: ${deals.map((d) => d.stage).join(", ")}.`
-      : `No deal opened yet.`,
+      ? `Interested vehicle: ${vehicle.year} ${vehicle.make} ${vehicle.model}.`
+      : lead.selectedModel
+        ? `Interested model: ${lead.selectedModel}.`
+        : `No vehicle of interest recorded.`,
+    `Risk level (computed, do NOT change): ${brief.riskLevel}. Reasons: ${brief.riskReasons.join(" ")}`,
+    `Confirmed next actions (computed, do NOT invent others): ${brief.actions.map((a) => a.title).join("; ")}.`,
     lead.notes ? `Notes: ${guardUntrusted("lead_notes", lead.notes, 300)}` : "",
     timeline.length
       ? `Recent activity: ${timeline.map((t) => t.title).join("; ")}.`
@@ -2115,87 +2123,76 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
 
   const prompt = [
     `You are AURA, the agentic sales intelligence of an ultra-premium automotive dealership.`,
-    `Analyse this single lead. The current stage goal is to ${stageGoal}.`,
+    `The current stage goal is to ${stageGoal}. The next actions and risk level are ALREADY decided by the pipeline engine below — you only write the words.`,
     facts,
     ``,
     `Return ONLY a JSON object (no markdown) with exactly these keys:`,
     `{`,
-    `  "headline": string,                       // one confident sentence on where this lead stands`,
-    `  "riskLevel": "low" | "medium" | "high",   // risk of losing this lead`,
-    `  "actions": [                              // 2 to 4 next best actions, most important first`,
-    `    { "title": string, "detail": string, "priority": "high" | "medium" | "low", "leadName": null }`,
-    `  ],`,
-    `  "draftMessage": string                    // a short, warm, ready-to-send follow-up message to the customer (no placeholders except their first name)`,
+    `  "headline": string,     // one confident sentence on where this lead stands, consistent with the computed risk and actions`,
+    `  "draftMessage": string  // a short, warm, ready-to-send follow-up message to the customer (no placeholders except their first name; do not mention internal process, risk, or checklists)`,
     `}`,
-    `Ground every action in the facts above (missing checklist items first). Luxury-brand tone: warm, confident, concise.`,
+    `Luxury-brand tone: warm, confident, concise.`,
   ].join("\n");
 
   const briefStartedAt = Date.now();
+  let headline = brief.fallbackHeadline;
+  let draftMessage = brief.fallbackDraft;
+  let llmStatus: "ok" | "fallback" = "fallback";
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 1200,
+      max_tokens: 700,
       messages: [{ role: "user", content: [{ type: "text", text: prompt }] }],
     });
     const textBlock = message.content.find((b) => b.type === "text");
     const raw = textBlock && textBlock.type === "text" ? textBlock.text : "";
     const jsonStart = raw.indexOf("{");
     const jsonEnd = raw.lastIndexOf("}");
-    if (jsonStart === -1 || jsonEnd === -1) {
-      req.log.error({ raw }, "Lead agent brief returned no JSON object");
-      res.status(502).json({ error: "The agent could not read this lead" });
-      return;
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      const candidate = JSON.parse(raw.slice(jsonStart, jsonEnd + 1)) as Record<
+        string,
+        unknown
+      >;
+      if (
+        typeof candidate.headline === "string" &&
+        candidate.headline.trim().length > 0
+      ) {
+        headline = candidate.headline.trim();
+        llmStatus = "ok";
+      }
+      if (
+        typeof candidate.draftMessage === "string" &&
+        candidate.draftMessage.trim().length > 0
+      ) {
+        draftMessage = candidate.draftMessage.trim();
+      }
     }
-    let candidate: Record<string, unknown>;
-    try {
-      candidate = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
-    } catch {
-      req.log.error({ raw }, "Lead agent brief returned invalid JSON");
-      res.status(502).json({ error: "The agent could not read this lead" });
-      return;
-    }
-    const result = GetLeadAgentBriefResponse.safeParse({
-      headline: candidate.headline,
-      riskLevel: candidate.riskLevel,
-      stageGoal,
-      actions: candidate.actions,
-      draftMessage: candidate.draftMessage,
-    });
-    if (!result.success) {
-      req.log.error(
-        { issues: result.error.issues },
-        "Lead agent brief failed validation",
-      );
-      res.status(502).json({ error: "The agent returned an unexpected shape" });
-      return;
-    }
-    await recordAgentRun({
-      dealerId,
-      agentKey: "sales",
-      runType: "lead_agent_brief",
-      inputSource: "leads",
-      inputSummary: `Lead #${lead.id} (${lead.phase})`,
-      outputSummary: result.data.headline,
-      refType: "lead",
-      refId: lead.id,
-      latencyMs: Date.now() - briefStartedAt,
-    });
-    res.json(result.data);
   } catch (err) {
-    req.log.error({ err }, "Lead agent brief LLM call failed");
-    await recordAgentRun({
-      dealerId,
-      agentKey: "sales",
-      runType: "lead_agent_brief",
-      inputSource: "leads",
-      refType: "lead",
-      refId: lead.id,
-      status: "error",
-      errorMessage: err instanceof Error ? err.message : String(err),
-      latencyMs: Date.now() - briefStartedAt,
-    });
-    res.status(502).json({ error: "The agent service is unavailable" });
+    req.log.warn(
+      { err },
+      "Lead agent brief LLM phrasing failed — deterministic fallback used",
+    );
   }
+
+  const result = GetLeadAgentBriefResponse.parse({
+    headline,
+    riskLevel: brief.riskLevel,
+    stageGoal,
+    actions: brief.actions,
+    draftMessage,
+  });
+  await recordAgentRun({
+    dealerId,
+    agentKey: "sales",
+    runType: "lead_agent_brief",
+    inputSource: "leads",
+    inputSummary: `Lead #${lead.id} (${lead.phase})`,
+    outputSummary: `${result.headline}${llmStatus === "fallback" ? " [deterministic fallback]" : ""}`,
+    refType: "lead",
+    refId: lead.id,
+    latencyMs: Date.now() - briefStartedAt,
+  });
+  res.json(result);
 });
 
 // ---------------------------------------------------------------------------
