@@ -1,0 +1,36 @@
+GRA shows up in 3 places (not just one):
+
+① Import/inventory (before any lead): vehicle is imported → GRA import duty computed → GRA Duty Pack generated → sets landed cost + the price the customer sees. (Finance/Customs; Module B.)
+② Taxes on every quote/invoice: VAT 0% or 14% per model (GRA tax rules via the tax engine).
+③ Registration at Pre-Delivery: the sold vehicle is registered with GRA (third-party) → registration number + plates.
+⓪ Import → Inventory (upstream, before the lead) — vehicle imported; GRA import duty computed from dealer_taxes (server-side, EV exclusion); landed cost set.
+📄 GRA Duty Pack (PDF), import/shipping docs (CIF), vehicle record (VIN/engine/mfg date).
+
+1. New — Lead created (WhatsApp/social/web/walk-in) with address + interested model(s). Dedup (append, not duplicate), round-robin assign, auto-generate quote (VAT applied). Owner: Sales Advisor.
+📄 Quote / "Code" PDF (name, address, model, year, price, VAT/GRA tax lines) — sent via WhatsApp/email.
+
+2. Contacted — Call within 24h SLA; logged with sentiment. Can't advance until logged.
+📄 Call notes/recording (activity — not a document).
+
+3. Engaged — Test drive (customer + vehicle availability, soft-lock), financing, negotiation; can close Not Interested.
+📄 Bank/financing document (customer uploads → "Financing Qualified"); optional driving licence/ID (checklist only, no verification); regenerated Quote if specs change.
+
+4. Pre-Book — Reservation fee paid → Deal created, Account + Contact created/linked, Selected Model set.
+📄 Reservation receipt/invoice; reservation record (amount/date/mode/receipt #).
+
+5. Vehicle Allocated — Specific VIN pulled + soft-locked to the deal; VIN/engine validated.
+📄 Allocation record (VIN, engine, colour, trim).
+
+6. Payment — Reservation invoice then final invoice (cash or bank financing; below-floor discount → manager gate); expected delivery date auto-set.
+📄 Reservation Invoice, Final Invoice (both with VAT/GRA tax lines), payment receipt(s).
+
+7. Pre-Delivery — PDI + document checklist; ← GRA registration happens here (vehicle registered with GRA via third party → registration number + plates). Ownership hands off → Delivery Advisor.
+📄 PDI checklist, pre-filled Handover Form, Warranty Document, GRA Registration document / number + plates (status-tracked), Insurance confirmation.
+
+8. Delivered (Closed Won) — Customer signs; docs scanned/uploaded; Actual Delivery Date set → vehicle becomes an Asset on the Account; feedback survey fires; ownership → Service Advisor.
+📄 Signed & scanned Handover Form, Registration doc, Warranty; Feedback/Survey.
+
+9. Service (lifelong) — Intro call ≤5 business days; scheduled cadences + unscheduled repairs → Case → Work Order → parts → invoice → service history.
+📄 Case, intake checklist, service quotation, service invoice (VAT), outtake list + receipt, warranty claim, service-history entry.
+
+One-line GRA summary: GRA duty is paid on import (inventory-side, before the sale, in the Duty Pack), GRA VAT rides on every quote/invoice, and GRA registration happens at Pre-Delivery to get the plates before handover.

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
-import { useGetVehicle } from "@workspace/api-client-react";
+import { useGetVehicle, useListGraFilings } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
@@ -19,9 +19,12 @@ import {
   Package,
   Palette,
   Rotate3d,
+  ScanLine,
   Settings2,
+  ShieldCheck,
   Zap,
 } from "lucide-react";
+import { DutyFiling } from "@/components/gra/duty-filing";
 import { Badge } from "@/components/ui/badge";
 import { Page } from "@/components/layout/page";
 import { cn } from "@/lib/utils";
@@ -88,10 +91,21 @@ export default function VehicleDetailPage() {
   const id = params ? Number(params.id) : NaN;
   const [, navigate] = useLocation();
   const [mode, setMode] = useState<"photo" | "spin">("photo");
+  const [showDuty, setShowDuty] = useState(false);
   const money = useMoney();
   const { can } = useAuthz();
 
   const { data: vehicle, isLoading, isError } = useGetVehicle(id);
+  const canDuty = can("finance", "view") || can("inventory", "edit");
+  const { data: dutyFilings } = useListGraFilings(
+    { vehicleId: id },
+    {
+      query: {
+        queryKey: ["gra-filings-vehicle", id],
+        enabled: Number.isFinite(id) && canDuty,
+      },
+    },
+  );
 
   if (isLoading) {
     return (
@@ -349,6 +363,47 @@ export default function VehicleDetailPage() {
               canEdit={can("inventory", "edit")}
             />
           </div>
+
+          {canDuty && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-foreground/[0.03] overflow-hidden">
+              <button
+                onClick={() => setShowDuty((v) => !v)}
+                className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-foreground/[0.04] transition-colors"
+              >
+                <ShieldCheck className="w-4 h-4 text-primary" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex-1">
+                  GRA Customs &amp; Import Duty
+                </span>
+                {(dutyFilings ?? []).some((f) => f.status === "filed") ? (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Duty filed
+                  </span>
+                ) : (dutyFilings ?? []).some(
+                    (f) => f.status === "pending_gate",
+                  ) ? (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    Awaiting approval
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <ScanLine className="w-3.5 h-3.5" />
+                    {showDuty ? "Hide" : "Scan import document"}
+                  </span>
+                )}
+              </button>
+              {showDuty && (
+                <div className="px-4 pb-4">
+                  <DutyFiling
+                    compact
+                    vehicleId={vehicle.id}
+                    prefillNotes={`Inventory import · Unit #${vehicle.id} · ${vehicle.year} ${vehicle.make} ${vehicle.model}`}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-3 mt-8">
             <button
