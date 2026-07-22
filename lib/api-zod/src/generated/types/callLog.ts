@@ -28,6 +28,8 @@ export interface CallLog {
   /** @nullable */
   transcript?: string | null;
   transcriptStatus?: CallLogTranscriptStatus;
+  /** @nullable */
+  callbackAt?: Date | null;
   actor: string;
   createdAt: Date;
 }

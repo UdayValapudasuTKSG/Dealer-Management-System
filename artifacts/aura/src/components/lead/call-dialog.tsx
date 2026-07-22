@@ -27,15 +27,24 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 type Direction = "outbound" | "inbound";
-type CallStatus = "completed" | "no_answer" | "busy" | "voicemail";
+type CallStatus =
+  | "completed"
+  | "no_answer"
+  | "busy"
+  | "voicemail"
+  | "wrong_number"
+  | "callback";
 type Sentiment = "positive" | "neutral" | "negative";
+type SentimentChoice = Sentiment | "auto";
 type LiveState = "idle" | "connecting" | "ringing" | "in_call" | "ended";
 
 const STATUS_OPTIONS: { value: CallStatus; label: string }[] = [
-  { value: "completed", label: "Completed" },
+  { value: "completed", label: "Connected" },
   { value: "no_answer", label: "No answer" },
   { value: "busy", label: "Busy" },
   { value: "voicemail", label: "Voicemail" },
+  { value: "wrong_number", label: "Wrong number" },
+  { value: "callback", label: "Callback requested" },
 ];
 
 const SENTIMENT_STYLE: Record<Sentiment, string> = {
@@ -76,7 +85,8 @@ export function CallDialog({
   const [direction, setDirection] = useState<Direction>("outbound");
   const [status, setStatus] = useState<CallStatus>("completed");
   const [minutes, setMinutes] = useState("");
-  const [sentiment, setSentiment] = useState<Sentiment>("neutral");
+  const [sentiment, setSentiment] = useState<SentimentChoice>("auto");
+  const [callbackAt, setCallbackAt] = useState("");
   const [notes, setNotes] = useState("");
   const [rationale, setRationale] = useState<string | null>(null);
 
@@ -114,7 +124,8 @@ export function CallDialog({
     setDirection("outbound");
     setStatus("completed");
     setMinutes("");
-    setSentiment("neutral");
+    setSentiment("auto");
+    setCallbackAt("");
     setNotes("");
     setRationale(null);
     setLiveState("idle");
@@ -278,13 +289,33 @@ export function CallDialog({
 
   const logCall = async () => {
     const mins = minutes.trim() === "" ? null : Number(minutes);
+    if (status === "callback") {
+      if (!callbackAt) {
+        toast({
+          title: "Pick a callback time",
+          description: "A callback outcome needs the time the customer asked for.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (new Date(callbackAt).getTime() <= Date.now()) {
+        toast({
+          title: "Callback time must be in the future",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     try {
       await createCall.mutateAsync({
         id: leadId,
         data: {
           direction,
           status,
-          sentiment,
+          ...(sentiment !== "auto" ? { sentiment } : {}),
+          ...(status === "callback" && callbackAt
+            ? { callbackAt: new Date(callbackAt).toISOString() }
+            : {}),
           ...(mins != null && Number.isFinite(mins) && mins >= 0
             ? { durationSeconds: Math.round(mins * 60) }
             : {}),
@@ -294,7 +325,10 @@ export function CallDialog({
       refreshCallData();
       toast({
         title: "Call logged",
-        description: `Outcome and sentiment saved to ${leadName}'s record.`,
+        description:
+          sentiment === "auto" && notes.trim()
+            ? `Saved to ${leadName}'s record — AURA is scoring the sentiment.`
+            : `Outcome saved to ${leadName}'s record.`,
       });
       reset();
       onOpenChange(false);
@@ -450,6 +484,22 @@ export function CallDialog({
             </div>
           )}
 
+          {!afterLiveCall && status === "callback" && (
+            <div>
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
+                Callback time
+              </div>
+              <Input
+                type="datetime-local"
+                value={callbackAt}
+                onChange={(e) => setCallbackAt(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1.5">
+                A follow-up task is created for the owner at this time.
+              </p>
+            </div>
+          )}
+
           <div>
             <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
               Notes
@@ -488,7 +538,23 @@ export function CallDialog({
                 AI suggest
               </Button>
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSentiment("auto");
+                  setRationale(null);
+                }}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-xs font-semibold ring-1 transition-colors inline-flex items-center gap-1",
+                  sentiment === "auto"
+                    ? "bg-primary/15 text-primary ring-primary/30"
+                    : "bg-transparent text-muted-foreground ring-white/10 hover:text-foreground",
+                )}
+              >
+                <Sparkles className="w-3 h-3" />
+                Let AURA score
+              </button>
               {(["positive", "neutral", "negative"] as const).map((s) => (
                 <button
                   key={s}
@@ -508,6 +574,12 @@ export function CallDialog({
                 </button>
               ))}
             </div>
+            {sentiment === "auto" && (
+              <p className="text-xs text-muted-foreground mt-2">
+                AURA scores the sentiment from your notes after saving; without
+                notes it stays neutral.
+              </p>
+            )}
             {rationale && (
               <p className="text-xs text-muted-foreground mt-2">
                 AI: {rationale}

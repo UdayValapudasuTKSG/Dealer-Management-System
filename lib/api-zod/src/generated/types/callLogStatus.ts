@@ -15,4 +15,6 @@ export const CallLogStatus = {
   no_answer: 'no_answer',
   busy: 'busy',
   voicemail: 'voicemail',
+  wrong_number: 'wrong_number',
+  callback: 'callback',
 } as const;

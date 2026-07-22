@@ -99,6 +99,11 @@ export const leadsTable = pgTable("leads", {
   address: text("address"),
   // Stamped whenever the lead advances to a new pipeline stage (powers days-in-stage / SLA).
   stageEnteredAt: timestamp("stage_entered_at", { withTimezone: true }),
+  // 24h contact-SLA breach notification marker — set once when the breach
+  // alert goes to the lead owner so repeated review fetches don't re-notify.
+  slaBreachNotifiedAt: timestamp("sla_breach_notified_at", {
+    withTimezone: true,
+  }),
   // Soft delete (R4.8): rows are never hard-removed from the data plane.
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
   deletedBy: text("deleted_by"),

@@ -27,6 +27,7 @@ export type ChecklistStage = (typeof CHECKLIST_STAGES)[number];
 
 /** Built-in automated checks the gate knows how to evaluate. */
 export const CHECKLIST_ITEM_KEYS = [
+  "call_logged",
   "contact_details",
   "vehicle_selected",
   "budget_discussed",
@@ -90,6 +91,7 @@ export const DEFAULT_STAGE_CHECKLISTS: Record<ChecklistStage, StageChecklistItem
       { key: "budget_discussed", label: "Budget / financing discussed", enabled: true },
     ],
     test_drive: [
+      { key: "call_logged", label: "At least one call logged with an outcome", enabled: true },
       { key: "test_drive_booked", label: "Test-drive slot booked", enabled: true },
       { key: "licence_on_file", label: "Driver's licence number on file", enabled: true },
       { key: "waiver_signed", label: "Test-drive waiver signed", enabled: true },

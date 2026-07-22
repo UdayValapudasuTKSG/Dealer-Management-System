@@ -613,8 +613,16 @@ export default function LeadDetail() {
   const [callOpen, setCallOpen] = useState(false);
   const [showDuty, setShowDuty] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const LOST_REASONS = [
+    { value: "no_contact", label: "No contact" },
+    { value: "not_interested", label: "Not interested" },
+    { value: "bought_elsewhere", label: "Bought elsewhere" },
+    { value: "no_budget", label: "No budget" },
+    { value: "duplicate", label: "Duplicate" },
+  ];
   const [lostOpen, setLostOpen] = useState(false);
   const [lostReason, setLostReason] = useState("");
+  const [lostReasonKey, setLostReasonKey] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [, navigate] = useLocation();
 
@@ -2804,28 +2812,57 @@ export default function LeadDetail() {
               lead. This can be reversed by editing the lead.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <Textarea
-            value={lostReason}
-            onChange={(e) => setLostReason(e.target.value)}
-            placeholder="Reason (optional) — e.g. bought elsewhere, budget, unresponsive"
-            rows={3}
-          />
+          <div className="space-y-3">
+            <div>
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
+                Reason (required)
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {LOST_REASONS.map((r) => (
+                  <button
+                    key={r.value}
+                    type="button"
+                    onClick={() => setLostReasonKey(r.value)}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-colors",
+                      lostReasonKey === r.value
+                        ? "bg-primary text-white ring-primary"
+                        : "bg-foreground/[0.04] text-muted-foreground ring-white/10 hover:text-foreground",
+                    )}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Textarea
+              value={lostReason}
+              onChange={(e) => setLostReason(e.target.value)}
+              placeholder="Extra detail (optional)"
+              rows={2}
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={updateLead.isPending}
+              disabled={updateLead.isPending || !lostReasonKey}
               onClick={async () => {
+                const label =
+                  LOST_REASONS.find((r) => r.value === lostReasonKey)?.label ??
+                  lostReasonKey;
+                const closureReason = lostReason.trim()
+                  ? `${label} — ${lostReason.trim()}`
+                  : label;
                 await updateLead.mutateAsync({
                   id: lead.id,
-                  data: { phase: "lost" },
+                  data: { phase: "lost", closureReason },
                 });
-                if (lostReason.trim()) {
-                  await createNote.mutateAsync({
-                    id: lead.id,
-                    data: { text: `Marked lost: ${lostReason.trim()}` },
-                  });
-                }
+                await createNote.mutateAsync({
+                  id: lead.id,
+                  data: { text: `Marked lost: ${closureReason}` },
+                });
                 setLostReason("");
+                setLostReasonKey("");
                 setLostOpen(false);
               }}
             >

@@ -137,6 +137,10 @@ import {
 import { computeLeadBrief } from "../lib/lead-brief";
 import { runIntakeOrchestration } from "../lib/intake-orchestration";
 import { autoAnalyzeCall } from "../lib/call-analysis";
+import {
+  scheduleCadenceAfterCall,
+  completeCadenceTasks,
+} from "../lib/call-cadence";
 
 const router: IRouter = Router();
 
@@ -1354,11 +1358,52 @@ router.get("/leads/:id/review", async (req, res): Promise<void> => {
   const next = stages.find(
     (s) => s.state === "current" && s.stage !== "delivery",
   );
+
+  // 24h contact SLA (Layer 2): only while the lead is still being chased for
+  // first contact. Breach lazily notifies the owner exactly once.
+  let sla: { deadline: Date; remainingMs: number; breached: boolean } | null =
+    null;
+  if (
+    (lead.phase === "new" || lead.phase === "contacted") &&
+    lead.status !== "lost" &&
+    lead.status !== "converted"
+  ) {
+    const since = lead.stageEnteredAt ?? lead.createdAt;
+    const deadline = new Date(since.getTime() + 24 * 60 * 60 * 1000);
+    const remainingMs = deadline.getTime() - Date.now();
+    sla = { deadline, remainingMs, breached: remainingMs <= 0 };
+    if (sla.breached && !lead.slaBreachNotifiedAt && lead.ownerUserId) {
+      // Compare-and-set: only the request that flips the marker notifies,
+      // so concurrent review reads can never double-notify.
+      const claimed = await db
+        .update(leadsTable)
+        .set({ slaBreachNotifiedAt: new Date() })
+        .where(
+          and(
+            eq(leadsTable.id, lead.id),
+            eq(leadsTable.dealerId, dealerId),
+            isNull(leadsTable.slaBreachNotifiedAt),
+          ),
+        )
+        .returning({ id: leadsTable.id });
+      if (claimed.length === 1)
+        await notifyUser({
+        userId: lead.ownerUserId,
+        dealerId,
+        type: "assignment",
+        title: `Contact SLA breached: ${lead.name}`,
+        body: "The 24h first-contact window has passed with no logged call. Reach the customer now or close the lead with a reason.",
+        link: `/lead/${lead.id}`,
+      });
+    }
+  }
+
   res.json(
     GetLeadReviewResponse.parse({
       leadId: lead.id,
       phase: lead.phase,
       nextStage: next ? next.stage : null,
+      sla,
       stages,
     }),
   );
@@ -1508,6 +1553,12 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
     })
     .where(and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, dealerId)))
     .returning();
+
+  // Advancing past the contact chase ends the follow-up call cadence.
+  await completeCadenceTasks(
+    lead,
+    "Lead advanced past the contact stage — cadence complete.",
+  );
 
   // Sold locks the VIN: reserve the vehicle so it can't be sold twice.
   if (toStage === "sold" && lead.interestedVehicleId) {
@@ -1906,6 +1957,19 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Closing a lead requires a reason (Layer 2): status → lost must carry a
+  // closure reason in the same request or already on the record.
+  const goingLost =
+    (parsed.data.status === "lost" && before.status !== "lost") ||
+    (parsed.data.phase === "lost" && before.phase !== "lost");
+  if (goingLost && !parsed.data.closureReason?.trim() && !before.closureReason) {
+    res.status(422).json({
+      error: "Closing a lead requires a reason",
+      unmet: ["closure_reason_required"],
+    });
+    return;
+  }
+
   const [lead] = await db
     .update(leadsTable)
     .set({
@@ -1951,6 +2015,10 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     }
   }
 
+  if (goingLost) {
+    // Closing the lead ends the follow-up cadence.
+    await completeCadenceTasks(lead!, "Lead closed — cadence stopped.");
+  }
   if (parsed.data.status && parsed.data.status !== before.status) {
     await logLeadEvent(
       lead!,
@@ -2394,6 +2462,17 @@ router.post("/leads/:id/calls", async (req, res): Promise<void> => {
     return;
   }
 
+  // A callback promise must be in the future (dealer-local clock).
+  const callbackAt = body.data.callbackAt ? new Date(body.data.callbackAt) : null;
+  if (callbackAt && callbackAt.getTime() <= Date.now()) {
+    res.status(400).json({ error: "Callback time must be in the future" });
+    return;
+  }
+  if (body.data.status === "callback" && !callbackAt) {
+    res.status(400).json({ error: "A callback disposition needs a callback time" });
+    return;
+  }
+
   // PENDING-INFRA seam: the adapter is a stub until a real provider exists.
   const session = await telephonyAdapter().placeCall({
     dealerId: lead.dealerId,
@@ -2410,10 +2489,11 @@ router.post("/leads/:id/calls", async (req, res): Promise<void> => {
       direction: body.data.direction,
       status: body.data.status,
       durationSeconds: body.data.durationSeconds ?? null,
-      sentiment: body.data.sentiment,
+      sentiment: body.data.sentiment ?? "neutral",
       notes: body.data.notes?.trim() || null,
       provider: session.provider,
       providerCallId: session.providerCallId,
+      callbackAt,
       actor: actorName(res),
     })
     .returning();
@@ -2432,6 +2512,21 @@ router.post("/leads/:id/calls", async (req, res): Promise<void> => {
     `${call!.notes ? `${call!.notes}\n` : ""}Sentiment: ${call!.sentiment}.`,
     actorName(res),
   );
+
+  // A6 call sentiment: when the advisor leaves the score to AURA and there
+  // are notes to judge from, the agent runs fire-and-forget (kill-switch and
+  // confidence-gated inside; below-floor scores route to human review).
+  if (!body.data.sentiment && call!.notes) {
+    autoAnalyzeCall(call!.id);
+  }
+
+  // Follow-up cadence (24h → +3d → +3d → +7d): unconnected attempts schedule
+  // the next touch; a connect closes the cadence; 4 misses suggest closing.
+  try {
+    await scheduleCadenceAfterCall(lead, call!);
+  } catch (err) {
+    req.log.error({ err, leadId: lead.id }, "Cadence scheduling failed");
+  }
 
   res.status(201).json(CreateLeadCallResponse.parse(call));
 });

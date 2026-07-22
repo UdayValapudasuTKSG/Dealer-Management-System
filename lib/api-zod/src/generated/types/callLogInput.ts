@@ -14,7 +14,8 @@ export interface CallLogInput {
   status: CallLogInputStatus;
   /** @minimum 0 */
   durationSeconds?: number;
-  sentiment: CallLogInputSentiment;
+  sentiment?: CallLogInputSentiment;
   /** @maxLength 4000 */
   notes?: string;
+  callbackAt?: Date;
 }

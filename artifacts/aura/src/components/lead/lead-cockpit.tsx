@@ -26,6 +26,7 @@ import {
   ArrowUpRight,
   Check,
   ClipboardList,
+  Clock,
   Loader2,
   Lock,
   Plus,
@@ -94,6 +95,7 @@ export function ActionChain({
   const review = useGetLeadReview(lead.id, {
     query: { queryKey: getGetLeadReviewQueryKey(lead.id) },
   });
+  const sla = review.data?.sla ?? null;
   const reviewStage = review.data?.stages.find((s) => s.state === "current");
   const advanceStage = useAdvanceLeadStage({
     mutation: {
@@ -182,6 +184,13 @@ export function ActionChain({
 
   const MotionDiv = motion.div;
 
+  function formatSlaRemaining(ms: number): string {
+    const totalMinutes = Math.max(0, Math.floor(ms / 60000));
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  }
+
   return (
     <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5 lg:p-7 overflow-hidden flex flex-col h-full shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
       <div className="flex items-center gap-2 mb-8">
@@ -190,6 +199,42 @@ export function ActionChain({
         </span>
         <span className="font-semibold tracking-tight text-lg">Action Chain</span>
       </div>
+
+      {sla && (
+        <div
+          className={cn(
+            "mb-6 rounded-xl border px-4 py-3 flex items-center gap-3",
+            sla.breached
+              ? "border-rose-500/40 bg-rose-500/10"
+              : sla.remainingMs < 6 * 60 * 60 * 1000
+                ? "border-amber-500/40 bg-amber-500/10"
+                : "border-white/10 bg-foreground/[0.02]",
+          )}
+        >
+          <Clock
+            className={cn(
+              "w-4 h-4 shrink-0",
+              sla.breached
+                ? "text-rose-400"
+                : sla.remainingMs < 6 * 60 * 60 * 1000
+                  ? "text-amber-400"
+                  : "text-muted-foreground",
+            )}
+          />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">
+              {sla.breached
+                ? "Contact SLA breached"
+                : `Contact SLA: ${formatSlaRemaining(sla.remainingMs)} left`}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {sla.breached
+                ? "The 24-hour first-contact window has passed — call the customer now or close the lead with a reason."
+                : "Log a call before the 24-hour first-contact window closes."}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="relative pl-7 flex-1">
         {/* The literal chain running through */}

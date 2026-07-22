@@ -1752,6 +1752,11 @@ export const GetLeadReviewResponse = zod.object({
   "leadId": zod.number(),
   "phase": zod.string(),
   "nextStage": zod.union([zod.literal('qualified'),zod.literal('test_drive'),zod.literal('proposal'),zod.literal('negotiation'),zod.literal('sold'),zod.literal(null)]).nullable(),
+  "sla": zod.union([zod.object({
+  "deadline": zod.coerce.date(),
+  "remainingMs": zod.number(),
+  "breached": zod.boolean()
+}),zod.null()]).optional(),
   "stages": zod.array(zod.object({
   "stage": zod.enum(['qualified', 'test_drive', 'proposal', 'negotiation', 'sold', 'delivery']),
   "label": zod.string(),
@@ -2242,7 +2247,7 @@ export const ListLeadCallsResponseItem = zod.object({
   "id": zod.number(),
   "leadId": zod.number(),
   "direction": zod.enum(['outbound', 'inbound']),
-  "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail']),
+  "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail', 'wrong_number', 'callback']),
   "durationSeconds": zod.number().nullish(),
   "sentiment": zod.enum(['positive', 'neutral', 'negative']),
   "notes": zod.string().nullish(),
@@ -2251,6 +2256,7 @@ export const ListLeadCallsResponseItem = zod.object({
   "recordingUrl": zod.string().nullish(),
   "transcript": zod.string().nullish(),
   "transcriptStatus": zod.enum(['none', 'pending', 'completed', 'failed']).optional(),
+  "callbackAt": zod.coerce.date().nullish(),
   "actor": zod.string(),
   "createdAt": zod.coerce.date()
 })
@@ -2272,17 +2278,18 @@ export const createLeadCallBodyNotesMax = 4000;
 
 export const CreateLeadCallBody = zod.object({
   "direction": zod.enum(['outbound', 'inbound']),
-  "status": zod.enum(['completed', 'no_answer', 'busy', 'voicemail']),
+  "status": zod.enum(['completed', 'no_answer', 'busy', 'voicemail', 'wrong_number', 'callback']),
   "durationSeconds": zod.number().min(createLeadCallBodyDurationSecondsMin).optional(),
-  "sentiment": zod.enum(['positive', 'neutral', 'negative']),
-  "notes": zod.string().max(createLeadCallBodyNotesMax).optional()
+  "sentiment": zod.enum(['positive', 'neutral', 'negative']).optional(),
+  "notes": zod.string().max(createLeadCallBodyNotesMax).optional(),
+  "callbackAt": zod.coerce.date().optional()
 })
 
 export const CreateLeadCallResponse = zod.object({
   "id": zod.number(),
   "leadId": zod.number(),
   "direction": zod.enum(['outbound', 'inbound']),
-  "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail']),
+  "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail', 'wrong_number', 'callback']),
   "durationSeconds": zod.number().nullish(),
   "sentiment": zod.enum(['positive', 'neutral', 'negative']),
   "notes": zod.string().nullish(),
@@ -2291,6 +2298,7 @@ export const CreateLeadCallResponse = zod.object({
   "recordingUrl": zod.string().nullish(),
   "transcript": zod.string().nullish(),
   "transcriptStatus": zod.enum(['none', 'pending', 'completed', 'failed']).optional(),
+  "callbackAt": zod.coerce.date().nullish(),
   "actor": zod.string(),
   "createdAt": zod.coerce.date()
 })
@@ -2317,7 +2325,7 @@ export const UpdateLeadCallResponse = zod.object({
   "id": zod.number(),
   "leadId": zod.number(),
   "direction": zod.enum(['outbound', 'inbound']),
-  "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail']),
+  "status": zod.enum(['in_progress', 'completed', 'no_answer', 'busy', 'voicemail', 'wrong_number', 'callback']),
   "durationSeconds": zod.number().nullish(),
   "sentiment": zod.enum(['positive', 'neutral', 'negative']),
   "notes": zod.string().nullish(),
@@ -2326,6 +2334,7 @@ export const UpdateLeadCallResponse = zod.object({
   "recordingUrl": zod.string().nullish(),
   "transcript": zod.string().nullish(),
   "transcriptStatus": zod.enum(['none', 'pending', 'completed', 'failed']).optional(),
+  "callbackAt": zod.coerce.date().nullish(),
   "actor": zod.string(),
   "createdAt": zod.coerce.date()
 })

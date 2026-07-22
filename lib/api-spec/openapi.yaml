@@ -7025,7 +7025,7 @@ components:
         id: { type: integer }
         leadId: { type: integer }
         direction: { type: string, enum: [outbound, inbound] }
-        status: { type: string, enum: [in_progress, completed, no_answer, busy, voicemail] }
+        status: { type: string, enum: [in_progress, completed, no_answer, busy, voicemail, wrong_number, callback] }
         durationSeconds: { type: ["integer", "null"] }
         sentiment: { type: string, enum: [positive, neutral, negative] }
         notes: { type: ["string", "null"] }
@@ -7034,6 +7034,7 @@ components:
         recordingUrl: { type: ["string", "null"] }
         transcript: { type: ["string", "null"] }
         transcriptStatus: { type: string, enum: [none, pending, completed, failed] }
+        callbackAt: { type: ["string", "null"], format: date-time }
         actor: { type: string }
         createdAt: { type: string, format: date-time }
     CallLogUpdate:
@@ -7056,13 +7057,16 @@ components:
         identity: { type: string }
     CallLogInput:
       type: object
-      required: [direction, status, sentiment]
+      required: [direction, status]
       properties:
         direction: { type: string, enum: [outbound, inbound] }
-        status: { type: string, enum: [completed, no_answer, busy, voicemail] }
+        status: { type: string, enum: [completed, no_answer, busy, voicemail, wrong_number, callback] }
         durationSeconds: { type: integer, minimum: 0 }
+        # Omitted sentiment = "let AURA score it" — the A6 call-sentiment agent
+        # runs fire-and-forget when notes are present (kill-switch aware).
         sentiment: { type: string, enum: [positive, neutral, negative] }
         notes: { type: string, maxLength: 4000 }
+        callbackAt: { type: string, format: date-time }
     CallSentimentSuggestInput:
       type: object
       required: [notes]
@@ -7309,6 +7313,13 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/LeadReviewItem"
+    LeadReviewSla:
+      type: object
+      required: [deadline, remainingMs, breached]
+      properties:
+        deadline: { type: string, format: date-time }
+        remainingMs: { type: integer }
+        breached: { type: boolean }
     LeadReview:
       type: object
       required: [leadId, phase, nextStage, stages]
@@ -7318,6 +7329,12 @@ components:
         nextStage:
           type: ["string", "null"]
           enum: [qualified, test_drive, proposal, negotiation, sold, null]
+        # 24h contact SLA — present only while the lead is in the pre-contact
+        # window (phase new/contacted with a stage-entry timestamp).
+        sla:
+          oneOf:
+            - $ref: "#/components/schemas/LeadReviewSla"
+            - type: "null"
         stages:
           type: array
           items:

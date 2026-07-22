@@ -30,6 +30,13 @@ export const tasksTable = pgTable("tasks", {
     onDelete: "set null",
   }),
   dueDate: date("due_date", { mode: "string" }),
+  // Precise due timestamp for time-of-day commitments (callback promises);
+  // dueDate stays the day-level field the task views sort on.
+  dueAt: timestamp("due_at", { withTimezone: true }),
+  // Provenance: "manual" (user-created), "cadence" (follow-up cadence agent)
+  // or "callback" (customer-requested callback). System kinds are safe to
+  // auto-close when the cadence resolves; manual tasks are never touched.
+  kind: text("kind").notNull().default("manual"),
   priority: text("priority").notNull().default("normal"),
   status: text("status").notNull().default("open"),
   attachments: jsonb("attachments")
@@ -68,6 +75,8 @@ export const insertTaskSchema = createInsertSchema(tasksTable, {
   status: z.enum(["open", "in_progress", "done"]),
 }).omit({ dealerId: true,
   id: true,
+  kind: true,
+  dueAt: true,
   createdAt: true,
   updatedAt: true,
   completedAt: true,

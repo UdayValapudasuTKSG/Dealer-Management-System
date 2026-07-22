@@ -17,6 +17,16 @@ export const CALL_STATUSES = [
   "no_answer",
   "busy",
   "voicemail",
+  "wrong_number",
+  "callback",
+] as const;
+
+/** Dispositions that count as "didn't reach the customer" for the follow-up cadence. */
+export const UNCONNECTED_CALL_STATUSES = [
+  "no_answer",
+  "busy",
+  "voicemail",
+  "wrong_number",
 ] as const;
 export type CallStatus = (typeof CALL_STATUSES)[number];
 
@@ -43,6 +53,8 @@ export const callLogsTable = pgTable("call_logs", {
   recordingUrl: text("recording_url"),
   transcript: text("transcript"),
   transcriptStatus: text("transcript_status").notNull().default("none"),
+  // Customer asked to be called back at a specific (future) time.
+  callbackAt: timestamp("callback_at", { withTimezone: true }),
   actor: text("actor").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

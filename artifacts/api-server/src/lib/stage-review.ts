@@ -1,5 +1,5 @@
-import { and, eq } from "drizzle-orm";
-import { db, vehiclesTable, type Lead } from "@workspace/db";
+import { and, eq, ne, sql } from "drizzle-orm";
+import { db, vehiclesTable, callLogsTable, type Lead } from "@workspace/db";
 
 // ---------------------------------------------------------------------------
 // Stage-advance review model — shared by the gated advance endpoint, the Run
@@ -44,6 +44,7 @@ export const ADVANCE_STAGE_LABEL: Record<string, string> = {
 // Who is accountable for clearing each checklist item — shown as owner chips
 // in the Run Review stepper.
 export const CHECK_OWNER: Record<string, string> = {
+  call_logged: "Sales Advisor",
   contact_details: "Sales Advisor",
   vehicle_selected: "Sales Advisor",
   budget_discussed: "Sales Advisor",
@@ -77,6 +78,21 @@ export function buildStageChecks(
 ): Record<string, () => Promise<boolean> | boolean> {
   const deal = leadDeals[0];
   return {
+    // Layer 2 Contacted gate: at least one call logged with a real outcome
+    // (any disposition except a still-in-progress browser call).
+    call_logged: async () => {
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(callLogsTable)
+        .where(
+          and(
+            eq(callLogsTable.leadId, lead.id),
+            eq(callLogsTable.dealerId, dealerId),
+            ne(callLogsTable.status, "in_progress"),
+          ),
+        );
+      return (row?.n ?? 0) > 0;
+    },
     contact_details: () => Boolean(lead.email || lead.phone),
     // Capture is model-only per the DMS spec (unit/VIN binds at Vehicle
     // Allocated), so a recorded model of interest also satisfies this check.

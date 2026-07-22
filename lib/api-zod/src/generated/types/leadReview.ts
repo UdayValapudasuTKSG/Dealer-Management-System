@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { LeadReviewNextStage } from './leadReviewNextStage';
+import type { LeadReviewSla } from './leadReviewSla';
 import type { LeadReviewStage } from './leadReviewStage';
 
 export interface LeadReview {
@@ -13,5 +14,6 @@ export interface LeadReview {
   phase: string;
   /** @nullable */
   nextStage: LeadReviewNextStage;
+  sla?: LeadReviewSla | null;
   stages: LeadReviewStage[];
 }

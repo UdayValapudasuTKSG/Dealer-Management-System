@@ -288,6 +288,7 @@ export * from './leadQuoteInfo';
 export * from './leadReview';
 export * from './leadReviewItem';
 export * from './leadReviewNextStage';
+export * from './leadReviewSla';
 export * from './leadReviewStage';
 export * from './leadReviewStageStage';
 export * from './leadReviewStageState';

@@ -1768,6 +1768,8 @@ export const CallLogStatus = {
   no_answer: 'no_answer',
   busy: 'busy',
   voicemail: 'voicemail',
+  wrong_number: 'wrong_number',
+  callback: 'callback',
 } as const;
 
 export type CallLogSentiment = typeof CallLogSentiment[keyof typeof CallLogSentiment];
@@ -1807,6 +1809,8 @@ export interface CallLog {
   /** @nullable */
   transcript?: string | null;
   transcriptStatus?: CallLogTranscriptStatus;
+  /** @nullable */
+  callbackAt?: string | null;
   actor: string;
   createdAt: string;
 }
@@ -1862,6 +1866,8 @@ export const CallLogInputStatus = {
   no_answer: 'no_answer',
   busy: 'busy',
   voicemail: 'voicemail',
+  wrong_number: 'wrong_number',
+  callback: 'callback',
 } as const;
 
 export type CallLogInputSentiment = typeof CallLogInputSentiment[keyof typeof CallLogInputSentiment];
@@ -1878,9 +1884,10 @@ export interface CallLogInput {
   status: CallLogInputStatus;
   /** @minimum 0 */
   durationSeconds?: number;
-  sentiment: CallLogInputSentiment;
+  sentiment?: CallLogInputSentiment;
   /** @maxLength 4000 */
   notes?: string;
+  callbackAt?: string;
 }
 
 export interface CallSentimentSuggestInput {
@@ -2173,6 +2180,12 @@ export interface LeadReviewStage {
   items: LeadReviewItem[];
 }
 
+export interface LeadReviewSla {
+  deadline: string;
+  remainingMs: number;
+  breached: boolean;
+}
+
 /**
  * @nullable
  */
@@ -2192,6 +2205,7 @@ export interface LeadReview {
   phase: string;
   /** @nullable */
   nextStage: LeadReviewNextStage;
+  sla?: LeadReviewSla | null;
   stages: LeadReviewStage[];
 }
 
