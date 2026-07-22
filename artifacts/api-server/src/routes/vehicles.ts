@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import ExcelJS from "exceljs";
-import { eq, desc, and, ilike, or, inArray, type SQL } from "drizzle-orm";
+import { eq, desc, and, ilike, or, inArray, isNull, isNotNull, type SQL } from "drizzle-orm";
 import {
   db,
   vehiclesTable,
@@ -20,7 +20,7 @@ import {
   UpdateVehicleResponse,
   ImportVehiclesResponse,
 } from "@workspace/api-zod";
-import { activeDealerId } from "../middlewares/rbac";
+import { activeDealerId, hasPermission } from "../middlewares/rbac";
 import {
   findBlockedEditField,
   redactHiddenFields,
@@ -54,6 +54,9 @@ router.get("/vehicles", async (req, res): Promise<void> => {
   }
 
   const filters: SQL[] = [eq(vehiclesTable.dealerId, activeDealerId(res))];
+  // Soft delete (R4.8): default reads exclude deleted rows.
+  if (!query.data.includeDeleted)
+    filters.push(isNull(vehiclesTable.deletedAt));
   if (query.data.divisionId)
     filters.push(eq(vehiclesTable.divisionId, query.data.divisionId));
   if (query.data.status) filters.push(eq(vehiclesTable.status, query.data.status));
@@ -440,6 +443,7 @@ router.get("/vehicles/:id", async (req, res): Promise<void> => {
       and(
         eq(vehiclesTable.id, params.data.id),
         eq(vehiclesTable.dealerId, activeDealerId(res)),
+        isNull(vehiclesTable.deletedAt),
       ),
     );
 
@@ -497,6 +501,7 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
       and(
         eq(vehiclesTable.id, params.data.id),
         eq(vehiclesTable.dealerId, dealerId),
+        isNull(vehiclesTable.deletedAt),
       ),
     );
   if (!before) {
@@ -542,12 +547,19 @@ router.delete("/vehicles/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Soft delete (R4.8): never hard-remove from the data plane.
+  const actor = res.locals.user;
   const [vehicle] = await db
-    .delete(vehiclesTable)
+    .update(vehiclesTable)
+    .set({
+      deletedAt: new Date(),
+      deletedBy: actor?.email ?? actor?.name ?? null,
+    })
     .where(
       and(
         eq(vehiclesTable.id, params.data.id),
         eq(vehiclesTable.dealerId, activeDealerId(res)),
+        isNull(vehiclesTable.deletedAt),
       ),
     )
     .returning();
@@ -558,6 +570,36 @@ router.delete("/vehicles/:id", async (req, res): Promise<void> => {
   }
 
   res.sendStatus(204);
+});
+
+// R4.8: restore a soft-deleted vehicle (delete-class privilege).
+router.post("/vehicles/:id/restore", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const user = res.locals.user;
+  if (!user || !hasPermission(user, "inventory", "delete")) {
+    res.status(403).json({ error: "Missing permission: delete on inventory" });
+    return;
+  }
+  const [vehicle] = await db
+    .update(vehiclesTable)
+    .set({ deletedAt: null, deletedBy: null })
+    .where(
+      and(
+        eq(vehiclesTable.id, id),
+        eq(vehiclesTable.dealerId, activeDealerId(res)),
+        isNotNull(vehiclesTable.deletedAt),
+      ),
+    )
+    .returning();
+  if (!vehicle) {
+    res.status(404).json({ error: "Vehicle not found" });
+    return;
+  }
+  res.json(UpdateVehicleResponse.parse(vehicle));
 });
 
 export default router;

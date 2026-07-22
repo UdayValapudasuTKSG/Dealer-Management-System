@@ -80,6 +80,9 @@ export const vehiclesTable = pgTable("vehicles", {
     .default([]),
   description: text("description"),
   featured: boolean("featured").notNull().default(false),
+  // Soft delete (R4.8): rows are never hard-removed from the data plane.
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: text("deleted_by"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

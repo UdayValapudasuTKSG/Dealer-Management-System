@@ -11,4 +11,5 @@ status?: string;
 divisionId?: number;
 powertrain?: string;
 search?: string;
+includeDeleted?: boolean;
 };

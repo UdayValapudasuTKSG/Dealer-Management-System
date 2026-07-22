@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, isNotNull, ne, sql, inArray, type SQL } from "drizzle-orm";
+import { eq, desc, and, isNull, isNotNull, ne, sql, inArray, type SQL } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -93,7 +93,7 @@ import { findOpenDuplicate, mergeIntoExistingLead } from "../lib/lead-dedup";
 import { telephonyAdapter } from "../lib/telephony";
 import { enqueueEmail, enqueueWhatsapp, notifyUser } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
-import { activeDealerId } from "../middlewares/rbac";
+import { activeDealerId, hasPermission } from "../middlewares/rbac";
 import {
   guardUntrusted,
   isAgentEnabled,
@@ -184,6 +184,8 @@ router.get("/leads", async (req, res): Promise<void> => {
   }
 
   const filters: SQL[] = [eq(leadsTable.dealerId, activeDealerId(res))];
+  // Soft delete (R4.8): default reads exclude deleted rows.
+  if (!query.data.includeDeleted) filters.push(isNull(leadsTable.deletedAt));
   if (query.data.divisionId)
     filters.push(eq(leadsTable.divisionId, query.data.divisionId));
   if (query.data.phase) filters.push(eq(leadsTable.phase, query.data.phase));
@@ -348,6 +350,7 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
       and(
         eq(leadsTable.id, params.data.id),
         eq(leadsTable.dealerId, activeDealerId(res)),
+        isNull(leadsTable.deletedAt),
       ),
     );
 
@@ -1866,6 +1869,7 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
       and(
         eq(leadsTable.id, params.data.id),
         eq(leadsTable.dealerId, activeDealerId(res)),
+        isNull(leadsTable.deletedAt),
       ),
     );
   if (!before) {
@@ -1952,12 +1956,19 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Soft delete (R4.8): never hard-remove from the data plane.
+  const actor = res.locals.user;
   const [lead] = await db
-    .delete(leadsTable)
+    .update(leadsTable)
+    .set({
+      deletedAt: new Date(),
+      deletedBy: actor?.email ?? actor?.name ?? null,
+    })
     .where(
       and(
         eq(leadsTable.id, params.data.id),
         eq(leadsTable.dealerId, activeDealerId(res)),
+        isNull(leadsTable.deletedAt),
       ),
     )
     .returning();
@@ -1968,6 +1979,36 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
   }
 
   res.sendStatus(204);
+});
+
+// R4.8: restore a soft-deleted lead (delete-class privilege).
+router.post("/leads/:id/restore", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid id" });
+    return;
+  }
+  const user = res.locals.user;
+  if (!user || !hasPermission(user, "leads", "delete")) {
+    res.status(403).json({ error: "Missing permission: delete on leads" });
+    return;
+  }
+  const [lead] = await db
+    .update(leadsTable)
+    .set({ deletedAt: null, deletedBy: null })
+    .where(
+      and(
+        eq(leadsTable.id, id),
+        eq(leadsTable.dealerId, activeDealerId(res)),
+        isNotNull(leadsTable.deletedAt),
+      ),
+    )
+    .returning();
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+  res.json(UpdateLeadResponse.parse(lead));
 });
 
 // ---------------------------------------------------------------------------

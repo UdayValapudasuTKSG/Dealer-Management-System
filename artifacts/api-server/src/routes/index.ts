@@ -60,9 +60,12 @@ router.use(testDriveRouter);
 // Everything below requires a signed-in user, then a role permission
 // matching the route (see middlewares/rbac.ts), and mutations are audited.
 // A generous per-user rate limit guards against runaway clients.
+// Pipeline order (R4.1): authn + dealer resolution (requireAuth) →
+// tenant-status / RBAC / entitlement gate (authorize) → rate limit →
+// idempotency + validation + resource scoping inside the route handlers.
 router.use(requireAuth);
-router.use(authedRateLimit);
 router.use(authorize);
+router.use(authedRateLimit);
 router.use(auditTrail);
 
 router.use(authRouter);

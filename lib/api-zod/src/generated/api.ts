@@ -152,7 +152,8 @@ export const ListVehiclesQueryParams = zod.object({
   "status": zod.coerce.string().optional(),
   "divisionId": zod.coerce.number().optional(),
   "powertrain": zod.coerce.string().optional(),
-  "search": zod.coerce.string().optional()
+  "search": zod.coerce.string().optional(),
+  "includeDeleted": zod.coerce.boolean().optional()
 })
 
 
@@ -420,6 +421,52 @@ export const DeleteVehicleParams = zod.object({
 })
 
 export const DeleteVehicleResponse = zod.void()
+
+
+/**
+ * @summary Restore a soft-deleted vehicle
+ */
+export const RestoreVehicleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+
+export const RestoreVehicleResponse = zod.object({
+  "id": zod.number(),
+  "divisionId": zod.number().nullish(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "trim": zod.string().nullish(),
+  "year": zod.number(),
+  "vin": zod.string().nullish(),
+  "engineNumber": zod.string().nullish(),
+  "registration": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "engine": zod.string().nullish(),
+  "transmission": zod.string().nullish(),
+  "price": zod.number(),
+  "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
+  "rangeKm": zod.number().nullish(),
+  "mileageKm": zod.number(),
+  "exteriorColor": zod.string(),
+  "bodyType": zod.string(),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']),
+  "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
+  "holdReason": zod.string().nullish(),
+  "imageUrl": zod.string().nullish(),
+  "images": zod.array(zod.string()).optional(),
+  "accessories": zod.array(zod.string()).optional(),
+  "documents": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})).optional(),
+  "description": zod.string().nullish(),
+  "featured": zod.boolean(),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**
@@ -915,7 +962,8 @@ export const ListDeliveryAdvisorsResponse = zod.array(ListDeliveryAdvisorsRespon
 export const ListLeadsQueryParams = zod.object({
   "phase": zod.coerce.string().optional(),
   "status": zod.coerce.string().optional(),
-  "divisionId": zod.coerce.number().optional()
+  "divisionId": zod.coerce.number().optional(),
+  "includeDeleted": zod.coerce.boolean().optional()
 })
 
 
@@ -1238,6 +1286,69 @@ export const DeleteLeadParams = zod.object({
 })
 
 export const DeleteLeadResponse = zod.void()
+
+
+/**
+ * @summary Restore a soft-deleted lead
+ */
+export const RestoreLeadParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+
+export const RestoreLeadResponse = zod.object({
+  "id": zod.number(),
+  "divisionId": zod.number().nullish(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
+  "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
+  "aiScore": zod.number(),
+  "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**

@@ -16,6 +16,7 @@ import {
   type PermissionModule,
   type PermissionCategory,
   type DealerEntitlements,
+  type EntitlementKey,
 } from "@workspace/db";
 import { and, desc, gt } from "drizzle-orm";
 import { logger } from "../lib/logger";
@@ -44,8 +45,12 @@ declare global {
     interface Locals {
       user?: AuthedUser;
       dealerId?: number;
-      /** Set when the bound dealer is suspended: data plane is frozen. */
+      /** Set when the bound dealer is suspended: data-plane WRITES are
+       * blocked with 423 (reads still served). */
       dealerSuspended?: boolean;
+      /** Entitlements (feature flags) of the bound dealer — missing keys
+       * default to enabled. Backs the entitlement gate (INV-ENT-1). */
+      dealerEntitlements?: DealerEntitlements;
       /** Set when a super admin is bound to the dealer via an impersonation
        * grant (NC-10): read_only blocks every mutation; elevated still
        * hard-blocks money-posting, gate resolution, and customer sends. */
@@ -346,19 +351,45 @@ async function resolveActiveDealer(
     }
     return active;
   }
-  // No header: never auto-bind for super admins (they land in the console)
-  // or for multi-dealership users (explicit picker). Single-membership users
-  // bind their only dealership. A super admin with exactly one REAL staff
-  // membership auto-binds it, same as any other single-dealership employee.
+  // No header (NC-14): default-dealer resolution is lastActive → sole
+  // membership → null (picker payload on GETs / 400 dealer_required on
+  // mutations). Super admins resolve against their REAL staff memberships
+  // only — never against the all-dealers platform list.
   if (isSuperAdmin) {
     const memberships = await loadMemberships(user.id);
-    if (memberships.length === 1) {
+    const resolved = defaultMembership(user, memberships);
+    if (resolved) {
       res.locals.boundViaMembership = true;
-      return memberships[0]!;
+      return resolved;
     }
     return null;
   }
-  return dealers.length === 1 ? dealers[0]! : null;
+  return defaultMembership(user, dealers);
+}
+
+/** NC-14 default-dealer order: lastActive membership → sole membership. */
+function defaultMembership(
+  user: User,
+  memberships: DealerMembership[],
+): DealerMembership | null {
+  if (user.lastActiveDealerId != null) {
+    const last = memberships.find(
+      (d) => d.dealerId === user.lastActiveDealerId,
+    );
+    if (last) return last;
+  }
+  return memberships.length === 1 ? memberships[0]! : null;
+}
+
+/** Remember the dealer a user last worked in (fire-and-forget, NC-14). */
+function stampLastActiveDealer(user: User, dealerId: number): void {
+  if (user.lastActiveDealerId === dealerId) return;
+  db.update(usersTable)
+    .set({ lastActiveDealerId: dealerId })
+    .where(eq(usersTable.id, user.id))
+    .catch((err) =>
+      logger.error({ err }, "Failed to stamp last active dealer"),
+    );
 }
 
 function isLoopbackRequest(req: Parameters<RequestHandler>[0]): boolean {
@@ -418,8 +449,10 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
         } as AuthedUser;
         if (active) {
           res.locals.dealerId = active.dealerId;
+          res.locals.dealerEntitlements = active.entitlements ?? {};
           if (active.dealerStatus === "suspended")
             res.locals.dealerSuspended = true;
+          stampLastActiveDealer(user, active.dealerId);
         }
         next();
         return;
@@ -438,6 +471,7 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
         roleId: null,
         status: "active",
         lastLoginAt: null,
+        lastActiveDealerId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         createdBy: null,
@@ -498,8 +532,10 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     };
     if (active) {
       res.locals.dealerId = active.dealerId;
+      res.locals.dealerEntitlements = active.entitlements ?? {};
       if (active.dealerStatus === "suspended")
         res.locals.dealerSuspended = true;
+      stampLastActiveDealer(user, active.dealerId);
     }
     next();
   } catch (err) {
@@ -672,25 +708,39 @@ export const authorize: RequestHandler = (req, res, next) => {
     }
     return next();
   }
-  // Without a dealership, only the auth endpoints are reachable — the client
-  // shows the "no dealership assigned" / dealer picker screen off /auth/me.
-  // Exception: roles are GLOBAL reference data, and the platform console
-  // (super admin, no bound dealer) needs them to assign dealership members.
+  const isRead = ["GET", "HEAD", "OPTIONS"].includes(req.method);
+  // NC-14: no resolvable active dealer. Data-plane GET → 200 picker payload
+  // (never an error); mutation → 400 dealer_required. Exception: roles are
+  // GLOBAL reference data the platform console (super admin, no bound
+  // dealer) needs to assign dealership members.
   if (user.dealerId == null && segment !== "auth") {
     const globalRolesRead =
       user.isSuperAdmin && req.method === "GET" && req.path === "/admin/roles";
-    if (!globalRolesRead) {
-      res.status(403).json({ error: "No dealership assigned" });
+    if (globalRolesRead) return next();
+    if (isRead) {
+      res.status(200).json({
+        code: "dealer_selection_required",
+        message: "Select a dealership to continue",
+        dealers: user.dealers.map((d) => ({
+          id: d.dealerId,
+          name: d.dealerName,
+        })),
+      });
       return;
     }
-    return next();
+    res.status(400).json({
+      error: "dealer_required",
+      message: "No active dealership resolvable for this mutation",
+    });
+    return;
   }
-  // Suspended dealership: data plane frozen. Only auth endpoints stay
-  // reachable so the client can render the suspended state.
-  if (res.locals.dealerSuspended && segment !== "auth") {
-    res.status(403).json({
-      error: "Dealership suspended",
-      code: "dealer_suspended",
+  // Tenant lifecycle (pipeline stage 3): a suspended dealer blocks data-plane
+  // WRITES with 423; reads are still served. Auth endpoints stay reachable so
+  // the client can render the suspended state.
+  if (res.locals.dealerSuspended && segment !== "auth" && !isRead) {
+    res.status(423).json({
+      error: "tenant_suspended",
+      message: "Dealership is suspended — writes are blocked",
     });
     return;
   }
@@ -720,15 +770,43 @@ export const authorize: RequestHandler = (req, res, next) => {
     }
   }
   const required = routePermission(req);
-  if (!required) return next();
-  if (!hasPermission(user, required.module, required.category)) {
+  if (required && !hasPermission(user, required.module, required.category)) {
     res.status(403).json({
       error: `Missing permission: ${required.category} on ${required.module}`,
+      requiredPermission: `${required.module}:${required.category}`,
     });
+    return;
+  }
+  // Entitlement / feature-flag gate (pipeline stage 5, INV-ENT-1, NC-9):
+  // AFTER RBAC. An unentitled module is hidden as 404 — indistinguishable
+  // from "does not exist". Missing keys default to enabled.
+  const entitlementKey = segmentEntitlement(segment, required?.module);
+  if (
+    entitlementKey &&
+    res.locals.dealerEntitlements?.[entitlementKey] === false
+  ) {
+    res.status(404).json({ error: "Not found" });
     return;
   }
   next();
 };
+
+// Maps a permission module / path segment to the dealer entitlement flag
+// that gates it (INV-ENT-1). Modules without a flag are always entitled.
+const MODULE_ENTITLEMENTS: Record<string, EntitlementKey> = {
+  finance: "finance_los",
+  gra: "gra_module",
+  service: "service_module",
+  parts: "parts_module",
+};
+function segmentEntitlement(
+  segment: string,
+  module: string | undefined,
+): EntitlementKey | null {
+  if (segment === "agents") return "ai_agents";
+  if (module && MODULE_ENTITLEMENTS[module]) return MODULE_ENTITLEMENTS[module];
+  return null;
+}
 
 const AUDIT_ACTION_BY_CATEGORY: Record<string, string> = {
   create: "create",

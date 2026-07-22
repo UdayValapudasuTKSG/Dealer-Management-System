@@ -40,15 +40,21 @@ function makeLimiter(opts: {
     }
     bucket.count += 1;
     const remaining = Math.max(0, opts.max - bucket.count);
+    const resetSec = Math.max(
+      1,
+      Math.ceil((bucket.windowStart + opts.windowMs - now) / 1000),
+    );
     res.setHeader("RateLimit-Limit", String(opts.max));
     res.setHeader("RateLimit-Remaining", String(remaining));
+    res.setHeader("RateLimit-Reset", String(resetSec));
     if (bucket.count > opts.max) {
-      const retryAfterSec = Math.ceil(
-        (bucket.windowStart + opts.windowMs - now) / 1000,
-      );
-      res.setHeader("Retry-After", String(Math.max(1, retryAfterSec)));
+      res.setHeader("Retry-After", String(resetSec));
       incrementMetric("rate_limited_total", { scope: opts.scope });
-      res.status(429).json({ error: "Too many requests — slow down and retry shortly" });
+      res.status(429).json({
+        error: "rate_limited",
+        message: "Too many requests — slow down and retry shortly",
+        retryAfter: resetSec,
+      });
       return;
     }
     next();

@@ -37,6 +37,9 @@ export const customersTable = pgTable("customers", {
   lifetimeValue: doublePrecision("lifetime_value").notNull().default(0),
   vehiclesOwned: integer("vehicles_owned").notNull().default(0),
   loyaltyTier: text("loyalty_tier").notNull().default("new"),
+  // Soft delete (R4.8): rows are never hard-removed from the data plane.
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: text("deleted_by"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

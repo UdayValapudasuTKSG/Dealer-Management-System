@@ -1462,6 +1462,77 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getDeleteVehicleMutationOptions(options));
     }
 
+export const getRestoreVehicleUrl = (id: number,) => {
+
+
+
+
+  return `/api/vehicles/${id}/restore`
+}
+
+/**
+ * @summary Restore a soft-deleted vehicle
+ */
+export const restoreVehicle = async (id: number, options?: RequestInit): Promise<Vehicle> => {
+
+  return customFetch<Vehicle>(getRestoreVehicleUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestoreVehicleMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreVehicle>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreVehicle>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['restoreVehicle'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreVehicle>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  restoreVehicle(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreVehicleMutationResult = NonNullable<Awaited<ReturnType<typeof restoreVehicle>>>
+
+    export type RestoreVehicleMutationError = ErrorType<Error>
+
+    /**
+ * @summary Restore a soft-deleted vehicle
+ */
+export const useRestoreVehicle = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreVehicle>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof restoreVehicle>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRestoreVehicleMutationOptions(options));
+    }
+
 export const getImportVehiclesUrl = () => {
 
 
@@ -2924,6 +2995,77 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteLeadMutationOptions(options));
+    }
+
+export const getRestoreLeadUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/restore`
+}
+
+/**
+ * @summary Restore a soft-deleted lead
+ */
+export const restoreLead = async (id: number, options?: RequestInit): Promise<Lead> => {
+
+  return customFetch<Lead>(getRestoreLeadUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestoreLeadMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreLead>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreLead>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['restoreLead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreLead>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  restoreLead(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreLeadMutationResult = NonNullable<Awaited<ReturnType<typeof restoreLead>>>
+
+    export type RestoreLeadMutationError = ErrorType<Error>
+
+    /**
+ * @summary Restore a soft-deleted lead
+ */
+export const useRestoreLead = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreLead>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof restoreLead>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRestoreLeadMutationOptions(options));
     }
 
 export const getCreateEnquiryUrl = () => {

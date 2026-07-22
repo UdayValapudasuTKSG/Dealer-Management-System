@@ -22,6 +22,10 @@ export const usersTable = pgTable("users", {
   createdBy: text("created_by"),
   updatedBy: text("updated_by"),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  // NC-14 default-dealer resolution: the dealer this user last worked in.
+  // Used when a data-plane GET arrives without an x-dealer-id header
+  // (lastActive → sole membership → picker payload).
+  lastActiveDealerId: integer("last_active_dealer_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

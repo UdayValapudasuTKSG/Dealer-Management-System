@@ -4740,6 +4740,7 @@ status?: string;
 divisionId?: number;
 powertrain?: string;
 search?: string;
+includeDeleted?: boolean;
 };
 
 export type ListBookingsParams = {
@@ -4756,6 +4757,7 @@ export type ListLeadsParams = {
 phase?: string;
 status?: string;
 divisionId?: number;
+includeDeleted?: boolean;
 };
 
 export type ListLeadSourcesParams = {

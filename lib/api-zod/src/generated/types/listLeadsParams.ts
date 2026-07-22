@@ -10,4 +10,5 @@ export type ListLeadsParams = {
 phase?: string;
 status?: string;
 divisionId?: number;
+includeDeleted?: boolean;
 };

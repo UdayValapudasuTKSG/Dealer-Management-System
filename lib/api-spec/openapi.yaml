@@ -328,6 +328,10 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: includeDeleted
+          in: query
+          required: false
+          schema: { type: boolean }
       responses:
         "200":
           description: List of vehicles
@@ -414,6 +418,29 @@ paths:
       responses:
         "204":
           description: Deleted
+  /vehicles/{id}/restore:
+    post:
+      operationId: restoreVehicle
+      tags: [vehicles]
+      summary: Restore a soft-deleted vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /vehicles/import:
     post:
       operationId: importVehicles
@@ -809,6 +836,10 @@ paths:
           in: query
           required: false
           schema: { type: integer }
+        - name: includeDeleted
+          in: query
+          required: false
+          schema: { type: boolean }
       responses:
         "200":
           description: List of leads
@@ -894,6 +925,30 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /leads/{id}/restore:
+    post:
+      operationId: restoreLead
+      tags: [leads]
+      summary: Restore a soft-deleted lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /enquiries:
     post:

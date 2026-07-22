@@ -20,3 +20,4 @@
 - [No-dealer request gating](no-dealer-request-gating.md) — sessions with no bound dealership only reach auth/platform; gate always-mounted dealer-scoped widgets/providers on activeDealer or they 403-loop.
 - [Storage ACL fail-closed](storage-acl-fail-closed.md) — never LIKE-match user-supplied storage keys in reference checks; use eq / jsonb `@>` containment or `%`/`_` widens the match.
 - [Deal delivery progression](deal-delivery-progression.md) — deals have NO manual stage control; finance disbursement commits, the 9-step delivery workflow delivers.
+- [Idempotency replay middleware](idempotency-replay-middleware.md) — atomic insert claim; only res.json+2xx marks completed, client aborts must release the claim or retries replay null.

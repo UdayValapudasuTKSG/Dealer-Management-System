@@ -271,6 +271,121 @@ async function main() {
         );
       }
     }
+    console.log("\n6. Pipeline reconciliation (NC-14, tenant status, entitlement, NC-7)");
+    {
+      // NC-14: no dealer header + no membership → GET returns a 200 picker
+      // payload; mutations get 400 dealer_required.
+      await clearGrants(SUPER);
+      const picker = await call("GET", "/vehicles", SUPER, null);
+      check(
+        "no active dealer GET → 200 dealer_selection_required",
+        picker.status === 200 && picker.json?.code === "dealer_selection_required",
+        `got ${picker.status} ${JSON.stringify(picker.json)}`,
+      );
+      const mut = await call("POST", "/vehicles", SUPER, null, { make: "X" });
+      check(
+        "no active dealer mutation → 400 dealer_required",
+        mut.status === 400 && mut.json?.error === "dealer_required",
+        `got ${mut.status} ${JSON.stringify(mut.json)}`,
+      );
+
+      // Tenant status: suspended dealer serves reads, blocks writes with 423.
+      await pool.query(`UPDATE dealers SET status = 'suspended' WHERE id = 2`);
+      try {
+        const read = await call("GET", "/vehicles", GM, 2);
+        check("suspended dealer read → 200", read.status === 200, `got ${read.status}`);
+        const write = await call("PATCH", `/vehicles/${ownVehicleId}`, GM, 2, {
+          price: 10001,
+        });
+        check(
+          "suspended dealer write → 423 tenant_suspended",
+          write.status === 423 && write.json?.error === "tenant_suspended",
+          `got ${write.status} ${JSON.stringify(write.json)}`,
+        );
+      } finally {
+        await pool.query(`UPDATE dealers SET status = 'active' WHERE id = 2`);
+      }
+
+      // Entitlement gate (INV-ENT-1): disabled module reads as 404.
+      await pool.query(
+        `UPDATE dealers SET entitlements = '{"finance_los": false}'::jsonb WHERE id = 2`,
+      );
+      try {
+        const r = await call("GET", "/invoices", GM, 2);
+        check("unentitled module → 404", r.status === 404, `got ${r.status}`);
+      } finally {
+        await pool.query(`UPDATE dealers SET entitlements = '{}'::jsonb WHERE id = 2`);
+      }
+      const entitled = await call("GET", "/invoices", GM, 2);
+      check("entitled module → 200", entitled.status === 200, `got ${entitled.status}`);
+
+      // NC-7 idempotency: replay returns the stored response; same key with a
+      // different body → 422 key_reuse_mismatch.
+      const dealRow = await pool
+        .query(`SELECT id FROM deals WHERE dealer_id = 2 LIMIT 1`)
+        .then((r) => r.rows[0]);
+      if (dealRow) {
+        const key = `p0-idem-${Date.now()}`;
+        const idemCall = (body: unknown) =>
+          fetch(`${BASE}/deals/${dealRow.id}`, {
+            method: "PATCH",
+            headers: {
+              "x-test-user-email": GM,
+              "x-dealer-id": "2",
+              "content-type": "application/json",
+              "x-idempotency-key": key,
+            },
+            body: JSON.stringify(body),
+          });
+        const first = await idemCall({ discount: 1 });
+        check("idempotent first call succeeds", first.ok, `got ${first.status}`);
+        const replay = await idemCall({ discount: 1 });
+        check(
+          "same key + body → replay (Idempotent-Replay header)",
+          replay.status === first.status &&
+            replay.headers.get("idempotent-replay") === "true",
+          `got ${replay.status} replay=${replay.headers.get("idempotent-replay")}`,
+        );
+        const mismatch = await idemCall({ discount: 2 });
+        const mmJson: any = await mismatch.json().catch(() => null);
+        check(
+          "same key + different body → 422 key_reuse_mismatch",
+          mismatch.status === 422 && mmJson?.error === "key_reuse_mismatch",
+          `got ${mismatch.status} ${JSON.stringify(mmJson)}`,
+        );
+        await pool.query(`DELETE FROM idempotency_keys WHERE key = $1`, [key]);
+      } else {
+        check("idempotency tests need a dealer-2 deal", false, "no deal found");
+      }
+    }
+
+    console.log("\n7. Rate limiting (429) — runs LAST (floods GM's bucket)");
+    {
+      // authedRateLimit is 600/min per user; flood cheap reads until a 429.
+      let got429 = false;
+      let reset: string | null = null;
+      outer: for (let batch = 0; batch < 14; batch++) {
+        const results = await Promise.all(
+          Array.from({ length: 50 }, () =>
+            fetch(`${BASE}/auth/me`, {
+              headers: { "x-test-user-email": GM, "x-dealer-id": "2" },
+            }),
+          ),
+        );
+        for (const r of results) {
+          if (r.status === 429) {
+            got429 = true;
+            reset = r.headers.get("ratelimit-reset");
+            break outer;
+          }
+        }
+      }
+      check(
+        "flood → 429 with RateLimit-Reset header",
+        got429 && reset != null,
+        `got429=${got429} reset=${reset}`,
+      );
+    }
   } finally {
     await db.delete(vehiclesTable).where(eq(vehiclesTable.id, foreignVehicleId));
     await clearGrants(SUPER);

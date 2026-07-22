@@ -99,6 +99,9 @@ export const leadsTable = pgTable("leads", {
   address: text("address"),
   // Stamped whenever the lead advances to a new pipeline stage (powers days-in-stage / SLA).
   stageEnteredAt: timestamp("stage_entered_at", { withTimezone: true }),
+  // Soft delete (R4.8): rows are never hard-removed from the data plane.
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  deletedBy: text("deleted_by"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
