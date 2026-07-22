@@ -406,5 +406,21 @@ export async function customFetch<T = unknown>(
     throw new ApiError(response, errorData, requestInfo);
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  const body = await parseSuccessBody(response, responseType, requestInfo);
+
+  // The API returns 200 `{code:"dealer_selection_required",dealers:[...]}` on
+  // GET when no active dealer is bound. That sentinel must never reach
+  // components expecting the endpoint's real shape (arrays etc) — surface it
+  // as an error so React Query error paths (and the dealer picker gate)
+  // handle it instead of crashing renders.
+  if (
+    body !== null &&
+    typeof body === "object" &&
+    !Array.isArray(body) &&
+    (body as { code?: unknown }).code === "dealer_selection_required"
+  ) {
+    throw new ApiError(response, body, requestInfo);
+  }
+
+  return body as T;
 }
