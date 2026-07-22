@@ -1,4 +1,4 @@
-import { and, eq, gt, isNotNull, notInArray } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, notInArray } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -106,6 +106,7 @@ async function upsertConversation(
     email: string | null;
     profileName: string | null;
     menu: string | null;
+    brand: string | null;
   }>,
 ): Promise<void> {
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
@@ -131,7 +132,8 @@ function resolveMenuReply(
   msg: InboundWhatsappMessage,
 ): string | null {
   if (msg.replyId) return msg.replyId;
-  const t = (msg.text ?? "").trim();
+  // Tolerate punctuation/decoration around the number ("6.", "(6)", " 6 ").
+  const t = (msg.text ?? "").trim().replace(/^[^\d]*(\d{1,2})[^\d]*$/, "$1");
   if (!/^\d{1,2}$/.test(t) || !convo.menu) return null;
   try {
     const ids = JSON.parse(convo.menu) as string[];
@@ -141,22 +143,51 @@ function resolveMenuReply(
   }
 }
 
-async function buildVehicleRows(dealerId: number): Promise<WhatsappListRow[]> {
-  const vehicles = await db
+async function availableVehicles(dealerId: number) {
+  return db
     .select()
     .from(vehiclesTable)
     .where(
       and(
         eq(vehiclesTable.dealerId, dealerId),
         eq(vehiclesTable.status, "available"),
+        isNull(vehiclesTable.deletedAt),
       ),
     );
-  // WhatsApp lists cap at 10 rows: up to 9 vehicles + an "Other" fallback.
-  // Collapse duplicates of the same model so the list covers more range.
+}
+
+/** Distinct makes with available stock — first menu level. */
+async function buildBrandRows(dealerId: number): Promise<WhatsappListRow[]> {
+  const vehicles = await availableVehicles(dealerId);
+  const byMake = new Map<string, number>();
+  for (const v of vehicles) {
+    if (!v.make) continue;
+    byMake.set(v.make, (byMake.get(v.make) ?? 0) + 1);
+  }
+  // WhatsApp lists cap at 10 rows: up to 9 brands + an "Other" fallback.
+  return [...byMake.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 9)
+    .map(([make, count]) => ({
+      id: `brand_${make}`,
+      title: make,
+      description: `${count} in stock`,
+    }));
+}
+
+/** Models of a chosen make — second menu level. */
+async function buildModelRows(
+  dealerId: number,
+  make: string,
+): Promise<WhatsappListRow[]> {
+  const vehicles = (await availableVehicles(dealerId)).filter(
+    (v) => (v.make ?? "").toLowerCase() === make.toLowerCase(),
+  );
+  // Collapse duplicates of the same model/trim so the list covers more range.
   const seen = new Set<string>();
   const rows: WhatsappListRow[] = [];
   for (const v of vehicles) {
-    const key = `${v.make} ${v.model} ${v.trim ?? v.variant ?? ""}`.trim();
+    const key = `${v.model} ${v.trim ?? v.variant ?? ""}`.trim();
     if (seen.has(key)) continue;
     seen.add(key);
     rows.push({
@@ -225,16 +256,16 @@ async function promptEmail(
   );
 }
 
-async function promptVehicle(
+async function promptBrand(
   t: WhatsappTransport,
   dealerId: number,
   phone: string,
   firstName: string,
 ): Promise<void> {
-  const rows = await buildVehicleRows(dealerId);
+  const rows = await buildBrandRows(dealerId);
   if (rows.length === 0) {
     // No inventory to list — fall back to free text.
-    await upsertConversation(phone, { menu: null });
+    await upsertConversation(phone, { step: "model", brand: null, menu: null });
     await t.sendText(
       phone,
       `Thanks ${firstName}! Which model are you interested in? Just type the make and model.`,
@@ -247,13 +278,15 @@ async function promptVehicle(
     description: "Tell us what you're looking for",
   });
   await upsertConversation(phone, {
+    step: "brand",
+    brand: null,
     menu: JSON.stringify(rows.map((r) => r.id)),
   });
   if (t.interactive) {
     await t.sendList(phone, {
-      body: `Thanks ${firstName}! Which model are you interested in? Tap below to browse our current showroom.`,
-      buttonLabel: "View models",
-      sectionTitle: "Available models",
+      body: `Thanks ${firstName}! Which brand are you interested in? Tap below to browse our current showroom.`,
+      buttonLabel: "View brands",
+      sectionTitle: "Brands in stock",
       rows,
     });
     return;
@@ -264,9 +297,56 @@ async function promptVehicle(
   );
   await t.sendText(
     phone,
-    `Thanks ${firstName}! Which model are you interested in? Reply with a number:\n\n${lines.join(
+    `Thanks ${firstName}! Which brand are you interested in? Reply with a number:\n\n${lines.join(
       "\n",
-    )}\n\nOr just type the make and model.`,
+    )}\n\nOr just type the make and model you're looking for.`,
+  );
+}
+
+async function promptModel(
+  t: WhatsappTransport,
+  dealerId: number,
+  phone: string,
+  firstName: string,
+  make: string,
+): Promise<void> {
+  const rows = await buildModelRows(dealerId, make);
+  if (rows.length === 0) {
+    await upsertConversation(phone, { step: "model", brand: make, menu: null });
+    await t.sendText(
+      phone,
+      `We don't have ${make} models in stock right now — just type the model you're looking for and we'll note it.`,
+    );
+    return;
+  }
+  rows.push({
+    id: OTHER_VEHICLE_ID,
+    title: "Other / not listed",
+    description: "Tell us what you're looking for",
+  });
+  await upsertConversation(phone, {
+    step: "model",
+    brand: make,
+    menu: JSON.stringify(rows.map((r) => r.id)),
+  });
+  if (t.interactive) {
+    await t.sendList(phone, {
+      body: `Great choice! Which ${make} model would you like? These are in our showroom right now.`,
+      buttonLabel: "View models",
+      sectionTitle: `${make} in stock`,
+      rows,
+    });
+    return;
+  }
+  const lines = rows.map(
+    (r, i) =>
+      `${i + 1}. ${r.title}${r.id !== OTHER_VEHICLE_ID && r.description ? ` — ${r.description}` : ""}`,
+  );
+  await t.sendText(
+    phone,
+    `Great choice! Which ${make} model would you like? Reply with a number:\n\n${lines.join(
+      "\n",
+    )}\n\nOr just type the model name.`,
   );
 }
 
@@ -579,22 +659,71 @@ export async function handleWhatsappMessage(
         await promptEmail(t, phone, firstName, true);
         return;
       }
-      await upsertConversation(phone, { step: "vehicle", email });
-      await promptVehicle(t, dealerId, phone, firstName);
+      await upsertConversation(phone, { email });
+      await promptBrand(t, dealerId, phone, firstName);
       return;
     }
 
-    // step === "vehicle"
-    const replyId = resolveMenuReply(convo, msg);
-    if (replyId && replyId.startsWith("veh_")) {
+    const firstName = (convo.name || "there").split(/\s+/)[0]!;
+
+    if (convo.step === "brand") {
+      const replyId = resolveMenuReply(convo, msg);
       if (replyId === OTHER_VEHICLE_ID) {
-        await upsertConversation(phone, { menu: null });
+        await upsertConversation(phone, { step: "model", brand: null, menu: null });
         await t.sendText(
           phone,
           "No problem — just type the make and model you're looking for.",
         );
         return;
       }
+      if (replyId && replyId.startsWith("brand_")) {
+        await promptModel(
+          t,
+          dealerId,
+          phone,
+          firstName,
+          replyId.slice("brand_".length),
+        );
+        return;
+      }
+      // Free text: try a direct inventory match (make/model typed outright).
+      const answer = (msg.text ?? msg.replyTitle ?? "").trim();
+      if (answer) {
+        const matched = await matchVehicleByText(answer, dealerId);
+        if (matched) {
+          await completeFlow(t, dealerId, convo, matched, answer);
+          return;
+        }
+        // Maybe they typed just a brand name.
+        const brands = await buildBrandRows(dealerId);
+        const hit = brands.find(
+          (b) => b.title.toLowerCase() === answer.toLowerCase(),
+        );
+        if (hit) {
+          await promptModel(t, dealerId, phone, firstName, hit.title);
+          return;
+        }
+        await completeFlow(t, dealerId, convo, null, answer);
+        return;
+      }
+      await t.sendText(
+        phone,
+        "Which brand are you interested in? Pick one from the list above, or type the make and model.",
+      );
+      return;
+    }
+
+    // step === "model"
+    const replyId = resolveMenuReply(convo, msg);
+    if (replyId === OTHER_VEHICLE_ID) {
+      await upsertConversation(phone, { menu: null });
+      await t.sendText(
+        phone,
+        "No problem — just type the make and model you're looking for.",
+      );
+      return;
+    }
+    if (replyId && replyId.startsWith("veh_")) {
       const vehicleId = Number(replyId.slice("veh_".length));
       const [v] = await db
         .select()
@@ -603,6 +732,8 @@ export async function handleWhatsappMessage(
           and(
             eq(vehiclesTable.id, vehicleId),
             eq(vehiclesTable.dealerId, dealerId),
+            eq(vehiclesTable.status, "available"),
+            isNull(vehiclesTable.deletedAt),
           ),
         );
       if (v) {
@@ -630,7 +761,12 @@ export async function handleWhatsappMessage(
       );
       return;
     }
-    const matched = await matchVehicleByText(answer, dealerId);
+    // Prefix the chosen brand (if any) so "Seal" matches "BYD Seal".
+    const matched =
+      (await matchVehicleByText(
+        convo.brand ? `${convo.brand} ${answer}` : answer,
+        dealerId,
+      )) ?? (await matchVehicleByText(answer, dealerId));
     await completeFlow(t, dealerId, convo, matched, answer);
   } catch (err) {
     logger.error({ err, phone }, "WhatsApp bot failed to handle message");

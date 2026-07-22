@@ -14,8 +14,10 @@ export const whatsappConversationsTable = pgTable(
     id: serial("id").primaryKey(),
     /** WhatsApp sender id (E.164 digits, no "+" — as Meta sends it). */
     phone: text("phone").notNull(),
-    /** Current step: "name" | "mobile" | "email" | "vehicle" */
+    /** Current step: "name" | "mobile" | "email" | "brand" | "model" */
     step: text("step").notNull().default("name"),
+    /** Selected vehicle make while on the "model" step. */
+    brand: text("brand"),
     name: text("name"),
     mobile: text("mobile"),
     email: text("email"),
