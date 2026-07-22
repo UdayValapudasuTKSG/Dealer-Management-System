@@ -42,6 +42,7 @@ export const gatesTable = pgTable("gates", {
 export const insertGateSchema = createInsertSchema(gatesTable, {
   type: z.enum([
     "below_floor_price",
+    "fee_waiver",
     "credit_decline",
     "capital_order",
     "gra_filing",

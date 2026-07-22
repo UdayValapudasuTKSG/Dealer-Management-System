@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, or, ilike, sql } from "drizzle-orm";
 import multer from "multer";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import {
@@ -29,6 +29,10 @@ import {
   UpdateCustomerBody,
   GetCustomerParams,
   UpdateCustomerParams,
+  ListCustomersQueryParams,
+  UpdateAccountRelationsParams,
+  UpdateAccountRelationsBody,
+  UpdateAccountRelationsResponse,
   ListCustomersResponse,
   GetCustomerResponse,
   UpdateCustomerResponse,
@@ -219,11 +223,39 @@ async function personaPayload(
 // ---------------------------------------------------------------------------
 // Customers CRUD
 // ---------------------------------------------------------------------------
-router.get("/customers", async (_req, res): Promise<void> => {
+router.get("/customers", async (req, res): Promise<void> => {
+  const query = ListCustomersQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const filters = [eq(customersTable.dealerId, dealerId)];
+  if (query.data.accountType) {
+    filters.push(eq(customersTable.accountType, query.data.accountType));
+  }
+  const q = query.data.q?.trim();
+  if (q) {
+    const like = `%${q}%`;
+    const digits = q.replace(/\D/g, "");
+    const matchers = [
+      ilike(customersTable.name, like),
+      ilike(customersTable.email, like),
+      ilike(customersTable.taxNumber, like),
+    ];
+    if (digits.length >= 4) {
+      matchers.push(
+        sql`regexp_replace(coalesce(${customersTable.phone}, ''), '\\D', '', 'g') LIKE ${`%${digits}%`}`,
+      );
+    } else {
+      matchers.push(ilike(customersTable.phone, like));
+    }
+    filters.push(or(...matchers)!);
+  }
   const rows = await db
     .select()
     .from(customersTable)
-    .where(eq(customersTable.dealerId, activeDealerId(res)))
+    .where(and(...filters))
     .orderBy(desc(customersTable.lifetimeValue));
   res.json(ListCustomersResponse.parse(rows));
 });
@@ -234,10 +266,45 @@ router.post("/customers", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const dealerId = activeDealerId(res);
+
+  // Business accounts need a TIN before they can transact (L4).
+  if (parsed.data.accountType === "business" && !parsed.data.taxNumber?.trim()) {
+    res.status(422).json({
+      error: "Business accounts require a TIN (tax number) before creation",
+    });
+    return;
+  }
+
+  // Dedupe: same email or same phone digits already on file → 409 with the
+  // existing account id so the client can link instead of duplicating.
+  const email = parsed.data.email?.trim();
+  const phoneDigits = (parsed.data.phone ?? "").replace(/\D/g, "");
+  const dupMatchers = [];
+  if (email) dupMatchers.push(ilike(customersTable.email, email));
+  if (phoneDigits.length >= 7) {
+    dupMatchers.push(
+      sql`regexp_replace(coalesce(${customersTable.phone}, ''), '\\D', '', 'g') = ${phoneDigits}`,
+    );
+  }
+  if (dupMatchers.length > 0) {
+    const [dup] = await db
+      .select({ id: customersTable.id, name: customersTable.name })
+      .from(customersTable)
+      .where(and(eq(customersTable.dealerId, dealerId), or(...dupMatchers)!))
+      .limit(1);
+    if (dup) {
+      res.status(409).json({
+        error: `An account with the same email or phone already exists (${dup.name})`,
+        existingId: dup.id,
+      });
+      return;
+    }
+  }
 
   const [customer] = await db
     .insert(customersTable)
-    .values({ ...parsed.data, dealerId: activeDealerId(res) })
+    .values({ ...parsed.data, dealerId })
     .returning();
 
   res.status(201).json(GetCustomerResponse.parse(customer));
@@ -470,16 +537,28 @@ router.post("/customers/:id/contacts", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Account not found" });
     return;
   }
+  // Only one primary contact per account: creating a second primary is a
+  // 422 — demote the existing one first (PATCH), which stays the explicit
+  // "make primary" flow.
   if (parsed.data.isPrimary) {
-    await db
-      .update(contactsTable)
-      .set({ isPrimary: false })
+    const [existingPrimary] = await db
+      .select({ id: contactsTable.id })
+      .from(contactsTable)
       .where(
         and(
           eq(contactsTable.accountId, params.data.id),
           eq(contactsTable.dealerId, dealerId),
+          eq(contactsTable.isPrimary, true),
         ),
       );
+    if (existingPrimary) {
+      res.status(422).json({
+        error:
+          "This account already has a primary contact — set the new contact as primary from the contact list instead",
+        unmet: ["primary_exists"],
+      });
+      return;
+    }
   }
   const [contact] = await db
     .insert(contactsTable)
@@ -604,6 +683,115 @@ router.get("/customers/:id/relations", async (req, res): Promise<void> => {
   }
   res.json(
     GetAccountRelationsResponse.parse(await relationsFor(account, dealerId)),
+  );
+});
+
+// Link (or unlink) an account under a parent — household grouping for
+// person accounts, subsidiary for business accounts. The relation type is
+// derived from the parent's accountType; the client-provided hint is only
+// validated for consistency.
+router.put("/customers/:id/relations", async (req, res): Promise<void> => {
+  const params = UpdateAccountRelationsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = UpdateAccountRelationsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const account = await accountOr404(params.data.id, dealerId);
+  if (!account) {
+    res.status(404).json({ error: "Account not found" });
+    return;
+  }
+
+  const parentId = parsed.data.parentAccountId;
+  if (parentId != null) {
+    if (parentId === params.data.id) {
+      res.status(422).json({ error: "An account cannot be its own parent" });
+      return;
+    }
+    const [parent] = await db
+      .select({
+        id: customersTable.id,
+        parentAccountId: customersTable.parentAccountId,
+        accountType: customersTable.accountType,
+      })
+      .from(customersTable)
+      .where(
+        and(
+          eq(customersTable.id, parentId),
+          eq(customersTable.dealerId, dealerId),
+        ),
+      );
+    if (!parent) {
+      // Cross-dealer / unknown parent: forbidden rather than not-found so the
+      // caller can't probe other dealers' account ids.
+      res.status(403).json({ error: "Parent account is not accessible" });
+      return;
+    }
+    // Walk the full ancestor chain so multi-hop cycles (A←B←C then A under C)
+    // are rejected, not just the direct two-node inversion.
+    let ancestorId: number | null = parent.parentAccountId;
+    let hops = 0;
+    while (ancestorId != null && hops < 50) {
+      if (ancestorId === params.data.id) {
+        res.status(422).json({
+          error:
+            "That account is already grouped under this one — unlink it first",
+        });
+        return;
+      }
+      const [ancestor] = await db
+        .select({ parentAccountId: customersTable.parentAccountId })
+        .from(customersTable)
+        .where(
+          and(
+            eq(customersTable.id, ancestorId),
+            eq(customersTable.dealerId, dealerId),
+          ),
+        );
+      ancestorId = ancestor?.parentAccountId ?? null;
+      hops += 1;
+    }
+    if (
+      parsed.data.relationType === "subsidiary" &&
+      parent.accountType !== "business"
+    ) {
+      res.status(422).json({
+        error: "A subsidiary link requires a business parent account",
+      });
+      return;
+    }
+    if (
+      parsed.data.relationType === "household" &&
+      parent.accountType !== "person"
+    ) {
+      res.status(422).json({
+        error: "A household link requires a person parent account",
+      });
+      return;
+    }
+  }
+
+  const [updated] = await db
+    .update(customersTable)
+    .set({ parentAccountId: parentId })
+    .where(
+      and(
+        eq(customersTable.id, params.data.id),
+        eq(customersTable.dealerId, dealerId),
+      ),
+    )
+    .returning();
+
+  res.json(
+    UpdateAccountRelationsResponse.parse(
+      await relationsFor(updated!, dealerId),
+    ),
   );
 });
 

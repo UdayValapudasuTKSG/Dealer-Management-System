@@ -529,6 +529,9 @@ export const ChecklistItemConfigKey = {
   test_drive_completed: 'test_drive_completed',
   deal_created: 'deal_created',
   deal_exists: 'deal_exists',
+  selected_model: 'selected_model',
+  reservation_fee: 'reservation_fee',
+  primary_contact: 'primary_contact',
   deposit_taken: 'deposit_taken',
   finance_approved: 'finance_approved',
 } as const;
@@ -746,6 +749,16 @@ export interface UploadUrlResponse {
 
 export interface Error {
   error: string;
+}
+
+export interface UnmetError {
+  error: string;
+  unmet: string[];
+}
+
+export interface DuplicateAccountError {
+  error: string;
+  existingId: number;
 }
 
 export type VehiclePowertrain = typeof VehiclePowertrain[keyof typeof VehiclePowertrain];
@@ -1036,7 +1049,11 @@ export interface Booking {
   customerId?: number | null;
   customerName: string;
   /** @nullable */
+  leadId?: number | null;
+  /** @nullable */
   dealId?: number | null;
+  /** @nullable */
+  waiverReason?: string | null;
   bookingAmount: number;
   amountPaid: number;
   paymentStatus: BookingPaymentStatus;
@@ -1072,6 +1089,11 @@ export interface BookingInput {
   paymentStatus?: BookingInputPaymentStatus;
   expiresAt: string;
   notes?: string;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  waiverReason?: string;
 }
 
 export type BookingUpdatePaymentStatus = typeof BookingUpdatePaymentStatus[keyof typeof BookingUpdatePaymentStatus];
@@ -2483,6 +2505,20 @@ export interface AccountSummary {
   email?: string | null;
   /** @nullable */
   phone?: string | null;
+}
+
+export type AccountRelationsInputRelationType = typeof AccountRelationsInputRelationType[keyof typeof AccountRelationsInputRelationType];
+
+
+export const AccountRelationsInputRelationType = {
+  household: 'household',
+  subsidiary: 'subsidiary',
+} as const;
+
+export interface AccountRelationsInput {
+  /** @nullable */
+  parentAccountId: number | null;
+  relationType?: AccountRelationsInputRelationType;
 }
 
 export interface AccountRelations {
@@ -5177,6 +5213,22 @@ includeDeleted?: boolean;
 export type ListLeadSourcesParams = {
 includeInactive?: boolean;
 };
+
+export type ListCustomersParams = {
+/**
+ * Search by name, email, phone digits or tax number (TIN)
+ */
+q?: string;
+accountType?: ListCustomersAccountType;
+};
+
+export type ListCustomersAccountType = typeof ListCustomersAccountType[keyof typeof ListCustomersAccountType];
+
+
+export const ListCustomersAccountType = {
+  person: 'person',
+  business: 'business',
+} as const;
 
 export type ListDealsParams = {
 stage?: string;

@@ -21,4 +21,9 @@ export interface BookingInput {
   paymentStatus?: BookingInputPaymentStatus;
   expiresAt: Date;
   notes?: string;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  waiverReason?: string;
 }

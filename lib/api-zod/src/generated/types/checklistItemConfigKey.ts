@@ -20,6 +20,9 @@ export const ChecklistItemConfigKey = {
   test_drive_completed: 'test_drive_completed',
   deal_created: 'deal_created',
   deal_exists: 'deal_exists',
+  selected_model: 'selected_model',
+  reservation_fee: 'reservation_fee',
+  primary_contact: 'primary_contact',
   deposit_taken: 'deposit_taken',
   finance_approved: 'finance_approved',
 } as const;

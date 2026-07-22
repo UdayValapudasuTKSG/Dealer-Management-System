@@ -39,6 +39,9 @@ export const CHECKLIST_ITEM_KEYS = [
   "quote_sent",
   "deal_created",
   "deal_exists",
+  "selected_model",
+  "reservation_fee",
+  "primary_contact",
   "deposit_taken",
   "finance_approved",
 ] as const;
@@ -107,6 +110,9 @@ export const DEFAULT_STAGE_CHECKLISTS: Record<ChecklistStage, StageChecklistItem
     ],
     sold: [
       { key: "deal_exists", label: "A deal must exist before marking sold", enabled: true },
+      { key: "selected_model", label: "Selected model locked on the lead", enabled: true },
+      { key: "reservation_fee", label: "Reservation fee paid (or manager-approved waiver)", enabled: true },
+      { key: "primary_contact", label: "Account linked with a primary contact", enabled: true },
       { key: "deposit_taken", label: "Deposit taken (deal deposit or reservation fee)", enabled: true },
       { key: "finance_approved", label: "Finance approved or cash purchase verified", enabled: true },
     ],

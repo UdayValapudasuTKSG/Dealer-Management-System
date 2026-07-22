@@ -1,5 +1,11 @@
 import { and, eq, ne, sql } from "drizzle-orm";
-import { db, vehiclesTable, callLogsTable, type Lead } from "@workspace/db";
+import {
+  db,
+  vehiclesTable,
+  callLogsTable,
+  contactsTable,
+  type Lead,
+} from "@workspace/db";
 
 // ---------------------------------------------------------------------------
 // Stage-advance review model — shared by the gated advance endpoint, the Run
@@ -56,6 +62,9 @@ export const CHECK_OWNER: Record<string, string> = {
   quote_sent: "Sales Advisor",
   deal_created: "Sales Manager",
   deal_exists: "Sales Manager",
+  selected_model: "Sales Advisor",
+  reservation_fee: "Sales Advisor",
+  primary_contact: "Sales Advisor",
   deposit_taken: "Finance",
   finance_approved: "Finance",
 };
@@ -119,6 +128,25 @@ export function buildStageChecks(
     quote_sent: () => Boolean(lead.quotationSent),
     deal_created: () => leadDeals.length > 0,
     deal_exists: () => Boolean(deal),
+    // Pre-Book (L4) gates: model locked, fee paid (or manager-approved
+    // waiver — the waiver flips reservationFeePaid too), account linked
+    // with a primary contact on file.
+    selected_model: () => Boolean(lead.selectedModel),
+    reservation_fee: () => Boolean(lead.reservationFeePaid),
+    primary_contact: async () => {
+      if (!lead.customerId) return false;
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(contactsTable)
+        .where(
+          and(
+            eq(contactsTable.accountId, lead.customerId),
+            eq(contactsTable.dealerId, dealerId),
+            eq(contactsTable.isPrimary, true),
+          ),
+        );
+      return (row?.n ?? 0) > 0;
+    },
     deposit_taken: () =>
       Boolean((deal && deal.depositPaid) || lead.reservationFeePaid),
     finance_approved: () =>

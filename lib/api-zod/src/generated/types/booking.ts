@@ -15,7 +15,11 @@ export interface Booking {
   customerId?: number | null;
   customerName: string;
   /** @nullable */
+  leadId?: number | null;
+  /** @nullable */
   dealId?: number | null;
+  /** @nullable */
+  waiverReason?: string | null;
   bookingAmount: number;
   amountPaid: number;
   paymentStatus: BookingPaymentStatus;

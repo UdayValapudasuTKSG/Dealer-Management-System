@@ -544,7 +544,9 @@ export const ListBookingsResponseItem = zod.object({
   "vehicleId": zod.number(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string(),
+  "leadId": zod.number().nullish(),
   "dealId": zod.number().nullish(),
+  "waiverReason": zod.string().nullish(),
   "bookingAmount": zod.number(),
   "amountPaid": zod.number(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
@@ -565,6 +567,9 @@ export const createBookingBodyBookingAmountMin = 0;
 
 export const createBookingBodyAmountPaidMin = 0;
 
+export const createBookingBodyWaiverReasonMin = 5;
+export const createBookingBodyWaiverReasonMax = 500;
+
 
 
 export const CreateBookingBody = zod.object({
@@ -577,7 +582,8 @@ export const CreateBookingBody = zod.object({
   "amountPaid": zod.number().min(createBookingBodyAmountPaidMin).optional(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid']).optional(),
   "expiresAt": zod.coerce.date(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "waiverReason": zod.string().min(createBookingBodyWaiverReasonMin).max(createBookingBodyWaiverReasonMax).optional()
 })
 
 export const CreateBookingResponse = zod.object({
@@ -585,7 +591,9 @@ export const CreateBookingResponse = zod.object({
   "vehicleId": zod.number(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string(),
+  "leadId": zod.number().nullish(),
   "dealId": zod.number().nullish(),
+  "waiverReason": zod.string().nullish(),
   "bookingAmount": zod.number(),
   "amountPaid": zod.number(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
@@ -606,7 +614,9 @@ export const GetBookingResponse = zod.object({
   "vehicleId": zod.number(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string(),
+  "leadId": zod.number().nullish(),
   "dealId": zod.number().nullish(),
+  "waiverReason": zod.string().nullish(),
   "bookingAmount": zod.number(),
   "amountPaid": zod.number(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
@@ -642,7 +652,9 @@ export const UpdateBookingResponse = zod.object({
   "vehicleId": zod.number(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string(),
+  "leadId": zod.number().nullish(),
   "dealId": zod.number().nullish(),
+  "waiverReason": zod.string().nullish(),
   "bookingAmount": zod.number(),
   "amountPaid": zod.number(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
@@ -666,7 +678,9 @@ export const SendBookingPaymentReminderResponse = zod.object({
   "vehicleId": zod.number(),
   "customerId": zod.number().nullish(),
   "customerName": zod.string(),
+  "leadId": zod.number().nullish(),
   "dealId": zod.number().nullish(),
+  "waiverReason": zod.string().nullish(),
   "bookingAmount": zod.number(),
   "amountPaid": zod.number(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
@@ -2418,6 +2432,14 @@ export const SuggestCallSentimentResponse = zod.object({
   "rationale": zod.string().nullish()
 })
 
+
+/**
+ * @summary List accounts (optionally text-searched for the buyer resolver)
+ */
+export const ListCustomersQueryParams = zod.object({
+  "q": zod.coerce.string().optional().describe('Search by name, email, phone digits or tax number (TIN)'),
+  "accountType": zod.enum(['person', 'business']).optional()
+})
 
 export const ListCustomersResponseItem = zod.object({
   "id": zod.number(),
@@ -5178,6 +5200,36 @@ export const GetAccountRelationsResponse = zod.object({
 
 
 /**
+ * @summary Link (or unlink) this account under a household / parent business
+ */
+export const UpdateAccountRelationsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAccountRelationsBody = zod.object({
+  "parentAccountId": zod.number().nullable(),
+  "relationType": zod.enum(['household', 'subsidiary']).optional()
+})
+
+export const UpdateAccountRelationsResponse = zod.object({
+  "parent": zod.union([zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "accountType": zod.enum(['person', 'business']),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish()
+}),zod.null()]).optional(),
+  "children": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "accountType": zod.enum(['person', 'business']),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish()
+}))
+})
+
+
+/**
  * @summary Get the persona profile (with computed lead score) for a customer
  */
 export const GetCustomerPersonaParams = zod.object({
@@ -6849,7 +6901,7 @@ export const ListStageChecklistsResponseItem = zod.object({
   "stage": zod.enum(['qualified', 'test_drive', 'proposal', 'negotiation', 'sold']),
   "version": zod.number(),
   "items": zod.array(zod.object({
-  "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'deposit_taken', 'finance_approved']),
+  "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'selected_model', 'reservation_fee', 'primary_contact', 'deposit_taken', 'finance_approved']),
   "label": zod.string().min(1).max(listStageChecklistsResponseItemsItemLabelMax),
   "enabled": zod.boolean()
 })),
@@ -6872,7 +6924,7 @@ export const setStageChecklistBodyItemsItemLabelMax = 200;
 
 export const SetStageChecklistBody = zod.object({
   "items": zod.array(zod.object({
-  "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'deposit_taken', 'finance_approved']),
+  "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'selected_model', 'reservation_fee', 'primary_contact', 'deposit_taken', 'finance_approved']),
   "label": zod.string().min(1).max(setStageChecklistBodyItemsItemLabelMax),
   "enabled": zod.boolean()
 }))
@@ -6886,7 +6938,7 @@ export const SetStageChecklistResponse = zod.object({
   "stage": zod.enum(['qualified', 'test_drive', 'proposal', 'negotiation', 'sold']),
   "version": zod.number(),
   "items": zod.array(zod.object({
-  "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'deposit_taken', 'finance_approved']),
+  "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'selected_model', 'reservation_fee', 'primary_contact', 'deposit_taken', 'finance_approved']),
   "label": zod.string().min(1).max(setStageChecklistResponseItemsItemLabelMax),
   "enabled": zod.boolean()
 })),

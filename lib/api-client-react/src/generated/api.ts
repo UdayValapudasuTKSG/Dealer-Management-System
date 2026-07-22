@@ -22,6 +22,7 @@ import type {
 import type {
   AbortProvisioningRequest,
   AccountRelations,
+  AccountRelationsInput,
   Activity,
   AdminUser,
   AdminUserAdd,
@@ -103,6 +104,7 @@ import type {
   Document,
   DocumentExtractionReviewBody,
   DocumentInput,
+  DuplicateAccountError,
   EmailLog,
   EmailSettings,
   EmailTemplateInfo,
@@ -168,6 +170,7 @@ import type {
   ListBookingsParams,
   ListCasesParams,
   ListCoveragePlansParams,
+  ListCustomersParams,
   ListDealsParams,
   ListDeliveriesParams,
   ListDocumentsParams,
@@ -251,6 +254,7 @@ import type {
   TestEmailRequest,
   TestEmailResult,
   TimelineEvent,
+  UnmetError,
   UnmetResponse,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -5531,17 +5535,27 @@ export const useSuggestCallSentiment = <TError = ErrorType<Error>,
       return useMutation(getSuggestCallSentimentMutationOptions(options));
     }
 
-export const getListCustomersUrl = () => {
+export const getListCustomersUrl = (params?: ListCustomersParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/customers`
+  return stringifiedParams.length > 0 ? `/api/customers?${stringifiedParams}` : `/api/customers`
 }
 
-export const listCustomers = async ( options?: RequestInit): Promise<Customer[]> => {
+/**
+ * @summary List accounts (optionally text-searched for the buyer resolver)
+ */
+export const listCustomers = async (params?: ListCustomersParams, options?: RequestInit): Promise<Customer[]> => {
 
-  return customFetch<Customer[]>(getListCustomersUrl(),
+  return customFetch<Customer[]>(getListCustomersUrl(params),
   {
     ...options,
     method: 'GET'
@@ -5554,23 +5568,23 @@ export const listCustomers = async ( options?: RequestInit): Promise<Customer[]>
 
 
 
-export const getListCustomersQueryKey = () => {
+export const getListCustomersQueryKey = (params?: ListCustomersParams,) => {
     return [
-    `/api/customers`
+    `/api/customers`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListCustomersQueryOptions = <TData = Awaited<ReturnType<typeof listCustomers>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListCustomersQueryOptions = <TData = Awaited<ReturnType<typeof listCustomers>>, TError = ErrorType<unknown>>(params?: ListCustomersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListCustomersQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListCustomersQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomers>>> = ({ signal }) => listCustomers({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCustomers>>> = ({ signal }) => listCustomers(params, { signal, ...requestOptions });
 
 
 
@@ -5583,13 +5597,16 @@ export type ListCustomersQueryResult = NonNullable<Awaited<ReturnType<typeof lis
 export type ListCustomersQueryError = ErrorType<unknown>
 
 
+/**
+ * @summary List accounts (optionally text-searched for the buyer resolver)
+ */
 
 export function useListCustomers<TData = Awaited<ReturnType<typeof listCustomers>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListCustomersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCustomers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListCustomersQueryOptions(options)
+  const queryOptions = getListCustomersQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -5625,7 +5642,7 @@ export const createCustomer = async (customerInput: CustomerInput, options?: Req
 
 
 
-export const getCreateCustomerMutationOptions = <TError = ErrorType<unknown>,
+export const getCreateCustomerMutationOptions = <TError = ErrorType<DuplicateAccountError | Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCustomer>>, TError,{data: BodyType<CustomerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createCustomer>>, TError,{data: BodyType<CustomerInput>}, TContext> => {
 
@@ -5654,9 +5671,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateCustomerMutationResult = NonNullable<Awaited<ReturnType<typeof createCustomer>>>
     export type CreateCustomerMutationBody = BodyType<CustomerInput>
-    export type CreateCustomerMutationError = ErrorType<unknown>
+    export type CreateCustomerMutationError = ErrorType<DuplicateAccountError | Error>
 
-    export const useCreateCustomer = <TError = ErrorType<unknown>,
+    export const useCreateCustomer = <TError = ErrorType<DuplicateAccountError | Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCustomer>>, TError,{data: BodyType<CustomerInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createCustomer>>,
@@ -11812,7 +11829,7 @@ export const createContact = async (id: number,
 
 
 
-export const getCreateContactMutationOptions = <TError = ErrorType<Error>,
+export const getCreateContactMutationOptions = <TError = ErrorType<Error | UnmetError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,{id: number;data: BodyType<ContactInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,{id: number;data: BodyType<ContactInput>}, TContext> => {
 
@@ -11841,12 +11858,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateContactMutationResult = NonNullable<Awaited<ReturnType<typeof createContact>>>
     export type CreateContactMutationBody = BodyType<ContactInput>
-    export type CreateContactMutationError = ErrorType<Error>
+    export type CreateContactMutationError = ErrorType<Error | UnmetError>
 
     /**
  * @summary Add a contact to an account
  */
-export const useCreateContact = <TError = ErrorType<Error>,
+export const useCreateContact = <TError = ErrorType<Error | UnmetError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createContact>>, TError,{id: number;data: BodyType<ContactInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createContact>>,
@@ -12157,6 +12174,78 @@ export function useGetAccountRelations<TData = Awaited<ReturnType<typeof getAcco
 
 
 
+
+export const getUpdateAccountRelationsUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/relations`
+}
+
+/**
+ * @summary Link (or unlink) this account under a household / parent business
+ */
+export const updateAccountRelations = async (id: number,
+    accountRelationsInput: AccountRelationsInput, options?: RequestInit): Promise<AccountRelations> => {
+
+  return customFetch<AccountRelations>(getUpdateAccountRelationsUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(accountRelationsInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateAccountRelationsMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountRelations>>, TError,{id: number;data: BodyType<AccountRelationsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAccountRelations>>, TError,{id: number;data: BodyType<AccountRelationsInput>}, TContext> => {
+
+const mutationKey = ['updateAccountRelations'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAccountRelations>>, {id: number;data: BodyType<AccountRelationsInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAccountRelations(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAccountRelationsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAccountRelations>>>
+    export type UpdateAccountRelationsMutationBody = BodyType<AccountRelationsInput>
+    export type UpdateAccountRelationsMutationError = ErrorType<Error>
+
+    /**
+ * @summary Link (or unlink) this account under a household / parent business
+ */
+export const useUpdateAccountRelations = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAccountRelations>>, TError,{id: number;data: BodyType<AccountRelationsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAccountRelations>>,
+        TError,
+        {id: number;data: BodyType<AccountRelationsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateAccountRelationsMutationOptions(options));
+    }
 
 export const getGetCustomerPersonaUrl = (id: number,) => {
 

@@ -1130,10 +1130,21 @@ function ReserveDialog({
     .toISOString()
     .slice(0, 10);
   const [expiresAt, setExpiresAt] = useState(defaultExpiry);
+  const [waiverReason, setWaiverReason] = useState("");
+  const feeWaived = (Number(bookingAmount) || 0) <= 0;
 
   const submit = () => {
     if (!customerName.trim()) {
       toast({ title: "Customer name is required", variant: "destructive" });
+      return;
+    }
+    if (feeWaived && waiverReason.trim().length < 5) {
+      toast({
+        title: "Waiver reason required",
+        description:
+          "The reservation fee is mandatory. To reserve without a fee, record why this trusted customer is exempt (manager approval will be requested).",
+        variant: "destructive",
+      });
       return;
     }
     createBooking.mutate(
@@ -1145,6 +1156,7 @@ function ReserveDialog({
           amountPaid: Number(amountPaid) || 0,
           expiresAt: new Date(`${expiresAt}T23:59:59`).toISOString(),
           ...(leadId ? { leadId: Number(leadId) } : {}),
+          ...(feeWaived ? { waiverReason: waiverReason.trim() } : {}),
         },
       },
       {
@@ -1248,6 +1260,23 @@ function ReserveDialog({
               />
             </div>
           </div>
+          {feeWaived && (
+            <div>
+              <label className="text-xs uppercase tracking-widest text-amber-500">
+                Fee waiver reason (manager approval)
+              </label>
+              <Input
+                className="mt-1.5"
+                placeholder="e.g. Fleet customer — 12 units purchased this year"
+                value={waiverReason}
+                onChange={(e) => setWaiverReason(e.target.value)}
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                The reservation fee is mandatory. A zero-fee reservation is a
+                trusted-customer bypass and raises a manager approval gate.
+              </p>
+            </div>
+          )}
           <div>
             <label className="text-xs uppercase tracking-widest text-muted-foreground">
               Hold until

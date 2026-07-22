@@ -525,7 +525,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Booking"
         "409":
-          description: Vehicle is not available for booking
+          description: Vehicle is not available for booking, or the lead already has an active booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Reservation fee is mandatory unless a trusted-bypass waiver reason is recorded
           content:
             application/json:
               schema:
@@ -1858,6 +1864,17 @@ paths:
     get:
       operationId: listCustomers
       tags: [customers]
+      summary: List accounts (optionally text-searched for the buyer resolver)
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Search by name, email, phone digits or tax number (TIN)
+          schema: { type: string }
+        - name: accountType
+          in: query
+          required: false
+          schema: { type: string, enum: [person, business] }
       responses:
         "200":
           description: List of customers
@@ -1883,6 +1900,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Customer"
+        "409":
+          description: An account with the same email, phone or TIN already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DuplicateAccountError"
+        "422":
+          description: Business accounts require a tax number (TIN)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /customers/{id}:
     get:
       operationId: getCustomer
@@ -3775,6 +3804,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: The account already has a primary contact (primary_exists)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnmetError" }
 
   /customers/{id}/contacts/{contactId}:
     patch:
@@ -3870,6 +3904,41 @@ paths:
               schema: { $ref: "#/components/schemas/AccountRelations" }
         "404":
           description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    put:
+      operationId: updateAccountRelations
+      tags: [customers]
+      summary: Link (or unlink) this account under a household / parent business
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccountRelationsInput" }
+      responses:
+        "200":
+          description: Updated relations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountRelations" }
+        "403":
+          description: Cross-tenant parent link rejected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid grouping (self-parent or cycle)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -6323,7 +6392,7 @@ components:
       properties:
         key:
           type: string
-          enum: [contact_details, vehicle_selected, budget_discussed, test_drive_booked, licence_on_file, waiver_signed, vehicle_available, test_drive_completed, deal_created, deal_exists, deposit_taken, finance_approved]
+          enum: [contact_details, vehicle_selected, budget_discussed, test_drive_booked, licence_on_file, waiver_signed, vehicle_available, test_drive_completed, deal_created, deal_exists, selected_model, reservation_fee, primary_contact, deposit_taken, finance_approved]
         label: { type: string, minLength: 1, maxLength: 200 }
         enabled: { type: boolean }
     StageChecklistConfig:
@@ -6532,6 +6601,20 @@ components:
           type: string
       required:
         - error
+    UnmetError:
+      type: object
+      required: [error, unmet]
+      properties:
+        error: { type: string }
+        unmet:
+          type: array
+          items: { type: string }
+    DuplicateAccountError:
+      type: object
+      required: [error, existingId]
+      properties:
+        error: { type: string }
+        existingId: { type: integer }
 
     Vehicle:
       type: object
@@ -6689,7 +6772,9 @@ components:
         vehicleId: { type: integer }
         customerId: { type: ["integer", "null"] }
         customerName: { type: string }
+        leadId: { type: ["integer", "null"] }
         dealId: { type: ["integer", "null"] }
+        waiverReason: { type: ["string", "null"] }
         bookingAmount: { type: number }
         amountPaid: { type: number }
         paymentStatus: { type: string, enum: [pending, partial, paid, refunded] }
@@ -6712,6 +6797,7 @@ components:
         paymentStatus: { type: string, enum: [pending, partial, paid] }
         expiresAt: { type: string, format: date-time }
         notes: { type: string }
+        waiverReason: { type: string, minLength: 5, maxLength: 500 }
     BookingUpdate:
       type: object
       properties:
@@ -7535,6 +7621,12 @@ components:
         accountType: { type: string, enum: [person, business] }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
+    AccountRelationsInput:
+      type: object
+      required: [parentAccountId]
+      properties:
+        parentAccountId: { type: ["integer", "null"] }
+        relationType: { type: string, enum: [household, subsidiary] }
     AccountRelations:
       type: object
       required: [children]

@@ -31,7 +31,11 @@ export const bookingsTable = pgTable("bookings", {
   vehicleId: integer("vehicle_id").notNull(),
   customerId: integer("customer_id"),
   customerName: text("customer_name").notNull(),
+  leadId: integer("lead_id"),
   dealId: integer("deal_id"),
+  // Trusted-customer fee bypass: set (with a manager-approval gate) when the
+  // reservation is taken with bookingAmount=0 for a fleet/repeat VIP buyer.
+  waiverReason: text("waiver_reason"),
   bookingAmount: doublePrecision("booking_amount").notNull(),
   amountPaid: doublePrecision("amount_paid").notNull().default(0),
   paymentStatus: text("payment_status").notNull().default("pending"),
