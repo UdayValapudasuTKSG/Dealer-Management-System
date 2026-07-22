@@ -22,3 +22,4 @@
 - [Deal delivery progression](deal-delivery-progression.md) — deals have NO manual stage control; finance disbursement commits, the 9-step delivery workflow delivers.
 - [Idempotency replay middleware](idempotency-replay-middleware.md) — atomic insert claim; only res.json+2xx marks completed, client aborts must release the claim or retries replay null.
 - [GRA duty engine conventions](gra-duty-engine.md) — engine never guesses: missing inputs return missingInputs[], unpublished bands become blocking reviewFlags; server recomputes at submit and gate approval.
+- [Agent-run idempotency ledger](agent-run-idempotency-ledger.md) — dedupe via agent_runs needs a stable refType/refId across ALL outcome paths; downstream entities go in affectedEntities.
