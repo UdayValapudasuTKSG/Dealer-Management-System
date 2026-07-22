@@ -586,7 +586,7 @@ export default function LeadDetail() {
   const { toast } = useToast();
   const money = useMoney();
 
-  const { data: lead, isLoading, isError } = useGetLead(id);
+  const { data: lead, isLoading, isError, error, refetch } = useGetLead(id);
   const { data: vehicle } = useGetVehicle(lead?.interestedVehicleId ?? 0, {
     query: {
       queryKey: ["lead-detail-vehicle", lead?.interestedVehicleId],
@@ -618,7 +618,7 @@ export default function LeadDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [, navigate] = useLocation();
 
-  const { can } = useAuthz();
+  const { can, isLoading: authLoading } = useAuthz();
   const canEdit = can("leads", "edit");
   const canDeskDeal = can("deals", "create");
   const canDelete = can("leads", "delete");
@@ -737,7 +737,10 @@ export default function LeadDetail() {
     },
   });
 
-  if (isLoading) {
+  // While auth / dealer context is still resolving, transient request
+  // failures (dealer_selection_required, missing x-dealer-id) are expected —
+  // keep showing the loader instead of a premature "Lead not found".
+  if (isLoading || (authLoading && (isError || !lead))) {
     return (
       <Page>
         <div className="flex items-center justify-center py-32">
@@ -748,13 +751,32 @@ export default function LeadDetail() {
   }
 
   if (isError || !lead) {
+    const status = (error as { status?: number } | null)?.status;
+    const trueNotFound = status === 404;
     return (
       <Page>
         <div className="text-center py-32 space-y-4">
-          <div className="text-lg font-semibold">Lead not found</div>
-          <Link href="/pipeline" className="text-primary hover:underline text-sm">
-            Back to Pipeline
-          </Link>
+          <div className="text-lg font-semibold">
+            {trueNotFound ? "Lead not found" : "Couldn't load this lead"}
+          </div>
+          {!trueNotFound && (
+            <div className="text-sm text-muted-foreground">
+              The request failed while loading. Try again.
+            </div>
+          )}
+          <div className="flex items-center justify-center gap-4">
+            {!trueNotFound && (
+              <button
+                onClick={() => void refetch()}
+                className="text-primary hover:underline text-sm"
+              >
+                Retry
+              </button>
+            )}
+            <Link href="/pipeline" className="text-primary hover:underline text-sm">
+              Back to Pipeline
+            </Link>
+          </div>
         </div>
       </Page>
     );

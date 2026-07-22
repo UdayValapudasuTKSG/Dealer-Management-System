@@ -51,7 +51,13 @@ const router: IRouter = Router();
 // (Meta Lead Ads + Twilio WhatsApp — signature-verified, not session-authed).
 // Tight per-IP rate limit — these are internet-exposed.
 router.use(healthRouter);
-router.use(publicRateLimit);
+// Scope the tight per-IP limit to the public prefixes ONLY. Mounting it with
+// a bare router.use() would run it for EVERY request — and behind the shared
+// reverse proxy all browser traffic presents the same IP, so the whole app
+// would collapse into one 60/min bucket and 429 during normal browsing.
+router.use("/enquiries", publicRateLimit);
+router.use("/webhooks", publicRateLimit);
+router.use("/test-drive", publicRateLimit);
 router.use(enquiriesRouter);
 router.use(webhooksRouter);
 // Public: customer self-service test-drive booking (token-authenticated link).

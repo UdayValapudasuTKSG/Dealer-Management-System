@@ -48,11 +48,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // X-Dealer-Id request header stays valid (e.g. after a membership change).
   useEffect(() => {
     if (me?.activeDealerId != null) {
+      const previous = localStorage.getItem(DEALER_STORAGE_KEY);
       localStorage.setItem(DEALER_STORAGE_KEY, String(me.activeDealerId));
+      // Queries that fired BEFORE the dealer context resolved failed with
+      // dealer_selection_required and would otherwise stay stuck in their
+      // error state (pages render "not found" until a manual refresh).
+      // Once the active dealer lands, re-run every errored query so the
+      // app self-heals from the startup race.
+      if (previous !== String(me.activeDealerId)) {
+        void queryClient.refetchQueries({
+          predicate: (q) => q.state.status === "error",
+        });
+      } else {
+        void queryClient.refetchQueries({
+          predicate: (q) =>
+            q.state.status === "error" &&
+            (q.state.error as { data?: { code?: string } } | null)?.data
+              ?.code === "dealer_selection_required",
+        });
+      }
     } else if (me && me.activeDealerId == null) {
       localStorage.removeItem(DEALER_STORAGE_KEY);
     }
-  }, [me]);
+  }, [me, queryClient]);
 
   // Self-heal a stale x-dealer-id: if the stored dealer no longer resolves
   // (membership removed → 404, or a super admin's impersonation grant
