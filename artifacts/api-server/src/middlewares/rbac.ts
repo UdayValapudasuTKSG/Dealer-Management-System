@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import {
   db,
   usersTable,
+  dealerInvitesTable,
   rolesTable,
   rolePermissionsTable,
   auditLogsTable,
@@ -154,6 +155,74 @@ async function provisionUser(clerkId: string): Promise<User> {
     .from(usersTable)
     .where(eq(usersTable.clerkId, clerkId));
   return raced!;
+}
+
+/**
+ * Clerk JIT invite binding (P2): a pending dealer_invites row whose email
+ * matches the signed-in user becomes a real membership on first contact.
+ * The founding GM never needs manual roster entry — they just sign in.
+ */
+async function claimPendingInvites(user: User): Promise<void> {
+  if (!user.email) return;
+  const invites = await db
+    .select()
+    .from(dealerInvitesTable)
+    .where(
+      and(
+        sql`lower(${dealerInvitesTable.email}) = ${user.email.toLowerCase()}`,
+        eq(dealerInvitesTable.status, "pending"),
+      ),
+    );
+  if (invites.length === 0) return;
+  for (const invite of invites) {
+    const roleId = await roleIdByName(invite.roleName);
+    if (roleId == null) {
+      logger.warn(
+        { inviteId: invite.id, roleName: invite.roleName },
+        "Pending dealer invite references an unknown role; skipping",
+      );
+      continue;
+    }
+    if (invite.isGeneralManager) {
+      await db
+        .update(dealerUsersTable)
+        .set({ isGeneralManager: false })
+        .where(eq(dealerUsersTable.dealerId, invite.dealerId));
+    }
+    await db
+      .insert(dealerUsersTable)
+      .values({
+        dealerId: invite.dealerId,
+        userId: user.id,
+        roleId,
+        isGeneralManager: invite.isGeneralManager,
+      })
+      .onConflictDoUpdate({
+        target: [dealerUsersTable.dealerId, dealerUsersTable.userId],
+        set: { roleId, isGeneralManager: invite.isGeneralManager },
+      });
+    await db
+      .update(dealerInvitesTable)
+      .set({ status: "accepted", acceptedAt: new Date() })
+      .where(eq(dealerInvitesTable.id, invite.id));
+    await db.insert(auditLogsTable).values({
+      dealerId: invite.dealerId,
+      actorUserId: user.id,
+      actorClerkId: user.clerkId,
+      actorName: user.name,
+      actorEmail: user.email,
+      action: "create",
+      module: "settings",
+      entityType: "dealer_user",
+      entityId: String(user.id),
+      summary: `${user.name ?? user.email} accepted the owner-admin invite and joined as ${invite.roleName} (Clerk JIT)`,
+      details: { inviteId: invite.id, roleName: invite.roleName },
+    });
+    logger.info(
+      { userId: user.id, dealerId: invite.dealerId },
+      "Dealer invite claimed via JIT binding",
+    );
+  }
 }
 
 // Test-only bypass for the self-contained validation harness
@@ -420,6 +489,7 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
           return;
         }
         const isSuperAdmin = isSuperAdminEmail(user.email);
+        if (!isSuperAdmin) await claimPendingInvites(user);
         const dealers = isSuperAdmin
           ? await listAllDealers()
           : await loadMemberships(user.id);
@@ -499,6 +569,7 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     }
 
     const isSuperAdmin = isSuperAdminEmail(user.email);
+    if (!isSuperAdmin) await claimPendingInvites(user);
     const dealers = isSuperAdmin
       ? await listAllDealers()
       : await loadMemberships(user.id);

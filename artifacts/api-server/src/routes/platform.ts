@@ -38,7 +38,29 @@ import {
   StartImpersonationBody,
   StartImpersonationResponse,
 } from "@workspace/api-zod";
-import { createDealerProvisioned, pauseDealerAgents } from "../lib/provisioning";
+import { ensureDefaultRoles, pauseDealerAgents } from "../lib/provisioning";
+import {
+  createSagaLedger,
+  getSagaSteps,
+  runProvisioningSaga,
+  sagaInFlight,
+  abortProvisioningSaga,
+  goLiveUnmet,
+  devFailStep,
+} from "../lib/provisioning-saga";
+import {
+  dealerInvitesTable,
+  provisioningStepsTable,
+  EXTERNAL_PROVISIONING_STEPS,
+  type ProvisioningStepKey,
+} from "@workspace/db";
+import {
+  GetDealerProvisioningParams,
+  RetryDealerProvisioningParams,
+  AbortDealerProvisioningParams,
+  AbortDealerProvisioningBody,
+  ActivateDealerParams,
+} from "@workspace/api-zod";
 import { invalidateGrantCache } from "../middlewares/rbac";
 import { logger } from "../lib/logger";
 
@@ -130,30 +152,236 @@ router.post("/platform/dealers", async (req, res): Promise<void> => {
     res.status(409).json({ error: "A dealer with this name already exists" });
     return;
   }
-  const created = await createDealerProvisioned({
-    name,
-    city: body.data.city ?? null,
-    country: body.data.country ?? null,
-    status: body.data.status ?? "active",
-    ...(body.data.usdExchangeRate !== undefined
-      ? { usdExchangeRate: body.data.usdExchangeRate }
-      : {}),
-    ...(body.data.entitlements !== undefined
-      ? { entitlements: body.data.entitlements }
-      : {}),
-    createdBy: res.locals.user?.clerkId ?? null,
+  // NC-3: create ALWAYS returns status=provisioning — the shell row is
+  // written first, then the durable SAGA seeds defaults step by step.
+  const [created] = await db
+    .insert(dealersTable)
+    .values({
+      name,
+      city: body.data.city ?? null,
+      country: body.data.country ?? null,
+      status: "provisioning",
+      ...(body.data.usdExchangeRate !== undefined
+        ? { usdExchangeRate: body.data.usdExchangeRate }
+        : {}),
+      ...(body.data.entitlements !== undefined
+        ? { entitlements: body.data.entitlements }
+        : {}),
+      createdBy: res.locals.user?.clerkId ?? null,
+    })
+    .returning();
+  const dealerId = created!.id;
+  await createSagaLedger(dealerId);
+  if (body.data.ownerEmail) {
+    // Recorded up-front so the invite step (and Clerk JIT binding) can see it.
+    await db
+      .insert(dealerInvitesTable)
+      .values({
+        dealerId,
+        email: body.data.ownerEmail.toLowerCase(),
+        invitedBy: res.locals.user?.email ?? "platform",
+      })
+      .onConflictDoNothing();
+  }
+  const failStep = devFailStep(req.header("x-provisioning-fail-step"));
+  const run = await runProvisioningSaga(dealerId, {
+    actor: res.locals.user?.email ?? "platform",
+    failStep,
   });
   await platformAudit(res, {
     action: "provision",
     entityType: "dealer",
-    entityId: created.id,
-    summary: `${res.locals.user?.name ?? "Super admin"} onboarded dealership "${created.name}" (divisions, roles, stage checklists, agents provisioned)`,
-    details: { dealerId: created.id },
+    entityId: dealerId,
+    summary: `${res.locals.user?.name ?? "Super admin"} created dealership shell "${created!.name}" (provisioning saga ${run.ok ? "completed all steps" : `halted at ${run.failedStep}`})`,
+    details: { dealerId, sagaOk: run.ok, failedStep: run.failedStep ?? null },
   });
-  res
-    .status(201)
-    .json(CreateDealerResponse.parse({ ...created, userCount: 0 }));
+  res.status(201).json(
+    CreateDealerResponse.parse({
+      dealer: { ...created!, userCount: 0 },
+      saga: await provisioningStatus(dealerId),
+    }),
+  );
 });
+
+/** Assemble the ProvisioningStatus payload (markers + go-live unmet list). */
+async function provisioningStatus(dealerId: number) {
+  const [dealer] = await db
+    .select({ status: dealersTable.status })
+    .from(dealersTable)
+    .where(eq(dealersTable.id, dealerId));
+  const steps = await getSagaSteps(dealerId);
+  const firstNonDone = steps.find((s) => s.status !== "done");
+  return {
+    dealerId,
+    status: dealer?.status ?? "provisioning",
+    steps: steps.map((s) => ({
+      stepKey: s.stepKey,
+      status: s.status,
+      attempts: s.attempts,
+      startedAt: s.startedAt,
+      doneAt: s.doneAt,
+      lastError: s.lastError,
+      compensationRunAt: s.compensationRunAt,
+      external: EXTERNAL_PROVISIONING_STEPS.includes(
+        s.stepKey as ProvisioningStepKey,
+      ),
+    })),
+    resumableFrom: firstNonDone?.stepKey ?? null,
+    unmet: await goLiveUnmet(dealerId),
+  };
+}
+
+router.get(
+  "/platform/dealers/:id/provisioning",
+  async (req, res): Promise<void> => {
+    const params = GetDealerProvisioningParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [dealer] = await db
+      .select({ id: dealersTable.id })
+      .from(dealersTable)
+      .where(eq(dealersTable.id, params.data.id));
+    if (!dealer) {
+      res.status(404).json({ error: "Dealer not found" });
+      return;
+    }
+    res.json(await provisioningStatus(params.data.id));
+  },
+);
+
+router.post(
+  "/platform/dealers/:id/provisioning/retry",
+  async (req, res): Promise<void> => {
+    const params = RetryDealerProvisioningParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [dealer] = await db
+      .select({ status: dealersTable.status, name: dealersTable.name })
+      .from(dealersTable)
+      .where(eq(dealersTable.id, params.data.id));
+    if (!dealer) {
+      res.status(404).json({ error: "Dealer not found" });
+      return;
+    }
+    if (dealer.status !== "provisioning") {
+      res
+        .status(422)
+        .json({ error: `Dealer is ${dealer.status}, not provisioning` });
+      return;
+    }
+    if (await sagaInFlight(params.data.id)) {
+      res.status(409).json({ error: "Saga already in flight" });
+      return;
+    }
+    const failStep = devFailStep(req.header("x-provisioning-fail-step"));
+    const run = await runProvisioningSaga(params.data.id, {
+      actor: res.locals.user?.email ?? "platform",
+      failStep,
+    });
+    await platformAudit(res, {
+      action: "provision",
+      entityType: "dealer",
+      entityId: params.data.id,
+      summary: `${res.locals.user?.name ?? "Super admin"} re-drove provisioning for "${dealer.name}" (${run.ok ? "all steps done" : `halted at ${run.failedStep}`})`,
+      details: { dealerId: params.data.id, sagaOk: run.ok },
+    });
+    res.status(202).json(await provisioningStatus(params.data.id));
+  },
+);
+
+router.post(
+  "/platform/dealers/:id/provisioning/abort",
+  async (req, res): Promise<void> => {
+    const params = AbortDealerProvisioningParams.safeParse(req.params);
+    const body = AbortDealerProvisioningBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const [dealer] = await db
+      .select({ status: dealersTable.status, name: dealersTable.name })
+      .from(dealersTable)
+      .where(eq(dealersTable.id, params.data.id));
+    if (!dealer) {
+      res.status(404).json({ error: "Dealer not found" });
+      return;
+    }
+    if (dealer.status !== "provisioning") {
+      res
+        .status(422)
+        .json({ error: `Dealer is ${dealer.status}, not provisioning` });
+      return;
+    }
+    await abortProvisioningSaga(params.data.id, body.data.reason);
+    await platformAudit(res, {
+      action: "provision",
+      entityType: "dealer",
+      entityId: params.data.id,
+      summary: `${res.locals.user?.name ?? "Super admin"} aborted provisioning for "${dealer.name}" — reverse compensation run, dealer closed`,
+      details: { dealerId: params.data.id, reason: body.data.reason },
+    });
+    res.status(202).json(await provisioningStatus(params.data.id));
+  },
+);
+
+router.post(
+  "/platform/dealers/:id/activate",
+  async (req, res): Promise<void> => {
+    const params = ActivateDealerParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [dealer] = await db
+      .select()
+      .from(dealersTable)
+      .where(eq(dealersTable.id, params.data.id));
+    if (!dealer) {
+      res.status(404).json({ error: "Dealer not found" });
+      return;
+    }
+    if (dealer.status !== "provisioning") {
+      res
+        .status(422)
+        .json({ unmet: [`status:${dealer.status}`] });
+      return;
+    }
+    // INV-SAGA-2: never active unless every marker is done AND the go-live
+    // checklist passes. Deterministic evaluator; 422 {unmet:[]} otherwise.
+    const unmet = await goLiveUnmet(params.data.id);
+    if (unmet.length > 0) {
+      res.status(422).json({ unmet });
+      return;
+    }
+    const [updated] = await db
+      .update(dealersTable)
+      .set({ status: "active" })
+      .where(
+        and(
+          eq(dealersTable.id, params.data.id),
+          eq(dealersTable.status, "provisioning"),
+        ),
+      )
+      .returning();
+    if (!updated) {
+      res.status(422).json({ unmet: ["status:changed_concurrently"] });
+      return;
+    }
+    await platformAudit(res, {
+      action: "activate",
+      entityType: "dealer",
+      entityId: updated.id,
+      summary: `${res.locals.user?.name ?? "Super admin"} activated dealership "${updated.name}" — go-live checklist passed`,
+      details: { dealerId: updated.id },
+    });
+    const full = await dealerWithCount(updated.id);
+    res.json(UpdateDealerResponse.parse(full));
+  },
+);
 
 router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
   const params = UpdateDealerParams.safeParse(req.params);

@@ -144,6 +144,76 @@ export interface DealerInput {
      */
   usdExchangeRate?: number;
   entitlements?: Entitlements;
+  /**
+     * First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)
+     * @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$
+     */
+  ownerEmail?: string;
+}
+
+export type ProvisioningStepStatus = typeof ProvisioningStepStatus[keyof typeof ProvisioningStepStatus];
+
+
+export const ProvisioningStepStatus = {
+  pending: 'pending',
+  in_progress: 'in_progress',
+  done: 'done',
+  failed: 'failed',
+  compensated: 'compensated',
+} as const;
+
+export interface ProvisioningStep {
+  stepKey: string;
+  status: ProvisioningStepStatus;
+  attempts: number;
+  /** @nullable */
+  startedAt?: string | null;
+  /** @nullable */
+  doneAt?: string | null;
+  /** @nullable */
+  lastError?: string | null;
+  /** @nullable */
+  compensationRunAt?: string | null;
+  /** Side effect leaves the DB (GCS/SMTP/LOS) — never wrapped in a transaction */
+  external?: boolean;
+}
+
+export type ProvisioningStatusStatus = typeof ProvisioningStatusStatus[keyof typeof ProvisioningStatusStatus];
+
+
+export const ProvisioningStatusStatus = {
+  provisioning: 'provisioning',
+  active: 'active',
+  suspended: 'suspended',
+  offboarding: 'offboarding',
+  closed: 'closed',
+} as const;
+
+export interface ProvisioningStatus {
+  dealerId: number;
+  status: ProvisioningStatusStatus;
+  steps: ProvisioningStep[];
+  /**
+     * First non-done step key
+     * @nullable
+     */
+  resumableFrom?: string | null;
+  /** Go-live checklist items still outstanding */
+  unmet?: string[];
+}
+
+export interface CreatedDealerWithSaga {
+  dealer: Dealer;
+  saga: ProvisioningStatus;
+}
+
+export interface AbortProvisioningRequest {
+  /** @minLength 5 */
+  reason: string;
+}
+
+export interface UnmetResponse {
+  unmet: string[];
 }
 
 /**

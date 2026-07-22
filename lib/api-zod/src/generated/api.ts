@@ -5573,6 +5573,7 @@ export const ListDealersResponse = zod.array(ListDealersResponseItem)
 
 export const createDealerBodyUsdExchangeRateExclusiveMin = 0;
 
+export const createDealerBodyOwnerEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
 
 
 export const CreateDealerBody = zod.object({
@@ -5581,10 +5582,132 @@ export const CreateDealerBody = zod.object({
   "country": zod.string().nullish(),
   "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']).optional(),
   "usdExchangeRate": zod.number().gt(createDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
-  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled')
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
+  "ownerEmail": zod.string().regex(createDealerBodyOwnerEmailRegExp).optional().describe('First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)')
 })
 
 export const CreateDealerResponse = zod.object({
+  "dealer": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
+  "userCount": zod.number().optional(),
+  "createdAt": zod.coerce.date()
+}),
+  "saga": zod.object({
+  "dealerId": zod.number(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
+  "steps": zod.array(zod.object({
+  "stepKey": zod.string(),
+  "status": zod.enum(['pending', 'in_progress', 'done', 'failed', 'compensated']),
+  "attempts": zod.number(),
+  "startedAt": zod.coerce.date().nullish(),
+  "doneAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "compensationRunAt": zod.coerce.date().nullish(),
+  "external": zod.boolean().optional().describe('Side effect leaves the DB (GCS\/SMTP\/LOS) — never wrapped in a transaction')
+})),
+  "resumableFrom": zod.string().nullish().describe('First non-done step key'),
+  "unmet": zod.array(zod.string()).optional().describe('Go-live checklist items still outstanding')
+})
+})
+
+
+/**
+ * @summary Provisioning saga markers + go-live checklist (super admin only)
+ */
+export const GetDealerProvisioningParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetDealerProvisioningResponse = zod.object({
+  "dealerId": zod.number(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
+  "steps": zod.array(zod.object({
+  "stepKey": zod.string(),
+  "status": zod.enum(['pending', 'in_progress', 'done', 'failed', 'compensated']),
+  "attempts": zod.number(),
+  "startedAt": zod.coerce.date().nullish(),
+  "doneAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "compensationRunAt": zod.coerce.date().nullish(),
+  "external": zod.boolean().optional().describe('Side effect leaves the DB (GCS\/SMTP\/LOS) — never wrapped in a transaction')
+})),
+  "resumableFrom": zod.string().nullish().describe('First non-done step key'),
+  "unmet": zod.array(zod.string()).optional().describe('Go-live checklist items still outstanding')
+})
+
+
+/**
+ * @summary Re-drive the saga from the first non-done step (super admin only)
+ */
+export const RetryDealerProvisioningParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RetryDealerProvisioningResponse = zod.object({
+  "dealerId": zod.number(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
+  "steps": zod.array(zod.object({
+  "stepKey": zod.string(),
+  "status": zod.enum(['pending', 'in_progress', 'done', 'failed', 'compensated']),
+  "attempts": zod.number(),
+  "startedAt": zod.coerce.date().nullish(),
+  "doneAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "compensationRunAt": zod.coerce.date().nullish(),
+  "external": zod.boolean().optional().describe('Side effect leaves the DB (GCS\/SMTP\/LOS) — never wrapped in a transaction')
+})),
+  "resumableFrom": zod.string().nullish().describe('First non-done step key'),
+  "unmet": zod.array(zod.string()).optional().describe('Go-live checklist items still outstanding')
+})
+
+
+/**
+ * @summary Abort provisioning — reverse compensation, dealer closed (super admin only)
+ */
+export const AbortDealerProvisioningParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const abortDealerProvisioningBodyReasonMin = 5;
+
+
+
+export const AbortDealerProvisioningBody = zod.object({
+  "reason": zod.string().min(abortDealerProvisioningBodyReasonMin)
+})
+
+export const AbortDealerProvisioningResponse = zod.object({
+  "dealerId": zod.number(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
+  "steps": zod.array(zod.object({
+  "stepKey": zod.string(),
+  "status": zod.enum(['pending', 'in_progress', 'done', 'failed', 'compensated']),
+  "attempts": zod.number(),
+  "startedAt": zod.coerce.date().nullish(),
+  "doneAt": zod.coerce.date().nullish(),
+  "lastError": zod.string().nullish(),
+  "compensationRunAt": zod.coerce.date().nullish(),
+  "external": zod.boolean().optional().describe('Side effect leaves the DB (GCS\/SMTP\/LOS) — never wrapped in a transaction')
+})),
+  "resumableFrom": zod.string().nullish().describe('First non-done step key'),
+  "unmet": zod.array(zod.string()).optional().describe('Go-live checklist items still outstanding')
+})
+
+
+/**
+ * @summary Go-live — flips provisioning→active when every saga step is done and the checklist passes (super admin only)
+ */
+export const ActivateDealerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ActivateDealerResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
   "city": zod.string().nullish(),
@@ -5607,6 +5730,7 @@ export const UpdateDealerParams = zod.object({
 
 export const updateDealerBodyUsdExchangeRateExclusiveMin = 0;
 
+export const updateDealerBodyOwnerEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
 
 
 export const UpdateDealerBody = zod.object({
@@ -5615,7 +5739,8 @@ export const UpdateDealerBody = zod.object({
   "country": zod.string().nullish(),
   "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']).optional(),
   "usdExchangeRate": zod.number().gt(updateDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
-  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled')
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
+  "ownerEmail": zod.string().regex(updateDealerBodyOwnerEmailRegExp).optional().describe('First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)')
 })
 
 export const UpdateDealerResponse = zod.object({

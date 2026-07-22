@@ -4126,17 +4126,105 @@ paths:
               $ref: "#/components/schemas/DealerInput"
       responses:
         "201":
-          description: Created dealer (fully provisioned with divisions, roles, stage checklists, and agents)
+          description: Created dealer shell (status=provisioning) with the saga ledger; seeding runs as a durable SAGA
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Dealer"
+                $ref: "#/components/schemas/CreatedDealerWithSaga"
         "409":
           description: A dealer with that name already exists
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /platform/dealers/{id}/provisioning:
+    get:
+      operationId: getDealerProvisioning
+      tags: [platform]
+      summary: Provisioning saga markers + go-live checklist (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Step markers, resumable position, and unmet go-live items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisioningStatus"
+        "404":
+          description: Unknown dealer
+  /platform/dealers/{id}/provisioning/retry:
+    post:
+      operationId: retryDealerProvisioning
+      tags: [platform]
+      summary: Re-drive the saga from the first non-done step (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "202":
+          description: Saga re-drive accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisioningStatus"
+        "409":
+          description: Saga already in flight
+        "422":
+          description: Dealer is not in provisioning state
+  /platform/dealers/{id}/provisioning/abort:
+    post:
+      operationId: abortDealerProvisioning
+      tags: [platform]
+      summary: Abort provisioning — reverse compensation, dealer closed (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AbortProvisioningRequest"
+      responses:
+        "202":
+          description: Compensation accepted (runs in reverse over completed steps)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProvisioningStatus"
+        "422":
+          description: Dealer is not in provisioning state
+  /platform/dealers/{id}/activate:
+    post:
+      operationId: activateDealer
+      tags: [platform]
+      summary: Go-live — flips provisioning→active when every saga step is done and the checklist passes (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Dealer activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dealer"
+        "422":
+          description: Go-live gate not met
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnmetResponse"
   /platform/dealers/{id}:
     patch:
       operationId: updateDealer
@@ -5518,6 +5606,57 @@ components:
         usdExchangeRate: { type: number, exclusiveMinimum: 0, description: "GYD per 1 USD" }
         entitlements:
           $ref: "#/components/schemas/Entitlements"
+        ownerEmail:
+          type: string
+          pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+          description: "First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)"
+    ProvisioningStep:
+      type: object
+      required: [stepKey, status, attempts]
+      properties:
+        stepKey: { type: string }
+        status: { type: string, enum: [pending, in_progress, done, failed, compensated] }
+        attempts: { type: integer }
+        startedAt: { type: ["string", "null"], format: date-time }
+        doneAt: { type: ["string", "null"], format: date-time }
+        lastError: { type: ["string", "null"] }
+        compensationRunAt: { type: ["string", "null"], format: date-time }
+        external: { type: boolean, description: "Side effect leaves the DB (GCS/SMTP/LOS) — never wrapped in a transaction" }
+    ProvisioningStatus:
+      type: object
+      required: [dealerId, status, steps]
+      properties:
+        dealerId: { type: integer }
+        status: { type: string, enum: [provisioning, active, suspended, offboarding, closed] }
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProvisioningStep"
+        resumableFrom: { type: ["string", "null"], description: "First non-done step key" }
+        unmet:
+          type: array
+          items: { type: string }
+          description: "Go-live checklist items still outstanding"
+    CreatedDealerWithSaga:
+      type: object
+      required: [dealer, saga]
+      properties:
+        dealer:
+          $ref: "#/components/schemas/Dealer"
+        saga:
+          $ref: "#/components/schemas/ProvisioningStatus"
+    AbortProvisioningRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 5 }
+    UnmetResponse:
+      type: object
+      required: [unmet]
+      properties:
+        unmet:
+          type: array
+          items: { type: string }
     ImpersonationRequest:
       type: object
       required: [dealerId, reason]

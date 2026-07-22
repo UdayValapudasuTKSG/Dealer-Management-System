@@ -273,6 +273,16 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       message: "Great news — the i7 you asked about arrives this Friday. Shall I hold a viewing slot for you?",
     },
   },
+  owner_invite: {
+    label: "Owner-Admin Invite",
+    description: "Invites the first General Manager of a newly provisioned dealership.",
+    subject: (x) => `You've been invited to run ${d(x, "dealerName", "your dealership")} on AURA`,
+    heading: (x) => `Welcome aboard, ${d(x, "name", "General Manager")}`,
+    body: (x) =>
+      `You have been invited as the founding <strong>General Manager</strong> of <strong>${d(x, "dealerName", "your dealership")}</strong> on the AURA Dealership Operating System. Simply sign in with this email address — your workspace, role and permissions are provisioned and will attach automatically the first time you log in.`,
+    cta: () => ({ label: "Sign in to claim your workspace" }),
+    sample: { name: "Priya Persaud", dealerName: "CAM Motors Georgetown" },
+  },
   smtp_test: {
     label: "SMTP Test",
     description: "Verifies the Gmail SMTP configuration.",

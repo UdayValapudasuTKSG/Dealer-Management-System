@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AbortProvisioningRequest,
   AccountRelations,
   Activity,
   AdminUser,
@@ -66,6 +67,7 @@ import type {
   CoveragePlan,
   CoveragePlanInput,
   CoveragePlanUpdate,
+  CreatedDealerWithSaga,
   CurrentUser,
   Customer,
   Customer360,
@@ -195,6 +197,7 @@ import type {
   PipelineSuggestions,
   PlatformUser,
   PredictiveAnalytics,
+  ProvisioningStatus,
   Quote,
   Receipt,
   ReceiveMetaWebhook200,
@@ -237,6 +240,7 @@ import type {
   TestEmailRequest,
   TestEmailResult,
   TimelineEvent,
+  UnmetResponse,
   UploadUrlRequest,
   UploadUrlResponse,
   Vehicle,
@@ -13039,9 +13043,9 @@ export const getCreateDealerUrl = () => {
 /**
  * @summary Create a dealer (super admin only)
  */
-export const createDealer = async (dealerInput: DealerInput, options?: RequestInit): Promise<Dealer> => {
+export const createDealer = async (dealerInput: DealerInput, options?: RequestInit): Promise<CreatedDealerWithSaga> => {
 
-  return customFetch<Dealer>(getCreateDealerUrl(),
+  return customFetch<CreatedDealerWithSaga>(getCreateDealerUrl(),
   {
     ...options,
     method: 'POST',
@@ -13097,6 +13101,297 @@ export const useCreateDealer = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getCreateDealerMutationOptions(options));
+    }
+
+export const getGetDealerProvisioningUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/provisioning`
+}
+
+/**
+ * @summary Provisioning saga markers + go-live checklist (super admin only)
+ */
+export const getDealerProvisioning = async (id: number, options?: RequestInit): Promise<ProvisioningStatus> => {
+
+  return customFetch<ProvisioningStatus>(getGetDealerProvisioningUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDealerProvisioningQueryKey = (id: number,) => {
+    return [
+    `/api/platform/dealers/${id}/provisioning`
+    ] as const;
+    }
+
+
+export const getGetDealerProvisioningQueryOptions = <TData = Awaited<ReturnType<typeof getDealerProvisioning>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDealerProvisioning>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDealerProvisioningQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDealerProvisioning>>> = ({ signal }) => getDealerProvisioning(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDealerProvisioning>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDealerProvisioningQueryResult = NonNullable<Awaited<ReturnType<typeof getDealerProvisioning>>>
+export type GetDealerProvisioningQueryError = ErrorType<void>
+
+
+/**
+ * @summary Provisioning saga markers + go-live checklist (super admin only)
+ */
+
+export function useGetDealerProvisioning<TData = Awaited<ReturnType<typeof getDealerProvisioning>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDealerProvisioning>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDealerProvisioningQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRetryDealerProvisioningUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/provisioning/retry`
+}
+
+/**
+ * @summary Re-drive the saga from the first non-done step (super admin only)
+ */
+export const retryDealerProvisioning = async (id: number, options?: RequestInit): Promise<ProvisioningStatus> => {
+
+  return customFetch<ProvisioningStatus>(getRetryDealerProvisioningUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryDealerProvisioningMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryDealerProvisioning>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryDealerProvisioning>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['retryDealerProvisioning'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryDealerProvisioning>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryDealerProvisioning(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryDealerProvisioningMutationResult = NonNullable<Awaited<ReturnType<typeof retryDealerProvisioning>>>
+
+    export type RetryDealerProvisioningMutationError = ErrorType<void>
+
+    /**
+ * @summary Re-drive the saga from the first non-done step (super admin only)
+ */
+export const useRetryDealerProvisioning = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryDealerProvisioning>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryDealerProvisioning>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRetryDealerProvisioningMutationOptions(options));
+    }
+
+export const getAbortDealerProvisioningUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/provisioning/abort`
+}
+
+/**
+ * @summary Abort provisioning — reverse compensation, dealer closed (super admin only)
+ */
+export const abortDealerProvisioning = async (id: number,
+    abortProvisioningRequest: AbortProvisioningRequest, options?: RequestInit): Promise<ProvisioningStatus> => {
+
+  return customFetch<ProvisioningStatus>(getAbortDealerProvisioningUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(abortProvisioningRequest)
+  }
+);}
+
+
+
+
+
+export const getAbortDealerProvisioningMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof abortDealerProvisioning>>, TError,{id: number;data: BodyType<AbortProvisioningRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof abortDealerProvisioning>>, TError,{id: number;data: BodyType<AbortProvisioningRequest>}, TContext> => {
+
+const mutationKey = ['abortDealerProvisioning'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof abortDealerProvisioning>>, {id: number;data: BodyType<AbortProvisioningRequest>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  abortDealerProvisioning(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AbortDealerProvisioningMutationResult = NonNullable<Awaited<ReturnType<typeof abortDealerProvisioning>>>
+    export type AbortDealerProvisioningMutationBody = BodyType<AbortProvisioningRequest>
+    export type AbortDealerProvisioningMutationError = ErrorType<void>
+
+    /**
+ * @summary Abort provisioning — reverse compensation, dealer closed (super admin only)
+ */
+export const useAbortDealerProvisioning = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof abortDealerProvisioning>>, TError,{id: number;data: BodyType<AbortProvisioningRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof abortDealerProvisioning>>,
+        TError,
+        {id: number;data: BodyType<AbortProvisioningRequest>},
+        TContext
+      > => {
+      return useMutation(getAbortDealerProvisioningMutationOptions(options));
+    }
+
+export const getActivateDealerUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/activate`
+}
+
+/**
+ * @summary Go-live — flips provisioning→active when every saga step is done and the checklist passes (super admin only)
+ */
+export const activateDealer = async (id: number, options?: RequestInit): Promise<Dealer> => {
+
+  return customFetch<Dealer>(getActivateDealerUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getActivateDealerMutationOptions = <TError = ErrorType<UnmetResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateDealer>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof activateDealer>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['activateDealer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof activateDealer>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  activateDealer(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ActivateDealerMutationResult = NonNullable<Awaited<ReturnType<typeof activateDealer>>>
+
+    export type ActivateDealerMutationError = ErrorType<UnmetResponse>
+
+    /**
+ * @summary Go-live — flips provisioning→active when every saga step is done and the checklist passes (super admin only)
+ */
+export const useActivateDealer = <TError = ErrorType<UnmetResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof activateDealer>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof activateDealer>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getActivateDealerMutationOptions(options));
     }
 
 export const getUpdateDealerUrl = (id: number,) => {

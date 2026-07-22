@@ -9,9 +9,11 @@ import {
   useListDealers, getListDealersQueryKey, useUpdateDealer,
   useListDealerAgents, getListDealerAgentsQueryKey, useUpdateDealerAgent,
   useListDealerMembers, getListDealerMembersQueryKey, useUpdateDealerMember, useRemoveDealerMember, useAddDealerMember,
-  useListAdminRoles, useListPlatformUsers, startImpersonation
+  useListAdminRoles, useListPlatformUsers, startImpersonation,
+  useGetDealerProvisioning, getGetDealerProvisioningQueryKey,
+  useRetryDealerProvisioning, useAbortDealerProvisioning, useActivateDealer
 } from "@workspace/api-client-react";
-import type { Dealer, DealerMember } from "@workspace/api-client-react";
+import type { Dealer, DealerMember, ProvisioningStatus } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,6 +112,16 @@ export default function DealerDetail() {
                     </span>
                     Active
                   </>
+                ) : dealer.status === "provisioning" ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                    Provisioning
+                  </>
+                ) : dealer.status === "closed" ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-rose-400/70" />
+                    Closed
+                  </>
                 ) : (
                   <>
                     <span className="h-1.5 w-1.5 rounded-full bg-white/40" />
@@ -185,6 +197,7 @@ export default function DealerDetail() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-6">
+          {dealer.status === "provisioning" && <ProvisioningPanel dealer={dealer} />}
           <GeneralSettingsPanel dealer={dealer} />
           <EntitlementsPanel dealer={dealer} />
           <AgentsPanel dealer={dealer} />
@@ -193,6 +206,221 @@ export default function DealerDetail() {
           <MembersPanel dealer={dealer} />
         </div>
       </div>
+    </div>
+  );
+}
+
+const STEP_LABELS: Record<string, string> = {
+  seed_roles: "Standard Roles",
+  seed_divisions: "Default Divisions",
+  seed_taxes: "Tax Rules",
+  seed_entitlements: "Module Entitlements",
+  provision_storage: "Document Storage",
+  seed_lead_sources: "Lead Sources",
+  seed_checklists: "Stage Checklists",
+  seed_agents: "AI Agent Roster",
+  invite_owner_admin: "Owner / GM Invite",
+  register_los: "LOS Registration",
+};
+
+const UNMET_LABELS: Record<string, string> = {
+  owner_invite_accepted: "The invited owner / General Manager has not signed in yet",
+};
+
+function unmetLabel(key: string) {
+  if (UNMET_LABELS[key]) return UNMET_LABELS[key];
+  if (key.startsWith("step:")) {
+    const step = key.slice(5);
+    return `Setup step incomplete: ${STEP_LABELS[step] ?? step}`;
+  }
+  return key;
+}
+
+function ProvisioningPanel({ dealer }: { dealer: Dealer }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [abortOpen, setAbortOpen] = useState(false);
+  const [abortReason, setAbortReason] = useState("");
+
+  const { data: saga, isLoading } = useGetDealerProvisioning(dealer.id, {
+    query: {
+      queryKey: getGetDealerProvisioningQueryKey(dealer.id),
+      refetchInterval: 5000,
+    },
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: getGetDealerProvisioningQueryKey(dealer.id) });
+    queryClient.invalidateQueries({ queryKey: getListDealersQueryKey() });
+  };
+
+  const retry = useRetryDealerProvisioning({
+    mutation: {
+      onSuccess: (res: ProvisioningStatus) => {
+        invalidate();
+        const failed = res.steps?.find(s => s.status === "failed");
+        toast(failed
+          ? { title: "Retry Halted", description: `Stopped again at "${STEP_LABELS[failed.stepKey] ?? failed.stepKey}".`, variant: "destructive" }
+          : { title: "Provisioning Resumed", description: "All setup steps completed." });
+      },
+      onError: (e: any) => toast({ title: "Retry Failed", description: e.message || "An error occurred", variant: "destructive" }),
+    },
+  });
+
+  const abort = useAbortDealerProvisioning({
+    mutation: {
+      onSuccess: () => {
+        invalidate();
+        setAbortOpen(false);
+        toast({ title: "Provisioning Aborted", description: "Completed steps were compensated in reverse and the workspace was closed." });
+      },
+      onError: (e: any) => toast({ title: "Abort Failed", description: e.message || "An error occurred", variant: "destructive" }),
+    },
+  });
+
+  const activate = useActivateDealer({
+    mutation: {
+      onSuccess: () => {
+        invalidate();
+        toast({ title: "Workspace Activated", description: `${dealer.name} is now live.` });
+      },
+      onError: (e: any) => {
+        const unmet: string[] = e?.data?.unmet ?? [];
+        toast({
+          title: "Go-Live Blocked",
+          description: unmet.length ? unmet.map(unmetLabel).join(". ") : (e.message || "Go-live checklist has unmet items."),
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
+  const steps = saga?.steps ?? [];
+  const unmet = saga?.unmet ?? [];
+  const hasFailure = steps.some(s => s.status === "failed");
+  const allDone = steps.length > 0 && steps.every(s => s.status === "done");
+  const busy = retry.isPending || abort.isPending || activate.isPending;
+
+  return (
+    <div className="glass rounded-xl p-6 space-y-5">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Onboarding Saga</div>
+          <h2 className="mt-1 font-serif text-[18px] tracking-tight text-zinc-900">Provisioning Progress</h2>
+          <p className="mt-1 text-[12.5px] text-zinc-500 max-w-lg leading-relaxed">
+            Each step is durable — a failure halts the run and can be retried from where it stopped, or aborted to unwind completed steps.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {hasFailure && (
+            <button
+              onClick={() => retry.mutate({ id: dealer.id })}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 text-white px-3.5 py-2 text-[12px] font-medium hover:bg-zinc-700 transition-colors disabled:opacity-50"
+            >
+              <PlayCircle className="w-3.5 h-3.5" />
+              {retry.isPending ? "Retrying..." : "Retry Setup"}
+            </button>
+          )}
+          <button
+            onClick={() => setAbortOpen(true)}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 text-rose-700 px-3.5 py-2 text-[12px] font-medium hover:bg-rose-100 transition-colors disabled:opacity-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Abort
+          </button>
+          <button
+            onClick={() => activate.mutate({ id: dealer.id })}
+            disabled={busy || !allDone || unmet.length > 0}
+            className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 text-white px-3.5 py-2 text-[12px] font-medium hover:bg-emerald-500 transition-colors disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed"
+          >
+            <Power className="w-3.5 h-3.5" />
+            {activate.isPending ? "Activating..." : "Activate"}
+          </button>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="h-32 rounded-lg border border-black/5 bg-white shimmer" />
+      ) : (
+        <>
+          <div className="divide-y divide-black/5 rounded-lg border border-black/5 bg-white/60 overflow-hidden">
+            {steps.map((s) => (
+              <div key={s.stepKey} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`h-2 w-2 rounded-full shrink-0 ${
+                    s.status === "done" ? "bg-emerald-500" :
+                    s.status === "failed" ? "bg-rose-500" :
+                    s.status === "in_progress" ? "bg-amber-400 animate-pulse" :
+                    s.status === "compensated" ? "bg-zinc-300" : "bg-zinc-200"
+                  }`} />
+                  <span className="text-[12.5px] text-zinc-800 truncate">{STEP_LABELS[s.stepKey] ?? s.stepKey}</span>
+                  {s.external && (
+                    <span className="rounded-full border border-black/10 bg-zinc-50 px-2 py-px text-[9.5px] font-medium uppercase tracking-[0.14em] text-zinc-500 shrink-0">External</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  {s.lastError && s.status === "failed" && (
+                    <span className="text-[11px] text-rose-600 max-w-[260px] truncate" title={s.lastError}>{s.lastError}</span>
+                  )}
+                  {(s.attempts ?? 0) > 1 && (
+                    <span className="font-mono text-[10.5px] text-zinc-400 tabular-nums">×{s.attempts}</span>
+                  )}
+                  <span className={`text-[10px] font-medium uppercase tracking-[0.14em] ${
+                    s.status === "done" ? "text-emerald-600" :
+                    s.status === "failed" ? "text-rose-600" :
+                    s.status === "compensated" ? "text-zinc-400" : "text-zinc-500"
+                  }`}>{s.status.replace("_", " ")}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {unmet.length > 0 && (
+            <div className="rounded-md bg-amber-50 border border-amber-200/70 p-3.5 text-[12px] text-amber-800 space-y-1">
+              <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-amber-700">Go-Live Checklist</div>
+              {unmet.map(u => (
+                <div key={u} className="flex items-center gap-2">
+                  <span className="h-1 w-1 rounded-full bg-amber-500 shrink-0" />
+                  {unmetLabel(u)}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      <Dialog open={abortOpen} onOpenChange={(open) => { if (!abort.isPending) setAbortOpen(open); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Abort Provisioning</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-[12.5px] text-zinc-500">
+              Completed setup steps are compensated in reverse order and the workspace is closed. This cannot be undone.
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Reason (audited)</label>
+              <Input
+                value={abortReason}
+                onChange={(e) => setAbortReason(e.target.value)}
+                placeholder="e.g. Duplicate onboarding request"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAbortOpen(false)} disabled={abort.isPending}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => abort.mutate({ id: dealer.id, data: { reason: abortReason.trim() } })}
+              disabled={abort.isPending || abortReason.trim().length < 5}
+            >
+              {abort.isPending ? "Unwinding..." : "Abort & Compensate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -22,4 +22,9 @@ export interface DealerInput {
      */
   usdExchangeRate?: number;
   entitlements?: Entitlements;
+  /**
+     * First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)
+     * @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$
+     */
+  ownerEmail?: string;
 }

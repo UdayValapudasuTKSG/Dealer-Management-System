@@ -29,6 +29,7 @@ export const EMAIL_TEMPLATES = [
   "thank_you",
   "outreach",
   "smtp_test",
+  "owner_invite",
 ] as const;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 

@@ -98,6 +98,12 @@ export default function Network() {
                           Suspended
                         </span>
                       )}
+                      {dealer.status === "provisioning" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10.5px] font-medium text-amber-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                          Provisioning
+                        </span>
+                      )}
                       {dealer.status === "active" && (
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10.5px] font-medium text-emerald-700">
                           <span className="relative flex h-1.5 w-1.5">
@@ -149,16 +155,21 @@ function CreateDealerDialog({ open, onClose }: { open: boolean, onClose: () => v
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
 
   const create = useCreateDealer({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (res) => {
         queryClient.invalidateQueries({ queryKey: getListDealersQueryKey() });
+        const failed = res.saga?.steps?.find(s => s.status === "failed");
         toast({
-          title: "Dealership Provisioned",
-          description: "Workspace initialized with default modules and AI agents.",
+          title: failed ? "Provisioning Halted" : "Workspace Provisioning",
+          description: failed
+            ? `Setup stopped at "${failed.stepKey}" — open the workspace to retry or abort.`
+            : "Defaults seeded. Activate once the go-live checklist clears.",
+          variant: failed ? "destructive" : undefined,
         });
-        setName(""); setCity(""); setCountry("");
+        setName(""); setCity(""); setCountry(""); setOwnerEmail("");
         onClose();
       },
       onError: (e: any) => {
@@ -179,7 +190,7 @@ function CreateDealerDialog({ open, onClose }: { open: boolean, onClose: () => v
         name: name.trim(),
         city: city.trim() || undefined,
         country: country.trim() || undefined,
-        status: "active"
+        ownerEmail: ownerEmail.trim() || undefined,
       }
     });
   };
@@ -225,9 +236,21 @@ function CreateDealerDialog({ open, onClose }: { open: boolean, onClose: () => v
               </div>
             </div>
 
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Owner / General Manager Email</label>
+              <Input 
+                type="email"
+                value={ownerEmail} 
+                onChange={e => setOwnerEmail(e.target.value)} 
+                placeholder="e.g. gm@dealership.com"
+                className="bg-white/50 border-black/10 rounded-md focus-visible:ring-1 focus-visible:ring-black/20 h-10 text-[13px]"
+              />
+              <p className="text-[11px] text-zinc-500 leading-relaxed">They receive an invite and are bound as General Manager on first sign-in. Required before the workspace can go live.</p>
+            </div>
+
             <div className="rounded-md bg-zinc-50 border border-black/5 p-3 text-[11px] text-zinc-600 flex gap-2.5">
               <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-zinc-400 mt-0.5" />
-              <p className="leading-relaxed">Provisioning automatically generates default divisions, standard roles, stage checklists, and the complete AI agent roster.</p>
+              <p className="leading-relaxed">Provisioning runs a step-by-step setup saga — divisions, roles, stage checklists, tax rules and the AI agent roster — and the workspace stays in "Provisioning" until you activate it.</p>
             </div>
           </div>
           
