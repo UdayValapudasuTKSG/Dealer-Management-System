@@ -74,6 +74,9 @@ async function analyze(callLogId: number): Promise<void> {
     .join("\n");
 
   const untrusted = [
+    call.transcript
+      ? `Call transcript (both parties):\n${call.transcript.slice(0, 6000)}`
+      : null,
     call.notes ? `Advisor call notes:\n${call.notes}` : null,
     recent.length > 0
       ? `Recent lead activity:\n${recent

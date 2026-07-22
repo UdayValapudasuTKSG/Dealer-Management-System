@@ -5071,6 +5071,88 @@ export const useUpdateLeadCall = <TError = ErrorType<Error>,
       return useMutation(getUpdateLeadCallMutationOptions(options));
     }
 
+export const getGetLeadCallRecordingUrl = (id: number,
+    callId: number,) => {
+
+
+
+
+  return `/api/leads/${id}/calls/${callId}/recording`
+}
+
+/**
+ * @summary Stream the Twilio call recording audio (proxied, never exposes Twilio credentials)
+ */
+export const getLeadCallRecording = async (id: number,
+    callId: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetLeadCallRecordingUrl(id,callId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLeadCallRecordingQueryKey = (id: number,
+    callId: number,) => {
+    return [
+    `/api/leads/${id}/calls/${callId}/recording`
+    ] as const;
+    }
+
+
+export const getGetLeadCallRecordingQueryOptions = <TData = Awaited<ReturnType<typeof getLeadCallRecording>>, TError = ErrorType<Error>>(id: number,
+    callId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadCallRecording>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLeadCallRecordingQueryKey(id,callId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLeadCallRecording>>> = ({ signal }) => getLeadCallRecording(id,callId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && callId !== null && callId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLeadCallRecording>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLeadCallRecordingQueryResult = NonNullable<Awaited<ReturnType<typeof getLeadCallRecording>>>
+export type GetLeadCallRecordingQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Stream the Twilio call recording audio (proxied, never exposes Twilio credentials)
+ */
+
+export function useGetLeadCallRecording<TData = Awaited<ReturnType<typeof getLeadCallRecording>>, TError = ErrorType<Error>>(
+ id: number,
+    callId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadCallRecording>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLeadCallRecordingQueryOptions(id,callId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getGetTelephonyConfigUrl = () => {
 
 

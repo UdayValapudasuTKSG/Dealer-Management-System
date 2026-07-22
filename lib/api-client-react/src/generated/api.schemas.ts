@@ -1779,6 +1779,16 @@ export const CallLogSentiment = {
   negative: 'negative',
 } as const;
 
+export type CallLogTranscriptStatus = typeof CallLogTranscriptStatus[keyof typeof CallLogTranscriptStatus];
+
+
+export const CallLogTranscriptStatus = {
+  none: 'none',
+  pending: 'pending',
+  completed: 'completed',
+  failed: 'failed',
+} as const;
+
 export interface CallLog {
   id: number;
   leadId: number;
@@ -1792,6 +1802,11 @@ export interface CallLog {
   provider: string;
   /** @nullable */
   providerCallId?: string | null;
+  /** @nullable */
+  recordingUrl?: string | null;
+  /** @nullable */
+  transcript?: string | null;
+  transcriptStatus?: CallLogTranscriptStatus;
   actor: string;
   createdAt: string;
 }

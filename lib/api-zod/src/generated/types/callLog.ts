@@ -8,6 +8,7 @@
 import type { CallLogDirection } from './callLogDirection';
 import type { CallLogSentiment } from './callLogSentiment';
 import type { CallLogStatus } from './callLogStatus';
+import type { CallLogTranscriptStatus } from './callLogTranscriptStatus';
 
 export interface CallLog {
   id: number;
@@ -22,6 +23,11 @@ export interface CallLog {
   provider: string;
   /** @nullable */
   providerCallId?: string | null;
+  /** @nullable */
+  recordingUrl?: string | null;
+  /** @nullable */
+  transcript?: string | null;
+  transcriptStatus?: CallLogTranscriptStatus;
   actor: string;
   createdAt: Date;
 }

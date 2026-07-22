@@ -5,6 +5,7 @@ import { eq, desc, and, ilike, or, inArray, isNull, isNotNull, type SQL } from "
 import {
   db,
   vehiclesTable,
+  divisionsTable,
   VEHICLE_STATUS_TRANSITIONS,
   type VehicleStatus,
 } from "@workspace/db";
@@ -125,6 +126,17 @@ const IMPORT_HEADER_MAP: Record<string, string> = {
   vin: "vin",
   variant: "variant",
   engine: "engine",
+  enginenumber: "engineNumber",
+  engineno: "engineNumber",
+  registration: "registration",
+  registrationnumber: "registration",
+  registrationno: "registration",
+  regno: "registration",
+  plate: "registration",
+  licenseplate: "registration",
+  numberplate: "registration",
+  division: "division",
+  divisionname: "division",
   transmission: "transmission",
   gearbox: "transmission",
   price: "price",
@@ -148,9 +160,25 @@ const IMPORT_HEADER_MAP: Record<string, string> = {
   status: "status",
   imageurl: "imageUrl",
   image: "imageUrl",
+  images: "images",
+  imageurls: "images",
+  gallery: "images",
+  galleryimages: "images",
+  accessories: "accessories",
+  accessory: "accessories",
   description: "description",
   featured: "featured",
 };
+
+// Multi-value cells (gallery images, accessories) accept comma, semicolon,
+// pipe or newline separators.
+const LIST_FIELDS = new Set(["images", "accessories"]);
+function splitList(text: string): string[] {
+  return text
+    .split(/[,;|\n]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
 
 const NUMBER_FIELDS = new Set(["year", "price", "rangeKm", "mileageKm"]);
 
@@ -260,6 +288,16 @@ router.post(
     }
 
     const MAX_ROWS = 1000;
+
+    // Resolve "Division" cells by name against the dealer's own divisions.
+    const divisionIdByName = new Map<string, number>();
+    for (const d of await db
+      .select({ id: divisionsTable.id, name: divisionsTable.name })
+      .from(divisionsTable)
+      .where(eq(divisionsTable.dealerId, dealerId))) {
+      divisionIdByName.set(d.name.trim().toLowerCase(), d.id);
+    }
+
     const errors: { row: number; field?: string | null; message: string }[] = [];
     const validRows: { row: number; data: typeof CreateVehicleBody._type }[] = [];
     const seenVins = new Map<string, number>();
@@ -276,6 +314,12 @@ router.post(
         if (NUMBER_FIELDS.has(field)) {
           const num = Number(text.replace(/[$,\s]/g, ""));
           raw[field] = Number.isFinite(num) ? num : text;
+        } else if (LIST_FIELDS.has(field)) {
+          raw[field] = splitList(text);
+        } else if (field === "engineNumber" || field === "vin") {
+          raw[field] = text.toUpperCase();
+        } else if (field === "registration") {
+          raw[field] = text.toUpperCase().replace(/[\s-]/g, "");
         } else if (field === "powertrain") {
           raw[field] = POWERTRAIN_ALIASES[text.toLowerCase()] ?? text;
         } else if (field === "status") {
@@ -288,6 +332,21 @@ router.post(
       }
       if (!hasValue) return; // fully empty row — skip silently
       total += 1;
+
+      const divisionText = typeof raw["division"] === "string" ? raw["division"] : "";
+      delete raw["division"];
+      if (divisionText) {
+        const divId = divisionIdByName.get(divisionText.trim().toLowerCase());
+        if (divId === undefined) {
+          errors.push({
+            row: rowNumber,
+            field: "division",
+            message: `Unknown division "${divisionText}" — expected one of: ${[...divisionIdByName.keys()].join(", ") || "(none configured)"}.`,
+          });
+          return;
+        }
+        raw["divisionId"] = divId;
+      }
 
       if (total > MAX_ROWS) {
         if (total === MAX_ROWS + 1) {
@@ -429,7 +488,9 @@ const TEMPLATE_COLUMNS: { header: string; example: string | number }[] = [
   { header: "Year", example: 2026 },
   { header: "VIN", example: "WBY73AW0XPCK00001" },
   { header: "Variant", example: "Long Wheelbase" },
-  { header: "Engine", example: "ENG0000000PCK0001" },
+  { header: "Engine Number", example: "ENG0000000PCK0001" },
+  { header: "Registration", example: "PAB1234" },
+  { header: "Division", example: "GT Automotive" },
   { header: "Transmission", example: "Single-speed automatic" },
   { header: "Price", example: 125000 },
   { header: "Powertrain", example: "EV" },
@@ -439,6 +500,8 @@ const TEMPLATE_COLUMNS: { header: string; example: string | number }[] = [
   { header: "Body Type", example: "Sedan" },
   { header: "Status", example: "available" },
   { header: "Image URL", example: "/vehicles/bmw-i7.png" },
+  { header: "Images", example: "https://example.com/front.jpg, https://example.com/interior.jpg" },
+  { header: "Accessories", example: "Floor mats, Roof rack, Tow bar" },
   { header: "Description", example: "Flagship electric sedan." },
 ];
 
@@ -457,7 +520,10 @@ router.get("/vehicles/import/template", async (_req, res): Promise<void> => {
   notes.addRow(["Required columns: Make, Model, Year, Price, Powertrain, Mileage (km), Exterior Color, Body Type"]);
   notes.addRow(["Powertrain: EV, Hybrid, Petrol or Diesel (Electric/Gas aliases accepted)"]);
   notes.addRow(["Status (optional): available, in_transit or service — defaults to available"]);
-  notes.addRow(["VIN and Engine number (optional) must be exactly 17 characters when provided"]);
+  notes.addRow(["VIN and Engine Number (optional) must be exactly 17 characters when provided"]);
+  notes.addRow(["Registration (optional): 3 uppercase letters + 1-4 digits, e.g. PAB1234"]);
+  notes.addRow(["Division (optional): must match one of your dealer's divisions by name"]);
+  notes.addRow(["Images and Accessories (optional): separate multiple values with commas"]);
   notes.addRow(["Delete the example row before importing your own stock."]);
   notes.getColumn(1).width = 100;
 

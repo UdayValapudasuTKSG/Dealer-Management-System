@@ -37,6 +37,12 @@ export const callLogsTable = pgTable("call_logs", {
   // and its call id. The stub adapter writes provider = "stub".
   provider: text("provider").notNull().default("stub"),
   providerCallId: text("provider_call_id"),
+  // Two-party conversation capture: Twilio dual-channel recording + AI
+  // transcript. transcriptStatus: none | pending | completed | failed.
+  recordingSid: text("recording_sid"),
+  recordingUrl: text("recording_url"),
+  transcript: text("transcript"),
+  transcriptStatus: text("transcript_status").notNull().default("none"),
   actor: text("actor").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

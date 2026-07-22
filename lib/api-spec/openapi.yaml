@@ -1704,6 +1704,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /leads/{id}/calls/{callId}/recording:
+    get:
+      operationId: getLeadCallRecording
+      tags: [leads]
+      summary: Stream the Twilio call recording audio (proxied, never exposes Twilio credentials)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: callId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Recording audio
+          content:
+            audio/mpeg:
+              schema: { type: string, format: binary }
+        "404":
+          description: Not found or no recording
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /telephony/config:
     get:
       operationId: getTelephonyConfig
@@ -6854,6 +6881,9 @@ components:
         notes: { type: ["string", "null"] }
         provider: { type: string }
         providerCallId: { type: ["string", "null"] }
+        recordingUrl: { type: ["string", "null"] }
+        transcript: { type: ["string", "null"] }
+        transcriptStatus: { type: string, enum: [none, pending, completed, failed] }
         actor: { type: string }
         createdAt: { type: string, format: date-time }
     CallLogUpdate:

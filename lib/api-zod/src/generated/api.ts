@@ -2238,6 +2238,9 @@ export const ListLeadCallsResponseItem = zod.object({
   "notes": zod.string().nullish(),
   "provider": zod.string(),
   "providerCallId": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
+  "transcript": zod.string().nullish(),
+  "transcriptStatus": zod.enum(['none', 'pending', 'completed', 'failed']).optional(),
   "actor": zod.string(),
   "createdAt": zod.coerce.date()
 })
@@ -2275,6 +2278,9 @@ export const CreateLeadCallResponse = zod.object({
   "notes": zod.string().nullish(),
   "provider": zod.string(),
   "providerCallId": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
+  "transcript": zod.string().nullish(),
+  "transcriptStatus": zod.enum(['none', 'pending', 'completed', 'failed']).optional(),
   "actor": zod.string(),
   "createdAt": zod.coerce.date()
 })
@@ -2307,9 +2313,23 @@ export const UpdateLeadCallResponse = zod.object({
   "notes": zod.string().nullish(),
   "provider": zod.string(),
   "providerCallId": zod.string().nullish(),
+  "recordingUrl": zod.string().nullish(),
+  "transcript": zod.string().nullish(),
+  "transcriptStatus": zod.enum(['none', 'pending', 'completed', 'failed']).optional(),
   "actor": zod.string(),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Stream the Twilio call recording audio (proxied, never exposes Twilio credentials)
+ */
+export const GetLeadCallRecordingParams = zod.object({
+  "id": zod.coerce.number(),
+  "callId": zod.coerce.number()
+})
+
+export const GetLeadCallRecordingResponse = zod.unknown()
 
 
 /**

@@ -8,12 +8,14 @@ import {
   leadsTable,
   timelineEventsTable,
   usersTable,
+  dealerUsersTable,
   webhookEventsTable,
 } from "@workspace/db";
 import { mapTwilioDialStatus, twilioVoiceConfig } from "../lib/telephony";
 import { notifyUser } from "../lib/email";
 import { logger } from "../lib/logger";
 import { autoAnalyzeCall } from "../lib/call-analysis";
+import { autoTranscribeCall } from "../lib/call-transcription";
 import {
   createInboundLead,
   matchVehicleByText,
@@ -668,13 +670,37 @@ router.post("/webhooks/twilio/voice", async (req, res): Promise<void> => {
       return;
     }
 
+    // The browser leg identifies the advisor (client:advisor-<userId>) —
+    // require a real membership in the lead's dealer before creating the call
+    // log, so a signed callback can't attach a call to a foreign tenant.
     let actor = "Staff";
+    let member = false;
     if (Number.isFinite(userId) && userId > 0) {
       const [user] = await db
         .select()
         .from(usersTable)
         .where(eq(usersTable.id, userId));
-      if (user) actor = user.name ?? user.email ?? "Staff";
+      if (user) {
+        actor = user.name ?? user.email ?? "Staff";
+        const [membership] = await db
+          .select({ id: dealerUsersTable.id })
+          .from(dealerUsersTable)
+          .where(
+            and(
+              eq(dealerUsersTable.userId, user.id),
+              eq(dealerUsersTable.dealerId, lead.dealerId),
+            ),
+          );
+        member = !!membership;
+      }
+    }
+    if (!member) {
+      req.log.warn(
+        { leadId, userId },
+        "Twilio voice webhook rejected: caller is not a member of the lead's dealer",
+      );
+      voiceSay(res, "This call cannot be completed.");
+      return;
     }
 
     const [call] = await db
@@ -694,12 +720,13 @@ router.post("/webhooks/twilio/voice", async (req, res): Promise<void> => {
     const proto = req.get("x-forwarded-proto")?.split(",")[0]?.trim() || req.protocol;
     const host = req.get("x-forwarded-host")?.split(",")[0]?.trim() || req.get("host");
     const actionUrl = `${proto}://${host}/api/webhooks/twilio/voice/complete?callLogId=${call!.id}`;
+    const recordingUrl = `${proto}://${host}/api/webhooks/twilio/voice/recording?callLogId=${call!.id}`;
 
     res
       .status(200)
       .type("text/xml")
       .send(
-        `<?xml version="1.0" encoding="UTF-8"?><Response><Dial callerId="${escapeXml(cfg.callerId)}" action="${escapeXml(actionUrl)}" timeout="25"><Number>${escapeXml(to)}</Number></Dial></Response>`,
+        `<?xml version="1.0" encoding="UTF-8"?><Response><Dial callerId="${escapeXml(cfg.callerId)}" action="${escapeXml(actionUrl)}" timeout="25" record="record-from-answer-dual" recordingStatusCallback="${escapeXml(recordingUrl)}" recordingStatusCallbackEvent="completed"><Number>${escapeXml(to)}</Number></Dial></Response>`,
       );
   } catch (err) {
     req.log.error({ err, leadId }, "Failed to start Twilio voice call");
@@ -731,11 +758,14 @@ router.post(
     }
 
     const callLogId = Number(req.query["callLogId"] ?? "");
+    const callSid = params["CallSid"] ?? "";
     const status = mapTwilioDialStatus(params["DialCallStatus"]);
     const duration = Number(params["DialCallDuration"] ?? "");
 
     try {
-      if (Number.isFinite(callLogId) && callLogId > 0) {
+      if (Number.isFinite(callLogId) && callLogId > 0 && callSid) {
+        // Bind the update to the immutable Twilio CallSid stamped at call
+        // creation — a signed-but-mismatched callback can't touch other rows.
         const [call] = await db
           .update(callLogsTable)
           .set({
@@ -745,7 +775,12 @@ router.post(
                 ? Math.round(duration)
                 : null,
           })
-          .where(eq(callLogsTable.id, callLogId))
+          .where(
+            and(
+              eq(callLogsTable.id, callLogId),
+              eq(callLogsTable.providerCallId, callSid),
+            ),
+          )
           .returning();
 
         // One activity record per call, written once the outcome is known.
@@ -787,6 +822,78 @@ router.post(
       .status(200)
       .type("text/xml")
       .send('<?xml version="1.0" encoding="UTF-8"?><Response/>');
+  },
+);
+
+// Recording status callback: Twilio finished the dual-channel recording of
+// the call — stamp the recording onto the call log and kick off AI
+// transcription so the full two-party conversation is captured.
+router.post(
+  "/webhooks/twilio/voice/recording",
+  async (req, res): Promise<void> => {
+    const cfg = twilioVoiceConfig();
+    if (!cfg) {
+      res.status(503).json({ error: "Twilio Voice is not configured" });
+      return;
+    }
+
+    const params: Record<string, string> = {};
+    for (const [k, v] of Object.entries(req.body ?? {})) {
+      if (typeof v === "string") params[k] = v;
+    }
+    const signature = req.get("x-twilio-signature");
+    if (
+      !verifyTwilioSignature(cfg.authToken, publicUrl(req), params, signature ?? undefined)
+    ) {
+      req.log.warn("Twilio recording webhook rejected: bad signature");
+      res.status(403).json({ error: "Invalid signature" });
+      return;
+    }
+
+    const callLogId = Number(req.query["callLogId"] ?? "");
+    const callSid = params["CallSid"] ?? "";
+    const recordingSid = params["RecordingSid"] ?? "";
+    const recordingStatus = params["RecordingStatus"] ?? "";
+
+    try {
+      if (
+        Number.isFinite(callLogId) &&
+        callLogId > 0 &&
+        callSid &&
+        recordingSid &&
+        recordingStatus === "completed"
+      ) {
+        // Bind the update to the immutable Twilio CallSid stamped at call
+        // creation — a signed-but-mismatched callback can't touch other rows.
+        const [call] = await db
+          .update(callLogsTable)
+          .set({
+            recordingSid,
+            // Stored for reference; playback goes through our authed proxy
+            // (GET /leads/:id/calls/:callId/recording), never this raw URL.
+            recordingUrl: params["RecordingUrl"] ?? null,
+            transcriptStatus: "pending",
+          })
+          .where(
+            and(
+              eq(callLogsTable.id, callLogId),
+              eq(callLogsTable.providerCallId, callSid),
+            ),
+          )
+          .returning();
+        if (call) {
+          req.log.info(
+            { callLogId, recordingSid },
+            "Twilio recording captured; transcription queued",
+          );
+          autoTranscribeCall(call.id);
+        }
+      }
+    } catch (err) {
+      req.log.error({ err, callLogId }, "Failed to store Twilio recording");
+    }
+
+    res.status(200).type("text/xml").send('<?xml version="1.0" encoding="UTF-8"?><Response/>');
   },
 );
 

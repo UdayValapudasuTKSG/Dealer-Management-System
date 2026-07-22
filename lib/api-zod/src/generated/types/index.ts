@@ -73,6 +73,7 @@ export * from './callLogInputSentiment';
 export * from './callLogInputStatus';
 export * from './callLogSentiment';
 export * from './callLogStatus';
+export * from './callLogTranscriptStatus';
 export * from './callLogUpdate';
 export * from './callLogUpdateSentiment';
 export * from './callSentimentSuggestInput';

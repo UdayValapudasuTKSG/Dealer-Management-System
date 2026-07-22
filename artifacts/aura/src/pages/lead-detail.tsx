@@ -2002,6 +2002,36 @@ export default function LeadDetail() {
                                   {c.notes}
                                 </p>
                               )}
+                              {c.recordingUrl && (
+                                <audio
+                                  controls
+                                  preload="none"
+                                  className="mt-2.5 h-9 w-full max-w-md"
+                                  src={`${import.meta.env.BASE_URL}api/leads/${lead.id}/calls/${c.id}/recording`}
+                                />
+                              )}
+                              {c.transcriptStatus === "pending" && (
+                                <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  Transcribing the conversation…
+                                </div>
+                              )}
+                              {c.transcriptStatus === "failed" && (
+                                <div className="mt-2 text-xs text-rose-400">
+                                  Transcription failed — the recording is still
+                                  available above.
+                                </div>
+                              )}
+                              {c.transcript && (
+                                <details className="mt-2.5 rounded-lg border border-white/10 bg-foreground/[0.03] px-3 py-2">
+                                  <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-muted-foreground select-none">
+                                    Conversation transcript
+                                  </summary>
+                                  <p className="mt-2 text-sm text-foreground/85 whitespace-pre-wrap">
+                                    {c.transcript}
+                                  </p>
+                                </details>
+                              )}
                               <div className="text-xs text-muted-foreground mt-1.5">
                                 {formatGuyanaDateTime(c.createdAt)} · {c.actor}
                               </div>

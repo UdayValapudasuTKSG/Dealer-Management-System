@@ -31,9 +31,20 @@ import { DocumentsCard } from "@/components/documents-card";
 
 function img(url: string | null | undefined) {
   if (!url) return undefined;
-  return url.startsWith("http")
-    ? url
-    : `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`;
+  if (/^(https?:|data:)/.test(url)) {
+    // Old imports stored absolute URLs to previous deployments — if it's our
+    // own storage path, serve it from THIS origin instead of the stale host.
+    try {
+      const u = new URL(url);
+      if (u.pathname.includes("/api/storage/")) {
+        return u.pathname.slice(u.pathname.indexOf("/api/storage/"));
+      }
+    } catch {
+      /* not a parseable absolute URL — fall through */
+    }
+    return url;
+  }
+  return `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`;
 }
 
 function Spec({

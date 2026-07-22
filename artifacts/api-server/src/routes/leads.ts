@@ -80,6 +80,7 @@ import {
   UpdateLeadCallParams,
   UpdateLeadCallBody,
   UpdateLeadCallResponse,
+  GetLeadCallRecordingParams,
   SuggestCallSentimentParams,
   SuggestCallSentimentBody,
   SuggestCallSentimentResponse,
@@ -88,6 +89,7 @@ import {
 } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
+import { fetchRecordingAudio } from "../lib/call-transcription";
 import { autoAssignLead, stampLeadAssignment } from "../lib/lead-assignment";
 import { findOpenDuplicate, mergeIntoExistingLead } from "../lib/lead-dedup";
 import { telephonyAdapter } from "../lib/telephony";
@@ -2340,6 +2342,55 @@ router.patch("/leads/:id/calls/:callId", async (req, res): Promise<void> => {
 
   res.json(UpdateLeadCallResponse.parse(updated));
 });
+
+// Stream the Twilio recording through our own authed, tenancy-scoped proxy —
+// the raw Twilio media URL (which needs account credentials) never leaves
+// the server.
+router.get(
+  "/leads/:id/calls/:callId/recording",
+  async (req, res): Promise<void> => {
+    const params = GetLeadCallRecordingParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const lead = await leadForDealer(params.data.id, activeDealerId(res));
+    if (!lead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const [call] = await db
+      .select()
+      .from(callLogsTable)
+      .where(
+        and(
+          eq(callLogsTable.id, params.data.callId),
+          eq(callLogsTable.leadId, lead.id),
+          eq(callLogsTable.dealerId, lead.dealerId),
+        ),
+      );
+    if (!call || !call.recordingSid) {
+      res.status(404).json({ error: "No recording for this call" });
+      return;
+    }
+    try {
+      const audio = await fetchRecordingAudio(call.recordingSid);
+      if (!audio || audio.length === 0) {
+        res.status(502).json({ error: "Could not fetch the recording audio" });
+        return;
+      }
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="call-${call.id}-recording.mp3"`,
+      );
+      res.end(audio);
+    } catch (err) {
+      req.log.error({ err, callId: call.id }, "Failed to fetch call recording");
+      res.status(502).json({ error: "Could not fetch the recording audio" });
+    }
+  },
+);
 
 // AI-assist: suggest a sentiment from call notes. Gated behind the Sales
 // agent kill switch — paused agent means no LLM calls, manual picker only.
