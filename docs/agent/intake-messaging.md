@@ -22,6 +22,9 @@
 - Secrets: Meta `WHATSAPP_ACCESS_TOKEN` + `WHATSAPP_PHONE_NUMBER_ID` (+ shared `META_APP_SECRET`/`META_VERIFY_TOKEN`); Twilio `TWILIO_AUTH_TOKEN`; unconfigured → 503.
 - Transcripts: every inbound and outbound message recorded in `whatsapp_messages` (transport wrapper in `lib/whatsapp-log.ts`; pre-lead rows keyed by phone digits, backfill-linked to the lead AFTER the final ack send).
 
+## Twilio browser click-to-call
+- Needs the FULL Twilio Voice credential set (account SID, API key SID/secret, TwiML App SID, phone number, auth token) — any missing piece silently falls back to the stub/manual flow (`twilioVoiceConfig()` in `api-server/src/lib/telephony.ts`); the Twilio TwiML App's Voice URL must point at `/api/webhooks/twilio/voice` on the public domain.
+
 ## Inbound dedup (shared)
 - `createInboundLead` (Meta Lead Ads + WhatsApp + Gmail paths) runs the A1 dedup agent first: `findOpenDuplicate(dealerId, input, { contactOnly: true })` — an open lead (phase not won/lost) in the SAME dealer matching normalized email OR phone (digit-suffix match tolerates +592 vs local formats) absorbs the enquiry via `mergeIntoExistingLead` (timeline `lead_merged`, interest/notes appended, missing contact filled, owner notified) instead of creating a duplicate. Website enquiries keep the stricter name+contact mode (default `findOpenDuplicate`).
 
