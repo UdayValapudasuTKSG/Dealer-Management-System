@@ -19,6 +19,7 @@ import { dealersTable } from "./dealers";
 export const CHECKLIST_STAGES = [
   "qualified",
   "test_drive",
+  "proposal",
   "negotiation",
   "sold",
 ] as const;
@@ -34,6 +35,7 @@ export const CHECKLIST_ITEM_KEYS = [
   "waiver_signed",
   "vehicle_available",
   "test_drive_completed",
+  "quote_sent",
   "deal_created",
   "deal_exists",
   "deposit_taken",
@@ -93,8 +95,12 @@ export const DEFAULT_STAGE_CHECKLISTS: Record<ChecklistStage, StageChecklistItem
       { key: "waiver_signed", label: "Test-drive waiver signed", enabled: true },
       { key: "vehicle_available", label: "Interested vehicle is available for a drive", enabled: true },
     ],
-    negotiation: [
+    proposal: [
       { key: "test_drive_completed", label: "Test drive completed (or explicitly booked)", enabled: true },
+      { key: "quote_sent", label: "Quotation sent to the customer", enabled: true },
+    ],
+    negotiation: [
+      { key: "quote_sent", label: "Quotation sent to the customer", enabled: false },
       { key: "deal_created", label: "Draft deal numbers entered (create a deal)", enabled: false },
     ],
     sold: [

@@ -158,7 +158,7 @@ export default function Deals() {
   const gatesForDeal = (dealId: number) =>
     (gates ?? []).filter((g) => g.refType === "deal" && g.refId === dealId);
 
-  const stages = ["desking", "negotiation", "finance", "committed", "delivered"];
+  const stages = ["desking", "committed", "delivered"];
 
   return (
     <>
@@ -251,8 +251,6 @@ export default function Deals() {
                 defaultValue: "desking",
                 options: [
                   { value: "desking", label: "Desking" },
-                  { value: "negotiation", label: "Negotiation" },
-                  { value: "finance", label: "Finance" },
                   { value: "committed", label: "Committed" },
                 ],
               },

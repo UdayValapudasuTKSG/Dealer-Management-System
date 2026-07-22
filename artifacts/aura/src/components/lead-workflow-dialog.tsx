@@ -55,12 +55,13 @@ import { formatGuyanaDateTime } from "@/lib/format";
 
 const NEXT_ADVANCE: Record<
   string,
-  { toStage: "qualified" | "test_drive" | "negotiation" | "sold"; label: string } | undefined
+  { toStage: "qualified" | "test_drive" | "proposal" | "negotiation" | "sold"; label: string } | undefined
 > = {
-  aware: { toStage: "qualified", label: "Qualified" },
-  consider: { toStage: "test_drive", label: "Test Drive" },
-  engage: { toStage: "negotiation", label: "Negotiation" },
-  negotiate: { toStage: "sold", label: "Sold" },
+  new: { toStage: "qualified", label: "Qualified" },
+  contacted: { toStage: "test_drive", label: "Test Drive" },
+  qualified: { toStage: "proposal", label: "Proposal" },
+  proposal: { toStage: "negotiation", label: "Negotiation" },
+  negotiation: { toStage: "sold", label: "Sold" },
 };
 
 const STATUS_LABEL: Record<string, string> = {

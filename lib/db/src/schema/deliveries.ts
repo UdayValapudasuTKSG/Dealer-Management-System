@@ -9,33 +9,32 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-/** Ordered delivery workflow steps — advanced strictly in sequence. */
+/**
+ * Ordered delivery workflow steps — advanced strictly in sequence.
+ * Canonical 9-step delivery SAGA (NC-3 / R2.9): EXACTLY 9 steps.
+ */
 export const DELIVERY_STEPS = [
   "sales_order",
-  "vehicle_prep",
-  "accessory_installation",
   "pdi_checklist",
   "registration",
   "insurance",
   "invoice",
-  "delivery_appointment",
-  "vehicle_delivery",
-  "customer_signature",
+  "appointment",
+  "delivery",
+  "signature",
   "feedback",
 ] as const;
 export type DeliveryStep = (typeof DELIVERY_STEPS)[number];
 
 export const DELIVERY_STEP_LABELS: Record<DeliveryStep, string> = {
   sales_order: "Sales Order",
-  vehicle_prep: "Vehicle Prep",
-  accessory_installation: "Accessory Installation",
   pdi_checklist: "PDI Checklist",
   registration: "Registration",
   insurance: "Insurance",
   invoice: "Invoice",
-  delivery_appointment: "Delivery Appointment",
-  vehicle_delivery: "Vehicle Delivery",
-  customer_signature: "Customer Signature",
+  appointment: "Delivery Appointment",
+  delivery: "Vehicle Delivery",
+  signature: "Customer Signature",
   feedback: "Feedback",
 };
 

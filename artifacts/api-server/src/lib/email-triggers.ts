@@ -219,9 +219,9 @@ export function onLeadUpdated(before: Lead, after: Lead): void {
         },
       });
     }
-    // "engage" is the Appointment phase — confirm the test drive (with a
+    // "qualified" is the Appointment phase — confirm the test drive (with a
     // calendar invite when a drive time is already on file).
-    if (after.phase === "engage" && before.phase !== "engage") {
+    if (after.phase === "qualified" && before.phase !== "qualified") {
       const owner = after.testDriveAt
         ? await ownerCalendarContact(after.ownerUserId)
         : null;

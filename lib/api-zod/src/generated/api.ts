@@ -178,7 +178,7 @@ export const ListVehiclesResponseItem = zod.object({
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']),
   "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
   "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
@@ -232,7 +232,7 @@ export const CreateVehicleBody = zod.object({
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']).optional(),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']).optional(),
   "imageUrl": zod.string().optional(),
   "images": zod.array(zod.string()).optional(),
   "accessories": zod.array(zod.string()).optional(),
@@ -267,7 +267,7 @@ export const CreateVehicleResponse = zod.object({
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']),
   "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
   "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
@@ -310,7 +310,7 @@ export const GetVehicleResponse = zod.object({
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']),
   "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
   "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
@@ -364,7 +364,7 @@ export const UpdateVehicleBody = zod.object({
   "mileageKm": zod.number().optional(),
   "exteriorColor": zod.string().optional(),
   "bodyType": zod.string().optional(),
-  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']).optional(),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']).optional(),
   "imageUrl": zod.string().optional(),
   "images": zod.array(zod.string()).optional(),
   "accessories": zod.array(zod.string()).optional(),
@@ -399,7 +399,7 @@ export const UpdateVehicleResponse = zod.object({
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']),
   "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
   "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
@@ -608,9 +608,9 @@ export const ListDeliveriesResponseItem = zod.object({
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
   "status": zod.enum(['in_progress', 'completed']),
-  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
-  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
   "status": zod.enum(['pending', 'completed']),
   "note": zod.string().nullish(),
@@ -655,9 +655,9 @@ export const CreateDeliveryResponse = zod.object({
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
   "status": zod.enum(['in_progress', 'completed']),
-  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
-  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
   "status": zod.enum(['pending', 'completed']),
   "note": zod.string().nullish(),
@@ -697,9 +697,9 @@ export const GetDeliveryResponse = zod.object({
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
   "status": zod.enum(['in_progress', 'completed']),
-  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
-  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
   "status": zod.enum(['pending', 'completed']),
   "note": zod.string().nullish(),
@@ -746,9 +746,9 @@ export const UpdateDeliveryResponse = zod.object({
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
   "status": zod.enum(['in_progress', 'completed']),
-  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
-  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
   "status": zod.enum(['pending', 'completed']),
   "note": zod.string().nullish(),
@@ -786,7 +786,7 @@ export const advanceDeliveryBodyFeedbackRatingMax = 5;
 
 
 export const AdvanceDeliveryBody = zod.object({
-  "step": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "step": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "note": zod.string().optional(),
   "appointmentAt": zod.coerce.date().optional(),
   "registrationNumber": zod.string().regex(advanceDeliveryBodyRegistrationNumberRegExp).optional().describe('Guyana plate — 3 uppercase letters followed by 1-4 digits (e.g. PAB 1234)'),
@@ -809,9 +809,9 @@ export const AdvanceDeliveryResponse = zod.object({
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
   "status": zod.enum(['in_progress', 'completed']),
-  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
-  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
   "status": zod.enum(['pending', 'completed']),
   "note": zod.string().nullish(),
@@ -861,9 +861,9 @@ export const UpdateDeliveryPdiResponse = zod.object({
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
   "status": zod.enum(['in_progress', 'completed']),
-  "currentStep": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
-  "key": zod.enum(['sales_order', 'vehicle_prep', 'accessory_installation', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'delivery_appointment', 'vehicle_delivery', 'customer_signature', 'feedback']),
+  "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
   "status": zod.enum(['pending', 'completed']),
   "note": zod.string().nullish(),
@@ -932,7 +932,7 @@ export const ListLeadsResponseItem = zod.object({
   "source": zod.string(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
@@ -988,7 +988,7 @@ export const CreateLeadBody = zod.object({
   "source": zod.string().min(1).optional(),
   "sourceDetail": zod.string().optional(),
   "priority": zod.enum(['high', 'medium', 'low']).optional(),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']).optional(),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional(),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']).optional(),
   "interestedVehicleId": zod.number().optional(),
   "selectedModel": zod.string().optional(),
@@ -1020,7 +1020,7 @@ export const CreateLeadResponse = zod.object({
   "source": zod.string(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
@@ -1083,7 +1083,7 @@ export const GetLeadResponse = zod.object({
   "source": zod.string(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
@@ -1144,7 +1144,7 @@ export const UpdateLeadBody = zod.object({
   "source": zod.string().min(1).optional(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']).optional(),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']).optional(),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']).optional(),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']).optional(),
   "interestedVehicleId": zod.number().optional(),
   "selectedModel": zod.string().nullish(),
@@ -1191,7 +1191,7 @@ export const UpdateLeadResponse = zod.object({
   "source": zod.string(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
@@ -1274,7 +1274,7 @@ export const CreateEnquiryResponse = zod.object({
   "source": zod.string(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
@@ -1448,7 +1448,7 @@ export const AssignLeadResponse = zod.object({
   "source": zod.string(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
@@ -1519,7 +1519,7 @@ export const AdvanceLeadStageParams = zod.object({
 })
 
 export const AdvanceLeadStageBody = zod.object({
-  "toStage": zod.enum(['qualified', 'test_drive', 'negotiation', 'sold'])
+  "toStage": zod.enum(['qualified', 'test_drive', 'proposal', 'negotiation', 'sold'])
 })
 
 
@@ -1536,7 +1536,7 @@ export const AdvanceLeadStageResponse = zod.object({
   "source": zod.string(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
@@ -1588,9 +1588,9 @@ export const GetLeadReviewParams = zod.object({
 export const GetLeadReviewResponse = zod.object({
   "leadId": zod.number(),
   "phase": zod.string(),
-  "nextStage": zod.union([zod.literal('qualified'),zod.literal('test_drive'),zod.literal('negotiation'),zod.literal('sold'),zod.literal(null)]).nullable(),
+  "nextStage": zod.union([zod.literal('qualified'),zod.literal('test_drive'),zod.literal('proposal'),zod.literal('negotiation'),zod.literal('sold'),zod.literal(null)]).nullable(),
   "stages": zod.array(zod.object({
-  "stage": zod.enum(['qualified', 'test_drive', 'negotiation', 'sold', 'delivery']),
+  "stage": zod.enum(['qualified', 'test_drive', 'proposal', 'negotiation', 'sold', 'delivery']),
   "label": zod.string(),
   "targetPhase": zod.string(),
   "state": zod.enum(['passed', 'current', 'upcoming']),
@@ -1633,7 +1633,7 @@ export const ScheduleTestDriveResponse = zod.object({
   "source": zod.string(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
@@ -1693,7 +1693,7 @@ export const CheckLeadAvailabilityResponse = zod.object({
   "source": zod.string(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
@@ -1757,7 +1757,7 @@ export const RecordLeadDecisionResponse = zod.object({
   "source": zod.string(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
@@ -2370,7 +2370,7 @@ export const ListDealsResponseItem = zod.object({
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
   "customerName": zod.string().nullish(),
-  "stage": zod.enum(['desking', 'negotiation', 'finance', 'committed', 'delivered', 'lost']),
+  "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
   "discount": zod.number(),
   "tradeInValue": zod.number(),
@@ -2391,7 +2391,7 @@ export const CreateDealBody = zod.object({
   "leadId": zod.number().optional(),
   "vehicleId": zod.number(),
   "customerName": zod.string().optional(),
-  "stage": zod.enum(['desking', 'negotiation', 'finance', 'committed', 'delivered', 'lost']).optional(),
+  "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']).optional(),
   "vehiclePrice": zod.number(),
   "discount": zod.number().optional(),
   "tradeInValue": zod.number().optional(),
@@ -2410,7 +2410,7 @@ export const CreateDealResponse = zod.object({
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
   "customerName": zod.string().nullish(),
-  "stage": zod.enum(['desking', 'negotiation', 'finance', 'committed', 'delivered', 'lost']),
+  "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
   "discount": zod.number(),
   "tradeInValue": zod.number(),
@@ -2435,7 +2435,7 @@ export const GetDealResponse = zod.object({
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
   "customerName": zod.string().nullish(),
-  "stage": zod.enum(['desking', 'negotiation', 'finance', 'committed', 'delivered', 'lost']),
+  "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
   "discount": zod.number(),
   "tradeInValue": zod.number(),
@@ -2458,7 +2458,7 @@ export const UpdateDealBody = zod.object({
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number().optional(),
   "customerName": zod.string().optional(),
-  "stage": zod.enum(['desking', 'negotiation', 'finance', 'committed', 'delivered', 'lost']).optional(),
+  "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']).optional(),
   "vehiclePrice": zod.number().optional(),
   "discount": zod.number().optional(),
   "tradeInValue": zod.number().optional(),
@@ -2477,7 +2477,7 @@ export const UpdateDealResponse = zod.object({
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
   "customerName": zod.string().nullish(),
-  "stage": zod.enum(['desking', 'negotiation', 'finance', 'committed', 'delivered', 'lost']),
+  "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
   "discount": zod.number(),
   "tradeInValue": zod.number(),
@@ -3162,7 +3162,7 @@ export const ListServiceOrdersResponseItem = zod.object({
   "customerName": zod.string().nullish(),
   "vehicleInfo": zod.string(),
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection']),
-  "status": zod.enum(['scheduled', 'checked_in', 'in_progress', 'awaiting_approval', 'completed', 'delivered']),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']),
   "scheduledDate": zod.coerce.date(),
   "complaint": zod.string().nullish(),
   "odometer": zod.number().nullish(),
@@ -3183,7 +3183,7 @@ export const CreateServiceOrderBody = zod.object({
   "customerName": zod.string().optional(),
   "vehicleInfo": zod.string().min(1),
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection']),
-  "status": zod.enum(['scheduled', 'checked_in', 'in_progress', 'awaiting_approval', 'completed', 'delivered']).optional(),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']).optional(),
   "scheduledDate": zod.coerce.date(),
   "complaint": zod.string().optional(),
   "odometer": zod.number().optional(),
@@ -3199,7 +3199,7 @@ export const CreateServiceOrderResponse = zod.object({
   "customerName": zod.string().nullish(),
   "vehicleInfo": zod.string(),
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection']),
-  "status": zod.enum(['scheduled', 'checked_in', 'in_progress', 'awaiting_approval', 'completed', 'delivered']),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']),
   "scheduledDate": zod.coerce.date(),
   "complaint": zod.string().nullish(),
   "odometer": zod.number().nullish(),
@@ -3217,7 +3217,7 @@ export const UpdateServiceOrderParams = zod.object({
 
 export const UpdateServiceOrderBody = zod.object({
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection']).optional(),
-  "status": zod.enum(['scheduled', 'checked_in', 'in_progress', 'awaiting_approval', 'completed', 'delivered']).optional(),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']).optional(),
   "scheduledDate": zod.coerce.date().optional(),
   "complaint": zod.string().optional(),
   "odometer": zod.number().optional(),
@@ -3233,7 +3233,7 @@ export const UpdateServiceOrderResponse = zod.object({
   "customerName": zod.string().nullish(),
   "vehicleInfo": zod.string(),
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection']),
-  "status": zod.enum(['scheduled', 'checked_in', 'in_progress', 'awaiting_approval', 'completed', 'delivered']),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']),
   "scheduledDate": zod.coerce.date(),
   "complaint": zod.string().nullish(),
   "odometer": zod.number().nullish(),
@@ -3278,7 +3278,7 @@ export const ListJobCardsResponseItem = zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
   "title": zod.string(),
-  "status": zod.enum(['open', 'in_progress', 'quality_check', 'completed']),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
   "technicianUserId": zod.number().nullish(),
   "technicianName": zod.string().nullish(),
   "checklist": zod.array(zod.object({
@@ -3316,7 +3316,7 @@ export const CreateJobCardResponse = zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
   "title": zod.string(),
-  "status": zod.enum(['open', 'in_progress', 'quality_check', 'completed']),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
   "technicianUserId": zod.number().nullish(),
   "technicianName": zod.string().nullish(),
   "checklist": zod.array(zod.object({
@@ -3338,7 +3338,7 @@ export const UpdateJobCardParams = zod.object({
 
 export const UpdateJobCardBody = zod.object({
   "title": zod.string().optional(),
-  "status": zod.enum(['open', 'in_progress', 'quality_check', 'completed']).optional(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']).optional(),
   "technicianUserId": zod.number().optional(),
   "technicianName": zod.string().optional(),
   "checklist": zod.array(zod.object({
@@ -3354,7 +3354,7 @@ export const UpdateJobCardResponse = zod.object({
   "id": zod.number(),
   "serviceOrderId": zod.number(),
   "title": zod.string(),
-  "status": zod.enum(['open', 'in_progress', 'quality_check', 'completed']),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
   "technicianUserId": zod.number().nullish(),
   "technicianName": zod.string().nullish(),
   "checklist": zod.array(zod.object({
@@ -3884,7 +3884,7 @@ export const CreateReviewResponse = zod.object({
  */
 export const ListCasesQueryParams = zod.object({
   "customerId": zod.coerce.number().optional(),
-  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']).optional(),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']).optional(),
   "refType": zod.coerce.string().optional(),
   "refId": zod.coerce.number().optional()
 })
@@ -3897,7 +3897,7 @@ export const ListCasesResponseItem = zod.object({
   "description": zod.string().nullish(),
   "type": zod.enum(['complaint', 'exception', 'inquiry']),
   "severity": zod.enum(['low', 'medium', 'high']),
-  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']),
   "refType": zod.string().nullish(),
   "refId": zod.number().nullish(),
   "assignedTo": zod.string().nullish(),
@@ -3936,7 +3936,7 @@ export const CreateCaseResponse = zod.object({
   "description": zod.string().nullish(),
   "type": zod.enum(['complaint', 'exception', 'inquiry']),
   "severity": zod.enum(['low', 'medium', 'high']),
-  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']),
   "refType": zod.string().nullish(),
   "refId": zod.number().nullish(),
   "assignedTo": zod.string().nullish(),
@@ -3959,7 +3959,7 @@ export const UpdateCaseBody = zod.object({
   "description": zod.string().nullish(),
   "type": zod.enum(['complaint', 'exception', 'inquiry']).optional(),
   "severity": zod.enum(['low', 'medium', 'high']).optional(),
-  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']).optional(),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']).optional(),
   "assignedTo": zod.string().nullish(),
   "resolutionNote": zod.string().nullish()
 })
@@ -3972,7 +3972,7 @@ export const UpdateCaseResponse = zod.object({
   "description": zod.string().nullish(),
   "type": zod.enum(['complaint', 'exception', 'inquiry']),
   "severity": zod.enum(['low', 'medium', 'high']),
-  "status": zod.enum(['open', 'in_progress', 'resolved', 'closed']),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']),
   "refType": zod.string().nullish(),
   "refId": zod.number().nullish(),
   "assignedTo": zod.string().nullish(),
@@ -4308,7 +4308,7 @@ export const GlobalSearchResponse = zod.object({
  * @summary AI-generated next actions for a pipeline stage
  */
 export const GetPipelineSuggestionsQueryParams = zod.object({
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost'])
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost'])
 })
 
 export const GetPipelineSuggestionsResponse = zod.object({
@@ -4448,7 +4448,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']),
   "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
   "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
@@ -4501,7 +4501,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']),
   "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
   "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
@@ -4522,7 +4522,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
   "customerName": zod.string().nullish(),
-  "stage": zod.enum(['desking', 'negotiation', 'finance', 'committed', 'delivered', 'lost']),
+  "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
   "discount": zod.number(),
   "tradeInValue": zod.number(),
@@ -4541,7 +4541,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "leadId": zod.number().nullish(),
   "vehicleId": zod.number(),
   "customerName": zod.string().nullish(),
-  "stage": zod.enum(['desking', 'negotiation', 'finance', 'committed', 'delivered', 'lost']),
+  "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
   "discount": zod.number(),
   "tradeInValue": zod.number(),
@@ -4606,7 +4606,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "customerName": zod.string().nullish(),
   "vehicleInfo": zod.string(),
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection']),
-  "status": zod.enum(['scheduled', 'checked_in', 'in_progress', 'awaiting_approval', 'completed', 'delivered']),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']),
   "scheduledDate": zod.coerce.date(),
   "complaint": zod.string().nullish(),
   "odometer": zod.number().nullish(),
@@ -4626,7 +4626,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "source": zod.string(),
   "sourceDetail": zod.string().nullish(),
   "priority": zod.enum(['high', 'medium', 'low']),
-  "phase": zod.enum(['aware', 'consider', 'engage', 'negotiate', 'won', 'lost']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
@@ -4902,7 +4902,7 @@ export const GetCustomerPersonaResponse = zod.object({
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']),
   "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
   "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
@@ -4991,7 +4991,7 @@ export const UpsertCustomerPersonaResponse = zod.object({
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']),
   "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
   "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
@@ -5061,7 +5061,7 @@ export const RecommendCustomerVehicleResponse = zod.object({
   "mileageKm": zod.number(),
   "exteriorColor": zod.string(),
   "bodyType": zod.string(),
-  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service']),
+  "status": zod.enum(['available', 'reserved', 'booked', 'delivered', 'in_transit', 'sold', 'service', 'under_repair']),
   "holdUntil": zod.coerce.date().nullish().describe('Soft lock — held around a booked test drive (single-unit models)'),
   "holdReason": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
@@ -5394,7 +5394,7 @@ export const GetCurrentUserResponse = zod.object({
   "dealers": zod.array(zod.object({
   "dealerId": zod.number(),
   "dealerName": zod.string(),
-  "dealerStatus": zod.enum(['active', 'suspended']).optional(),
+  "dealerStatus": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']).optional(),
   "roleName": zod.string().nullish(),
   "isGeneralManager": zod.boolean().optional(),
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD for this dealership')
@@ -5447,7 +5447,7 @@ export const ListDealersResponseItem = zod.object({
   "name": zod.string(),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'suspended']),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "userCount": zod.number().optional(),
@@ -5468,7 +5468,7 @@ export const CreateDealerBody = zod.object({
   "name": zod.string().min(1),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'suspended']).optional(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']).optional(),
   "usdExchangeRate": zod.number().gt(createDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled')
 })
@@ -5478,7 +5478,7 @@ export const CreateDealerResponse = zod.object({
   "name": zod.string(),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'suspended']),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "userCount": zod.number().optional(),
@@ -5502,7 +5502,7 @@ export const UpdateDealerBody = zod.object({
   "name": zod.string().min(1),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'suspended']).optional(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']).optional(),
   "usdExchangeRate": zod.number().gt(updateDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled')
 })
@@ -5512,7 +5512,7 @@ export const UpdateDealerResponse = zod.object({
   "name": zod.string(),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['active', 'suspended']),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "userCount": zod.number().optional(),
@@ -5727,7 +5727,7 @@ export const ListAdminUsersResponseItem = zod.object({
   "imageUrl": zod.string().nullish(),
   "roleId": zod.number().nullish(),
   "roleName": zod.string().nullish(),
-  "status": zod.enum(['active', 'suspended']),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
   "reportingManagerUserId": zod.number().nullish(),
   "reportingManagerName": zod.string().nullish(),
   "divisionId": zod.number().nullish(),
@@ -5754,7 +5754,7 @@ export const AddAdminUserResponse = zod.object({
   "imageUrl": zod.string().nullish(),
   "roleId": zod.number().nullish(),
   "roleName": zod.string().nullish(),
-  "status": zod.enum(['active', 'suspended']),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
   "reportingManagerUserId": zod.number().nullish(),
   "reportingManagerName": zod.string().nullish(),
   "divisionId": zod.number().nullish(),
@@ -5773,7 +5773,7 @@ export const UpdateAdminUserParams = zod.object({
 
 export const UpdateAdminUserBody = zod.object({
   "roleId": zod.number().nullish(),
-  "status": zod.enum(['active', 'suspended']).optional(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']).optional(),
   "reportingManagerUserId": zod.number().nullish(),
   "divisionId": zod.number().nullish()
 })
@@ -5786,7 +5786,7 @@ export const UpdateAdminUserResponse = zod.object({
   "imageUrl": zod.string().nullish(),
   "roleId": zod.number().nullish(),
   "roleName": zod.string().nullish(),
-  "status": zod.enum(['active', 'suspended']),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
   "reportingManagerUserId": zod.number().nullish(),
   "reportingManagerName": zod.string().nullish(),
   "divisionId": zod.number().nullish(),
@@ -6036,7 +6036,7 @@ export const listStageChecklistsResponseItemsItemLabelMax = 200;
 
 
 export const ListStageChecklistsResponseItem = zod.object({
-  "stage": zod.enum(['qualified', 'test_drive', 'negotiation', 'sold']),
+  "stage": zod.enum(['qualified', 'test_drive', 'proposal', 'negotiation', 'sold']),
   "version": zod.number(),
   "items": zod.array(zod.object({
   "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'deposit_taken', 'finance_approved']),
@@ -6053,7 +6053,7 @@ export const ListStageChecklistsResponse = zod.array(ListStageChecklistsResponse
  * @summary Save a new version of a stage's checklist (history preserved)
  */
 export const SetStageChecklistParams = zod.object({
-  "stage": zod.enum(['qualified', 'test_drive', 'negotiation', 'sold'])
+  "stage": zod.enum(['qualified', 'test_drive', 'proposal', 'negotiation', 'sold'])
 })
 
 export const setStageChecklistBodyItemsItemLabelMax = 200;
@@ -6073,7 +6073,7 @@ export const setStageChecklistResponseItemsItemLabelMax = 200;
 
 
 export const SetStageChecklistResponse = zod.object({
-  "stage": zod.enum(['qualified', 'test_drive', 'negotiation', 'sold']),
+  "stage": zod.enum(['qualified', 'test_drive', 'proposal', 'negotiation', 'sold']),
   "version": zod.number(),
   "items": zod.array(zod.object({
   "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'deposit_taken', 'finance_approved']),

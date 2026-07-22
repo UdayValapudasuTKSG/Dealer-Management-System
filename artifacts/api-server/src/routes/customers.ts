@@ -82,7 +82,7 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 },
 });
 
-const ACTIVE_DEAL_STAGES = ["desking", "negotiation", "finance", "committed"];
+const ACTIVE_DEAL_STAGES = ["desking", "committed"];
 
 // ---------------------------------------------------------------------------
 // Lead score: computed from persona completeness + intent + real activity.

@@ -717,7 +717,7 @@ export default function LeadDetail() {
 
   // ----- Journey stage nav (8-phase pipeline, label-only over phase+deal) ---
   const dealRank = (s: string) =>
-    s === "delivered" ? 3 : s === "committed" ? 2 : s === "finance" ? 1 : 0;
+    s === "delivered" ? 3 : s === "committed" ? 2 : 0;
   const linkedDeal = (allDeals ?? [])
     .filter(
       (d) =>
@@ -727,19 +727,20 @@ export default function LeadDetail() {
     .sort((a, b) => dealRank(b.stage) - dealRank(a.stage))[0];
   const journeyIndex = (() => {
     switch (lead.phase) {
-      case "aware":
+      case "new":
         return 0;
-      case "consider":
+      case "contacted":
         return 1;
-      case "engage":
+      case "qualified":
         return 2;
-      case "negotiate":
+      case "proposal":
+        return 3;
+      case "negotiation":
         return 3;
       case "won": {
         const s = linkedDeal?.stage;
         if (s === "delivered") return 7;
         if (s === "committed") return 6;
-        if (s === "finance") return 5;
         return 4;
       }
       default:
@@ -2264,7 +2265,7 @@ export default function LeadDetail() {
                 {linkedDeals.length === 0 ? (
                   <div className="space-y-2.5">
                     <p className="text-xs text-muted-foreground">
-                      {lead.phase === "negotiate" || lead.phase === "won"
+                      {lead.phase === "negotiation" || lead.phase === "won"
                         ? "This lead is in negotiation with no deal on file — desk one now so the numbers are tracked and later stage gates can pass."
                         : "No deal yet — that's normal at this stage. The sales advisor desks the deal when negotiation starts; if a vehicle is selected, AURA auto-desks a draft deal the moment this lead advances to Negotiation."}
                     </p>
@@ -2275,7 +2276,7 @@ export default function LeadDetail() {
                       <p className="text-xs text-muted-foreground">
                         {!lead.interestedVehicleId
                           ? "Select a vehicle of interest first — a deal is always desked against a specific vehicle."
-                          : lead.phase === "negotiate" || lead.phase === "won"
+                          : lead.phase === "negotiation" || lead.phase === "won"
                             ? "Desk the deal against the selected vehicle, then take a deposit to clear the Sold-stage gates."
                             : "Complete the current stage checklist. On advancing to Negotiation, a draft deal is created automatically at the listed price for the advisor to refine."}
                       </p>

@@ -11,7 +11,10 @@ export type CaseStatus = typeof CaseStatus[keyof typeof CaseStatus];
 
 export const CaseStatus = {
   open: 'open',
+  acknowledged: 'acknowledged',
   in_progress: 'in_progress',
+  on_hold: 'on_hold',
   resolved: 'resolved',
   closed: 'closed',
+  cancelled: 'cancelled',
 } as const;

@@ -79,7 +79,7 @@ export async function createInboundLead(opts: {
       channel: opts.channel,
       source: opts.source,
       priority: "medium",
-      phase: "aware",
+      phase: "new",
       status: "new",
       interestedVehicleId: opts.vehicle?.id ?? null,
       variant: opts.vehicle?.variant ?? null,

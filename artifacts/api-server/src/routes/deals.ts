@@ -33,13 +33,7 @@ const router: IRouter = Router();
 
 // Deals move forward one stage at a time (backwards moves allowed for
 // corrections back to the immediately preceding stage only).
-const DEAL_STAGE_ORDER = [
-  "desking",
-  "negotiation",
-  "finance",
-  "committed",
-  "delivered",
-];
+const DEAL_STAGE_ORDER = ["desking", "committed", "delivered"];
 
 // Discounts beyond this share of the vehicle price raise a below-floor
 // approval gate for a sales manager (the deal itself is not blocked).

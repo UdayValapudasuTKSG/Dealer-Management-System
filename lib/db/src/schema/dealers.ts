@@ -14,8 +14,18 @@ import { z } from "zod/v4";
 import { rolesTable } from "./roles";
 import { usersTable } from "./users";
 
-/** Dealer lifecycle: suspended = data plane frozen, agents disabled. */
-export const DEALER_STATUSES = ["active", "suspended"] as const;
+/**
+ * Canonical dealer control-plane machine (NC-3):
+ * provisioning → active → suspended → offboarding → closed.
+ * suspended = data plane frozen (writes 423), agents disabled.
+ */
+export const DEALER_STATUSES = [
+  "provisioning",
+  "active",
+  "suspended",
+  "offboarding",
+  "closed",
+] as const;
 export type DealerStatus = (typeof DEALER_STATUSES)[number];
 
 /**

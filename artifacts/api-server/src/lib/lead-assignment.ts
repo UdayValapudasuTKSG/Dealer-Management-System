@@ -22,7 +22,7 @@ import { logger } from "./logger";
 // (fallback: Sales Manager): whoever was assigned a lead least recently (or
 // never) is next — deterministic, plain code, no LLM. Managers can always
 // override via POST /leads/:id/assign. Mirrors the manual-assign side-effects:
-// status new→assigned, phase aware→consider, timeline event, advisor
+// status new→assigned, phase new→contacted, timeline event, advisor
 // notification, lead_assignment email — plus an agent activity entry.
 // Never throws: on any failure the lead simply stays unassigned for a human.
 // ---------------------------------------------------------------------------
@@ -129,8 +129,8 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
           lead.status === "new" || lead.status === "assigned"
             ? "assigned"
             : lead.status,
-        phase: lead.phase === "aware" ? "consider" : lead.phase,
-        ...(lead.phase === "aware" ? { stageEnteredAt: new Date() } : {}),
+        phase: lead.phase === "new" ? "contacted" : lead.phase,
+        ...(lead.phase === "new" ? { stageEnteredAt: new Date() } : {}),
       })
       .where(and(eq(leadsTable.id, lead.id), sql`owner_user_id is null`))
       .returning();

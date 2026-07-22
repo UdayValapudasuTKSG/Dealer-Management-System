@@ -12,6 +12,7 @@ export type StageChecklistConfigStage = typeof StageChecklistConfigStage[keyof t
 export const StageChecklistConfigStage = {
   qualified: 'qualified',
   test_drive: 'test_drive',
+  proposal: 'proposal',
   negotiation: 'negotiation',
   sold: 'sold',
 } as const;

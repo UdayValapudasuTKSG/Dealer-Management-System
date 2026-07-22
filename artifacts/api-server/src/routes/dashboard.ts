@@ -13,15 +13,16 @@ import {
 const router: IRouter = Router();
 
 const PIPELINE_PHASES: { phase: string; label: string }[] = [
-  { phase: "aware", label: "Aware" },
-  { phase: "consider", label: "Consider" },
-  { phase: "engage", label: "Engage" },
-  { phase: "negotiate", label: "Negotiate" },
+  { phase: "new", label: "New" },
+  { phase: "contacted", label: "Contacted" },
+  { phase: "qualified", label: "Qualified" },
+  { phase: "proposal", label: "Proposal" },
+  { phase: "negotiation", label: "Negotiation" },
   { phase: "won", label: "Won" },
 ];
 
-const ACTIVE_DEAL_STAGES = ["desking", "negotiation", "finance", "committed"];
-const CLOSED_SERVICE = ["completed", "delivered"];
+const ACTIVE_DEAL_STAGES = ["desking", "committed"];
+const CLOSED_SERVICE = ["resolved", "closed"];
 
 router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);

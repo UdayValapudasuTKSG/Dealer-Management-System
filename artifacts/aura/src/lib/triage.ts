@@ -230,7 +230,7 @@ export function buildTriage(
   for (const d of deals ?? []) {
     if (
       !d.depositPaid &&
-      (d.stage === "negotiation" || d.stage === "desking" || d.stage === "finance")
+      d.stage === "desking"
     ) {
       today.push({
         kind: "deposit",
@@ -262,8 +262,8 @@ export function buildTriage(
   }
 
   for (const so of serviceOrders ?? []) {
-    if (so.status === "completed" || so.status === "delivered") continue;
-    if (so.status === "awaiting_approval") {
+    if (so.status === "resolved" || so.status === "closed" || so.status === "cancelled") continue;
+    if (so.status === "on_hold") {
       urgent.push({
         kind: "service",
         bucket: "urgent",
@@ -283,7 +283,7 @@ export function buildTriage(
         key: `service-${so.id}`,
         context: so.vehicleInfo,
         subContext:
-          so.status === "scheduled" ? "Service due today" : "Service in bay",
+          so.status === "open" ? "Service due today" : "Service in bay",
         assignee: so.technician ?? null,
         href: "/service",
         rank: 2,

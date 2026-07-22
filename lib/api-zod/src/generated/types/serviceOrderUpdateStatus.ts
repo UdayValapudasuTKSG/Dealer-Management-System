@@ -10,10 +10,11 @@ export type ServiceOrderUpdateStatus = typeof ServiceOrderUpdateStatus[keyof typ
 
 
 export const ServiceOrderUpdateStatus = {
-  scheduled: 'scheduled',
-  checked_in: 'checked_in',
+  open: 'open',
+  acknowledged: 'acknowledged',
   in_progress: 'in_progress',
-  awaiting_approval: 'awaiting_approval',
-  completed: 'completed',
-  delivered: 'delivered',
+  on_hold: 'on_hold',
+  resolved: 'resolved',
+  closed: 'closed',
+  cancelled: 'cancelled',
 } as const;

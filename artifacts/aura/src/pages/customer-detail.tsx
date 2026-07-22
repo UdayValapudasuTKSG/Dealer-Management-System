@@ -84,12 +84,20 @@ export default function CustomerDetail() {
     relations,
   } = data;
 
-  const JOURNEY_PHASES = ["aware", "consider", "engage", "negotiate", "won"] as const;
+  const JOURNEY_PHASES = [
+    "new",
+    "contacted",
+    "qualified",
+    "proposal",
+    "negotiation",
+    "won",
+  ] as const;
   const JOURNEY_LABEL: Record<string, string> = {
-    aware: "New Lead",
-    consider: "Qualified",
-    engage: "Test Drive",
-    negotiate: "Negotiation",
+    new: "New Lead",
+    contacted: "Contacted",
+    qualified: "Qualified",
+    proposal: "Proposal",
+    negotiation: "Negotiation",
     won: "Delivered",
   };
   const leadPhaseIndex = leads.reduce(
@@ -100,7 +108,7 @@ export default function CustomerDetail() {
     const idx =
       d.stage === "delivered"
         ? 4
-        : ["desking", "negotiation", "finance", "committed"].includes(d.stage)
+        : ["desking", "committed"].includes(d.stage)
           ? 3
           : -1;
     return Math.max(max, idx);

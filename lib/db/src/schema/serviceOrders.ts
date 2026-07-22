@@ -10,6 +10,21 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
+/**
+ * Canonical service-order (Case) machine (NC-3):
+ * open → acknowledged → in_progress → on_hold → resolved → closed (+ cancelled).
+ */
+export const SERVICE_ORDER_STATUSES = [
+  "open",
+  "acknowledged",
+  "in_progress",
+  "on_hold",
+  "resolved",
+  "closed",
+  "cancelled",
+] as const;
+export type ServiceOrderStatus = (typeof SERVICE_ORDER_STATUSES)[number];
+
 export const serviceOrdersTable = pgTable("service_orders", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
@@ -17,7 +32,7 @@ export const serviceOrdersTable = pgTable("service_orders", {
   customerName: text("customer_name"),
   vehicleInfo: text("vehicle_info").notNull(),
   type: text("type").notNull().default("maintenance"),
-  status: text("status").notNull().default("scheduled"),
+  status: text("status").notNull().default("open"),
   scheduledDate: date("scheduled_date", { mode: "string" }).notNull(),
   complaint: text("complaint"),
   odometer: integer("odometer"),
@@ -32,6 +47,7 @@ export const serviceOrdersTable = pgTable("service_orders", {
 
 export const insertServiceOrderSchema = createInsertSchema(
   serviceOrdersTable,
+  { status: z.enum(SERVICE_ORDER_STATUSES) },
 ).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertServiceOrder = z.infer<typeof insertServiceOrderSchema>;
 export type ServiceOrder = typeof serviceOrdersTable.$inferSelect;

@@ -53,15 +53,13 @@ import { ShieldCheck } from "lucide-react";
 
 const STEP_ICONS: Record<string, React.ReactNode> = {
   sales_order: <FileText className="w-4 h-4" />,
-  payment_clearance: <CheckCircle2 className="w-4 h-4" />,
-  vehicle_allocation: <Truck className="w-4 h-4" />,
   pdi_checklist: <ClipboardCheck className="w-4 h-4" />,
   registration: <FileText className="w-4 h-4" />,
   insurance: <FileText className="w-4 h-4" />,
-  accessories_fitment: <ClipboardCheck className="w-4 h-4" />,
   invoice: <FileText className="w-4 h-4" />,
-  delivery_appointment: <CalendarClock className="w-4 h-4" />,
-  customer_signature: <PenLine className="w-4 h-4" />,
+  delivery: <Truck className="w-4 h-4" />,
+  appointment: <CalendarClock className="w-4 h-4" />,
+  signature: <PenLine className="w-4 h-4" />,
   feedback: <Star className="w-4 h-4" />,
 };
 
@@ -400,7 +398,7 @@ function DeliveryDetail({
             />
           </div>
         );
-      case "delivery_appointment":
+      case "appointment":
         return (
           <Input
             type="datetime-local"
@@ -408,7 +406,7 @@ function DeliveryDetail({
             onChange={(e) => setForm({ ...form, appointmentAt: e.target.value })}
           />
         );
-      case "customer_signature":
+      case "signature":
         return (
           <Input
             placeholder="Customer's full name (signature)"

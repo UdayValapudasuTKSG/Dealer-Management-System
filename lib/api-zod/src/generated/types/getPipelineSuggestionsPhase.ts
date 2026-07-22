@@ -10,10 +10,11 @@ export type GetPipelineSuggestionsPhase = typeof GetPipelineSuggestionsPhase[key
 
 
 export const GetPipelineSuggestionsPhase = {
-  aware: 'aware',
-  consider: 'consider',
-  engage: 'engage',
-  negotiate: 'negotiate',
+  new: 'new',
+  contacted: 'contacted',
+  qualified: 'qualified',
+  proposal: 'proposal',
+  negotiation: 'negotiation',
   won: 'won',
   lost: 'lost',
 } as const;

@@ -1154,8 +1154,8 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
         existing.status === "new" || existing.status === "assigned"
           ? "assigned"
           : existing.status,
-      phase: existing.phase === "aware" ? "consider" : existing.phase,
-      ...(existing.phase === "aware" ? { stageEnteredAt: new Date() } : {}),
+      phase: existing.phase === "new" ? "contacted" : existing.phase,
+      ...(existing.phase === "new" ? { stageEnteredAt: new Date() } : {}),
     })
     .where(
       and(
@@ -1578,10 +1578,10 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
       testDriveWaiver: true,
       status: "test_drive",
       phase:
-        existing.phase === "aware" || existing.phase === "consider"
-          ? "engage"
+        existing.phase === "new" || existing.phase === "contacted"
+          ? "qualified"
           : existing.phase,
-      ...(existing.phase === "aware" || existing.phase === "consider"
+      ...(existing.phase === "new" || existing.phase === "contacted"
         ? { stageEnteredAt: new Date() }
         : {}),
     })
@@ -1811,7 +1811,7 @@ router.post("/leads/:id/decision", async (req, res): Promise<void> => {
     .set({
       purchaseType: choice,
       status: "converted",
-      phase: "negotiate",
+      phase: "negotiation",
       stageEnteredAt: new Date(),
     })
     .where(
@@ -1974,10 +1974,11 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
 // AI agent brief — per-lead next best actions + draft follow-up
 // ---------------------------------------------------------------------------
 const BRIEF_STAGE_GOAL: Record<string, string> = {
-  aware: "make first contact within 24 hours and qualify interest",
-  consider: "log the first call, capture budget and financing preference",
-  engage: "book the test drive, qualify financing, and send the quotation",
-  negotiate: "secure the reservation fee and lock the selected model",
+  new: "make first contact within 24 hours and qualify interest",
+  contacted: "log the first call, capture budget and financing preference",
+  qualified: "book the test drive, qualify financing, and send the quotation",
+  proposal: "present the quotation and align on the offer",
+  negotiation: "secure the reservation fee and lock the selected model",
   won: "allocate the unit, clear payment, and deliver flawlessly",
   lost: "understand the loss and plan re-engagement",
 };

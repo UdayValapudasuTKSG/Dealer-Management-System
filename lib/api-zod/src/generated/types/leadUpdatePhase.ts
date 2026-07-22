@@ -10,10 +10,11 @@ export type LeadUpdatePhase = typeof LeadUpdatePhase[keyof typeof LeadUpdatePhas
 
 
 export const LeadUpdatePhase = {
-  aware: 'aware',
-  consider: 'consider',
-  engage: 'engage',
-  negotiate: 'negotiate',
+  new: 'new',
+  contacted: 'contacted',
+  qualified: 'qualified',
+  proposal: 'proposal',
+  negotiation: 'negotiation',
   won: 'won',
   lost: 'lost',
 } as const;

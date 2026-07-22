@@ -53,8 +53,11 @@ export type DealerMembershipInfoDealerStatus = typeof DealerMembershipInfoDealer
 
 
 export const DealerMembershipInfoDealerStatus = {
+  provisioning: 'provisioning',
   active: 'active',
   suspended: 'suspended',
+  offboarding: 'offboarding',
+  closed: 'closed',
 } as const;
 
 export interface DealerMembershipInfo {
@@ -94,8 +97,11 @@ export type DealerStatus = typeof DealerStatus[keyof typeof DealerStatus];
 
 
 export const DealerStatus = {
+  provisioning: 'provisioning',
   active: 'active',
   suspended: 'suspended',
+  offboarding: 'offboarding',
+  closed: 'closed',
 } as const;
 
 export interface Dealer {
@@ -117,8 +123,11 @@ export type DealerInputStatus = typeof DealerInputStatus[keyof typeof DealerInpu
 
 
 export const DealerInputStatus = {
+  provisioning: 'provisioning',
   active: 'active',
   suspended: 'suspended',
+  offboarding: 'offboarding',
+  closed: 'closed',
 } as const;
 
 export interface DealerInput {
@@ -261,8 +270,11 @@ export type AdminUserStatus = typeof AdminUserStatus[keyof typeof AdminUserStatu
 
 
 export const AdminUserStatus = {
+  provisioning: 'provisioning',
   active: 'active',
   suspended: 'suspended',
+  offboarding: 'offboarding',
+  closed: 'closed',
 } as const;
 
 export interface AdminUser {
@@ -296,8 +308,11 @@ export type AdminUserUpdateStatus = typeof AdminUserUpdateStatus[keyof typeof Ad
 
 
 export const AdminUserUpdateStatus = {
+  provisioning: 'provisioning',
   active: 'active',
   suspended: 'suspended',
+  offboarding: 'offboarding',
+  closed: 'closed',
 } as const;
 
 export interface AdminUserUpdate {
@@ -418,6 +433,7 @@ export type StageChecklistConfigStage = typeof StageChecklistConfigStage[keyof t
 export const StageChecklistConfigStage = {
   qualified: 'qualified',
   test_drive: 'test_drive',
+  proposal: 'proposal',
   negotiation: 'negotiation',
   sold: 'sold',
 } as const;
@@ -637,6 +653,7 @@ export const VehicleStatus = {
   in_transit: 'in_transit',
   sold: 'sold',
   service: 'service',
+  under_repair: 'under_repair',
 } as const;
 
 export interface VehicleDocument {
@@ -714,6 +731,7 @@ export const VehicleInputStatus = {
   in_transit: 'in_transit',
   sold: 'sold',
   service: 'service',
+  under_repair: 'under_repair',
 } as const;
 
 export interface VehicleInput {
@@ -785,6 +803,7 @@ export const VehicleUpdateStatus = {
   in_transit: 'in_transit',
   sold: 'sold',
   service: 'service',
+  under_repair: 'under_repair',
 } as const;
 
 export interface VehicleUpdate {
@@ -944,15 +963,13 @@ export type DeliveryStepStateKey = typeof DeliveryStepStateKey[keyof typeof Deli
 
 export const DeliveryStepStateKey = {
   sales_order: 'sales_order',
-  vehicle_prep: 'vehicle_prep',
-  accessory_installation: 'accessory_installation',
   pdi_checklist: 'pdi_checklist',
   registration: 'registration',
   insurance: 'insurance',
   invoice: 'invoice',
-  delivery_appointment: 'delivery_appointment',
-  vehicle_delivery: 'vehicle_delivery',
-  customer_signature: 'customer_signature',
+  appointment: 'appointment',
+  delivery: 'delivery',
+  signature: 'signature',
   feedback: 'feedback',
 } as const;
 
@@ -994,15 +1011,13 @@ export type DeliveryCurrentStep = typeof DeliveryCurrentStep[keyof typeof Delive
 
 export const DeliveryCurrentStep = {
   sales_order: 'sales_order',
-  vehicle_prep: 'vehicle_prep',
-  accessory_installation: 'accessory_installation',
   pdi_checklist: 'pdi_checklist',
   registration: 'registration',
   insurance: 'insurance',
   invoice: 'invoice',
-  delivery_appointment: 'delivery_appointment',
-  vehicle_delivery: 'vehicle_delivery',
-  customer_signature: 'customer_signature',
+  appointment: 'appointment',
+  delivery: 'delivery',
+  signature: 'signature',
   feedback: 'feedback',
 } as const;
 
@@ -1064,15 +1079,13 @@ export type DeliveryAdvanceInputStep = typeof DeliveryAdvanceInputStep[keyof typ
 
 export const DeliveryAdvanceInputStep = {
   sales_order: 'sales_order',
-  vehicle_prep: 'vehicle_prep',
-  accessory_installation: 'accessory_installation',
   pdi_checklist: 'pdi_checklist',
   registration: 'registration',
   insurance: 'insurance',
   invoice: 'invoice',
-  delivery_appointment: 'delivery_appointment',
-  vehicle_delivery: 'vehicle_delivery',
-  customer_signature: 'customer_signature',
+  appointment: 'appointment',
+  delivery: 'delivery',
+  signature: 'signature',
   feedback: 'feedback',
 } as const;
 
@@ -1265,10 +1278,11 @@ export type LeadPhase = typeof LeadPhase[keyof typeof LeadPhase];
 
 
 export const LeadPhase = {
-  aware: 'aware',
-  consider: 'consider',
-  engage: 'engage',
-  negotiate: 'negotiate',
+  new: 'new',
+  contacted: 'contacted',
+  qualified: 'qualified',
+  proposal: 'proposal',
+  negotiation: 'negotiation',
   won: 'won',
   lost: 'lost',
 } as const;
@@ -1412,10 +1426,11 @@ export type LeadInputPhase = typeof LeadInputPhase[keyof typeof LeadInputPhase];
 
 
 export const LeadInputPhase = {
-  aware: 'aware',
-  consider: 'consider',
-  engage: 'engage',
-  negotiate: 'negotiate',
+  new: 'new',
+  contacted: 'contacted',
+  qualified: 'qualified',
+  proposal: 'proposal',
+  negotiation: 'negotiation',
   won: 'won',
   lost: 'lost',
 } as const;
@@ -1488,10 +1503,11 @@ export type LeadUpdatePhase = typeof LeadUpdatePhase[keyof typeof LeadUpdatePhas
 
 
 export const LeadUpdatePhase = {
-  aware: 'aware',
-  consider: 'consider',
-  engage: 'engage',
-  negotiate: 'negotiate',
+  new: 'new',
+  contacted: 'contacted',
+  qualified: 'qualified',
+  proposal: 'proposal',
+  negotiation: 'negotiation',
   won: 'won',
   lost: 'lost',
 } as const;
@@ -1947,6 +1963,7 @@ export type LeadAdvanceInputToStage = typeof LeadAdvanceInputToStage[keyof typeo
 export const LeadAdvanceInputToStage = {
   qualified: 'qualified',
   test_drive: 'test_drive',
+  proposal: 'proposal',
   negotiation: 'negotiation',
   sold: 'sold',
 } as const;
@@ -1973,6 +1990,7 @@ export type LeadReviewStageStage = typeof LeadReviewStageStage[keyof typeof Lead
 export const LeadReviewStageStage = {
   qualified: 'qualified',
   test_drive: 'test_drive',
+  proposal: 'proposal',
   negotiation: 'negotiation',
   sold: 'sold',
   delivery: 'delivery',
@@ -2004,6 +2022,7 @@ export type LeadReviewNextStage = typeof LeadReviewNextStage[keyof typeof LeadRe
 export const LeadReviewNextStage = {
   qualified: 'qualified',
   test_drive: 'test_drive',
+  proposal: 'proposal',
   negotiation: 'negotiation',
   sold: 'sold',
 } as const;
@@ -2463,10 +2482,9 @@ export type DealStage = typeof DealStage[keyof typeof DealStage];
 
 export const DealStage = {
   desking: 'desking',
-  negotiation: 'negotiation',
-  finance: 'finance',
   committed: 'committed',
   delivered: 'delivered',
+  cancelled: 'cancelled',
   lost: 'lost',
 } as const;
 
@@ -2502,10 +2520,9 @@ export type DealInputStage = typeof DealInputStage[keyof typeof DealInputStage];
 
 export const DealInputStage = {
   desking: 'desking',
-  negotiation: 'negotiation',
-  finance: 'finance',
   committed: 'committed',
   delivered: 'delivered',
+  cancelled: 'cancelled',
   lost: 'lost',
 } as const;
 
@@ -2532,10 +2549,9 @@ export type DealUpdateStage = typeof DealUpdateStage[keyof typeof DealUpdateStag
 
 export const DealUpdateStage = {
   desking: 'desking',
-  negotiation: 'negotiation',
-  finance: 'finance',
   committed: 'committed',
   delivered: 'delivered',
+  cancelled: 'cancelled',
   lost: 'lost',
 } as const;
 
@@ -3073,12 +3089,13 @@ export type ServiceOrderStatus = typeof ServiceOrderStatus[keyof typeof ServiceO
 
 
 export const ServiceOrderStatus = {
-  scheduled: 'scheduled',
-  checked_in: 'checked_in',
+  open: 'open',
+  acknowledged: 'acknowledged',
   in_progress: 'in_progress',
-  awaiting_approval: 'awaiting_approval',
-  completed: 'completed',
-  delivered: 'delivered',
+  on_hold: 'on_hold',
+  resolved: 'resolved',
+  closed: 'closed',
+  cancelled: 'cancelled',
 } as const;
 
 export interface ServiceOrder {
@@ -3119,12 +3136,13 @@ export type ServiceOrderInputStatus = typeof ServiceOrderInputStatus[keyof typeo
 
 
 export const ServiceOrderInputStatus = {
-  scheduled: 'scheduled',
-  checked_in: 'checked_in',
+  open: 'open',
+  acknowledged: 'acknowledged',
   in_progress: 'in_progress',
-  awaiting_approval: 'awaiting_approval',
-  completed: 'completed',
-  delivered: 'delivered',
+  on_hold: 'on_hold',
+  resolved: 'resolved',
+  closed: 'closed',
+  cancelled: 'cancelled',
 } as const;
 
 export interface ServiceOrderInput {
@@ -3158,12 +3176,13 @@ export type ServiceOrderUpdateStatus = typeof ServiceOrderUpdateStatus[keyof typ
 
 
 export const ServiceOrderUpdateStatus = {
-  scheduled: 'scheduled',
-  checked_in: 'checked_in',
+  open: 'open',
+  acknowledged: 'acknowledged',
   in_progress: 'in_progress',
-  awaiting_approval: 'awaiting_approval',
-  completed: 'completed',
-  delivered: 'delivered',
+  on_hold: 'on_hold',
+  resolved: 'resolved',
+  closed: 'closed',
+  cancelled: 'cancelled',
 } as const;
 
 export interface ServiceOrderUpdate {
@@ -3200,8 +3219,10 @@ export type JobCardStatus = typeof JobCardStatus[keyof typeof JobCardStatus];
 export const JobCardStatus = {
   open: 'open',
   in_progress: 'in_progress',
-  quality_check: 'quality_check',
+  on_hold: 'on_hold',
   completed: 'completed',
+  closed: 'closed',
+  cancelled: 'cancelled',
 } as const;
 
 export interface JobCard {
@@ -3243,8 +3264,10 @@ export type JobCardUpdateStatus = typeof JobCardUpdateStatus[keyof typeof JobCar
 export const JobCardUpdateStatus = {
   open: 'open',
   in_progress: 'in_progress',
-  quality_check: 'quality_check',
+  on_hold: 'on_hold',
   completed: 'completed',
+  closed: 'closed',
+  cancelled: 'cancelled',
 } as const;
 
 export interface JobCardUpdate {
@@ -3749,9 +3772,12 @@ export type CaseStatus = typeof CaseStatus[keyof typeof CaseStatus];
 
 export const CaseStatus = {
   open: 'open',
+  acknowledged: 'acknowledged',
   in_progress: 'in_progress',
+  on_hold: 'on_hold',
   resolved: 'resolved',
   closed: 'closed',
+  cancelled: 'cancelled',
 } as const;
 
 export interface Case {
@@ -3841,9 +3867,12 @@ export type CaseUpdateStatus = typeof CaseUpdateStatus[keyof typeof CaseUpdateSt
 
 export const CaseUpdateStatus = {
   open: 'open',
+  acknowledged: 'acknowledged',
   in_progress: 'in_progress',
+  on_hold: 'on_hold',
   resolved: 'resolved',
   closed: 'closed',
+  cancelled: 'cancelled',
 } as const;
 
 export interface CaseUpdate {
@@ -4809,9 +4838,12 @@ export type ListCasesStatus = typeof ListCasesStatus[keyof typeof ListCasesStatu
 
 export const ListCasesStatus = {
   open: 'open',
+  acknowledged: 'acknowledged',
   in_progress: 'in_progress',
+  on_hold: 'on_hold',
   resolved: 'resolved',
   closed: 'closed',
+  cancelled: 'cancelled',
 } as const;
 
 export type ListAgentRunsParams = {
@@ -4862,10 +4894,11 @@ export type GetPipelineSuggestionsPhase = typeof GetPipelineSuggestionsPhase[key
 
 
 export const GetPipelineSuggestionsPhase = {
-  aware: 'aware',
-  consider: 'consider',
-  engage: 'engage',
-  negotiate: 'negotiate',
+  new: 'new',
+  contacted: 'contacted',
+  qualified: 'qualified',
+  proposal: 'proposal',
+  negotiation: 'negotiation',
   won: 'won',
   lost: 'lost',
 } as const;

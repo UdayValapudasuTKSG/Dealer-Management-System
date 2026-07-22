@@ -67,10 +67,10 @@ const TOOLTIP_STYLE = {
 
 /* DMS stage labels are a label-only mapping over lead phase. */
 const FUNNEL_STAGES: { key: string; label: string; match: (l: Lead) => boolean }[] = [
-  { key: "new", label: "New", match: (l) => l.phase === "aware" },
-  { key: "contacted", label: "Contacted", match: (l) => l.phase === "consider" },
-  { key: "engaged", label: "Engaged", match: (l) => l.phase === "engage" },
-  { key: "prebook", label: "Pre-Book", match: (l) => l.phase === "negotiate" },
+  { key: "new", label: "New", match: (l) => l.phase === "new" },
+  { key: "contacted", label: "Contacted", match: (l) => l.phase === "contacted" },
+  { key: "engaged", label: "Engaged", match: (l) => l.phase === "qualified" || l.phase === "proposal" },
+  { key: "prebook", label: "Pre-Book", match: (l) => l.phase === "negotiation" },
   { key: "won", label: "Won", match: (l) => l.phase === "won" },
 ];
 

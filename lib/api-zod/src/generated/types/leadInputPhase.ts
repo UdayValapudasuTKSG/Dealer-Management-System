@@ -10,10 +10,11 @@ export type LeadInputPhase = typeof LeadInputPhase[keyof typeof LeadInputPhase];
 
 
 export const LeadInputPhase = {
-  aware: 'aware',
-  consider: 'consider',
-  engage: 'engage',
-  negotiate: 'negotiate',
+  new: 'new',
+  contacted: 'contacted',
+  qualified: 'qualified',
+  proposal: 'proposal',
+  negotiation: 'negotiation',
   won: 'won',
   lost: 'lost',
 } as const;

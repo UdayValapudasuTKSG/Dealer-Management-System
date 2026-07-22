@@ -11,9 +11,8 @@ export type DealInputStage = typeof DealInputStage[keyof typeof DealInputStage];
 
 export const DealInputStage = {
   desking: 'desking',
-  negotiation: 'negotiation',
-  finance: 'finance',
   committed: 'committed',
   delivered: 'delivered',
+  cancelled: 'cancelled',
   lost: 'lost',
 } as const;

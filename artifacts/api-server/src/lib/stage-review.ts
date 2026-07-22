@@ -8,18 +8,27 @@ import { db, vehiclesTable, type Lead } from "@workspace/db";
 // ---------------------------------------------------------------------------
 
 export const ADVANCE_TARGET_PHASE = {
-  qualified: "consider",
-  test_drive: "engage",
-  negotiation: "negotiate",
+  qualified: "contacted",
+  test_drive: "qualified",
+  proposal: "proposal",
+  negotiation: "negotiation",
   sold: "won",
 } as const;
 export type AdvanceStage = keyof typeof ADVANCE_TARGET_PHASE;
 
-export const PHASE_ORDER = ["aware", "consider", "engage", "negotiate", "won"];
+export const PHASE_ORDER = [
+  "new",
+  "contacted",
+  "qualified",
+  "proposal",
+  "negotiation",
+  "won",
+];
 
 export const REVIEW_STAGE_LABEL: Record<string, string> = {
   qualified: "Qualification",
   test_drive: "Test Drive",
+  proposal: "Proposal",
   negotiation: "Negotiation",
   sold: "Booking Confirmed",
 };
@@ -27,6 +36,7 @@ export const REVIEW_STAGE_LABEL: Record<string, string> = {
 export const ADVANCE_STAGE_LABEL: Record<string, string> = {
   qualified: "Qualified",
   test_drive: "Test Drive",
+  proposal: "Proposal",
   negotiation: "Negotiation",
   sold: "Sold",
 };
@@ -42,6 +52,7 @@ export const CHECK_OWNER: Record<string, string> = {
   waiver_signed: "Customer",
   vehicle_available: "Inventory",
   test_drive_completed: "Sales Advisor",
+  quote_sent: "Sales Advisor",
   deal_created: "Sales Manager",
   deal_exists: "Sales Manager",
   deposit_taken: "Finance",
@@ -89,6 +100,7 @@ export function buildStageChecks(
       return !v || v.status === "available" || v.status === "reserved";
     },
     test_drive_completed: () => Boolean(lead.testDriveAt),
+    quote_sent: () => Boolean(lead.quotationSent),
     deal_created: () => leadDeals.length > 0,
     deal_exists: () => Boolean(deal),
     deposit_taken: () =>

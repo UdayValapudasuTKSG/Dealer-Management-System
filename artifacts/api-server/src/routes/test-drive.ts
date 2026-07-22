@@ -236,10 +236,10 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
       testDriveWaiver: true,
       status: "test_drive",
       phase:
-        lead.phase === "aware" || lead.phase === "consider"
-          ? "engage"
+        lead.phase === "new" || lead.phase === "contacted"
+          ? "qualified"
           : lead.phase,
-      ...(lead.phase === "aware" || lead.phase === "consider"
+      ...(lead.phase === "new" || lead.phase === "contacted"
         ? { stageEnteredAt: new Date() }
         : {}),
     })

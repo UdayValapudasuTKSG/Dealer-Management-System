@@ -17,4 +17,5 @@ export const VehicleStatus = {
   in_transit: 'in_transit',
   sold: 'sold',
   service: 'service',
+  under_repair: 'under_repair',
 } as const;

@@ -89,8 +89,10 @@ type TabKey = (typeof TABS)[number]["key"];
 const JOB_STATUS_LABEL: Record<string, string> = {
   open: "Open",
   in_progress: "In Progress",
-  quality_check: "Quality Check",
+  on_hold: "On Hold",
   completed: "Completed",
+  closed: "Closed",
+  cancelled: "Cancelled",
 };
 
 export default function Service() {
@@ -337,7 +339,7 @@ function BookingsTab() {
                   <td className="px-4 py-2">
                     <span
                       className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest ${
-                        order.status === "completed"
+                        order.status === "resolved" || order.status === "closed"
                           ? "bg-primary/15 text-primary"
                           : "bg-foreground/[0.06] text-muted-foreground"
                       }`}
@@ -383,7 +385,7 @@ function BookingsTab() {
           >
             <Card className="glass-panel border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl overflow-hidden group relative">
               <div
-                className={`absolute top-0 bottom-0 left-0 w-1.5 ${order.status === "completed" ? "bg-primary" : "bg-white/10"}`}
+                className={`absolute top-0 bottom-0 left-0 w-1.5 ${order.status === "resolved" || order.status === "closed" ? "bg-primary" : "bg-white/10"}`}
               />
               <CardContent className="p-6 md:p-7 flex flex-col md:flex-row gap-6 justify-between pl-7 md:pl-8">
                 <div className="flex gap-4 items-start w-full md:w-2/5">
@@ -635,8 +637,9 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
 
   const NEXT: Record<string, JobCard["status"] | undefined> = {
     open: "in_progress",
-    in_progress: "quality_check",
-    quality_check: "completed",
+    in_progress: "completed",
+    on_hold: "in_progress",
+    completed: "closed",
   };
   const next = NEXT[card.status];
 

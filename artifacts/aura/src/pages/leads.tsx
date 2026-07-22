@@ -170,13 +170,7 @@ export default function Leads() {
   // Delivered by their furthest-along linked deal. Lost leads → null.
   const stageOf = useMemo(() => {
     const rank = (stage: string) =>
-      stage === "delivered"
-        ? 3
-        : stage === "committed"
-          ? 2
-          : stage === "finance"
-            ? 1
-            : 0;
+      stage === "delivered" ? 3 : stage === "committed" ? 2 : 0;
     const dealByLead = new Map<number, string>();
     const dealByCustomer = new Map<number, string>();
     for (const d of deals ?? []) {
@@ -197,13 +191,13 @@ export default function Leads() {
       customerId?: number | null;
     }): Stage | null => {
       switch (l.phase) {
-        case "aware":
+        case "new":
           return "new_lead";
-        case "consider":
+        case "contacted":
           return "contacted";
-        case "engage":
+        case "qualified":
           return "engaged";
-        case "negotiate":
+        case "negotiation":
           return "pre_book";
         case "won": {
           const dealStage =
@@ -213,7 +207,6 @@ export default function Leads() {
               : undefined);
           if (dealStage === "delivered") return "delivered";
           if (dealStage === "committed") return "pre_delivery";
-          if (dealStage === "finance") return "payment";
           return "vehicle_allocated";
         }
         default:

@@ -3056,7 +3056,7 @@ paths:
         - name: status
           in: query
           required: false
-          schema: { type: string, enum: [open, in_progress, resolved, closed] }
+          schema: { type: string, enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled] }
         - name: refType
           in: query
           required: false
@@ -3456,7 +3456,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [aware, consider, engage, negotiate, won, lost]
+            enum: [new, contacted, qualified, proposal, negotiation, won, lost]
       responses:
         "200":
           description: Agentic suggestions for the requested stage
@@ -4628,7 +4628,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [qualified, test_drive, negotiation, sold]
+            enum: [qualified, test_drive, proposal, negotiation, sold]
       requestBody:
         required: true
         content:
@@ -5430,7 +5430,7 @@ components:
       properties:
         dealerId: { type: integer }
         dealerName: { type: string }
-        dealerStatus: { type: string, enum: [active, suspended] }
+        dealerStatus: { type: string, enum: [provisioning, active, suspended, offboarding, closed] }
         roleName: { type: ["string", "null"] }
         isGeneralManager: { type: boolean }
         usdExchangeRate: { type: number, description: "GYD per 1 USD for this dealership" }
@@ -5446,7 +5446,7 @@ components:
         name: { type: string }
         city: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
-        status: { type: string, enum: [active, suspended] }
+        status: { type: string, enum: [provisioning, active, suspended, offboarding, closed] }
         usdExchangeRate: { type: number, description: "GYD per 1 USD" }
         entitlements:
           $ref: "#/components/schemas/Entitlements"
@@ -5459,7 +5459,7 @@ components:
         name: { type: string, minLength: 1 }
         city: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
-        status: { type: string, enum: [active, suspended] }
+        status: { type: string, enum: [provisioning, active, suspended, offboarding, closed] }
         usdExchangeRate: { type: number, exclusiveMinimum: 0, description: "GYD per 1 USD" }
         entitlements:
           $ref: "#/components/schemas/Entitlements"
@@ -5563,7 +5563,7 @@ components:
         imageUrl: { type: ["string", "null"] }
         roleId: { type: ["integer", "null"] }
         roleName: { type: ["string", "null"] }
-        status: { type: string, enum: [active, suspended] }
+        status: { type: string, enum: [provisioning, active, suspended, offboarding, closed] }
         reportingManagerUserId: { type: ["integer", "null"] }
         reportingManagerName: { type: ["string", "null"] }
         divisionId: { type: ["integer", "null"] }
@@ -5574,7 +5574,7 @@ components:
       type: object
       properties:
         roleId: { type: ["integer", "null"] }
-        status: { type: string, enum: [active, suspended] }
+        status: { type: string, enum: [provisioning, active, suspended, offboarding, closed] }
         reportingManagerUserId: { type: ["integer", "null"] }
         divisionId: { type: ["integer", "null"] }
     AdminUserAdd:
@@ -5673,7 +5673,7 @@ components:
       type: object
       required: [stage, version, items]
       properties:
-        stage: { type: string, enum: [qualified, test_drive, negotiation, sold] }
+        stage: { type: string, enum: [qualified, test_drive, proposal, negotiation, sold] }
         version: { type: integer }
         items:
           type: array
@@ -5898,7 +5898,7 @@ components:
         mileageKm: { type: integer }
         exteriorColor: { type: string }
         bodyType: { type: string }
-        status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service] }
+        status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service, under_repair] }
         holdUntil: { type: ["string", "null"], format: date-time, description: "Soft lock — held around a booked test drive (single-unit models)" }
         holdReason: { type: ["string", "null"] }
         imageUrl: { type: ["string", "null"] }
@@ -5942,7 +5942,7 @@ components:
         mileageKm: { type: integer }
         exteriorColor: { type: string }
         bodyType: { type: string }
-        status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service] }
+        status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service, under_repair] }
         imageUrl: { type: string }
         images:
           type: array
@@ -5976,7 +5976,7 @@ components:
         mileageKm: { type: integer }
         exteriorColor: { type: string }
         bodyType: { type: string }
-        status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service] }
+        status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service, under_repair] }
         imageUrl: { type: string }
         images:
           type: array
@@ -6050,7 +6050,7 @@ components:
       type: object
       required: [key, label, status]
       properties:
-        key: { type: string, enum: [sales_order, vehicle_prep, accessory_installation, pdi_checklist, registration, insurance, invoice, delivery_appointment, vehicle_delivery, customer_signature, feedback] }
+        key: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, delivery, signature, feedback] }
         label: { type: string }
         status: { type: string, enum: [pending, completed] }
         note: { type: ["string", "null"] }
@@ -6076,7 +6076,7 @@ components:
         advisorName: { type: ["string", "null"] }
         vehicleLabel: { type: ["string", "null"] }
         status: { type: string, enum: [in_progress, completed] }
-        currentStep: { type: string, enum: [sales_order, vehicle_prep, accessory_installation, pdi_checklist, registration, insurance, invoice, delivery_appointment, vehicle_delivery, customer_signature, feedback] }
+        currentStep: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, delivery, signature, feedback] }
         steps:
           type: array
           items:
@@ -6110,7 +6110,7 @@ components:
       type: object
       required: [step]
       properties:
-        step: { type: string, enum: [sales_order, vehicle_prep, accessory_installation, pdi_checklist, registration, insurance, invoice, delivery_appointment, vehicle_delivery, customer_signature, feedback] }
+        step: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, delivery, signature, feedback] }
         note: { type: string }
         appointmentAt: { type: string, format: date-time }
         registrationNumber: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$", description: "Guyana plate — 3 uppercase letters followed by 1-4 digits (e.g. PAB 1234)" }
@@ -6258,7 +6258,7 @@ components:
         source: { type: string }
         sourceDetail: { type: ["string", "null"] }
         priority: { type: string, enum: [high, medium, low] }
-        phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
+        phase: { type: string, enum: [new, contacted, qualified, proposal, negotiation, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         customerId: { type: ["integer", "null"] }
         interestedVehicleId: { type: ["integer", "null"] }
@@ -6308,7 +6308,7 @@ components:
         source: { type: string, minLength: 1 }
         sourceDetail: { type: string }
         priority: { type: string, enum: [high, medium, low] }
-        phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
+        phase: { type: string, enum: [new, contacted, qualified, proposal, negotiation, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         interestedVehicleId: { type: integer }
         selectedModel: { type: string }
@@ -6334,7 +6334,7 @@ components:
         source: { type: string, minLength: 1 }
         sourceDetail: { type: ["string", "null"] }
         priority: { type: string, enum: [high, medium, low] }
-        phase: { type: string, enum: [aware, consider, engage, negotiate, won, lost] }
+        phase: { type: string, enum: [new, contacted, qualified, proposal, negotiation, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         interestedVehicleId: { type: integer }
         selectedModel: { type: ["string", "null"] }
@@ -6627,7 +6627,7 @@ components:
       properties:
         toStage:
           type: string
-          enum: [qualified, test_drive, negotiation, sold]
+          enum: [qualified, test_drive, proposal, negotiation, sold]
     LeadAdvanceUnmet:
       type: object
       required: [error, unmet]
@@ -6650,7 +6650,7 @@ components:
       properties:
         stage:
           type: string
-          enum: [qualified, test_drive, negotiation, sold, delivery]
+          enum: [qualified, test_drive, proposal, negotiation, sold, delivery]
         label: { type: string }
         targetPhase: { type: string }
         state:
@@ -6668,7 +6668,7 @@ components:
         phase: { type: string }
         nextStage:
           type: ["string", "null"]
-          enum: [qualified, test_drive, negotiation, sold, null]
+          enum: [qualified, test_drive, proposal, negotiation, sold, null]
         stages:
           type: array
           items:
@@ -6938,7 +6938,7 @@ components:
         leadId: { type: ["integer", "null"] }
         vehicleId: { type: integer }
         customerName: { type: ["string", "null"] }
-        stage: { type: string, enum: [desking, negotiation, finance, committed, delivered, lost] }
+        stage: { type: string, enum: [desking, committed, delivered, cancelled, lost] }
         vehiclePrice: { type: number }
         discount: { type: number }
         tradeInValue: { type: number }
@@ -6958,7 +6958,7 @@ components:
         leadId: { type: integer }
         vehicleId: { type: integer }
         customerName: { type: string }
-        stage: { type: string, enum: [desking, negotiation, finance, committed, delivered, lost] }
+        stage: { type: string, enum: [desking, committed, delivered, cancelled, lost] }
         vehiclePrice: { type: number }
         discount: { type: number }
         tradeInValue: { type: number }
@@ -6975,7 +6975,7 @@ components:
         leadId: { type: ["integer", "null"] }
         vehicleId: { type: integer }
         customerName: { type: string }
-        stage: { type: string, enum: [desking, negotiation, finance, committed, delivered, lost] }
+        stage: { type: string, enum: [desking, committed, delivered, cancelled, lost] }
         vehiclePrice: { type: number }
         discount: { type: number }
         tradeInValue: { type: number }
@@ -7281,7 +7281,7 @@ components:
         customerName: { type: ["string", "null"] }
         vehicleInfo: { type: string }
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
-        status: { type: string, enum: [scheduled, checked_in, in_progress, awaiting_approval, completed, delivered] }
+        status: { type: string, enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled] }
         scheduledDate: { type: string, format: date }
         complaint: { type: ["string", "null"] }
         odometer: { type: ["integer", "null"] }
@@ -7300,7 +7300,7 @@ components:
         customerName: { type: string }
         vehicleInfo: { type: string, minLength: 1 }
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
-        status: { type: string, enum: [scheduled, checked_in, in_progress, awaiting_approval, completed, delivered] }
+        status: { type: string, enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled] }
         scheduledDate: { type: string, format: date }
         complaint: { type: string }
         odometer: { type: integer }
@@ -7314,7 +7314,7 @@ components:
       type: object
       properties:
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
-        status: { type: string, enum: [scheduled, checked_in, in_progress, awaiting_approval, completed, delivered] }
+        status: { type: string, enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled] }
         scheduledDate: { type: string, format: date }
         complaint: { type: string }
         odometer: { type: integer }
@@ -7353,7 +7353,7 @@ components:
         id: { type: integer }
         serviceOrderId: { type: integer }
         title: { type: string }
-        status: { type: string, enum: [open, in_progress, quality_check, completed] }
+        status: { type: string, enum: [open, in_progress, on_hold, completed, closed, cancelled] }
         technicianUserId: { type: ["integer", "null"] }
         technicianName: { type: ["string", "null"] }
         checklist:
@@ -7383,7 +7383,7 @@ components:
       type: object
       properties:
         title: { type: string }
-        status: { type: string, enum: [open, in_progress, quality_check, completed] }
+        status: { type: string, enum: [open, in_progress, on_hold, completed, closed, cancelled] }
         technicianUserId: { type: integer }
         technicianName: { type: string }
         checklist:
@@ -7710,7 +7710,7 @@ components:
           enum: [low, medium, high]
         status:
           type: string
-          enum: [open, in_progress, resolved, closed]
+          enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled]
         refType: { type: ["string", "null"] }
         refId: { type: ["integer", "null"] }
         assignedTo: { type: ["string", "null"] }
@@ -7748,7 +7748,7 @@ components:
           enum: [low, medium, high]
         status:
           type: string
-          enum: [open, in_progress, resolved, closed]
+          enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled]
         assignedTo: { type: ["string", "null"] }
         resolutionNote: { type: ["string", "null"] }
 

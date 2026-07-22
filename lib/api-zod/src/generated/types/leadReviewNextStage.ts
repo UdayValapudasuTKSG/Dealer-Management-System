@@ -15,6 +15,7 @@ export type LeadReviewNextStage = typeof LeadReviewNextStage[keyof typeof LeadRe
 export const LeadReviewNextStage = {
   qualified: 'qualified',
   test_drive: 'test_drive',
+  proposal: 'proposal',
   negotiation: 'negotiation',
   sold: 'sold',
 } as const;

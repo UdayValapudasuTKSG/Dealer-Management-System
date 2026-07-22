@@ -20,17 +20,19 @@ export const VEHICLE_STATUSES = [
   "in_transit",
   "sold",
   "service",
+  "under_repair",
 ] as const;
 export type VehicleStatus = (typeof VEHICLE_STATUSES)[number];
 
 /** Allowed stock-status transitions for the booking/delivery lifecycle. */
 export const VEHICLE_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
-  available: ["reserved", "booked", "in_transit", "service", "sold"],
+  available: ["reserved", "booked", "in_transit", "service", "under_repair", "sold"],
   reserved: ["booked", "available"],
   booked: ["delivered", "available"],
   delivered: [],
   in_transit: ["available"],
-  service: ["available"],
+  service: ["available", "under_repair"],
+  under_repair: ["available", "service"],
   sold: [],
 };
 

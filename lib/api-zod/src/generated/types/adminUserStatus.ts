@@ -10,6 +10,9 @@ export type AdminUserStatus = typeof AdminUserStatus[keyof typeof AdminUserStatu
 
 
 export const AdminUserStatus = {
+  provisioning: 'provisioning',
   active: 'active',
   suspended: 'suspended',
+  offboarding: 'offboarding',
+  closed: 'closed',
 } as const;

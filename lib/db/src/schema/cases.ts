@@ -21,16 +21,20 @@ export type CaseType = (typeof CASE_TYPES)[number];
 export const CASE_SEVERITIES = ["low", "medium", "high"] as const;
 export type CaseSeverity = (typeof CASE_SEVERITIES)[number];
 
+/** Canonical Case machine (NC-3): open → acknowledged → in_progress → on_hold → resolved → closed (+ cancelled). */
 export const CASE_STATUSES = [
   "open",
+  "acknowledged",
   "in_progress",
+  "on_hold",
   "resolved",
   "closed",
+  "cancelled",
 ] as const;
 export type CaseStatus = (typeof CASE_STATUSES)[number];
 
 export const casesTable = pgTable(
-  "cases",
+  "service_cases",
   {
     id: serial("id").primaryKey(),
     dealerId: integer("dealer_id").notNull(),
@@ -53,8 +57,8 @@ export const casesTable = pgTable(
       .defaultNow(),
   },
   (t) => [
-    index("cases_dealer_status_idx").on(t.dealerId, t.status),
-    index("cases_dealer_customer_idx").on(t.dealerId, t.customerId),
+    index("service_cases_dealer_status_idx").on(t.dealerId, t.status),
+    index("service_cases_dealer_customer_idx").on(t.dealerId, t.customerId),
   ],
 );
 

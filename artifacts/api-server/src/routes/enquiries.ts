@@ -155,7 +155,7 @@ router.post("/enquiries", async (req, res): Promise<void> => {
       channel: "web",
       source: source ?? "website",
       priority: "medium",
-      phase: "aware",
+      phase: "new",
       status: "new",
       interestedVehicleId,
       variant: variant ?? matchedVariant,

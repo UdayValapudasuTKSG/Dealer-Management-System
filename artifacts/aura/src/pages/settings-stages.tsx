@@ -19,13 +19,20 @@ import { cn } from "@/lib/utils";
 type Stage = StageChecklistConfig["stage"];
 
 const STAGE_LABEL: Record<Stage, string> = {
-  qualified: "Contacted → Engaged",
-  test_drive: "Engaged → Pre-Book",
-  negotiation: "Pre-Book → Vehicle Allocated",
-  sold: "Vehicle Allocated → Payment",
+  qualified: "New → Contacted",
+  test_drive: "Contacted → Qualified",
+  proposal: "Qualified → Proposal",
+  negotiation: "Proposal → Negotiation",
+  sold: "Negotiation → Won",
 };
 
-const STAGE_ORDER: Stage[] = ["qualified", "test_drive", "negotiation", "sold"];
+const STAGE_ORDER: Stage[] = [
+  "qualified",
+  "test_drive",
+  "proposal",
+  "negotiation",
+  "sold",
+];
 
 export default function SettingsStages() {
   const { toast } = useToast();

@@ -11,14 +11,12 @@ export type DeliveryCurrentStep = typeof DeliveryCurrentStep[keyof typeof Delive
 
 export const DeliveryCurrentStep = {
   sales_order: 'sales_order',
-  vehicle_prep: 'vehicle_prep',
-  accessory_installation: 'accessory_installation',
   pdi_checklist: 'pdi_checklist',
   registration: 'registration',
   insurance: 'insurance',
   invoice: 'invoice',
-  delivery_appointment: 'delivery_appointment',
-  vehicle_delivery: 'vehicle_delivery',
-  customer_signature: 'customer_signature',
+  appointment: 'appointment',
+  delivery: 'delivery',
+  signature: 'signature',
   feedback: 'feedback',
 } as const;

@@ -10,6 +10,9 @@ export type DealerMembershipInfoDealerStatus = typeof DealerMembershipInfoDealer
 
 
 export const DealerMembershipInfoDealerStatus = {
+  provisioning: 'provisioning',
   active: 'active',
   suspended: 'suspended',
+  offboarding: 'offboarding',
+  closed: 'closed',
 } as const;

@@ -12,6 +12,7 @@ export type LeadAdvanceInputToStage = typeof LeadAdvanceInputToStage[keyof typeo
 export const LeadAdvanceInputToStage = {
   qualified: 'qualified',
   test_drive: 'test_drive',
+  proposal: 'proposal',
   negotiation: 'negotiation',
   sold: 'sold',
 } as const;

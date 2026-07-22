@@ -12,6 +12,7 @@ export type LeadReviewStageStage = typeof LeadReviewStageStage[keyof typeof Lead
 export const LeadReviewStageStage = {
   qualified: 'qualified',
   test_drive: 'test_drive',
+  proposal: 'proposal',
   negotiation: 'negotiation',
   sold: 'sold',
   delivery: 'delivery',

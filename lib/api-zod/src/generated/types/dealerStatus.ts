@@ -10,6 +10,9 @@ export type DealerStatus = typeof DealerStatus[keyof typeof DealerStatus];
 
 
 export const DealerStatus = {
+  provisioning: 'provisioning',
   active: 'active',
   suspended: 'suspended',
+  offboarding: 'offboarding',
+  closed: 'closed',
 } as const;

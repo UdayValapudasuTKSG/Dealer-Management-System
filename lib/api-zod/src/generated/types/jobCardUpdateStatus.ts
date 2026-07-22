@@ -12,6 +12,8 @@ export type JobCardUpdateStatus = typeof JobCardUpdateStatus[keyof typeof JobCar
 export const JobCardUpdateStatus = {
   open: 'open',
   in_progress: 'in_progress',
-  quality_check: 'quality_check',
+  on_hold: 'on_hold',
   completed: 'completed',
+  closed: 'closed',
+  cancelled: 'cancelled',
 } as const;

@@ -23,6 +23,18 @@ export const LEAD_SOURCES = [
 ] as const;
 export type LeadSource = (typeof LEAD_SOURCES)[number];
 
+/** Canonical lead phase machine (NC-3): new → contacted → qualified → proposal → negotiation → won | lost. */
+export const LEAD_PHASES = [
+  "new",
+  "contacted",
+  "qualified",
+  "proposal",
+  "negotiation",
+  "won",
+  "lost",
+] as const;
+export type LeadPhase = (typeof LEAD_PHASES)[number];
+
 export const LEAD_PRIORITIES = ["high", "medium", "low"] as const;
 export type LeadPriority = (typeof LEAD_PRIORITIES)[number];
 
@@ -40,7 +52,7 @@ export const leadsTable = pgTable("leads", {
   // Social sub-platform (facebook/instagram/tiktok/…) when source is social.
   sourceDetail: text("source_detail"),
   priority: text("priority").notNull().default("medium"),
-  phase: text("phase").notNull().default("aware"),
+  phase: text("phase").notNull().default("new"),
   status: text("status").notNull().default("new"),
   customerId: integer("customer_id"),
   interestedVehicleId: integer("interested_vehicle_id"),
@@ -92,7 +104,9 @@ export const leadsTable = pgTable("leads", {
     .defaultNow(),
 });
 
-export const insertLeadSchema = createInsertSchema(leadsTable).omit({ dealerId: true,
+export const insertLeadSchema = createInsertSchema(leadsTable, {
+  phase: z.enum(LEAD_PHASES),
+}).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });

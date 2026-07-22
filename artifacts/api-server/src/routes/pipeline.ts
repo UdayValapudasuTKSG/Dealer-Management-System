@@ -16,19 +16,21 @@ import {
 const router: IRouter = Router();
 
 const PHASE_LABEL: Record<string, string> = {
-  aware: "New Lead",
-  consider: "Working",
-  engage: "Appointment",
-  negotiate: "Desking",
+  new: "New Lead",
+  contacted: "Working",
+  qualified: "Appointment",
+  proposal: "Proposal",
+  negotiation: "Desking",
   won: "Delivered",
   lost: "Lost",
 };
 
 const STAGE_GOAL: Record<string, string> = {
-  aware: "make first contact and qualify interest",
-  consider: "nurture the lead and match inventory",
-  engage: "book and confirm a test drive or showroom visit",
-  negotiate: "structure terms and close the deal",
+  new: "make first contact and qualify interest",
+  contacted: "nurture the lead and match inventory",
+  qualified: "book and confirm a test drive or showroom visit",
+  proposal: "present the quote and align on the offer",
+  negotiation: "structure terms and close the deal",
   won: "deliver flawlessly and set up retention",
   lost: "review the loss and plan re-engagement",
 };

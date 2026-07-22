@@ -14719,7 +14719,7 @@ export function useListStageChecklists<TData = Awaited<ReturnType<typeof listSta
 
 
 
-export const getSetStageChecklistUrl = (stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold',) => {
+export const getSetStageChecklistUrl = (stage: 'qualified' | 'test_drive' | 'proposal' | 'negotiation' | 'sold',) => {
 
 
 
@@ -14730,7 +14730,7 @@ export const getSetStageChecklistUrl = (stage: 'qualified' | 'test_drive' | 'neg
 /**
  * @summary Save a new version of a stage's checklist (history preserved)
  */
-export const setStageChecklist = async (stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold',
+export const setStageChecklist = async (stage: 'qualified' | 'test_drive' | 'proposal' | 'negotiation' | 'sold',
     stageChecklistInput: StageChecklistInput, options?: RequestInit): Promise<StageChecklistConfig> => {
 
   return customFetch<StageChecklistConfig>(getSetStageChecklistUrl(stage),
@@ -14747,8 +14747,8 @@ export const setStageChecklist = async (stage: 'qualified' | 'test_drive' | 'neg
 
 
 export const getSetStageChecklistMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setStageChecklist>>, TError,{stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof setStageChecklist>>, TError,{stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setStageChecklist>>, TError,{stage: 'qualified' | 'test_drive' | 'proposal' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setStageChecklist>>, TError,{stage: 'qualified' | 'test_drive' | 'proposal' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}, TContext> => {
 
 const mutationKey = ['setStageChecklist'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -14760,7 +14760,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setStageChecklist>>, {stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setStageChecklist>>, {stage: 'qualified' | 'test_drive' | 'proposal' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}> = (props) => {
           const {stage,data} = props ?? {};
 
           return  setStageChecklist(stage,data,requestOptions)
@@ -14781,11 +14781,11 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
  * @summary Save a new version of a stage's checklist (history preserved)
  */
 export const useSetStageChecklist = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setStageChecklist>>, TError,{stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setStageChecklist>>, TError,{stage: 'qualified' | 'test_drive' | 'proposal' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof setStageChecklist>>,
         TError,
-        {stage: 'qualified' | 'test_drive' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>},
+        {stage: 'qualified' | 'test_drive' | 'proposal' | 'negotiation' | 'sold';data: BodyType<StageChecklistInput>},
         TContext
       > => {
       return useMutation(getSetStageChecklistMutationOptions(options));

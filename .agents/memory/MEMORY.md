@@ -19,4 +19,4 @@
 - [Agent kill switches fail open](agent-governance-kill-switch.md) — per-dealer agent pause only works if that dealer has seeded `agents` rows; seed every dealer or the toggle silently no-ops.
 - [No-dealer request gating](no-dealer-request-gating.md) — sessions with no bound dealership only reach auth/platform; gate always-mounted dealer-scoped widgets/providers on activeDealer or they 403-loop.
 - [Storage ACL fail-closed](storage-acl-fail-closed.md) — never LIKE-match user-supplied storage keys in reference checks; use eq / jsonb `@>` containment or `%`/`_` widens the match.
-- [Deal delivery progression](deal-delivery-progression.md) — deals have NO manual stage control; finance disbursement commits, the 11-step delivery workflow delivers.
+- [Deal delivery progression](deal-delivery-progression.md) — deals have NO manual stage control; finance disbursement commits, the 9-step delivery workflow delivers.

@@ -11,6 +11,16 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { divisionsTable } from "./divisions";
 
+/** Canonical deal stage machine (NC-3): desking → committed → delivered (+ cancelled | lost). */
+export const DEAL_STAGES = [
+  "desking",
+  "committed",
+  "delivered",
+  "cancelled",
+  "lost",
+] as const;
+export type DealStage = (typeof DEAL_STAGES)[number];
+
 export const dealsTable = pgTable("deals", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
@@ -34,7 +44,9 @@ export const dealsTable = pgTable("deals", {
     .defaultNow(),
 });
 
-export const insertDealSchema = createInsertSchema(dealsTable).omit({ dealerId: true,
+export const insertDealSchema = createInsertSchema(dealsTable, {
+  stage: z.enum(DEAL_STAGES),
+}).omit({ dealerId: true,
   id: true,
   createdAt: true,
 });

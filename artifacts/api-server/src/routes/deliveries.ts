@@ -356,7 +356,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       }
       break;
     }
-    case "delivery_appointment": {
+    case "appointment": {
       const at = parsed.data.appointmentAt
         ? new Date(parsed.data.appointmentAt)
         : delivery.appointmentAt;
@@ -392,7 +392,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       );
       break;
     }
-    case "customer_signature":
+    case "signature":
       if (!parsed.data.signatureName) {
         res.status(422).json({ error: "Customer signature name is required" });
         return;

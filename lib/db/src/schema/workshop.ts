@@ -93,6 +93,17 @@ export type PartPurchase = typeof partPurchasesTable.$inferSelect;
 
 export type ChecklistItem = { label: string; done: boolean };
 
+/** Canonical job-card machine (NC-3): open → in_progress → on_hold → completed → closed (+ cancelled). */
+export const JOB_CARD_STATUSES = [
+  "open",
+  "in_progress",
+  "on_hold",
+  "completed",
+  "closed",
+  "cancelled",
+] as const;
+export type JobCardStatus = (typeof JOB_CARD_STATUSES)[number];
+
 export const jobCardsTable = pgTable("job_cards", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
@@ -116,6 +127,7 @@ export const jobCardsTable = pgTable("job_cards", {
 });
 
 export const insertJobCardSchema = createInsertSchema(jobCardsTable, {
+  status: z.enum(JOB_CARD_STATUSES),
   checklist: z.array(z.object({ label: z.string(), done: z.boolean() })),
 }).omit({ dealerId: true, id: true, createdAt: true, startedAt: true, completedAt: true });
 export type InsertJobCard = z.infer<typeof insertJobCardSchema>;
