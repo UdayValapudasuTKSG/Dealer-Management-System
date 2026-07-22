@@ -14,4 +14,7 @@ export interface LeadAgentBrief {
   stageGoal: string;
   actions: PipelineSuggestionAction[];
   draftMessage: string;
+  confidence: number;
+  routedToHuman: boolean;
+  agentDisabled: boolean;
 }

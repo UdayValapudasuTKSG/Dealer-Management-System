@@ -12,4 +12,5 @@ export type LeadDecisionInputChoice = typeof LeadDecisionInputChoice[keyof typeo
 export const LeadDecisionInputChoice = {
   cash: 'cash',
   finance: 'finance',
+  not_interested: 'not_interested',
 } as const;

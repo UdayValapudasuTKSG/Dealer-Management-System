@@ -164,6 +164,23 @@ export function AgentBriefPanel({
             >
               {brief.data.riskLevel} risk
             </span>
+            {!brief.data.agentDisabled && (
+              <span
+                className={cn(
+                  "text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ring-1 shrink-0",
+                  brief.data.routedToHuman
+                    ? "bg-amber-500/15 text-amber-400 ring-amber-500/30"
+                    : "bg-foreground/[0.05] text-muted-foreground ring-white/10",
+                )}
+              >
+                {Math.round(brief.data.confidence * 100)}% confidence
+              </span>
+            )}
+            {brief.data.agentDisabled && (
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full ring-1 shrink-0 bg-foreground/[0.05] text-muted-foreground ring-white/10">
+                AI paused
+              </span>
+            )}
           </div>
           <p className="text-sm text-foreground/90 leading-relaxed -mt-2">
             {brief.data.headline}
@@ -198,6 +215,21 @@ export function AgentBriefPanel({
               ))}
           </ul>
 
+          {brief.data.agentDisabled || brief.data.routedToHuman ? (
+            <div className="rounded-xl border border-white/10 bg-foreground/[0.03] p-3.5">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                <AlertCircle className="w-3 h-3 text-amber-400" />
+                {brief.data.agentDisabled
+                  ? "AI drafting is paused"
+                  : "Routed to you"}
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {brief.data.agentDisabled
+                  ? "The Sales agent is paused for this dealership — write the follow-up yourself from the Correspondence tab."
+                  : "The agent doesn't have enough verified context to draft a message it trusts — please write this follow-up personally."}
+              </p>
+            </div>
+          ) : (
           <div className="rounded-xl border border-white/10 bg-foreground/[0.03] p-3.5">
             <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
               <Zap className="w-3 h-3 text-primary" />
@@ -287,6 +319,7 @@ export function AgentBriefPanel({
               </button>
             </div>
           </div>
+          )}
         </div>
       )}
     </div>

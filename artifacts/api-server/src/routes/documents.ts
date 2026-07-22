@@ -389,6 +389,15 @@ router.post(
     }
     const proposedFields = new Set(doc.extraction.fields.map((f) => f.field));
     const edits = parsed.data.fields ?? doc.extraction.fields;
+    // A5 guardrail: reviewers may only confirm fields inside the pre-fill
+    // allowlist — anything else is a hard 403, never silently applied.
+    const outOfList = edits.find((f) => !PREFILL_FIELDS[f.field]);
+    if (outOfList) {
+      res.status(403).json({
+        error: `Field "${outOfList.field}" is not in the pre-fill allowlist`,
+      });
+      return;
+    }
     const applied: { field: string; value: string }[] = [];
     let patch: Record<string, unknown> = {};
     for (const f of edits) {

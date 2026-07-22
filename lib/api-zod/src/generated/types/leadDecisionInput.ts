@@ -9,4 +9,6 @@ import type { LeadDecisionInputChoice } from './leadDecisionInputChoice';
 
 export interface LeadDecisionInput {
   choice: LeadDecisionInputChoice;
+  /** @maxLength 500 */
+  reason?: string;
 }

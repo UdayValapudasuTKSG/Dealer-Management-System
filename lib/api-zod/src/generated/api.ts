@@ -1670,7 +1670,10 @@ export const GetLeadAgentBriefResponse = zod.object({
   "priority": zod.enum(['high', 'medium', 'low']),
   "leadName": zod.string().nullish()
 })),
-  "draftMessage": zod.string()
+  "draftMessage": zod.string(),
+  "confidence": zod.number(),
+  "routedToHuman": zod.boolean(),
+  "agentDisabled": zod.boolean()
 })
 
 
@@ -1843,6 +1846,25 @@ export const ScheduleTestDriveResponse = zod.object({
 })
 
 
+/**
+ * @summary A10 — candidate test-drive slots (customer + vehicle availability)
+ */
+export const GetLeadTestDriveAvailabilityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetLeadTestDriveAvailabilityResponse = zod.object({
+  "vehicleId": zod.number(),
+  "unitCount": zod.number(),
+  "slots": zod.array(zod.object({
+  "start": zod.coerce.date(),
+  "end": zod.coerce.date(),
+  "vehicleFree": zod.boolean(),
+  "customerFree": zod.boolean()
+}))
+})
+
+
 export const CheckLeadAvailabilityParams = zod.object({
   "id": zod.coerce.number()
 })
@@ -1907,8 +1929,13 @@ export const RecordLeadDecisionParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const recordLeadDecisionBodyReasonMax = 500;
+
+
+
 export const RecordLeadDecisionBody = zod.object({
-  "choice": zod.enum(['cash', 'finance'])
+  "choice": zod.enum(['cash', 'finance', 'not_interested']),
+  "reason": zod.string().max(recordLeadDecisionBodyReasonMax).optional()
 })
 
 

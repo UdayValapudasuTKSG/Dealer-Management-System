@@ -109,6 +109,22 @@ router.post("/finance-applications", async (req, res): Promise<void> => {
     return;
   }
 
+  // A5 financing sanity gates: the facility must exceed the down payment and
+  // the term must be a realistic 12–84 months.
+  const downPayment = parsed.data.downPayment ?? 0;
+  if (parsed.data.amount <= downPayment) {
+    res.status(422).json({
+      error: "Financed amount must be greater than the down payment",
+    });
+    return;
+  }
+  if (parsed.data.termMonths < 12 || parsed.data.termMonths > 84) {
+    res.status(422).json({
+      error: "Term must be between 12 and 84 months",
+    });
+    return;
+  }
+
   const [application] = await db
     .insert(financeApplicationsTable)
     .values({

@@ -2215,10 +2215,26 @@ export type LeadDecisionInputChoice = typeof LeadDecisionInputChoice[keyof typeo
 export const LeadDecisionInputChoice = {
   cash: 'cash',
   finance: 'finance',
+  not_interested: 'not_interested',
 } as const;
 
 export interface LeadDecisionInput {
   choice: LeadDecisionInputChoice;
+  /** @maxLength 500 */
+  reason?: string;
+}
+
+export interface AvailabilitySlot {
+  start: string;
+  end: string;
+  vehicleFree: boolean;
+  customerFree: boolean;
+}
+
+export interface LeadTestDriveAvailability {
+  vehicleId: number;
+  unitCount: number;
+  slots: AvailabilitySlot[];
 }
 
 export interface LeadAdvisor {
@@ -4385,6 +4401,9 @@ export interface LeadAgentBrief {
   stageGoal: string;
   actions: PipelineSuggestionAction[];
   draftMessage: string;
+  confidence: number;
+  routedToHuman: boolean;
+  agentDisabled: boolean;
 }
 
 export interface PipelineSuggestions {

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, or, isNull, isNotNull, ne, sql, inArray, notInArray, type SQL } from "drizzle-orm";
+import { eq, desc, and, or, isNull, isNotNull, ne, ilike, gte, lte, sql, inArray, notInArray, type SQL } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -41,6 +41,8 @@ import {
   GetLeadReviewParams,
   GetLeadReviewResponse,
   CheckLeadAvailabilityParams,
+  GetLeadTestDriveAvailabilityParams,
+  GetLeadTestDriveAvailabilityResponse,
   RecordLeadDecisionParams,
   RecordLeadDecisionBody,
   GetLeadTimelineParams,
@@ -98,6 +100,7 @@ import { enqueueEmail, enqueueWhatsapp, notifyUser } from "../lib/email";
 import { ensureAccountForLead } from "../lib/accounts";
 import { activeDealerId, hasPermission } from "../middlewares/rbac";
 import {
+  MIN_AGENT_CONFIDENCE,
   guardUntrusted,
   isAgentEnabled,
   recordAgentRun,
@@ -124,6 +127,8 @@ import {
 } from "../lib/field-permissions";
 import {
   afterTestDriveBooked,
+  offeredSlotTimes,
+  SLOT_LENGTH_MS,
   vehicleAvailabilityError,
 } from "../lib/test-drive-scheduler";
 import {
@@ -1038,6 +1043,13 @@ router.post(
       res.status(404).json({ error: "Quote not found" });
       return;
     }
+    if (quote.status === "superseded") {
+      res.status(410).json({
+        error:
+          "This Code has been superseded by a newer revision — send the current one instead.",
+      });
+      return;
+    }
 
     const channel = body.data.channel;
     if (channel === "email") {
@@ -1775,6 +1787,98 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
   res.json(GetLeadResponse.parse(lead));
 });
 
+// A10 — deterministic slot-candidate check: the offerable showroom grid with
+// per-slot vehicle-side (showroom + unit) and customer-side availability.
+router.get(
+  "/leads/:id/availability-check",
+  async (req, res): Promise<void> => {
+    const params = GetLeadTestDriveAvailabilityParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const dealerId = activeDealerId(res);
+    const [lead] = await db
+      .select()
+      .from(leadsTable)
+      .where(
+        and(eq(leadsTable.id, params.data.id), eq(leadsTable.dealerId, dealerId)),
+      );
+    if (!lead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    if (!lead.interestedVehicleId) {
+      res
+        .status(409)
+        .json({ error: "This lead has no interested vehicle to check" });
+      return;
+    }
+    const [vehicle] = await db
+      .select()
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.id, lead.interestedVehicleId),
+          eq(vehiclesTable.dealerId, dealerId),
+        ),
+      );
+    if (!vehicle) {
+      res.status(409).json({ error: "Interested vehicle no longer exists" });
+      return;
+    }
+
+    // Units of this model still on the floor (drives the soft-lock decision).
+    const units = await db
+      .select({ id: vehiclesTable.id })
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.dealerId, dealerId),
+          eq(vehiclesTable.make, vehicle.make),
+          eq(vehiclesTable.model, vehicle.model),
+          eq(vehiclesTable.status, "available"),
+        ),
+      );
+
+    // The showroom runs one drive at a time — any other lead's booking blocks
+    // the slot on the vehicle side.
+    const slots = offeredSlotTimes();
+    const windowStart = slots[0]!;
+    const windowEnd = new Date(
+      slots[slots.length - 1]!.getTime() + SLOT_LENGTH_MS,
+    );
+    const otherBookings = await db
+      .select({ at: leadsTable.testDriveAt })
+      .from(leadsTable)
+      .where(
+        and(
+          eq(leadsTable.dealerId, dealerId),
+          isNotNull(leadsTable.testDriveAt),
+          ne(leadsTable.id, lead.id),
+          gte(leadsTable.testDriveAt, windowStart),
+          lte(leadsTable.testDriveAt, windowEnd),
+        ),
+      );
+    const taken = new Set(otherBookings.map((r) => r.at!.getTime()));
+    const drivable = !(await vehicleAvailabilityError(lead));
+    const ownBooking = lead.testDriveAt?.getTime() ?? null;
+
+    res.json(
+      GetLeadTestDriveAvailabilityResponse.parse({
+        vehicleId: vehicle.id,
+        unitCount: units.length,
+        slots: slots.map((start) => ({
+          start: start.toISOString(),
+          end: new Date(start.getTime() + SLOT_LENGTH_MS).toISOString(),
+          vehicleFree: drivable && !taken.has(start.getTime()),
+          customerFree: ownBooking !== start.getTime(),
+        })),
+      }),
+    );
+  },
+);
+
 router.post(
   "/leads/:id/availability-check",
   async (req, res): Promise<void> => {
@@ -1889,6 +1993,64 @@ router.post("/leads/:id/decision", async (req, res): Promise<void> => {
   }
 
   const choice = parsed.data.choice;
+
+  // "Not interested" closes the lead: release any test-drive soft-lock on the
+  // interested vehicle and cancel every still-queued outbound draft so no
+  // follow-up lands after the customer said no.
+  if (choice === "not_interested") {
+    const reason = parsed.data.reason?.trim() || "Customer not interested";
+    const [lost] = await db
+      .update(leadsTable)
+      .set({
+        status: "lost",
+        phase: "lost",
+        closureReason: reason,
+        stageEnteredAt: new Date(),
+      })
+      .where(
+        and(
+          eq(leadsTable.id, params.data.id),
+          eq(leadsTable.dealerId, activeDealerId(res)),
+        ),
+      )
+      .returning();
+
+    if (lost!.interestedVehicleId) {
+      await db
+        .update(vehiclesTable)
+        .set({ holdUntil: null, holdReason: null })
+        .where(
+          and(
+            eq(vehiclesTable.id, lost!.interestedVehicleId),
+            eq(vehiclesTable.dealerId, lost!.dealerId),
+            ilike(vehiclesTable.holdReason, `%${lost!.name}%`),
+          ),
+        );
+    }
+
+    await db
+      .update(emailLogsTable)
+      .set({ status: "cancelled" })
+      .where(
+        and(
+          eq(emailLogsTable.dealerId, lost!.dealerId),
+          eq(emailLogsTable.leadId, lost!.id),
+          eq(emailLogsTable.status, "queued"),
+        ),
+      );
+
+    await logLeadEvent(
+      lost!,
+      "lead_lost",
+      "Client decided not to proceed",
+      `${reason}. Queued outreach cancelled and any test-drive hold released.`,
+      actorName(res),
+    );
+
+    res.json(GetLeadResponse.parse(lost));
+    return;
+  }
+
   const [lead] = await db
     .update(leadsTable)
     .set({
@@ -2283,7 +2445,34 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
       .limit(8),
   ]);
 
-  if (!(await isAgentEnabled(dealerId, "sales"))) {
+  const agentEnabled = await isAgentEnabled(dealerId, "sales");
+
+  // 1) Deterministic core: actions + risk from the REAL advance checklist.
+  //    This part always runs — even with the agent paused, the advisor gets
+  //    the checklist-driven playbook (just no AI phrasing or draft).
+  const lastActivityAt = timeline[0]?.createdAt ?? null;
+  const brief = await computeLeadBrief(
+    lead,
+    dealerId,
+    deals,
+    vehicle,
+    lastActivityAt,
+    agentEnabled,
+  );
+  const { stageGoal } = brief;
+
+  // Grounding confidence: how much verified context the agent actually has.
+  // Thin context (no contact channel, no vehicle, no activity) routes the
+  // customer-facing draft to a human instead of auto-writing one.
+  let confidence = 1;
+  if (!lead.phone && !lead.email) confidence -= 0.3;
+  if (!vehicle && !lead.selectedModel) confidence -= 0.2;
+  if (timeline.length === 0) confidence -= 0.2;
+  if (!lead.assignedTo) confidence -= 0.1;
+  confidence = Math.round(Math.max(0, confidence) * 100) / 100;
+  const routedToHuman = confidence < MIN_AGENT_CONFIDENCE;
+
+  if (!agentEnabled) {
     await recordAgentRun({
       dealerId,
       agentKey: "sales",
@@ -2294,23 +2483,20 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
       status: "blocked",
       errorMessage: "Agent paused by dealer kill switch",
     });
-    res.status(409).json({
-      error: "The Sales agent is paused — resume it in AI Agents to use briefs.",
-    });
+    res.json(
+      GetLeadAgentBriefResponse.parse({
+        headline: brief.fallbackHeadline,
+        riskLevel: brief.riskLevel,
+        stageGoal,
+        actions: brief.actions,
+        draftMessage: "",
+        confidence,
+        routedToHuman: true,
+        agentDisabled: true,
+      }),
+    );
     return;
   }
-
-  // 1) Deterministic core: actions + risk from the REAL advance checklist.
-  const lastActivityAt = timeline[0]?.createdAt ?? null;
-  const brief = await computeLeadBrief(
-    lead,
-    dealerId,
-    deals,
-    vehicle,
-    lastActivityAt,
-    await isAgentEnabled(dealerId, "sales"),
-  );
-  const { stageGoal } = brief;
 
   // 2) LLM is phrasing-only: headline + customer draft. Any failure or drift
   //    falls back to the deterministic templates — never a 502, never an
@@ -2349,9 +2535,11 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
 
   const briefStartedAt = Date.now();
   let headline = brief.fallbackHeadline;
-  let draftMessage = brief.fallbackDraft;
+  // Below the confidence floor the agent never writes a customer-facing
+  // draft — the advisor composes it manually (routedToHuman).
+  let draftMessage = routedToHuman ? "" : brief.fallbackDraft;
   let llmStatus: "ok" | "fallback" = "fallback";
-  try {
+  if (!routedToHuman) try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 700,
@@ -2393,6 +2581,9 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
     stageGoal,
     actions: brief.actions,
     draftMessage,
+    confidence,
+    routedToHuman,
+    agentDisabled: false,
   });
   await recordAgentRun({
     dealerId,

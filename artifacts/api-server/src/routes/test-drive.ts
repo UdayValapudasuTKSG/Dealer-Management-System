@@ -156,6 +156,12 @@ router.get("/test-drive/:token", async (req, res): Promise<void> => {
     res.status(404).json({ error: "This booking link is not valid" });
     return;
   }
+  if (lead.status === "lost" || lead.status === "converted") {
+    res.status(410).json({
+      error: "This booking link has expired — contact the showroom to book.",
+    });
+    return;
+  }
   res.json(GetTestDriveInviteResponse.parse(await buildInvite(lead)));
 });
 
@@ -174,6 +180,12 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
   const lead = await findLeadByToken(params.data.token);
   if (!lead) {
     res.status(404).json({ error: "This booking link is not valid" });
+    return;
+  }
+  if (lead.status === "lost" || lead.status === "converted") {
+    res.status(410).json({
+      error: "This booking link has expired — contact the showroom to book.",
+    });
     return;
   }
 

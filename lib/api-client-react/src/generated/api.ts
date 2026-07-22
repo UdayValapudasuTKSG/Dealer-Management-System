@@ -157,6 +157,7 @@ import type {
   LeadSourceConfig,
   LeadSourceInput,
   LeadSourceUpdate,
+  LeadTestDriveAvailability,
   LeadTestDriveInput,
   LeadUpdate,
   LifecycleBlockersResponse,
@@ -3974,6 +3975,83 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getScheduleTestDriveMutationOptions(options));
     }
+
+export const getGetLeadTestDriveAvailabilityUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/availability-check`
+}
+
+/**
+ * @summary A10 — candidate test-drive slots (customer + vehicle availability)
+ */
+export const getLeadTestDriveAvailability = async (id: number, options?: RequestInit): Promise<LeadTestDriveAvailability> => {
+
+  return customFetch<LeadTestDriveAvailability>(getGetLeadTestDriveAvailabilityUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLeadTestDriveAvailabilityQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/availability-check`
+    ] as const;
+    }
+
+
+export const getGetLeadTestDriveAvailabilityQueryOptions = <TData = Awaited<ReturnType<typeof getLeadTestDriveAvailability>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadTestDriveAvailability>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLeadTestDriveAvailabilityQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLeadTestDriveAvailability>>> = ({ signal }) => getLeadTestDriveAvailability(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLeadTestDriveAvailability>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLeadTestDriveAvailabilityQueryResult = NonNullable<Awaited<ReturnType<typeof getLeadTestDriveAvailability>>>
+export type GetLeadTestDriveAvailabilityQueryError = ErrorType<Error>
+
+
+/**
+ * @summary A10 — candidate test-drive slots (customer + vehicle availability)
+ */
+
+export function useGetLeadTestDriveAvailability<TData = Awaited<ReturnType<typeof getLeadTestDriveAvailability>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadTestDriveAvailability>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLeadTestDriveAvailabilityQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getCheckLeadAvailabilityUrl = (id: number,) => {
 

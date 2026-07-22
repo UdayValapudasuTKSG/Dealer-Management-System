@@ -22,6 +22,39 @@ import { logger } from "./logger";
 const HOLD_AFTER_DRIVE_MS = 2 * 60 * 60 * 1000;
 const REMINDER_LEAD_MS = 24 * 60 * 60 * 1000;
 
+// Showroom slot grid — shared with the public booking page and the staff
+// A10 availability check so both always agree on what's offerable.
+export const SLOT_OPEN_HOUR = 9; // first slot 9:00 AM
+export const SLOT_LAST_HOUR = 16; // last slot 4:00 PM
+export const SLOT_WINDOW_DAYS = 14; // bookable window starts tomorrow
+export const SLOT_LENGTH_MS = 60 * 60 * 1000;
+
+export function slotWindowDays(): Date[] {
+  const now = new Date();
+  const days: Date[] = [];
+  for (let offset = 1; offset <= SLOT_WINDOW_DAYS; offset++) {
+    days.push(
+      new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset),
+    );
+  }
+  return days;
+}
+
+export function offeredSlotTimes(): Date[] {
+  return slotWindowDays().flatMap((day) =>
+    Array.from(
+      { length: SLOT_LAST_HOUR - SLOT_OPEN_HOUR + 1 },
+      (_, i) =>
+        new Date(
+          day.getFullYear(),
+          day.getMonth(),
+          day.getDate(),
+          SLOT_OPEN_HOUR + i,
+        ),
+    ),
+  );
+}
+
 /**
  * Availability gate: the lead's interested vehicle must still be in a
  * test-drivable status. Returns an error message when it is not.
