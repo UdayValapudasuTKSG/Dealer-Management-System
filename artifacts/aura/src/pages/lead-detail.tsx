@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useRoute, Link } from "wouter";
+import { useRoute, Link, useLocation } from "wouter";
 import {
   useGetLead,
   useListDivisions,
@@ -17,6 +17,7 @@ import {
   useSendLeadQuote,
   useListGates,
   useCreateDeal,
+  useDeleteLead,
   getListLeadQuotesQueryKey,
   getGetLeadQueryKey,
   getGetLeadTimelineQueryKey,
@@ -47,16 +48,36 @@ import {
   Loader2,
   Mail,
   MessageSquare,
+  MoreVertical,
   Pencil,
   Phone,
   PhoneIncoming,
   PhoneOutgoing,
   Send,
   ShieldCheck,
+  Trash2,
   User,
   Workflow,
   X,
+  XCircle,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { motion, AnimatePresence } from "framer-motion";
 import { DutyFiling } from "@/components/gra/duty-filing";
 import { Page } from "@/components/layout/page";
@@ -592,10 +613,15 @@ export default function LeadDetail() {
   const [callOpen, setCallOpen] = useState(false);
   const [showDuty, setShowDuty] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [lostOpen, setLostOpen] = useState(false);
+  const [lostReason, setLostReason] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [, navigate] = useLocation();
 
   const { can } = useAuthz();
   const canEdit = can("leads", "edit");
   const canDeskDeal = can("deals", "create");
+  const canDelete = can("leads", "delete");
 
   const createDeal = useCreateDeal({
     mutation: {
@@ -628,6 +654,23 @@ export default function LeadDetail() {
       },
       onError: () =>
         toast({ title: "Could not update lead", variant: "destructive" }),
+    },
+  });
+
+  const deleteLead = useDeleteLead({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+        qc.invalidateQueries({ queryKey: getListDealsQueryKey() });
+        toast({
+          title: "Lead deleted",
+          description:
+            "Linked deals and bookings were cancelled, reserved stock released, and the contact is free for new enquiries.",
+        });
+        navigate("/pipeline");
+      },
+      onError: () =>
+        toast({ title: "Could not delete lead", variant: "destructive" }),
     },
   });
 
@@ -1059,6 +1102,37 @@ export default function LeadDetail() {
               <Workflow className="w-4 h-4" />
               Workflow
             </Button>
+            {(canEdit || canDelete) && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" aria-label="More actions">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canEdit && lead.phase !== "lost" && lead.phase !== "won" && (
+                    <DropdownMenuItem onClick={() => setLostOpen(true)}>
+                      <XCircle className="w-3.5 h-3.5 mr-2" />
+                      Mark as Lost…
+                    </DropdownMenuItem>
+                  )}
+                  {canDelete && (
+                    <>
+                      {canEdit && lead.phase !== "lost" && lead.phase !== "won" && (
+                        <DropdownMenuSeparator />
+                      )}
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => setDeleteOpen(true)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-2" />
+                        Delete Lead…
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
       </div>
@@ -2697,6 +2771,80 @@ export default function LeadDetail() {
           }}
         />
       )}
+
+      <AlertDialog open={lostOpen} onOpenChange={setLostOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark this lead as Lost?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The lead moves to the Lost column and stops absorbing new
+              enquiries — a fresh enquiry from {lead.name} will create a new
+              lead. This can be reversed by editing the lead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={lostReason}
+            onChange={(e) => setLostReason(e.target.value)}
+            placeholder="Reason (optional) — e.g. bought elsewhere, budget, unresponsive"
+            rows={3}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={updateLead.isPending}
+              onClick={async () => {
+                await updateLead.mutateAsync({
+                  id: lead.id,
+                  data: { phase: "lost" },
+                });
+                if (lostReason.trim()) {
+                  await createNote.mutateAsync({
+                    id: lead.id,
+                    data: { text: `Marked lost: ${lostReason.trim()}` },
+                  });
+                }
+                setLostReason("");
+                setLostOpen(false);
+              }}
+            >
+              Mark as Lost
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this lead?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>This removes the lead and cleans up everything linked to it:</p>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Undelivered deals are cancelled</li>
+                  <li>Active bookings are cancelled</li>
+                  <li>Reserved vehicles are released back to available</li>
+                  <li>Pending approvals are dismissed</li>
+                </ul>
+                <p>
+                  The phone number and email become free for a brand-new lead
+                  capture immediately.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteLead.isPending}
+              onClick={() => deleteLead.mutate({ id: lead.id })}
+            >
+              {deleteLead.isPending ? "Deleting…" : "Delete Lead"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Page>
   );
 }

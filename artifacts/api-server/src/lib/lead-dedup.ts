@@ -1,4 +1,4 @@
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, isNull, notInArray } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -62,6 +62,9 @@ export async function findOpenDuplicate(
       and(
         eq(leadsTable.dealerId, dealerId),
         notInArray(leadsTable.phase, ["won", "lost"]),
+        // Soft-deleted leads never absorb new enquiries — deleting a lead
+        // frees its phone/email for a fresh capture.
+        isNull(leadsTable.deletedAt),
       ),
     );
 

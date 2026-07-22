@@ -1,6 +1,6 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
-import { and, eq, notInArray, isNotNull } from "drizzle-orm";
+import { and, eq, notInArray, isNotNull, isNull } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import {
   db,
@@ -193,6 +193,7 @@ async function findOpenLeadByEmail(dealerId: number, email: string) {
         eq(leadsTable.dealerId, dealerId),
         isNotNull(leadsTable.email),
         notInArray(leadsTable.phase, OPEN_EXCLUDED_PHASES),
+        isNull(leadsTable.deletedAt),
       ),
     );
   const needle = email.trim().toLowerCase();

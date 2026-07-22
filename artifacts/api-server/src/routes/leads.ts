@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, or, isNull, isNotNull, ne, sql, inArray, type SQL } from "drizzle-orm";
+import { eq, desc, and, or, isNull, isNotNull, ne, sql, inArray, notInArray, type SQL } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -11,6 +11,7 @@ import {
   emailLogsTable,
   whatsappMessagesTable,
   dealsTable,
+  bookingsTable,
   callLogsTable,
   agentsTable,
   gatesTable,
@@ -1986,6 +1987,7 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
 
   // Soft delete (R4.8): never hard-remove from the data plane.
   const actor = res.locals.user;
+  const dealerId = activeDealerId(res);
   const [lead] = await db
     .update(leadsTable)
     .set({
@@ -1995,7 +1997,7 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
     .where(
       and(
         eq(leadsTable.id, params.data.id),
-        eq(leadsTable.dealerId, activeDealerId(res)),
+        eq(leadsTable.dealerId, dealerId),
         isNull(leadsTable.deletedAt),
       ),
     )
@@ -2005,6 +2007,122 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Lead not found" });
     return;
   }
+
+  // Cleanup cascade: cancel everything tied to this lead so the contact
+  // (phone/email) and any reserved stock are immediately reusable.
+  // 1. Cancel linked deals that haven't been delivered.
+  const linkedDeals = await db
+    .select()
+    .from(dealsTable)
+    .where(and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, lead.id)));
+  const cancellableDeals = linkedDeals.filter(
+    (d) => d.stage !== "delivered" && d.stage !== "cancelled" && d.stage !== "lost",
+  );
+  if (cancellableDeals.length > 0) {
+    await db
+      .update(dealsTable)
+      .set({ stage: "cancelled" })
+      .where(
+        inArray(
+          dealsTable.id,
+          cancellableDeals.map((d) => d.id),
+        ),
+      );
+  }
+
+  // 2. Cancel active bookings hanging off those deals.
+  const dealIds = linkedDeals.map((d) => d.id);
+  if (dealIds.length > 0) {
+    await db
+      .update(bookingsTable)
+      .set({ status: "cancelled" })
+      .where(
+        and(
+          eq(bookingsTable.dealerId, dealerId),
+          inArray(bookingsTable.dealId, dealIds),
+          eq(bookingsTable.status, "active"),
+        ),
+      );
+  }
+
+  // 3. Dismiss pending gates on the lead and its deals.
+  const gateConds: SQL[] = [
+    and(eq(gatesTable.refType, "lead"), eq(gatesTable.refId, lead.id))!,
+  ];
+  if (dealIds.length > 0)
+    gateConds.push(
+      and(eq(gatesTable.refType, "deal"), inArray(gatesTable.refId, dealIds))!,
+    );
+  await db
+    .update(gatesTable)
+    .set({ status: "dismissed" })
+    .where(
+      and(
+        eq(gatesTable.dealerId, dealerId),
+        eq(gatesTable.status, "pending"),
+        or(...gateConds),
+      ),
+    );
+
+  // 4. Release reserved/booked vehicles tied to this lead — but only when no
+  // OTHER live deal or active booking still claims them.
+  const vehicleIds = [
+    ...new Set(
+      [
+        lead.interestedVehicleId,
+        ...linkedDeals.map((d) => d.vehicleId),
+      ].filter((v): v is number => typeof v === "number"),
+    ),
+  ];
+  for (const vehicleId of vehicleIds) {
+    const [otherDeal] = await db
+      .select({ id: dealsTable.id })
+      .from(dealsTable)
+      .where(
+        and(
+          eq(dealsTable.dealerId, dealerId),
+          eq(dealsTable.vehicleId, vehicleId),
+          notInArray(dealsTable.stage, ["cancelled", "lost", "delivered"]),
+          dealIds.length > 0 ? notInArray(dealsTable.id, dealIds) : undefined,
+        ),
+      )
+      .limit(1);
+    const [otherBooking] = await db
+      .select({ id: bookingsTable.id })
+      .from(bookingsTable)
+      .where(
+        and(
+          eq(bookingsTable.dealerId, dealerId),
+          eq(bookingsTable.vehicleId, vehicleId),
+          eq(bookingsTable.status, "active"),
+        ),
+      )
+      .limit(1);
+    if (!otherDeal && !otherBooking) {
+      await db
+        .update(vehiclesTable)
+        .set({ status: "available" })
+        .where(
+          and(
+            eq(vehiclesTable.dealerId, dealerId),
+            eq(vehiclesTable.id, vehicleId),
+            inArray(vehiclesTable.status, ["reserved", "booked"]),
+          ),
+        );
+    }
+  }
+
+  await db.insert(timelineEventsTable).values({
+    dealerId,
+    customerId: lead.customerId,
+    domain: "leads",
+    kind: "lead_deleted",
+    title: `Lead deleted: ${lead.name}`,
+    detail: `${actor?.name ?? actor?.email ?? "Staff"} deleted this lead. ${cancellableDeals.length} deal(s) cancelled, linked bookings cancelled, pending approvals dismissed, reserved stock released. The contact details are free to be captured again.`,
+    actor: actor?.name ?? actor?.email ?? "Staff",
+    refType: "lead",
+    refId: lead.id,
+  });
 
   res.sendStatus(204);
 });

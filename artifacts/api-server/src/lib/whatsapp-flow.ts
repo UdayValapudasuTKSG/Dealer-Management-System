@@ -71,6 +71,7 @@ async function findOpenLeadByPhone(dealerId: number, phone: string) {
         eq(leadsTable.dealerId, dealerId),
         isNotNull(leadsTable.phone),
         notInArray(leadsTable.phase, OPEN_EXCLUDED_PHASES),
+        isNull(leadsTable.deletedAt),
       ),
     );
   return (
