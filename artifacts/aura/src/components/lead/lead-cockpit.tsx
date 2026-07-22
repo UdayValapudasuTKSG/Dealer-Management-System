@@ -206,7 +206,9 @@ export function ActionChain({
             <CheckCircle2 className="w-3.5 h-3.5" />
           </div>
           <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
-            {stage?.label} Readiness
+            {(reviewStage?.items?.length ? reviewStage.label : stage?.label) ??
+              stage?.label}{" "}
+            Readiness
           </div>
           {items.length === 0 ? (
             <div className="text-sm text-muted-foreground bg-foreground/[0.02] border border-white/5 rounded-xl px-4 py-3">
@@ -385,8 +387,11 @@ export function ActionChain({
             {reviewStage?.stage === "delivery" ? (
               <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-foreground/[0.03] px-4 py-2.5 text-xs text-muted-foreground">
                 <Lock className="w-3.5 h-3.5 shrink-0" />
-                Delivery completes through the deal workflow — GRA duty filing
-                and handover are cleared there.
+                {reviewStage.items.some(
+                  (i) => i.key === "payment_settled" && !i.met,
+                )
+                  ? "Next step: commit the linked deal on the Deals page — the GRA duty filing and handover unlock after commit."
+                  : "Delivery completes through the deal workflow — GRA duty filing and handover are cleared there."}
               </div>
             ) : (
               canEdit && (
