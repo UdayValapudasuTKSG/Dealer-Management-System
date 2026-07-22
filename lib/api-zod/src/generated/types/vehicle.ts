@@ -7,6 +7,7 @@
  */
 import type { VehicleDocument } from './vehicleDocument';
 import type { VehiclePowertrain } from './vehiclePowertrain';
+import type { VehiclePriceLine } from './vehiclePriceLine';
 import type { VehicleStatus } from './vehicleStatus';
 
 export interface Vehicle {
@@ -54,4 +55,8 @@ export interface Vehicle {
   description?: string | null;
   featured: boolean;
   createdAt: Date;
+  /** Server-computed tax/duty composition from dealer_taxes (detail reads only; client never computes tax) */
+  priceLines?: VehiclePriceLine[];
+  /** price + all applicable tax lines (USD-scale) */
+  priceTotalWithTax?: number;
 }

@@ -6313,6 +6313,21 @@ components:
         description: { type: ["string", "null"] }
         featured: { type: boolean }
         createdAt: { type: string, format: date-time }
+        priceLines:
+          type: array
+          description: "Server-computed tax/duty composition from dealer_taxes (detail reads only; client never computes tax)"
+          items:
+            $ref: "#/components/schemas/VehiclePriceLine"
+        priceTotalWithTax: { type: number, description: "price + all applicable tax lines (USD-scale)" }
+    VehiclePriceLine:
+      type: object
+      required: [code, name, kind, rate, amount]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [percent, fixed] }
+        rate: { type: number }
+        amount: { type: number }
     VehicleDocument:
       type: object
       required: [name, url]
@@ -6393,14 +6408,16 @@ components:
       required: [row, message]
       properties:
         row: { type: integer, description: "Spreadsheet row number (1-based, including header)" }
+        field: { type: ["string", "null"], description: "Offending field, when attributable" }
         message: { type: string }
     VehicleImportResult:
       type: object
-      required: [total, created, failed, errors]
+      required: [total, inserted, updated, skipped, errors]
       properties:
         total: { type: integer, description: "Data rows found in the sheet" }
-        created: { type: integer }
-        failed: { type: integer }
+        inserted: { type: integer, description: "New vehicles created" }
+        updated: { type: integer, description: "Existing vehicles updated (upsert by dealer + VIN)" }
+        skipped: { type: integer, description: "Rows not applied (validation errors, in-file duplicates, row cap)" }
         errors:
           type: array
           items:

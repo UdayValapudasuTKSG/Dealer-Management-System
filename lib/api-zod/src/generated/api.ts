@@ -191,7 +191,15 @@ export const ListVehiclesResponseItem = zod.object({
 })).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "priceLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})).optional().describe('Server-computed tax\/duty composition from dealer_taxes (detail reads only; client never computes tax)'),
+  "priceTotalWithTax": zod.number().optional().describe('price + all applicable tax lines (USD-scale)')
 })
 export const ListVehiclesResponse = zod.array(ListVehiclesResponseItem)
 
@@ -280,7 +288,15 @@ export const CreateVehicleResponse = zod.object({
 })).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "priceLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})).optional().describe('Server-computed tax\/duty composition from dealer_taxes (detail reads only; client never computes tax)'),
+  "priceTotalWithTax": zod.number().optional().describe('price + all applicable tax lines (USD-scale)')
 })
 
 
@@ -323,7 +339,15 @@ export const GetVehicleResponse = zod.object({
 })).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "priceLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})).optional().describe('Server-computed tax\/duty composition from dealer_taxes (detail reads only; client never computes tax)'),
+  "priceTotalWithTax": zod.number().optional().describe('price + all applicable tax lines (USD-scale)')
 })
 
 
@@ -412,7 +436,15 @@ export const UpdateVehicleResponse = zod.object({
 })).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "priceLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})).optional().describe('Server-computed tax\/duty composition from dealer_taxes (detail reads only; client never computes tax)'),
+  "priceTotalWithTax": zod.number().optional().describe('price + all applicable tax lines (USD-scale)')
 })
 
 
@@ -465,7 +497,15 @@ export const RestoreVehicleResponse = zod.object({
 })).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "priceLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})).optional().describe('Server-computed tax\/duty composition from dealer_taxes (detail reads only; client never computes tax)'),
+  "priceTotalWithTax": zod.number().optional().describe('price + all applicable tax lines (USD-scale)')
 })
 
 
@@ -474,10 +514,12 @@ export const RestoreVehicleResponse = zod.object({
  */
 export const ImportVehiclesResponse = zod.object({
   "total": zod.number().describe('Data rows found in the sheet'),
-  "created": zod.number(),
-  "failed": zod.number(),
+  "inserted": zod.number().describe('New vehicles created'),
+  "updated": zod.number().describe('Existing vehicles updated (upsert by dealer + VIN)'),
+  "skipped": zod.number().describe('Rows not applied (validation errors, in-file duplicates, row cap)'),
   "errors": zod.array(zod.object({
   "row": zod.number().describe('Spreadsheet row number (1-based, including header)'),
+  "field": zod.string().nullish().describe('Offending field, when attributable'),
   "message": zod.string()
 }))
 })
@@ -4571,7 +4613,15 @@ export const GetCustomerOverviewResponse = zod.object({
 })).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "priceLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})).optional().describe('Server-computed tax\/duty composition from dealer_taxes (detail reads only; client never computes tax)'),
+  "priceTotalWithTax": zod.number().optional().describe('price + all applicable tax lines (USD-scale)')
 }),zod.null()]).optional(),
   "leadScore": zod.number(),
   "updatedAt": zod.string().nullish()
@@ -4624,7 +4674,15 @@ export const GetCustomerOverviewResponse = zod.object({
 })).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "priceLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})).optional().describe('Server-computed tax\/duty composition from dealer_taxes (detail reads only; client never computes tax)'),
+  "priceTotalWithTax": zod.number().optional().describe('price + all applicable tax lines (USD-scale)')
 })),
   "activeDeal": zod.union([zod.object({
   "id": zod.number(),
@@ -5025,7 +5083,15 @@ export const GetCustomerPersonaResponse = zod.object({
 })).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "priceLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})).optional().describe('Server-computed tax\/duty composition from dealer_taxes (detail reads only; client never computes tax)'),
+  "priceTotalWithTax": zod.number().optional().describe('price + all applicable tax lines (USD-scale)')
 }),zod.null()]).optional(),
   "leadScore": zod.number(),
   "updatedAt": zod.string().nullish()
@@ -5114,7 +5180,15 @@ export const UpsertCustomerPersonaResponse = zod.object({
 })).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "priceLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})).optional().describe('Server-computed tax\/duty composition from dealer_taxes (detail reads only; client never computes tax)'),
+  "priceTotalWithTax": zod.number().optional().describe('price + all applicable tax lines (USD-scale)')
 }),zod.null()]).optional(),
   "leadScore": zod.number(),
   "updatedAt": zod.string().nullish()
@@ -5184,7 +5258,15 @@ export const RecommendCustomerVehicleResponse = zod.object({
 })).optional(),
   "description": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "priceLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})).optional().describe('Server-computed tax\/duty composition from dealer_taxes (detail reads only; client never computes tax)'),
+  "priceTotalWithTax": zod.number().optional().describe('price + all applicable tax lines (USD-scale)')
 }),zod.null()]).optional(),
   "leadScore": zod.number(),
   "updatedAt": zod.string().nullish()

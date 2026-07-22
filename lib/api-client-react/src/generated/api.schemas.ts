@@ -779,6 +779,22 @@ export interface VehicleDocument {
   url: string;
 }
 
+export type VehiclePriceLineKind = typeof VehiclePriceLineKind[keyof typeof VehiclePriceLineKind];
+
+
+export const VehiclePriceLineKind = {
+  percent: 'percent',
+  fixed: 'fixed',
+} as const;
+
+export interface VehiclePriceLine {
+  code: string;
+  name: string;
+  kind: VehiclePriceLineKind;
+  rate: number;
+  amount: number;
+}
+
 export interface Vehicle {
   id: number;
   /** @nullable */
@@ -824,6 +840,10 @@ export interface Vehicle {
   description?: string | null;
   featured: boolean;
   createdAt: string;
+  /** Server-computed tax/duty composition from dealer_taxes (detail reads only; client never computes tax) */
+  priceLines?: VehiclePriceLine[];
+  /** price + all applicable tax lines (USD-scale) */
+  priceTotalWithTax?: number;
 }
 
 export type VehicleInputPowertrain = typeof VehicleInputPowertrain[keyof typeof VehicleInputPowertrain];
@@ -969,14 +989,23 @@ export interface VehicleUpdate {
 export interface VehicleImportError {
   /** Spreadsheet row number (1-based, including header) */
   row: number;
+  /**
+     * Offending field, when attributable
+     * @nullable
+     */
+  field?: string | null;
   message: string;
 }
 
 export interface VehicleImportResult {
   /** Data rows found in the sheet */
   total: number;
-  created: number;
-  failed: number;
+  /** New vehicles created */
+  inserted: number;
+  /** Existing vehicles updated (upsert by dealer + VIN) */
+  updated: number;
+  /** Rows not applied (validation errors, in-file duplicates, row cap) */
+  skipped: number;
   errors: VehicleImportError[];
 }
 

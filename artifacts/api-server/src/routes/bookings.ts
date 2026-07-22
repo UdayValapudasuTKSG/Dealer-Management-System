@@ -178,6 +178,13 @@ router.post("/bookings", async (req, res): Promise<void> => {
     });
     return;
   }
+  // Soft-lock: an unexpired hold keeps the unit visible but unbookable.
+  if (vehicle.holdUntil && vehicle.holdUntil.getTime() > Date.now()) {
+    res.status(409).json({
+      error: `Vehicle is on hold${vehicle.holdReason ? ` (${vehicle.holdReason})` : ""} until ${vehicle.holdUntil.toISOString()} and cannot be booked`,
+    });
+    return;
+  }
 
   // Reservation from a lead (Pre-Book): promote the lead to an Account with a
   // primary Contact, and lock the Selected Model on the lead.

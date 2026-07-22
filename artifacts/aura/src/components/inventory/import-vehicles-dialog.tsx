@@ -26,9 +26,10 @@ const apiBase = () => `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
 
 type ImportResult = {
   total: number;
-  created: number;
-  failed: number;
-  errors: { row: number; message: string }[];
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: { row: number; field?: string | null; message: string }[];
 };
 
 export function ImportVehiclesDialog({ trigger }: { trigger: React.ReactNode }) {
@@ -80,11 +81,12 @@ export function ImportVehiclesDialog({ trigger }: { trigger: React.ReactNode }) 
       }
       const summary = (await res.json()) as ImportResult;
       setResult(summary);
-      if (summary.created > 0) {
+      const applied = summary.inserted + summary.updated;
+      if (applied > 0) {
         qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
         toast({
           title: "Inventory imported",
-          description: `${summary.created} of ${summary.total} vehicle${summary.total === 1 ? "" : "s"} added to the showroom.`,
+          description: `${summary.inserted} added, ${summary.updated} updated of ${summary.total} row${summary.total === 1 ? "" : "s"}.`,
         });
       } else {
         toast({
@@ -192,12 +194,18 @@ export function ImportVehiclesDialog({ trigger }: { trigger: React.ReactNode }) 
             <div className="flex items-center gap-4 rounded-xl bg-foreground/[0.03] border border-white/10 px-4 py-3 text-sm">
               <span className="flex items-center gap-1.5 text-emerald-400">
                 <CheckCircle2 className="w-4 h-4" />
-                {result.created} imported
+                {result.inserted} added
               </span>
-              {result.failed > 0 && (
+              {result.updated > 0 && (
+                <span className="flex items-center gap-1.5 text-sky-400">
+                  <CheckCircle2 className="w-4 h-4" />
+                  {result.updated} updated
+                </span>
+              )}
+              {result.skipped > 0 && (
                 <span className="flex items-center gap-1.5 text-amber-400">
                   <AlertTriangle className="w-4 h-4" />
-                  {result.failed} skipped
+                  {result.skipped} skipped
                 </span>
               )}
               <span className="text-muted-foreground ml-auto">{result.total} rows</span>
@@ -206,7 +214,10 @@ export function ImportVehiclesDialog({ trigger }: { trigger: React.ReactNode }) 
               <div className="max-h-44 overflow-y-auto rounded-xl border border-amber-500/20 bg-amber-500/[0.04] divide-y divide-white/5">
                 {result.errors.map((e, i) => (
                   <div key={i} className="px-4 py-2 text-xs">
-                    <span className="font-semibold text-amber-400">Row {e.row}:</span>{" "}
+                    <span className="font-semibold text-amber-400">
+                      Row {e.row}
+                      {e.field ? ` · ${e.field}` : ""}:
+                    </span>{" "}
                     <span className="text-muted-foreground">{e.message}</span>
                   </div>
                 ))}

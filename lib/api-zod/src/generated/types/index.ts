@@ -457,6 +457,8 @@ export * from './vehicleInput';
 export * from './vehicleInputPowertrain';
 export * from './vehicleInputStatus';
 export * from './vehiclePowertrain';
+export * from './vehiclePriceLine';
+export * from './vehiclePriceLineKind';
 export * from './vehicleStatus';
 export * from './vehicleUpdate';
 export * from './vehicleUpdatePowertrain';

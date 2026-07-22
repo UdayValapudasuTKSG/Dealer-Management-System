@@ -9,5 +9,10 @@
 export interface VehicleImportError {
   /** Spreadsheet row number (1-based, including header) */
   row: number;
+  /**
+     * Offending field, when attributable
+     * @nullable
+     */
+  field?: string | null;
   message: string;
 }

@@ -10,7 +10,11 @@ import type { VehicleImportError } from './vehicleImportError';
 export interface VehicleImportResult {
   /** Data rows found in the sheet */
   total: number;
-  created: number;
-  failed: number;
+  /** New vehicles created */
+  inserted: number;
+  /** Existing vehicles updated (upsert by dealer + VIN) */
+  updated: number;
+  /** Rows not applied (validation errors, in-file duplicates, row cap) */
+  skipped: number;
   errors: VehicleImportError[];
 }

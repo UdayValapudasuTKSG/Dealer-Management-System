@@ -26,6 +26,7 @@ import {
   redactHiddenFields,
 } from "../lib/field-permissions";
 import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
+import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 
 const router: IRouter = Router();
 
@@ -259,7 +260,7 @@ router.post(
     }
 
     const MAX_ROWS = 1000;
-    const errors: { row: number; message: string }[] = [];
+    const errors: { row: number; field?: string | null; message: string }[] = [];
     const validRows: { row: number; data: typeof CreateVehicleBody._type }[] = [];
     const seenVins = new Map<string, number>();
     let total = 0;
@@ -300,69 +301,111 @@ router.post(
 
       const parsed = CreateVehicleBody.safeParse(raw);
       if (!parsed.success) {
+        const first = parsed.error.issues[0];
         const issues = parsed.error.issues
           .map((i) => `${i.path.join(".")}: ${i.message}`)
           .join("; ");
-        errors.push({ row: rowNumber, message: issues });
+        errors.push({
+          row: rowNumber,
+          field: first ? String(first.path[0] ?? null) : null,
+          message: issues,
+        });
         return;
       }
       const vin = parsed.data.vin?.trim().toUpperCase();
       if (vin) {
+        // Upsert key is (dealerId, vin): a VIN listed twice in the same file
+        // means the LATER row wins — the earlier one is skipped and reported.
         const firstRow = seenVins.get(vin);
         if (firstRow !== undefined) {
+          const idx = validRows.findIndex(
+            (r) => r.data.vin?.trim().toUpperCase() === vin,
+          );
+          if (idx !== -1) validRows.splice(idx, 1);
           errors.push({
-            row: rowNumber,
-            message: `Duplicate VIN ${vin} — already listed on row ${firstRow} of this file.`,
+            row: firstRow,
+            field: "vin",
+            message: `Duplicate VIN ${vin} — superseded by row ${rowNumber} of this file (later row wins).`,
           });
-          return;
         }
         seenVins.set(vin, rowNumber);
       }
       validRows.push({ row: rowNumber, data: parsed.data });
     });
 
-    // Skip rows whose VIN already exists in inventory.
+    // Upsert by (dealerId, vin): rows whose VIN already exists UPDATE the
+    // existing vehicle; new VINs (or VIN-less rows) INSERT.
+    const existingByVin = new Map<string, number>();
     if (seenVins.size > 0) {
       const existing = await db
-        .select({ vin: vehiclesTable.vin })
+        .select({ id: vehiclesTable.id, vin: vehiclesTable.vin })
         .from(vehiclesTable)
         .where(
           and(
             eq(vehiclesTable.dealerId, dealerId),
             inArray(vehiclesTable.vin, [...seenVins.keys()]),
+            isNull(vehiclesTable.deletedAt),
           ),
         );
-      const existingVins = new Set(
-        existing.map((r) => r.vin?.trim().toUpperCase()).filter(Boolean),
-      );
-      if (existingVins.size > 0) {
-        for (let i = validRows.length - 1; i >= 0; i--) {
-          const entry = validRows[i]!;
-          const vin = entry.data.vin?.trim().toUpperCase();
-          if (vin && existingVins.has(vin)) {
-            errors.push({
-              row: entry.row,
-              message: `A vehicle with VIN ${vin} already exists in inventory — row skipped.`,
-            });
-            validRows.splice(i, 1);
-          }
-        }
+      for (const r of existing) {
+        const v = r.vin?.trim().toUpperCase();
+        if (v) existingByVin.set(v, r.id);
       }
     }
 
-    let created = 0;
+    let inserted = 0;
+    let updated = 0;
     const importDivisionId = await defaultDivisionId(dealerId);
     for (const { row, data } of validRows) {
+      const vin = data.vin?.trim().toUpperCase();
+      const existingId = vin ? existingByVin.get(vin) : undefined;
       try {
-        await db.insert(vehiclesTable).values({
-          ...data,
-          divisionId: data.divisionId ?? importDivisionId,
-          dealerId,
-        });
-        created += 1;
+        if (existingId !== undefined) {
+          // Never let an import perform an illegal status jump.
+          const { status: requestedStatus, ...rest } = data;
+          const [before] = await db
+            .select({ status: vehiclesTable.status })
+            .from(vehiclesTable)
+            .where(eq(vehiclesTable.id, existingId));
+          let statusPatch: Record<string, string> = {};
+          if (
+            requestedStatus &&
+            before &&
+            requestedStatus !== before.status
+          ) {
+            const allowed =
+              VEHICLE_STATUS_TRANSITIONS[before.status as VehicleStatus] ?? [];
+            if (allowed.includes(requestedStatus as VehicleStatus)) {
+              statusPatch = { status: requestedStatus };
+            } else {
+              errors.push({
+                row,
+                field: "status",
+                message: `Status ${before.status} → ${requestedStatus} is not a legal transition — other fields updated, status left unchanged.`,
+              });
+            }
+          }
+          await db
+            .update(vehiclesTable)
+            .set({ ...rest, ...statusPatch })
+            .where(
+              and(
+                eq(vehiclesTable.id, existingId),
+                eq(vehiclesTable.dealerId, dealerId),
+              ),
+            );
+          updated += 1;
+        } else {
+          await db.insert(vehiclesTable).values({
+            ...data,
+            divisionId: data.divisionId ?? importDivisionId,
+            dealerId,
+          });
+          inserted += 1;
+        }
       } catch (err) {
-        req.log.error({ err, row }, "vehicle import row insert failed");
-        errors.push({ row, message: "Database insert failed for this row." });
+        req.log.error({ err, row }, "vehicle import row write failed");
+        errors.push({ row, message: "Database write failed for this row." });
       }
     }
 
@@ -370,8 +413,9 @@ router.post(
     res.json(
       ImportVehiclesResponse.parse({
         total,
-        created,
-        failed: total - created,
+        inserted,
+        updated,
+        skipped: total - inserted - updated,
         errors,
       }),
     );
@@ -455,7 +499,28 @@ router.get("/vehicles/:id", async (req, res): Promise<void> => {
   const [visible] = await redactHiddenFields(res.locals.user, "inventory", [
     vehicle,
   ]);
-  res.json(GetVehicleResponse.parse(visible));
+
+  // Server-computed price composition from dealer_taxes — the client never
+  // computes tax (same deterministic engine as quotes/deals). Only attached
+  // when the role can see `price`; derived amounts must not leak a redacted
+  // price.
+  let priceExtras: Record<string, unknown> = {};
+  const priceVisible =
+    visible != null &&
+    typeof (visible as Record<string, unknown>).price === "number";
+  if (priceVisible) try {
+    const taxes = await ensureDealerTaxes(vehicle.dealerId);
+    const composed = computeTaxes(vehicle.price, taxes, {
+      powertrain: vehicle.powertrain,
+    });
+    priceExtras = {
+      priceLines: composed.lines,
+      priceTotalWithTax: composed.totalWithTax,
+    };
+  } catch (err) {
+    req.log.error({ err, vehicleId: vehicle.id }, "vehicle price composition failed");
+  }
+  res.json(GetVehicleResponse.parse({ ...visible, ...priceExtras }));
 });
 
 router.patch("/vehicles/:id", async (req, res): Promise<void> => {

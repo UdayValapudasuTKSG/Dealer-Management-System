@@ -29,7 +29,7 @@ export const VEHICLE_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   available: ["reserved", "booked", "in_transit", "service", "under_repair", "sold"],
   reserved: ["booked", "available"],
   booked: ["delivered", "available"],
-  delivered: [],
+  delivered: ["sold"],
   in_transit: ["available"],
   service: ["available", "under_repair"],
   under_repair: ["available", "service"],
