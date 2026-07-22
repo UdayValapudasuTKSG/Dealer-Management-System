@@ -2163,7 +2163,7 @@ export default function LeadDetail() {
 
                   {(() => {
                     const notes = (timeline ?? []).filter(
-                      (e) => e.kind === "note",
+                      (e) => e.kind === "note" || e.kind === "call_summary",
                     );
                     return notes.length > 0 ? (
                       <div className="space-y-3">

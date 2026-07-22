@@ -234,9 +234,17 @@ export function CallDialog({
     }
   };
 
-  // After a live browser call, notes + sentiment PATCH onto the call log the
-  // server already created (duration/status were captured automatically).
+  // After a live browser call, the server already captured duration/outcome,
+  // and the AI transcribes the recording, scores sentiment, and posts a
+  // summary automatically — only OPTIONAL extra notes are saved here (never
+  // sentiment, so the manual default can't overwrite the AI score).
   const saveLiveAnnotation = async () => {
+    if (!notes.trim()) {
+      // Nothing extra to add — the automated pipeline handles the rest.
+      reset();
+      onOpenChange(false);
+      return;
+    }
     if (liveCallLogId == null) {
       toast({
         title: "Call record still syncing",
@@ -249,14 +257,13 @@ export function CallDialog({
         id: leadId,
         callId: liveCallLogId,
         data: {
-          sentiment,
-          ...(notes.trim() ? { notes: notes.trim() } : {}),
+          notes: notes.trim(),
         },
       });
       refreshCallData();
       toast({
-        title: "Call saved",
-        description: `Notes and sentiment saved to ${leadName}'s record.`,
+        title: "Note added",
+        description: `Your note was attached to ${leadName}'s call record.`,
       });
       reset();
       onOpenChange(false);
@@ -346,7 +353,7 @@ export function CallDialog({
               </div>
               <div className="text-xs text-muted-foreground truncate">
                 {liveState === "ended"
-                  ? "Duration and outcome were recorded automatically. Add notes below."
+                  ? "Recorded automatically — AI is transcribing the call, scoring sentiment, and posting a summary to the lead. Add anything extra below."
                   : leadPhone}
               </div>
             </div>
@@ -450,11 +457,16 @@ export function CallDialog({
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="What was discussed? Objections, next steps…"
+              placeholder={
+                afterLiveCall
+                  ? "Optional — anything the transcript won't capture (context, promises, follow-ups)…"
+                  : "What was discussed? Objections, next steps…"
+              }
               rows={3}
             />
           </div>
 
+          {!afterLiveCall && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <div className="text-[11px] uppercase tracking-widest text-muted-foreground">
@@ -502,6 +514,7 @@ export function CallDialog({
               </p>
             )}
           </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -523,7 +536,7 @@ export function CallDialog({
               ) : (
                 <Phone className="w-4 h-4" />
               )}
-              Save notes
+              {notes.trim() ? "Add note" : "Done"}
             </Button>
           ) : (
             <Button
