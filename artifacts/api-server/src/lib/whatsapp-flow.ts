@@ -686,15 +686,10 @@ export async function handleWhatsappMessage(
         );
         return;
       }
-      // Free text: try a direct inventory match (make/model typed outright).
       const answer = (msg.text ?? msg.replyTitle ?? "").trim();
       if (answer) {
-        const matched = await matchVehicleByText(answer, dealerId);
-        if (matched) {
-          await completeFlow(t, dealerId, convo, matched, answer);
-          return;
-        }
-        // Maybe they typed just a brand name.
+        // A bare brand name shows that brand's models — checked BEFORE the
+        // fuzzy vehicle match so "BYD" doesn't silently pick the first BYD.
         const brands = await buildBrandRows(dealerId);
         const hit = brands.find(
           (b) => b.title.toLowerCase() === answer.toLowerCase(),
@@ -703,7 +698,9 @@ export async function handleWhatsappMessage(
           await promptModel(t, dealerId, phone, firstName, hit.title);
           return;
         }
-        await completeFlow(t, dealerId, convo, null, answer);
+        // Otherwise treat it as a make+model typed outright.
+        const matched = await matchVehicleByText(answer, dealerId);
+        await completeFlow(t, dealerId, convo, matched, answer);
         return;
       }
       await t.sendText(
