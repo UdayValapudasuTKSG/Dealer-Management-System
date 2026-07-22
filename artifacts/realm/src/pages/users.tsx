@@ -1,7 +1,32 @@
 import { useState } from "react";
 import { useListPlatformUsers } from "@workspace/api-client-react";
-import { Users as UsersIcon, Search, Activity, Calendar } from "lucide-react";
+import { Users as UsersIcon, Search, Calendar } from "lucide-react";
 import { Input } from "@/components/ui/input";
+
+function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500 ${className || ""}`}>
+      {children}
+    </div>
+  );
+}
+
+function PageHeader({ eyebrow, title, subtitle, right }: { eyebrow?: string; title: string; subtitle?: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-6 flex-wrap">
+      <div>
+        {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
+        <h1 className="mt-2 font-serif text-4xl tracking-tight text-zinc-900">{title}</h1>
+        {subtitle && (
+          <p className="mt-2 text-[13.5px] text-zinc-600 max-w-2xl leading-relaxed">
+            {subtitle}
+          </p>
+        )}
+      </div>
+      {right}
+    </div>
+  );
+}
 
 export default function Users() {
   const { data: users, isLoading } = useListPlatformUsers();
@@ -13,64 +38,72 @@ export default function Users() {
   );
 
   return (
-    <div className="space-y-8 font-sans">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-6">
-        <div>
-          <h1 className="text-3xl font-serif tracking-wide">Platform Users</h1>
-          <p className="text-xs text-muted-foreground mt-2 uppercase tracking-[0.15em]">Identities managed across the network</p>
-        </div>
-      </div>
+    <div className="mx-auto max-w-7xl px-4 md:px-8 py-8 space-y-6 font-sans">
+      <PageHeader 
+        eyebrow="USERS" 
+        title="Platform Users" 
+        subtitle="Identities managed across the network." 
+      />
 
-      <div className="relative max-w-md glass-panel rounded-2xl overflow-hidden p-1">
-        <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 opacity-50" />
+      <div className="relative max-w-md glass rounded-xl overflow-hidden p-1 hover-elevate">
+        <Search className="w-3.5 h-3.5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
         <Input 
           placeholder="Search by name or email..." 
-          className="pl-11 bg-transparent border-none shadow-none focus-visible:ring-0 h-12 text-sm placeholder:text-muted-foreground/50"
+          className="pl-10 bg-transparent border-none shadow-none focus-visible:ring-0 h-10 text-[13px] placeholder:text-zinc-400"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
-      <div className="glass-panel rounded-2xl overflow-hidden">
+      <div className="glass rounded-2xl overflow-hidden hover-elevate">
         {isLoading && (
-          <div className="p-12 text-center text-muted-foreground font-serif italic">Loading users...</div>
+          <div className="p-12 text-center text-zinc-500 font-serif italic">Loading users...</div>
         )}
         
         {!isLoading && filtered.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground font-serif italic">No users found.</div>
+          <div className="p-12 text-center text-zinc-500 font-serif italic">No users found.</div>
         ) : (
-          <div className="divide-y divide-white/5">
+          <div className="divide-y divide-black/5">
             {filtered.map(user => (
-              <div key={user.id} className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-5 hover:bg-white/[0.02] transition-colors">
-                <div className="flex items-center gap-5 flex-1 min-w-0">
+              <div key={user.id} className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-5 hover:bg-zinc-50/50 transition-colors">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
                   {user.imageUrl ? (
-                    <img src={user.imageUrl} className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0 grayscale" alt="" />
+                    <img src={user.imageUrl} className="w-10 h-10 rounded-full object-cover border border-black/5 shrink-0 grayscale" alt="" />
                   ) : (
-                    <div className="w-12 h-12 rounded-xl bg-white/[0.05] flex items-center justify-center text-white font-serif text-xl border border-white/10 shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 font-serif text-lg border border-black/5 shrink-0">
                       {(user.name || user.email || "?").charAt(0).toUpperCase()}
                     </div>
                   )}
                   <div className="min-w-0">
-                    <div className="flex items-center gap-3 mb-1.5">
-                      <h3 className="font-serif text-lg tracking-wide truncate">{user.name || "Unknown User"}</h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-serif text-[14.5px] tracking-tight text-zinc-900 truncate">{user.name || "Unknown User"}</h3>
                       {user.status === "active" ? (
-                        <span className="bg-white/10 text-foreground rounded-md px-2 py-0.5 text-[9px] uppercase tracking-widest border border-white/10">Active</span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10.5px] font-medium text-emerald-700">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          </span>
+                          Active
+                        </span>
                       ) : (
-                        <span className="bg-black/20 text-muted-foreground rounded-md px-2 py-0.5 text-[9px] uppercase tracking-widest border border-white/10">{user.status}</span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-zinc-50 px-2.5 py-0.5 text-[10.5px] font-medium text-zinc-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
+                          {user.status}
+                        </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-muted-foreground truncate opacity-80">{user.email}</div>
+                    <div className="text-[11px] text-zinc-500 truncate">{user.email}</div>
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-6 text-[10px] uppercase tracking-[0.15em] text-muted-foreground sm:ml-auto">
+                <div className="flex items-center gap-6 text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500 sm:ml-auto">
                   <div className="flex items-center gap-1.5">
-                    <UsersIcon className="w-3.5 h-3.5 opacity-50" />
-                    <span>{user.dealerCount} workspace{user.dealerCount === 1 ? '' : 's'}</span>
+                    <UsersIcon className="w-3.5 h-3.5" />
+                    <span className="font-mono tracking-normal">{user.dealerCount} workspace{user.dealerCount === 1 ? '' : 's'}</span>
                   </div>
                   <div className="flex items-center gap-1.5 hidden sm:flex">
-                    <Calendar className="w-3.5 h-3.5 opacity-50" />
-                    <span>Joined {new Date(user.createdAt).toLocaleDateString()}</span>
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Joined <span className="font-mono tracking-normal">{new Date(user.createdAt).toLocaleDateString()}</span></span>
                   </div>
                 </div>
               </div>
@@ -81,4 +114,3 @@ export default function Users() {
     </div>
   );
 }
-

@@ -14,6 +14,31 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 
+function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500 ${className || ""}`}>
+      {children}
+    </div>
+  );
+}
+
+function PageHeader({ eyebrow, title, subtitle, right }: { eyebrow?: string; title: string; subtitle?: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-6 flex-wrap">
+      <div>
+        {eyebrow && <SectionLabel>{eyebrow}</SectionLabel>}
+        <h1 className="mt-2 font-serif text-4xl tracking-tight text-zinc-900">{title}</h1>
+        {subtitle && (
+          <p className="mt-2 text-[13.5px] text-zinc-600 max-w-2xl leading-relaxed">
+            {subtitle}
+          </p>
+        )}
+      </div>
+      {right}
+    </div>
+  );
+}
+
 export default function Network() {
   const { data: dealers, isLoading } = useListDealers();
   const [search, setSearch] = useState("");
@@ -26,67 +51,80 @@ export default function Network() {
   );
 
   return (
-    <div className="space-y-8 font-sans">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-6">
-        <div>
-          <h1 className="text-3xl font-serif tracking-wide">Dealership Network</h1>
-          <p className="text-xs text-muted-foreground mt-2 uppercase tracking-[0.15em]">Manage and provision operating workspaces</p>
-        </div>
-        <Button onClick={() => setCreateOpen(true)} className="shrink-0 rounded-md uppercase tracking-widest text-[10px] bg-primary text-primary-foreground hover:bg-primary/90">
-          <Plus className="w-3.5 h-3.5 mr-2" />
-          Provision Workspace
-        </Button>
-      </div>
+    <div className="mx-auto max-w-7xl px-4 md:px-8 py-8 space-y-6 font-sans">
+      <PageHeader 
+        eyebrow="NETWORK"
+        title="Dealership Network"
+        subtitle="Manage and provision operating workspaces across all regions."
+        right={
+          <button onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-2 rounded-md bg-zinc-900 text-white px-4 py-2 text-[12.5px] font-medium hover:bg-zinc-700 transition-colors disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed">
+            <Plus className="w-3.5 h-3.5" />
+            Provision Workspace
+          </button>
+        }
+      />
 
-      <div className="relative glass-panel rounded-2xl overflow-hidden p-1">
-        <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 opacity-50" />
+      <div className="relative glass rounded-xl overflow-hidden p-1 hover-elevate">
+        <Search className="w-3.5 h-3.5 absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" />
         <Input 
           placeholder="Search network..." 
-          className="pl-11 bg-transparent border-none shadow-none focus-visible:ring-0 h-12 text-sm placeholder:text-muted-foreground/50"
+          className="pl-10 bg-transparent border-none shadow-none focus-visible:ring-0 h-10 text-[13px] placeholder:text-zinc-400"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         {isLoading && (
-          <div className="py-12 text-center text-muted-foreground font-serif italic">
-            Loading network data...
+          <div className="py-12 flex justify-center">
+            <div className="h-24 w-full max-w-xl rounded-xl border border-black/10 bg-white shimmer" />
           </div>
         )}
         
         {filteredDealers.map((dealer) => (
           <Link key={dealer.id} href={`/network/${dealer.id}`}>
-            <div className="glass-panel p-5 hover:bg-white/[0.08] transition-all cursor-pointer group rounded-2xl">
+            <div className="glass p-5 hover-elevate transition-all cursor-pointer group rounded-xl">
               <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-5 min-w-0">
-                  <div className="w-12 h-12 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                    <Building2 className="w-5 h-5 opacity-70" />
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-zinc-100 border border-black/5 flex items-center justify-center shrink-0">
+                    <Building2 className="w-4 h-4 text-zinc-500" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-3 mb-1.5">
-                      <h3 className="font-serif text-lg tracking-wide truncate">{dealer.name}</h3>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-serif text-[14.5px] tracking-tight text-zinc-900 truncate">{dealer.name}</h3>
                       {dealer.status === "suspended" && (
-                        <span className="bg-black/40 border border-white/10 rounded-md px-2 py-0.5 text-[9px] uppercase tracking-widest text-muted-foreground">Suspended</span>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-zinc-50 px-2.5 py-0.5 text-[10.5px] font-medium text-zinc-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-zinc-400" />
+                          Suspended
+                        </span>
+                      )}
+                      {dealer.status === "active" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10.5px] font-medium text-emerald-700">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          </span>
+                          Active
+                        </span>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-[10px] uppercase tracking-[0.15em] text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">
                       {(dealer.city || dealer.country) && (
                         <div className="flex items-center gap-1.5">
-                          <MapPin className="w-3 h-3 opacity-60" />
+                          <MapPin className="w-3 h-3" />
                           {[dealer.city, dealer.country].filter(Boolean).join(", ")}
                         </div>
                       )}
                       <div className="flex items-center gap-1.5">
-                        <BadgeDollarSign className="w-3 h-3 opacity-60" />
-                        1 USD = {dealer.usdExchangeRate} GYD
+                        <BadgeDollarSign className="w-3 h-3" />
+                        <span className="font-mono text-[10.5px] tabular-nums lowercase tracking-normal">1 usd = {dealer.usdExchangeRate} gyd</span>
                       </div>
                     </div>
                   </div>
                 </div>
                 
-                <div className="shrink-0 text-muted-foreground group-hover:text-foreground transition-colors mr-2">
-                  <ChevronRight className="w-4 h-4 opacity-50" />
+                <div className="shrink-0 text-zinc-300 group-hover:text-zinc-600 transition-colors mr-2">
+                  <ChevronRight className="w-4 h-4" />
                 </div>
               </div>
             </div>
@@ -94,7 +132,7 @@ export default function Network() {
         ))}
 
         {!isLoading && filteredDealers.length === 0 && (
-          <div className="py-12 text-center text-muted-foreground glass-panel rounded-2xl font-serif italic">
+          <div className="py-12 text-center text-zinc-500 glass rounded-xl text-[13px]">
             No dealerships found matching your search.
           </div>
         )}
@@ -148,62 +186,61 @@ function CreateDealerDialog({ open, onClose }: { open: boolean, onClose: () => v
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-md glass-panel rounded-2xl border-white/10 shadow-2xl font-sans">
+      <DialogContent className="sm:max-w-md glass rounded-2xl shadow-xl font-sans">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle className="font-serif text-xl tracking-wide">Provision New Workspace</DialogTitle>
+            <DialogTitle className="font-serif text-[20px] tracking-tight">Provision New Workspace</DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-6 py-6">
-            <div className="space-y-2.5">
-              <label className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground ml-1">Dealership Name</label>
+          <div className="space-y-5 py-6">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Dealership Name</label>
               <Input 
                 value={name} 
                 onChange={e => setName(e.target.value)} 
                 placeholder="e.g. AURA Motors Georgetown"
-                className="bg-white/5 border-white/10 rounded-xl focus-visible:ring-1 focus-visible:ring-white/30 h-11"
+                className="bg-white/50 border-black/10 rounded-md focus-visible:ring-1 focus-visible:ring-black/20 h-10 text-[13px]"
                 autoFocus
               />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2.5">
-                <label className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground ml-1">City</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">City</label>
                 <Input 
                   value={city} 
                   onChange={e => setCity(e.target.value)} 
                   placeholder="e.g. Georgetown"
-                  className="bg-white/5 border-white/10 rounded-xl focus-visible:ring-1 focus-visible:ring-white/30 h-11"
+                  className="bg-white/50 border-black/10 rounded-md focus-visible:ring-1 focus-visible:ring-black/20 h-10 text-[13px]"
                 />
               </div>
-              <div className="space-y-2.5">
-                <label className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground ml-1">Country</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Country</label>
                 <Input 
                   value={country} 
                   onChange={e => setCountry(e.target.value)} 
                   placeholder="e.g. Guyana"
-                  className="bg-white/5 border-white/10 rounded-xl focus-visible:ring-1 focus-visible:ring-white/30 h-11"
+                  className="bg-white/50 border-black/10 rounded-md focus-visible:ring-1 focus-visible:ring-black/20 h-10 text-[13px]"
                 />
               </div>
             </div>
 
-            <div className="rounded-xl bg-white/[0.03] border border-white/5 p-4 text-[11px] text-muted-foreground flex gap-3">
-              <ShieldAlert className="w-4 h-4 shrink-0 opacity-70 mt-0.5" />
+            <div className="rounded-md bg-zinc-50 border border-black/5 p-3 text-[11px] text-zinc-600 flex gap-2.5">
+              <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-zinc-400 mt-0.5" />
               <p className="leading-relaxed">Provisioning automatically generates default divisions, standard roles, stage checklists, and the complete AI agent roster.</p>
             </div>
           </div>
           
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={onClose} className="rounded-xl uppercase tracking-widest text-[10px] border-white/10 hover:bg-white/5 bg-transparent">
+            <button type="button" onClick={onClose} className="inline-flex items-center justify-center rounded-md border border-black/10 bg-white px-4 py-2 text-[12.5px] font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
               Cancel
-            </Button>
-            <Button type="submit" disabled={!name.trim() || create.isPending} className="rounded-xl uppercase tracking-widest text-[10px] bg-primary text-primary-foreground hover:bg-primary/90">
+            </button>
+            <button type="submit" disabled={!name.trim() || create.isPending} className="inline-flex items-center justify-center rounded-md bg-zinc-900 text-white px-4 py-2 text-[12.5px] font-medium hover:bg-zinc-700 transition-colors disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed">
               {create.isPending ? "Provisioning..." : "Initialize Workspace"}
-            </Button>
+            </button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
   );
 }
-

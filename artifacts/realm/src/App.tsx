@@ -3,7 +3,6 @@ import { Switch, Route, Redirect, useLocation, Router as WouterRouter } from "wo
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, Show, useClerk } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
-import { dark } from "@clerk/themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -48,7 +47,6 @@ if (!clerkPubKey) {
 }
 
 const clerkAppearance = {
-  theme: dark,
   cssLayerName: "clerk",
   variables: {
     colorPrimary: "hsl(0 0% 9%)",
