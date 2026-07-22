@@ -9,6 +9,8 @@ import {
 import { notifyUsers } from "./email";
 import { onLeadCreated } from "./email-triggers";
 import { autoAssignLead } from "./lead-assignment";
+import { findOpenDuplicate, mergeIntoExistingLead } from "./lead-dedup";
+import { notifyUser } from "./email";
 import { runIntakeOrchestration } from "./intake-orchestration";
 import { autoQuoteOnLeadCreated } from "./quotes";
 import { dealerStaffIdsByRole } from "./tenancy";
@@ -69,6 +71,54 @@ export async function createInboundLead(opts: {
   /** Timeline actor name ("Meta Lead Ads" / "WhatsApp") */
   actor: string;
 }): Promise<Lead> {
+  // Dedup agent (A1): a matching open lead (normalized email OR phone within
+  // this dealer) absorbs the enquiry instead of creating a duplicate.
+  const duplicate = await findOpenDuplicate(
+    opts.dealerId,
+    {
+      name: opts.name,
+      email: opts.email,
+      phone: opts.phone,
+      interestedVehicleId: opts.vehicle?.id ?? null,
+      variant: opts.vehicle?.variant ?? null,
+      color: opts.vehicle?.color ?? null,
+      notes: opts.notes ?? null,
+    },
+    { contactOnly: true },
+  );
+  if (duplicate) {
+    const { lead: merged } = await mergeIntoExistingLead(
+      duplicate,
+      {
+        name: opts.name,
+        email: opts.email,
+        phone: opts.phone,
+        interestedVehicleId: opts.vehicle?.id ?? null,
+        variant: opts.vehicle?.variant ?? null,
+        color: opts.vehicle?.color ?? null,
+        notes: opts.notes
+          ? `${opts.channelLabel} enquiry:\n${opts.notes}`
+          : `Repeat enquiry via ${opts.channelLabel}.`,
+      },
+      opts.channelLabel,
+    );
+    if (merged.ownerUserId) {
+      try {
+        await notifyUser({
+          userId: merged.ownerUserId,
+          dealerId: merged.dealerId,
+          type: "system",
+          title: `Repeat enquiry: ${merged.name}`,
+          body: `A new ${opts.channelLabel} enquiry matched this open lead and was merged into it.`,
+          link: `/lead/${merged.id}`,
+        });
+      } catch (err) {
+        logger.error({ err }, "Failed to notify owner of merged enquiry");
+      }
+    }
+    return merged;
+  }
+
   const [lead] = await db
     .insert(leadsTable)
     .values({

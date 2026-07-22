@@ -4,6 +4,7 @@ import { and, eq, notInArray, isNotNull } from "drizzle-orm";
 import {
   db,
   callLogsTable,
+  dealersTable,
   leadsTable,
   timelineEventsTable,
   usersTable,
@@ -36,7 +37,10 @@ const router: IRouter = Router();
 // Meta Lead Ads webhook (Facebook / Instagram lead forms)
 // ---------------------------------------------------------------------------
 
-const GRAPH_BASE = "https://graph.facebook.com/v21.0";
+// Overridable so signed webhook flows can be exercised against a local stub
+// Graph server in dev/tests (mirrors WHATSAPP_GRAPH_BASE_URL).
+const GRAPH_BASE =
+  process.env["META_GRAPH_BASE_URL"] || "https://graph.facebook.com/v21.0";
 
 function metaConfig(): {
   appSecret: string;
@@ -86,8 +90,20 @@ function verifyMetaSignature(
 
 type MetaFieldDatum = { name: string; values?: string[] };
 
+/** Resolve the owning dealer from the Meta page id — fail closed when the
+ * page is unmapped so a foreign/unknown page can never write a lead. */
+async function dealerIdForMetaPage(pageId: string): Promise<number | null> {
+  if (!pageId) return null;
+  const [d] = await db
+    .select({ id: dealersTable.id })
+    .from(dealersTable)
+    .where(eq(dealersTable.metaPageId, pageId));
+  return d?.id ?? null;
+}
+
 async function processLeadgenEvent(
   leadgenId: string,
+  pageId: string,
   pageToken: string,
 ): Promise<void> {
   // Idempotency: skip leadgen ids we've already processed (Meta retries).
@@ -101,6 +117,16 @@ async function processLeadgenEvent(
       ),
     );
   if (seen) return;
+
+  // Tenant routing: page_id must map to a dealer BEFORE any write.
+  const dealerId = await dealerIdForMetaPage(pageId);
+  if (dealerId == null) {
+    logger.warn(
+      { leadgenId, pageId },
+      "Meta leadgen rejected: page_id is not mapped to any dealer",
+    );
+    return;
+  }
 
   const url = `${GRAPH_BASE}/${encodeURIComponent(leadgenId)}?fields=field_data,created_time,platform,form_id&access_token=${encodeURIComponent(pageToken)}`;
   const resp = await fetch(url);
@@ -144,7 +170,6 @@ async function processLeadgenEvent(
       break;
     }
   }
-  const dealerId = await defaultDealerId();
   const vehicle = await matchVehicleByText(vehicleAnswer, dealerId);
 
   const source = data.platform === "ig" ? "instagram" : "facebook";
@@ -192,7 +217,13 @@ router.post("/webhooks/meta", async (req, res): Promise<void> => {
 
   let payload: {
     object?: string;
-    entry?: { changes?: { field?: string; value?: { leadgen_id?: string } }[] }[];
+    entry?: {
+      id?: string;
+      changes?: {
+        field?: string;
+        value?: { leadgen_id?: string; page_id?: string };
+      }[];
+    }[];
   };
   try {
     payload = JSON.parse(raw.toString("utf8"));
@@ -201,11 +232,13 @@ router.post("/webhooks/meta", async (req, res): Promise<void> => {
     return;
   }
 
-  const leadgenIds: string[] = [];
+  const leadgenIds: { leadgenId: string; pageId: string }[] = [];
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const id = change.value?.leadgen_id;
-      if (change.field === "leadgen" && id) leadgenIds.push(id);
+      const pageId = change.value?.page_id ?? entry.id ?? "";
+      if (change.field === "leadgen" && id)
+        leadgenIds.push({ leadgenId: id, pageId });
     }
   }
 
@@ -213,11 +246,11 @@ router.post("/webhooks/meta", async (req, res): Promise<void> => {
   // and the leadgen id stays unprocessed so the retry can succeed.
   res.status(200).json({ received: leadgenIds.length });
 
-  for (const id of leadgenIds) {
+  for (const { leadgenId, pageId } of leadgenIds) {
     try {
-      await processLeadgenEvent(id, cfg.pageToken);
+      await processLeadgenEvent(leadgenId, pageId, cfg.pageToken);
     } catch (err) {
-      logger.error({ err, leadgenId: id }, "Failed to process Meta leadgen event");
+      logger.error({ err, leadgenId }, "Failed to process Meta leadgen event");
     }
   }
 });

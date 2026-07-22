@@ -54,6 +54,9 @@ export const dealersTable = pgTable("dealers", {
   usdExchangeRate: doublePrecision("usd_exchange_rate")
     .notNull()
     .default(208.5),
+  // Meta (Facebook/Instagram) page id that routes Lead Ads webhook events to
+  // this dealer. Unmapped page ids are rejected (fail closed, no lead write).
+  metaPageId: text("meta_page_id"),
   // Feature flags — missing keys mean "enabled".
   entitlements: jsonb("entitlements")
     .$type<DealerEntitlements>()

@@ -36,15 +36,24 @@ export type DedupCandidate = {
   notes?: string | null;
 };
 
-/** Find an open lead that deterministically matches name + phone/email. */
+/**
+ * Find an open lead that deterministically matches phone/email.
+ * Default mode also requires a name match (website forms, where the
+ * submitter types their own name). Webhook channels (Meta Lead Ads,
+ * WhatsApp) pass `contactOnly: true` because their names are often
+ * placeholders ("WhatsApp +592…", profile names) — there a hard contact
+ * point match (normalized email OR phone digits) alone is decisive.
+ */
 export async function findOpenDuplicate(
   dealerId: number,
   input: DedupCandidate,
+  opts?: { contactOnly?: boolean },
 ): Promise<Lead | null> {
   const name = normName(input.name);
   const phone = normPhone(input.phone);
   const email = normEmail(input.email);
-  if (!name || (!phone && !email)) return null;
+  if (!phone && !email) return null;
+  if (!opts?.contactOnly && !name) return null;
 
   const open = await db
     .select()
@@ -58,8 +67,11 @@ export async function findOpenDuplicate(
 
   return (
     open.find((l) => {
-      if (normName(l.name) !== name) return false;
-      const phoneHit = !!phone && normPhone(l.phone) === phone;
+      if (!opts?.contactOnly && normName(l.name) !== name) return false;
+      const lp = normPhone(l.phone);
+      // Digit-suffix match tolerates +592 prefix vs local formats.
+      const phoneHit =
+        !!phone && !!lp && (lp === phone || lp.slice(-10) === phone.slice(-10));
       const emailHit = !!email && normEmail(l.email) === email;
       return phoneHit || emailHit;
     }) ?? null
