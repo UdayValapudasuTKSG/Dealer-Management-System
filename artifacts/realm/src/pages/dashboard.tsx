@@ -1,6 +1,5 @@
 import { useListDealers, useListPlatformUsers, useListPlatformAudit } from "@workspace/api-client-react";
 import { Network, Users, Activity, Building2 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function Dashboard() {
   const { data: dealers } = useListDealers();
@@ -12,71 +11,73 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 font-sans">
-      <div className="border-b border-border pb-6">
-        <h1 className="text-3xl font-serif text-foreground">Command Overview</h1>
-        <p className="text-sm text-muted-foreground mt-2 uppercase tracking-widest">Network status and high-level platform metrics</p>
+      <div className="border-b border-border/50 pb-6">
+        <h1 className="text-3xl font-serif tracking-wide">Command Overview</h1>
+        <p className="text-xs text-muted-foreground mt-2 uppercase tracking-[0.15em]">Network status and high-level platform metrics</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        <Card className="bg-white border-border rounded-none shadow-none">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-border/40">
-            <CardTitle className="text-[10px] uppercase tracking-widest text-muted-foreground">Network Size</CardTitle>
-            <Network className="w-4 h-4 text-black" />
-          </CardHeader>
-          <CardContent className="pt-4">
-            <div className="text-4xl font-serif text-black">{(dealers ?? []).length}</div>
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground mt-3">
-              <span className="text-black">{activeDealers} active</span> <span className="mx-2">•</span> <span className="text-muted-foreground">{suspendedDealers} suspended</span>
+        <div className="glass-panel p-6 flex flex-col justify-between">
+          <div className="flex flex-row items-center justify-between pb-4 border-b border-white/5 mb-4">
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Network Size</h3>
+            <Network className="w-4 h-4 opacity-50" />
+          </div>
+          <div>
+            <div className="text-4xl font-serif tracking-tight">{(dealers ?? []).length}</div>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground mt-3 flex items-center gap-2">
+              <span className="text-foreground font-medium">{activeDealers} active</span> 
+              <span className="w-1 h-1 rounded-full bg-white/20"></span>
+              <span>{suspendedDealers} suspended</span>
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="bg-white border-border rounded-none shadow-none">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-border/40">
-            <CardTitle className="text-[10px] uppercase tracking-widest text-muted-foreground">Platform Users</CardTitle>
-            <Users className="w-4 h-4 text-black" />
-          </CardHeader>
-          <CardContent className="pt-4">
-            <div className="text-4xl font-serif text-black">{(users ?? []).length}</div>
+        <div className="glass-panel p-6 flex flex-col justify-between">
+          <div className="flex flex-row items-center justify-between pb-4 border-b border-white/5 mb-4">
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Platform Users</h3>
+            <Users className="w-4 h-4 opacity-50" />
+          </div>
+          <div>
+            <div className="text-4xl font-serif tracking-tight">{(users ?? []).length}</div>
             <p className="text-[11px] uppercase tracking-wider text-muted-foreground mt-3">Across all workspaces</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="bg-white border-border rounded-none shadow-none">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-border/40">
-            <CardTitle className="text-[10px] uppercase tracking-widest text-muted-foreground">Recent Events</CardTitle>
-            <Activity className="w-4 h-4 text-black" />
-          </CardHeader>
-          <CardContent className="pt-4">
-            <div className="text-4xl font-serif text-black">{(audit ?? []).length}</div>
+        <div className="glass-panel p-6 flex flex-col justify-between">
+          <div className="flex flex-row items-center justify-between pb-4 border-b border-white/5 mb-4">
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Recent Events</h3>
+            <Activity className="w-4 h-4 opacity-50" />
+          </div>
+          <div>
+            <div className="text-4xl font-serif tracking-tight">{(audit ?? []).length}</div>
             <p className="text-[11px] uppercase tracking-wider text-muted-foreground mt-3">Logged actions recently</p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <Card className="bg-white border-border rounded-none shadow-none">
-          <CardHeader className="border-b border-border/40 pb-4">
-            <CardTitle className="text-lg font-serif">Recent Dealerships</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
+        <div className="glass-panel">
+          <div className="px-6 py-5 border-b border-white/5">
+            <h3 className="text-lg font-serif">Recent Dealerships</h3>
+          </div>
+          <div className="p-6">
             <div className="space-y-6">
               {(dealers ?? []).slice(0, 5).map(dealer => (
                 <div key={dealer.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-muted/30 flex items-center justify-center text-black border border-border">
-                      <Building2 className="w-4 h-4" />
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-center shrink-0">
+                      <Building2 className="w-4 h-4 opacity-70" />
                     </div>
                     <div>
-                      <div className="font-serif text-base text-black">{dealer.name}</div>
+                      <div className="font-serif text-base tracking-wide">{dealer.name}</div>
                       <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{dealer.city || "No city"} • {dealer.country || "No country"}</div>
                     </div>
                   </div>
-                  <div className="text-[10px] uppercase tracking-widest">
+                  <div className="text-[9px] uppercase tracking-[0.2em]">
                     {dealer.status === "active" ? (
-                      <span className="text-black font-medium border border-black/20 px-2 py-1 bg-black/5">Active</span>
+                      <span className="font-medium bg-white/[0.08] text-foreground px-2 py-1 rounded-sm border border-white/10">Active</span>
                     ) : (
-                      <span className="text-muted-foreground border border-border px-2 py-1">Suspended</span>
+                      <span className="text-muted-foreground border border-white/10 px-2 py-1 rounded-sm bg-black/20">Suspended</span>
                     )}
                   </div>
                 </div>
@@ -85,22 +86,22 @@ export default function Dashboard() {
                 <div className="text-sm text-muted-foreground py-4 text-center font-serif italic">No dealerships found.</div>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="bg-white border-border rounded-none shadow-none">
-          <CardHeader className="border-b border-border/40 pb-4">
-            <CardTitle className="text-lg font-serif">Recent Platform Activity</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="space-y-5">
+        <div className="glass-panel">
+          <div className="px-6 py-5 border-b border-white/5">
+            <h3 className="text-lg font-serif">Recent Platform Activity</h3>
+          </div>
+          <div className="p-6">
+            <div className="space-y-6">
               {(audit ?? []).map(entry => (
                 <div key={entry.id} className="flex gap-4">
-                  <div className="w-1.5 h-1.5 mt-2 bg-black shrink-0" />
+                  <div className="w-1.5 h-1.5 mt-2 rounded-full bg-foreground/40 shrink-0" />
                   <div>
-                    <div className="text-sm text-black leading-snug">{entry.summary}</div>
+                    <div className="text-sm text-foreground/90 leading-snug font-medium">{entry.summary}</div>
                     <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-2">
-                      {entry.actorName || entry.actorEmail || "System"} <span className="mx-1">•</span> {new Date(entry.createdAt).toLocaleString()}
+                      {entry.actorName || entry.actorEmail || "System"} <span className="mx-1 opacity-50">•</span> {new Date(entry.createdAt).toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -109,9 +110,10 @@ export default function Dashboard() {
                 <div className="text-sm text-muted-foreground py-4 text-center font-serif italic">No recent activity.</div>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
+
