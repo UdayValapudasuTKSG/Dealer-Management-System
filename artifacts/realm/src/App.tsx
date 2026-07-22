@@ -51,17 +51,19 @@ const clerkAppearance = {
   theme: dark,
   cssLayerName: "clerk",
   variables: {
-    colorPrimary: "hsl(199 89% 48%)",
-    colorBackground: "hsl(222 47% 11%)",
-    colorInput: "hsl(217.2 32.6% 17.5%)",
-    borderRadius: "0.5rem",
+    colorPrimary: "hsl(0 0% 9%)",
+    colorBackground: "hsl(0 0% 98%)",
+    colorInput: "hsl(0 0% 90%)",
+    colorText: "hsl(0 0% 10%)",
+    borderRadius: "0rem",
   },
   elements: {
     rootBox: "w-full flex justify-center",
-    cardBox: "bg-[hsl(222_47%_11%)] border border-white/10 shadow-2xl",
-    headerTitle: "text-white font-semibold",
-    headerSubtitle: "text-muted-foreground",
-    formButtonPrimary: "bg-primary hover:bg-primary/90 text-primary-foreground",
+    cardBox: "bg-background border border-border shadow-none rounded-none",
+    headerTitle: "text-foreground font-serif text-2xl font-normal",
+    headerSubtitle: "text-muted-foreground font-sans",
+    formButtonPrimary: "bg-primary hover:bg-primary/90 text-primary-foreground rounded-none uppercase tracking-widest text-xs",
+    formFieldInput: "rounded-none border-border focus:ring-primary focus:border-primary",
   },
 };
 

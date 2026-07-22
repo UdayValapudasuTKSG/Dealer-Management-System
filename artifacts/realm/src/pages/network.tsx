@@ -28,13 +28,13 @@ export default function Network() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-8 font-sans">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Dealership Network</h1>
-          <p className="text-muted-foreground mt-1">Manage and provision operating workspaces.</p>
+          <h1 className="text-3xl font-serif text-foreground">Dealership Network</h1>
+          <p className="text-sm text-muted-foreground mt-2 uppercase tracking-widest">Manage and provision operating workspaces</p>
         </div>
-        <Button onClick={() => setCreateOpen(true)} className="shrink-0 shadow-lg shadow-primary/20">
+        <Button onClick={() => setCreateOpen(true)} className="shrink-0 rounded-none uppercase tracking-widest text-xs bg-black text-white hover:bg-black/90">
           <Plus className="w-4 h-4 mr-2" />
           Provision Workspace
         </Button>
@@ -44,7 +44,7 @@ export default function Network() {
         <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input 
           placeholder="Search network..." 
-          className="pl-9 bg-card/50 border-white/10"
+          className="pl-9 bg-white border-border rounded-none shadow-none focus-visible:ring-1 focus-visible:ring-black"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -52,34 +52,34 @@ export default function Network() {
 
       <div className="grid gap-4">
         {isLoading && (
-          <div className="py-12 text-center text-muted-foreground animate-pulse">
+          <div className="py-12 text-center text-muted-foreground font-serif italic">
             Loading network data...
           </div>
         )}
         
         {filteredDealers.map((dealer) => (
           <Link key={dealer.id} href={`/network/${dealer.id}`}>
-            <Card className="p-4 bg-card/40 hover:bg-card/80 border-white/5 hover:border-primary/20 transition-all cursor-pointer group">
+            <Card className="p-4 bg-white hover:bg-gray-50 border-border rounded-none shadow-none transition-colors cursor-pointer group">
               <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-primary shrink-0 border border-primary/20">
-                    <Building2 className="w-6 h-6" />
+                <div className="flex items-center gap-5 min-w-0">
+                  <div className="w-12 h-12 bg-muted/30 flex items-center justify-center text-black border border-border shrink-0">
+                    <Building2 className="w-5 h-5" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-white truncate text-base">{dealer.name}</h3>
+                    <div className="flex items-center gap-3 mb-1.5">
+                      <h3 className="font-serif text-lg text-black truncate">{dealer.name}</h3>
                       {dealer.status === "suspended" && (
-                        <Badge variant="outline" className="text-amber-400 border-amber-400/20 bg-amber-400/10">Suspended</Badge>
+                        <Badge variant="outline" className="text-muted-foreground border-border rounded-none px-2 py-0.5 text-[10px] uppercase tracking-widest">Suspended</Badge>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-[10px] uppercase tracking-widest text-muted-foreground">
                       {(dealer.city || dealer.country) && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           <MapPin className="w-3 h-3" />
                           {[dealer.city, dealer.country].filter(Boolean).join(", ")}
                         </div>
                       )}
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <BadgeDollarSign className="w-3 h-3" />
                         1 USD = {dealer.usdExchangeRate} GYD
                       </div>
@@ -87,7 +87,7 @@ export default function Network() {
                   </div>
                 </div>
                 
-                <div className="shrink-0 text-muted-foreground group-hover:text-primary transition-colors">
+                <div className="shrink-0 text-muted-foreground group-hover:text-black transition-colors">
                   <ChevronRight className="w-5 h-5" />
                 </div>
               </div>
@@ -96,7 +96,7 @@ export default function Network() {
         ))}
 
         {!isLoading && filteredDealers.length === 0 && (
-          <div className="py-12 text-center text-muted-foreground border border-dashed border-white/10 rounded-xl bg-card/20">
+          <div className="py-12 text-center text-muted-foreground border border-border bg-white font-serif italic">
             No dealerships found matching your search.
           </div>
         )}
@@ -150,56 +150,56 @@ function CreateDealerDialog({ open, onClose }: { open: boolean, onClose: () => v
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-md bg-background border-white/10 shadow-2xl">
+      <DialogContent className="sm:max-w-md bg-white border-border rounded-none shadow-none font-sans">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle className="text-white">Provision New Workspace</DialogTitle>
+            <DialogTitle className="font-serif text-xl text-black">Provision New Workspace</DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Dealership Name</label>
+          <div className="space-y-5 py-6">
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Dealership Name</label>
               <Input 
                 value={name} 
                 onChange={e => setName(e.target.value)} 
                 placeholder="e.g. AURA Motors Georgetown"
-                className="bg-card/50 border-white/10"
+                className="bg-white border-border rounded-none focus-visible:ring-1 focus-visible:ring-black"
                 autoFocus
               />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">City</label>
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest text-muted-foreground">City</label>
                 <Input 
                   value={city} 
                   onChange={e => setCity(e.target.value)} 
                   placeholder="e.g. Georgetown"
-                  className="bg-card/50 border-white/10"
+                  className="bg-white border-border rounded-none focus-visible:ring-1 focus-visible:ring-black"
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Country</label>
+              <div className="space-y-2">
+                <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Country</label>
                 <Input 
                   value={country} 
                   onChange={e => setCountry(e.target.value)} 
                   placeholder="e.g. Guyana"
-                  className="bg-card/50 border-white/10"
+                  className="bg-white border-border rounded-none focus-visible:ring-1 focus-visible:ring-black"
                 />
               </div>
             </div>
 
-            <div className="rounded-lg bg-primary/10 border border-primary/20 p-3 text-xs text-primary/90 flex gap-2">
-              <ShieldAlert className="w-4 h-4 shrink-0" />
-              <p>Provisioning automatically generates default divisions, standard roles, stage checklists, and the complete AI agent roster.</p>
+            <div className="border border-border bg-gray-50 p-4 text-[11px] text-muted-foreground flex gap-3">
+              <ShieldAlert className="w-4 h-4 shrink-0 text-black" />
+              <p className="leading-relaxed">Provisioning automatically generates default divisions, standard roles, stage checklists, and the complete AI agent roster.</p>
             </div>
           </div>
           
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={onClose} className="hover:bg-white/5 hover:text-white">
+            <Button type="button" variant="outline" onClick={onClose} className="rounded-none uppercase tracking-widest text-xs border-border text-black hover:bg-gray-50">
               Cancel
             </Button>
-            <Button type="submit" disabled={!name.trim() || create.isPending}>
+            <Button type="submit" disabled={!name.trim() || create.isPending} className="rounded-none uppercase tracking-widest text-xs bg-black text-white hover:bg-black/90">
               {create.isPending ? "Provisioning..." : "Initialize Workspace"}
             </Button>
           </DialogFooter>

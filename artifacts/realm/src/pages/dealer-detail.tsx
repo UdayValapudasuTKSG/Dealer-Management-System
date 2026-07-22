@@ -41,11 +41,11 @@ export default function DealerDetail() {
   const [entering, setEntering] = useState(false);
 
   if (isLoading) {
-    return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
+    return <div className="p-8 text-center text-muted-foreground font-serif italic">Loading...</div>;
   }
 
   if (!dealer) {
-    return <div className="p-8 text-center text-muted-foreground">Dealership not found.</div>;
+    return <div className="p-8 text-center text-muted-foreground font-serif italic">Dealership not found.</div>;
   }
 
   const handleEnterWorkspace = async () => {
@@ -71,40 +71,40 @@ export default function DealerDetail() {
   };
 
   return (
-    <div className="space-y-6 pb-20">
-      <div className="flex items-center gap-4 text-sm text-muted-foreground mb-2">
-        <Link href="/network" className="hover:text-white flex items-center gap-1 transition-colors">
-          <ArrowLeft className="w-4 h-4" /> Back to Network
+    <div className="space-y-6 pb-20 font-sans">
+      <div className="flex items-center gap-4 text-[10px] uppercase tracking-widest text-muted-foreground mb-4">
+        <Link href="/network" className="hover:text-black flex items-center gap-1.5 transition-colors">
+          <ArrowLeft className="w-3 h-3" /> Back to Network
         </Link>
       </div>
 
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 bg-card/30 p-6 rounded-2xl border border-white/5">
-        <div className="flex items-start gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0 mt-1">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 bg-white p-6 border border-border">
+        <div className="flex items-start gap-5">
+          <div className="w-16 h-16 bg-muted/30 flex items-center justify-center text-black border border-border shrink-0 mt-1">
             <Building2 className="w-8 h-8" />
           </div>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-white tracking-tight">{dealer.name}</h1>
-              <Badge variant={dealer.status === "active" ? "default" : "secondary"} className={
-                dealer.status === "active" ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" : "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20"
-              }>
+            <div className="flex items-center gap-4">
+              <h1 className="text-3xl font-serif text-black tracking-tight">{dealer.name}</h1>
+              <Badge variant="outline" className={`rounded-none px-2 py-0.5 text-[10px] uppercase tracking-widest ${
+                dealer.status === "active" ? "border-black text-black" : "border-border text-muted-foreground"
+              }`}>
                 {dealer.status === "active" ? "Active" : "Suspended"}
               </Badge>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-x-6 gap-y-2 mt-2 text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-x-8 gap-y-2 mt-3 text-[11px] uppercase tracking-wider text-muted-foreground">
               {(dealer.city || dealer.country) && (
                 <span className="flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4" />
+                  <MapPin className="w-3.5 h-3.5 text-black" />
                   {[dealer.city, dealer.country].filter(Boolean).join(", ")}
                 </span>
               )}
               <span className="flex items-center gap-1.5">
-                <Activity className="w-4 h-4" />
+                <Activity className="w-3.5 h-3.5 text-black" />
                 ID: {dealer.id}
               </span>
               <span className="flex items-center gap-1.5">
-                <DollarSign className="w-4 h-4" />
+                <DollarSign className="w-3.5 h-3.5 text-black" />
                 Rate: 1 USD = {dealer.usdExchangeRate || 208} GYD
               </span>
             </div>
@@ -114,7 +114,7 @@ export default function DealerDetail() {
         <div className="flex items-center gap-3 shrink-0">
           <Button 
             variant="outline" 
-            className="border-primary/30 text-primary hover:bg-primary hover:text-white"
+            className="border-black text-black hover:bg-black hover:text-white rounded-none uppercase tracking-widest text-xs"
             onClick={handleEnterWorkspace}
             disabled={entering || dealer.status === "suspended"}
           >
@@ -181,39 +181,41 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
   };
 
   return (
-    <div className="bg-card/30 border border-white/5 rounded-2xl overflow-hidden">
-      <div className="p-4 border-b border-white/5 flex items-center gap-2 font-medium text-white">
-        <Settings className="w-4 h-4 text-primary" /> General Configuration
+    <div className="bg-white border border-border">
+      <div className="p-4 border-b border-border flex items-center gap-2.5 font-serif text-lg text-black">
+        <Settings className="w-5 h-5" /> General Configuration
       </div>
-      <div className="p-5 space-y-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground font-medium">Dealership Name</label>
-            <Input value={name} onChange={e => setName(e.target.value)} className="bg-background border-white/10" />
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Dealership Name</label>
+            <Input value={name} onChange={e => setName(e.target.value)} className="bg-white border-border rounded-none focus-visible:ring-1 focus-visible:ring-black" />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground font-medium">USD Exchange Rate (GYD)</label>
-            <Input type="number" value={rate} onChange={e => setRate(e.target.value)} className="bg-background border-white/10" />
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-muted-foreground">USD Exchange Rate (GYD)</label>
+            <Input type="number" value={rate} onChange={e => setRate(e.target.value)} className="bg-white border-border rounded-none focus-visible:ring-1 focus-visible:ring-black" />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground font-medium">City</label>
-            <Input value={city} onChange={e => setCity(e.target.value)} className="bg-background border-white/10" />
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-muted-foreground">City</label>
+            <Input value={city} onChange={e => setCity(e.target.value)} className="bg-white border-border rounded-none focus-visible:ring-1 focus-visible:ring-black" />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-xs text-muted-foreground font-medium">Country</label>
-            <Input value={country} onChange={e => setCountry(e.target.value)} className="bg-background border-white/10" />
+          <div className="space-y-2">
+            <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Country</label>
+            <Input value={country} onChange={e => setCountry(e.target.value)} className="bg-white border-border rounded-none focus-visible:ring-1 focus-visible:ring-black" />
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-white/5">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between pt-6 border-t border-border">
+          <div className="flex items-center gap-4">
             <Switch checked={dealer.status === "active"} onCheckedChange={toggleStatus} disabled={update.isPending} />
             <div>
-              <div className="text-sm font-medium text-white">Workspace State</div>
-              <div className="text-xs text-muted-foreground">Suspending pauses all AI agents and blocks access.</div>
+              <div className="text-sm font-medium text-black">Workspace State</div>
+              <div className="text-[11px] text-muted-foreground mt-1">Suspending pauses all AI agents and blocks access.</div>
             </div>
           </div>
-          <Button onClick={handleSave} disabled={update.isPending} size="sm">Save Changes</Button>
+          <Button onClick={handleSave} disabled={update.isPending} size="sm" className="rounded-none uppercase tracking-widest text-[10px] bg-black text-white hover:bg-black/90 px-4 h-9">
+            Save Changes
+          </Button>
         </div>
       </div>
     </div>
@@ -244,19 +246,19 @@ function EntitlementsPanel({ dealer }: { dealer: Dealer }) {
   };
 
   return (
-    <div className="bg-card/30 border border-white/5 rounded-2xl overflow-hidden">
-      <div className="p-4 border-b border-white/5 flex items-center gap-2 font-medium text-white">
-        <Power className="w-4 h-4 text-primary" /> Feature Entitlements
+    <div className="bg-white border border-border">
+      <div className="p-4 border-b border-border flex items-center gap-2.5 font-serif text-lg text-black">
+        <Power className="w-5 h-5" /> Feature Entitlements
       </div>
-      <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
         {ENTITLEMENT_MODULES.map(m => {
           const on = entitlementOn(dealer.entitlements as any, m.key);
           return (
-            <div key={m.key} className="flex items-start gap-3 p-3 rounded-xl bg-background/50 border border-white/5">
-              <Switch checked={on} onCheckedChange={v => toggle(m.key, v)} disabled={update.isPending} className="mt-1" />
+            <div key={m.key} className="flex items-start gap-4 p-4 bg-gray-50 border border-border">
+              <Switch checked={on} onCheckedChange={v => toggle(m.key, v)} disabled={update.isPending} className="mt-0.5" />
               <div>
-                <div className="text-sm font-medium text-white">{m.label}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">{m.desc}</div>
+                <div className="text-sm font-medium text-black">{m.label}</div>
+                <div className="text-[11px] text-muted-foreground mt-1 leading-relaxed">{m.desc}</div>
               </div>
             </div>
           );
@@ -281,31 +283,31 @@ function AgentsPanel({ dealer }: { dealer: Dealer }) {
   const aiEntitled = entitlementOn(dealer.entitlements as any, "ai_agents");
 
   return (
-    <div className="bg-card/30 border border-white/5 rounded-2xl overflow-hidden">
-      <div className="p-4 border-b border-white/5 flex items-center justify-between">
-        <div className="flex items-center gap-2 font-medium text-white">
-          <Bot className="w-4 h-4 text-primary" /> AI Agent Governance
+    <div className="bg-white border border-border">
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-2.5 font-serif text-lg text-black">
+          <Bot className="w-5 h-5" /> AI Agent Governance
         </div>
         {(!aiEntitled || dealer.status === "suspended") && (
-          <Badge variant="outline" className="text-amber-400 border-amber-400/20 bg-amber-400/10">
+          <Badge variant="outline" className="rounded-none px-2 py-0.5 text-[10px] uppercase tracking-widest border-border text-muted-foreground">
             {dealer.status === "suspended" ? "Suspended (Halted)" : "Disabled via Entitlement"}
           </Badge>
         )}
       </div>
       <div className="p-0">
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-border">
           {(agents ?? []).map(a => {
             const running = a.status !== "paused";
             return (
-              <div key={a.id} className="flex items-center gap-4 p-4 hover:bg-white/[0.02] transition-colors">
+              <div key={a.id} className="flex items-center gap-4 p-5 hover:bg-gray-50 transition-colors">
                 {running ? (
-                  <PlayCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <PlayCircle className="w-5 h-5 text-black shrink-0" />
                 ) : (
-                  <PauseCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                  <PauseCircle className="w-5 h-5 text-muted-foreground shrink-0" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-white truncate">{a.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">{a.domain}</div>
+                  <div className="text-sm font-medium text-black truncate">{a.name}</div>
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground mt-1 truncate">{a.domain}</div>
                 </div>
                 <Switch 
                   checked={running} 
@@ -320,7 +322,7 @@ function AgentsPanel({ dealer }: { dealer: Dealer }) {
             );
           })}
           {(agents ?? []).length === 0 && (
-            <div className="p-6 text-center text-sm text-muted-foreground">
+            <div className="p-8 text-center text-sm text-muted-foreground font-serif italic">
               No agents provisioned for this workspace.
             </div>
           )}
@@ -353,107 +355,108 @@ function MembersPanel({ dealer }: { dealer: Dealer }) {
   const candidates = (users ?? []).filter(u => !memberIds.has(u.id));
 
   return (
-    <div className="bg-card/30 border border-white/5 rounded-2xl overflow-hidden flex flex-col h-full">
-      <div className="p-4 border-b border-white/5 flex items-center justify-between">
-        <div className="flex items-center gap-2 font-medium text-white">
-          <Users className="w-4 h-4 text-primary" /> Roster
+    <div className="bg-white border border-border flex flex-col h-full">
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-2.5 font-serif text-lg text-black">
+          <Users className="w-5 h-5" /> Roster
         </div>
-        <Button size="sm" variant="outline" className="h-8 border-white/10" onClick={() => setAddOpen(true)}>
-          <Plus className="w-4 h-4 mr-1" /> Add
+        <Button size="sm" variant="outline" className="h-8 rounded-none border-border text-[10px] uppercase tracking-widest px-3 hover:bg-gray-50 text-black" onClick={() => setAddOpen(true)}>
+          <Plus className="w-3.5 h-3.5 mr-1.5" /> Add
         </Button>
       </div>
-      <div className="divide-y divide-white/5 flex-1 overflow-y-auto max-h-[600px]">
+      <div className="divide-y divide-border flex-1 overflow-y-auto max-h-[600px]">
         {(members ?? []).map(m => (
-          <div key={m.id} className="p-4 flex flex-col gap-3 hover:bg-white/[0.02]">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+          <div key={m.id} className="p-5 flex flex-col gap-4 hover:bg-gray-50 transition-colors">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-muted/30 text-black flex items-center justify-center font-serif text-lg border border-border shrink-0">
                 {(m.name || m.email || "?").charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-white truncate flex items-center gap-1.5">
+                <div className="text-sm font-medium text-black truncate flex items-center gap-2">
                   {m.name || m.email}
-                  {m.isGeneralManager && <Crown className="w-3.5 h-3.5 text-amber-400" />}
+                  {m.isGeneralManager && <Crown className="w-3.5 h-3.5 text-black" />}
                 </div>
-                <div className="text-xs text-muted-foreground truncate">{m.email}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5 truncate">{m.email}</div>
               </div>
             </div>
             
-            <div className="flex items-center gap-2 pl-11">
+            <div className="flex items-center gap-2 pl-[56px]">
               <Select value={String(m.roleId)} onValueChange={v => patch.mutate({
                 id: dealer.id, userId: m.userId, data: { roleId: Number(v), isGeneralManager: m.isGeneralManager }
               })}>
-                <SelectTrigger className="h-8 text-xs bg-background border-white/10">
+                <SelectTrigger className="h-8 text-[11px] bg-white border-border rounded-none focus:ring-1 focus:ring-black w-[140px]">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  {(roles ?? []).map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}
+                <SelectContent className="rounded-none border-border">
+                  {(roles ?? []).map(r => <SelectItem key={r.id} value={String(r.id)} className="text-[11px]">{r.name}</SelectItem>)}
                 </SelectContent>
               </Select>
               
-              <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-amber-400 hover:bg-white/5" onClick={() => patch.mutate({
+              <Button size="icon" variant="outline" className="h-8 w-8 border-border rounded-none text-muted-foreground hover:text-black hover:bg-gray-50" onClick={() => patch.mutate({
                 id: dealer.id, userId: m.userId, data: { roleId: m.roleId, isGeneralManager: !m.isGeneralManager }
               })}>
-                <Crown className={m.isGeneralManager ? "text-amber-400" : ""} />
+                <Crown className={`w-4 h-4 ${m.isGeneralManager ? "text-black" : ""}`} />
               </Button>
               
-              <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-white/5" onClick={() => remove.mutate({
+              <Button size="icon" variant="outline" className="h-8 w-8 border-border rounded-none text-muted-foreground hover:text-black hover:bg-gray-50" onClick={() => remove.mutate({
                 id: dealer.id, userId: m.userId
               })}>
-                <Trash2 />
+                <Trash2 className="w-4 h-4" />
               </Button>
             </div>
           </div>
         ))}
         {(members ?? []).length === 0 && (
-          <div className="p-8 text-center text-sm text-muted-foreground">No members assigned.</div>
+          <div className="p-8 text-center text-sm text-muted-foreground font-serif italic">No members assigned.</div>
         )}
       </div>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="sm:max-w-md bg-background border-white/10">
+        <DialogContent className="sm:max-w-md bg-white border-border rounded-none shadow-none font-sans">
           <DialogHeader>
-            <DialogTitle>Add Roster Member</DialogTitle>
+            <DialogTitle className="font-serif text-xl text-black">Add Roster Member</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">Platform User</label>
+          <div className="space-y-5 py-6">
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Platform User</label>
               <Select value={userId} onValueChange={setUserId}>
-                <SelectTrigger className="bg-card/50 border-white/10">
+                <SelectTrigger className="bg-white border-border rounded-none focus:ring-1 focus:ring-black">
                   <SelectValue placeholder="Select user..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-none border-border">
                   {candidates.map(u => (
                     <SelectItem key={u.id} value={String(u.id)}>{u.name || u.email}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">Assigned Role</label>
+            <div className="space-y-2">
+              <label className="text-[10px] uppercase tracking-widest text-muted-foreground">Assigned Role</label>
               <Select value={roleId} onValueChange={setRoleId}>
-                <SelectTrigger className="bg-card/50 border-white/10">
+                <SelectTrigger className="bg-white border-border rounded-none focus:ring-1 focus:ring-black">
                   <SelectValue placeholder="Select role..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="rounded-none border-border">
                   {(roles ?? []).map(r => (
                     <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <label className="flex items-center gap-2 text-sm text-white pt-2">
+            <label className="flex items-center gap-3 text-sm text-black pt-2 cursor-pointer">
               <Switch checked={isGM} onCheckedChange={setIsGM} />
               Designate as General Manager
             </label>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAddOpen(false)} className="rounded-none uppercase tracking-widest text-xs border-border text-black hover:bg-gray-50">Cancel</Button>
             <Button 
               disabled={!userId || !roleId || add.isPending}
               onClick={() => add.mutate({
                 id: dealer.id,
                 data: { userId: Number(userId), roleId: Number(roleId), isGeneralManager: isGM }
               })}
+              className="rounded-none uppercase tracking-widest text-xs bg-black text-white hover:bg-black/90"
             >
               Add Member
             </Button>
