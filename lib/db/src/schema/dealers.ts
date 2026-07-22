@@ -66,6 +66,10 @@ export const impersonationGrantsTable = pgTable("impersonation_grants", {
     .notNull()
     .references(() => dealersTable.id, { onDelete: "cascade" }),
   reason: text("reason"),
+  /** NC-10: impersonation is read-only by default; writes need explicit elevation. */
+  mode: text("mode", { enum: ["read_only", "elevated"] })
+    .notNull()
+    .default("read_only"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -17,7 +17,7 @@ import {
   type PermissionCategory,
   type DealerEntitlements,
 } from "@workspace/db";
-import { and, gt } from "drizzle-orm";
+import { and, desc, gt } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 export type DealerMembership = {
@@ -46,6 +46,10 @@ declare global {
       dealerId?: number;
       /** Set when the bound dealer is suspended: data plane is frozen. */
       dealerSuspended?: boolean;
+      /** Set when a super admin is bound to the dealer via an impersonation
+       * grant (NC-10): read_only blocks every mutation; elevated still
+       * hard-blocks money-posting, gate resolution, and customer sends. */
+      impersonation?: "read_only" | "elevated";
     }
   }
 }
@@ -211,23 +215,40 @@ function requestedDealerId(req: Request): number | null {
 // workspace (x-dealer-id) while holding an unexpired grant, created via
 // POST /platform/impersonation (audited). Cached briefly to avoid a query on
 // every request.
-const grantCache = new Map<string, { until: number; ts: number }>();
+type ImpersonationMode = "read_only" | "elevated";
+const grantCache = new Map<
+  string,
+  // expiresAt caps the cache window so a grant is never honored past its
+  // actual expiry, even inside the cache TTL (null = no-grant result).
+  { mode: ImpersonationMode | null; ts: number; expiresAt: number | null }
+>();
 const GRANT_CACHE_TTL_MS = 15_000;
 
 export function invalidateGrantCache() {
   grantCache.clear();
 }
 
-async function hasImpersonationGrant(
+/** Returns the unexpired grant's mode, or null when no grant exists. When
+ * multiple unexpired grants exist, the most recent one wins. */
+async function impersonationGrantMode(
   userId: number,
   dealerId: number,
-): Promise<boolean> {
+): Promise<ImpersonationMode | null> {
   const key = `${userId}:${dealerId}`;
   const cached = grantCache.get(key);
   const now = Date.now();
-  if (cached && now - cached.ts < GRANT_CACHE_TTL_MS) return cached.until > now;
+  if (
+    cached &&
+    now - cached.ts < GRANT_CACHE_TTL_MS &&
+    (cached.expiresAt === null || now < cached.expiresAt)
+  ) {
+    return cached.mode;
+  }
   const [row] = await db
-    .select({ id: impersonationGrantsTable.id })
+    .select({
+      mode: impersonationGrantsTable.mode,
+      expiresAt: impersonationGrantsTable.expiresAt,
+    })
     .from(impersonationGrantsTable)
     .where(
       and(
@@ -236,9 +257,15 @@ async function hasImpersonationGrant(
         gt(impersonationGrantsTable.expiresAt, new Date()),
       ),
     )
+    .orderBy(desc(impersonationGrantsTable.createdAt))
     .limit(1);
-  grantCache.set(key, { until: row ? now + GRANT_CACHE_TTL_MS : 0, ts: now });
-  return !!row;
+  const mode = (row?.mode as ImpersonationMode | undefined) ?? null;
+  grantCache.set(key, {
+    mode,
+    ts: now,
+    expiresAt: row?.expiresAt ? new Date(row.expiresAt).getTime() : null,
+  });
+  return mode;
 }
 
 // Suspicious-access audit rows are deduped per (user, dealer) for a window so
@@ -263,7 +290,7 @@ function auditSuspiciousAccess(user: User, requestedDealer: number, path: string
       module: "platform",
       entityType: "dealer",
       entityId: String(requestedDealer),
-      summary: `${user.name ?? user.email ?? `User #${user.id}`} sent x-dealer-id ${requestedDealer} without a membership (denied with 404)`,
+      summary: `${user.name ?? user.email ?? `User #${user.id}`} sent x-dealer-id ${requestedDealer} without a membership (denied with 403)`,
       details: { requestedDealerId: requestedDealer, path },
     })
     .catch((err) => logger.error({ err }, "Failed to write suspicious-access audit row"));
@@ -285,20 +312,26 @@ async function resolveActiveDealer(
   if (requested != null) {
     const active = dealers.find((d) => d.dealerId === requested) ?? null;
     if (!active) {
-      // Opaque 404 for no-membership (per spec): don't leak whether the
-      // dealership exists — and record the attempt for the platform console.
+      // NC-1: an x-dealer-id outside the caller's memberships is an
+      // authenticated-but-not-permitted condition → 403. (404 is reserved for
+      // rows missing WITHIN the active dealer scope.) The attempt is audited
+      // for the platform console.
       auditSuspiciousAccess(user, requested, req.path);
-      res.status(404).json({ error: "Not found" });
+      res.status(403).json({ error: "Forbidden", code: "dealer_forbidden" });
       return undefined;
     }
     // Super admins never bind a dealer workspace silently: they need an
-    // explicit, audited impersonation grant from the platform console.
-    if (isSuperAdmin && !(await hasImpersonationGrant(user.id, requested))) {
-      res.status(403).json({
-        error: "Impersonation grant required",
-        code: "impersonation_required",
-      });
-      return undefined;
+    // explicit, audited impersonation grant from the platform console (NC-10).
+    if (isSuperAdmin) {
+      const mode = await impersonationGrantMode(user.id, requested);
+      if (!mode) {
+        res.status(403).json({
+          error: "Impersonation grant required",
+          code: "impersonation_required",
+        });
+        return undefined;
+      }
+      res.locals.impersonation = mode;
     }
     return active;
   }
@@ -309,12 +342,23 @@ async function resolveActiveDealer(
   return dealers.length === 1 ? dealers[0]! : null;
 }
 
+function isLoopbackRequest(req: Parameters<RequestHandler>[0]): boolean {
+  const remoteAddr = req.socket.remoteAddress ?? "";
+  return (
+    remoteAddr === "::1" ||
+    remoteAddr.startsWith("127.") ||
+    remoteAddr.startsWith("::ffff:127.")
+  );
+}
+
 export const requireAuth: RequestHandler = async (req, res, next) => {
   try {
     // Dev-only persona impersonation: outside production, an
     // `x-test-user-email` header signs the request in as that seeded user
     // with their REAL memberships/role/permissions (for persona testing).
-    if (process.env.NODE_ENV !== "production") {
+    // Loopback-only (traffic arrives via the local reverse proxy), so a
+    // misconfigured non-production deployment cannot expose it externally.
+    if (process.env.NODE_ENV !== "production" && isLoopbackRequest(req)) {
       const testEmail = req.header("x-test-user-email")?.trim().toLowerCase();
       if (testEmail) {
         const [user] = await db
@@ -360,7 +404,9 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
         return;
       }
     }
-    if (AUTH_BYPASS) {
+    // Hardened: the harness bypass only ever answers loopback traffic, so a
+    // misconfigured non-production deployment cannot expose it to the network.
+    if (AUTH_BYPASS && isLoopbackRequest(req)) {
       const dealerId = requestedDealerId(req) ?? 2;
       res.locals.user = {
         id: 0,
@@ -575,6 +621,20 @@ export function routePermission(
   return { module: rule.module, category };
 }
 
+// NC-10: writes that are NEVER permitted under impersonation, even elevated —
+// money-posting, gate resolution, and customer-facing sends.
+const IMPERSONATION_HARD_BLOCKED_SEGMENTS = new Set([
+  "payments",
+  "invoices",
+  "receipts",
+  "outstanding-balances",
+  "gates",
+  "emails",
+  "communications",
+  "telephony",
+  "enquiries",
+]);
+
 export const authorize: RequestHandler = (req, res, next) => {
   const user = res.locals.user;
   if (!user) {
@@ -611,6 +671,31 @@ export const authorize: RequestHandler = (req, res, next) => {
       code: "dealer_suspended",
     });
     return;
+  }
+  // NC-10 impersonation safety: read-only by default — every mutation is
+  // blocked; even an elevated grant hard-blocks money-posting, gate
+  // resolution, and customer-facing sends.
+  const impersonation = res.locals.impersonation;
+  if (
+    impersonation &&
+    !["GET", "HEAD", "OPTIONS"].includes(req.method) &&
+    segment !== "auth"
+  ) {
+    if (impersonation === "read_only") {
+      res.status(403).json({
+        error: "Impersonation is read-only; request an elevated grant to write",
+        code: "impersonation_read_only",
+      });
+      return;
+    }
+    if (IMPERSONATION_HARD_BLOCKED_SEGMENTS.has(segment)) {
+      res.status(403).json({
+        error:
+          "Money-posting, gate resolution, and customer sends are never permitted while impersonating",
+        code: "impersonation_blocked",
+      });
+      return;
+    }
   }
   const required = routePermission(req);
   if (!required) return next();

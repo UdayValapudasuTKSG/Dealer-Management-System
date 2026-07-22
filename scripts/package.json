@@ -12,6 +12,7 @@
     "verify-gate-cascades": "tsx ./src/verify-gate-cascades.ts",
     "backfill-assignee-user-ids": "tsx ./src/backfill-assignee-user-ids.ts",
     "check-gate-cascades": "bash ./run-gate-cascade-check.sh",
+    "verify-p0-security": "tsx ./src/verify-p0-security.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

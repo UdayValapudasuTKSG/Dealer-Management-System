@@ -4,8 +4,8 @@ import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
-import { eq } from "drizzle-orm";
-import { db, documentsTable } from "@workspace/db";
+import { and, eq, or, sql } from "drizzle-orm";
+import { db, documentsTable, vehiclesTable } from "@workspace/db";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { activeDealerId } from "../middlewares/rbac";
 
@@ -115,9 +115,9 @@ router.get("/storage/public-objects/*filePath", async (req: Request, res: Respon
  * Tenancy enforcement (behind requireAuth):
  * - New uploads carry a server-stamped `uploads/dealer-{id}/` prefix: only the
  *   owning dealer can read them; any other dealer gets an indistinguishable 404.
- * - Legacy unprefixed keys: if a documents row references the key, its dealerId
- *   must match the active dealer (404 otherwise). Unreferenced legacy objects
- *   (vehicle display photos) remain readable by any signed-in member.
+ * - Legacy unprefixed keys FAIL CLOSED: readable only when the key is
+ *   referenced by the active dealer's own documents or vehicle photos.
+ *   Anything unreferenced (or referenced by another dealer) is a 404.
  */
 router.get("/storage/objects/*path", async (req: Request, res: Response) => {
   try {
@@ -134,12 +134,38 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
         return;
       }
     } else {
+      // Legacy unprefixed key: only serve it when the ACTIVE dealer's own
+      // records reference it (documents storageKey or vehicle photos).
       const [owningDoc] = await db
-        .select({ dealerId: documentsTable.dealerId })
+        .select({ id: documentsTable.id })
         .from(documentsTable)
-        .where(eq(documentsTable.storageKey, objectPath))
+        .where(
+          and(
+            eq(documentsTable.storageKey, objectPath),
+            eq(documentsTable.dealerId, dealerId),
+          ),
+        )
         .limit(1);
-      if (owningDoc && owningDoc.dealerId !== dealerId) {
+      let referenced = !!owningDoc;
+      if (!referenced) {
+        const [owningVehicle] = await db
+          .select({ id: vehiclesTable.id })
+          .from(vehiclesTable)
+          .where(
+            and(
+              eq(vehiclesTable.dealerId, dealerId),
+              or(
+                eq(vehiclesTable.imageUrl, objectPath),
+                // Exact JSON element containment — no LIKE, so `%`/`_` in a
+                // user-supplied key can never widen the match (fail closed).
+                sql`${vehiclesTable.images} @> ${JSON.stringify([objectPath])}::jsonb`,
+              ),
+            ),
+          )
+          .limit(1);
+        referenced = !!owningVehicle;
+      }
+      if (!referenced) {
         res.status(404).json({ error: "Object not found" });
         return;
       }

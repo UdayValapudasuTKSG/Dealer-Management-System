@@ -76,7 +76,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // the server will bind them to a dealership workspace.
       if (me?.isSuperAdmin) {
         try {
-          await startImpersonation({ dealerId });
+          await startImpersonation({
+            dealerId,
+            reason: "Workspace switch from AURA dealer picker",
+            mode: "read_only",
+          });
         } catch {
           return; // grant refused — stay where we are
         }

@@ -5,9 +5,15 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ImpersonationRequestMode } from './impersonationRequestMode';
 
 export interface ImpersonationRequest {
   dealerId: number;
-  /** @nullable */
-  reason?: string | null;
+  /**
+     * Why the window is needed — audited (NC-10)
+     * @minLength 5
+     */
+  reason: string;
+  /** read_only (default) blocks all writes; elevated allows writes except money-posting, gate resolution, and customer sends */
+  mode?: ImpersonationRequestMode;
 }

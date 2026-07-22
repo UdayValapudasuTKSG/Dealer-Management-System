@@ -5,9 +5,11 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ImpersonationGrantMode } from './impersonationGrantMode';
 
 export interface ImpersonationGrant {
   id: number;
   dealerId: number;
+  mode: ImpersonationGrantMode;
   expiresAt: Date;
 }

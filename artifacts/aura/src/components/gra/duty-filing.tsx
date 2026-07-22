@@ -31,11 +31,11 @@ const ACCEPTED: Record<string, GraExtractRequestMediaType> = {
 };
 
 const MONEY_FIELDS: { key: keyof GraFilingDraft; label: string }[] = [
-  { key: "cifValue", label: "CIF Value (GHS)" },
+  { key: "cifValue", label: "CIF Value (GY$)" },
 ];
 
 const ghs = (n: number) =>
-  `GHS ${n.toLocaleString("en-GH", { maximumFractionDigits: 0 })}`;
+  `GY$${n.toLocaleString("en-GY", { maximumFractionDigits: 0 })}`;
 
 /** Futuristic X-ray scan overlay: moving green rays + grid over the doc. */
 function XrayScanOverlay() {

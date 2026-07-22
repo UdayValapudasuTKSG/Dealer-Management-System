@@ -5465,16 +5465,22 @@ components:
           $ref: "#/components/schemas/Entitlements"
     ImpersonationRequest:
       type: object
-      required: [dealerId]
+      required: [dealerId, reason]
       properties:
         dealerId: { type: integer }
-        reason: { type: ["string", "null"] }
+        reason: { type: string, minLength: 5, description: "Why the window is needed — audited (NC-10)" }
+        mode:
+          type: string
+          enum: [read_only, elevated]
+          default: read_only
+          description: "read_only (default) blocks all writes; elevated allows writes except money-posting, gate resolution, and customer sends"
     ImpersonationGrant:
       type: object
-      required: [id, dealerId, expiresAt]
+      required: [id, dealerId, mode, expiresAt]
       properties:
         id: { type: integer }
         dealerId: { type: integer }
+        mode: { type: string, enum: [read_only, elevated] }
         expiresAt: { type: string, format: date-time }
     Division:
       type: object

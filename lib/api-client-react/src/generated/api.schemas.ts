@@ -137,15 +137,40 @@ export interface DealerInput {
   entitlements?: Entitlements;
 }
 
+/**
+ * read_only (default) blocks all writes; elevated allows writes except money-posting, gate resolution, and customer sends
+ */
+export type ImpersonationRequestMode = typeof ImpersonationRequestMode[keyof typeof ImpersonationRequestMode];
+
+
+export const ImpersonationRequestMode = {
+  read_only: 'read_only',
+  elevated: 'elevated',
+} as const;
+
 export interface ImpersonationRequest {
   dealerId: number;
-  /** @nullable */
-  reason?: string | null;
+  /**
+     * Why the window is needed — audited (NC-10)
+     * @minLength 5
+     */
+  reason: string;
+  /** read_only (default) blocks all writes; elevated allows writes except money-posting, gate resolution, and customer sends */
+  mode?: ImpersonationRequestMode;
 }
+
+export type ImpersonationGrantMode = typeof ImpersonationGrantMode[keyof typeof ImpersonationGrantMode];
+
+
+export const ImpersonationGrantMode = {
+  read_only: 'read_only',
+  elevated: 'elevated',
+} as const;
 
 export interface ImpersonationGrant {
   id: number;
   dealerId: number;
+  mode: ImpersonationGrantMode;
   expiresAt: string;
 }
 

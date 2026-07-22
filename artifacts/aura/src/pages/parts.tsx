@@ -329,7 +329,7 @@ function CreateSupplierDialog() {
         </Button>
       }
       fields={[
-        { name: "name", label: "Company", type: "text", required: true, span: "full", placeholder: "Bosch Ghana Ltd" },
+        { name: "name", label: "Company", type: "text", required: true, span: "full", placeholder: "Bosch Guyana Ltd" },
         { name: "contactName", label: "Contact", type: "text", span: "half" },
         { name: "email", label: "Email", type: "text", span: "half" },
         { name: "phone", label: "Phone", type: "text", span: "half" },

@@ -191,6 +191,17 @@ router.patch("/agents/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // NC-13: agent kill switches are a governance/platform control — dealer
+  // staff (including GMs/admins) may not pause or resume agents. Platform
+  // super admins operate them via PATCH /platform/dealers/:id/agents/:agentId.
+  if ("status" in parsed.data && !res.locals.user?.isSuperAdmin) {
+    res.status(403).json({
+      error: "Agent kill switches are controlled at the platform level",
+      code: "kill_switch_platform_reserved",
+    });
+    return;
+  }
+
   const dealerId = activeDealerId(res);
   const [agent] = await db
     .update(agentsTable)

@@ -38,6 +38,9 @@ export default function DealerDetail() {
   const dealer = dealers?.find(d => d.id === dealerId);
   const { toast } = useToast();
   const [entering, setEntering] = useState(false);
+  const [impersonateOpen, setImpersonateOpen] = useState(false);
+  const [impersonateReason, setImpersonateReason] = useState("");
+  const [impersonateElevated, setImpersonateElevated] = useState(false);
 
   if (isLoading) {
     return <div className="p-12 text-center text-zinc-500 font-serif italic">Loading...</div>;
@@ -48,13 +51,24 @@ export default function DealerDetail() {
   }
 
   const handleEnterWorkspace = async () => {
+    if (impersonateReason.trim().length < 5) {
+      toast({
+        title: "Reason Required",
+        description: "Enter a short reason (at least 5 characters) — it is written to the platform audit trail.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       setEntering(true);
-      await startImpersonation({ dealerId });
+      const mode = impersonateElevated ? "elevated" : "read_only";
+      await startImpersonation({ dealerId, reason: impersonateReason.trim(), mode });
       localStorage.setItem("aura-dealer-id", String(dealerId));
       toast({
         title: "Workspace Authorized",
-        description: "Opening 8-hour audited impersonation window.",
+        description: impersonateElevated
+          ? "Opening a 60-minute audited window with write elevation (money, gates and customer sends stay blocked)."
+          : "Opening a 60-minute audited read-only window.",
       });
       setTimeout(() => {
         window.location.href = "/";
@@ -126,7 +140,7 @@ export default function DealerDetail() {
         <div className="flex items-center gap-3 shrink-0">
           <button 
             className="inline-flex items-center gap-2 rounded-md bg-white text-zinc-950 px-4 py-2 text-[12.5px] font-medium hover:bg-zinc-200 transition-colors disabled:bg-white/10 disabled:text-white/40 disabled:cursor-not-allowed"
-            onClick={handleEnterWorkspace}
+            onClick={() => setImpersonateOpen(true)}
             disabled={entering || dealer.status === "suspended"}
           >
             <Key className="w-3.5 h-3.5" />
@@ -134,6 +148,40 @@ export default function DealerDetail() {
           </button>
         </div>
       </div>
+
+      <Dialog open={impersonateOpen} onOpenChange={(open) => { if (!entering) setImpersonateOpen(open); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Enter Workspace</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-[12.5px] text-zinc-500">
+              Opens a 60-minute audited impersonation window for {dealer.name}. Read-only by default.
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Reason (audited)</label>
+              <Input
+                value={impersonateReason}
+                onChange={(e) => setImpersonateReason(e.target.value)}
+                placeholder="e.g. Investigating support ticket"
+              />
+            </div>
+            <label className="flex items-start gap-2.5 text-[12.5px] text-zinc-700 cursor-pointer">
+              <Switch checked={impersonateElevated} onCheckedChange={setImpersonateElevated} />
+              <span>
+                Request write elevation
+                <span className="block text-[11px] text-zinc-500">Money-posting, gate approvals and customer sends remain blocked either way.</span>
+              </span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImpersonateOpen(false)} disabled={entering}>Cancel</Button>
+            <Button onClick={handleEnterWorkspace} disabled={entering || impersonateReason.trim().length < 5}>
+              {entering ? "Authorizing..." : "Start Window"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="xl:col-span-2 space-y-6">

@@ -384,26 +384,32 @@ export default function Agents() {
                           <span className="text-muted-foreground">success</span>
                         </span>
                       </div>
-                      <button
-                        onClick={() => toggle(agent.id, agent.status)}
-                        disabled={updateAgent.isPending}
-                        className={cn(
-                          "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors",
-                          paused
-                            ? "bg-primary text-white hover:bg-primary/90"
-                            : "bg-foreground/[0.05] text-muted-foreground hover:text-foreground",
-                        )}
-                      >
-                        {paused ? (
-                          <>
-                            <Play className="h-3 w-3" /> Resume
-                          </>
-                        ) : (
-                          <>
-                            <Pause className="h-3 w-3" /> Pause
-                          </>
-                        )}
-                      </button>
+                      {me?.isSuperAdmin ? (
+                        <button
+                          onClick={() => toggle(agent.id, agent.status)}
+                          disabled={updateAgent.isPending}
+                          className={cn(
+                            "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition-colors",
+                            paused
+                              ? "bg-primary text-white hover:bg-primary/90"
+                              : "bg-foreground/[0.05] text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {paused ? (
+                            <>
+                              <Play className="h-3 w-3" /> Resume
+                            </>
+                          ) : (
+                            <>
+                              <Pause className="h-3 w-3" /> Pause
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
+                          Platform-managed
+                        </span>
+                      )}
                     </div>
                   </motion.div>
                 );

@@ -136,7 +136,7 @@ export function AuraCopilot() {
   useCopilotAction({
     name: "startGraFiling",
     description:
-      "Start a new Ghana Revenue Authority (GRA) vehicle import-duty filing. Use when the manager wants to file duty, clear a vehicle, or upload an import document.",
+      "Start a new Guyana Revenue Authority (GRA) vehicle import-duty filing. Use when the manager wants to file duty, clear a vehicle, or upload an import document.",
     parameters: [],
     handler: async () => {
       navigate("/gra");

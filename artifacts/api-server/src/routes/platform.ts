@@ -47,7 +47,8 @@ import { logger } from "../lib/logger";
 const router: IRouter = Router();
 
 /** How long a super-admin impersonation grant stays valid. */
-export const IMPERSONATION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+// NC-10: impersonation windows are capped at 60 minutes.
+export const IMPERSONATION_TTL_MS = 60 * 60 * 1000;
 
 /** Platform-level audit rows carry dealerId = null so they never leak into a
  * dealer's own audit trail; the subject dealer goes in details. */
@@ -314,7 +315,8 @@ router.post("/platform/impersonation", async (req, res): Promise<void> => {
     .values({
       userId: user.id,
       dealerId: dealer.id,
-      reason: body.data.reason ?? null,
+      reason: body.data.reason,
+      mode: body.data.mode ?? "read_only",
       expiresAt,
     })
     .returning();
@@ -323,11 +325,12 @@ router.post("/platform/impersonation", async (req, res): Promise<void> => {
     action: "impersonate",
     entityType: "dealer",
     entityId: dealer.id,
-    summary: `${user.name ?? user.email ?? "Super admin"} started an impersonation window for dealership "${dealer.name}" (expires ${expiresAt.toISOString()})`,
+    summary: `${user.name ?? user.email ?? "Super admin"} started a ${grant!.mode === "elevated" ? "write-elevated" : "read-only"} impersonation window for dealership "${dealer.name}" (expires ${expiresAt.toISOString()})`,
     details: {
       dealerId: dealer.id,
       grantId: grant!.id,
-      reason: body.data.reason ?? null,
+      reason: body.data.reason,
+      mode: grant!.mode,
       expiresAt: expiresAt.toISOString(),
     },
   });
@@ -335,6 +338,7 @@ router.post("/platform/impersonation", async (req, res): Promise<void> => {
     StartImpersonationResponse.parse({
       id: grant!.id,
       dealerId: grant!.dealerId,
+      mode: grant!.mode,
       expiresAt: grant!.expiresAt,
     }),
   );

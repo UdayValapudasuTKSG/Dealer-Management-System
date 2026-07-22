@@ -227,8 +227,8 @@ router.post("/gra/extract", async (req, res): Promise<void> => {
   }
 });
 
-const ghs = (n: number) =>
-  `GHS ${n.toLocaleString("en-GH", { maximumFractionDigits: 0 })}`;
+const gyd = (n: number) =>
+  `GY$${n.toLocaleString("en-GY", { maximumFractionDigits: 0 })}`;
 
 router.post("/gra/filings", async (req, res): Promise<void> => {
   const parsed = SubmitGraFilingBody.safeParse(req.body);
@@ -262,7 +262,7 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
       customerName: d.ownerName,
       refType: "vehicle",
       title: `GRA duty filing — ${d.year} ${d.make} ${d.model}`,
-      summary: `Concierge prepared a Ghana Revenue Authority vehicle-duty filing for the ${d.year} ${d.make} ${d.model} (VIN ${d.vin}). Total assessed duty of ${ghs(
+      summary: `Concierge prepared a Guyana Revenue Authority vehicle-duty filing for the ${d.year} ${d.make} ${d.model} (VIN ${d.vin}). Total assessed duty of ${gyd(
         d.totalPayable,
       )} is ready for an officer to file.`,
       recommendation:
@@ -278,9 +278,9 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
         },
         { label: "Engine", value: `${d.engineCc.toLocaleString()} cc ${d.fuelType}` },
         { label: "HS Code", value: d.hsCode },
-        { label: "CIF Value", value: ghs(d.cifValue) },
-        ...d.taxLines.map((l) => ({ label: l.name, value: ghs(l.amount) })),
-        { label: "Total Payable", value: ghs(d.totalPayable) },
+        { label: "CIF Value", value: gyd(d.cifValue) },
+        ...d.taxLines.map((l) => ({ label: l.name, value: gyd(l.amount) })),
+        { label: "Total Payable", value: gyd(d.totalPayable) },
       ],
     })
     .returning();

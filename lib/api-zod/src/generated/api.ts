@@ -5682,14 +5682,20 @@ export const ListPlatformAuditResponse = zod.array(ListPlatformAuditResponseItem
 /**
  * @summary Grant yourself an audited, time-boxed impersonation window for a dealer (super admin only)
  */
+export const startImpersonationBodyReasonMin = 5;
+
+export const startImpersonationBodyModeDefault = `read_only`;
+
 export const StartImpersonationBody = zod.object({
   "dealerId": zod.number(),
-  "reason": zod.string().nullish()
+  "reason": zod.string().min(startImpersonationBodyReasonMin).describe('Why the window is needed — audited (NC-10)'),
+  "mode": zod.enum(['read_only', 'elevated']).default(startImpersonationBodyModeDefault).describe('read_only (default) blocks all writes; elevated allows writes except money-posting, gate resolution, and customer sends')
 })
 
 export const StartImpersonationResponse = zod.object({
   "id": zod.number(),
   "dealerId": zod.number(),
+  "mode": zod.enum(['read_only', 'elevated']),
   "expiresAt": zod.coerce.date()
 })
 
