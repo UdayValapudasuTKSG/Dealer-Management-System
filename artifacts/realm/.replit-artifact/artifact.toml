@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/realm/"
+title = "AURA Realm — Dealer Network Command"
+version = "1.0.0"
+id = "artifacts/realm"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/realm/" ]
+localPort = 23617
+
+[services.development]
+run = "pnpm --filter @workspace/realm run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/realm", "run", "build" ]
+publicDir = "artifacts/realm/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23617"
+BASE_PATH = "/realm/"

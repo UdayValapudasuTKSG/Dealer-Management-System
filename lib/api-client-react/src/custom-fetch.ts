@@ -17,6 +17,17 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _dealerHeaderEnabled = true;
+
+/**
+ * Enable/disable the automatic `x-dealer-id` header sourced from
+ * `localStorage.aura-dealer-id`. Platform-level apps (e.g. AURA Realm)
+ * must disable it so a stale dealer id can never break super-admin
+ * requests, which are dealer-agnostic.
+ */
+export function setDealerHeaderEnabled(enabled: boolean): void {
+  _dealerHeaderEnabled = enabled;
+}
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -351,7 +362,7 @@ export async function customFetch<T = unknown>(
 
   // Attach the active dealer header for multi-tenant scoping (web only —
   // localStorage is absent in React Native / SSR contexts).
-  if (!headers.has("x-dealer-id")) {
+  if (_dealerHeaderEnabled && !headers.has("x-dealer-id")) {
     try {
       const dealerId =
         typeof localStorage !== "undefined"

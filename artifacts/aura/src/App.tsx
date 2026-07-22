@@ -38,7 +38,6 @@ import SettingsStages from "@/pages/settings-stages";
 import SettingsTaxes from "@/pages/settings-taxes";
 import SettingsAudit from "@/pages/settings-audit";
 import NotFound from "@/pages/not-found";
-import AdminPage from "@/pages/admin";
 import NoDealership from "@/pages/no-dealership";
 import DealerPicker, { DealerSuspended } from "@/pages/dealer-picker";
 
@@ -231,10 +230,9 @@ function AppShell() {
 function AppRoutes() {
   return (
     <Switch>
+                {/* Platform Console moved to the standalone AURA Realm app. */}
                 <Route path="/admin">
-                  <RequireSuperAdmin>
-                    <AdminPage />
-                  </RequireSuperAdmin>
+                  <RedirectToRealm />
                 </Route>
                 <Route path="/pipeline" component={Leads} />
                 <Route path="/leads" component={Leads} />
@@ -314,12 +312,13 @@ function AppRoutes() {
 // impersonation land on the Platform Console.
 function DealershipGate({ children }: { children: React.ReactNode }) {
   const { me, isLoading, dealers, activeDealer } = useAuthz();
-  const [location] = useLocation();
   if (isLoading || !me) return <>{children}</>;
   if (me.isSuperAdmin) {
-    // No bound workspace → the console is the only meaningful destination.
-    if (me.activeDealerId == null && location !== "/admin") {
-      return <Redirect to="/admin" />;
+    // No bound workspace → the Platform Console (AURA Realm) is the only
+    // meaningful destination. It is a separate artifact at /realm/, so this
+    // is a full-page navigation, not a wouter redirect.
+    if (me.activeDealerId == null) {
+      return <RedirectToRealm />;
     }
     return <>{children}</>;
   }
@@ -333,21 +332,12 @@ function DealershipGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function RequireSuperAdmin({ children }: { children: React.ReactNode }) {
-  const { me } = useAuthz();
-  if (me && !me.isSuperAdmin) {
-    return (
-      <div className="p-8 flex flex-col items-center justify-center min-h-[50vh] text-center">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-8 py-10 max-w-md">
-          <h2 className="text-xl font-bold tracking-tight">Access denied</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Platform administration is restricted to the super admin.
-          </p>
-        </div>
-      </div>
-    );
-  }
-  return <>{children}</>;
+/** Full-page navigation to the standalone AURA Realm artifact at /realm/. */
+function RedirectToRealm() {
+  useEffect(() => {
+    window.location.replace("/realm/");
+  }, []);
+  return null;
 }
 
 function RequireSettings({ children }: { children: React.ReactNode }) {

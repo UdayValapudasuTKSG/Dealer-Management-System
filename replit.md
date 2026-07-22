@@ -23,6 +23,7 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 - DB schema: `lib/db/src/schema/` (one file per table + barrel `index.ts`)
 - API routes: `artifacts/api-server/src/routes/` (one file per domain + barrel `index.ts`)
 - Web app: `artifacts/aura/src/` — pages in `src/pages/`, routes wired in `src/App.tsx`
+- Platform console: `artifacts/realm/` — standalone super-admin app "AURA Realm" at `/realm/` (dark cyan command-center brand, own Clerk sign-in). Aura's `/admin` page is deleted; `/admin` full-page redirects to `/realm/`, side-nav "AURA Realm" is a plain `<a>` (cross-artifact nav must be full-page, never wouter). Realm calls `setDealerHeaderEnabled(false)` at boot so a stale `aura-dealer-id` can't 403 platform requests; "Enter Workspace" starts an impersonation grant, sets `aura-dealer-id`, and navigates to aura `/`.
 - Generated hooks/schemas: `lib/api-client-react` and `@workspace/api-zod`
 - Vehicle images: `artifacts/aura/public/vehicles/`; showroom videos: `artifacts/aura/public/videos/`
 

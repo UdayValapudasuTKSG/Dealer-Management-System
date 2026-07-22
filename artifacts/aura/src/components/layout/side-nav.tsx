@@ -323,7 +323,9 @@ function useNavClusters() {
   if (me?.isSuperAdmin) {
     clusters.push({
       label: "Admin",
-      items: [{ name: "Platform Admin", href: "/admin", module: "", icon: Shield }],
+      // Cross-artifact link — the Platform Console now lives in the
+      // standalone AURA Realm app served at /realm/ (full page navigation).
+      items: [{ name: "AURA Realm", href: "/realm/", module: "", icon: Shield }],
     });
   }
 
@@ -388,8 +390,12 @@ function NavContent({
               {cluster.items.map((item) => {
                 const active = isItemActive(location, item.href);
                 const ItemIcon = item.icon;
+                // Links out of this artifact (e.g. /realm/) must be plain
+                // anchors — wouter would otherwise swallow the navigation.
+                const external = item.href.startsWith("/realm");
+                const LinkComp = (external ? "a" : Link) as typeof Link;
                 return (
-                  <Link
+                  <LinkComp
                     key={item.href}
                     href={item.href}
                     onClick={onNavigate}
@@ -424,7 +430,7 @@ function NavContent({
                         {item.name}
                       </span>
                     )}
-                  </Link>
+                  </LinkComp>
                 );
               })}
             </div>
