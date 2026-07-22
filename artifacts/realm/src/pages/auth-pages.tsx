@@ -1,6 +1,8 @@
 import { SignIn } from "@clerk/react";
 import { Shield } from "lucide-react";
 
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export function SignInPage() {
   return (
     <div className="min-h-[100dvh] flex items-center justify-center bg-background p-4 relative overflow-hidden font-sans accent-blobs">
@@ -13,7 +15,7 @@ export function SignInPage() {
           <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-medium">Network Command Console</p>
         </div>
         <div className="glass p-2 rounded-3xl clerk-container-override hover-elevate">
-          <SignIn routing="path" path="/sign-in" appearance={{
+          <SignIn routing="path" path={`${basePath}/sign-in`} fallbackRedirectUrl={`${basePath}/`} appearance={{
             elements: {
               cardBox: "shadow-none bg-transparent rounded-2xl",
               card: "bg-transparent shadow-none",
