@@ -3,7 +3,7 @@ import { useParams, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { 
   ArrowLeft, Building2, MapPin, Power, Activity, Settings, Users, Bot, Key, DollarSign,
-  ShieldAlert, PlayCircle, PauseCircle, Crown, Trash2, Plus
+  ShieldAlert, PlayCircle, PauseCircle, Crown, Trash2, Plus, Archive, Download, Scale
 } from "lucide-react";
 import { 
   useListDealers, getListDealersQueryKey, useUpdateDealer,
@@ -11,7 +11,8 @@ import {
   useListDealerMembers, getListDealerMembersQueryKey, useUpdateDealerMember, useRemoveDealerMember, useAddDealerMember,
   useListAdminRoles, useListPlatformUsers, startImpersonation,
   useGetDealerProvisioning, getGetDealerProvisioningQueryKey,
-  useRetryDealerProvisioning, useAbortDealerProvisioning, useActivateDealer
+  useRetryDealerProvisioning, useAbortDealerProvisioning, useActivateDealer,
+  useSuspendDealer, useResumeDealer, useOffboardDealer, useCloseDealer, useRetryOffboarding
 } from "@workspace/api-client-react";
 import type { Dealer, DealerMember, ProvisioningStatus } from "@workspace/api-client-react";
 
@@ -203,6 +204,7 @@ export default function DealerDetail() {
           <AgentsPanel dealer={dealer} />
         </div>
         <div className="space-y-6">
+          <LifecyclePanel dealer={dealer} />
           <MembersPanel dealer={dealer} />
         </div>
       </div>
@@ -443,17 +445,6 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
     }
   });
 
-  const toggleStatus = () => {
-    const newStatus = dealer.status === "active" ? "suspended" : "active";
-    update.mutate({
-      id: dealer.id,
-      data: {
-        name: dealer.name,
-        status: newStatus
-      }
-    });
-  };
-
   const handleSave = () => {
     update.mutate({
       id: dealer.id,
@@ -461,7 +452,6 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
         name: name.trim(),
         city: city.trim() || null,
         country: country.trim() || null,
-        status: dealer.status,
         usdExchangeRate: rate ? Number(rate) : undefined
       }
     });
@@ -492,14 +482,7 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-between pt-5 border-t border-black/5">
-          <div className="flex items-center gap-4">
-            <Switch checked={dealer.status === "active"} onCheckedChange={toggleStatus} disabled={update.isPending} />
-            <div>
-              <div className="text-[13px] font-medium text-zinc-900">Workspace State</div>
-              <div className="text-[11px] text-zinc-500 mt-0.5">Suspending pauses all AI agents and blocks access.</div>
-            </div>
-          </div>
+        <div className="flex items-center justify-end pt-5 border-t border-black/5">
           <button onClick={handleSave} disabled={update.isPending} className="inline-flex items-center justify-center rounded-md bg-zinc-900 text-white px-4 py-2 text-[12.5px] font-medium hover:bg-zinc-700 transition-colors disabled:bg-zinc-100 disabled:text-zinc-400 disabled:cursor-not-allowed">
             Save Changes
           </button>
@@ -526,7 +509,6 @@ function EntitlementsPanel({ dealer }: { dealer: Dealer }) {
       id: dealer.id,
       data: {
         name: dealer.name,
-        status: dealer.status,
         entitlements: { ...(dealer.entitlements || {}), [key]: on }
       }
     });
@@ -747,6 +729,209 @@ function MembersPanel({ dealer }: { dealer: Dealer }) {
             >
               Add Member
             </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+const BLOCKER_LABELS: Record<string, string> = {
+  open_invoices: "Open invoices (issued / partially paid)",
+  undisbursed_finance: "Approved finance applications not yet disbursed",
+  open_gates: "Open approval gates",
+};
+
+const CLOSE_UNMET_LABELS: Record<string, string> = {
+  export_pending: "Tenant export bundle has not been delivered yet",
+  retention_active: "Retention window is still running",
+  legal_hold: "A legal hold is active on this tenant",
+  open_gates: "Open approval gates remain",
+};
+
+function LifecyclePanel({ dealer }: { dealer: Dealer }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [reason, setReason] = useState("");
+  const [confirm, setConfirm] = useState<"suspend" | "offboard" | "close" | null>(null);
+  const [blockers, setBlockers] = useState<string[]>([]);
+  const [unmet, setUnmet] = useState<string[]>([]);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getListDealersQueryKey() });
+  const done = (title: string) => {
+    invalidate();
+    setConfirm(null);
+    setReason("");
+    setBlockers([]);
+    setUnmet([]);
+    toast({ title });
+  };
+  const fail = (e: any) => {
+    const body = e?.response?.data ?? e?.data ?? {};
+    if (Array.isArray(body.blockers)) {
+      setBlockers(body.blockers);
+      return;
+    }
+    if (Array.isArray(body.unmet)) {
+      setUnmet(body.unmet);
+      return;
+    }
+    toast({ title: "Error", description: body.error ?? e.message, variant: "destructive" });
+  };
+
+  const suspend = useSuspendDealer({ mutation: { onSuccess: () => done("Dealership suspended"), onError: fail } });
+  const resume = useResumeDealer({ mutation: { onSuccess: () => done("Dealership resumed"), onError: fail } });
+  const offboard = useOffboardDealer({ mutation: { onSuccess: () => done("Offboarding started — export and retention clock running"), onError: fail } });
+  const close = useCloseDealer({ mutation: { onSuccess: () => done("Dealership closed"), onError: fail } });
+  const retryExport = useRetryOffboarding({ mutation: { onSuccess: () => done("Export saga re-driven from the step ledger"), onError: fail } });
+  const holdUpdate = useUpdateDealer({
+    mutation: {
+      onSuccess: () => { invalidate(); },
+      onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    },
+  });
+
+  const busy = suspend.isPending || resume.isPending || offboard.isPending || close.isPending;
+  const s = dealer.status;
+
+  return (
+    <div className="glass rounded-2xl overflow-hidden hover-elevate">
+      <div className="px-5 py-4 border-b border-black/5 flex items-center gap-2 font-serif text-[14.5px] tracking-tight">
+        <Archive className="w-4 h-4 text-zinc-400" /> Lifecycle
+      </div>
+      <div className="p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Current State</div>
+            <div className="text-[13.5px] font-medium text-zinc-900 capitalize mt-0.5">{s}</div>
+          </div>
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-medium border ${
+            s === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
+            s === "closed" ? "border-zinc-200 bg-zinc-100 text-zinc-500" :
+            s === "provisioning" ? "border-sky-200 bg-sky-50 text-sky-700" :
+            "border-amber-200 bg-amber-50 text-amber-700"
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              s === "active" ? "bg-emerald-500" : s === "closed" ? "bg-zinc-400" : "bg-amber-400"
+            }`} />
+            {s}
+          </span>
+        </div>
+
+        <div className="flex items-start gap-2.5 pt-3 border-t border-black/5">
+          <Switch
+            checked={dealer.legalHold === true}
+            onCheckedChange={(v) => holdUpdate.mutate({ id: dealer.id, data: { name: dealer.name, legalHold: v } })}
+            disabled={holdUpdate.isPending || s === "closed"}
+          />
+          <div>
+            <div className="text-[12.5px] font-medium text-zinc-900 flex items-center gap-1.5"><Scale className="w-3.5 h-3.5 text-zinc-400" /> Legal Hold</div>
+            <div className="text-[11px] text-zinc-500 mt-0.5">While on, the tenant cannot be closed or purged.</div>
+          </div>
+        </div>
+
+        {dealer.retentionUntil && s !== "closed" && (
+          <div className="text-[11.5px] text-zinc-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Retention window runs until {new Date(dealer.retentionUntil).toLocaleDateString()}.
+          </div>
+        )}
+        {dealer.exportUrl && (
+          <div className="text-[11.5px] text-zinc-600 flex items-center gap-1.5 bg-zinc-50 border border-black/5 rounded-lg px-3 py-2">
+            <Download className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+            <span className="truncate" title={dealer.exportUrl}>Export bundle delivered: {dealer.exportUrl.split("/").slice(-3).join("/")}</span>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 pt-3 border-t border-black/5">
+          {s === "active" && (
+            <>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => { setBlockers([]); setConfirm("suspend"); }}>
+                <PauseCircle className="w-3.5 h-3.5 mr-1.5" /> Suspend
+              </Button>
+              <Button size="sm" variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50" disabled={busy} onClick={() => { setBlockers([]); setConfirm("offboard"); }}>
+                <Archive className="w-3.5 h-3.5 mr-1.5" /> Offboard
+              </Button>
+            </>
+          )}
+          {s === "suspended" && (
+            <>
+              <Button size="sm" disabled={busy} onClick={() => resume.mutate({ id: dealer.id })}>
+                <PlayCircle className="w-3.5 h-3.5 mr-1.5" /> Resume
+              </Button>
+              <Button size="sm" variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50" disabled={busy} onClick={() => { setBlockers([]); setConfirm("offboard"); }}>
+                <Archive className="w-3.5 h-3.5 mr-1.5" /> Offboard
+              </Button>
+            </>
+          )}
+          {s === "offboarding" && (
+            <>
+              {!dealer.exportUrl && (
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => retryExport.mutate({ id: dealer.id })}>
+                  <Download className="w-3.5 h-3.5 mr-1.5" /> Retry Export
+                </Button>
+              )}
+              <Button size="sm" variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50" disabled={busy} onClick={() => { setUnmet([]); close.mutate({ id: dealer.id }); }}>
+                <ShieldAlert className="w-3.5 h-3.5 mr-1.5" /> Close Tenant
+              </Button>
+            </>
+          )}
+          {s === "closed" && (
+            <div className="text-[11.5px] text-zinc-500">This tenant is closed. All requests return 423.</div>
+          )}
+        </div>
+
+        {unmet.length > 0 && (
+          <div className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2.5 space-y-1">
+            <div className="text-[11px] font-medium text-rose-700">Cannot close yet:</div>
+            {unmet.map(u => (
+              <div key={u} className="text-[11.5px] text-rose-700">• {CLOSE_UNMET_LABELS[u] ?? u}</div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Dialog open={confirm !== null} onOpenChange={(o) => { if (!o) { setConfirm(null); setBlockers([]); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-serif tracking-tight">
+              {confirm === "suspend" ? "Suspend dealership" : "Offboard dealership"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-[12.5px] text-zinc-600">
+              {confirm === "suspend"
+                ? "Writes freeze and all AI agents pause. Reads keep working. This is reversible."
+                : "Starts the export + retention process. Writes freeze, agents pause, and a whole-tenant export bundle is generated. The tenant can be closed once the retention window lapses."}
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Reason (required)</label>
+              <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Non-payment, contract ended" className="bg-white/50 border-black/10 rounded-md h-10 text-[13px]" />
+            </div>
+            {blockers.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 space-y-1">
+                <div className="text-[11px] font-medium text-amber-700">Advisory blockers found:</div>
+                {blockers.map(b => (
+                  <div key={b} className="text-[11.5px] text-amber-700">• {BLOCKER_LABELS[b] ?? b}</div>
+                ))}
+                <div className="text-[11px] text-amber-600 pt-1">Confirming again will force past these blockers.</div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setConfirm(null); setBlockers([]); }} disabled={busy}>Cancel</Button>
+            <Button
+              variant={blockers.length > 0 ? "destructive" : "default"}
+              disabled={busy || reason.trim().length < 5}
+              onClick={() => {
+                if (confirm === "suspend") {
+                  suspend.mutate({ id: dealer.id, data: { reason: reason.trim(), force: blockers.length > 0 } });
+                } else if (confirm === "offboard") {
+                  offboard.mutate({ id: dealer.id, data: { reason: reason.trim() } });
+                }
+              }}
+            >
+              {busy ? "Working..." : blockers.length > 0 ? "Force " + (confirm === "suspend" ? "Suspend" : "Offboard") : confirm === "suspend" ? "Suspend" : "Start Offboarding"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

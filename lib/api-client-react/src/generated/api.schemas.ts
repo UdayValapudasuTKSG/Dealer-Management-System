@@ -116,19 +116,19 @@ export interface Dealer {
   usdExchangeRate?: number;
   entitlements?: Entitlements;
   userCount?: number;
+  /** Blocks close/purge while true */
+  legalHold?: boolean;
+  /** @nullable */
+  offboardedAt?: string | null;
+  /** @nullable */
+  retentionUntil?: string | null;
+  /**
+     * Whole-tenant offboarding export bundle
+     * @nullable
+     */
+  exportUrl?: string | null;
   createdAt: string;
 }
-
-export type DealerInputStatus = typeof DealerInputStatus[keyof typeof DealerInputStatus];
-
-
-export const DealerInputStatus = {
-  provisioning: 'provisioning',
-  active: 'active',
-  suspended: 'suspended',
-  offboarding: 'offboarding',
-  closed: 'closed',
-} as const;
 
 export interface DealerInput {
   /** @minLength 1 */
@@ -137,7 +137,8 @@ export interface DealerInput {
   city?: string | null;
   /** @nullable */
   country?: string | null;
-  status?: DealerInputStatus;
+  /** Legal hold — blocks close/purge while true */
+  legalHold?: boolean;
   /**
      * GYD per 1 USD
      * @exclusiveMinimum 0
@@ -214,6 +215,51 @@ export interface AbortProvisioningRequest {
 
 export interface UnmetResponse {
   unmet: string[];
+}
+
+export interface SuspendDealerRequest {
+  /** @minLength 5 */
+  reason: string;
+  /** Override the advisory blocker pre-check (409) — human must force */
+  force?: boolean;
+}
+
+export interface LifecycleReasonRequest {
+  /** @minLength 5 */
+  reason: string;
+}
+
+export type LifecycleBlockersResponseBlockersItem = typeof LifecycleBlockersResponseBlockersItem[keyof typeof LifecycleBlockersResponseBlockersItem];
+
+
+export const LifecycleBlockersResponseBlockersItem = {
+  open_invoices: 'open_invoices',
+  undisbursed_finance: 'undisbursed_finance',
+  open_gates: 'open_gates',
+} as const;
+
+export interface LifecycleBlockersResponse {
+  error: string;
+  blockers: LifecycleBlockersResponseBlockersItem[];
+}
+
+export interface AgentPolicy {
+  /** Agent semantic key, or __all__ for the platform master kill switch */
+  agentKey: string;
+  enabled: boolean;
+  /** @nullable */
+  note?: string | null;
+  /** @nullable */
+  updatedBy?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+}
+
+export interface AgentPolicyUpdate {
+  agentKey: string;
+  enabled: boolean;
+  /** @nullable */
+  note?: string | null;
 }
 
 /**

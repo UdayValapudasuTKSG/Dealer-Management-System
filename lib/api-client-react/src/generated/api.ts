@@ -28,6 +28,8 @@ import type {
   AdminUserUpdate,
   Agent,
   AgentMetrics,
+  AgentPolicy,
+  AgentPolicyUpdate,
   AgentRun,
   AgentRunReview,
   AgentUpdate,
@@ -153,6 +155,8 @@ import type {
   LeadSourceUpdate,
   LeadTestDriveInput,
   LeadUpdate,
+  LifecycleBlockersResponse,
+  LifecycleReasonRequest,
   ListActivityParams,
   ListAgentRunsParams,
   ListAuditLogsParams,
@@ -224,6 +228,7 @@ import type {
   StageChecklistInput,
   Supplier,
   SupplierInput,
+  SuspendDealerRequest,
   Task,
   TaskComment,
   TaskCommentInput,
@@ -13392,6 +13397,511 @@ export const useActivateDealer = <TError = ErrorType<UnmetResponse>,
         TContext
       > => {
       return useMutation(getActivateDealerMutationOptions(options));
+    }
+
+export const getSuspendDealerUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/suspend`
+}
+
+/**
+ * @summary Suspend a dealer (active→suspended) — advisory 409 blocker pre-check unless force (super admin only)
+ */
+export const suspendDealer = async (id: number,
+    suspendDealerRequest: SuspendDealerRequest, options?: RequestInit): Promise<Dealer> => {
+
+  return customFetch<Dealer>(getSuspendDealerUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(suspendDealerRequest)
+  }
+);}
+
+
+
+
+
+export const getSuspendDealerMutationOptions = <TError = ErrorType<void | LifecycleBlockersResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suspendDealer>>, TError,{id: number;data: BodyType<SuspendDealerRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof suspendDealer>>, TError,{id: number;data: BodyType<SuspendDealerRequest>}, TContext> => {
+
+const mutationKey = ['suspendDealer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof suspendDealer>>, {id: number;data: BodyType<SuspendDealerRequest>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  suspendDealer(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SuspendDealerMutationResult = NonNullable<Awaited<ReturnType<typeof suspendDealer>>>
+    export type SuspendDealerMutationBody = BodyType<SuspendDealerRequest>
+    export type SuspendDealerMutationError = ErrorType<void | LifecycleBlockersResponse>
+
+    /**
+ * @summary Suspend a dealer (active→suspended) — advisory 409 blocker pre-check unless force (super admin only)
+ */
+export const useSuspendDealer = <TError = ErrorType<void | LifecycleBlockersResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suspendDealer>>, TError,{id: number;data: BodyType<SuspendDealerRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof suspendDealer>>,
+        TError,
+        {id: number;data: BodyType<SuspendDealerRequest>},
+        TContext
+      > => {
+      return useMutation(getSuspendDealerMutationOptions(options));
+    }
+
+export const getResumeDealerUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/resume`
+}
+
+/**
+ * @summary Resume a suspended dealer (suspended→active) (super admin only)
+ */
+export const resumeDealer = async (id: number, options?: RequestInit): Promise<Dealer> => {
+
+  return customFetch<Dealer>(getResumeDealerUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResumeDealerMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeDealer>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resumeDealer>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['resumeDealer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resumeDealer>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  resumeDealer(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResumeDealerMutationResult = NonNullable<Awaited<ReturnType<typeof resumeDealer>>>
+
+    export type ResumeDealerMutationError = ErrorType<void>
+
+    /**
+ * @summary Resume a suspended dealer (suspended→active) (super admin only)
+ */
+export const useResumeDealer = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeDealer>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resumeDealer>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getResumeDealerMutationOptions(options));
+    }
+
+export const getOffboardDealerUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/offboard`
+}
+
+/**
+ * @summary Begin tenant wind-down (active|suspended→offboarding) — freezes writes, builds the export bundle, starts the retention clock (super admin only)
+ */
+export const offboardDealer = async (id: number,
+    lifecycleReasonRequest: LifecycleReasonRequest, options?: RequestInit): Promise<Dealer> => {
+
+  return customFetch<Dealer>(getOffboardDealerUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(lifecycleReasonRequest)
+  }
+);}
+
+
+
+
+
+export const getOffboardDealerMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof offboardDealer>>, TError,{id: number;data: BodyType<LifecycleReasonRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof offboardDealer>>, TError,{id: number;data: BodyType<LifecycleReasonRequest>}, TContext> => {
+
+const mutationKey = ['offboardDealer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof offboardDealer>>, {id: number;data: BodyType<LifecycleReasonRequest>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  offboardDealer(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type OffboardDealerMutationResult = NonNullable<Awaited<ReturnType<typeof offboardDealer>>>
+    export type OffboardDealerMutationBody = BodyType<LifecycleReasonRequest>
+    export type OffboardDealerMutationError = ErrorType<void>
+
+    /**
+ * @summary Begin tenant wind-down (active|suspended→offboarding) — freezes writes, builds the export bundle, starts the retention clock (super admin only)
+ */
+export const useOffboardDealer = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof offboardDealer>>, TError,{id: number;data: BodyType<LifecycleReasonRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof offboardDealer>>,
+        TError,
+        {id: number;data: BodyType<LifecycleReasonRequest>},
+        TContext
+      > => {
+      return useMutation(getOffboardDealerMutationOptions(options));
+    }
+
+export const getRetryOffboardingUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/offboarding/retry`
+}
+
+/**
+ * @summary Re-drive the offboarding export saga from the step ledger (only while status=offboarding; super admin only)
+ */
+export const retryOffboarding = async (id: number, options?: RequestInit): Promise<Dealer> => {
+
+  return customFetch<Dealer>(getRetryOffboardingUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryOffboardingMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryOffboarding>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryOffboarding>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['retryOffboarding'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryOffboarding>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryOffboarding(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryOffboardingMutationResult = NonNullable<Awaited<ReturnType<typeof retryOffboarding>>>
+
+    export type RetryOffboardingMutationError = ErrorType<void>
+
+    /**
+ * @summary Re-drive the offboarding export saga from the step ledger (only while status=offboarding; super admin only)
+ */
+export const useRetryOffboarding = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryOffboarding>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryOffboarding>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRetryOffboardingMutationOptions(options));
+    }
+
+export const getCloseDealerUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/close`
+}
+
+/**
+ * @summary Close a dealer (offboarding→closed, terminal) — 422 while export pending, retention active, legal hold, or open gates (super admin only)
+ */
+export const closeDealer = async (id: number, options?: RequestInit): Promise<Dealer> => {
+
+  return customFetch<Dealer>(getCloseDealerUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCloseDealerMutationOptions = <TError = ErrorType<void | UnmetResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeDealer>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof closeDealer>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['closeDealer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof closeDealer>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  closeDealer(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CloseDealerMutationResult = NonNullable<Awaited<ReturnType<typeof closeDealer>>>
+
+    export type CloseDealerMutationError = ErrorType<void | UnmetResponse>
+
+    /**
+ * @summary Close a dealer (offboarding→closed, terminal) — 422 while export pending, retention active, legal hold, or open gates (super admin only)
+ */
+export const useCloseDealer = <TError = ErrorType<void | UnmetResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof closeDealer>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof closeDealer>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCloseDealerMutationOptions(options));
+    }
+
+export const getListAgentPoliciesUrl = () => {
+
+
+
+
+  return `/api/platform/agent-policies`
+}
+
+/**
+ * @summary Platform agent-policy library — global per-key policies plus the __all__ master kill switch (super admin only)
+ */
+export const listAgentPolicies = async ( options?: RequestInit): Promise<AgentPolicy[]> => {
+
+  return customFetch<AgentPolicy[]>(getListAgentPoliciesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAgentPoliciesQueryKey = () => {
+    return [
+    `/api/platform/agent-policies`
+    ] as const;
+    }
+
+
+export const getListAgentPoliciesQueryOptions = <TData = Awaited<ReturnType<typeof listAgentPolicies>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentPolicies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAgentPoliciesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAgentPolicies>>> = ({ signal }) => listAgentPolicies({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAgentPolicies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAgentPoliciesQueryResult = NonNullable<Awaited<ReturnType<typeof listAgentPolicies>>>
+export type ListAgentPoliciesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Platform agent-policy library — global per-key policies plus the __all__ master kill switch (super admin only)
+ */
+
+export function useListAgentPolicies<TData = Awaited<ReturnType<typeof listAgentPolicies>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAgentPolicies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAgentPoliciesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAgentPolicyUrl = () => {
+
+
+
+
+  return `/api/platform/agent-policies`
+}
+
+/**
+ * @summary Upsert a global agent policy (disable overrides every per-dealer switch) (super admin only)
+ */
+export const updateAgentPolicy = async (agentPolicyUpdate: AgentPolicyUpdate, options?: RequestInit): Promise<AgentPolicy> => {
+
+  return customFetch<AgentPolicy>(getUpdateAgentPolicyUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentPolicyUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAgentPolicyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgentPolicy>>, TError,{data: BodyType<AgentPolicyUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAgentPolicy>>, TError,{data: BodyType<AgentPolicyUpdate>}, TContext> => {
+
+const mutationKey = ['updateAgentPolicy'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAgentPolicy>>, {data: BodyType<AgentPolicyUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAgentPolicy(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAgentPolicyMutationResult = NonNullable<Awaited<ReturnType<typeof updateAgentPolicy>>>
+    export type UpdateAgentPolicyMutationBody = BodyType<AgentPolicyUpdate>
+    export type UpdateAgentPolicyMutationError = ErrorType<void>
+
+    /**
+ * @summary Upsert a global agent policy (disable overrides every per-dealer switch) (super admin only)
+ */
+export const useUpdateAgentPolicy = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAgentPolicy>>, TError,{data: BodyType<AgentPolicyUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAgentPolicy>>,
+        TError,
+        {data: BodyType<AgentPolicyUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAgentPolicyMutationOptions(options));
     }
 
 export const getUpdateDealerUrl = (id: number,) => {

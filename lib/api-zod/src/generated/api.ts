@@ -5562,6 +5562,10 @@ export const ListDealersResponseItem = zod.object({
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "userCount": zod.number().optional(),
+  "legalHold": zod.boolean().optional().describe('Blocks close\/purge while true'),
+  "offboardedAt": zod.coerce.date().nullish(),
+  "retentionUntil": zod.coerce.date().nullish(),
+  "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "createdAt": zod.coerce.date()
 })
 export const ListDealersResponse = zod.array(ListDealersResponseItem)
@@ -5580,7 +5584,7 @@ export const CreateDealerBody = zod.object({
   "name": zod.string().min(1),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']).optional(),
+  "legalHold": zod.boolean().optional().describe('Legal hold — blocks close\/purge while true'),
   "usdExchangeRate": zod.number().gt(createDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "ownerEmail": zod.string().regex(createDealerBodyOwnerEmailRegExp).optional().describe('First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)')
@@ -5596,6 +5600,10 @@ export const CreateDealerResponse = zod.object({
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "userCount": zod.number().optional(),
+  "legalHold": zod.boolean().optional().describe('Blocks close\/purge while true'),
+  "offboardedAt": zod.coerce.date().nullish(),
+  "retentionUntil": zod.coerce.date().nullish(),
+  "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "createdAt": zod.coerce.date()
 }),
   "saga": zod.object({
@@ -5716,7 +5724,179 @@ export const ActivateDealerResponse = zod.object({
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "userCount": zod.number().optional(),
+  "legalHold": zod.boolean().optional().describe('Blocks close\/purge while true'),
+  "offboardedAt": zod.coerce.date().nullish(),
+  "retentionUntil": zod.coerce.date().nullish(),
+  "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Suspend a dealer (active→suspended) — advisory 409 blocker pre-check unless force (super admin only)
+ */
+export const SuspendDealerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const suspendDealerBodyReasonMin = 5;
+
+export const suspendDealerBodyForceDefault = false;
+
+export const SuspendDealerBody = zod.object({
+  "reason": zod.string().min(suspendDealerBodyReasonMin),
+  "force": zod.boolean().default(suspendDealerBodyForceDefault).describe('Override the advisory blocker pre-check (409) — human must force')
+})
+
+export const SuspendDealerResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
+  "userCount": zod.number().optional(),
+  "legalHold": zod.boolean().optional().describe('Blocks close\/purge while true'),
+  "offboardedAt": zod.coerce.date().nullish(),
+  "retentionUntil": zod.coerce.date().nullish(),
+  "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Resume a suspended dealer (suspended→active) (super admin only)
+ */
+export const ResumeDealerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ResumeDealerResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
+  "userCount": zod.number().optional(),
+  "legalHold": zod.boolean().optional().describe('Blocks close\/purge while true'),
+  "offboardedAt": zod.coerce.date().nullish(),
+  "retentionUntil": zod.coerce.date().nullish(),
+  "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Begin tenant wind-down (active|suspended→offboarding) — freezes writes, builds the export bundle, starts the retention clock (super admin only)
+ */
+export const OffboardDealerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const offboardDealerBodyReasonMin = 5;
+
+
+
+export const OffboardDealerBody = zod.object({
+  "reason": zod.string().min(offboardDealerBodyReasonMin)
+})
+
+export const OffboardDealerResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
+  "userCount": zod.number().optional(),
+  "legalHold": zod.boolean().optional().describe('Blocks close\/purge while true'),
+  "offboardedAt": zod.coerce.date().nullish(),
+  "retentionUntil": zod.coerce.date().nullish(),
+  "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Re-drive the offboarding export saga from the step ledger (only while status=offboarding; super admin only)
+ */
+export const RetryOffboardingParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RetryOffboardingResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
+  "userCount": zod.number().optional(),
+  "legalHold": zod.boolean().optional().describe('Blocks close\/purge while true'),
+  "offboardedAt": zod.coerce.date().nullish(),
+  "retentionUntil": zod.coerce.date().nullish(),
+  "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Close a dealer (offboarding→closed, terminal) — 422 while export pending, retention active, legal hold, or open gates (super admin only)
+ */
+export const CloseDealerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CloseDealerResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "city": zod.string().nullish(),
+  "country": zod.string().nullish(),
+  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']),
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
+  "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
+  "userCount": zod.number().optional(),
+  "legalHold": zod.boolean().optional().describe('Blocks close\/purge while true'),
+  "offboardedAt": zod.coerce.date().nullish(),
+  "retentionUntil": zod.coerce.date().nullish(),
+  "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Platform agent-policy library — global per-key policies plus the __all__ master kill switch (super admin only)
+ */
+export const ListAgentPoliciesResponseItem = zod.object({
+  "agentKey": zod.string().describe('Agent semantic key, or __all__ for the platform master kill switch'),
+  "enabled": zod.boolean(),
+  "note": zod.string().nullish(),
+  "updatedBy": zod.string().nullish(),
+  "updatedAt": zod.coerce.date().nullish()
+})
+export const ListAgentPoliciesResponse = zod.array(ListAgentPoliciesResponseItem)
+
+
+/**
+ * @summary Upsert a global agent policy (disable overrides every per-dealer switch) (super admin only)
+ */
+export const UpdateAgentPolicyBody = zod.object({
+  "agentKey": zod.string(),
+  "enabled": zod.boolean(),
+  "note": zod.string().nullish()
+})
+
+export const UpdateAgentPolicyResponse = zod.object({
+  "agentKey": zod.string().describe('Agent semantic key, or __all__ for the platform master kill switch'),
+  "enabled": zod.boolean(),
+  "note": zod.string().nullish(),
+  "updatedBy": zod.string().nullish(),
+  "updatedAt": zod.coerce.date().nullish()
 })
 
 
@@ -5737,7 +5917,7 @@ export const UpdateDealerBody = zod.object({
   "name": zod.string().min(1),
   "city": zod.string().nullish(),
   "country": zod.string().nullish(),
-  "status": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']).optional(),
+  "legalHold": zod.boolean().optional().describe('Legal hold — blocks close\/purge while true'),
   "usdExchangeRate": zod.number().gt(updateDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "ownerEmail": zod.string().regex(updateDealerBodyOwnerEmailRegExp).optional().describe('First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)')
@@ -5752,6 +5932,10 @@ export const UpdateDealerResponse = zod.object({
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "userCount": zod.number().optional(),
+  "legalHold": zod.boolean().optional().describe('Blocks close\/purge while true'),
+  "offboardedAt": zod.coerce.date().nullish(),
+  "retentionUntil": zod.coerce.date().nullish(),
+  "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "createdAt": zod.coerce.date()
 })
 

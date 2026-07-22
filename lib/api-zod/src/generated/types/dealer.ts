@@ -20,5 +20,16 @@ export interface Dealer {
   usdExchangeRate?: number;
   entitlements?: Entitlements;
   userCount?: number;
+  /** Blocks close/purge while true */
+  legalHold?: boolean;
+  /** @nullable */
+  offboardedAt?: Date | null;
+  /** @nullable */
+  retentionUntil?: Date | null;
+  /**
+     * Whole-tenant offboarding export bundle
+     * @nullable
+     */
+  exportUrl?: string | null;
   createdAt: Date;
 }

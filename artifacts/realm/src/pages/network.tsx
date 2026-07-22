@@ -3,13 +3,15 @@ import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { 
   Building2, Plus, Search, MapPin, BadgeDollarSign, ShieldAlert,
-  ChevronRight
+  ChevronRight, Bot
 } from "lucide-react";
 import { 
-  useListDealers, getListDealersQueryKey, useCreateDealer 
+  useListDealers, getListDealersQueryKey, useCreateDealer,
+  useListAgentPolicies, getListAgentPoliciesQueryKey, useUpdateAgentPolicy
 } from "@workspace/api-client-react";
 
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -104,6 +106,18 @@ export default function Network() {
                           Provisioning
                         </span>
                       )}
+                      {dealer.status === "offboarding" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[10.5px] font-medium text-amber-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                          Offboarding
+                        </span>
+                      )}
+                      {dealer.status === "closed" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-zinc-100 px-2.5 py-0.5 text-[10.5px] font-medium text-zinc-500">
+                          <span className="h-1.5 w-1.5 rounded-full bg-zinc-300" />
+                          Closed
+                        </span>
+                      )}
                       {dealer.status === "active" && (
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[10.5px] font-medium text-emerald-700">
                           <span className="relative flex h-1.5 w-1.5">
@@ -144,7 +158,64 @@ export default function Network() {
         )}
       </div>
 
+      <AgentPoliciesPanel />
+
       <CreateDealerDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+    </div>
+  );
+}
+
+const POLICY_AGENT_KEYS = [
+  "concierge", "sales", "appraisal", "finance", "inventory", "customs",
+  "scheduler", "service", "parts", "ledger", "retention", "analyst", "documents",
+] as const;
+
+function AgentPoliciesPanel() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: policies } = useListAgentPolicies();
+  const update = useUpdateAgentPolicy({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListAgentPoliciesQueryKey() }),
+      onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    },
+  });
+
+  const enabledFor = (key: string) => {
+    const row = (policies ?? []).find(p => p.agentKey === key);
+    return row ? row.enabled : true; // missing rows fail open
+  };
+  const masterOn = enabledFor("__all__");
+  const toggle = (key: string, on: boolean) =>
+    update.mutate({ data: { agentKey: key, enabled: on } });
+
+  return (
+    <div className="glass rounded-2xl overflow-hidden hover-elevate">
+      <div className="px-5 py-4 border-b border-black/5 flex items-center gap-2 font-serif text-[14.5px] tracking-tight">
+        <Bot className="w-4 h-4 text-zinc-400" /> Platform Agent Policies
+        <span className="ml-auto text-[10px] font-sans font-medium uppercase tracking-[0.18em] text-zinc-500">Overrides every dealer switch</span>
+      </div>
+      <div className="p-5 space-y-4">
+        <div className="flex items-center justify-between rounded-xl border border-black/5 bg-zinc-50/60 px-4 py-3">
+          <div>
+            <div className="text-[13px] font-medium text-zinc-900">Global Kill Switch</div>
+            <div className="text-[11px] text-zinc-500 mt-0.5">Turning this off halts every AI agent across all dealerships instantly.</div>
+          </div>
+          <Switch checked={masterOn} onCheckedChange={(v) => toggle("__all__", v)} disabled={update.isPending} />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+          {POLICY_AGENT_KEYS.map(key => (
+            <div key={key} className={`flex items-center justify-between rounded-lg border border-black/5 px-3 py-2 ${!masterOn ? "opacity-50" : ""}`}>
+              <span className="text-[12px] font-medium text-zinc-800 capitalize">{key}</span>
+              <Switch
+                checked={enabledFor(key)}
+                onCheckedChange={(v) => toggle(key, v)}
+                disabled={update.isPending || !masterOn}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

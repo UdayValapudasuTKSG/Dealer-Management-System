@@ -60,10 +60,29 @@ export const dealersTable = pgTable("dealers", {
     .notNull()
     .default({}),
   createdBy: text("created_by"),
+  // P3 offboarding/close controls: a legal hold blocks close (and purge);
+  // offboardedAt starts the retention clock, retentionUntil gates close;
+  // exportUrl is the whole-tenant offboarding export bundle location.
+  legalHold: boolean("legal_hold").notNull().default(false),
+  offboardedAt: timestamp("offboarded_at", { withTimezone: true }),
+  retentionUntil: timestamp("retention_until", { withTimezone: true }),
+  exportUrl: text("export_url"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
+
+/**
+ * Canonical lifecycle transition table (P3): every status change must be an
+ * allowed hop; illegal jumps → 409. Terminal: closed (re-provision to return).
+ */
+export const DEALER_STATUS_TRANSITIONS: Record<DealerStatus, DealerStatus[]> = {
+  provisioning: ["active", "closed"], // closed via saga abort
+  active: ["suspended", "offboarding"],
+  suspended: ["active", "offboarding"],
+  offboarding: ["closed"],
+  closed: [],
+};
 
 /** Audited super-admin impersonation grants: required before a super admin
  * may bind a dealer's workspace via the x-dealer-id header. */

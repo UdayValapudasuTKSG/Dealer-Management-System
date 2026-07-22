@@ -5,7 +5,6 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
-import type { DealerInputStatus } from './dealerInputStatus';
 import type { Entitlements } from './entitlements';
 
 export interface DealerInput {
@@ -15,7 +14,8 @@ export interface DealerInput {
   city?: string | null;
   /** @nullable */
   country?: string | null;
-  status?: DealerInputStatus;
+  /** Legal hold — blocks close/purge while true */
+  legalHold?: boolean;
   /**
      * GYD per 1 USD
      * @exclusiveMinimum 0

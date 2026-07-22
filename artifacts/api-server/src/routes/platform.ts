@@ -7,8 +7,12 @@ import {
   usersTable,
   rolesTable,
   agentsTable,
+  agentPoliciesTable,
+  AGENT_POLICY_MASTER_KEY,
   auditLogsTable,
   impersonationGrantsTable,
+  DEALER_STATUS_TRANSITIONS,
+  type DealerStatus,
   type AuditAction,
 } from "@workspace/db";
 import {
@@ -37,7 +41,28 @@ import {
   ListPlatformAuditResponse,
   StartImpersonationBody,
   StartImpersonationResponse,
+  SuspendDealerParams,
+  RetryOffboardingParams,
+  RetryOffboardingResponse,
+  SuspendDealerBody,
+  SuspendDealerResponse,
+  ResumeDealerParams,
+  ResumeDealerResponse,
+  OffboardDealerParams,
+  OffboardDealerBody,
+  OffboardDealerResponse,
+  CloseDealerParams,
+  CloseDealerResponse,
+  ListAgentPoliciesResponse,
+  UpdateAgentPolicyBody,
+  UpdateAgentPolicyResponse,
 } from "@workspace/api-zod";
+import {
+  suspendBlockers,
+  runOffboardingSaga,
+  closeUnmet,
+} from "../lib/dealer-lifecycle";
+import { DEFAULT_AGENTS } from "../lib/provisioning";
 import { ensureDefaultRoles, pauseDealerAgents } from "../lib/provisioning";
 import {
   createSagaLedger,
@@ -390,14 +415,8 @@ router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid input" });
     return;
   }
-  const [before] = await db
-    .select({ status: dealersTable.status })
-    .from(dealersTable)
-    .where(eq(dealersTable.id, params.data.id));
-  if (!before) {
-    res.status(404).json({ error: "Dealer not found" });
-    return;
-  }
+  // Status is NOT patchable here — lifecycle moves go through the dedicated
+  // suspend/resume/offboard/close endpoints with their own gates.
   const [updated] = await db
     .update(dealersTable)
     .set({
@@ -406,12 +425,14 @@ router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
       ...(body.data.country !== undefined
         ? { country: body.data.country }
         : {}),
-      ...(body.data.status !== undefined ? { status: body.data.status } : {}),
       ...(body.data.usdExchangeRate !== undefined
         ? { usdExchangeRate: body.data.usdExchangeRate }
         : {}),
       ...(body.data.entitlements !== undefined
         ? { entitlements: body.data.entitlements }
+        : {}),
+      ...(body.data.legalHold !== undefined
+        ? { legalHold: body.data.legalHold }
         : {}),
     })
     .where(eq(dealersTable.id, params.data.id))
@@ -420,31 +441,315 @@ router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Dealer not found" });
     return;
   }
-  // Lifecycle transitions are audited; suspension also disables the
-  // dealership's AI agents automatically.
-  if (body.data.status !== undefined && body.data.status !== before.status) {
-    if (updated.status === "suspended") {
-      const paused = await pauseDealerAgents(updated.id);
-      await platformAudit(res, {
-        action: "suspend",
-        entityType: "dealer",
-        entityId: updated.id,
-        summary: `${res.locals.user?.name ?? "Super admin"} suspended dealership "${updated.name}" (data plane frozen, ${paused} agents paused)`,
-        details: { dealerId: updated.id, agentsPaused: paused },
-      });
-    } else {
-      await platformAudit(res, {
-        action: "activate",
-        entityType: "dealer",
-        entityId: updated.id,
-        summary: `${res.locals.user?.name ?? "Super admin"} reactivated dealership "${updated.name}" (agents stay paused until re-enabled)`,
-        details: { dealerId: updated.id },
-      });
-    }
-  }
   const full = await dealerWithCount(updated.id);
   res.json(UpdateDealerResponse.parse(full));
 });
+
+// ---------------------------------------------------------------------------
+// P3 dealer lifecycle endpoints. Every move is validated against the
+// DEALER_STATUS_TRANSITIONS table (illegal jump → 409 invalid_transition).
+// ---------------------------------------------------------------------------
+
+async function loadDealerOr404(res: Response, id: number) {
+  const [dealer] = await db
+    .select()
+    .from(dealersTable)
+    .where(eq(dealersTable.id, id));
+  if (!dealer) {
+    res.status(404).json({ error: "Dealer not found" });
+    return null;
+  }
+  return dealer;
+}
+
+// Atomic compare-and-set on dealer status: the UPDATE only lands when the
+// row is STILL in the expected `from` status, so two concurrent admin calls
+// can never both commit (the loser gets null → 409 stale transition).
+async function casDealerStatus(
+  id: number,
+  from: string,
+  set: Partial<typeof dealersTable.$inferInsert> & { status: DealerStatus },
+) {
+  const [updated] = await db
+    .update(dealersTable)
+    .set(set)
+    .where(
+      and(
+        eq(dealersTable.id, id),
+        eq(dealersTable.status, from as DealerStatus),
+      ),
+    )
+    .returning();
+  return updated ?? null;
+}
+
+function staleTransition(res: Response, to: DealerStatus) {
+  res.status(409).json({
+    error: "invalid_transition",
+    detail: `dealer status changed concurrently; ${to} not applied`,
+    to,
+  });
+}
+
+function assertTransition(
+  res: Response,
+  from: string,
+  to: DealerStatus,
+): boolean {
+  const allowed =
+    DEALER_STATUS_TRANSITIONS[from as DealerStatus] ?? [];
+  if (!allowed.includes(to)) {
+    res.status(409).json({
+      error: "invalid_transition",
+      from,
+      to,
+    });
+    return false;
+  }
+  return true;
+}
+
+router.post(
+  "/platform/dealers/:id/suspend",
+  async (req, res): Promise<void> => {
+    const params = SuspendDealerParams.safeParse(req.params);
+    const body = SuspendDealerBody.safeParse(req.body ?? {});
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const dealer = await loadDealerOr404(res, params.data.id);
+    if (!dealer) return;
+    if (!assertTransition(res, dealer.status, "suspended")) return;
+    // Advisory pre-check: open money exposure blocks unless force=true.
+    const blockers = await suspendBlockers(dealer.id);
+    if (blockers.length > 0 && !body.data.force) {
+      res.status(409).json({ error: "suspend_blocked", blockers });
+      return;
+    }
+    const updated = await casDealerStatus(dealer.id, dealer.status, {
+      status: "suspended",
+    });
+    if (!updated) {
+      staleTransition(res, "suspended");
+      return;
+    }
+    const paused = await pauseDealerAgents(dealer.id);
+    await platformAudit(res, {
+      action: "suspend",
+      entityType: "dealer",
+      entityId: dealer.id,
+      summary: `${res.locals.user?.name ?? "Super admin"} suspended dealership "${dealer.name}"${body.data.force ? " (forced past blockers)" : ""} — writes frozen, ${paused} agents paused`,
+      details: {
+        dealerId: dealer.id,
+        reason: body.data.reason,
+        force: body.data.force ?? false,
+        blockers,
+        agentsPaused: paused,
+      },
+    });
+    const full = await dealerWithCount(updated.id);
+    res.json(SuspendDealerResponse.parse(full));
+  },
+);
+
+router.post(
+  "/platform/dealers/:id/resume",
+  async (req, res): Promise<void> => {
+    const params = ResumeDealerParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const dealer = await loadDealerOr404(res, params.data.id);
+    if (!dealer) return;
+    if (!assertTransition(res, dealer.status, "active")) return;
+    const updated = await casDealerStatus(dealer.id, dealer.status, {
+      status: "active",
+    });
+    if (!updated) {
+      staleTransition(res, "active");
+      return;
+    }
+    await platformAudit(res, {
+      action: "activate",
+      entityType: "dealer",
+      entityId: dealer.id,
+      summary: `${res.locals.user?.name ?? "Super admin"} resumed dealership "${dealer.name}" (agents stay paused until re-enabled)`,
+      details: { dealerId: dealer.id },
+    });
+    const full = await dealerWithCount(updated.id);
+    res.json(ResumeDealerResponse.parse(full));
+  },
+);
+
+router.post(
+  "/platform/dealers/:id/offboard",
+  async (req, res): Promise<void> => {
+    const params = OffboardDealerParams.safeParse(req.params);
+    const body = OffboardDealerBody.safeParse(req.body ?? {});
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const dealer = await loadDealerOr404(res, params.data.id);
+    if (!dealer) return;
+    if (!assertTransition(res, dealer.status, "offboarding")) return;
+    const offboardedAt = new Date();
+    const updated = await casDealerStatus(dealer.id, dealer.status, {
+      status: "offboarding",
+      offboardedAt,
+    });
+    if (!updated) {
+      staleTransition(res, "offboarding");
+      return;
+    }
+    const paused = await pauseDealerAgents(dealer.id);
+    await platformAudit(res, {
+      action: "suspend",
+      entityType: "dealer",
+      entityId: dealer.id,
+      summary: `${res.locals.user?.name ?? "Super admin"} started offboarding dealership "${dealer.name}" — export + retention clock running, ${paused} agents paused`,
+      details: { dealerId: dealer.id, reason: body.data.reason },
+    });
+    // 202: the export saga runs asynchronously after the response.
+    const full = await dealerWithCount(updated.id);
+    res.status(202).json(OffboardDealerResponse.parse(full));
+    void runOffboardingSaga(updated).catch((err) =>
+      req.log.error({ err, dealerId: dealer.id }, "offboarding saga error"),
+    );
+  },
+);
+
+router.post(
+  "/platform/dealers/:id/offboarding/retry",
+  async (req, res): Promise<void> => {
+    const params = RetryOffboardingParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const dealer = await loadDealerOr404(res, params.data.id);
+    if (!dealer) return;
+    if (dealer.status !== "offboarding") {
+      res.status(409).json({
+        error: "not_offboarding",
+        detail: "Export saga can only be re-driven while status=offboarding",
+        status: dealer.status,
+      });
+      return;
+    }
+    await platformAudit(res, {
+      action: "suspend",
+      entityType: "dealer",
+      entityId: dealer.id,
+      summary: `${res.locals.user?.name ?? "Super admin"} re-drove the offboarding export saga for dealership "${dealer.name}"`,
+      details: { dealerId: dealer.id },
+    });
+    const full = await dealerWithCount(dealer.id);
+    res.status(202).json(RetryOffboardingResponse.parse(full));
+    // Resumes from the first non-done step in the provisioning_steps ledger.
+    void runOffboardingSaga(dealer).catch((err) =>
+      req.log.error({ err, dealerId: dealer.id }, "offboarding saga retry error"),
+    );
+  },
+);
+
+router.post(
+  "/platform/dealers/:id/close",
+  async (req, res): Promise<void> => {
+    const params = CloseDealerParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const dealer = await loadDealerOr404(res, params.data.id);
+    if (!dealer) return;
+    if (!assertTransition(res, dealer.status, "closed")) return;
+    // Close is a hard gate: NO force. All conditions must be met.
+    const unmet = await closeUnmet(dealer);
+    if (unmet.length > 0) {
+      res.status(422).json({ error: "close_blocked", unmet });
+      return;
+    }
+    const updated = await casDealerStatus(dealer.id, dealer.status, {
+      status: "closed",
+    });
+    if (!updated) {
+      staleTransition(res, "closed");
+      return;
+    }
+    await platformAudit(res, {
+      action: "suspend",
+      entityType: "dealer",
+      entityId: dealer.id,
+      summary: `${res.locals.user?.name ?? "Super admin"} closed dealership "${dealer.name}" — tenant is now fully dark (423 on all requests)`,
+      details: { dealerId: dealer.id },
+    });
+    const full = await dealerWithCount(updated.id);
+    res.json(CloseDealerResponse.parse(full));
+  },
+);
+
+// ---------------------------------------------------------------------------
+// P4 agent policy library + global kill switch (__all__ master key).
+// Missing rows fail OPEN; a disabled row wins over everything.
+// ---------------------------------------------------------------------------
+
+const VALID_POLICY_KEYS = new Set<string>([
+  AGENT_POLICY_MASTER_KEY,
+  ...DEFAULT_AGENTS.map((a) => a.key),
+]);
+
+router.get("/platform/agent-policies", async (_req, res): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(agentPoliciesTable)
+    .orderBy(asc(agentPoliciesTable.agentKey));
+  res.json(ListAgentPoliciesResponse.parse(rows));
+});
+
+router.patch(
+  "/platform/agent-policies",
+  async (req, res): Promise<void> => {
+    const body = UpdateAgentPolicyBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: "Invalid input" });
+      return;
+    }
+    const agentKey = body.data.agentKey;
+    if (!VALID_POLICY_KEYS.has(agentKey)) {
+      res.status(422).json({ error: "unknown_agent_key", agentKey });
+      return;
+    }
+    const [row] = await db
+      .insert(agentPoliciesTable)
+      .values({
+        agentKey,
+        enabled: body.data.enabled,
+        note: body.data.note ?? null,
+        updatedBy: res.locals.user?.email ?? null,
+      })
+      .onConflictDoUpdate({
+        target: agentPoliciesTable.agentKey,
+        set: {
+          enabled: body.data.enabled,
+          note: body.data.note ?? null,
+          updatedBy: res.locals.user?.email ?? null,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    await platformAudit(res, {
+      action: "update",
+      entityType: "agent",
+      entityId: null,
+      summary: `${res.locals.user?.name ?? "Super admin"} ${body.data.enabled ? "enabled" : "DISABLED"} agent policy "${agentKey}"${agentKey === AGENT_POLICY_MASTER_KEY ? " (GLOBAL kill switch)" : ""}`,
+      details: { agentKey, enabled: body.data.enabled, note: body.data.note },
+    });
+    res.json(UpdateAgentPolicyResponse.parse(row));
+  },
+);
 
 router.get(
   "/platform/dealers/:id/agents",

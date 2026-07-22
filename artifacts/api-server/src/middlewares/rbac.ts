@@ -49,6 +49,9 @@ declare global {
       /** Set when the bound dealer is suspended: data-plane WRITES are
        * blocked with 423 (reads still served). */
       dealerSuspended?: boolean;
+      /** Active dealer lifecycle status (P3): suspended/offboarding block
+       * writes (423); closed blocks ALL data-plane access. */
+      dealerLifecycleStatus?: string;
       /** Entitlements (feature flags) of the bound dealer — missing keys
        * default to enabled. Backs the entitlement gate (INV-ENT-1). */
       dealerEntitlements?: DealerEntitlements;
@@ -520,7 +523,11 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
         if (active) {
           res.locals.dealerId = active.dealerId;
           res.locals.dealerEntitlements = active.entitlements ?? {};
-          if (active.dealerStatus === "suspended")
+          res.locals.dealerLifecycleStatus = active.dealerStatus;
+          if (
+            active.dealerStatus === "suspended" ||
+            active.dealerStatus === "offboarding"
+          )
             res.locals.dealerSuspended = true;
           stampLastActiveDealer(user, active.dealerId);
         }
@@ -604,7 +611,11 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     if (active) {
       res.locals.dealerId = active.dealerId;
       res.locals.dealerEntitlements = active.entitlements ?? {};
-      if (active.dealerStatus === "suspended")
+      res.locals.dealerLifecycleStatus = active.dealerStatus;
+      if (
+        active.dealerStatus === "suspended" ||
+        active.dealerStatus === "offboarding"
+      )
         res.locals.dealerSuspended = true;
       stampLastActiveDealer(user, active.dealerId);
     }
@@ -805,13 +816,24 @@ export const authorize: RequestHandler = (req, res, next) => {
     });
     return;
   }
-  // Tenant lifecycle (pipeline stage 3): a suspended dealer blocks data-plane
-  // WRITES with 423; reads are still served. Auth endpoints stay reachable so
-  // the client can render the suspended state.
+  // Tenant lifecycle (pipeline stage 3, INV-SUSP-1): suspended/offboarding
+  // dealers block data-plane WRITES with 423 while reads are still served
+  // (export window). A CLOSED dealer is hard-off — reads AND writes 423.
+  // Auth endpoints stay reachable so the client can render the state.
+  if (res.locals.dealerLifecycleStatus === "closed" && segment !== "auth") {
+    res.status(423).json({
+      error: "tenant_closed",
+      message: "Dealership is closed — data-plane access is disabled",
+    });
+    return;
+  }
   if (res.locals.dealerSuspended && segment !== "auth" && !isRead) {
     res.status(423).json({
-      error: "tenant_suspended",
-      message: "Dealership is suspended — writes are blocked",
+      error:
+        res.locals.dealerLifecycleStatus === "offboarding"
+          ? "tenant_offboarding"
+          : "tenant_suspended",
+      message: "Dealership writes are blocked by its lifecycle state",
     });
     return;
   }

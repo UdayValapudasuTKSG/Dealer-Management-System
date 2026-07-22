@@ -4225,6 +4225,166 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UnmetResponse"
+  /platform/dealers/{id}/suspend:
+    post:
+      operationId: suspendDealer
+      tags: [platform]
+      summary: Suspend a dealer (active→suspended) — advisory 409 blocker pre-check unless force (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuspendDealerRequest"
+      responses:
+        "200":
+          description: Dealer suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dealer"
+        "409":
+          description: Advisory blockers (repeat with force) or illegal transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LifecycleBlockersResponse"
+        "404":
+          description: Not found
+  /platform/dealers/{id}/resume:
+    post:
+      operationId: resumeDealer
+      tags: [platform]
+      summary: Resume a suspended dealer (suspended→active) (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Dealer active again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dealer"
+        "409":
+          description: Not suspended
+        "404":
+          description: Not found
+  /platform/dealers/{id}/offboard:
+    post:
+      operationId: offboardDealer
+      tags: [platform]
+      summary: Begin tenant wind-down (active|suspended→offboarding) — freezes writes, builds the export bundle, starts the retention clock (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LifecycleReasonRequest"
+      responses:
+        "202":
+          description: Offboarding accepted (async export/retention saga)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dealer"
+        "409":
+          description: Illegal transition
+        "404":
+          description: Not found
+  /platform/dealers/{id}/offboarding/retry:
+    post:
+      operationId: retryOffboarding
+      tags: [platform]
+      summary: Re-drive the offboarding export saga from the step ledger (only while status=offboarding; super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "202":
+          description: Saga re-driven from first non-done step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dealer"
+        "409":
+          description: Dealer is not in offboarding
+        "404":
+          description: Not found
+  /platform/dealers/{id}/close:
+    post:
+      operationId: closeDealer
+      tags: [platform]
+      summary: Close a dealer (offboarding→closed, terminal) — 422 while export pending, retention active, legal hold, or open gates (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Dealer closed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dealer"
+        "409":
+          description: Illegal transition
+        "422":
+          description: Close gate not met
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnmetResponse"
+        "404":
+          description: Not found
+  /platform/agent-policies:
+    get:
+      operationId: listAgentPolicies
+      tags: [platform]
+      summary: Platform agent-policy library — global per-key policies plus the __all__ master kill switch (super admin only)
+      responses:
+        "200":
+          description: Policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentPolicy"
+    patch:
+      operationId: updateAgentPolicy
+      tags: [platform]
+      summary: Upsert a global agent policy (disable overrides every per-dealer switch) (super admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentPolicyUpdate"
+      responses:
+        "200":
+          description: Updated policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentPolicy"
+        "422":
+          description: Unknown agent key
   /platform/dealers/{id}:
     patch:
       operationId: updateDealer
@@ -5594,6 +5754,10 @@ components:
         entitlements:
           $ref: "#/components/schemas/Entitlements"
         userCount: { type: integer }
+        legalHold: { type: boolean, description: "Blocks close/purge while true" }
+        offboardedAt: { type: ["string", "null"], format: date-time }
+        retentionUntil: { type: ["string", "null"], format: date-time }
+        exportUrl: { type: ["string", "null"], description: "Whole-tenant offboarding export bundle" }
         createdAt: { type: string, format: date-time }
     DealerInput:
       type: object
@@ -5602,7 +5766,7 @@ components:
         name: { type: string, minLength: 1 }
         city: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
-        status: { type: string, enum: [provisioning, active, suspended, offboarding, closed] }
+        legalHold: { type: boolean, description: "Legal hold — blocks close/purge while true" }
         usdExchangeRate: { type: number, exclusiveMinimum: 0, description: "GYD per 1 USD" }
         entitlements:
           $ref: "#/components/schemas/Entitlements"
@@ -5657,6 +5821,46 @@ components:
         unmet:
           type: array
           items: { type: string }
+    SuspendDealerRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 5 }
+        force:
+          type: boolean
+          default: false
+          description: "Override the advisory blocker pre-check (409) — human must force"
+    LifecycleReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 5 }
+    LifecycleBlockersResponse:
+      type: object
+      required: [error, blockers]
+      properties:
+        error: { type: string }
+        blockers:
+          type: array
+          items:
+            type: string
+            enum: [open_invoices, undisbursed_finance, open_gates]
+    AgentPolicy:
+      type: object
+      required: [agentKey, enabled]
+      properties:
+        agentKey: { type: string, description: "Agent semantic key, or __all__ for the platform master kill switch" }
+        enabled: { type: boolean }
+        note: { type: ["string", "null"] }
+        updatedBy: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"], format: date-time }
+    AgentPolicyUpdate:
+      type: object
+      required: [agentKey, enabled]
+      properties:
+        agentKey: { type: string }
+        enabled: { type: boolean }
+        note: { type: ["string", "null"] }
     ImpersonationRequest:
       type: object
       required: [dealerId, reason]

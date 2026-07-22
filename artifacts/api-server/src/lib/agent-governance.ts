@@ -1,7 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   agentsTable,
+  agentPoliciesTable,
+  AGENT_POLICY_MASTER_KEY,
   agentRunsTable,
   auditLogsTable,
   dealersTable,
@@ -64,8 +66,23 @@ export async function isAgentEnabled(
     })
     .from(dealersTable)
     .where(eq(dealersTable.id, dealerId));
-  if (!dealer || dealer.status === "suspended") return false;
+  // Any non-active lifecycle state freezes agent activity (suspended,
+  // offboarding, closed, provisioning-in-flight keeps agents quiet too).
+  if (!dealer || dealer.status !== "active") return false;
   if (dealer.entitlements?.ai_agents === false) return false;
+  // Platform agent-policy library (P4): a global policy row disabled for
+  // this key — or the `__all__` master kill switch — overrides every
+  // per-dealer setting. Missing rows fail open.
+  const policies = await db
+    .select({
+      agentKey: agentPoliciesTable.agentKey,
+      enabled: agentPoliciesTable.enabled,
+    })
+    .from(agentPoliciesTable)
+    .where(
+      inArray(agentPoliciesTable.agentKey, [agentKey, AGENT_POLICY_MASTER_KEY]),
+    );
+  if (policies.some((p) => !p.enabled)) return false;
   const [agent] = await db
     .select({ status: agentsTable.status })
     .from(agentsTable)
