@@ -1,3 +1,4 @@
+import twilio from "twilio";
 import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -38,6 +39,44 @@ export function whatsappConfig(): {
   if (!appSecret || !verifyToken || !accessToken || !phoneNumberId)
     return null;
   return { appSecret, verifyToken, accessToken, phoneNumberId };
+}
+
+/**
+ * Twilio WhatsApp outbound config. Uses TWILIO_WHATSAPP_FROM when set
+ * (e.g. the sandbox number), otherwise falls back to TWILIO_PHONE_NUMBER.
+ */
+export function twilioWhatsappConfig(): {
+  accountSid: string;
+  authToken: string;
+  from: string;
+} | null {
+  const accountSid = process.env["TWILIO_ACCOUNT_SID"];
+  const authToken = process.env["TWILIO_AUTH_TOKEN"];
+  const from = (
+    process.env["TWILIO_WHATSAPP_FROM"] ||
+    process.env["TWILIO_PHONE_NUMBER"] ||
+    ""
+  ).replace(/[\s()-]/g, "");
+  if (!accountSid || !authToken || !from) return null;
+  return { accountSid, authToken, from };
+}
+
+/** Send a plain WhatsApp text via the Twilio Messages API. */
+export async function sendTwilioWhatsappText(
+  cfg: { accountSid: string; authToken: string; from: string },
+  to: string,
+  body: string,
+): Promise<void> {
+  const client = twilio(cfg.accountSid, cfg.authToken);
+  const normalizedTo = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
+  const normalizedFrom = cfg.from.startsWith("whatsapp:")
+    ? cfg.from
+    : `whatsapp:${cfg.from}`;
+  await client.messages.create({
+    from: normalizedFrom,
+    to: normalizedTo,
+    body,
+  });
 }
 
 async function send(

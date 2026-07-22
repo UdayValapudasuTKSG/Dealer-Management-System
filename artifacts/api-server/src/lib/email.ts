@@ -14,7 +14,12 @@ import {
 import { logger } from "./logger";
 import { buildQuotePdf } from "./quote-pdf";
 import { testDriveIcsFromPayload } from "./calendar";
-import { whatsappConfig, sendWhatsappText } from "./whatsapp";
+import {
+  whatsappConfig,
+  sendWhatsappText,
+  twilioWhatsappConfig,
+  sendTwilioWhatsappText,
+} from "./whatsapp";
 import { recordWhatsappMessage } from "./whatsapp-log";
 
 // ---------------------------------------------------------------------------
@@ -523,24 +528,29 @@ async function processWhatsappQueue(): Promise<void> {
     .limit(10);
   if (pending.length === 0) return;
 
-  const cfg = whatsappConfig();
+  const metaCfg = whatsappConfig();
+  const twilioCfg = twilioWhatsappConfig();
   for (const item of pending) {
     const attempts = item.attempts + 1;
     await db
       .update(emailLogsTable)
       .set({ status: "sending", attempts })
       .where(eq(emailLogsTable.id, item.id));
-    if (!cfg) {
+    if (!metaCfg && !twilioCfg) {
       await markFailed(
         item.id,
         attempts,
-        "WhatsApp sending is not configured (Meta Cloud API credentials missing).",
+        "WhatsApp sending is not configured (no Meta Cloud API or Twilio WhatsApp credentials).",
       );
       continue;
     }
     try {
       const body = item.payload?.body ?? "";
-      await sendWhatsappText(cfg, item.recipient, body);
+      if (metaCfg) {
+        await sendWhatsappText(metaCfg, item.recipient, body);
+      } else if (twilioCfg) {
+        await sendTwilioWhatsappText(twilioCfg, item.recipient, body);
+      }
       await db
         .update(emailLogsTable)
         .set({ status: "sent", sentAt: new Date(), lastError: null })
