@@ -510,7 +510,7 @@ function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
         : undefined,
       options: vehicles.map((v) => ({
         value: String(v.id),
-        label: `${v.year} ${v.make} ${v.model} ${v.trim || v.variant || ""} — ${v.exteriorColor}${v.vin ? ` · ${v.vin}` : ""}`,
+        label: `${v.year} ${v.make} ${v.model} ${v.trim || v.variant || ""} — ${v.exteriorColor} · Unit #${v.id}`,
       })),
     },
     {
@@ -749,6 +749,11 @@ export default function LeadDetail() {
   })();
   const quoteSent = lead.quotationSent || !!quote?.sentAt;
   const vinValid = !!vehicle?.vin && vehicle.vin.length === 17;
+  // Spec (A11): a specific VIN is only hard-locked to the order at deal
+  // commit. Before that, interest is model-level — never surface the VIN.
+  const vinAllocated =
+    !!linkedDeal &&
+    (linkedDeal.stage === "committed" || linkedDeal.stage === "delivered");
   const linkedDelivery = linkedDeal
     ? (allDeliveries ?? []).find((d) => d.dealId === linkedDeal.id)
     : undefined;
@@ -942,7 +947,7 @@ export default function LeadDetail() {
 
   const vehicleOptions = (vehicles ?? []).map((v) => ({
     value: String(v.id),
-    label: `${v.year} ${v.make} ${v.model} ${v.trim || v.variant || ""} — ${v.exteriorColor}${v.vin ? ` · ${v.vin}` : ""}`,
+    label: `${v.year} ${v.make} ${v.model} ${v.trim || v.variant || ""} — ${v.exteriorColor} · Unit #${v.id}`,
   }));
 
   const saveVehicle = async (v: string | boolean) => {
@@ -1427,13 +1432,17 @@ export default function LeadDetail() {
                       {vehicle?.exteriorColor || lead.color}
                     </InlineField>
                     <InlineField label="VIN">
-                      {vehicle?.vin ? (
+                      {vinAllocated && vehicle?.vin ? (
                         <Link
                           href={`/vehicle/${vehicle.id}`}
                           className="font-mono text-xs tracking-wide text-primary hover:underline"
                         >
                           {vehicle.vin}
                         </Link>
+                      ) : vehicle ? (
+                        <span className="text-xs text-muted-foreground">
+                          Assigned at allocation
+                        </span>
                       ) : null}
                     </InlineField>
                     <InlineField label="Unit Price">
