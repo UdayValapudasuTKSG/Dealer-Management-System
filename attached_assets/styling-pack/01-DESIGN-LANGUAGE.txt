@@ -1,0 +1,159 @@
+U I + A G E N T I C E X T R A C T I O N PA C K
+
+Design Language
+01 · Design Language
+The aesthetic in one line: quiet-luxury enterprise — a near-monochrome, editorial interface where translucent
+glass panels float over a soft, slowly-drifting pastel gradient, anchored by a serif display face and a single
+restrained accent hue.
+It reads as *expensive, calm, and trustworthy* — the opposite of a rainbow SaaS dashboard. Think a privatebank statement crossed with a design magazine.
+
+1. The five non-negotiable rules
+1. One hue, not a rainbow. The entire UI is built on neutral zinc/grey. Color is
+*information*, never decoration. A single accent family (teal / emerald) signals "AI / live / grounded / success".
+Semantic status uses rose (danger), amber (attention/human-needed), sky/violet/indigo only inside data
+visualizations.
+1. Glass over gradient. Content sits on translucent, blurred glass cards
+( backdrop-filter: blur ) over a fixed pastel gradient canvas with two slow-drifting accent "blobs". This creates
+depth without borders shouting.
+1. Serif for headlines, grotesk for body, mono for data. Display numbers and page
+titles use IBM Plex Serif (medium weight, tight tracking). Body is Inter. IDs, code, citations, timestamps use
+JetBrains Mono. This three-font contrast is the single biggest "this looks designed" signal.
+1. Tiny tracked uppercase labels. Every section is introduced by a ~10px,
+font-medium , uppercase , tracking-[0.18em] , muted-grey eyebrow. They're everywhere and they make dense
+
+screens scannable.
+1. Numbers are tabular. Every metric uses tabular-nums / `font-variant-numeric:
+tabular-nums` so digits don't jitter. Big stats are serif + 5xl + tabular.
+
+2. Palette (the whole thing)
+Defined as HSL channel triples in CSS variables so light/dark swap cleanly. Full values live in 02-theme.css . The
+mental model:
+Light mode
+Background canvas: NOT pure white. A warm-grey hsl(210 14% 96%) with two radial
+
+pastel washes (a teal one top-right, a cool-grey one bottom-left) + a vertical gradient. Set backgroundattachment: fixed .
+
+Surfaces ( card , popover ): white 0 0% 100% .
+Foreground text: near-black 0 0% 4% (never pure #000 ).
+Muted text: 0 0% 40% . Borders: 0 0% 90% .
+Primary (buttons/active): near-black 0 0% 4% with white text → high-contrast,
+monochrome CTAs.
+Destructive: 0 84% 50% .
+Dark mode ( .dark class on <html> ): inverts to 0 0% 4% background, 0 0% 6% cards, 0 0% 98% text. Shadows
+get heavier.
+The accent (used sparingly, by hand, not as a token):
+Teal: teal-50/100/300/500/800/900 — AI surfaces, grounded state, citation chips.
+Emerald: emerald-400/500 — "live", success, "just populated" flash, the pulsing dot.
+Amber: human-attention / "awaiting you" / pending.
+Rose: high risk / negative delta.
+Charts are deliberately monochrome ramps ( chart-1..5 = 5 steps of grey) so data viz stays on-brand;
+categorical color is the exception, not the rule.
+
+3. Typography scale
+USE
+
+FONT
+
+CLASSES
+
+Page title
+
+serif
+
+font-serif text-4xl tracking-tight
+
+Hero headline
+
+serif
+
+font-serif text-[34px] leading-[1.08] tracking-tight
+
+Big stat
+
+serif
+
+font-serif text-5xl font-medium tracking-tight tabular-nums
+
+Card title
+
+serif
+
+font-serif text-[14.5px] tracking-tight
+
+Body
+
+sans (Inter)
+
+text-[13px] leading-relaxed
+
+Eyebrow / section label
+
+sans
+
+text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500
+
+Micro-eyebrow
+
+sans
+
+text-[9.5px] font-semibold uppercase tracking-[0.22em]
+
+ID / code / citation
+
+mono
+
+font-mono text-[10.5px]
+
+Body font-feature-settings: 'cv02','cv03','cv04','cv11' (Inter character variants). Serif uses 'lnum','tnum'
+(lining tabular figures).
+Note the fractional font sizes ( text-[13px] , text-[10.5px] , text-[14.5px] ). This precision — not the default
+Tailwind steps — is part of the refined feel.
+
+4. Shape, depth & spacing
+Radius: base --radius: .5rem . Cards use rounded-xl / rounded-2xl . Pills/chips
+use rounded-full . Buttons rounded-md . The big hero is rounded-2xl .
+Shadows are soft and low-opacity — long, diffuse, barely-there. No hard drop
+shadows. Hero uses shadow-[0_30px_80px_-30px_rgba(0,0,0,0.6)] . Glass cards use custom multi-layer
+shadows with an inset top highlight (see .glass ).
+Borders are translucent — border-white/60 , border-black/5 , border-black/10
+rather than solid grey, so they read as edges of glass not boxes.
+Spacing: generous. Page padding ~ p-7 / p-8 , cards p-5 , sections gap-3 / gap-5 .
+
+The "hover-elevate" interaction system
+Instead of changing background colors on hover, interactive surfaces get a translucent overlay via ::after
+pseudo-elements ( .hover-elevate , .active-elevate , .hover-elevate-2 , .toggle-elevate ). The overlay tint ( -elevate-1 / --elevate-2 ) auto-inverts in dark mode. This keeps hover states consistent and subtle across light
+
+and dark. (Full CSS in 02-theme.css .)
+
+5. The signature surfaces
+Glass card ( .glass / .glass-strong / .glass-soft ): translucent white,
+blur(18px) saturate(140%) , a white inset top highlight, and a soft drop shadow. This is the default panel. strong for KPI/hero tiles, -soft for nested.
+
+Dark hero block: bg-zinc-950 text-white rounded-2xl p-7 ring-1 ring-white/10
+with a huge soft shadow. Used once at the top of a detail page as the "command" surface — KPI tiles inside
+use bg-white/[0.03] border-white/10 .
+Pill / chip: `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5
+text-[10.5px] font-medium + a tiny h-1.5 w-1.5 rounded-full` status dot.
+Eyebrow label: see typography table.
+
+6. Iconography
+lucide-react exclusively, small ( h-3 w-3 to h-3.5 w-3.5 ), shrink-0 , often
+paired left of a tracked label. Sparkles = AI. Check / CheckCircle2 = done. Loader2 animate-spin = working.
+Lock = gated. FileText = document/citation.
+
+Icons are passed as React.ComponentType<{ className?: string }> in config arrays so
+nav/action lists are data-driven.
+
+7. Micro-conventions that sell the polish
+Status = dot + word. A colored 1.5px dot next to a tiny label, never a loud badge.
+The live pulse: an emerald dot with a animate-ping ring behind it = "system is
+alive". Used in the assistant header and "live" tags.
+Tabular everything numeric, right-aligned in tables.
+data-testid on every interactive element ( button-* , link-* , chip-* ,
+module-* ). Keep this — it makes the app testable and is free.
+
+Empty/loading uses shimmer (a sweeping gradient), not spinners, for content
+skeletons.
+Deltas are tiny tabular text, text-emerald-700 (up) / text-rose-700 (down).
+
+

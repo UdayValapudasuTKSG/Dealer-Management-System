@@ -1,0 +1,226 @@
+U I + A G E N T I C E X T R A C T I O N PA C K
+
+Agentic Features
+05 · Agentic Features (the differentiator)
+This is what makes the app feel agent-native rather than "a dashboard with a chatbot bolted on". The original
+assistant was named Cova; below it's the Assistant. Everything here is generic — re-target the nouns to your
+domain.
+There are seven distinct agentic capabilities. Build them as a self-contained assistant/ module so they drop
+into any app.
+src/components/assistant/
+├── AssistantProvider.tsx
+
+# global state: thread, messages, context, grounding, source-view
+
+├── AssistantRail.tsx
+
+# the right-hand panel: thread + streaming + send
+
+├── AssistantMessage.tsx
+
+# renders one message (citations, reasoning, tools, viz, suggestions)
+
+├── AssistantComposer.tsx
+
+# textarea + send + grounded-doc chip
+
+├── AssistantActions.tsx
+
+# "the assistant can do X" quick-action chips → tool calls
+
+├── AgentDriver.tsx
+
+# scripted "agent works the record" simulator/orchestrator
+
+├── SourceViewer.tsx
+
+# side-by-side citation source panel
+
+└── generativeChart.ts
+
+# NL prompt → chart kind → aggregation
+
+1. The Assistant Rail (persistent co-pilot)
+A 360px glass panel pinned to the right edge of the viewport, sticky top-0 h-screen , collapsible to a floating
+pill in the bottom-right corner. It is always present across every page — context-aware of the current
+route/record.
+Key UX details to copy:
+Header: serif "Assistant" wordmark + a live pulse dot (emerald ping) + a tiny
+uppercase subtitle ( Co-pilot · {role} ). A context chip shows what it's anchored to ( CTX · record · {id} ) in
+mono.
+Collapsed state: a rounded floating button bottom-right
+( fixed right-5 bottom-5 z-50 … rounded-full bg-white/90 backdrop-blur-xl shadow ) with a Sparkles icon +
+serif "Assistant".
+Thread: scrollable, auto-scrolls to bottom on new messages
+( scrollRef.current.scrollTop = scrollRef.current.scrollHeight in a useEffect ).
+Composer: textarea, Enter sends / Shift+Enter newline, send button disables
+
+while empty or streaming. Footer hint in tiny tracked uppercase.
+Global event bus: any component anywhere can open the rail and ask a question by
+dispatching a window event — no prop drilling: `` ts window.dispatchEvent(new CustomEvent("assistant:ask",
+{ detail: { prompt } })); `` The rail listens, expands, and sends. This is how charts, tables, and buttons
+
+across the app delegate to the assistant.
+Glass styling: bg-white/40 backdrop-blur-xl border-l border-black/5 . User bubbles are dark ( bg-zinc950/80 ), assistant bubbles are light glass ( bg-white/25 backdrop-blur-xl ).
+
+2. Streaming responses (SSE) + the action-token protocol
+The rail streams from a backend SSE endpoint and renders tokens as they arrive. Two subtle but important
+mechanics:
+(a) Server-Sent Events parsing. POST to /api/assistant/chat , read res.body.getReader() , decode, split on
+\n\n , parse data: {json} lines. Each chunk may carry { content } , { citations } , or { error } .
+
+(b) Inline action tokens. The model can emit [[ACT:name:arg]] tokens mid-stream to *drive the UI*. The rail
+strips them from rendered text and dispatches side-effects:
+const ACTION_RE = /\[\[ACT:([a-z-]+)(?::([^\]]+))?\]\]/gi;
+// e.g. [[ACT:navigate:/reports]]
+
+[[ACT:open-record:123]]
+
+[[ACT:set-panel:summary]]
+
+Critically, it holds back a partial trailing token so a half-streamed [[ACT:nav never flashes on screen
+( pendingPrefixLen keeps the unclosed prefix buffered until the ]] arrives). This lets the LLM *act on the app*,
+not just talk.
+Typing indicator while the first token is pending: the three staggered dots (see 04-ANIMATIONS.md ).
+Full message state shape:
+type AssistantMessage =
+| { id; role: "user"; content; at }
+| { id; role: "assistant"; content; reasoning: string[];
+citations: { label; source }[]; documentCitations?: DocCitation[];
+toolCalls: { name; args; result }[];
+suggestions: { id; label; prompt }[];
+viz?: { prompt; kind } | null; at; streaming?: boolean };
+
+3. Rich assistant messages
+A single assistant turn can render, stacked:
+1. Markdown-ish text with inline citation chips (see #5).
+
+2. A generated chart card (see #6).
+3. A collapsible reasoning trace — Brain icon, "Reasoning · N steps", expands to a
+left-bordered mono list numbered 01, 02, … . Shows the model's chain of thought.
+1. Citation chips — FileText + label + source, rounded-full glass.
+2. Tool-call chips — Wrench + tool name + truncated result, mono. Shows what the
+agent *did*, not just said.
+1. Suggestion chips — follow-up prompts; clicking re-sends them. Hover inverts to
+dark. This keeps the conversation moving.
+Each of these is conditional ( message.reasoning.length > 0 && … ) so simple replies stay clean. Copy the exact
+JSX from the source AssistantMessage (recipes in 03-COMPONENTS.md for the chip styles).
+
+4. Quick-actions ("the Assistant can do…")
+A row of action chips above/in the rail that invoke real backend tools (not chat). Each: { action, label, icon,
+requiresClaim } . Clicking fires a mutation, then synthesizes an assistant message describing the result (with a
+
+tool-call chip + an artifact markdown body + follow-up suggestions), and invalidates the affected queries so
+the UI refreshes. Disabled when prerequisites aren't met (e.g. no record selected) or while pending; the icon
+swaps to Loader2 animate-spin while running.
+This is the "agent has hands" pattern: the assistant can *execute*, and the result lands back in the thread as a
+normal turn. Generic action examples: "Advance workflow", "Draft document", "Run scan", "Notify
+stakeholders", "Generate report".
+
+5. Document grounding + citations + side-by-side source viewer
+The standout feature. The assistant can be grounded in a specific document, after which it answers *only*
+from that document and cites passages.
+Ground: dispatch assistant:ground-document with the doc + its analysis. The rail
+shows a teal "grounded · {name}" badge (with an X to un-ground), resets the thread, and (if available) loads
+the prior persisted chat for that document from the server so conversations survive reloads and are visible
+cross-user.
+Citations in text: the model emits markers like [p. 2 · §3.1] . A tokenizer
+( CITATION_RE = /\[p\.\s*(\d+)\s*[·•]\s*([^\]]+?)\]/g ) splits content into text + clickable citation chips
+( FileText + p.2·§3.1 , teal when the source exists).
+Source viewer: clicking a citation opens a side-by-side panel ( SourceViewer )
+next to the rail showing that page/section of the document, with page navigation. The active citation chip gets
+a teal ring. Closing or un-grounding clears it.
+Persistence: after each grounded turn, PUT the full thread + a last-message preview
+
+to /api/assistant/doc-threads/:recordId/:docId , and emit assistant:doc-chats-updated so an "inbox" list of
+document chats can refresh.
+This makes answers auditable / defensible — every claim the AI makes links to its source. Reproduce it for any
+document-heavy domain (contracts, research, medical records, legal discovery, policies).
+
+6. Generative BI (NL → chart, client-side)
+The assistant turns plain-English analytics prompts into live charts from the app's own data store — no server
+round-trip needed.
+Intent detection: regex matches viz prompts (`/viz|chart|graph|distribution|
+breakdown|by (region|stage|…)/i`).
+Routing: routePrompt(text) maps the prompt to a VizKind via ordered regex
+patterns (first match wins, sensible default).
+Aggregation: a pure aggregate(facts, kind) function computes the series from the
+in-memory data (group-by-sum, histogram bins, top-N, pie counts).
+Render: a <VizChart kind data /> (recharts: bar / horizontal-bar / pie) inside a
+glass "Generated chart" card with a Sparkles eyebrow, the chart, an auto-written "Insight ·" summary line,
+and a "Add to dashboard" pin button.
+Pin: generated charts can be persisted/pinned onto a real analytics page.
+VizKind catalog (generalize to your metrics):
+
+type VizKind = "value_by_category_a" | "value_by_region" | "leakage_by_category"
+| "score_distribution" | "stage_mix" | "tier_mix" | "leaderboard";
+const VIZ_META = { /* title, chartType: "bar"|"hbar"|"pie", unit: "usd"|"count" */ };
+
+Charts use the monochrome --chart-* ramp; text fills are forced muted ( [&_text]:!fill-zinc-600 ).
+
+7. The Agent Driver (visible autonomous work)
+AgentDriver is a React context provider that simulates / orchestrates an agent actually working a record —
+
+it's what makes the product feel autonomous rather than reactive. On a timer it walks a scripted plan for the
+record's current workflow stage.
+State + API:
+
+interface DriverStep { agent: string; verb: string; module: string; summary: string; durationMs: number; }
+interface DriverActivity { id; agent; module; summary; at; }
+// PLANS: Record<Stage, DriverStep[]>
+
+— per-stage scripted sequences
+
+// exposes: { step, stepIdx, total, activity, stageComplete, revealedModules,
+//
+
+pause(), resume(), skip(), isCovered(moduleId), nextAgentForModule(id) }
+
+Each step, on its timer, fires window events that drive the rest of the UI:
+claim:set-module (switch the visible panel to where the agent is "working")
+
+marks that panel revealed (panels start "covered" and get uncovered as the agent
+reaches them — a progressive-disclosure reveal)
+records an activity entry (capped, newest first)
+when the plan finishes, emits *:stage-complete so the page can auto-advance
+A companion Agent Activity Strip renders this honestly inside the record:
+a header with Agent activity · {stage} + an N of M complete counter
+a live tag (emerald pulsing dot) while a step runs, OR an amber "awaiting you"
+tag when paused at a human checkpoint (it never pretends an agent is working when it's actually waiting on
+the human)
+the current step: Loader2 spin + "{Agent} — {what it's doing}" + a
+"Open where it's posting →" jump link
+a collapsible history of completed steps, each with a "See in {panel} →" link;
+newly-landed items briefly pulse emerald
+Human-in-the-loop is first-class: the driver pauses at checkpoints, the strip shows "awaiting you", and a Stage
+Progress Banner shows X of N decisions resolved · Y blocking advance with a progress bar — green when
+ready to advance, amber otherwise. The "advance" button is disabled until the human resolves blocking
+decisions.
+This trio — Driver + Activity Strip + Progress Banner — is the autonomy story: the agent visibly does work,
+surfaces what it did, and stops for the human exactly when it should.
+
+Backend contract (what Gemini should also generate)
+Minimal endpoints the frontend expects:
+POST /api/assistant/chat
+
+→ SSE stream of data: {content|citations|error}
+
+POST /api/assistant/action
+
+→ { message, artifactMarkdown?, action, followUpSuggestions?
+
+}
+GET
+
+/api/assistant/doc-threads/:recordId/:docId → { messages: [...] }
+
+PUT
+
+/api/assistant/doc-threads/:recordId/:docId → persist thread
+
+The model's system prompt should instruct it to: cite with [p. N · §X] when grounded, emit
+[[ACT:name:arg]] to drive the UI, and return reasoning steps + follow-up suggestions. Use the latest Claude
+
+or Gemini model for the chat endpoint.
+
+

@@ -1,0 +1,80 @@
+U I + A G E N T I C E X T R A C T I O N PA C K
+
+Start Here
+UI + Agentic Extraction Pack
+This folder is a portable, domain-agnostic distillation of the visual language, component system, animation
+system, and agentic-UX patterns from an existing production-grade React app. It is written so you can hand it
+to Gemini Enterprise (or any code-gen model) and get back a *beautiful, modern, agent-native* application
+in any domain — none of the original business meaning leaks through.
+Everything here is generic. Where the source app said "claim", "adjuster", "Cova", this pack says "record",
+"user", "Assistant". Swap those nouns for your domain and go.
+
+What's in the box
+FILE
+
+WHAT IT GIVES YOU
+
+00-START-HERE.md
+
+This file — read order + the one-paragraph master prompt.
+
+01-DESIGN-LANGUAGE.md
+
+The *aesthetic*: the look, the rules, the "why it feels expensive".
+
+02-theme.css
+
+Copy-paste design tokens + utilities (light/dark, glass, animations). Drop-in.
+
+03-COMPONENTS.md
+
+Full component inventory + the custom primitives with prop APIs & class recipes.
+
+04-ANIMATIONS.md
+
+Every animation/motion pattern, when to use each, exact keyframes.
+
+05-AGENTIC-
+
+The agent-native UX: assistant rail, streaming, citations, grounding, the "agent driver",
+
+FEATURES.md
+
+generative charts. The differentiator.
+
+06-LAYOUT-AND-
+
+App shell, navigation, page scaffolding, RBAC/persona, state conventions.
+
+PATTERNS.md
+07-STACK-AND-SETUP.md
+
+Exact dependencies, file structure, config, install steps.
+
+Read order
+1. 01-DESIGN-LANGUAGE.md (the soul)
+2. 07-STACK-AND-SETUP.md (the skeleton)
+3. 02-theme.css + 04-ANIMATIONS.md (the skin)
+4. 03-COMPONENTS.md + 06-LAYOUT-AND-PATTERNS.md (the muscle)
+5. 05-AGENTIC-FEATURES.md (the brain — what makes it feel alive)
+
+Master prompt (paste this into Gemini Enterprise)
+Build a modern, agent-native web application for {YOUR DOMAIN}. Use the attached UI Extraction Pack
+as the single source of truth for all visual design, components, animation, layout, and agentic UX. Match
+it exactly: - Stack: React 18/19 + TypeScript (strict) + Vite + Tailwind CSS v4 + Radix UI primitives
+(shadcn/ui "new-york" style) + framer-motion + lucide-react icons + recharts + TanStack Query. Routing
+with wouter . See 07-STACK-AND-SETUP.md . - Look: A calm, editorial, "quiet luxury" enterprise aesthetic —
+near-monochrome zinc palette, one accent hue (teal/emerald), glassmorphism panels floating over a
+soft pastel gradient canvas, a serif display font for headlines (IBM Plex Serif) and a clean grotesk (Inter)
+for body, mono (JetBrains Mono) for data/IDs. Generous whitespace, tiny uppercase tracked labels,
+tabular numerals. See 01-DESIGN-LANGUAGE.md and use 02-theme.css verbatim. - Agent-native: Include a
+persistent right-hand Assistant rail with streaming responses, collapsible reasoning traces, tool-call
+chips, source citations with a side-by-side source viewer, document "grounding", follow-up suggestion
+chips, and a client-side generative chart feature. Optionally include the "agent driver" that visibly walks a
+record through a workflow. See 05-AGENTIC-FEATURES.md . Produce a polished, cohesive product — not a
+wireframe. Every panel is a glass card, every number is tabular, every section has a tiny eyebrow label,
+and the Assistant is always one keystroke away.
+Replace {YOUR DOMAIN} (e.g. "a sales CRM", "a clinical-trials console", "a logistics control tower") and attach
+the rest of the files.
+
+

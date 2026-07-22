@@ -1,0 +1,188 @@
+U I + A G E N T I C E X T R A C T I O N PA C K
+
+Motion & Animation
+04 · Motion & Animation
+Two motion systems: (1) CSS keyframe utilities (in 02-theme.css ) for ambient and agent-driven effects, and
+(2) framer-motion for list/enter transitions. The rule: motion is *purposeful and slow* — it signals state
+change or system liveness, never decoration. Nothing bounces gratuitously; easing is gentle.
+
+1. CSS keyframe utilities (all defined in 02-theme.css )
+CLASS
+
+EFFECT
+
+WHEN TO USE
+
+TIMING
+
+accent-blobs
+
+Two giant blurred blobs
+
+On the app root container —
+
+26s / 32s ease-in-out
+
+slowly drift behind
+
+ambient depth
+
+infinite alternate
+
+Gradient sweep across a
+
+Content skeletons / loading
+
+1.6s ease-in-out infinite
+
+grey block
+
+placeholders (not spinners)
+
+agent-step-
+
+Progress bar fills
+
+An agent step's countdown; set
+
+bar
+
+0→100%
+
+animationDuration inline per
+
+everything
+shimmer
+
+linear, forwards
+
+step
+agent-just-
+
+One-shot emerald
+
+populated
+
+background flash
+
+agent-pill-
+
+Pill fades + drops +
+
+in
+
+scales in
+
+agent-
+
+Overlay holds then fades
+
+A panel the agent just wrote into
+
+1.6s ease-out
+
+A status pill appearing
+
+360ms cubicbezier(0.2,0.8,0.2,1)
+
+"Agent is writing here…" cover
+
+1.6s ease-out forwards
+
+during reveal
+
+writingoverlay
+agent-
+
+Glowing emerald line
+
+Inside the writing overlay — the
+
+1.4s cubic-
+
+writing-scan
+
+sweeps top→bottom
+
+"scanning" feel
+
+bezier(0.4,0,0.2,1)
+forwards
+
+agent-
+
+Content fades up from
+
+Revealing real content after the
+
+content-fade-
+
+35% opacity
+
+overlay
+
+900ms ease-out
+
+in
+
+The "agent writes into a panel" choreography (signature moment)
+
+When the agent populates a section, run these together to make it feel like the AI is physically filling the panel
+in:
+1. Panel mounts with agent-writing-overlay covering it.
+2. agent-writing-scan line sweeps down (emerald glow).
+3. Real children mount with agent-content-fade-in .
+4. Panel gets a one-shot agent-just-populated emerald flash.
+5. A "Agent just updated this" pill drops in with agent-pill-in .
+This is the single most "alive" interaction — reproduce it for any agent write.
+
+2. Tailwind built-in animations (used inline, no setup)
+CLASS
+
+USE
+
+animate-spin
+
+On Loader2 icon for any in-flight/working state
+
+animate-pulse
+
+On a small dot for "live" / a streaming typing dot
+
+animate-ping
+
+Behind a solid dot for the live "radar" pulse (see recipe in 03 )
+
+Streaming "typing" indicator (three dots, staggered):
+<div className="flex items-center gap-1.5 pl-1">
+<span className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-pulse" />
+<span className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-pulse [animation-delay:120ms]" />
+<span className="h-1.5 w-1.5 rounded-full bg-zinc-400 animate-pulse [animation-delay:240ms]" />
+</div>
+
+3. framer-motion usage
+Imported as import { motion, AnimatePresence } from "framer-motion" . Used for:
+Generative chart entrance — charts fade/scale in when the assistant produces them
+( AnimatePresence so swapping chart kinds animates out/in).
+List item enter/exit — activity feeds, message lists.
+Standard entrance pattern:
+
+<motion.div
+initial={{ opacity: 0, y: 8 }}
+animate={{ opacity: 1, y: 0 }}
+exit={{ opacity: 0, y: -8 }}
+transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+>
+
+Keep durations 0.2–0.35s and use the same [0.2,0.8,0.2,1] ease everywhere for cohesion.
+
+4. Transitions on state (the quiet majority)
+Most "animation" is just transition-colors / transition-all on hover/active/width:
+Sidebar collapse: transition-[width] duration-200 .
+Progress bar fills: transition-all duration-500 on a style={{width}} div.
+Hover states: transition-colors + the hover-elevate overlay system.
+Confidence/score bars animate width changes smoothly via transition-all .
+Principle: if a value changes, animate it ( transition-all ); if a surface is interactive, give it transition-colors
++ an elevate overlay. Never leave a state change instant.
+
+

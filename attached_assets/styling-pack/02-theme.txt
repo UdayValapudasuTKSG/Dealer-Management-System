@@ -1,0 +1,466 @@
+U I + A G E N T I C E X T R A C T I O N PA C K
+
+Theme & Tokens (theme.css)
+
+/* ============================================================================
+* 02-theme.css
+
+—
+
+Drop-in design tokens, utilities & animations
+
+* ---------------------------------------------------------------------------* Tailwind CSS v4 (@theme inline). Import this as your global stylesheet.
+* Generic / domain-agnostic. Light + dark. Glassmorphism + the full animation
+* system (renamed "cova-*" → "agent-*").
+*
+*
+
+import "./theme.css"
+
+// in main.tsx
+
+*
+* Requires:
+
+tailwindcss@^4, tw-animate-css, @tailwindcss/typography
+
+* ============================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?
+family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Serif:wght@300;400;500;600;700&family=JetBrains+Mono:wg
+ht@400;500&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---- token bridge: expose CSS vars to Tailwind color/utility names -------- */
+@theme inline {
+--color-background: hsl(var(--background));
+--color-foreground: hsl(var(--foreground));
+--color-border: hsl(var(--border));
+--color-input: hsl(var(--input));
+--color-ring: hsl(var(--ring));
+
+--color-card: hsl(var(--card));
+--color-card-foreground: hsl(var(--card-foreground));
+--color-card-border: hsl(var(--card-border));
+
+--color-popover: hsl(var(--popover));
+--color-popover-foreground: hsl(var(--popover-foreground));
+--color-popover-border: hsl(var(--popover-border));
+
+--color-primary: hsl(var(--primary));
+--color-primary-foreground: hsl(var(--primary-foreground));
+--color-primary-border: var(--primary-border);
+
+--color-secondary: hsl(var(--secondary));
+--color-secondary-foreground: hsl(var(--secondary-foreground));
+--color-secondary-border: var(--secondary-border);
+
+--color-muted: hsl(var(--muted));
+--color-muted-foreground: hsl(var(--muted-foreground));
+--color-muted-border: var(--muted-border);
+
+--color-accent: hsl(var(--accent));
+--color-accent-foreground: hsl(var(--accent-foreground));
+--color-accent-border: var(--accent-border);
+
+--color-destructive: hsl(var(--destructive));
+--color-destructive-foreground: hsl(var(--destructive-foreground));
+--color-destructive-border: var(--destructive-border);
+
+/* Monochrome chart ramp — keeps data viz on-brand. */
+--color-chart-1: hsl(var(--chart-1));
+--color-chart-2: hsl(var(--chart-2));
+--color-chart-3: hsl(var(--chart-3));
+--color-chart-4: hsl(var(--chart-4));
+--color-chart-5: hsl(var(--chart-5));
+
+--color-sidebar: hsl(var(--sidebar));
+--color-sidebar-foreground: hsl(var(--sidebar-foreground));
+--color-sidebar-border: hsl(var(--sidebar-border));
+--color-sidebar-primary: hsl(var(--sidebar-primary));
+--color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+--color-sidebar-accent: hsl(var(--sidebar-accent));
+--color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+--color-sidebar-ring: hsl(var(--sidebar-ring));
+
+--font-sans: var(--app-font-sans);
+--font-serif: var(--app-font-serif);
+--font-mono: var(--app-font-mono);
+
+--radius-sm: calc(var(--radius) - 4px);
+--radius-md: calc(var(--radius) - 2px);
+--radius-lg: var(--radius);
+--radius-xl: calc(var(--radius) + 4px);
+}
+
+/* ---- LIGHT theme --------------------------------------------------------- */
+:root {
+--button-outline: rgba(0,0,0, .10);
+--badge-outline: rgba(0,0,0, .05);
+--opaque-button-border-intensity: -8;
+
+--elevate-1: rgba(0,0,0, .03);
+--elevate-2: rgba(0,0,0, .08);
+
+--background: 0 0% 100%;
+--foreground: 0 0% 4%;
+--border: 0 0% 90%;
+--card: 0 0% 100%;
+--card-foreground: 0 0% 4%;
+--card-border: 0 0% 90%;
+--sidebar: 0 0% 99%;
+--sidebar-foreground: 0 0% 20%;
+--sidebar-border: 0 0% 92%;
+--sidebar-primary: 0 0% 4%;
+--sidebar-primary-foreground: 0 0% 100%;
+--sidebar-accent: 0 0% 96%;
+--sidebar-accent-foreground: 0 0% 4%;
+--sidebar-ring: 0 0% 4%;
+--popover: 0 0% 100%;
+--popover-foreground: 0 0% 4%;
+--popover-border: 0 0% 90%;
+--primary: 0 0% 4%;
+--primary-foreground: 0 0% 100%;
+--secondary: 0 0% 96%;
+--secondary-foreground: 0 0% 9%;
+--muted: 0 0% 96%;
+--muted-foreground: 0 0% 40%;
+--accent: 0 0% 96%;
+--accent-foreground: 0 0% 9%;
+--destructive: 0 84% 50%;
+--destructive-foreground: 0 0% 100%;
+--input: 0 0% 90%;
+--ring: 0 0% 4%;
+--chart-1: 0 0% 10%;
+--chart-2: 0 0% 30%;
+--chart-3: 0 0% 50%;
+--chart-4: 0 0% 70%;
+--chart-5: 0 0% 85%;
+
+--app-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+--app-font-serif: 'IBM Plex Serif', Georgia, serif;
+--app-font-mono: 'JetBrains Mono', Menlo, monospace;
+--radius: .5rem;
+
+/* Soft, diffuse, low-opacity shadows. */
+
+--shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.04);
+--shadow-xs: 0px 1px 2px 0px rgba(0,0,0,0.04);
+--shadow-sm: 0px 1px 2px 0px rgba(0,0,0,0.04);
+--shadow: 0px 1px 3px 0px rgba(0,0,0,0.06);
+--shadow-md: 0px 4px 6px -1px rgba(0,0,0,0.06);
+--shadow-lg: 0px 10px 15px -3px rgba(0,0,0,0.06);
+--shadow-xl: 0px 20px 25px -5px rgba(0,0,0,0.06);
+--shadow-2xl: 0px 25px 50px -12px rgba(0,0,0,0.10);
+--tracking-normal: 0em;
+--spacing: 0.25rem;
+
+/* Auto-derived "opaque button" borders (slightly darker than the fill). */
+--sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-borderintensity)) / alpha);
+--sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-borderintensity)) / alpha);
+--primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) /
+alpha);
+--secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) /
+alpha);
+--muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+--accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+--destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity))
+/ alpha);
+}
+
+/* ---- DARK theme ---------------------------------------------------------- */
+.dark {
+--button-outline: rgba(255,255,255, .10);
+--badge-outline: rgba(255,255,255, .05);
+--opaque-button-border-intensity: 9;
+--elevate-1: rgba(255,255,255, .04);
+--elevate-2: rgba(255,255,255, .09);
+
+--background: 0 0% 4%;
+--foreground: 0 0% 98%;
+--border: 0 0% 14%;
+--card: 0 0% 6%;
+--card-foreground: 0 0% 98%;
+--card-border: 0 0% 14%;
+--sidebar: 0 0% 5%;
+--sidebar-foreground: 0 0% 80%;
+--sidebar-border: 0 0% 12%;
+--sidebar-primary: 0 0% 98%;
+
+--sidebar-primary-foreground: 0 0% 4%;
+--sidebar-accent: 0 0% 12%;
+--sidebar-accent-foreground: 0 0% 98%;
+--sidebar-ring: 0 0% 98%;
+--popover: 0 0% 6%;
+--popover-foreground: 0 0% 98%;
+--popover-border: 0 0% 14%;
+--primary: 0 0% 98%;
+--primary-foreground: 0 0% 4%;
+--secondary: 0 0% 12%;
+--secondary-foreground: 0 0% 98%;
+--muted: 0 0% 12%;
+--muted-foreground: 0 0% 60%;
+--accent: 0 0% 12%;
+--accent-foreground: 0 0% 98%;
+--destructive: 0 70% 50%;
+--destructive-foreground: 0 0% 98%;
+--input: 0 0% 14%;
+--ring: 0 0% 98%;
+--chart-1: 0 0% 95%;
+--chart-2: 0 0% 75%;
+--chart-3: 0 0% 55%;
+--chart-4: 0 0% 35%;
+--chart-5: 0 0% 20%;
+
+--shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.20);
+--shadow-xs: 0px 1px 2px 0px rgba(0,0,0,0.20);
+--shadow-sm: 0px 1px 2px 0px rgba(0,0,0,0.20);
+--shadow: 0px 1px 3px 0px rgba(0,0,0,0.30);
+--shadow-md: 0px 4px 6px -1px rgba(0,0,0,0.30);
+--shadow-lg: 0px 10px 15px -3px rgba(0,0,0,0.30);
+--shadow-xl: 0px 20px 25px -5px rgba(0,0,0,0.30);
+--shadow-2xl: 0px 25px 50px -12px rgba(0,0,0,0.40);
+}
+
+/* ---- base ---------------------------------------------------------------- */
+@layer base {
+* { @apply border-border; }
+body {
+@apply font-sans antialiased text-foreground;
+font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+/* Warm-grey canvas + one accent wash. No rainbow — one hue family, subtle depth. */
+background-color: hsl(210 14% 96%);
+background-image:
+
+radial-gradient(at 85% -10%, hsl(190 35% 86% / 0.55), transparent 55%),
+radial-gradient(at 10% 100%, hsl(200 20% 88% / 0.55), transparent 55%),
+linear-gradient(180deg, hsl(210 16% 97%), hsl(215 12% 94%));
+background-attachment: fixed;
+}
+.font-serif {
+font-family: var(--app-font-serif);
+font-feature-settings: 'lnum', 'tnum';
+}
+.tabular-nums { font-variant-numeric: tabular-nums; }
+}
+
+/* ---- GLASS surfaces ------------------------------------------------------ */
+@layer utilities {
+/* `.glass` = default translucent panel. `.glass-strong` = KPI/hero tiles.
+`.glass-soft` = nested/secondary. */
+.glass {
+background-color: rgba(255, 255, 255, 0.62);
+backdrop-filter: blur(18px) saturate(140%);
+-webkit-backdrop-filter: blur(18px) saturate(140%);
+border: 1px solid rgba(255, 255, 255, 0.75);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.65),
+0 1px 2px rgba(60, 40, 80, 0.04),
+0 16px 40px -24px rgba(60, 40, 80, 0.22);
+}
+.glass-strong {
+background-color: rgba(255, 255, 255, 0.78);
+backdrop-filter: blur(22px) saturate(150%);
+-webkit-backdrop-filter: blur(22px) saturate(150%);
+border: 1px solid rgba(255, 255, 255, 0.85);
+box-shadow:
+inset 0 1px 0 rgba(255, 255, 255, 0.75),
+0 1px 2px rgba(60, 40, 80, 0.05),
+0 22px 60px -28px rgba(60, 40, 80, 0.28);
+}
+.glass-soft {
+background-color: rgba(255, 255, 255, 0.45);
+backdrop-filter: blur(14px) saturate(140%);
+-webkit-backdrop-filter: blur(14px) saturate(140%);
+border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+/* Two slow-drifting accent blobs behind content. Add `accent-blobs` to the
+
+top-level app container. */
+.accent-blobs::before,
+.accent-blobs::after {
+content: "";
+position: fixed;
+pointer-events: none;
+z-index: 0;
+border-radius: 9999px;
+filter: blur(90px);
+opacity: 0.45;
+}
+.accent-blobs::before {
+width: 540px; height: 540px;
+top: -160px; right: -100px;
+background: radial-gradient(circle, hsl(190 45% 72% / 0.55), transparent 65%);
+animation: accent-drift 26s ease-in-out infinite alternate;
+}
+.accent-blobs::after {
+width: 640px; height: 640px;
+bottom: -220px; left: 18%;
+background: radial-gradient(circle, hsl(210 18% 78% / 0.50), transparent 65%);
+animation: accent-drift 32s ease-in-out infinite alternate-reverse;
+}
+@keyframes accent-drift {
+0%
+
+{ transform: translate3d(0, 0, 0) scale(1); }
+
+100% { transform: translate3d(-24px, 36px, 0) scale(1.06); }
+}
+}
+
+/* ---- misc utilities ------------------------------------------------------ */
+@layer utilities {
+input[type="search"]::-webkit-search-cancel-button { @apply hidden; }
+[contenteditable][data-placeholder]:empty::before {
+content: attr(data-placeholder);
+color: hsl(var(--muted-foreground));
+pointer-events: none;
+}
+.no-default-hover-elevate {}
+.no-default-active-elevate {}
+
+/* HOVER-ELEVATE SYSTEM — translucent ::after overlay instead of bg swaps.
+Add `.hover-elevate` / `.active-elevate` (or `-2` for stronger) to any
+interactive surface. Auto-inverts in dark mode via --elevate-*. */
+.toggle-elevate::before,
+
+.toggle-elevate-2::before {
+content: ""; pointer-events: none; position: absolute;
+inset: 0px; border-radius: inherit; z-index: -1;
+}
+.toggle-elevate.toggle-elevated::before { background-color: var(--elevate-2); }
+.border.toggle-elevate::before { inset: -1px; }
+
+.hover-elevate:not(.no-default-hover-elevate),
+.active-elevate:not(.no-default-active-elevate),
+.hover-elevate-2:not(.no-default-hover-elevate),
+.active-elevate-2:not(.no-default-active-elevate) {
+position: relative; z-index: 0;
+}
+.hover-elevate:not(.no-default-hover-elevate)::after,
+.active-elevate:not(.no-default-active-elevate)::after,
+.hover-elevate-2:not(.no-default-hover-elevate)::after,
+.active-elevate-2:not(.no-default-active-elevate)::after {
+content: ""; pointer-events: none; position: absolute;
+inset: 0px; border-radius: inherit; z-index: 999;
+}
+.hover-elevate:hover:not(.no-default-hover-elevate)::after,
+.active-elevate:active:not(.no-default-active-elevate)::after {
+background-color: var(--elevate-1);
+}
+.hover-elevate-2:hover:not(.no-default-hover-elevate)::after,
+.active-elevate-2:active:not(.no-default-active-elevate)::after {
+background-color: var(--elevate-2);
+}
+.border.hover-elevate:not(.no-hover-interaction-elevate)::after,
+.border.active-elevate:not(.no-active-interaction-elevate)::after,
+.border.hover-elevate-2:not(.no-hover-interaction-elevate)::after,
+.border.active-elevate-2:not(.no-active-interaction-elevate)::after {
+inset: -1px;
+}
+
+/* SHIMMER — content skeleton sweep. Apply to a `bg-zinc-200` block. */
+.shimmer {
+background: linear-gradient(90deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.10) 50%, rgba(0,0,0,0.04) 100%);
+background-size: 200% 100%;
+animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer {
+0% { background-position: 200% 0; }
+100% { background-position: -200% 0; }
+
+}
+
+/* ===== AGENT ANIMATIONS (originally "cova-*") ========================== */
+
+/* Step progress bar — fills L→R over the step duration. Set
+animation-duration inline per step (e.g. style={{animationDuration:'3.6s'}}). */
+.agent-step-bar {
+width: 0%;
+animation-name: agent-step-fill;
+animation-timing-function: linear;
+animation-fill-mode: forwards;
+}
+@keyframes agent-step-fill { 0% { width: 0%; } 100% { width: 100%; } }
+
+/* "Just populated" emerald flash when the agent writes into a panel. */
+.agent-just-populated { animation: agent-flash 1.6s ease-out 1; }
+@keyframes agent-flash {
+0%
+
+{ background-color: rgba(16, 185, 129, 0.10); }
+
+60%
+
+{ background-color: rgba(16, 185, 129, 0.04); }
+
+100% { background-color: transparent; }
+}
+
+/* Pill drop-in. */
+.agent-pill-in { animation: agent-pill-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) 1; }
+@keyframes agent-pill-in {
+0%
+
+{ opacity: 0; transform: translateY(-4px) scale(0.96); }
+
+100% { opacity: 1; transform: translateY(0)
+
+scale(1);
+
+}
+
+}
+
+/* "Agent is writing here…" overlay: shows, holds ~1.2s, fades. */
+.agent-writing-overlay { animation: agent-writing-fade 1.6s ease-out 1 forwards; }
+@keyframes agent-writing-fade {
+0%, 70% { opacity: 1; }
+100%
+
+{ opacity: 0; }
+
+}
+/* Scan line sweeping top→bottom while the overlay is up. */
+.agent-writing-scan {
+animation: agent-writing-scan 1.4s cubic-bezier(0.4, 0, 0.2, 1) 1 forwards;
+box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+}
+@keyframes agent-writing-scan {
+0%
+
+{ transform: translateY(0);
+
+10%
+
+{ opacity: 1; }
+
+90%
+
+{ opacity: 1; }
+
+opacity: 0; }
+
+100% { transform: translateY(420px); opacity: 0; }
+}
+/* Children fade in under the overlay so the reveal feels intentional. */
+.agent-content-fade-in { animation: agent-content-fade-in 900ms ease-out 1; }
+@keyframes agent-content-fade-in {
+0%
+
+{ opacity: 0.35; transform: translateY(2px); }
+
+100% { opacity: 1;
+}
+}
+
+transform: translateY(0);
+
+}
+
+

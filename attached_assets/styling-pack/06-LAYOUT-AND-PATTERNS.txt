@@ -1,0 +1,165 @@
+U I + A G E N T I C E X T R A C T I O N PA C K
+
+Layout & Patterns
+06 · Layout, Navigation & App Patterns
+How the screens are assembled and how state flows. Domain-agnostic.
+
+1. The three-column app shell
+┌──────────┬─────────────────────────────────┬──────────────┐
+│ Sidebar
+
+│
+
+<main>
+
+│ (dark,
+
+│
+
+page content (glass cards
+
+│ Rail (glass, │
+
+over pastel gradient)
+
+│ 360px,
+
+│ collapsi-│
+│ ble)
+
+│
+
+│ Assistant
+
+│
+
+│
+
+│ collapsible) │
+
+└──────────┴─────────────────────────────────┴──────────────┘
+
+Root container:
+<div className="flex min-h-screen w-full text-zinc-900 relative accent-blobs">
+<Sidebar />
+<main className="flex-1 min-w-0 overflow-x-hidden relative z-[1]"> {children} </main>
+<AssistantRail />
+</div>
+
+Note accent-blobs (ambient drift), relative z-[1] on main so content sits above blobs.
+Provider nesting (outermost → in):
+QueryClientProvider → TooltipProvider → Auth/PersonaProvider → LayoutChromeProvider
+→ AssistantProvider → Router → AppShell → page
++ <Toaster /> (sonner) at the root.
+
+A nice touch: clicking anywhere in <main> auto-collapses the sidebar ( onClickCapture ), unless the target has
+[data-no-collapse] . Maximizes content space.
+
+2. Sidebar (the dark navigation)
+Dark slab: bg-zinc-950 text-zinc-200 , sticky top-0 h-screen , collapsible between
+
+w-[220px] and w-[56px] with transition-[width] duration-200 .
+
+Wordmark (serif) + a small "AI" capsule badge ( Sparkles + uppercase tracked).
+Nav is data-driven from a NAV: NavItem[] array, each { to, label, icon, section } .
+Items are grouped by section with tiny tracked-uppercase section headers.
+Active item = bg-white text-zinc-950 (inverted); inactive = `text-zinc-400
+hover:bg-white/5 hover:text-white . Active match: location === to || location.startsWith(to)`.
+When collapsed: icons only, centered, title tooltips.
+Footer: a user/persona switcher (dropdown-menu) with an avatar (initials), name +
+role, and a sign-out item. Plus a tiny trust line ( ShieldCheck · SOC 2 ).
+type NavItem = { to: string; label: string;
+icon: React.ComponentType<{ className?: string }>; section?: string };
+
+3. Persona / RBAC (multi-role from one app)
+A PersonaProvider models distinct user roles, each with its own home route and allowed route prefixes. This
+lets one codebase serve internal users, admins, and external portals.
+type Persona = { id; name; role; icon; home: string; allowed: string[]; scope; username };
+function canAccess(persona, path) {
+return persona.allowed.some(a => path === a || path.startsWith(a + "/") || path.startsWith(a));
+}
+
+Sidebar filters NAV by canAccess . The shell redirects to persona.home if the
+user navigates to a disallowed route.
+Persona + auth flags persist in localStorage (keys are app-namespaced, e.g.
+app.persona.v1 , app.auth.v1 ). Never persist raw tokens.
+
+A persona switcher in the sidebar lets you preview the app as any role — great for demos.
+Generalize: roles = whatever your domain has (operator / manager / executive / customer / admin). The
+pattern (home + allowed-prefixes + route gating + switcher) is reusable as-is.
+
+4. Page scaffolding
+A typical page:
+
+<div className="mx-auto max-w-7xl px-8 py-8 space-y-6">
+<PageHeader eyebrow="SECTION" title="Page Title" subtitle="One line of context."
+right={<button …>Primary action</button>} />
+{/* glass cards, KPI grids, tables, charts … */}
+</div>
+
+Detail pages open with the dark command hero (KPIs + a workflow pipeline), then the
+Agent Activity Strip, then Stage Progress Banner, then a stack of glass panels.
+KPI rows: grid grid-cols-2 sm:grid-cols-5 gap-3 .
+Error boundaries per panel: wrap each top-level panel in its own <ErrorBoundary>
+with a small retry card fallback — one panel's error must not whitescreen the page.
+
+5. Workflow pipeline visualization
+A horizontal row of stage cells ( grid grid-cols-6 gap-2 ), each showing:
+state via color: complete (emerald border/bg + Check ), active (inverted solid
++ pulse dot), pending ( Lock , muted).
+a thin progress bar ( style={{ width: pct% }} + transition-all ).
+a done/total count, with · N review in amber when human steps are pending.
+clickable to "replay"/jump to that stage (dispatches a set-stage event).
+This appears both in the dark hero (compact) and as a standalone card ( LifecyclePipeline ) with an "Advance
+to next stage" CTA gated on autoAdvanceEligible .
+
+6. State management conventions
+STATE KIND
+
+WHERE IT LIVES
+
+Server data
+
+TanStack Query ( useQuery / useMutation ), keys + invalidation. Never
+in a store.
+
+"What am I viewing" (filters, tabs, sort, search,
+
+URL search params ( useSearchParams ), { replace: true } , defaults
+
+pagination)
+
+omitted from URL.
+
+Cross-panel communication
+
+URL params or window CustomEvents — never a shared store/context
+spanning panels.
+
+Global UI (sidebar collapsed, theme)
+
+small React context ( LayoutChromeProvider )
+
+Assistant thread/grounding
+
+the AssistantProvider context
+
+Auth/persona
+
+context + localStorage (no tokens)
+
+Why URL-params for view state: refresh keeps your view, links are shareable, back button works, panels
+reading the same param stay in sync for free. Validate params with a runtime guard and fall back to a default
+— URL strings are untrusted.
+TanStack Query defaults used:
+new QueryClient({ defaultOptions: { queries: {
+refetchOnWindowFocus: false, retry: 1, staleTime: 30_000 } } });
+
+The window-event bus is the app's loose-coupling backbone. Events seen in the source: assistant:ask ,
+assistant:ground-document , assistant:doc-chats-updated , claim:set-module (→ record:set-panel ),
+claim:set-stage , claim:cova-populated (→ record:agent-populated ), *:stage-complete . Use this so a chart
+
+can ask the assistant, the assistant can switch a panel, and the driver can drive the page — all without imports
+between them.
+
+
