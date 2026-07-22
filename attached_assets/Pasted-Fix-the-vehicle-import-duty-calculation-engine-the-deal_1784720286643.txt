@@ -1,0 +1,66 @@
+Fix the vehicle import duty calculation engine (the `dealer_taxes` / duty logic).
+The current code selects the wrong excise band and computes excise on CIF only.
+Replace it with the GRA rules below. Do NOT touch the UI or the OCR step.
+
+INPUTS the engine must accept:
+- cifUSD (number)
+- engineCC (number)
+- fuelType: "gasoline" | "diesel" | "electric"
+- yearOfManufacture (number)
+- yearOfImport (number)
+- importerType: "private" | "dealer_used" | "new_vehicle_trader"
+- bodyType: e.g. "double_cab_pickup" | "car" | "suv" | ...
+- isHybrid (bool)
+- retailPriceUSD (number, only for new_vehicle_trader)
+- exchangeRate (GYD per USD, locked at submission)
+
+RULES:
+
+1) AGE: "under 4 years" if yearOfManufacture >= (yearOfImport - 3).
+   Otherwise "4 years and older". (GRA: 48 months before Jan 1 of import year.)
+
+2) ELECTRIC: duty 0%, excise 0%, VAT 0% regardless of age. Stop here.
+
+3) DUTY (under 4 years only; 4+ years is always 0% duty and 0% VAT):
+   - gasoline/diesel <=1500cc: duty 35%
+   - >1500cc: duty 45%
+   Duty = dutyRate * cifUSD
+
+4) EXCISE BASE (under 4 years):
+   - private:            base = cifUSD + duty
+   - dealer_used:        base = (1.5 * cifUSD) + duty
+   - new_vehicle_trader: base = retailPriceUSD + duty
+   Excise = exciseRate * base
+
+5) EXCISE RATE by cc band (USE THE CORRECT BAND — this is the bug):
+   GASOLINE under 4yr: <=1500:0% | 1500-1800:10% | 1800-2000:10% | 2000-3000:110% | >3000:140%
+   DIESEL   under 4yr: <=1500:0% | 1500-1800:10% | 1800-2500:110% | >2500:110%
+   (Flag 1800-2000cc diesel to a human — GRA's published table has a gap there.)
+
+6) FLAT-RATE (4+ years): excise is a FLAT GYD amount, not a %:
+   gasoline <=1500cc: GY$800,000
+   diesel   <=1500cc: GY$800,000
+   Larger 4+ bands use (CIF + baseUSD)*rate + baseUSD — implement the full
+   4+ tables from GRA, but treat the flat GYD bands as GYD, not USD.
+
+7) VAT = 14% * (cifUSD + duty + excise)  [for under-4 non-exempt vehicles]
+
+8) VAT EXEMPTIONS (VAT = 0), effective 16 Feb 2026:
+   - double_cab_pickup with engineCC <= 2500
+   - new vehicle under 4yr with engineCC < 1500
+   - hybrid under 4yr with engineCC < 2000
+
+9) DO NOT add an Environmental Levy or Registration Fee to the import duty
+   total unless a documented GRA rule is provided. Remove the hardcoded
+   US$25 / US$75 lines, or move them to a clearly-labeled "non-duty fees"
+   section that a human must confirm.
+
+10) TOTAL = duty + excise + VAT. Convert to GYD using exchangeRate.
+
+HUMAN GATE: the approval screen must re-run this calculation server-side,
+display which age category, cc band, importer type, and formula path were
+used, and BLOCK approval if any required input is missing.
+
+Add unit tests for: a 2,755cc diesel dealer_used 2024 import at CIF US$33,800
+(expected excise ≈ US$72,501, VAT ≈ US$17,012, total ≈ US$104,723) and at
+least one gasoline 4+ years flat-rate case.

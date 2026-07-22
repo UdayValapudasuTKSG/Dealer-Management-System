@@ -31,12 +31,19 @@ import { DocumentsCard } from "@/components/documents-card";
 
 function img(url: string | null | undefined) {
   if (!url) return undefined;
+  // Repair pasted duplicates ("https://…https://…") — keep the first URL.
+  const dup = url.indexOf("http", url.startsWith("http") ? 1 : 0);
+  if (dup > 0 && /^https?:/.test(url)) url = url.slice(0, dup);
   if (/^(https?:|data:)/.test(url)) {
-    // Old imports stored absolute URLs to previous deployments — if it's our
-    // own storage path, serve it from THIS origin instead of the stale host.
+    // Only rewrite OUR OWN storage URLs to this origin (e.g. a stale preview
+    // domain). External hosts (old sites, CDNs) are left untouched — their
+    // objects don't exist in this app's storage.
     try {
       const u = new URL(url);
-      if (u.pathname.includes("/api/storage/")) {
+      if (
+        u.host === window.location.host &&
+        u.pathname.includes("/api/storage/")
+      ) {
         return u.pathname.slice(u.pathname.indexOf("/api/storage/"));
       }
     } catch {

@@ -198,6 +198,17 @@ function normalizeHeader(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Excel cells sometimes carry the same URL pasted twice back-to-back
+ * ("https://…https://…"). Keep only the first URL so the stored value is
+ * always a single valid link.
+ */
+function firstUrl(text: string): string {
+  if (!/^https?:/i.test(text)) return text;
+  const dup = text.indexOf("http", 1);
+  return dup > 0 ? text.slice(0, dup) : text;
+}
+
 /** exceljs cell values can be rich objects — reduce them to plain text. */
 function cellText(value: ExcelJS.CellValue): string {
   if (value == null) return "";
@@ -315,7 +326,12 @@ router.post(
           const num = Number(text.replace(/[$,\s]/g, ""));
           raw[field] = Number.isFinite(num) ? num : text;
         } else if (LIST_FIELDS.has(field)) {
-          raw[field] = splitList(text);
+          raw[field] =
+            field === "images"
+              ? splitList(text).map(firstUrl)
+              : splitList(text);
+        } else if (field === "imageUrl") {
+          raw[field] = firstUrl(text);
         } else if (field === "engineNumber" || field === "vin") {
           raw[field] = text.toUpperCase();
         } else if (field === "registration") {
