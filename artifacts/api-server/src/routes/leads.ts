@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, isNull, isNotNull, ne, sql, inArray, type SQL } from "drizzle-orm";
+import { eq, desc, and, or, isNull, isNotNull, ne, sql, inArray, type SQL } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -1271,8 +1271,34 @@ router.get("/leads/:id/review", async (req, res): Promise<void> => {
   // Delivery phase: not a lead-stage advance (deals own delivery), but the
   // review must surface delivery readiness — GRA duty filing included.
   const dealIds = leadDeals.map((d) => d.id);
+  // GRA gates are created with refType "vehicle" (filings may be submitted
+  // deal-less from the Documents tab), so match on both the linked deals'
+  // vehicles and the lead's interested vehicle — not just deal refs.
+  const graVehicleIds = [
+    ...new Set(
+      [
+        ...leadDeals.map((d) => d.vehicleId),
+        lead.interestedVehicleId,
+      ].filter((v): v is number => v != null),
+    ),
+  ];
+  const graRefConds: SQL[] = [];
+  if (dealIds.length > 0)
+    graRefConds.push(
+      and(
+        eq(gatesTable.refType, "deal"),
+        inArray(gatesTable.refId, dealIds),
+      )!,
+    );
+  if (graVehicleIds.length > 0)
+    graRefConds.push(
+      and(
+        eq(gatesTable.refType, "vehicle"),
+        inArray(gatesTable.refId, graVehicleIds),
+      )!,
+    );
   const graGates =
-    dealIds.length > 0
+    graRefConds.length > 0
       ? await db
           .select({ status: gatesTable.status })
           .from(gatesTable)
@@ -1280,8 +1306,7 @@ router.get("/leads/:id/review", async (req, res): Promise<void> => {
             and(
               eq(gatesTable.dealerId, dealerId),
               eq(gatesTable.type, "gra_filing"),
-              eq(gatesTable.refType, "deal"),
-              inArray(gatesTable.refId, dealIds),
+              or(...graRefConds),
             ),
           )
       : [];
