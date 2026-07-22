@@ -60,6 +60,7 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 - Metallic Bronze theme (2026-07): brand accent is Metallic Bronze #A97142 (`--primary: 27 44% 46%`); blue is fully retired from the UI (kept only in chart SERIES_COLORS). LIGHT mode default: warm ivory canvas with faint bronze radial glows + white glass cards + always-dark sidebar; DARK mode is near-black glass with bronze glows, toggled via Sun/Moon in the sidebar user card (localStorage). `--gold` token = polished bronze highlight. Clerk appearance colors live in `App.tsx` (`clerkAppearance`).
 - Strongly car/automotive-themed and aesthetic; use real images. No emojis in the UI.
 - Keep all features end-to-end — no dead-end clicks.
+- Every build must run the regression + e2e checks before delivery: registered validations `typecheck`, `p0-security`, `isolation-p5`, `provisioning-saga` (plus the `gate-cascades` workflow) must all pass; run targeted e2e/curl tests on any changed endpoints or flows.
 
 ## Gotchas
 

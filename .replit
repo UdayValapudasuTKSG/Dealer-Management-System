@@ -20,6 +20,22 @@ author = "agent"
 task = "workflow.run"
 args = "gate-cascades"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "typecheck"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "p0-security"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "isolation-p5"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "provisioning-saga"
+
 [[workflows.workflow]]
 name = "gate-cascades"
 author = "agent"
@@ -27,6 +43,50 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/scripts run check-gate-cascades"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "typecheck"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm run typecheck"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "p0-security"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/scripts run verify-p0-security"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "isolation-p5"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/scripts run verify-isolation-p5"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "provisioning-saga"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/scripts run verify-provisioning-saga"
 
 [workflows.workflow.metadata]
 isValidation = true
