@@ -23,6 +23,7 @@ export * from "./idempotencyKeys";
 export * from "./activity";
 export * from "./timelineEvents";
 export * from "./gates";
+export * from "./graFilings";
 export * from "./conversations";
 export * from "./messages";
 export * from "./roles";

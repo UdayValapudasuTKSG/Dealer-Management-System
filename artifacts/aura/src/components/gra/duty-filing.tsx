@@ -4,6 +4,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   useExtractGraFiling,
   useSubmitGraFiling,
+  useListGraFilings,
+  getListGraFilingsQueryKey,
+  getGetGraFilingPdfUrl,
   type GraFilingDraft,
 } from "@workspace/api-client-react";
 import type { GraExtractRequestMediaType } from "@workspace/api-client-react";
@@ -22,6 +25,7 @@ import {
   ScanLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMoney } from "@/lib/format";
 
 const ACCEPTED: Record<string, GraExtractRequestMediaType> = {
   "image/png": "image/png",
@@ -31,11 +35,8 @@ const ACCEPTED: Record<string, GraExtractRequestMediaType> = {
 };
 
 const MONEY_FIELDS: { key: keyof GraFilingDraft; label: string }[] = [
-  { key: "cifValue", label: "CIF Value (GY$)" },
+  { key: "cifValue", label: "CIF Value (US$)" },
 ];
-
-const ghs = (n: number) =>
-  `GY$${n.toLocaleString("en-GY", { maximumFractionDigits: 0 })}`;
 
 /** Futuristic X-ray scan overlay: moving green rays + grid over the doc. */
 function XrayScanOverlay() {
@@ -116,6 +117,23 @@ export function DutyFiling({
 
   const extract = useExtractGraFiling();
   const submit = useSubmitGraFiling();
+  const money = useMoney();
+
+  // After submission, watch the filing so the PDF unlocks the moment the
+  // human gate is approved (server flips pending_gate → filed).
+  const filingQuery = useListGraFilings(
+    submittedGateId ? { gateId: submittedGateId } : undefined,
+    {
+      query: {
+        queryKey: getListGraFilingsQueryKey(
+          submittedGateId ? { gateId: submittedGateId } : undefined,
+        ),
+        enabled: submittedGateId != null,
+        refetchInterval: 5000,
+      },
+    },
+  );
+  const filing = submittedGateId ? filingQuery.data?.[0] : undefined;
 
   const handleFile = async (file: File) => {
     const mediaType = ACCEPTED[file.type];
@@ -457,7 +475,7 @@ export function DutyFiling({
                             )}
                           </span>
                           <span className="font-medium tabular-nums">
-                            {ghs(line.amount)}
+                            {money.dual(line.amount)}
                           </span>
                         </motion.div>
                       ))}
@@ -489,20 +507,46 @@ export function DutyFiling({
                         Total payable to GRA
                       </div>
                       <div className="text-3xl font-semibold tracking-tight">
-                        {ghs(total)}
+                        {money.gyd(total)}
+                      </div>
+                      <div className="text-sm text-muted-foreground mt-0.5 tabular-nums">
+                        {money.usd(total)} at GY${money.rate}/US$
                       </div>
                     </div>
                     <ShieldCheck className="w-10 h-10 text-primary/40" />
                   </motion.div>
 
                   {submittedGateId ? (
-                    <Link
-                      href="/deals"
-                      className="flex items-center justify-center gap-2 w-full rounded-full bg-primary hover:bg-primary/90 text-white h-12 font-medium transition-colors"
-                    >
-                      Review on the deal
-                      <ChevronRight className="w-4 h-4" />
-                    </Link>
+                    <div className="space-y-3">
+                      {filing?.status === "filed" ? (
+                        <a
+                          href={getGetGraFilingPdfUrl(filing.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 w-full rounded-full bg-primary hover:bg-primary/90 text-white h-12 font-medium transition-colors"
+                        >
+                          <FileText className="w-5 h-5" />
+                          Download GRA Duty Pack (PDF)
+                        </a>
+                      ) : filing?.status === "rejected" ? (
+                        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
+                          The filing was declined at the approval gate. Review
+                          the document and resubmit.
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2 w-full rounded-full border border-primary/20 bg-primary/5 text-primary h-12 font-medium">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Awaiting gate approval — PDF unlocks when approved
+                        </div>
+                      )}
+                      <Link
+                        href="/deals"
+                        className="flex items-center justify-center gap-2 w-full rounded-full border border-border hover:bg-white/[0.04] h-11 text-sm font-medium transition-colors"
+                      >
+                        Review on the deal
+                        <ChevronRight className="w-4 h-4" />
+                      </Link>
+                    </div>
                   ) : (
                     <Button
                       onClick={handleSubmit}

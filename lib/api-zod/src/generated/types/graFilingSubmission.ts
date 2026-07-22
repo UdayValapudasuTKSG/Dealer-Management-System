@@ -9,4 +9,9 @@ import type { GraFilingDraft } from './graFilingDraft';
 
 export interface GraFilingSubmission {
   draft: GraFilingDraft;
+  /**
+     * Imported vehicle this filing clears
+     * @nullable
+     */
+  vehicleId?: number | null;
 }

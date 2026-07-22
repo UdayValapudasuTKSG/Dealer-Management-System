@@ -4032,10 +4032,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
   /gra/filings:
+    get:
+      operationId: listGraFilings
+      tags: [gra]
+      summary: List GRA duty filing snapshots (dealer-scoped)
+      parameters:
+        - in: query
+          name: gateId
+          schema: { type: integer }
+        - in: query
+          name: vehicleId
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Filings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GraFiling"
     post:
       operationId: submitGraFiling
       tags: [gra]
-      summary: Submit a completed GRA filing draft; raises a gra_filing decision gate
+      summary: Submit a completed GRA filing draft; raises a gra_filing decision gate and a pending filing snapshot
       requestBody:
         required: true
         content:
@@ -4051,6 +4071,40 @@ paths:
                 $ref: "#/components/schemas/Gate"
         "400":
           description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Client tax lines mismatch server recompute
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /gra/filings/{id}/pdf:
+    get:
+      operationId: getGraFilingPdf
+      tags: [gra]
+      summary: GRA Import Duty Pack PDF — available only after the gra_filing gate is resolved
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Duty pack PDF
+          content:
+            application/pdf: {}
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: gra_filing gate not yet resolved
           content:
             application/json:
               schema:
@@ -8534,6 +8588,58 @@ components:
       required: [draft]
       properties:
         draft: { $ref: "#/components/schemas/GraFilingDraft" }
+        vehicleId: { type: ["integer", "null"], description: Imported vehicle this filing clears }
+    GraFiling:
+      type: object
+      required:
+        - id
+        - dealerId
+        - gateId
+        - filingRef
+        - status
+        - ownerName
+        - tin
+        - vin
+        - make
+        - model
+        - year
+        - engineCc
+        - fuelType
+        - hsCode
+        - cifValue
+        - exchangeRate
+        - evExcluded
+        - taxLines
+        - totalPayable
+        - createdAt
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        gateId: { type: integer }
+        vehicleId: { type: ["integer", "null"] }
+        filingRef: { type: string }
+        status: { type: string, description: pending_gate | filed | rejected }
+        ownerName: { type: string }
+        tin: { type: string }
+        vin: { type: string }
+        make: { type: string }
+        model: { type: string }
+        year: { type: integer }
+        engineCc: { type: integer }
+        fuelType: { type: string }
+        hsCode: { type: string }
+        cifValue: { type: number, description: USD-scale, human-confirmed }
+        exchangeRate: { type: number, description: usdExchangeRate snapshot at submit time }
+        evExcluded: { type: boolean }
+        taxLines:
+          type: array
+          items: { $ref: "#/components/schemas/GraTaxLine" }
+        totalPayable: { type: number, description: USD-scale, server-computed }
+        sourceNotes: { type: ["string", "null"] }
+        filedBy: { type: ["string", "null"] }
+        filedAt: { type: ["string", "null"], format: date-time }
+        createdBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
 
     Customer360:
       type: object

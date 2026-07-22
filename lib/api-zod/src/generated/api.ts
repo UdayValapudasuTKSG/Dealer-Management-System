@@ -5516,7 +5516,51 @@ export const ExtractGraFilingResponse = zod.object({
 
 
 /**
- * @summary Submit a completed GRA filing draft; raises a gra_filing decision gate
+ * @summary List GRA duty filing snapshots (dealer-scoped)
+ */
+export const ListGraFilingsQueryParams = zod.object({
+  "gateId": zod.coerce.number().optional(),
+  "vehicleId": zod.coerce.number().optional()
+})
+
+export const ListGraFilingsResponseItem = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "gateId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "filingRef": zod.string(),
+  "status": zod.string().describe('pending_gate | filed | rejected'),
+  "ownerName": zod.string(),
+  "tin": zod.string(),
+  "vin": zod.string(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "engineCc": zod.number(),
+  "fuelType": zod.string(),
+  "hsCode": zod.string(),
+  "cifValue": zod.number().describe('USD-scale'),
+  "exchangeRate": zod.number().describe('usdExchangeRate snapshot at submit time'),
+  "evExcluded": zod.boolean(),
+  "taxLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number().describe('USD-scale amount computed server-side')
+})),
+  "totalPayable": zod.number().describe('USD-scale'),
+  "sourceNotes": zod.string().nullish(),
+  "filedBy": zod.string().nullish(),
+  "filedAt": zod.coerce.date().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListGraFilingsResponse = zod.array(ListGraFilingsResponseItem)
+
+
+/**
+ * @summary Submit a completed GRA filing draft; raises a gra_filing decision gate and a pending filing snapshot
  */
 export const SubmitGraFilingBody = zod.object({
   "draft": zod.object({
@@ -5541,7 +5585,8 @@ export const SubmitGraFilingBody = zod.object({
   "confidence": zod.number().nullish().describe('Extraction confidence 0-1 reported by the vision model'),
   "uncertainFields": zod.array(zod.string()).describe('Extracted fields the model could not clearly read; must be human-verified'),
   "notes": zod.string().nullish()
-})
+}),
+  "vehicleId": zod.number().nullish().describe('Imported vehicle this filing clears')
 })
 
 export const SubmitGraFilingResponse = zod.object({
@@ -5567,6 +5612,16 @@ export const SubmitGraFilingResponse = zod.object({
   "resolvedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary GRA Import Duty Pack PDF — available only after the gra_filing gate is resolved
+ */
+export const GetGraFilingPdfParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetGraFilingPdfResponse = zod.unknown()
 
 
 /**

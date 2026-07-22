@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import {
   db,
   gatesTable,
+  graFilingsTable,
   dealsTable,
   financeApplicationsTable,
   vehiclesTable,
@@ -164,6 +165,22 @@ async function applyCascade(
       };
     }
     case "gra_filing": {
+      // Human gate resolved → flip the pending filing snapshot to "filed"
+      // (immutable from here on). The duty pack PDF only exists after this.
+      await tx
+        .update(graFilingsTable)
+        .set({
+          status: "filed",
+          filedBy: gate.resolvedBy ?? "Officer",
+          filedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(graFilingsTable.gateId, gate.id),
+            eq(graFilingsTable.dealerId, gate.dealerId),
+            eq(graFilingsTable.status, "pending_gate"),
+          ),
+        );
       return {
         title: "GRA filing submitted",
         detail:
@@ -310,6 +327,19 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
       const receipt = await applyCascade(tx, row, action, adjustedAmount);
       await writeReceipt(tx, row, receipt.title, receipt.detail);
     } else {
+      if (row.type === "gra_filing") {
+        // Officer declined the filing — the snapshot is rejected, never filed.
+        await tx
+          .update(graFilingsTable)
+          .set({ status: "rejected" })
+          .where(
+            and(
+              eq(graFilingsTable.gateId, row.id),
+              eq(graFilingsTable.dealerId, row.dealerId),
+              eq(graFilingsTable.status, "pending_gate"),
+            ),
+          );
+      }
       await writeReceipt(
         tx,
         row,

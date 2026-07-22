@@ -32,5 +32,8 @@
 - Concierge runs on CopilotKit: runtime at `POST /api/copilotkit` (AnthropicAdapter over the Replit Anthropic client, billed to credits). Route sets `Cache-Control: no-cache, no-transform` + `X-Accel-Buffering: no` (proxy cuts the stream otherwise → `ERR_INCOMPLETE_CHUNKED_ENCODING`), sets `req.url = req.originalUrl`, and is excluded from Express body parsing.
 - Legacy SSE chat (`POST /anthropic/conversations/{id}/messages`): SSE stream with NO usable generated hook — client consumes via `fetch` + `ReadableStream` (buffer partial frames); server persists the assistant message in a `finally`/abort path.
 
-## GRA duty filing (`/gra`)
-- Upload an import document image → `POST /gra/extract` (Anthropic vision) autofills a duty draft → `POST /gra/filings` creates a `gra_filing` human decision gate surfaced in Reviews.
+## GRA duty filing (`/gra`) — GUYANA Revenue Authority
+- Upload an import document image → `POST /gra/extract` (Anthropic vision, larger 12mb JSON body limit in `app.ts`) transcribes LEGIBLE fields only — fields below `MIN_AGENT_CONFIDENCE` are dropped/nulled, never invented, and listed in `uncertainFields` for human verification.
+- Duty is NEVER trusted from the client or the model: the server recomputes lines deterministically from `dealer_taxes` (`ensureDealerTaxes` seeds Guyana defaults — duty 45%, excise 10%, env levy, reg fee, VAT 14% on CIF+pre-VAT total; `excludeEv` honored). `POST /gra/filings` 422s with `serverTaxLines` if the submitted lines don't match the recompute.
+- Submission writes an immutable `gra_filings` snapshot (`pending_gate`, filingRef `GRA-<year>-<gateId>`, rate snapshot from `dealers.usdExchangeRate`) plus a `gra_filing` human gate. Gate approve/adjust cascade flips it to `filed` (filedBy/filedAt); dismiss → `rejected`.
+- `GET /gra/filings/{id}/pdf` streams the pdfkit "GRA Import Duty Pack" (R8.7 layout, USD+GYD dual currency, provenance footer) — 409 until the gate is resolved and the filing is `filed`. UI (`components/gra/duty-filing.tsx`) polls the filing after submit and unlocks the PDF download on approval; CIF is entered in US$ (USD-scale convention), displays are GYD-first via `useMoney`.

@@ -1,8 +1,16 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod/v4";
+import { and, desc, eq } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
-import { db, gatesTable } from "@workspace/db";
+import {
+  db,
+  gatesTable,
+  graFilingsTable,
+  dealersTable,
+  divisionsTable,
+} from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
+import { buildGraDutyPackPdf } from "../lib/gra-pdf";
 import {
   isAgentEnabled,
   recordAgentRun,
@@ -159,6 +167,23 @@ router.post("/gra/extract", async (req, res): Promise<void> => {
       return value == null || (conf[k] ?? 0) < MIN_AGENT_CONFIDENCE;
     });
 
+    // Legible-only guarantee: any field the model could not read confidently
+    // is DROPPED (blank/zero), never passed through as a low-trust auto-fill.
+    // The officer keys it in from the source document before the gate.
+    const dropped = new Set(
+      Object.keys(FIELD_LABELS).filter((k) => (conf[k] ?? 0) < MIN_AGENT_CONFIDENCE),
+    );
+    if (dropped.has("ownerName")) x.ownerName = null;
+    if (dropped.has("tin")) x.tin = null;
+    if (dropped.has("vin")) x.vin = null;
+    if (dropped.has("make")) x.make = null;
+    if (dropped.has("model")) x.model = null;
+    if (dropped.has("year")) x.year = null;
+    if (dropped.has("engineCc")) x.engineCc = null;
+    if (dropped.has("fuelType")) x.fuelType = null;
+    if (dropped.has("hsCode")) x.hsCode = null;
+    if (dropped.has("cifValue")) x.cifValue = null;
+
     // Deterministic server-side duty computation from the dealer's configured
     // tax rules (dealer_taxes) — the model never computes amounts. Every
     // active rule lands in taxLines and totalPayable is their exact sum.
@@ -246,46 +271,188 @@ router.post("/gra/filings", async (req, res): Promise<void> => {
   const isEv = (submitted.fuelType ?? "").toLowerCase() === "electric";
   const taxRules = await ensureDealerTaxes(dealerId);
   const duty = computeGraDuty(submitted.cifValue, taxRules, { isEv });
+
+  // Spec R9 D-GRA-1: if the client posts tax lines that do not match the
+  // deterministic server recompute, reject the filing and return the
+  // server-computed lines — the app never accepts a fabricated duty figure.
+  const mismatch =
+    submitted.taxLines.length !== duty.lines.length ||
+    Math.abs(submitted.totalPayable - duty.totalPayable) > 0.01 ||
+    submitted.taxLines.some((l, i) => {
+      const s = duty.lines[i];
+      return !s || s.code !== l.code || Math.abs(s.amount - l.amount) > 0.01;
+    });
+  if (mismatch) {
+    res.status(422).json({
+      error:
+        "Submitted tax lines do not match the server-computed duty. Refresh the draft — duty is always computed server-side from the dealer's tax rules.",
+      serverTaxLines: duty.lines,
+      serverTotalPayable: duty.totalPayable,
+    });
+    return;
+  }
+
   const d = {
     ...submitted,
     taxLines: duty.lines,
     totalPayable: duty.totalPayable,
   };
 
-  const [gate] = await db
-    .insert(gatesTable)
-    .values({
-      dealerId,
-      type: "gra_filing",
-      status: "pending",
-      priority: "high",
-      customerName: d.ownerName,
-      refType: "vehicle",
-      title: `GRA duty filing — ${d.year} ${d.make} ${d.model}`,
-      summary: `Concierge prepared a Guyana Revenue Authority vehicle-duty filing for the ${d.year} ${d.make} ${d.model} (VIN ${d.vin}). Total assessed duty of ${gyd(
-        d.totalPayable,
-      )} is ready for an officer to file.`,
-      recommendation:
-        "Figures reconcile against the CIF value at standard GRA rates. Approve to file the duty pack and unblock clearance and registration.",
-      amount: d.totalPayable,
-      evidence: [
-        { label: "Importer", value: d.ownerName },
-        { label: "TIN", value: d.tin },
-        { label: "Chassis / VIN", value: d.vin },
-        {
-          label: "Vehicle",
-          value: `${d.year} ${d.make} ${d.model}`,
-        },
-        { label: "Engine", value: `${d.engineCc.toLocaleString()} cc ${d.fuelType}` },
-        { label: "HS Code", value: d.hsCode },
-        { label: "CIF Value", value: gyd(d.cifValue) },
-        ...d.taxLines.map((l) => ({ label: l.name, value: gyd(l.amount) })),
-        { label: "Total Payable", value: gyd(d.totalPayable) },
-      ],
-    })
-    .returning();
+  // Snapshot the dealer's exchange rate at submit time so later rate drift
+  // never retro-changes a filed duty (17-mB step 4).
+  const [dealer] = await db
+    .select()
+    .from(dealersTable)
+    .where(eq(dealersTable.id, dealerId));
+  const exchangeRate = dealer?.usdExchangeRate ?? 209;
+  const both = (n: number) =>
+    `US$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })} / ${gyd(n * exchangeRate)}`;
 
+  const { gate, filing } = await db.transaction(async (tx) => {
+    const [gateRow] = await tx
+      .insert(gatesTable)
+      .values({
+        dealerId,
+        type: "gra_filing",
+        status: "pending",
+        priority: "high",
+        customerName: d.ownerName,
+        refType: "vehicle",
+        refId: parsed.data.vehicleId ?? null,
+        title: `GRA duty filing — ${d.year} ${d.make} ${d.model}`,
+        summary: `AI-extracted fields (legible values only) with a server-computed Guyana Revenue Authority duty sheet for the ${d.year} ${d.make} ${d.model} (VIN ${d.vin}). Total assessed duty ${both(
+          d.totalPayable,
+        )} awaits officer confirmation before filing.`,
+        recommendation:
+          "Verify each extracted field against the source documents, correct anything mis-read, then approve to file the duty pack and unblock clearance and registration.",
+        amount: d.totalPayable,
+        evidence: [
+          { label: "Importer", value: d.ownerName },
+          { label: "TIN", value: d.tin },
+          { label: "Chassis / VIN", value: d.vin },
+          {
+            label: "Vehicle",
+            value: `${d.year} ${d.make} ${d.model}`,
+          },
+          { label: "Engine", value: `${d.engineCc.toLocaleString()} cc ${d.fuelType}` },
+          { label: "HS Code", value: d.hsCode },
+          { label: "CIF Value", value: both(d.cifValue) },
+          ...d.taxLines.map((l) => ({ label: l.name, value: both(l.amount) })),
+          { label: "Total Payable", value: both(d.totalPayable) },
+          { label: "Exchange rate snapshot", value: `US$1 = GY$${exchangeRate}` },
+        ],
+      })
+      .returning();
+
+    // Immutable pending filing snapshot — flipped to "filed" ONLY when a
+    // human resolves the gra_filing gate (17-mB steps 7–8).
+    const [filingRow] = await tx
+      .insert(graFilingsTable)
+      .values({
+        dealerId,
+        gateId: gateRow.id,
+        vehicleId: parsed.data.vehicleId ?? null,
+        filingRef: `GRA-${new Date().getFullYear()}-${String(gateRow.id).padStart(5, "0")}`,
+        status: "pending_gate",
+        ownerName: d.ownerName,
+        tin: d.tin,
+        vin: d.vin,
+        make: d.make,
+        model: d.model,
+        year: d.year,
+        engineCc: d.engineCc,
+        fuelType: d.fuelType,
+        hsCode: d.hsCode,
+        cifValue: d.cifValue,
+        exchangeRate,
+        evExcluded: isEv,
+        taxLines: duty.lines,
+        totalPayable: duty.totalPayable,
+        sourceNotes: d.notes ?? null,
+        createdBy: res.locals.user?.email ?? "system",
+      })
+      .returning();
+
+    return { gate: gateRow, filing: filingRow };
+  });
+
+  req.log.info(
+    { gateId: gate.id, filingId: filing.id, dealerId },
+    "GRA filing draft submitted; awaiting gra_filing gate",
+  );
   res.json(SubmitGraFilingResponse.parse(gate));
+});
+
+router.get("/gra/filings", async (req, res): Promise<void> => {
+  const dealerId = activeDealerId(res);
+  const gateId = req.query.gateId ? Number(req.query.gateId) : undefined;
+  const vehicleId = req.query.vehicleId ? Number(req.query.vehicleId) : undefined;
+  const conds = [eq(graFilingsTable.dealerId, dealerId)];
+  if (gateId && Number.isFinite(gateId)) conds.push(eq(graFilingsTable.gateId, gateId));
+  if (vehicleId && Number.isFinite(vehicleId))
+    conds.push(eq(graFilingsTable.vehicleId, vehicleId));
+  const rows = await db
+    .select()
+    .from(graFilingsTable)
+    .where(and(...conds))
+    .orderBy(desc(graFilingsTable.id));
+  res.json(rows);
+});
+
+router.get("/gra/filings/:id/pdf", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid filing id" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [filing] = await db
+    .select()
+    .from(graFilingsTable)
+    .where(and(eq(graFilingsTable.id, id), eq(graFilingsTable.dealerId, dealerId)));
+  if (!filing) {
+    res.status(404).json({ error: "Filing not found" });
+    return;
+  }
+  if (filing.status !== "filed") {
+    res.status(409).json({
+      error:
+        "The gra_filing gate has not been resolved yet — the duty pack is generated only after an officer confirms the filing.",
+    });
+    return;
+  }
+
+  const [dealer] = await db
+    .select()
+    .from(dealersTable)
+    .where(eq(dealersTable.id, dealerId));
+  const [gate] = await db
+    .select()
+    .from(gatesTable)
+    .where(and(eq(gatesTable.id, filing.gateId), eq(gatesTable.dealerId, dealerId)));
+  const divisions = await db
+    .select()
+    .from(divisionsTable)
+    .where(eq(divisionsTable.dealerId, dealerId));
+  const division = divisions[0] ?? null;
+
+  const pdf = await buildGraDutyPackPdf(filing, {
+    dealerName: dealer?.name ?? "AURA Dealership",
+    divisionName: division?.name ?? null,
+    dealerAddress: [dealer?.city, dealer?.country].filter(Boolean).join(", ") || null,
+    dealerTin: null,
+    gateResolvedBy: gate?.resolvedBy ?? null,
+    gateResolution: gate?.resolution ?? null,
+    extractedFieldNotes: filing.sourceNotes,
+  });
+
+  res
+    .setHeader("Content-Type", "application/pdf")
+    .setHeader(
+      "Content-Disposition",
+      `inline; filename="${filing.filingRef}-duty-pack.pdf"`,
+    )
+    .send(pdf);
 });
 
 export default router;

@@ -125,3 +125,9 @@ id = "OVThM-BLvdGYiJWriQ3Qm"
 uri = "file://docs/AURA_WALKTHROUGH.md"
 type = "text"
 title = "AURA End-to-End Walkthrough"
+
+[[outputs]]
+id = "rACn8XpIpG7CBeWGoyYHo"
+uri = "file://.local/demo/GRA-2026-01812-duty-pack.pdf"
+type = "pdf"
+title = "GRA Import Duty Pack — GRA-2026-01812 (2024 Toyota Hilux)"

@@ -50,10 +50,16 @@ const isMetaWebhook = (url: string): boolean =>
   url.startsWith("/api/webhooks/meta") ||
   url.startsWith("/api/webhooks/whatsapp");
 const rawParser = express.raw({ type: "*/*", limit: "1mb" });
+// GRA document extraction posts a base64 image in the JSON body — needs a
+// larger limit than the 100kb express default.
+const largeJsonParser = express.json({ limit: "12mb" });
+const isGraExtract = (url: string): boolean =>
+  url.startsWith("/api/gra/extract");
 
 app.use((req, res, next) => {
   if (isCopilotKit(req.originalUrl)) return next();
   if (isMetaWebhook(req.originalUrl)) return rawParser(req, res, next);
+  if (isGraExtract(req.originalUrl)) return largeJsonParser(req, res, next);
   jsonParser(req, res, next);
 });
 app.use((req, res, next) => {

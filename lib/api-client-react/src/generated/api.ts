@@ -125,6 +125,7 @@ import type {
   GetSentimentAnalysisParams,
   GlobalSearchParams,
   GraExtractRequest,
+  GraFiling,
   GraFilingDraft,
   GraFilingSubmission,
   HealthStatus,
@@ -169,6 +170,7 @@ import type {
   ListEmailLogsParams,
   ListFinanceApplicationsParams,
   ListGatesParams,
+  ListGraFilingsParams,
   ListInvoicesParams,
   ListJobCardsParams,
   ListLeadSourcesParams,
@@ -12670,6 +12672,90 @@ export const useExtractGraFiling = <TError = ErrorType<Error>,
       return useMutation(getExtractGraFilingMutationOptions(options));
     }
 
+export const getListGraFilingsUrl = (params?: ListGraFilingsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/gra/filings?${stringifiedParams}` : `/api/gra/filings`
+}
+
+/**
+ * @summary List GRA duty filing snapshots (dealer-scoped)
+ */
+export const listGraFilings = async (params?: ListGraFilingsParams, options?: RequestInit): Promise<GraFiling[]> => {
+
+  return customFetch<GraFiling[]>(getListGraFilingsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGraFilingsQueryKey = (params?: ListGraFilingsParams,) => {
+    return [
+    `/api/gra/filings`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListGraFilingsQueryOptions = <TData = Awaited<ReturnType<typeof listGraFilings>>, TError = ErrorType<unknown>>(params?: ListGraFilingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGraFilings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGraFilingsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGraFilings>>> = ({ signal }) => listGraFilings(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGraFilings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGraFilingsQueryResult = NonNullable<Awaited<ReturnType<typeof listGraFilings>>>
+export type ListGraFilingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List GRA duty filing snapshots (dealer-scoped)
+ */
+
+export function useListGraFilings<TData = Awaited<ReturnType<typeof listGraFilings>>, TError = ErrorType<unknown>>(
+ params?: ListGraFilingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGraFilings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGraFilingsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getSubmitGraFilingUrl = () => {
 
 
@@ -12679,7 +12765,7 @@ export const getSubmitGraFilingUrl = () => {
 }
 
 /**
- * @summary Submit a completed GRA filing draft; raises a gra_filing decision gate
+ * @summary Submit a completed GRA filing draft; raises a gra_filing decision gate and a pending filing snapshot
  */
 export const submitGraFiling = async (graFilingSubmission: GraFilingSubmission, options?: RequestInit): Promise<Gate> => {
 
@@ -12728,7 +12814,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SubmitGraFilingMutationError = ErrorType<Error>
 
     /**
- * @summary Submit a completed GRA filing draft; raises a gra_filing decision gate
+ * @summary Submit a completed GRA filing draft; raises a gra_filing decision gate and a pending filing snapshot
  */
 export const useSubmitGraFiling = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGraFiling>>, TError,{data: BodyType<GraFilingSubmission>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -12740,6 +12826,83 @@ export const useSubmitGraFiling = <TError = ErrorType<Error>,
       > => {
       return useMutation(getSubmitGraFilingMutationOptions(options));
     }
+
+export const getGetGraFilingPdfUrl = (id: number,) => {
+
+
+
+
+  return `/api/gra/filings/${id}/pdf`
+}
+
+/**
+ * @summary GRA Import Duty Pack PDF — available only after the gra_filing gate is resolved
+ */
+export const getGraFilingPdf = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetGraFilingPdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGraFilingPdfQueryKey = (id: number,) => {
+    return [
+    `/api/gra/filings/${id}/pdf`
+    ] as const;
+    }
+
+
+export const getGetGraFilingPdfQueryOptions = <TData = Awaited<ReturnType<typeof getGraFilingPdf>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGraFilingPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGraFilingPdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGraFilingPdf>>> = ({ signal }) => getGraFilingPdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGraFilingPdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGraFilingPdfQueryResult = NonNullable<Awaited<ReturnType<typeof getGraFilingPdf>>>
+export type GetGraFilingPdfQueryError = ErrorType<Error>
+
+
+/**
+ * @summary GRA Import Duty Pack PDF — available only after the gra_filing gate is resolved
+ */
+
+export function useGetGraFilingPdf<TData = Awaited<ReturnType<typeof getGraFilingPdf>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGraFilingPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGraFilingPdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetCurrentUserUrl = () => {
 

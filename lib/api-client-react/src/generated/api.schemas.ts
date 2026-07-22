@@ -4487,6 +4487,48 @@ export interface GraComputeResponse {
 
 export interface GraFilingSubmission {
   draft: GraFilingDraft;
+  /**
+     * Imported vehicle this filing clears
+     * @nullable
+     */
+  vehicleId?: number | null;
+}
+
+export interface GraFiling {
+  id: number;
+  dealerId: number;
+  gateId: number;
+  /** @nullable */
+  vehicleId?: number | null;
+  filingRef: string;
+  /** pending_gate | filed | rejected */
+  status: string;
+  ownerName: string;
+  tin: string;
+  vin: string;
+  make: string;
+  model: string;
+  year: number;
+  engineCc: number;
+  fuelType: string;
+  hsCode: string;
+  /** USD-scale */
+  cifValue: number;
+  /** usdExchangeRate snapshot at submit time */
+  exchangeRate: number;
+  evExcluded: boolean;
+  taxLines: GraTaxLine[];
+  /** USD-scale */
+  totalPayable: number;
+  /** @nullable */
+  sourceNotes?: string | null;
+  /** @nullable */
+  filedBy?: string | null;
+  /** @nullable */
+  filedAt?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
+  createdAt: string;
 }
 
 export interface Customer360 {
@@ -5057,6 +5099,11 @@ limit?: number;
 
 export type ListGatesParams = {
 status?: string;
+};
+
+export type ListGraFilingsParams = {
+gateId?: number;
+vehicleId?: number;
 };
 
 export type ListPlatformAuditParams = {
