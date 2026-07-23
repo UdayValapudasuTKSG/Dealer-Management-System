@@ -96,18 +96,106 @@ export type ApplyPaymentArgs = {
   method: string;
   reference?: string | null;
   receivedBy?: string | null;
+  confirmDuplicate?: boolean;
 };
+
+/**
+ * Raised by applyPayment when a transactional guard fails; the route maps
+ * `code` to the appropriate HTTP status + body.
+ */
+export class PaymentGuardError extends Error {
+  constructor(
+    public code:
+      | "invoice_void"
+      | "invoice_already_paid"
+      | "reversal_exceeds_paid"
+      | "overpayment"
+      | "duplicate_reference",
+    public extra: Record<string, unknown> = {},
+  ) {
+    super(code);
+    this.name = "PaymentGuardError";
+  }
+}
 
 /**
  * Record a payment inside one transaction: ledger row, invoice status
  * recompute (issued → partially_paid → paid), and a receipt with the
- * currency + exchange-rate snapshot. Caller must have already rejected
- * void invoices and overpayments.
+ * currency + exchange-rate snapshot. All monetary guards run INSIDE the
+ * transaction while holding a row lock on the invoice, so concurrent
+ * postings serialize and cannot overpay, over-reverse, or slip a
+ * duplicate reference past the guard (throws PaymentGuardError).
  */
 export async function applyPayment(args: ApplyPaymentArgs) {
   const { invoice } = args;
   const exchangeRate = await dealerExchangeRate(invoice.dealerId);
   return db.transaction(async (tx) => {
+    // Serialize concurrent postings against this invoice.
+    const [locked] = await tx
+      .select()
+      .from(invoicesTable)
+      .where(
+        and(
+          eq(invoicesTable.id, invoice.id),
+          eq(invoicesTable.dealerId, invoice.dealerId),
+        ),
+      )
+      .for("update");
+    if (!locked || locked.status === "void") {
+      throw new PaymentGuardError("invoice_void");
+    }
+    const isReversal = args.amount < 0;
+    if (locked.status === "paid" && !isReversal) {
+      throw new PaymentGuardError("invoice_already_paid");
+    }
+
+    const reference = args.reference?.trim() || null;
+    if (reference) {
+      // Advisory xact lock keyed on (dealer, reference) serializes the
+      // duplicate-reference check across invoices for this dealer.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`${invoice.dealerId}:${reference}`}))`,
+      );
+    }
+
+    const [{ paid: alreadyPaid }] = await tx
+      .select({
+        paid: sql<number>`coalesce(sum(${paymentsTable.amount}), 0)::float`,
+      })
+      .from(paymentsTable)
+      .where(eq(paymentsTable.invoiceId, invoice.id));
+
+    if (isReversal) {
+      const after = Math.round((alreadyPaid! + args.amount) * 100) / 100;
+      if (after < 0) {
+        throw new PaymentGuardError("reversal_exceeds_paid", {
+          paid: alreadyPaid,
+        });
+      }
+    } else {
+      const excess =
+        Math.round((alreadyPaid! + args.amount - locked.amount) * 100) / 100;
+      if (excess > 0) {
+        throw new PaymentGuardError("overpayment", { excess });
+      }
+      if (reference && !args.confirmDuplicate) {
+        const [dupe] = await tx
+          .select({ id: paymentsTable.id })
+          .from(paymentsTable)
+          .where(
+            and(
+              eq(paymentsTable.dealerId, invoice.dealerId),
+              eq(paymentsTable.reference, reference),
+            ),
+          );
+        if (dupe) {
+          throw new PaymentGuardError("duplicate_reference", {
+            existingPaymentId: dupe.id,
+          });
+        }
+      }
+    }
+
     const [row] = await tx
       .insert(paymentsTable)
       .values({
@@ -128,7 +216,12 @@ export async function applyPayment(args: ApplyPaymentArgs) {
       .from(paymentsTable)
       .where(eq(paymentsTable.invoiceId, invoice.id));
 
-    const status = paid >= invoice.amount - 0.005 ? "paid" : "partially_paid";
+    const status =
+      paid >= invoice.amount - 0.005
+        ? "paid"
+        : paid <= 0.005
+          ? "issued"
+          : "partially_paid";
     await tx
       .update(invoicesTable)
       .set({ status })

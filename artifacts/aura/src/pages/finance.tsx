@@ -22,6 +22,7 @@ import {
   getListOutstandingBalancesQueryKey,
   useListLeads,
   useListCustomers,
+  type PaymentInput,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -457,7 +458,28 @@ export default function Finance() {
               ]}
               onSubmit={async (values) => {
                 const v = values as Record<string, unknown>;
-                await createPayment.mutateAsync({ data: { ...v, invoiceId: Number(v.invoiceId) } as never });
+                const payload = {
+                  invoiceId: Number(v.invoiceId),
+                  amount: Number(v.amount),
+                  method: v.method as PaymentInput["method"],
+                  reference: (v.reference as string) || undefined,
+                };
+                try {
+                  await createPayment.mutateAsync({ data: payload });
+                } catch (err: unknown) {
+                  const apiErr = err as { status?: number; data?: { error?: string } };
+                  if (
+                    apiErr.status === 409 &&
+                    apiErr.data?.error === "duplicate_reference" &&
+                    window.confirm(
+                      "A payment with this reference already exists for this dealership. Record it again as a separate payment?",
+                    )
+                  ) {
+                    await createPayment.mutateAsync({ data: { ...payload, confirmDuplicate: true } });
+                  } else {
+                    throw err;
+                  }
+                }
                 queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
                 queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
                 queryClient.invalidateQueries({ queryKey: getListReceiptsQueryKey() });

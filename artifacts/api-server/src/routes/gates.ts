@@ -17,6 +17,7 @@ import {
   type AdvanceStage,
 } from "../lib/stage-review";
 import { computeDraftDuty } from "../lib/gra-duty";
+import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 import { activeDealerId } from "../middlewares/rbac";
 import {
   ListGatesQueryParams,
@@ -89,6 +90,13 @@ async function applyCascade(
 
   switch (gate.type) {
     case "below_floor_price": {
+      // gate.amount stores the EFFECTIVE selling price snapshot (vehiclePrice
+      // − discount), NOT the discount. Approve authorizes the deal's current
+      // numbers as-is; adjust sets a NEW discount (adjustedAmount) and
+      // recomputes OTD deterministically via the dealer tax engine. Either
+      // way the gate's amount snapshot is refreshed so commit-time staleness
+      // checks compare against the authorized effective price.
+      let authorizedDiscount = 0;
       if (gate.refId) {
         const [deal] = await tx
           .select()
@@ -100,20 +108,44 @@ async function applyCascade(
             ),
           );
         if (deal) {
-          const otd =
-            deal.vehiclePrice -
-            effectiveAmount -
-            deal.tradeInValue +
-            deal.accessories;
-          await tx
-            .update(dealsTable)
-            .set({ discount: effectiveAmount, otdPrice: otd })
-            .where(
-              and(
-                eq(dealsTable.id, gate.refId),
-                eq(dealsTable.dealerId, gate.dealerId),
-              ),
+          const newDiscount =
+            action === "adjust" && adjustedAmount !== undefined
+              ? Math.min(Math.max(adjustedAmount, 0), deal.vehiclePrice)
+              : deal.discount;
+          authorizedDiscount = newDiscount;
+          if (newDiscount !== deal.discount) {
+            const [vehicle] = await tx
+              .select({ powertrain: vehiclesTable.powertrain })
+              .from(vehiclesTable)
+              .where(
+                and(
+                  eq(vehiclesTable.id, deal.vehicleId),
+                  eq(vehiclesTable.dealerId, deal.dealerId),
+                ),
+              );
+            const taxBase = Math.max(
+              deal.vehiclePrice - newDiscount + deal.accessories,
+              0,
             );
+            const taxRules = await ensureDealerTaxes(deal.dealerId);
+            const { totalWithTax } = computeTaxes(taxBase, taxRules, {
+              powertrain: vehicle?.powertrain ?? null,
+            });
+            await tx
+              .update(dealsTable)
+              .set({ discount: newDiscount, otdPrice: totalWithTax })
+              .where(
+                and(
+                  eq(dealsTable.id, gate.refId),
+                  eq(dealsTable.dealerId, gate.dealerId),
+                ),
+              );
+          }
+          // Refresh the snapshot to the authorized effective price.
+          await tx
+            .update(gatesTable)
+            .set({ amount: deal.vehiclePrice - newDiscount })
+            .where(eq(gatesTable.id, gate.id));
         }
       }
       return {
@@ -121,7 +153,7 @@ async function applyCascade(
           action === "adjust"
             ? "Below-floor price adjusted and approved"
             : "Below-floor price approved",
-        detail: `Discount of $${effectiveAmount.toLocaleString()} authorized on the deal; pricing pushed live and the advisor notified.`,
+        detail: `Discount of $${authorizedDiscount.toLocaleString()} authorized on the deal; pricing pushed live and the advisor notified.`,
       };
     }
     case "credit_decline": {
@@ -386,8 +418,15 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
           ? { amount: adjustedAmount }
           : {}),
       })
-      .where(eq(gatesTable.id, gate.id))
+      .where(
+        and(eq(gatesTable.id, gate.id), eq(gatesTable.status, "pending")),
+      )
       .returning();
+    if (!row) {
+      // Another request resolved this gate concurrently — compare-and-set
+      // failed; skip the cascade entirely.
+      return null;
+    }
 
     if (action !== "dismiss") {
       const receipt = await applyCascade(tx, row, action, adjustedAmount);
@@ -417,6 +456,10 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
     return row;
   });
 
+  if (!updated) {
+    res.status(400).json({ error: "Gate already resolved" });
+    return;
+  }
   res.json(ResolveGateResponse.parse(updated));
 });
 

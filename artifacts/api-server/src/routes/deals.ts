@@ -34,6 +34,7 @@ import {
   approvedFinanceAppForDeal,
   ensureFinalInvoiceForDeal,
 } from "../lib/invoicing";
+import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
 import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
 
@@ -473,6 +474,53 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
     }
   }
 
+  // Negotiated-amount validation + deterministic OTD recompute (A3 tax
+  // engine, L6): whenever a price component changes the server recomputes
+  // otdPrice from dealer_taxes — the client-sent otdPrice is never trusted.
+  const priceTouched =
+    parsed.data.vehiclePrice !== undefined ||
+    parsed.data.discount !== undefined ||
+    parsed.data.tradeInValue !== undefined ||
+    parsed.data.accessories !== undefined;
+  if (before && priceTouched) {
+    const vehiclePrice = parsed.data.vehiclePrice ?? before.vehiclePrice;
+    const discount = parsed.data.discount ?? before.discount;
+    const tradeInValue = parsed.data.tradeInValue ?? before.tradeInValue;
+    const accessories = parsed.data.accessories ?? before.accessories;
+    if (discount < 0 || tradeInValue < 0 || accessories < 0 || vehiclePrice < 0) {
+      res.status(422).json({ error: "Price components cannot be negative" });
+      return;
+    }
+    if (tradeInValue > vehiclePrice) {
+      res.status(422).json({
+        error: "trade_in_exceeds_price",
+        unmet: [
+          "Trade-in value cannot exceed the vehicle price — record the excess as a separate customer credit",
+        ],
+      });
+      return;
+    }
+    if (discount > vehiclePrice) {
+      res.status(422).json({ error: "Discount cannot exceed the vehicle price" });
+      return;
+    }
+    const [vehicle] = await db
+      .select({ powertrain: vehiclesTable.powertrain })
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.id, before.vehicleId),
+          eq(vehiclesTable.dealerId, dealerId),
+        ),
+      );
+    const taxBase = Math.max(vehiclePrice - discount + accessories, 0);
+    const taxRules = await ensureDealerTaxes(dealerId);
+    const { totalWithTax } = computeTaxes(taxBase, taxRules, {
+      powertrain: vehicle?.powertrain ?? null,
+    });
+    parsed.data.otdPrice = totalWithTax;
+  }
+
   if (before && parsed.data.stage && parsed.data.stage !== before.stage) {
     const fromIdx = DEAL_STAGE_ORDER.indexOf(before.stage);
     const toIdx = DEAL_STAGE_ORDER.indexOf(parsed.data.stage);
@@ -491,6 +539,73 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
         error: "Deposit must be recorded before committing the deal",
       });
       return;
+    }
+    // Below-floor gate (L6): a deal discounted past the 5% floor cannot
+    // commit until a manager APPROVES the below_floor_price gate — and the
+    // approval must cover the CURRENT numbers (editing the discount after
+    // approval invalidates the stale approval and raises a fresh gate).
+    if (parsed.data.stage === "committed") {
+      const vehiclePrice = parsed.data.vehiclePrice ?? before.vehiclePrice;
+      const discount = parsed.data.discount ?? before.discount;
+      if (
+        vehiclePrice > 0 &&
+        discount / vehiclePrice > FLOOR_DISCOUNT_RATIO
+      ) {
+        const effective = vehiclePrice - discount;
+        const gates = await db
+          .select()
+          .from(gatesTable)
+          .where(
+            and(
+              eq(gatesTable.dealerId, dealerId),
+              eq(gatesTable.type, "below_floor_price"),
+              eq(gatesTable.refType, "deal"),
+              eq(gatesTable.refId, before.id),
+            ),
+          )
+          .orderBy(desc(gatesTable.id));
+        const pending = gates.find((g) => g.status === "pending");
+        const approvedCurrent = gates.find(
+          (g) =>
+            (g.status === "approved" || g.status === "adjusted") &&
+            g.amount != null &&
+            Math.abs(g.amount - effective) <= 0.01 + 1e-9,
+        );
+        if (!approvedCurrent) {
+          let gateId = pending?.id;
+          if (!gateId) {
+            // No pending gate covering the current numbers — raise one.
+            await raiseBelowFloorGateIfNeeded({
+              ...before,
+              vehiclePrice,
+              discount,
+            });
+            const [fresh] = await db
+              .select({ id: gatesTable.id })
+              .from(gatesTable)
+              .where(
+                and(
+                  eq(gatesTable.dealerId, dealerId),
+                  eq(gatesTable.type, "below_floor_price"),
+                  eq(gatesTable.refType, "deal"),
+                  eq(gatesTable.refId, before.id),
+                  eq(gatesTable.status, "pending"),
+                ),
+              )
+              .orderBy(desc(gatesTable.id));
+            gateId = fresh?.id;
+          }
+          const pct = Math.round((discount / vehiclePrice) * 1000) / 10;
+          res.status(422).json({
+            gate: "below_floor_price",
+            gateId,
+            unmet: [
+              `Discount ${pct}% exceeds the ${FLOOR_DISCOUNT_RATIO * 100}% floor — a sales manager must approve the below-floor price before commit`,
+            ],
+          });
+          return;
+        }
+      }
     }
     // Financed settle gate (L6): a bank-financed deal can only commit once
     // its finance application is approved or disbursed by the LOS.

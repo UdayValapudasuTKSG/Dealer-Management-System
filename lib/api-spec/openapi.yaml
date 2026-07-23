@@ -8071,6 +8071,7 @@ components:
         amount: { type: number }
         method: { type: string, enum: [cash, card, bank_transfer, cheque, mobile_money, financing] }
         reference: { type: string }
+        confirmDuplicate: { type: boolean, description: "Set true to record a payment whose reference already exists for this dealer (mobile-money collision confirm)" }
     Receipt:
       type: object
       required: [id, receiptNumber, paymentId, invoiceId, invoiceNumber, customerName, amount, method, currency, createdAt]

@@ -55,6 +55,7 @@ import {
 } from "@workspace/api-zod";
 import {
   applyPayment,
+  PaymentGuardError,
   invoicePaidTotal,
   issueInvoice,
   logPaymentEvent,
@@ -667,6 +668,35 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  // Void guard (L6): an invoice with applied funds cannot be voided
+  // directly — the payments must be reversed (negative payment) first so
+  // the ledger stays append-only and every dollar has a receipt trail.
+  if (parsed.data.status === "void") {
+    const [existing] = await db
+      .select()
+      .from(invoicesTable)
+      .where(
+        and(
+          eq(invoicesTable.id, params.data.id),
+          eq(invoicesTable.dealerId, activeDealerId(res)),
+        ),
+      );
+    if (!existing) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+    if (existing.status !== "void") {
+      const paid = await invoicePaidTotal(existing.id);
+      if (paid > 0.005) {
+        res.status(422).json({
+          error: "refund_required",
+          paid,
+          hint: "Reverse the applied payments (negative payment) before voiding this invoice",
+        });
+        return;
+      }
+    }
+  }
   const [invoice] = await db
     .update(invoicesTable)
     .set(parsed.data)
@@ -699,8 +729,8 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (parsed.data.amount <= 0) {
-    res.status(400).json({ error: "Payment amount must be positive" });
+  if (parsed.data.amount === 0) {
+    res.status(400).json({ error: "Payment amount cannot be zero" });
     return;
   }
   const [invoice] = await db
@@ -720,28 +750,50 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
     res.status(409).json({ error: "invoice_void" });
     return;
   }
-  if (invoice.status === "paid") {
+  const isReversal = parsed.data.amount < 0;
+  if (invoice.status === "paid" && !isReversal) {
     res.status(409).json({ error: "invoice_already_paid" });
     return;
   }
 
-  // Overpayment guard: applied + amount must not exceed the invoice total.
-  const alreadyPaid = await invoicePaidTotal(invoice.id);
-  const excess =
-    Math.round((alreadyPaid + parsed.data.amount - invoice.amount) * 100) / 100;
-  if (excess > 0) {
-    res.status(422).json({ error: "overpayment", excess });
-    return;
-  }
-
+  // All monetary guards (overpayment, reversal floor, duplicate reference)
+  // run INSIDE applyPayment's transaction under an invoice row lock, so
+  // concurrent postings cannot race past them.
   const receivedBy = res.locals.user?.name ?? res.locals.user?.email ?? null;
-  const result = await applyPayment({
-    invoice,
-    amount: parsed.data.amount,
-    method: parsed.data.method,
-    reference: parsed.data.reference ?? null,
-    receivedBy,
-  });
+  let result;
+  try {
+    result = await applyPayment({
+      invoice,
+      amount: parsed.data.amount,
+      method: parsed.data.method,
+      reference: parsed.data.reference ?? null,
+      receivedBy,
+      confirmDuplicate: parsed.data.confirmDuplicate === true,
+    });
+  } catch (err) {
+    if (err instanceof PaymentGuardError) {
+      switch (err.code) {
+        case "invoice_void":
+        case "invoice_already_paid":
+          res.status(409).json({ error: err.code });
+          return;
+        case "reversal_exceeds_paid":
+          res.status(422).json({ error: err.code, ...err.extra });
+          return;
+        case "overpayment":
+          res.status(422).json({ error: err.code, ...err.extra });
+          return;
+        case "duplicate_reference":
+          res.status(409).json({
+            error: err.code,
+            ...err.extra,
+            hint: "A payment with this reference already exists — resend with confirmDuplicate:true if it is genuinely a second payment",
+          });
+          return;
+      }
+    }
+    throw err;
+  }
   await logPaymentEvent(
     invoice,
     result.payment.amount,

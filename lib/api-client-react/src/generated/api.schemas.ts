@@ -3347,6 +3347,8 @@ export interface PaymentInput {
   amount: number;
   method: PaymentInputMethod;
   reference?: string;
+  /** Set true to record a payment whose reference already exists for this dealer (mobile-money collision confirm) */
+  confirmDuplicate?: boolean;
 }
 
 export interface Receipt {

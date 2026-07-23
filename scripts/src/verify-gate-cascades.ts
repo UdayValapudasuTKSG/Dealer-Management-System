@@ -137,14 +137,15 @@ async function testBelowFloorPrice(action: "approve" | "adjust") {
       customerName: "Cascade Test",
       stage: "negotiation",
       vehiclePrice: 120000,
-      discount: 0,
+      discount: 6500,
       tradeInValue: 10000,
       accessories: 2000,
       otdPrice: 112000,
     })
     .returning();
 
-  const requested = 6500;
+  // gate.amount stores the EFFECTIVE selling price (vehiclePrice − discount).
+  const requested = 120000 - 6500;
   const adjusted = 4000;
   const [gate] = await db
     .insert(gatesTable)
@@ -169,21 +170,40 @@ async function testBelowFloorPrice(action: "approve" | "adjust") {
     action === "adjust" ? { action, adjustedAmount: adjusted } : { action },
   );
 
-  const expected = action === "adjust" ? adjusted : requested;
+  // approve authorizes the deal's CURRENT discount unchanged; adjust sets a
+  // new discount and recomputes OTD via the dealer tax engine (>= tax base).
+  const expectedDiscount = action === "adjust" ? adjusted : 6500;
   const [after] = await db
     .select()
     .from(dealsTable)
     .where(eq(dealsTable.id, deal.id));
-  const expectedOtd = 120000 - expected - 10000 + 2000;
   check(
-    `${label}: deal.discount = ${expected}`,
-    after.discount === expected,
+    `${label}: deal.discount = ${expectedDiscount}`,
+    after.discount === expectedDiscount,
     `got ${after.discount}`,
   );
+  if (action === "adjust") {
+    const taxBase = 120000 - adjusted + 2000;
+    check(
+      `${label}: deal.otdPrice recomputed via tax engine (>= ${taxBase})`,
+      after.otdPrice >= taxBase,
+      `got ${after.otdPrice}`,
+    );
+  } else {
+    check(
+      `${label}: deal.otdPrice untouched on approve`,
+      after.otdPrice === 112000,
+      `got ${after.otdPrice}`,
+    );
+  }
+  const [gateAfter] = await db
+    .select()
+    .from(gatesTable)
+    .where(eq(gatesTable.id, gate.id));
   check(
-    `${label}: deal.otdPrice recomputed = ${expectedOtd}`,
-    after.otdPrice === expectedOtd,
-    `got ${after.otdPrice}`,
+    `${label}: gate.amount refreshed to authorized effective price`,
+    gateAfter.amount === 120000 - expectedDiscount,
+    `got ${gateAfter.amount}`,
   );
 
   const receipt = await findReceipt(

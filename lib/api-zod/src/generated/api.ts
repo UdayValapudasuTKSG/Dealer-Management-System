@@ -3394,7 +3394,8 @@ export const CreatePaymentBody = zod.object({
   "invoiceId": zod.number(),
   "amount": zod.number(),
   "method": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'financing']),
-  "reference": zod.string().optional()
+  "reference": zod.string().optional(),
+  "confirmDuplicate": zod.boolean().optional().describe('Set true to record a payment whose reference already exists for this dealer (mobile-money collision confirm)')
 })
 
 export const CreatePaymentResponse = zod.object({
