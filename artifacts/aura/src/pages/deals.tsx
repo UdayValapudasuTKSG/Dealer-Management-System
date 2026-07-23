@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearch, useLocation } from "wouter";
+import { useFocusParam, useFocusHighlight } from "@/lib/use-focus-param";
 import {
   useListDeals,
   useListGates,
@@ -147,6 +148,9 @@ export default function Deals() {
   const search = useSearch();
   const [, navigate] = useLocation();
   const [deskOpen, setDeskOpen] = useState(false);
+  /* Triage deep link: /deals?deal=<id> scrolls to and highlights the deal. */
+  const focusDealId = useFocusParam("deal");
+  const isFocused = useFocusHighlight(focusDealId, "deal", !!deals?.length);
   const prefillVehicleId = new URLSearchParams(search).get("vehicle") ?? "";
   const prefillVehicle = (vehicles ?? []).find(
     (v) => String(v.id) === prefillVehicleId,
@@ -307,9 +311,12 @@ export default function Deals() {
               {(deals ?? []).map((deal) => (
                 <tr
                   key={deal.id}
+                  id={`deal-${deal.id}`}
                   className={`border-b border-white/5 hover:bg-foreground/[0.03] transition-colors ${
                     deal.customerId ? "cursor-pointer" : ""
-                  } ${compact ? "" : "h-14"}`}
+                  } ${compact ? "" : "h-14"} ${
+                    isFocused(deal.id) ? "bg-primary/10 ring-1 ring-inset ring-primary/50" : ""
+                  }`}
                   onClick={() =>
                     deal.customerId && navigate(`/customers/${deal.customerId}`)
                   }
@@ -428,11 +435,14 @@ export default function Deals() {
                   stageDeals.map((deal, i) => (
                     <motion.div
                       key={deal.id}
+                      id={`deal-${deal.id}`}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: stageIndex * 0.06 + i * 0.04 }}
                     >
-                      <Card className="border border-white/10 shadow-sm hover:shadow-xl hover:shadow-primary/10 hover:border-primary/40 transition-all duration-300 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] overflow-hidden group">
+                      <Card className={`border shadow-sm hover:shadow-xl hover:shadow-primary/10 hover:border-primary/40 transition-all duration-300 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] overflow-hidden group ${
+                        isFocused(deal.id) ? "border-primary ring-2 ring-primary/50" : "border-white/10"
+                      }`}>
                         <CardContent className="p-5">
                           <div className="flex justify-between items-start mb-4 gap-3">
                             {deal.customerId ? (

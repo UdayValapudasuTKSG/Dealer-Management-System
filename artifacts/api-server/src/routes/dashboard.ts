@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { and, avg, eq, gte } from "drizzle-orm";
 import { db, leadsTable, dealsTable, vehiclesTable, serviceOrdersTable, agentsTable, agentRunsTable } from "@workspace/db";
-import { activeDealerId } from "../middlewares/rbac";
+import { activeDealerId, type AuthedUser } from "../middlewares/rbac";
+import type { Response } from "express";
 import {
   GetDashboardSummaryResponse,
   GetPipelineResponse,
@@ -24,9 +25,65 @@ const PIPELINE_PHASES: { phase: string; label: string }[] = [
 const ACTIVE_DEAL_STAGES = ["desking", "committed"];
 const CLOSED_SERVICE = ["resolved", "closed"];
 
+/* Server-enforced persona scoping. Manager roles see dealership-wide
+   aggregates; everyone else gets numbers computed ONLY over records assigned
+   to them. Mirrors the client-side BROAD_VIEW_ROLES set, but enforced here so
+   an advisor's dashboard payloads are curtailed regardless of the client. */
+const BROAD_VIEW_ROLES = new Set([
+  "General Manager",
+  "Sales Manager",
+  "Service Manager",
+  "Finance Manager",
+]);
+
+type Scope = { broad: true } | { broad: false; userId: number; nameKey: string | null };
+
+function requestScope(res: Response): Scope {
+  const user = res.locals.user as AuthedUser | undefined;
+  if (user && (user.isSuperAdmin || BROAD_VIEW_ROLES.has(user.roleName ?? "")))
+    return { broad: true };
+  // Deny-by-default: unknown/advisor users are scoped to their own records.
+  return {
+    broad: false,
+    userId: user?.id ?? -1,
+    nameKey: user?.name?.trim().toLowerCase() || null,
+  };
+}
+
+/* Match by user ID first; fall back to display name only for records that
+   predate assignee user IDs (same semantics as the client filter). */
+function assignedToMe(
+  scope: Scope,
+  assigneeUserId: number | null | undefined,
+  assigneeName: string | null | undefined,
+): boolean {
+  if (scope.broad) return true;
+  if (assigneeUserId != null) return assigneeUserId === scope.userId;
+  return (
+    scope.nameKey != null &&
+    (assigneeName ?? "").trim().toLowerCase() === scope.nameKey
+  );
+}
+
+const scopeLeads = <T extends { ownerUserId: number | null; assignedTo: string | null }>(
+  scope: Scope,
+  rows: T[],
+): T[] => (scope.broad ? rows : rows.filter((l) => assignedToMe(scope, l.ownerUserId, l.assignedTo)));
+
+const scopeDeals = <T extends { salesAdvisorUserId: number | null; salesAdvisor: string | null }>(
+  scope: Scope,
+  rows: T[],
+): T[] => (scope.broad ? rows : rows.filter((d) => assignedToMe(scope, d.salesAdvisorUserId, d.salesAdvisor)));
+
+const scopeServiceOrders = <T extends { technicianUserId: number | null; technician: string | null }>(
+  scope: Scope,
+  rows: T[],
+): T[] => (scope.broad ? rows : rows.filter((s) => assignedToMe(scope, s.technicianUserId, s.technician)));
+
 router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
-  const [leads, deals, vehicles, serviceOrders, agents] = await Promise.all([
+  const scope = requestScope(res);
+  const [allLeads, allDeals, vehicles, allServiceOrders, agents] = await Promise.all([
     db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
     db.select().from(dealsTable).where(eq(dealsTable.dealerId, dealerId)),
     db.select().from(vehiclesTable).where(eq(vehiclesTable.dealerId, dealerId)),
@@ -52,6 +109,10 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   const avgResponseSeconds = latency?.avgMs
     ? Math.round((Number(latency.avgMs) / 1000) * 10) / 10
     : 0;
+
+  const leads = scopeLeads(scope, allLeads);
+  const deals = scopeDeals(scope, allDeals);
+  const serviceOrders = scopeServiceOrders(scope, allServiceOrders);
 
   const totalLeads = leads.length;
   const wonLeads = leads.filter((l) => l.phase === "won" || l.status === "converted").length;
@@ -92,10 +153,12 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
 
 router.get("/dashboard/pipeline", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
-  const [leads, vehicles] = await Promise.all([
+  const scope = requestScope(res);
+  const [allLeads, vehicles] = await Promise.all([
     db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
     db.select().from(vehiclesTable).where(eq(vehiclesTable.dealerId, dealerId)),
   ]);
+  const leads = scopeLeads(scope, allLeads);
   const priceById = new Map(vehicles.map((v) => [v.id, v.price]));
 
   const stages = PIPELINE_PHASES.map(({ phase, label }) => {
@@ -113,10 +176,12 @@ router.get("/dashboard/pipeline", async (_req, res): Promise<void> => {
 
 router.get("/dashboard/sales-performance", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
-  const deals = await db
+  const scope = requestScope(res);
+  const allDeals = await db
     .select()
     .from(dealsTable)
     .where(eq(dealsTable.dealerId, dealerId));
+  const deals = scopeDeals(scope, allDeals);
   const closed = deals.filter(
     (d) => d.stage === "delivered" || d.stage === "committed",
   );
@@ -187,10 +252,13 @@ const PROJECTION_MONTHS = 3;
 
 router.get("/dashboard/predictions", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
-  const [deals, leads] = await Promise.all([
+  const scope = requestScope(res);
+  const [allDeals, allLeads] = await Promise.all([
     db.select().from(dealsTable).where(eq(dealsTable.dealerId, dealerId)),
     db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
   ]);
+  const deals = scopeDeals(scope, allDeals);
+  const leads = scopeLeads(scope, allLeads);
   const closed = deals.filter(
     (d) => d.stage === "delivered" || d.stage === "committed",
   );

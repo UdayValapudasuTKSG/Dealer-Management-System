@@ -64,9 +64,9 @@ type GateLike = {
 function gateHref(g: GateLike): string {
   if (g.refId != null) {
     if (g.refType === "lead") return `/lead/${g.refId}`;
-    if (g.refType === "deal") return "/deals";
-    if (g.refType === "delivery") return "/deliveries";
-    if (g.refType === "vehicle") return "/inventory";
+    if (g.refType === "deal") return `/deals?deal=${g.refId}`;
+    if (g.refType === "delivery") return `/deliveries?delivery=${g.refId}`;
+    if (g.refType === "vehicle") return `/vehicle/${g.refId}`;
   }
   return "/deals";
 }
@@ -239,7 +239,7 @@ export function buildTriage(
         key: `deal-${d.id}`,
         context: d.customerName ?? "Deal",
         subContext: "Deposit still to come",
-        href: "/deals",
+        href: `/deals?deal=${d.id}`,
         rank: 2,
       });
     }
@@ -256,7 +256,7 @@ export function buildTriage(
       context: del.customerName ?? `Delivery #${del.id}`,
       subContext: isToday ? "Delivery today" : "Delivery in progress",
       assignee: del.advisorName ?? null,
-      href: "/deliveries",
+      href: `/deliveries?delivery=${del.id}`,
       rank: isToday ? 1 : 5,
     });
   }
@@ -272,7 +272,7 @@ export function buildTriage(
         context: so.vehicleInfo,
         subContext: "Waiting on the customer's go-ahead",
         assignee: so.technician ?? null,
-        href: "/service",
+        href: `/service?order=${so.id}`,
         rank: 2,
       });
     } else if (isTodayDateOnly(so.scheduledDate)) {
@@ -285,7 +285,7 @@ export function buildTriage(
         subContext:
           so.status === "open" ? "Service due today" : "Service in bay",
         assignee: so.technician ?? null,
-        href: "/service",
+        href: `/service?order=${so.id}`,
         rank: 2,
       });
     }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { useFocusParam, useFocusHighlight } from "@/lib/use-focus-param";
 import {
   useListServiceOrders,
   useCreateServiceOrder,
@@ -102,7 +103,11 @@ export default function Service() {
   // `me` loads async, so keep the tab unset until the user picks one and
   // derive the default from the (eventually loaded) role.
   const [pickedTab, setTab] = useState<TabKey | null>(null);
-  const tab: TabKey = pickedTab ?? (isTechnician ? "myjobs" : "bookings");
+  /* Triage deep link: /service?order=<id> lands on the Bookings tab and
+     highlights that repair order. */
+  const focusOrderId = useFocusParam("order");
+  const tab: TabKey =
+    pickedTab ?? (focusOrderId != null ? "bookings" : isTechnician ? "myjobs" : "bookings");
 
   return (
     <>
@@ -296,6 +301,9 @@ function BookingsTab() {
   const money = useMoney();
   const remind = useSendServiceReminder();
   const { density, setDensity, layout, setLayout } = useViewMode("service");
+  /* Triage deep link: /service?order=<id> scrolls to and highlights the RO. */
+  const focusOrderId = useFocusParam("order");
+  const isFocused = useFocusHighlight(focusOrderId, "service-order", !!orders?.length);
 
   if (!isLoading && orders?.length !== 0 && layout === "list") {
     return (
@@ -322,7 +330,13 @@ function BookingsTab() {
             </thead>
             <tbody>
               {(orders ?? []).map((order) => (
-                <tr key={order.id} className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors">
+                <tr
+                  key={order.id}
+                  id={`service-order-${order.id}`}
+                  className={`border-b border-white/5 hover:bg-foreground/[0.03] transition-colors ${
+                    isFocused(order.id) ? "bg-primary/10 ring-1 ring-inset ring-primary/50" : ""
+                  }`}
+                >
                   <td className={`px-4 tabular-nums text-primary font-semibold ${density === "compact" ? "py-2.5" : "py-3.5"}`}>
                     #{order.id.toString().padStart(5, "0")}
                   </td>
@@ -379,11 +393,14 @@ function BookingsTab() {
         orders?.map((order, i) => (
           <motion.div
             key={order.id}
+            id={`service-order-${order.id}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.04 }}
           >
-            <Card className="glass-panel border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl overflow-hidden group relative">
+            <Card className={`glass-panel shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl overflow-hidden group relative ${
+              isFocused(order.id) ? "border border-primary ring-2 ring-primary/50" : "border-none"
+            }`}>
               <div
                 className={`absolute top-0 bottom-0 left-0 w-1.5 ${order.status === "resolved" || order.status === "closed" ? "bg-primary" : "bg-white/10"}`}
               />

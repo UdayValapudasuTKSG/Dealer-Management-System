@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useFocusParam } from "@/lib/use-focus-param";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListDeliveries,
@@ -70,6 +71,18 @@ export default function Deliveries() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const { data: deliveries, isLoading } = useListDeliveries();
   const { data: bookings } = useListBookings();
+
+  /* Triage deep link: /deliveries?delivery=<id> opens that delivery. */
+  const focusDeliveryId = useFocusParam("delivery");
+  useEffect(() => {
+    if (
+      focusDeliveryId != null &&
+      (deliveries ?? []).some((d) => d.id === focusDeliveryId)
+    ) {
+      setTab("deliveries");
+      setSelectedId(focusDeliveryId);
+    }
+  }, [focusDeliveryId, deliveries]);
 
   const active = (deliveries ?? []).filter((d) => d.status !== "completed");
   const completed = (deliveries ?? []).filter((d) => d.status === "completed");
