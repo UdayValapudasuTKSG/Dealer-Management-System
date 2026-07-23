@@ -587,6 +587,11 @@ function VehicleCard({
             >
               {vehicle.status.replace("_", " ")}
             </Badge>
+            {(vehicle.recallFlag || vehicle.damageFlag) && (
+              <Badge className="bg-destructive text-white text-[10px] font-bold tracking-widest uppercase border-none px-3 py-1">
+                {vehicle.recallFlag ? "Recall hold" : "Damage hold"}
+              </Badge>
+            )}
           </div>
         </div>
 

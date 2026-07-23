@@ -6641,6 +6641,8 @@ components:
         status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service, under_repair] }
         holdUntil: { type: ["string", "null"], format: date-time, description: "Soft lock — held around a booked test drive (single-unit models)" }
         holdReason: { type: ["string", "null"] }
+        recallFlag: { type: boolean, description: "Recall monitor — flagged units block deal commit until cleared" }
+        damageFlag: { type: boolean, description: "Damage monitor — flagged units block deal commit until cleared" }
         imageUrl: { type: ["string", "null"] }
         images:
           type: array
@@ -6732,6 +6734,8 @@ components:
         exteriorColor: { type: string }
         bodyType: { type: string }
         status: { type: string, enum: [available, reserved, booked, delivered, in_transit, sold, service, under_repair] }
+        recallFlag: { type: boolean }
+        damageFlag: { type: boolean }
         imageUrl: { type: string }
         images:
           type: array
@@ -8844,7 +8848,7 @@ components:
       required: [id, type, status, priority, title, summary, evidence, createdAt]
       properties:
         id: { type: integer }
-        type: { type: string, enum: [below_floor_price, credit_decline, capital_order, gra_filing, refund_release, stage_advance] }
+        type: { type: string, enum: [below_floor_price, credit_decline, capital_order, gra_filing, refund_release, stage_advance, recall_damage] }
         status: { type: string, enum: [pending, approved, adjusted, dismissed] }
         priority: { type: string, enum: [high, normal, low] }
         customerId: { type: ["integer", "null"] }

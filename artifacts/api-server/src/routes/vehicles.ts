@@ -661,12 +661,32 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
     const allowed =
       VEHICLE_STATUS_TRANSITIONS[before.status as VehicleStatus] ?? [];
     if (!allowed.includes(parsed.data.status as VehicleStatus)) {
+      // Concurrent soft-lock: trying to reserve a unit someone else already
+      // locked is a conflict (re-fetch and pick again), not a bad request.
+      if (
+        (parsed.data.status === "reserved" || parsed.data.status === "booked") &&
+        before.status !== "available"
+      ) {
+        res.status(409).json({
+          error: `This unit is already ${before.status} — refresh and pick another VIN`,
+        });
+        return;
+      }
       res.status(422).json({
         error: `Invalid status transition: ${before.status} → ${parsed.data.status}`,
       });
       return;
     }
   }
+
+  // Race-safe soft-lock: when locking (available → reserved/booked) the
+  // UPDATE is conditional on the row still being available — first writer
+  // wins, the loser gets a 409 instead of silently double-locking.
+  const locking =
+    parsed.data.status &&
+    parsed.data.status !== before.status &&
+    (parsed.data.status === "reserved" || parsed.data.status === "booked") &&
+    before.status === "available";
 
   const [vehicle] = await db
     .update(vehiclesTable)
@@ -675,9 +695,17 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
       and(
         eq(vehiclesTable.id, params.data.id),
         eq(vehiclesTable.dealerId, dealerId),
+        ...(locking ? [eq(vehiclesTable.status, "available")] : []),
       ),
     )
     .returning();
+
+  if (locking && !vehicle) {
+    res.status(409).json({
+      error: "This unit was just locked by someone else — refresh and pick another VIN",
+    });
+    return;
+  }
 
   if (!vehicle) {
     res.status(404).json({ error: "Vehicle not found" });

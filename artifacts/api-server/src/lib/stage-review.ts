@@ -65,6 +65,8 @@ export const CHECK_OWNER: Record<string, string> = {
   selected_model: "Sales Advisor",
   reservation_fee: "Sales Advisor",
   primary_contact: "Sales Advisor",
+  vin_allocated: "Sales Advisor",
+  recall_clear: "Inventory",
   deposit_taken: "Finance",
   finance_approved: "Finance",
 };
@@ -146,6 +148,37 @@ export function buildStageChecks(
           ),
         );
       return (row?.n ?? 0) > 0;
+    },
+    // Vehicle Allocated (L5): a physical unit (VIN) must be bound to the
+    // lead, and that unit must be clear of recall/damage flags.
+    vin_allocated: async () => {
+      if (!lead.interestedVehicleId) return false;
+      const [v] = await db
+        .select({ vin: vehiclesTable.vin })
+        .from(vehiclesTable)
+        .where(
+          and(
+            eq(vehiclesTable.id, lead.interestedVehicleId),
+            eq(vehiclesTable.dealerId, dealerId),
+          ),
+        );
+      return Boolean(v?.vin);
+    },
+    recall_clear: async () => {
+      if (!lead.interestedVehicleId) return true;
+      const [v] = await db
+        .select({
+          recallFlag: vehiclesTable.recallFlag,
+          damageFlag: vehiclesTable.damageFlag,
+        })
+        .from(vehiclesTable)
+        .where(
+          and(
+            eq(vehiclesTable.id, lead.interestedVehicleId),
+            eq(vehiclesTable.dealerId, dealerId),
+          ),
+        );
+      return !v || (!v.recallFlag && !v.damageFlag);
     },
     deposit_taken: () =>
       Boolean((deal && deal.depositPaid) || lead.reservationFeePaid),

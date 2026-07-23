@@ -844,6 +844,10 @@ export interface Vehicle {
   holdUntil?: string | null;
   /** @nullable */
   holdReason?: string | null;
+  /** Recall monitor — flagged units block deal commit until cleared */
+  recallFlag?: boolean;
+  /** Damage monitor — flagged units block deal commit until cleared */
+  damageFlag?: boolean;
   /** @nullable */
   imageUrl?: string | null;
   images?: string[];
@@ -991,6 +995,8 @@ export interface VehicleUpdate {
   exteriorColor?: string;
   bodyType?: string;
   status?: VehicleUpdateStatus;
+  recallFlag?: boolean;
+  damageFlag?: boolean;
   imageUrl?: string;
   images?: string[];
   accessories?: string[];
@@ -4500,6 +4506,7 @@ export const GateType = {
   gra_filing: 'gra_filing',
   refund_release: 'refund_release',
   stage_advance: 'stage_advance',
+  recall_damage: 'recall_damage',
 } as const;
 
 export type GateStatus = typeof GateStatus[keyof typeof GateStatus];

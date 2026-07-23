@@ -267,6 +267,26 @@ async function applyCascade(
         detail: `${gate.customerName ?? "The lead"} moved forward to ${stageLabel}; every checklist criterion had been verified by the Pipeline agent.`,
       };
     }
+    case "recall_damage": {
+      // Approving the hold clears the recall/damage flags on the unit so
+      // the blocked deal commit can be retried (advisory monitor, L5).
+      if (gate.refType === "vehicle" && gate.refId) {
+        await tx
+          .update(vehiclesTable)
+          .set({ recallFlag: false, damageFlag: false })
+          .where(
+            and(
+              eq(vehiclesTable.id, gate.refId),
+              eq(vehiclesTable.dealerId, gate.dealerId),
+            ),
+          );
+      }
+      return {
+        title: "Recall/damage hold cleared",
+        detail:
+          "The unit was inspected and cleared; its recall/damage flags are lifted and the blocked deal commit can be retried.",
+      };
+    }
     default:
       return { title: "Gate resolved", detail: "" };
   }

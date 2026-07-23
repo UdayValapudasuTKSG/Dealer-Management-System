@@ -46,6 +46,10 @@ export interface Vehicle {
   holdUntil?: Date | null;
   /** @nullable */
   holdReason?: string | null;
+  /** Recall monitor — flagged units block deal commit until cleared */
+  recallFlag?: boolean;
+  /** Damage monitor — flagged units block deal commit until cleared */
+  damageFlag?: boolean;
   /** @nullable */
   imageUrl?: string | null;
   images?: string[];

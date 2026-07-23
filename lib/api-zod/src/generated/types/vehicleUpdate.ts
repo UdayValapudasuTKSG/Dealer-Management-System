@@ -45,6 +45,8 @@ export interface VehicleUpdate {
   exteriorColor?: string;
   bodyType?: string;
   status?: VehicleUpdateStatus;
+  recallFlag?: boolean;
+  damageFlag?: boolean;
   imageUrl?: string;
   images?: string[];
   accessories?: string[];

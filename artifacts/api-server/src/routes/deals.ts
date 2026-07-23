@@ -1,13 +1,17 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
 import {
   db,
   dealsTable,
   vehiclesTable,
+  bookingsTable,
   gatesTable,
   leadsTable,
   timelineEventsTable,
+  VIN_LENGTH,
+  REGISTRATION_PATTERN,
 } from "@workspace/db";
+import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
 import { activeDealerId } from "../middlewares/rbac";
 import { idempotent } from "../middlewares/idempotency";
 import {
@@ -85,6 +89,187 @@ async function logDealLinkEvent(
     refType: "lead",
     refId: lead.id,
   });
+}
+
+// How long the VIN hard-lock hold runs after deal commit (SLA timer).
+const VIN_LOCK_HOLD_HOURS = 72;
+
+type AllocationResult =
+  | { ok: true }
+  | { ok: false; status: number; body: Record<string, unknown> };
+
+// A11 deterministic VIN allocation (L5): runs inline on deal commit — NOT a
+// separate approval gate. Validates the physical unit's identity, blocks
+// flagged (recall/damage) units behind an advisory gate, and hard-locks the
+// vehicle available/reserved → booked with a race-safe conditional write so
+// two deals can never allocate the same VIN.
+async function allocateVehicleOnCommit(
+  deal: typeof dealsTable.$inferSelect,
+  dealerId: number,
+  actor: string,
+): Promise<AllocationResult> {
+  const started = Date.now();
+  const [vehicle] = await db
+    .select()
+    .from(vehiclesTable)
+    .where(
+      and(
+        eq(vehiclesTable.id, deal.vehicleId),
+        eq(vehiclesTable.dealerId, dealerId),
+      ),
+    );
+  if (!vehicle) {
+    return {
+      ok: false,
+      status: 422,
+      body: {
+        error: "vehicle_not_found",
+        unmet: ["The deal's vehicle no longer exists in this dealership's stock"],
+      },
+    };
+  }
+
+  // Identity validation before lock: VIN + engine number exactly 17 chars,
+  // registration (when present) must match the Guyana plate format.
+  const unmet: string[] = [];
+  if (!vehicle.vin || vehicle.vin.length !== VIN_LENGTH)
+    unmet.push(`VIN must be exactly ${VIN_LENGTH} characters before allocation`);
+  if (!vehicle.engineNumber || vehicle.engineNumber.length !== VIN_LENGTH)
+    unmet.push(`Engine number must be exactly ${VIN_LENGTH} characters before allocation`);
+  if (vehicle.registration && !REGISTRATION_PATTERN.test(vehicle.registration))
+    unmet.push("Registration must be 3 uppercase letters followed by 1-4 digits");
+  if (unmet.length) {
+    return {
+      ok: false,
+      status: 422,
+      body: { error: "vehicle_identity_invalid", unmet },
+    };
+  }
+
+  // Recall/damage monitor: flagged units block commit behind an advisory
+  // gate until inventory clears the flag.
+  if (vehicle.recallFlag || vehicle.damageFlag) {
+    const flag = vehicle.recallFlag ? "recall" : "damage";
+    const [existing] = await db
+      .select({ id: gatesTable.id })
+      .from(gatesTable)
+      .where(
+        and(
+          eq(gatesTable.dealerId, dealerId),
+          eq(gatesTable.type, "recall_damage"),
+          eq(gatesTable.refType, "vehicle"),
+          eq(gatesTable.refId, vehicle.id),
+          eq(gatesTable.status, "pending"),
+        ),
+      );
+    if (!existing) {
+      await db.insert(gatesTable).values({
+        dealerId,
+        type: "recall_damage",
+        status: "pending",
+        priority: "high",
+        title: `${flag === "recall" ? "Recall" : "Damage"} hold — ${vehicle.year} ${vehicle.make} ${vehicle.model} (VIN ${vehicle.vin})`,
+        summary: `Deal #${deal.id} commit blocked: the allocated unit carries a ${flag} flag. Clear the flag (or swap the unit) to release the commit.`,
+        refType: "vehicle",
+        refId: vehicle.id,
+        evidence: [
+          { label: "Deal", value: `#${deal.id}` },
+          { label: "VIN", value: vehicle.vin ?? "—" },
+          { label: "Flag", value: flag },
+        ],
+      });
+    }
+    return {
+      ok: false,
+      status: 422,
+      body: {
+        error: "recall_damage_open",
+        unmet: [
+          `This unit carries a ${flag} flag — commit is blocked until inventory clears it`,
+        ],
+      },
+    };
+  }
+
+  // Race-safe hard lock: the conditional UPDATE is the allocation — first
+  // writer wins, a concurrent commit on the same VIN matches zero rows.
+  const holdUntil = new Date(Date.now() + VIN_LOCK_HOLD_HOURS * 3600 * 1000);
+  const locked = await db
+    .update(vehiclesTable)
+    .set({ status: "booked", holdUntil, holdReason: "vin_lock" })
+    .where(
+      and(
+        eq(vehiclesTable.id, vehicle.id),
+        eq(vehiclesTable.dealerId, dealerId),
+        inArray(vehiclesTable.status, ["available", "reserved"]),
+      ),
+    )
+    .returning({ id: vehiclesTable.id });
+
+  if (!locked.length) {
+    // Already booked is fine only when this deal's own paid pre-book locked
+    // it (booking → deal auto-desk path); anything else is a real conflict.
+    if (vehicle.status === "booked") {
+      const [own] = await db
+        .select({ id: bookingsTable.id })
+        .from(bookingsTable)
+        .where(
+          and(
+            eq(bookingsTable.dealerId, dealerId),
+            eq(bookingsTable.vehicleId, vehicle.id),
+            eq(bookingsTable.dealId, deal.id),
+          ),
+        );
+      if (own) return { ok: true };
+    }
+    return {
+      ok: false,
+      status: 409,
+      body: {
+        error: "vehicle_unavailable",
+        detail: `This unit is ${vehicle.status} and cannot be allocated to deal #${deal.id} — pick another VIN`,
+      },
+    };
+  }
+
+  // Audit: deterministic A11 run (advisory-off dealers still allocate — the
+  // state machine is core; the kill switch only silences the agent audit).
+  if (await isAgentEnabled(dealerId, "inventory")) {
+    await recordAgentRun({
+      dealerId,
+      agentKey: "inventory",
+      runType: "vin_allocation",
+      inputSource: "deal_commit",
+      inputSummary: `Deal #${deal.id} committed — allocating VIN ${vehicle.vin}`,
+      outputSummary: `VIN ${vehicle.vin} hard-locked (${vehicle.status} → booked, hold ${VIN_LOCK_HOLD_HOURS}h)`,
+      confidence: 100,
+      mutation: true,
+      refType: "vehicle",
+      refId: vehicle.id,
+      latencyMs: Date.now() - started,
+      changeSummary: `vehicle.status ${vehicle.status} → booked`,
+    });
+  }
+
+  if (deal.leadId != null) {
+    const lead = await findDealerLead(deal.leadId, dealerId);
+    if (lead) {
+      await db.insert(timelineEventsTable).values({
+        dealerId,
+        customerId: lead.customerId,
+        domain: "leads",
+        kind: "vin_allocated",
+        title: "VIN allocated",
+        detail: `Deal #${deal.id} commit locked VIN ${vehicle.vin} (${vehicle.year} ${vehicle.make} ${vehicle.model}) — status ${vehicle.status} → booked.`,
+        actor,
+        isAgent: true,
+        refType: "lead",
+        refId: lead.id,
+      });
+    }
+  }
+
+  return { ok: true };
 }
 
 const dealActor = (res: {
@@ -323,6 +508,20 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
         return;
       }
     }
+    // A11 VIN allocation (L5): committing hard-locks the physical unit.
+    // Runs BEFORE the deal row is written so a deal can never sit in
+    // "committed" without its VIN actually locked.
+    if (parsed.data.stage === "committed") {
+      const allocation = await allocateVehicleOnCommit(
+        before,
+        dealerId,
+        dealActor(res),
+      );
+      if (!allocation.ok) {
+        res.status(allocation.status).json(allocation.body);
+        return;
+      }
+    }
   }
 
   // Keep the advisor user ID in sync when the advisor name changes without
@@ -367,20 +566,9 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
 
   await raiseBelowFloorGateIfNeeded(deal);
 
-  // VIN lock: committing reserves the vehicle; delivering marks it sold.
+  // Delivering marks the unit sold (commit already VIN-locked it → booked).
   if (before && before.stage !== deal.stage) {
-    if (deal.stage === "committed") {
-      await db
-        .update(vehiclesTable)
-        .set({ status: "reserved" })
-        .where(
-          and(
-            eq(vehiclesTable.id, deal.vehicleId),
-            eq(vehiclesTable.dealerId, dealerId),
-            eq(vehiclesTable.status, "available"),
-          ),
-        );
-    } else if (deal.stage === "delivered") {
+    if (deal.stage === "delivered") {
       await db
         .update(vehiclesTable)
         .set({ status: "sold" })

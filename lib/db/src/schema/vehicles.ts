@@ -71,6 +71,9 @@ export const vehiclesTable = pgTable("vehicles", {
   /** Soft lock: single-unit models are held around a booked test drive. */
   holdUntil: timestamp("hold_until", { withTimezone: true }),
   holdReason: text("hold_reason"),
+  /** L5 recall/damage monitor: flagged units block deal commit until cleared. */
+  recallFlag: boolean("recall_flag").notNull().default(false),
+  damageFlag: boolean("damage_flag").notNull().default(false),
   imageUrl: text("image_url"),
   images: jsonb("images").$type<string[]>().notNull().default([]),
   accessories: jsonb("accessories").$type<string[]>().notNull().default([]),
