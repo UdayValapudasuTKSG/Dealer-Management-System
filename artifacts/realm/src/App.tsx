@@ -19,13 +19,15 @@ import Audit from "@/pages/audit";
 import AccessDenied from "@/pages/access-denied";
 import NotFound from "@/pages/not-found";
 
-/* Keep data live without hard refreshes: cached data is fresh for only 30s,
-   and returning to the tab re-checks the server in the background. */
+/* Live data: visible queries silently re-poll every 10s (paused when the
+   tab is hidden), plus refetch on tab focus and page navigation. */
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: true,
-      staleTime: 30 * 1000,
+      staleTime: 0,
+      refetchInterval: 10 * 1000,
+      refetchIntervalInBackground: false,
     },
   },
 });

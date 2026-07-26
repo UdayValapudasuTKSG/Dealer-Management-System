@@ -40,15 +40,17 @@ import NotFound from "@/pages/not-found";
 import NoDealership from "@/pages/no-dealership";
 import DealerPicker, { DealerSuspended } from "@/pages/dealer-picker";
 
-/* Keep data live without hard refreshes: cached data is considered fresh for
-   only 30s, and returning to the tab or remounting a page re-checks the
-   server in the background (stale-while-revalidate — the old data stays on
-   screen until fresh data arrives, so there is no flicker). */
+/* Live data: every visible query silently re-polls the server every 10s
+   (paused when the tab is hidden), plus refetches on tab focus and page
+   navigation. Stale-while-revalidate keeps old data on screen until fresh
+   data arrives, so updates appear without flicker or spinners. */
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: true,
-      staleTime: 30 * 1000,
+      staleTime: 0,
+      refetchInterval: 10 * 1000,
+      refetchIntervalInBackground: false,
     },
   },
 });
