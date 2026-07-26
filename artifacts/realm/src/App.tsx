@@ -19,11 +19,13 @@ import Audit from "@/pages/audit";
 import AccessDenied from "@/pages/access-denied";
 import NotFound from "@/pages/not-found";
 
+/* Keep data live without hard refreshes: cached data is fresh for only 30s,
+   and returning to the tab re-checks the server in the background. */
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
-      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: true,
+      staleTime: 30 * 1000,
     },
   },
 });

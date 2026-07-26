@@ -40,11 +40,15 @@ import NotFound from "@/pages/not-found";
 import NoDealership from "@/pages/no-dealership";
 import DealerPicker, { DealerSuspended } from "@/pages/dealer-picker";
 
+/* Keep data live without hard refreshes: cached data is considered fresh for
+   only 30s, and returning to the tab or remounting a page re-checks the
+   server in the background (stale-while-revalidate — the old data stays on
+   screen until fresh data arrives, so there is no flicker). */
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
-      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: true,
+      staleTime: 30 * 1000,
     },
   },
 });
