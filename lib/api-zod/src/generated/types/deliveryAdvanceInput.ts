@@ -20,6 +20,8 @@ export interface DeliveryAdvanceInput {
   insuranceProvider?: string;
   signatureName?: string;
   signatureData?: string;
+  /** Actual handover timestamp (GMT-4) — required on the delivery step */
+  deliveredAt?: Date;
   /**
      * @minimum 1
      * @maximum 5

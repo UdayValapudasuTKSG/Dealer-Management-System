@@ -235,22 +235,33 @@ export function buildHandoverPdf(
             : `Vehicle #${delivery.vehicleId}`,
         ],
         ["VIN", vehicle?.vin ?? "—"],
+        ["Engine no.", vehicle?.engineNumber ?? "—"],
         ["Colour", vehicle?.exteriorColor ?? "—"],
-        ["Registration", delivery.registrationNumber ?? "Pending"],
+        ["Registration plate", delivery.registrationNumber ?? "Pending"],
         [
           "Insurance",
           delivery.insurancePolicy
             ? `${delivery.insurancePolicy}${delivery.insuranceProvider ? ` (${delivery.insuranceProvider})` : ""}`
             : "Pending",
         ],
+        [
+          "Accessories",
+          vehicle && vehicle.accessories.length > 0
+            ? vehicle.accessories.join(", ")
+            : "None recorded",
+        ],
+        ["Expected delivery", fmtDate(delivery.appointmentAt ?? null)],
+        ["Actual delivery", fmtDate(delivery.deliveredAt ?? null)],
         ["Delivery advisor", advisorName ?? "—"],
       ],
       y,
     );
 
-    // PDI summary
+    // PDI summary (tri-state: pass / fail / waived with reason)
     const items = delivery.pdiItems ?? [];
-    const done = items.filter((i) => i.checked).length;
+    const done = items.filter(
+      (i) => i.status === "pass" || i.status === "waived",
+    ).length;
     y = sectionLabel(doc, "PRE-DELIVERY INSPECTION", y);
     doc
       .font("Helvetica")
@@ -258,18 +269,40 @@ export function buildHandoverPdf(
       .fillColor("#111111")
       .text(
         items.length > 0
-          ? `${done} of ${items.length} checks completed`
+          ? `${done} of ${items.length} checks passed or waived`
           : "No PDI checklist recorded",
         LEFT,
         y,
       );
     y += 18;
+    const pdiMark: Record<string, string> = {
+      pass: "[PASS]",
+      fail: "[FAIL]",
+      waived: "[WAIVED]",
+      pending: "[ ]",
+    };
     for (const item of items) {
+      const suffix =
+        item.status === "waived" && item.waiveReason
+          ? ` — waived: ${item.waiveReason}`
+          : item.note
+            ? ` — ${item.note}`
+            : "";
       doc
         .font("Helvetica")
         .fontSize(9)
-        .fillColor(item.checked ? "#333333" : "#999999")
-        .text(`${item.checked ? "[x]" : "[ ]"}  ${item.label}`, LEFT + 12, y);
+        .fillColor(
+          item.status === "fail"
+            ? "#b30f16"
+            : item.status === "pending"
+              ? "#999999"
+              : "#333333",
+        )
+        .text(
+          `${pdiMark[item.status] ?? "[ ]"}  ${item.label}${suffix}`,
+          LEFT + 12,
+          y,
+        );
       y += 14;
     }
     y += 16;

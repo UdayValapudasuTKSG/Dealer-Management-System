@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFocusParam } from "@/lib/use-focus-param";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -49,6 +49,8 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { PageHero } from "@/components/layout/page-hero";
+import { DocumentsCard } from "@/components/documents-card";
+import { useReviewDocumentExtraction } from "@workspace/api-client-react";
 import { DutyFiling } from "@/components/gra/duty-filing";
 import { ShieldCheck } from "lucide-react";
 
@@ -334,6 +336,10 @@ function DeliveryDetail({
         ? { appointmentAt: new Date(form.appointmentAt).toISOString() }
         : {}),
       ...(form.signatureName ? { signatureName: form.signatureName } : {}),
+      ...(form.signatureData ? { signatureData: form.signatureData } : {}),
+      ...(form.deliveredAt
+        ? { deliveredAt: new Date(form.deliveredAt).toISOString() }
+        : {}),
       ...(form.feedbackRating
         ? { feedbackRating: Number(form.feedbackRating) }
         : {}),
@@ -358,9 +364,47 @@ function DeliveryDetail({
                 : `Next: ${d.steps.find((s) => s.key === d.currentStep)?.label}`,
           });
         },
-        onError: (err: unknown) =>
+        onError: (err: unknown) => {
+          const data = (
+            err as {
+              response?: { data?: { error?: string; unmet?: string[] } };
+            }
+          )?.response?.data;
           toast({
             title: "Cannot advance",
+            description:
+              data?.unmet && data.unmet.length > 0
+                ? data.unmet.join(" · ")
+                : (data?.error ?? "Something went wrong."),
+            variant: "destructive",
+          });
+          invalidate();
+        },
+      },
+    );
+  };
+
+  const setPdi = (idx: number, status: "pass" | "fail" | "waived" | "pending") => {
+    let waiveReason: string | null = null;
+    if (status === "waived") {
+      waiveReason = window.prompt(
+        "Waive reason (required to waive this check):",
+        delivery.pdiItems[idx]?.waiveReason ?? "",
+      );
+      if (!waiveReason?.trim()) return;
+    }
+    const items = delivery.pdiItems.map((it, i) =>
+      i === idx
+        ? { ...it, status, waiveReason: status === "waived" ? waiveReason : null }
+        : it,
+    );
+    updatePdi.mutate(
+      { id: delivery.id, data: { items } },
+      {
+        onSuccess: invalidate,
+        onError: (err: unknown) =>
+          toast({
+            title: "PDI update failed",
             description:
               (err as { response?: { data?: { error?: string } } })?.response
                 ?.data?.error ?? "Something went wrong.",
@@ -370,45 +414,84 @@ function DeliveryDetail({
     );
   };
 
-  const togglePdi = (idx: number) => {
-    const items = delivery.pdiItems.map((it, i) =>
-      i === idx ? { ...it, checked: !it.checked } : it,
-    );
-    updatePdi.mutate(
-      { id: delivery.id, data: { items } },
-      { onSuccess: invalidate },
-    );
-  };
-
   const stepInputs = () => {
     switch (delivery.currentStep) {
       case "registration":
         return (
-          <Input
-            placeholder="Registration number, e.g. PAB1234 (optional)"
-            value={form.registrationNumber ?? ""}
-            onChange={(e) =>
-              setForm({ ...form, registrationNumber: e.target.value })
-            }
-          />
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                placeholder="Plate number, e.g. PAB1234"
+                value={form.registrationNumber ?? delivery.registrationNumber ?? ""}
+                onChange={(e) =>
+                  setForm({ ...form, registrationNumber: e.target.value.toUpperCase() })
+                }
+              />
+              <Select
+                value={delivery.registrationStatus}
+                onValueChange={(v) =>
+                  updateDelivery.mutate(
+                    {
+                      id: delivery.id,
+                      data: {
+                        registrationStatus: v as
+                          | "pending"
+                          | "submitted"
+                          | "issued",
+                      },
+                    },
+                    {
+                      onSuccess: () => {
+                        invalidate();
+                        toast({ title: `Registration marked ${v}` });
+                      },
+                    },
+                  )
+                }
+              >
+                <SelectTrigger className="bg-foreground/[0.04] border-white/10">
+                  <SelectValue placeholder="Registration status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="submitted">Submitted to GRA</SelectItem>
+                  <SelectItem value="issued">Plate issued</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {delivery.registrationStuck && (
+              <p className="text-xs text-amber-400 flex items-center gap-1.5">
+                <BellRing className="w-3.5 h-3.5" />
+                Registration has been sitting at “submitted” for more than 72
+                hours — chase it up.
+              </p>
+            )}
+          </div>
         );
       case "insurance":
         return (
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              placeholder="Policy number"
-              value={form.insurancePolicy ?? ""}
-              onChange={(e) =>
-                setForm({ ...form, insurancePolicy: e.target.value })
-              }
-            />
-            <Input
-              placeholder="Provider"
-              value={form.insuranceProvider ?? ""}
-              onChange={(e) =>
-                setForm({ ...form, insuranceProvider: e.target.value })
-              }
-            />
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                placeholder="Policy number"
+                value={form.insurancePolicy ?? ""}
+                onChange={(e) =>
+                  setForm({ ...form, insurancePolicy: e.target.value })
+                }
+              />
+              <Input
+                placeholder="Provider"
+                value={form.insuranceProvider ?? ""}
+                onChange={(e) =>
+                  setForm({ ...form, insuranceProvider: e.target.value })
+                }
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {delivery.insuranceDocId
+                ? "Cover note attached."
+                : "Attach the insurance cover note under Documents below (type: Insurance)."}
+            </p>
           </div>
         );
       case "appointment":
@@ -421,13 +504,52 @@ function DeliveryDetail({
         );
       case "signature":
         return (
-          <Input
-            placeholder="Customer's full name (signature)"
-            value={form.signatureName ?? ""}
-            onChange={(e) =>
-              setForm({ ...form, signatureName: e.target.value })
-            }
-          />
+          <div className="space-y-2">
+            <Input
+              placeholder="Customer's full name (signature)"
+              value={form.signatureName ?? ""}
+              onChange={(e) =>
+                setForm({ ...form, signatureName: e.target.value })
+              }
+            />
+            <SignaturePad
+              value={form.signatureData ?? ""}
+              onChange={(dataUrl) =>
+                setForm({ ...form, signatureData: dataUrl })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              {delivery.handoverSheetDocId
+                ? "Signed handover sheet uploaded."
+                : "Alternatively, upload the scanned signed handover sheet under Documents below (type: Signed Handover) — A5 will verify it."}
+            </p>
+          </div>
+        );
+      case "delivery":
+        return (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-xl border border-white/10 bg-foreground/[0.03] px-3 py-2">
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Expected
+                </p>
+                <p className="mt-0.5">{fmtDate(delivery.appointmentAt)}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-foreground/[0.03] px-3 py-2">
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Actual handover
+                </p>
+                <Input
+                  type="datetime-local"
+                  value={form.deliveredAt ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, deliveredAt: e.target.value })
+                  }
+                  className="mt-1 h-8 bg-background/60 border-white/15"
+                />
+              </div>
+            </div>
+          </div>
         );
       case "feedback":
         return (
@@ -465,7 +587,9 @@ function DeliveryDetail({
 
   const pdiPending =
     delivery.currentStep === "pdi_checklist" &&
-    delivery.pdiItems.some((i) => !i.checked);
+    delivery.pdiItems.some(
+      (i) => i.status !== "pass" && i.status !== "waived",
+    );
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -591,30 +715,99 @@ function DeliveryDetail({
                 <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-3">
                   Pre-delivery inspection
                 </h3>
-                <div className="grid sm:grid-cols-2 gap-2">
+                <div className="space-y-2">
                   {delivery.pdiItems.map((item, i) => (
-                    <button
+                    <div
                       key={item.label}
-                      onClick={() => togglePdi(i)}
-                      className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-left hover:bg-foreground/[0.04] transition-colors"
+                      className="flex flex-wrap items-center gap-2.5 rounded-xl px-3 py-2 text-sm bg-foreground/[0.02]"
                     >
-                      {item.checked ? (
-                        <CheckCircle2 className="w-4.5 h-4.5 w-5 h-5 text-emerald-400 shrink-0" />
+                      {item.status === "pass" ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                      ) : item.status === "fail" ? (
+                        <X className="w-5 h-5 text-red-400 shrink-0" />
+                      ) : item.status === "waived" ? (
+                        <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
                       ) : (
                         <Circle className="w-5 h-5 text-muted-foreground shrink-0" />
                       )}
                       <span
-                        className={
-                          item.checked ? "" : "text-muted-foreground"
-                        }
+                        className={`flex-1 min-w-32 ${
+                          item.status === "pending"
+                            ? "text-muted-foreground"
+                            : ""
+                        }`}
                       >
                         {item.label}
+                        {item.status === "waived" && item.waiveReason && (
+                          <span className="block text-[11px] text-amber-400/80">
+                            Waived — {item.waiveReason}
+                          </span>
+                        )}
                       </span>
-                    </button>
+                      <div className="flex items-center gap-1">
+                        {(
+                          [
+                            ["pass", "Pass"],
+                            ["fail", "Fail"],
+                            ["waived", "Waive"],
+                          ] as const
+                        ).map(([value, label]) => (
+                          <button
+                            key={value}
+                            onClick={() =>
+                              setPdi(
+                                i,
+                                item.status === value ? "pending" : value,
+                              )
+                            }
+                            disabled={updatePdi.isPending}
+                            className={`h-7 px-2.5 rounded-full text-xs font-medium border transition-colors ${
+                              item.status === value
+                                ? value === "pass"
+                                  ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-400"
+                                  : value === "fail"
+                                    ? "border-red-500/50 bg-red-500/15 text-red-400"
+                                    : "border-amber-500/50 bg-amber-500/15 text-amber-400"
+                                : "border-white/10 text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05]"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
+                {delivery.pdiWorkOrderId != null &&
+                  delivery.pdiItems.some((i) => i.status === "fail") && (
+                    <p className="mt-3 text-xs text-red-400">
+                      Failed checks opened rectification work order #
+                      {delivery.pdiWorkOrderId} in Service. The delivery is
+                      blocked until every item is marked Pass or Waived.
+                    </p>
+                  )}
               </div>
             )}
+
+          {/* Handover sheet verification banner */}
+          {delivery.handoverVerification &&
+            delivery.handoverVerification.status !== "none" && (
+              <HandoverVerificationBanner
+                delivery={delivery}
+                onDone={invalidate}
+              />
+            )}
+
+          {/* Documents (insurance cover note, signed handover sheet, …) */}
+          {delivery.status !== "completed" && (
+            <div className="mt-6">
+              <DocumentsCard
+                entityType="delivery"
+                entityId={delivery.id}
+                canEdit
+              />
+            </div>
+          )}
 
           {/* Advance panel */}
           {current && (
@@ -623,6 +816,24 @@ function DeliveryDetail({
                 {STEP_ICONS[current.key]}
                 Current step — {current.label}
               </div>
+              {(delivery.unmet ?? []).length > 0 && (
+                <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
+                  <p className="text-xs font-bold uppercase tracking-widest text-amber-400 mb-1.5">
+                    Before you can advance
+                  </p>
+                  <ul className="space-y-1">
+                    {(delivery.unmet ?? []).map((u) => (
+                      <li
+                        key={u}
+                        className="text-sm text-amber-200/90 flex items-start gap-2"
+                      >
+                        <Circle className="w-2 h-2 mt-1.5 shrink-0 fill-amber-400 text-amber-400" />
+                        {u}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="mt-3 space-y-2">
                 {stepInputs()}
                 <Input
@@ -665,6 +876,221 @@ function DeliveryDetail({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SignaturePad({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (dataUrl: string) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawing = useRef(false);
+  const hasInk = useRef(false);
+
+  const pos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const start = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    drawing.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const { x, y } = pos(e);
+    ctx.strokeStyle = "#e8e2d9";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drawing.current) return;
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const { x, y } = pos(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    hasInk.current = true;
+  };
+
+  const end = () => {
+    if (!drawing.current) return;
+    drawing.current = false;
+    if (hasInk.current && canvasRef.current) {
+      onChange(canvasRef.current.toDataURL("image/png"));
+    }
+  };
+
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    hasInk.current = false;
+    onChange("");
+  };
+
+  return (
+    <div className="rounded-xl border border-white/15 bg-background/60 overflow-hidden">
+      <canvas
+        ref={canvasRef}
+        width={620}
+        height={140}
+        className="w-full h-[140px] touch-none cursor-crosshair"
+        onPointerDown={start}
+        onPointerMove={move}
+        onPointerUp={end}
+        onPointerLeave={end}
+      />
+      <div className="flex items-center justify-between px-3 py-1.5 border-t border-white/10">
+        <span className="text-[11px] text-muted-foreground">
+          {value ? "Signature captured" : "Customer signs here"}
+        </span>
+        <button
+          onClick={clear}
+          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function HandoverVerificationBanner({
+  delivery,
+  onDone,
+}: {
+  delivery: Delivery;
+  onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const review = useReviewDocumentExtraction();
+  const v = delivery.handoverVerification;
+  if (!v || v.status === "none") return null;
+
+  const badge = (match: boolean) =>
+    match ? (
+      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
+        Match
+      </span>
+    ) : (
+      <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400">
+        Mismatch
+      </span>
+    );
+
+  const act = (action: "accept" | "dismiss") => {
+    if (!delivery.handoverSheetDocId) return;
+    review.mutate(
+      {
+        id: delivery.handoverSheetDocId,
+        data:
+          action === "accept"
+            ? {
+                action,
+                fields: v.fields
+                  .filter((f) => f.extracted)
+                  .map((f) => ({ field: f.field, value: f.extracted ?? "" })),
+              }
+            : { action },
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title:
+              action === "accept"
+                ? "Handover sheet verified"
+                : "Verification dismissed",
+          });
+          onDone();
+        },
+        onError: (err: unknown) =>
+          toast({
+            title: "Review failed",
+            description:
+              (err as { response?: { data?: { error?: string } } })?.response
+                ?.data?.error ?? "Try again.",
+            variant: "destructive",
+          }),
+      },
+    );
+  };
+
+  const tone =
+    v.status === "accepted"
+      ? "border-emerald-500/25 bg-emerald-500/[0.05]"
+      : v.status === "failed"
+        ? "border-red-500/25 bg-red-500/[0.05]"
+        : v.allMatch
+          ? "border-emerald-500/25 bg-emerald-500/[0.05]"
+          : "border-amber-500/25 bg-amber-500/[0.05]";
+
+  return (
+    <div className={`mt-6 rounded-2xl border p-5 ${tone}`}>
+      <div className="flex items-center gap-2 text-sm font-semibold">
+        <ShieldCheck className="w-4 h-4" />
+        Signed handover sheet — A5 verification
+        <Badge
+          variant="secondary"
+          className="text-[10px] uppercase tracking-widest border-none bg-white/10 text-muted-foreground"
+        >
+          {v.status}
+        </Badge>
+      </div>
+      {v.summary && (
+        <p className="text-xs text-muted-foreground mt-1">{v.summary}</p>
+      )}
+      {v.fields.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {v.fields.map((f) => (
+            <div key={f.field} className="flex items-center gap-2 text-sm">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground w-28 shrink-0">
+                {f.label}
+              </span>
+              <span className="flex-1 truncate">
+                {f.extracted ?? "—"}
+                {!f.match && f.expected && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    (expected {f.expected})
+                  </span>
+                )}
+              </span>
+              {badge(f.match)}
+            </div>
+          ))}
+        </div>
+      )}
+      {v.status === "proposed" && delivery.handoverSheetDocId && (
+        <div className="flex items-center gap-2 mt-3.5">
+          <button
+            onClick={() => act("accept")}
+            disabled={review.isPending}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+          >
+            {review.isPending ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-3.5 h-3.5" />
+            )}
+            Confirm sheet
+          </button>
+          <button
+            onClick={() => act("dismiss")}
+            disabled={review.isPending}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-white/15 text-sm font-medium hover:bg-white/[0.05] transition-colors disabled:opacity-50"
+          >
+            <X className="w-3.5 h-3.5" /> Dismiss
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

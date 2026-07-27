@@ -12,4 +12,5 @@ export type ListDocumentsEntityType = typeof ListDocumentsEntityType[keyof typeo
 export const ListDocumentsEntityType = {
   lead: 'lead',
   vehicle: 'vehicle',
+  delivery: 'delivery',
 } as const;

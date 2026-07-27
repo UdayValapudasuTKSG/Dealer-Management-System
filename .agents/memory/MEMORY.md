@@ -26,3 +26,4 @@
 - [WhatsApp outbound providers](whatsapp-outbound-providers.md) — outbound queue selects Meta vs Twilio by WHATSAPP_PROVIDER; Twilio needs a WhatsApp-enabled From number, not the voice number.
 - [Shared-proxy IP rate limiting](shared-proxy-rate-limit.md) — per-IP limits behind the shared proxy collapse into one bucket; scope them to public prefixes, never global. Startup auth races need error-query refetch; "not found" only on true 404.
 - [Payment & gate guard atomicity](payment-gate-atomicity.md) — monetary guards run inside applyPayment tx under invoice FOR UPDATE + advisory lock; gate resolve is compare-and-set on pending.
+- [Delivery advance gates](delivery-advance-gates.md) — body-supplied gated fields (signature, plate, deliveredAt) must merge into the gate-eval copy before computeUnmet, or valid advances 422.

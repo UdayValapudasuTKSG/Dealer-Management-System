@@ -51,11 +51,40 @@ export const deliveryStepStateSchema = z.object({
 });
 export type DeliveryStepState = z.infer<typeof deliveryStepStateSchema>;
 
+/** Tri-state PDI (L7): every item must be pass or waived-with-reason to advance. */
+export const PDI_ITEM_STATUSES = [
+  "pending",
+  "pass",
+  "fail",
+  "waived",
+] as const;
+export type PdiItemStatus = (typeof PDI_ITEM_STATUSES)[number];
+
 export const pdiItemSchema = z.object({
   label: z.string(),
-  checked: z.boolean(),
+  status: z.enum(PDI_ITEM_STATUSES),
+  waiveReason: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
 });
 export type PdiItem = z.infer<typeof pdiItemSchema>;
+
+/**
+ * Legacy compatibility: pdi_items rows persisted before the tri-state upgrade
+ * were shaped `{ label, checked }`. Normalize any raw payload to the current
+ * `{ label, status, ... }` shape so old rows never break parsing or gating.
+ */
+export function normalizePdiItems(items: unknown): PdiItem[] {
+  if (!Array.isArray(items)) return [];
+  return items.map((raw): PdiItem => {
+    const parsed = pdiItemSchema.safeParse(raw);
+    if (parsed.success) return parsed.data;
+    const r = (raw ?? {}) as Record<string, unknown>;
+    return {
+      label: typeof r.label === "string" ? r.label : "PDI item",
+      status: r.checked === true ? "pass" : "pending",
+    };
+  });
+}
 
 export const DEFAULT_PDI_ITEMS: PdiItem[] = [
   "Exterior paint & panel inspection",
@@ -68,7 +97,15 @@ export const DEFAULT_PDI_ITEMS: PdiItem[] = [
   "Brake system test",
   "Road test completed",
   "Detailing & final wash",
-].map((label) => ({ label, checked: false }));
+].map((label): PdiItem => ({ label, status: "pending" }));
+
+/** Registration submission tracking (L7): pending → submitted → issued. */
+export const REGISTRATION_STATUSES = [
+  "pending",
+  "submitted",
+  "issued",
+] as const;
+export type RegistrationStatus = (typeof REGISTRATION_STATUSES)[number];
 
 export function defaultDeliverySteps(): DeliveryStepState[] {
   return DELIVERY_STEPS.map((key) => ({
@@ -101,8 +138,16 @@ export const deliveriesTable = pgTable("deliveries", {
   feedbackRating: integer("feedback_rating"),
   feedbackComment: text("feedback_comment"),
   registrationNumber: text("registration_number"),
+  registrationStatus: text("registration_status").notNull().default("pending"),
+  registrationSubmittedAt: timestamp("registration_submitted_at", {
+    withTimezone: true,
+  }),
   insurancePolicy: text("insurance_policy"),
   insuranceProvider: text("insurance_provider"),
+  insuranceDocId: integer("insurance_doc_id"),
+  handoverSheetDocId: integer("handover_sheet_doc_id"),
+  pdiWorkOrderId: integer("pdi_work_order_id"),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -112,6 +157,7 @@ export const deliveriesTable = pgTable("deliveries", {
 export const insertDeliverySchema = createInsertSchema(deliveriesTable, {
   status: z.enum(DELIVERY_STATUSES),
   currentStep: z.enum(DELIVERY_STEPS),
+  registrationStatus: z.enum(REGISTRATION_STATUSES),
   steps: z.array(deliveryStepStateSchema),
   pdiItems: z.array(pdiItemSchema),
 }).omit({ dealerId: true, id: true, createdAt: true });

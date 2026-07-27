@@ -2394,7 +2394,7 @@ export const advanceDelivery = async (id: number,
 
 
 
-export const getAdvanceDeliveryMutationOptions = <TError = ErrorType<Error>,
+export const getAdvanceDeliveryMutationOptions = <TError = ErrorType<Error | UnmetError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof advanceDelivery>>, TError,{id: number;data: BodyType<DeliveryAdvanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof advanceDelivery>>, TError,{id: number;data: BodyType<DeliveryAdvanceInput>}, TContext> => {
 
@@ -2423,12 +2423,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type AdvanceDeliveryMutationResult = NonNullable<Awaited<ReturnType<typeof advanceDelivery>>>
     export type AdvanceDeliveryMutationBody = BodyType<DeliveryAdvanceInput>
-    export type AdvanceDeliveryMutationError = ErrorType<Error>
+    export type AdvanceDeliveryMutationError = ErrorType<Error | UnmetError>
 
     /**
  * @summary Complete the current delivery step (in strict order)
  */
-export const useAdvanceDelivery = <TError = ErrorType<Error>,
+export const useAdvanceDelivery = <TError = ErrorType<Error | UnmetError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof advanceDelivery>>, TError,{id: number;data: BodyType<DeliveryAdvanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof advanceDelivery>>,

@@ -47,6 +47,7 @@ export const DOCUMENT_TYPE_LABEL: Record<string, string> = {
   insurance: "Insurance",
   registration: "Registration",
   customs: "Customs",
+  signed_handover: "Signed Handover",
   invoice: "Invoice",
   quote: "Quote",
   other: "Other",

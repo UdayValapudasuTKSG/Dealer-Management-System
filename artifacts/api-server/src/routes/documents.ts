@@ -6,6 +6,7 @@ import {
   documentsTable,
   leadsTable,
   vehiclesTable,
+  deliveriesTable,
   auditLogsTable,
   timelineEventsTable,
 } from "@workspace/db";
@@ -34,6 +35,11 @@ import {
   runDocumentExtraction,
   PREFILL_FIELDS,
 } from "../lib/document-extract";
+import {
+  isHandoverSheet,
+  runHandoverVerification,
+  HANDOVER_FIELDS,
+} from "../lib/handover-verify";
 
 const router: IRouter = Router();
 
@@ -52,7 +58,9 @@ export const ALLOWED_DOCUMENT_MIME = new Set([
  * lead documents require the `leads` module, vehicle documents `inventory`.
  */
 function moduleFor(entityType: string): string {
-  return entityType === "lead" ? "leads" : "inventory";
+  if (entityType === "lead") return "leads";
+  if (entityType === "delivery") return "deliveries";
+  return "inventory";
 }
 
 function requirePermission(
@@ -71,10 +79,10 @@ function requirePermission(
   return true;
 }
 
-/** 404 unless the parent lead/vehicle exists in the active dealer. */
+/** 404 unless the parent lead/vehicle/delivery exists in the active dealer. */
 async function parentExists(
   dealerId: number,
-  entityType: "lead" | "vehicle",
+  entityType: "lead" | "vehicle" | "delivery",
   entityId: number,
 ): Promise<boolean> {
   if (entityType === "lead") {
@@ -82,6 +90,18 @@ async function parentExists(
       .select({ id: leadsTable.id })
       .from(leadsTable)
       .where(and(eq(leadsTable.id, entityId), eq(leadsTable.dealerId, dealerId)));
+    return !!row;
+  }
+  if (entityType === "delivery") {
+    const [row] = await db
+      .select({ id: deliveriesTable.id })
+      .from(deliveriesTable)
+      .where(
+        and(
+          eq(deliveriesTable.id, entityId),
+          eq(deliveriesTable.dealerId, dealerId),
+        ),
+      );
     return !!row;
   }
   const [row] = await db
@@ -208,6 +228,42 @@ router.post("/documents", async (req: Request, res: Response): Promise<void> => 
       .returning();
     launched = pending!;
     void runDocumentExtraction(launched);
+  }
+
+  // Delivery documents auto-link onto the delivery row: the insurance cover
+  // note satisfies the insurance gate; the signed handover sheet is queued
+  // for A5 OCR verification (kill-switch aware — paused agent = manual).
+  if (body.entityType === "delivery") {
+    if (body.type === "insurance") {
+      await db
+        .update(deliveriesTable)
+        .set({ insuranceDocId: doc!.id })
+        .where(
+          and(
+            eq(deliveriesTable.id, body.entityId),
+            eq(deliveriesTable.dealerId, dealerId),
+          ),
+        );
+    } else if (body.type === "signed_handover") {
+      await db
+        .update(deliveriesTable)
+        .set({ handoverSheetDocId: doc!.id })
+        .where(
+          and(
+            eq(deliveriesTable.id, body.entityId),
+            eq(deliveriesTable.dealerId, dealerId),
+          ),
+        );
+      if (isHandoverSheet(doc!) && (await isDocumentAgentActive(dealerId))) {
+        const [pending] = await db
+          .update(documentsTable)
+          .set({ extractionStatus: "pending" })
+          .where(eq(documentsTable.id, doc!.id))
+          .returning();
+        launched = pending!;
+        void runHandoverVerification(launched);
+      }
+    }
   }
 
   res.status(201).json(CreateDocumentResponse.parse(launched));
@@ -377,6 +433,50 @@ router.post(
         entityType: "document",
         entityId: String(doc.id),
         summary: `${actorName} dismissed the A5 pre-fill proposal from ${doc.fileName}`,
+      });
+      res.json(ReviewDocumentExtractionResponse.parse(updated));
+      return;
+    }
+
+    // Accept on a signed handover sheet: the advisor confirms (optionally
+    // corrects) the OCR-read values — nothing is written to other records;
+    // the accepted extraction feeds the delivery's verification banner.
+    if (doc.entityType === "delivery") {
+      const edits = parsed.data.fields ?? doc.extraction.fields;
+      const outOfList = edits.find((f) => !HANDOVER_FIELDS[f.field]);
+      if (outOfList) {
+        res.status(403).json({
+          error: `Field "${outOfList.field}" is not in the handover verification allowlist`,
+        });
+        return;
+      }
+      const proposed = new Set(doc.extraction.fields.map((f) => f.field));
+      const fields = edits
+        .filter((f) => proposed.has(f.field))
+        .map((f) => ({
+          field: f.field,
+          label: HANDOVER_FIELDS[f.field]!.label,
+          value: f.value.slice(0, 200),
+        }));
+      const [updated] = await db
+        .update(documentsTable)
+        .set({
+          extractionStatus: "accepted",
+          extraction: { summary: doc.extraction.summary ?? null, fields },
+        })
+        .where(eq(documentsTable.id, doc.id))
+        .returning();
+      await db.insert(auditLogsTable).values({
+        dealerId,
+        actorUserId: user?.id ?? null,
+        actorClerkId: user?.clerkId ?? null,
+        actorName: user?.name ?? null,
+        actorEmail: user?.email ?? null,
+        action: "approve",
+        module: "deliveries",
+        entityType: "document",
+        entityId: String(doc.id),
+        summary: `${actorName} confirmed the A5 handover sheet verification for ${doc.fileName}`,
       });
       res.json(ReviewDocumentExtractionResponse.parse(updated));
       return;

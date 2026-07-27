@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import PDFDocument from "pdfkit";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
   db,
   deliveriesTable,
@@ -15,11 +15,15 @@ import {
   timelineEventsTable,
   assetsTable,
   reviewsTable,
+  documentsTable,
+  serviceOrdersTable,
   DELIVERY_STEPS,
   DELIVERY_STEP_LABELS,
   type Delivery,
   type DeliveryStep,
   type DeliveryStepState,
+  type PdiItem,
+  normalizePdiItems,
 } from "@workspace/db";
 import {
   ListDeliveriesQueryParams,
@@ -42,6 +46,11 @@ import {
   ListDeliveryAdvisorsResponse,
 } from "@workspace/api-zod";
 import { ensureDeliveryForDeal } from "../lib/delivery";
+import {
+  buildHandoverVerification,
+  handoverExpectedFor,
+  type HandoverVerification,
+} from "../lib/handover-verify";
 import { buildHandoverPdf } from "../lib/document-pdfs";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { onDealStageChanged } from "../lib/email-triggers";
@@ -56,7 +65,118 @@ const money = (n: number) =>
 type Enriched = Delivery & {
   advisorName: string | null;
   vehicleLabel: string | null;
+  unmet: string[];
+  registrationStuck: boolean;
+  handoverVerification: HandoverVerification | null;
 };
+
+const REGISTRATION_STUCK_MS = 72 * 60 * 60 * 1000;
+
+function isRegistrationStuck(d: Delivery): boolean {
+  return (
+    d.registrationStatus === "submitted" &&
+    !!d.registrationSubmittedAt &&
+    Date.now() - d.registrationSubmittedAt.getTime() > REGISTRATION_STUCK_MS
+  );
+}
+
+const pdiOk = (i: PdiItem) => i.status === "pass" || i.status === "waived";
+
+/**
+ * L7/L8 readiness: what is still blocking the CURRENT step from advancing,
+ * computed purely from stored state (body-supplied values like the signature
+ * name are validated at advance time). Powers both the 422 payload and the
+ * readiness panel.
+ */
+async function computeUnmet(d: Delivery): Promise<string[]> {
+  if (d.status === "completed") return [];
+  const unmet: string[] = [];
+  switch (d.currentStep as DeliveryStep) {
+    case "pdi_checklist": {
+      const failed = d.pdiItems.filter((i) => i.status === "fail");
+      const open = d.pdiItems.filter((i) => !pdiOk(i) && i.status !== "fail");
+      if (failed.length > 0)
+        unmet.push(
+          `PDI failed: ${failed.map((i) => i.label).join(", ")} — resolve the rectification work order${d.pdiWorkOrderId ? ` (#${d.pdiWorkOrderId})` : ""}, then mark the item(s) pass or waived`,
+        );
+      if (open.length > 0)
+        unmet.push(
+          `${open.length} PDI item(s) still pending — each must be marked pass or waived (with a reason)`,
+        );
+      break;
+    }
+    case "registration":
+      if (!d.registrationNumber)
+        unmet.push("Registration plate number not recorded");
+      if (d.registrationStatus !== "issued")
+        unmet.push(
+          `Registration certificate not issued yet (currently "${d.registrationStatus}")`,
+        );
+      break;
+    case "insurance":
+      if (!d.insuranceDocId)
+        unmet.push("Insurance cover note document not attached");
+      break;
+    case "delivery":
+      if (!d.deliveredAt)
+        unmet.push("Actual handover date/time must be recorded");
+      break;
+    case "signature": {
+      if (d.handoverSheetDocId) {
+        const [doc] = await db
+          .select({ extractionStatus: documentsTable.extractionStatus })
+          .from(documentsTable)
+          .where(
+            and(
+              eq(documentsTable.id, d.handoverSheetDocId),
+              eq(documentsTable.dealerId, d.dealerId),
+            ),
+          );
+        // The uploaded sheet only satisfies the gate once an advisor has
+        // ACCEPTED the OCR verification — every other status blocks.
+        if (!doc) {
+          unmet.push("Signed handover sheet document is missing — re-upload it");
+        } else if (doc.extractionStatus !== "accepted") {
+          unmet.push(
+            doc.extractionStatus === "dismissed"
+              ? "Handover sheet verification was dismissed — upload a corrected signed sheet"
+              : doc.extractionStatus === "failed"
+                ? "Handover sheet verification failed — upload a clearer scan or capture the signature pad instead"
+                : "Signed handover sheet verification awaiting advisor review",
+          );
+        }
+      } else if (!d.signatureName || !d.signatureData) {
+        unmet.push(
+          "Capture the customer signature (pad) or upload the signed handover sheet",
+        );
+      }
+      break;
+    }
+    case "feedback":
+      break;
+  }
+  return unmet;
+}
+
+async function handoverVerificationFor(
+  d: Delivery,
+): Promise<HandoverVerification | null> {
+  if (!d.handoverSheetDocId) return null;
+  const [doc] = await db
+    .select({
+      extractionStatus: documentsTable.extractionStatus,
+      extraction: documentsTable.extraction,
+    })
+    .from(documentsTable)
+    .where(
+      and(
+        eq(documentsTable.id, d.handoverSheetDocId),
+        eq(documentsTable.dealerId, d.dealerId),
+      ),
+    );
+  if (!doc) return null;
+  return buildHandoverVerification(doc, await handoverExpectedFor(d));
+}
 
 async function enrich(rows: Delivery[], dealerId: number): Promise<Enriched[]> {
   const advisorIds = [
@@ -87,17 +207,22 @@ async function enrich(rows: Delivery[], dealerId: number): Promise<Enriched[]> {
         .from(vehiclesTable)
         .where(eq(vehiclesTable.dealerId, dealerId))
     : [];
-  return rows.map((r) => {
-    const a = advisors.find((x) => x.id === r.advisorUserId);
-    const v = vehicles.find((x) => x.id === r.vehicleId);
-    return {
-      ...r,
-      advisorName: a ? (a.name ?? a.email ?? `User #${a.id}`) : null,
-      vehicleLabel: v
-        ? `${v.year} ${v.make} ${v.model}${v.vin ? ` · ${v.vin}` : ""}`
-        : null,
-    };
-  });
+  return Promise.all(
+    rows.map(async (r) => {
+      const a = advisors.find((x) => x.id === r.advisorUserId);
+      const v = vehicles.find((x) => x.id === r.vehicleId);
+      return {
+        ...r,
+        advisorName: a ? (a.name ?? a.email ?? `User #${a.id}`) : null,
+        vehicleLabel: v
+          ? `${v.year} ${v.make} ${v.model}${v.vin ? ` · ${v.vin}` : ""}`
+          : null,
+        unmet: await computeUnmet(r),
+        registrationStuck: isRegistrationStuck(r),
+        handoverVerification: await handoverVerificationFor(r),
+      };
+    }),
+  );
 }
 
 async function loadDelivery(
@@ -108,7 +233,7 @@ async function loadDelivery(
     .select()
     .from(deliveriesTable)
     .where(and(eq(deliveriesTable.id, id), eq(deliveriesTable.dealerId, dealerId)));
-  return row;
+  return row ? { ...row, pdiItems: normalizePdiItems(row.pdiItems) } : row;
 }
 
 router.get("/deliveries", async (req, res): Promise<void> => {
@@ -123,11 +248,13 @@ router.get("/deliveries", async (req, res): Promise<void> => {
   if (query.data.mine === 1 && res.locals.user?.id)
     filters.push(eq(deliveriesTable.advisorUserId, res.locals.user.id));
 
-  const rows = await db
-    .select()
-    .from(deliveriesTable)
-    .where(and(...filters))
-    .orderBy(desc(deliveriesTable.createdAt));
+  const rows = (
+    await db
+      .select()
+      .from(deliveriesTable)
+      .where(and(...filters))
+      .orderBy(desc(deliveriesTable.createdAt))
+  ).map((r) => ({ ...r, pdiItems: normalizePdiItems(r.pdiItems) }));
 
   res.json(ListDeliveriesResponse.parse(await enrich(rows, activeDealerId(res))));
 });
@@ -182,6 +309,40 @@ router.get("/deliveries/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Delivery not found" });
     return;
   }
+  // L7 flag: registration sitting at "submitted" for >72h leaves an agent
+  // timeline receipt once so the delay is visible on the customer journey.
+  if (isRegistrationStuck(row)) {
+    try {
+      const [existing] = await db
+        .select({ id: timelineEventsTable.id })
+        .from(timelineEventsTable)
+        .where(
+          and(
+            eq(timelineEventsTable.dealerId, row.dealerId),
+            eq(timelineEventsTable.kind, "delivery_registration_stuck"),
+            eq(timelineEventsTable.refType, "delivery"),
+            eq(timelineEventsTable.refId, row.id),
+          ),
+        );
+      if (!existing) {
+        await db.insert(timelineEventsTable).values({
+          dealerId: row.dealerId,
+          customerId: row.customerId ?? null,
+          domain: "delivery",
+          kind: "delivery_registration_stuck",
+          title: "Registration submission stuck for more than 72 hours",
+          detail: `Registration for delivery #${row.id} was submitted ${row.registrationSubmittedAt?.toISOString() ?? ""} and has not been issued — follow up with the licensing office.`,
+          actor: "AURA orchestration",
+          isAgent: true,
+          cause: `Delivery #${row.id} registration monitoring`,
+          refType: "delivery",
+          refId: row.id,
+        });
+      }
+    } catch (err) {
+      logger.error({ err, deliveryId: row.id }, "stuck receipt failed");
+    }
+  }
   res.json(GetDeliveryResponse.parse((await enrich([row], activeDealerId(res)))[0]));
 });
 
@@ -196,9 +357,43 @@ router.patch("/deliveries/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const current = await loadDelivery(params.data.id, activeDealerId(res));
+  if (!current) {
+    res.status(404).json({ error: "Delivery not found" });
+    return;
+  }
+  const patch: Partial<Delivery> = {};
+  if ("advisorUserId" in (req.body ?? {}))
+    patch.advisorUserId = parsed.data.advisorUserId ?? null;
+  if (parsed.data.registrationNumber !== undefined)
+    patch.registrationNumber = parsed.data.registrationNumber;
+  if (parsed.data.insurancePolicy !== undefined)
+    patch.insurancePolicy = parsed.data.insurancePolicy;
+  if (parsed.data.insuranceProvider !== undefined)
+    patch.insuranceProvider = parsed.data.insuranceProvider;
+  if (
+    parsed.data.registrationStatus !== undefined &&
+    parsed.data.registrationStatus !== current.registrationStatus
+  ) {
+    patch.registrationStatus = parsed.data.registrationStatus;
+    // Stamp submission time on the pending → submitted hop (basis of the
+    // >72h stuck flag); reset it when pulled back to pending.
+    if (parsed.data.registrationStatus === "submitted")
+      patch.registrationSubmittedAt = new Date();
+    if (parsed.data.registrationStatus === "pending")
+      patch.registrationSubmittedAt = null;
+  }
+  if (Object.keys(patch).length === 0) {
+    res.json(
+      UpdateDeliveryResponse.parse(
+        (await enrich([current], activeDealerId(res)))[0],
+      ),
+    );
+    return;
+  }
   const [row] = await db
     .update(deliveriesTable)
-    .set({ advisorUserId: parsed.data.advisorUserId ?? null })
+    .set(patch)
     .where(
       and(
         eq(deliveriesTable.id, params.data.id),
@@ -284,35 +479,54 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
     return;
   }
   if (delivery.status === "completed") {
-    res.status(422).json({ error: "Delivery is already completed" });
+    res
+      .status(422)
+      .json({ error: "Delivery is already completed", unmet: [] });
     return;
   }
   const step = parsed.data.step as DeliveryStep;
   if (step !== delivery.currentStep) {
     res.status(422).json({
       error: `Steps must be completed in order — next step is "${DELIVERY_STEP_LABELS[delivery.currentStep as DeliveryStep]}"`,
+      unmet: [],
     });
     return;
   }
 
   const extra: Partial<Delivery> = {};
 
-  // Per-step requirements + side data
+  // Body-supplied values land on the row BEFORE gating so the unmet list is
+  // evaluated against what the advisor just provided.
+  const gated: Delivery = { ...delivery };
+  if (parsed.data.registrationNumber) {
+    extra.registrationNumber = parsed.data.registrationNumber;
+    gated.registrationNumber = parsed.data.registrationNumber;
+  }
+  if (parsed.data.deliveredAt) {
+    extra.deliveredAt = new Date(parsed.data.deliveredAt);
+    gated.deliveredAt = extra.deliveredAt;
+  }
+  if (parsed.data.signatureName) gated.signatureName = parsed.data.signatureName;
+  if (parsed.data.signatureData) gated.signatureData = parsed.data.signatureData;
+
+  // L7/L8 readiness gates — a single 422 shape { error, unmet[] }.
+  const unmet = await computeUnmet(gated);
+  if (step === "signature" && !parsed.data.signatureName) {
+    unmet.push("Customer signature name is required");
+  }
+  if (step === "feedback" && !parsed.data.feedbackRating) {
+    unmet.push("A feedback rating (1–5) is required");
+  }
+  if (unmet.length > 0) {
+    res.status(422).json({
+      error: `${DELIVERY_STEP_LABELS[step]} cannot be completed yet`,
+      unmet,
+    });
+    return;
+  }
+
+  // Per-step side data
   switch (step) {
-    case "pdi_checklist": {
-      const unchecked = delivery.pdiItems.filter((i) => !i.checked);
-      if (unchecked.length > 0) {
-        res.status(422).json({
-          error: `PDI checklist incomplete — ${unchecked.length} item(s) remaining`,
-        });
-        return;
-      }
-      break;
-    }
-    case "registration":
-      if (parsed.data.registrationNumber)
-        extra.registrationNumber = parsed.data.registrationNumber;
-      break;
     case "insurance":
       if (parsed.data.insurancePolicy)
         extra.insurancePolicy = parsed.data.insurancePolicy;
@@ -363,9 +577,10 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
         ? new Date(parsed.data.appointmentAt)
         : delivery.appointmentAt;
       if (!at) {
-        res
-          .status(422)
-          .json({ error: "An appointment date/time is required" });
+        res.status(422).json({
+          error: "An appointment date/time is required",
+          unmet: ["An appointment date/time is required"],
+        });
         return;
       }
       extra.appointmentAt = at;
@@ -395,20 +610,14 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       break;
     }
     case "signature":
-      if (!parsed.data.signatureName) {
-        res.status(422).json({ error: "Customer signature name is required" });
-        return;
-      }
-      extra.signatureName = parsed.data.signatureName;
+      if (parsed.data.signatureName)
+        extra.signatureName = parsed.data.signatureName;
       if (parsed.data.signatureData)
         extra.signatureData = parsed.data.signatureData;
       break;
     case "feedback":
-      if (!parsed.data.feedbackRating) {
-        res.status(422).json({ error: "A feedback rating (1–5) is required" });
-        return;
-      }
-      extra.feedbackRating = parsed.data.feedbackRating;
+      if (parsed.data.feedbackRating)
+        extra.feedbackRating = parsed.data.feedbackRating;
       if (parsed.data.feedbackComment)
         extra.feedbackComment = parsed.data.feedbackComment;
       break;
@@ -557,15 +766,15 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
     // handed off to a Service Advisor for the ownership phase.
     if (delivery.customerId) {
       try {
+        // Idempotent on the delivery itself: a retried completion can never
+        // mint a second asset row for the same delivery.
         const [existingAsset] = await db
           .select({ id: assetsTable.id })
           .from(assetsTable)
           .where(
             and(
-              eq(assetsTable.vehicleId, delivery.vehicleId),
-              eq(assetsTable.accountId, delivery.customerId),
+              eq(assetsTable.deliveryId, delivery.id),
               eq(assetsTable.dealerId, delivery.dealerId),
-              eq(assetsTable.status, "active"),
             ),
           );
         if (!existingAsset) {
@@ -581,19 +790,54 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
               ),
             );
 
-          const [serviceAdvisor] = await db
-            .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
-            .from(usersTable)
-            .innerJoin(dealerUsersTable, eq(dealerUsersTable.userId, usersTable.id))
-            .innerJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
+          // Division-scoped round robin: prefer Service Advisors in the
+          // deal's division (oldest lastLeadAssignedAt first, never-assigned
+          // leading), falling back to any active Service Advisor.
+          const [deal] = await db
+            .select({ divisionId: dealsTable.divisionId })
+            .from(dealsTable)
             .where(
               and(
-                eq(dealerUsersTable.dealerId, delivery.dealerId),
-                eq(rolesTable.name, "Service Advisor"),
-                eq(usersTable.status, "active"),
+                eq(dealsTable.id, delivery.dealId),
+                eq(dealsTable.dealerId, delivery.dealerId),
               ),
-            )
-            .limit(1);
+            );
+          const advisorPool = (divisionId: number | null) =>
+            db
+              .select({
+                id: usersTable.id,
+                name: usersTable.name,
+                email: usersTable.email,
+                memberId: dealerUsersTable.id,
+              })
+              .from(usersTable)
+              .innerJoin(dealerUsersTable, eq(dealerUsersTable.userId, usersTable.id))
+              .innerJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
+              .where(
+                and(
+                  eq(dealerUsersTable.dealerId, delivery.dealerId),
+                  eq(rolesTable.name, "Service Advisor"),
+                  eq(usersTable.status, "active"),
+                  ...(divisionId != null
+                    ? [eq(dealerUsersTable.divisionId, divisionId)]
+                    : []),
+                ),
+              )
+              .orderBy(
+                sql`${dealerUsersTable.lastLeadAssignedAt} asc nulls first`,
+                asc(dealerUsersTable.id),
+              )
+              .limit(1);
+          let [serviceAdvisor] = deal?.divisionId
+            ? await advisorPool(deal.divisionId)
+            : [];
+          if (!serviceAdvisor) [serviceAdvisor] = await advisorPool(null);
+          if (serviceAdvisor) {
+            await db
+              .update(dealerUsersTable)
+              .set({ lastLeadAssignedAt: new Date() })
+              .where(eq(dealerUsersTable.id, serviceAdvisor.memberId));
+          }
 
           const [asset] = await db
             .insert(assetsTable)
@@ -603,7 +847,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
               vehicleId: delivery.vehicleId,
               dealId: delivery.dealId,
               deliveryId: delivery.id,
-              deliveredAt: new Date(),
+              deliveredAt: delivery.deliveredAt ?? new Date(),
               serviceAdvisorUserId: serviceAdvisor?.id ?? null,
               status: "active",
             })
@@ -650,6 +894,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
         to: email,
         dealerId: delivery.dealerId,
         customerId: delivery.customerId,
+        dedupeKey: `delivery:${delivery.id}:csat`,
         data: { name, vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId) },
       });
     })().catch((err) => logger.error({ err }, "feedback email failed"));
@@ -669,13 +914,83 @@ router.patch("/deliveries/:id/pdi", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  // L7 tri-state guard: a waiver is only valid with a recorded reason.
+  const badWaiver = parsed.data.items.find(
+    (i) => i.status === "waived" && !i.waiveReason?.trim(),
+  );
+  if (badWaiver) {
+    res.status(400).json({
+      error: `"${badWaiver.label}" is waived without a reason — a waive reason is required`,
+    });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const delivery = await loadDelivery(params.data.id, dealerId);
+  if (!delivery) {
+    res.status(404).json({ error: "Delivery not found" });
+    return;
+  }
+  // The signed PDI is part of the handover record — once the customer has
+  // signed, reopening the checklist would falsify it.
+  const signatureDone = delivery.steps.some(
+    (s) => s.key === "signature" && s.status === "completed",
+  );
+  if (signatureDone) {
+    res.status(422).json({
+      error: "The customer has already signed — the PDI checklist is locked",
+    });
+    return;
+  }
+
+  const patch: Partial<Delivery> = { pdiItems: parsed.data.items };
+  const failed = parsed.data.items.filter((i) => i.status === "fail");
+
+  // L7: a failed PDI item spins up ONE rectification work order in Service.
+  if (failed.length > 0 && !delivery.pdiWorkOrderId) {
+    const vehicleLabel = await vehicleLabelFor(delivery.vehicleId, dealerId);
+    const [workOrder] = await db
+      .insert(serviceOrdersTable)
+      .values({
+        dealerId,
+        customerId: delivery.customerId ?? null,
+        customerName: delivery.customerName ?? null,
+        vehicleInfo: vehicleLabel,
+        type: "repair",
+        status: "open",
+        scheduledDate: new Date().toISOString().slice(0, 10),
+        complaint: `PDI rectification for delivery #${delivery.id} — failed: ${failed.map((i) => i.label).join(", ")}`,
+        jobs: failed.map((i) => `Rectify: ${i.label}${i.note ? ` (${i.note})` : ""}`),
+      })
+      .returning();
+    patch.pdiWorkOrderId = workOrder?.id ?? null;
+    if (workOrder) {
+      try {
+        await db.insert(timelineEventsTable).values({
+          dealerId,
+          customerId: delivery.customerId ?? null,
+          domain: "delivery",
+          kind: "pdi_rectification_opened",
+          title: `PDI failure — rectification work order #${workOrder.id} opened`,
+          detail: `Failed item(s): ${failed.map((i) => i.label).join(", ")}. Delivery is blocked until each is marked pass or waived.`,
+          actor: "AURA orchestration",
+          isAgent: true,
+          cause: `PDI checklist on delivery #${delivery.id}`,
+          refType: "service_order",
+          refId: workOrder.id,
+        });
+      } catch (err) {
+        logger.error({ err, deliveryId: delivery.id }, "pdi receipt failed");
+      }
+    }
+  }
+
   const [row] = await db
     .update(deliveriesTable)
-    .set({ pdiItems: parsed.data.items })
+    .set(patch)
     .where(
       and(
         eq(deliveriesTable.id, params.data.id),
-        eq(deliveriesTable.dealerId, activeDealerId(res)),
+        eq(deliveriesTable.dealerId, dealerId),
       ),
     )
     .returning();
@@ -683,7 +998,7 @@ router.patch("/deliveries/:id/pdi", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Delivery not found" });
     return;
   }
-  res.json(UpdateDeliveryPdiResponse.parse((await enrich([row], activeDealerId(res)))[0]));
+  res.json(UpdateDeliveryPdiResponse.parse((await enrich([row], dealerId))[0]));
 });
 
 router.get("/deliveries/:id/invoice.pdf", async (req, res): Promise<void> => {

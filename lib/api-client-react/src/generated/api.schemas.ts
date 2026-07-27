@@ -1166,9 +1166,53 @@ export interface DeliveryStepState {
   completedBy?: string | null;
 }
 
+export type PdiItemStatus = typeof PdiItemStatus[keyof typeof PdiItemStatus];
+
+
+export const PdiItemStatus = {
+  pending: 'pending',
+  pass: 'pass',
+  fail: 'fail',
+  waived: 'waived',
+} as const;
+
 export interface PdiItem {
   label: string;
-  checked: boolean;
+  status: PdiItemStatus;
+  /** @nullable */
+  waiveReason?: string | null;
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface HandoverVerificationField {
+  field: string;
+  label: string;
+  /** @nullable */
+  extracted: string | null;
+  /** @nullable */
+  expected: string | null;
+  match: boolean;
+}
+
+export type HandoverVerificationStatus = typeof HandoverVerificationStatus[keyof typeof HandoverVerificationStatus];
+
+
+export const HandoverVerificationStatus = {
+  none: 'none',
+  pending: 'pending',
+  proposed: 'proposed',
+  accepted: 'accepted',
+  dismissed: 'dismissed',
+  failed: 'failed',
+} as const;
+
+export interface HandoverVerification {
+  status: HandoverVerificationStatus;
+  allMatch: boolean;
+  /** @nullable */
+  summary?: string | null;
+  fields: HandoverVerificationField[];
 }
 
 export type DeliveryStatus = typeof DeliveryStatus[keyof typeof DeliveryStatus];
@@ -1192,6 +1236,15 @@ export const DeliveryCurrentStep = {
   delivery: 'delivery',
   signature: 'signature',
   feedback: 'feedback',
+} as const;
+
+export type DeliveryRegistrationStatus = typeof DeliveryRegistrationStatus[keyof typeof DeliveryRegistrationStatus];
+
+
+export const DeliveryRegistrationStatus = {
+  pending: 'pending',
+  submitted: 'submitted',
+  issued: 'issued',
 } as const;
 
 export interface Delivery {
@@ -1228,10 +1281,26 @@ export interface Delivery {
   feedbackComment?: string | null;
   /** @nullable */
   registrationNumber?: string | null;
+  registrationStatus?: DeliveryRegistrationStatus;
+  /** @nullable */
+  registrationSubmittedAt?: string | null;
+  /** Registration has sat at "submitted" for more than 72 hours */
+  registrationStuck?: boolean;
   /** @nullable */
   insurancePolicy?: string | null;
   /** @nullable */
   insuranceProvider?: string | null;
+  /** @nullable */
+  insuranceDocId?: number | null;
+  /** @nullable */
+  handoverSheetDocId?: number | null;
+  /** @nullable */
+  pdiWorkOrderId?: number | null;
+  /** @nullable */
+  deliveredAt?: string | null;
+  /** What is blocking the current step from advancing */
+  unmet?: string[];
+  handoverVerification?: HandoverVerification | null;
   /** @nullable */
   completedAt?: string | null;
   createdAt: string;
@@ -1242,9 +1311,23 @@ export interface DeliveryInput {
   advisorUserId?: number;
 }
 
+export type DeliveryUpdateRegistrationStatus = typeof DeliveryUpdateRegistrationStatus[keyof typeof DeliveryUpdateRegistrationStatus];
+
+
+export const DeliveryUpdateRegistrationStatus = {
+  pending: 'pending',
+  submitted: 'submitted',
+  issued: 'issued',
+} as const;
+
 export interface DeliveryUpdate {
   /** @nullable */
   advisorUserId?: number | null;
+  /** @pattern ^[A-Z]{3}[0-9]{1,4}$ */
+  registrationNumber?: string;
+  registrationStatus?: DeliveryUpdateRegistrationStatus;
+  insurancePolicy?: string;
+  insuranceProvider?: string;
 }
 
 export type DeliveryAdvanceInputStep = typeof DeliveryAdvanceInputStep[keyof typeof DeliveryAdvanceInputStep];
@@ -1275,6 +1358,8 @@ export interface DeliveryAdvanceInput {
   insuranceProvider?: string;
   signatureName?: string;
   signatureData?: string;
+  /** Actual handover timestamp (GMT-4) — required on the delivery step */
+  deliveredAt?: string;
   /**
      * @minimum 1
      * @maximum 5
@@ -1312,6 +1397,7 @@ export type DocumentEntityType = typeof DocumentEntityType[keyof typeof Document
 export const DocumentEntityType = {
   lead: 'lead',
   vehicle: 'vehicle',
+  delivery: 'delivery',
 } as const;
 
 export type DocumentType = typeof DocumentType[keyof typeof DocumentType];
@@ -1326,6 +1412,7 @@ export const DocumentType = {
   customs: 'customs',
   invoice: 'invoice',
   quote: 'quote',
+  signed_handover: 'signed_handover',
   other: 'other',
 } as const;
 
@@ -1369,6 +1456,7 @@ export type DocumentInputEntityType = typeof DocumentInputEntityType[keyof typeo
 export const DocumentInputEntityType = {
   lead: 'lead',
   vehicle: 'vehicle',
+  delivery: 'delivery',
 } as const;
 
 export type DocumentInputType = typeof DocumentInputType[keyof typeof DocumentInputType];
@@ -1383,6 +1471,7 @@ export const DocumentInputType = {
   customs: 'customs',
   invoice: 'invoice',
   quote: 'quote',
+  signed_handover: 'signed_handover',
   other: 'other',
 } as const;
 
@@ -5446,5 +5535,6 @@ export type ListDocumentsEntityType = typeof ListDocumentsEntityType[keyof typeo
 export const ListDocumentsEntityType = {
   lead: 'lead',
   vehicle: 'vehicle',
+  delivery: 'delivery',
 } as const;
 

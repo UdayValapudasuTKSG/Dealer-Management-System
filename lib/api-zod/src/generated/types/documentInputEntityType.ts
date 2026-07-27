@@ -12,4 +12,5 @@ export type DocumentInputEntityType = typeof DocumentInputEntityType[keyof typeo
 export const DocumentInputEntityType = {
   lead: 'lead',
   vehicle: 'vehicle',
+  delivery: 'delivery',
 } as const;

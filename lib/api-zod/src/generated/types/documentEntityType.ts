@@ -12,4 +12,5 @@ export type DocumentEntityType = typeof DocumentEntityType[keyof typeof Document
 export const DocumentEntityType = {
   lead: 'lead',
   vehicle: 'vehicle',
+  delivery: 'delivery',
 } as const;

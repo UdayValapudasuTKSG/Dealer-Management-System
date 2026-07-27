@@ -758,7 +758,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/UnmetError"
   /deliveries/{id}/pdi:
     patch:
       operationId: updateDeliveryPdi
@@ -5808,7 +5808,7 @@ paths:
         - name: entityType
           in: query
           required: true
-          schema: { type: string, enum: [lead, vehicle] }
+          schema: { type: string, enum: [lead, vehicle, delivery] }
         - name: entityId
           in: query
           required: true
@@ -6822,10 +6822,34 @@ components:
         completedBy: { type: ["string", "null"] }
     PdiItem:
       type: object
-      required: [label, checked]
+      required: [label, status]
       properties:
         label: { type: string }
-        checked: { type: boolean }
+        status: { type: string, enum: [pending, pass, fail, waived] }
+        waiveReason: { type: ["string", "null"] }
+        note: { type: ["string", "null"] }
+    HandoverVerificationField:
+      type: object
+      required: [field, label, extracted, expected, match]
+      properties:
+        field: { type: string }
+        label: { type: string }
+        extracted: { type: ["string", "null"] }
+        expected: { type: ["string", "null"] }
+        match: { type: boolean }
+    HandoverVerification:
+      type: object
+      required: [status, allMatch, fields]
+      properties:
+        status:
+          type: string
+          enum: [none, pending, proposed, accepted, dismissed, failed]
+        allMatch: { type: boolean }
+        summary: { type: ["string", "null"] }
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/HandoverVerificationField"
     Delivery:
       type: object
       required: [id, dealId, vehicleId, status, currentStep, steps, pdiItems, createdAt]
@@ -6856,8 +6880,25 @@ components:
         feedbackRating: { type: ["integer", "null"] }
         feedbackComment: { type: ["string", "null"] }
         registrationNumber: { type: ["string", "null"] }
+        registrationStatus: { type: string, enum: [pending, submitted, issued] }
+        registrationSubmittedAt: { type: ["string", "null"], format: date-time }
+        registrationStuck:
+          type: boolean
+          description: Registration has sat at "submitted" for more than 72 hours
         insurancePolicy: { type: ["string", "null"] }
         insuranceProvider: { type: ["string", "null"] }
+        insuranceDocId: { type: ["integer", "null"] }
+        handoverSheetDocId: { type: ["integer", "null"] }
+        pdiWorkOrderId: { type: ["integer", "null"] }
+        deliveredAt: { type: ["string", "null"], format: date-time }
+        unmet:
+          type: array
+          description: What is blocking the current step from advancing
+          items: { type: string }
+        handoverVerification:
+          oneOf:
+            - $ref: "#/components/schemas/HandoverVerification"
+            - type: "null"
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     DeliveryInput:
@@ -6870,6 +6911,10 @@ components:
       type: object
       properties:
         advisorUserId: { type: ["integer", "null"] }
+        registrationNumber: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$" }
+        registrationStatus: { type: string, enum: [pending, submitted, issued] }
+        insurancePolicy: { type: string }
+        insuranceProvider: { type: string }
     DeliveryAdvanceInput:
       type: object
       required: [step]
@@ -6882,6 +6927,7 @@ components:
         insuranceProvider: { type: string }
         signatureName: { type: string }
         signatureData: { type: string }
+        deliveredAt: { type: string, format: date-time, description: "Actual handover timestamp (GMT-4) — required on the delivery step" }
         feedbackRating: { type: integer, minimum: 1, maximum: 5 }
         feedbackComment: { type: string }
     DeliveryPdiInput:
@@ -6932,7 +6978,7 @@ components:
         ]
       properties:
         id: { type: integer }
-        entityType: { type: string, enum: [lead, vehicle] }
+        entityType: { type: string, enum: [lead, vehicle, delivery] }
         entityId: { type: integer }
         type:
           type: string
@@ -6946,6 +6992,7 @@ components:
               customs,
               invoice,
               quote,
+              signed_handover,
               other,
             ]
         version: { type: integer }
@@ -6968,7 +7015,7 @@ components:
       type: object
       required: [entityType, entityId, type, fileName, storageKey, mimeType, sizeBytes]
       properties:
-        entityType: { type: string, enum: [lead, vehicle] }
+        entityType: { type: string, enum: [lead, vehicle, delivery] }
         entityId: { type: integer }
         type:
           type: string
@@ -6982,6 +7029,7 @@ components:
               customs,
               invoice,
               quote,
+              signed_handover,
               other,
             ]
         fileName: { type: string, minLength: 1 }

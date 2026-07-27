@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DeliveryCurrentStep } from './deliveryCurrentStep';
+import type { DeliveryRegistrationStatus } from './deliveryRegistrationStatus';
 import type { DeliveryStatus } from './deliveryStatus';
 import type { DeliveryStepState } from './deliveryStepState';
+import type { HandoverVerification } from './handoverVerification';
 import type { PdiItem } from './pdiItem';
 
 export interface Delivery {
@@ -44,10 +46,26 @@ export interface Delivery {
   feedbackComment?: string | null;
   /** @nullable */
   registrationNumber?: string | null;
+  registrationStatus?: DeliveryRegistrationStatus;
+  /** @nullable */
+  registrationSubmittedAt?: Date | null;
+  /** Registration has sat at "submitted" for more than 72 hours */
+  registrationStuck?: boolean;
   /** @nullable */
   insurancePolicy?: string | null;
   /** @nullable */
   insuranceProvider?: string | null;
+  /** @nullable */
+  insuranceDocId?: number | null;
+  /** @nullable */
+  handoverSheetDocId?: number | null;
+  /** @nullable */
+  pdiWorkOrderId?: number | null;
+  /** @nullable */
+  deliveredAt?: Date | null;
+  /** What is blocking the current step from advancing */
+  unmet?: string[];
+  handoverVerification?: HandoverVerification | null;
   /** @nullable */
   completedAt?: Date | null;
   createdAt: Date;

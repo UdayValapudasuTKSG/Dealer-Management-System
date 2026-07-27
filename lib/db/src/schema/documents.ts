@@ -10,7 +10,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const DOCUMENT_ENTITY_TYPES = ["lead", "vehicle"] as const;
+export const DOCUMENT_ENTITY_TYPES = ["lead", "vehicle", "delivery"] as const;
 export type DocumentEntityType = (typeof DOCUMENT_ENTITY_TYPES)[number];
 
 export const DOCUMENT_TYPES = [
@@ -22,6 +22,7 @@ export const DOCUMENT_TYPES = [
   "customs",
   "invoice",
   "quote",
+  "signed_handover",
   "other",
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];

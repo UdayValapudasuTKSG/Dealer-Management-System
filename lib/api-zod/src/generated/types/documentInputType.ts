@@ -18,5 +18,6 @@ export const DocumentInputType = {
   customs: 'customs',
   invoice: 'invoice',
   quote: 'quote',
+  signed_handover: 'signed_handover',
   other: 'other',
 } as const;

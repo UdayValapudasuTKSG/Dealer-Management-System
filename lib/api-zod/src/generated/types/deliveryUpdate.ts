@@ -5,8 +5,14 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DeliveryUpdateRegistrationStatus } from './deliveryUpdateRegistrationStatus';
 
 export interface DeliveryUpdate {
   /** @nullable */
   advisorUserId?: number | null;
+  /** @pattern ^[A-Z]{3}[0-9]{1,4}$ */
+  registrationNumber?: string;
+  registrationStatus?: DeliveryUpdateRegistrationStatus;
+  insurancePolicy?: string;
+  insuranceProvider?: string;
 }

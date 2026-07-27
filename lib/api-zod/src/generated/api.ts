@@ -734,7 +734,9 @@ export const ListDeliveriesResponseItem = zod.object({
 })),
   "pdiItems": zod.array(zod.object({
   "label": zod.string(),
-  "checked": zod.boolean()
+  "status": zod.enum(['pending', 'pass', 'fail', 'waived']),
+  "waiveReason": zod.string().nullish(),
+  "note": zod.string().nullish()
 })),
   "appointmentAt": zod.coerce.date().nullish(),
   "invoiceId": zod.number().nullish(),
@@ -743,8 +745,28 @@ export const ListDeliveriesResponseItem = zod.object({
   "feedbackRating": zod.number().nullish(),
   "feedbackComment": zod.string().nullish(),
   "registrationNumber": zod.string().nullish(),
+  "registrationStatus": zod.enum(['pending', 'submitted', 'issued']).optional(),
+  "registrationSubmittedAt": zod.coerce.date().nullish(),
+  "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "insuranceDocId": zod.number().nullish(),
+  "handoverSheetDocId": zod.number().nullish(),
+  "pdiWorkOrderId": zod.number().nullish(),
+  "deliveredAt": zod.coerce.date().nullish(),
+  "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
+  "handoverVerification": zod.union([zod.object({
+  "status": zod.enum(['none', 'pending', 'proposed', 'accepted', 'dismissed', 'failed']),
+  "allMatch": zod.boolean(),
+  "summary": zod.string().nullish(),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "label": zod.string(),
+  "extracted": zod.string().nullable(),
+  "expected": zod.string().nullable(),
+  "match": zod.boolean()
+}))
+}),zod.null()]).optional(),
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -781,7 +803,9 @@ export const CreateDeliveryResponse = zod.object({
 })),
   "pdiItems": zod.array(zod.object({
   "label": zod.string(),
-  "checked": zod.boolean()
+  "status": zod.enum(['pending', 'pass', 'fail', 'waived']),
+  "waiveReason": zod.string().nullish(),
+  "note": zod.string().nullish()
 })),
   "appointmentAt": zod.coerce.date().nullish(),
   "invoiceId": zod.number().nullish(),
@@ -790,8 +814,28 @@ export const CreateDeliveryResponse = zod.object({
   "feedbackRating": zod.number().nullish(),
   "feedbackComment": zod.string().nullish(),
   "registrationNumber": zod.string().nullish(),
+  "registrationStatus": zod.enum(['pending', 'submitted', 'issued']).optional(),
+  "registrationSubmittedAt": zod.coerce.date().nullish(),
+  "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "insuranceDocId": zod.number().nullish(),
+  "handoverSheetDocId": zod.number().nullish(),
+  "pdiWorkOrderId": zod.number().nullish(),
+  "deliveredAt": zod.coerce.date().nullish(),
+  "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
+  "handoverVerification": zod.union([zod.object({
+  "status": zod.enum(['none', 'pending', 'proposed', 'accepted', 'dismissed', 'failed']),
+  "allMatch": zod.boolean(),
+  "summary": zod.string().nullish(),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "label": zod.string(),
+  "extracted": zod.string().nullable(),
+  "expected": zod.string().nullable(),
+  "match": zod.boolean()
+}))
+}),zod.null()]).optional(),
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -823,7 +867,9 @@ export const GetDeliveryResponse = zod.object({
 })),
   "pdiItems": zod.array(zod.object({
   "label": zod.string(),
-  "checked": zod.boolean()
+  "status": zod.enum(['pending', 'pass', 'fail', 'waived']),
+  "waiveReason": zod.string().nullish(),
+  "note": zod.string().nullish()
 })),
   "appointmentAt": zod.coerce.date().nullish(),
   "invoiceId": zod.number().nullish(),
@@ -832,8 +878,28 @@ export const GetDeliveryResponse = zod.object({
   "feedbackRating": zod.number().nullish(),
   "feedbackComment": zod.string().nullish(),
   "registrationNumber": zod.string().nullish(),
+  "registrationStatus": zod.enum(['pending', 'submitted', 'issued']).optional(),
+  "registrationSubmittedAt": zod.coerce.date().nullish(),
+  "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "insuranceDocId": zod.number().nullish(),
+  "handoverSheetDocId": zod.number().nullish(),
+  "pdiWorkOrderId": zod.number().nullish(),
+  "deliveredAt": zod.coerce.date().nullish(),
+  "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
+  "handoverVerification": zod.union([zod.object({
+  "status": zod.enum(['none', 'pending', 'proposed', 'accepted', 'dismissed', 'failed']),
+  "allMatch": zod.boolean(),
+  "summary": zod.string().nullish(),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "label": zod.string(),
+  "extracted": zod.string().nullable(),
+  "expected": zod.string().nullable(),
+  "match": zod.boolean()
+}))
+}),zod.null()]).optional(),
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -846,8 +912,15 @@ export const UpdateDeliveryParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateDeliveryBodyRegistrationNumberRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
+
+
 export const UpdateDeliveryBody = zod.object({
-  "advisorUserId": zod.number().nullish()
+  "advisorUserId": zod.number().nullish(),
+  "registrationNumber": zod.string().regex(updateDeliveryBodyRegistrationNumberRegExp).optional(),
+  "registrationStatus": zod.enum(['pending', 'submitted', 'issued']).optional(),
+  "insurancePolicy": zod.string().optional(),
+  "insuranceProvider": zod.string().optional()
 })
 
 export const UpdateDeliveryResponse = zod.object({
@@ -872,7 +945,9 @@ export const UpdateDeliveryResponse = zod.object({
 })),
   "pdiItems": zod.array(zod.object({
   "label": zod.string(),
-  "checked": zod.boolean()
+  "status": zod.enum(['pending', 'pass', 'fail', 'waived']),
+  "waiveReason": zod.string().nullish(),
+  "note": zod.string().nullish()
 })),
   "appointmentAt": zod.coerce.date().nullish(),
   "invoiceId": zod.number().nullish(),
@@ -881,8 +956,28 @@ export const UpdateDeliveryResponse = zod.object({
   "feedbackRating": zod.number().nullish(),
   "feedbackComment": zod.string().nullish(),
   "registrationNumber": zod.string().nullish(),
+  "registrationStatus": zod.enum(['pending', 'submitted', 'issued']).optional(),
+  "registrationSubmittedAt": zod.coerce.date().nullish(),
+  "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "insuranceDocId": zod.number().nullish(),
+  "handoverSheetDocId": zod.number().nullish(),
+  "pdiWorkOrderId": zod.number().nullish(),
+  "deliveredAt": zod.coerce.date().nullish(),
+  "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
+  "handoverVerification": zod.union([zod.object({
+  "status": zod.enum(['none', 'pending', 'proposed', 'accepted', 'dismissed', 'failed']),
+  "allMatch": zod.boolean(),
+  "summary": zod.string().nullish(),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "label": zod.string(),
+  "extracted": zod.string().nullable(),
+  "expected": zod.string().nullable(),
+  "match": zod.boolean()
+}))
+}),zod.null()]).optional(),
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -909,6 +1004,7 @@ export const AdvanceDeliveryBody = zod.object({
   "insuranceProvider": zod.string().optional(),
   "signatureName": zod.string().optional(),
   "signatureData": zod.string().optional(),
+  "deliveredAt": zod.coerce.date().optional().describe('Actual handover timestamp (GMT-4) — required on the delivery step'),
   "feedbackRating": zod.number().min(1).max(advanceDeliveryBodyFeedbackRatingMax).optional(),
   "feedbackComment": zod.string().optional()
 })
@@ -935,7 +1031,9 @@ export const AdvanceDeliveryResponse = zod.object({
 })),
   "pdiItems": zod.array(zod.object({
   "label": zod.string(),
-  "checked": zod.boolean()
+  "status": zod.enum(['pending', 'pass', 'fail', 'waived']),
+  "waiveReason": zod.string().nullish(),
+  "note": zod.string().nullish()
 })),
   "appointmentAt": zod.coerce.date().nullish(),
   "invoiceId": zod.number().nullish(),
@@ -944,8 +1042,28 @@ export const AdvanceDeliveryResponse = zod.object({
   "feedbackRating": zod.number().nullish(),
   "feedbackComment": zod.string().nullish(),
   "registrationNumber": zod.string().nullish(),
+  "registrationStatus": zod.enum(['pending', 'submitted', 'issued']).optional(),
+  "registrationSubmittedAt": zod.coerce.date().nullish(),
+  "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "insuranceDocId": zod.number().nullish(),
+  "handoverSheetDocId": zod.number().nullish(),
+  "pdiWorkOrderId": zod.number().nullish(),
+  "deliveredAt": zod.coerce.date().nullish(),
+  "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
+  "handoverVerification": zod.union([zod.object({
+  "status": zod.enum(['none', 'pending', 'proposed', 'accepted', 'dismissed', 'failed']),
+  "allMatch": zod.boolean(),
+  "summary": zod.string().nullish(),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "label": zod.string(),
+  "extracted": zod.string().nullable(),
+  "expected": zod.string().nullable(),
+  "match": zod.boolean()
+}))
+}),zod.null()]).optional(),
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -961,7 +1079,9 @@ export const UpdateDeliveryPdiParams = zod.object({
 export const UpdateDeliveryPdiBody = zod.object({
   "items": zod.array(zod.object({
   "label": zod.string(),
-  "checked": zod.boolean()
+  "status": zod.enum(['pending', 'pass', 'fail', 'waived']),
+  "waiveReason": zod.string().nullish(),
+  "note": zod.string().nullish()
 }))
 })
 
@@ -987,7 +1107,9 @@ export const UpdateDeliveryPdiResponse = zod.object({
 })),
   "pdiItems": zod.array(zod.object({
   "label": zod.string(),
-  "checked": zod.boolean()
+  "status": zod.enum(['pending', 'pass', 'fail', 'waived']),
+  "waiveReason": zod.string().nullish(),
+  "note": zod.string().nullish()
 })),
   "appointmentAt": zod.coerce.date().nullish(),
   "invoiceId": zod.number().nullish(),
@@ -996,8 +1118,28 @@ export const UpdateDeliveryPdiResponse = zod.object({
   "feedbackRating": zod.number().nullish(),
   "feedbackComment": zod.string().nullish(),
   "registrationNumber": zod.string().nullish(),
+  "registrationStatus": zod.enum(['pending', 'submitted', 'issued']).optional(),
+  "registrationSubmittedAt": zod.coerce.date().nullish(),
+  "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "insuranceDocId": zod.number().nullish(),
+  "handoverSheetDocId": zod.number().nullish(),
+  "pdiWorkOrderId": zod.number().nullish(),
+  "deliveredAt": zod.coerce.date().nullish(),
+  "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
+  "handoverVerification": zod.union([zod.object({
+  "status": zod.enum(['none', 'pending', 'proposed', 'accepted', 'dismissed', 'failed']),
+  "allMatch": zod.boolean(),
+  "summary": zod.string().nullish(),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "label": zod.string(),
+  "extracted": zod.string().nullable(),
+  "expected": zod.string().nullable(),
+  "match": zod.boolean()
+}))
+}),zod.null()]).optional(),
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -7549,15 +7691,15 @@ export const CreateCommNoteResponse = zod.object({
  * @summary List documents for a lead or vehicle (all versions, newest first)
  */
 export const ListDocumentsQueryParams = zod.object({
-  "entityType": zod.enum(['lead', 'vehicle']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
   "entityId": zod.coerce.number()
 })
 
 export const ListDocumentsResponseItem = zod.object({
   "id": zod.number(),
-  "entityType": zod.enum(['lead', 'vehicle']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
   "entityId": zod.number(),
-  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'other']),
+  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "version": zod.number(),
   "fileName": zod.string(),
   "storageKey": zod.string().nullish(),
@@ -7591,9 +7733,9 @@ export const createDocumentBodySizeBytesMin = 0;
 
 
 export const CreateDocumentBody = zod.object({
-  "entityType": zod.enum(['lead', 'vehicle']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
   "entityId": zod.number(),
-  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'other']),
+  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "fileName": zod.string().min(1),
   "storageKey": zod.string().min(1),
   "mimeType": zod.string().min(1),
@@ -7603,9 +7745,9 @@ export const CreateDocumentBody = zod.object({
 
 export const CreateDocumentResponse = zod.object({
   "id": zod.number(),
-  "entityType": zod.enum(['lead', 'vehicle']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
   "entityId": zod.number(),
-  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'other']),
+  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "version": zod.number(),
   "fileName": zod.string(),
   "storageKey": zod.string().nullish(),
@@ -7654,9 +7796,9 @@ export const ReviewDocumentExtractionBody = zod.object({
 
 export const ReviewDocumentExtractionResponse = zod.object({
   "id": zod.number(),
-  "entityType": zod.enum(['lead', 'vehicle']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
   "entityId": zod.number(),
-  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'other']),
+  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "version": zod.number(),
   "fileName": zod.string(),
   "storageKey": zod.string().nullish(),

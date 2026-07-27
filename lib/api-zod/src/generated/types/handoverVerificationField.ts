@@ -5,13 +5,13 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
-import type { PdiItemStatus } from './pdiItemStatus';
 
-export interface PdiItem {
+export interface HandoverVerificationField {
+  field: string;
   label: string;
-  status: PdiItemStatus;
   /** @nullable */
-  waiveReason?: string | null;
+  extracted: string | null;
   /** @nullable */
-  note?: string | null;
+  expected: string | null;
+  match: boolean;
 }
