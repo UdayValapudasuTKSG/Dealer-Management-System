@@ -18,7 +18,7 @@ import {
   REVIEW_STAGE_LABEL,
   type AdvanceStage,
 } from "../lib/stage-review";
-import { computeDraftDuty } from "../lib/gra-duty";
+import { computeDraftDuty, taxLinesMatch } from "../lib/gra-duty";
 import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 import { activeDealerId } from "../middlewares/rbac";
 import {
@@ -200,26 +200,13 @@ async function applyCascade(
       };
     }
     case "gra_filing": {
-      // Human gate resolved → flip the pending filing snapshot to "filed"
-      // (immutable from here on). The duty pack PDF only exists after this.
-      await tx
-        .update(graFilingsTable)
-        .set({
-          status: "filed",
-          filedBy: gate.resolvedBy ?? "Officer",
-          filedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(graFilingsTable.gateId, gate.id),
-            eq(graFilingsTable.dealerId, gate.dealerId),
-            eq(graFilingsTable.status, "pending_gate"),
-          ),
-        );
+      // Approval AUTHORISES the filing but does not file it — the snapshot
+      // stays pending_gate until staff explicitly POST /gra/filings with this
+      // resolved gate (17-mB step 8). The duty pack PDF only exists after that.
       return {
-        title: "GRA filing submitted",
+        title: "GRA duty sheet approved",
         detail:
-          "Duty pack accepted by the responsible officer and filed to the GRA; clearance and registration steps are now unblocked.",
+          "Officer confirmed the duty computation. The filing can now be submitted to the GRA to generate the duty pack.",
       };
     }
     case "refund_release": {
@@ -441,23 +428,18 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
         ),
       );
     if (filing) {
-      const duty = computeDraftDuty(
-        {
-          cifValue: filing.cifValue,
-          engineCc: filing.engineCc,
-          fuelType: filing.fuelType,
-          year: filing.year,
-          yearOfImport: filing.yearOfImport,
-          importerType: filing.importerType,
-          bodyType: filing.bodyType,
-          isHybrid: filing.isHybrid,
-          retailPrice: filing.retailPrice,
-        },
-        filing.exchangeRate,
-      );
+      const duty = await computeDraftDuty(gate.dealerId, {
+        cifValue: filing.cifValue,
+        engineCc: filing.engineCc,
+        fuelType: filing.fuelType,
+        year: filing.year,
+        yearOfImport: filing.yearOfImport,
+      });
       const unmet = [...duty.missingInputs, ...duty.reviewFlags];
       if (Math.abs(duty.totalPayable - filing.totalPayable) > 0.01) {
         unmet.push("total_mismatch_with_gra_engine");
+      } else if (!taxLinesMatch(duty.taxLines, filing.taxLines)) {
+        unmet.push("tax_lines_mismatch_with_gra_engine");
       }
       if (unmet.length > 0) {
         res.status(422).json({

@@ -4329,7 +4329,7 @@ paths:
     post:
       operationId: extractGraFiling
       tags: [gra]
-      summary: Extract a GRA vehicle-duty filing draft from an uploaded document image
+      summary: Vision-extract LEGIBLE fields only (make/model/year/cifPrinted/engineCc/fuelType) from a customs document — never TIN/VIN/duty
       requestBody:
         required: true
         content:
@@ -4338,13 +4338,49 @@ paths:
               $ref: "#/components/schemas/GraExtractRequest"
       responses:
         "200":
-          description: Extracted filing draft
+          description: Legible fields with per-field confidence; low-confidence fields dropped for human key-in
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GraFilingDraft"
+                $ref: "#/components/schemas/GraExtractResponse"
         "400":
           description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Document unreadable — every field requires human key-in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /gra/review:
+    post:
+      operationId: reviewGraFiling
+      tags: [gra]
+      summary: Submit the human-confirmed draft for officer review — computes the duty sheet server-side from dealer_taxes and raises the gra_filing gate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GraReviewSubmission"
+      responses:
+        "201":
+          description: gra_filing gate raised holding the computed duty sheet + pending filing snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Gate"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Required duty inputs missing or CIF components do not sum to CIF
           content:
             application/json:
               schema:
@@ -4376,7 +4412,7 @@ paths:
     post:
       operationId: submitGraFiling
       tags: [gra]
-      summary: Submit a completed GRA filing draft; raises a gra_filing decision gate and a pending filing snapshot
+      summary: File the confirmed duty snapshot to GRA — requires a RESOLVED gra_filing gate (409 otherwise); taxLines must match the server recompute (422 otherwise)
       requestBody:
         required: true
         content:
@@ -4384,20 +4420,32 @@ paths:
             schema:
               $ref: "#/components/schemas/GraFilingSubmission"
       responses:
-        "200":
-          description: Created gate
+        "201":
+          description: Immutable filed snapshot
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Gate"
+                $ref: "#/components/schemas/GraFiling"
         "400":
           description: Bad request
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "404":
+          description: Gate or pending filing not found in the active dealer scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: gra_filing gate not resolved (or filing already filed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "422":
-          description: Client tax lines mismatch server recompute
+          description: Client tax lines / CIF / rate mismatch the server-computed sheet
           content:
             application/json:
               schema:
@@ -4407,7 +4455,7 @@ paths:
     post:
       operationId: computeGraDuty
       tags: [gra]
-      summary: Recompute the GRA duty breakdown server-side from officer-edited draft inputs
+      summary: Recompute the duty sheet server-side from dealer_taxes for officer-edited draft inputs (pure, no writes)
       requestBody:
         required: true
         content:
@@ -4416,7 +4464,7 @@ paths:
               $ref: "#/components/schemas/GraComputeRequest"
       responses:
         "200":
-          description: Server-computed duty lines, breakdown, flags and missing inputs
+          description: Server-computed duty lines, missing inputs and EV exclusions
           content:
             application/json:
               schema:
@@ -4432,7 +4480,7 @@ paths:
     get:
       operationId: getGraFilingPdf
       tags: [gra]
-      summary: GRA Import Duty Pack PDF — available only after the gra_filing gate is resolved
+      summary: GRA Import Duty Pack PDF — available only after the gra_filing gate is resolved and the filing is filed
       parameters:
         - in: path
           name: id
@@ -9091,6 +9139,33 @@ components:
         mediaType:
           type: string
           enum: [image/png, image/jpeg, image/webp, image/gif]
+        sourceDocId:
+          type: ["integer", "null"]
+          description: documents.id of the uploaded customs/manifest/proforma file, for traceability
+    GraExtractedFields:
+      type: object
+      description: Legible-only allowlist — the model NEVER returns TIN, VIN, owner or any duty figure; those are human-keyed from the source documents
+      properties:
+        make: { type: ["string", "null"] }
+        model: { type: ["string", "null"] }
+        year: { type: ["integer", "null"] }
+        cifPrinted: { type: ["number", "null"], description: CIF value exactly as printed on the document (USD-scale), human-confirmed before any duty compute }
+        engineCc: { type: ["integer", "null"] }
+        fuelType: { type: ["string", "null"] }
+    GraExtractResponse:
+      type: object
+      required: [fields, confidence, dropped]
+      properties:
+        fields: { $ref: "#/components/schemas/GraExtractedFields" }
+        confidence:
+          type: object
+          description: Per-field confidence 0-1 for the fields that were kept
+          additionalProperties: { type: number }
+        dropped:
+          type: array
+          description: Fields below MIN_AGENT_CONFIDENCE or illegible — dropped, flagged for human key-in, never auto-filled
+          items: { type: string }
+        notes: { type: ["string", "null"], description: Model remark on legibility, wrapped via guardUntrusted }
     GraTaxLine:
       type: object
       required: [code, name, kind, rate, amount]
@@ -9100,8 +9175,11 @@ components:
         kind: { type: string, enum: [percent, fixed] }
         rate: { type: number }
         amount: { type: number, description: USD-scale amount computed server-side }
+        basis: { type: ["string", "null"], description: Human-readable base the line was computed on }
+        baseAmount: { type: ["number", "null"], description: USD-scale base the rate applied to (null for fixed lines) }
     GraFilingDraft:
       type: object
+      description: Human-confirmed filing inputs. TIN/VIN/owner are keyed by the officer from source docs; duty is NEVER part of the draft — the server computes it from dealer_taxes.
       required:
         - ownerName
         - tin
@@ -9113,64 +9191,30 @@ components:
         - fuelType
         - hsCode
         - cifValue
-        - taxLines
-        - totalPayable
-        - uncertainFields
       properties:
         ownerName: { type: string }
-        tin: { type: string, description: Guyana Taxpayer Identification Number }
-        vin: { type: string, description: Chassis / VIN number }
+        tin: { type: string, description: Guyana Taxpayer Identification Number — human-keyed, never extracted }
+        vin: { type: string, description: Chassis / VIN number — human-keyed, never extracted }
         make: { type: string }
         model: { type: string }
         year: { type: integer }
         engineCc: { type: integer, description: Engine capacity in cubic centimetres }
         fuelType: { type: string }
         hsCode: { type: string, description: Harmonised System tariff code }
-        cifValue: { type: number, description: Cost, Insurance & Freight value, USD-scale }
-        taxLines:
-          type: array
-          description: Deterministic server-computed duty/levy lines from the dealer's tax rules (never AI-computed)
-          items: { $ref: "#/components/schemas/GraTaxLine" }
-        totalPayable: { type: number, description: Sum of taxLines, USD-scale, server-computed }
-        confidence: { type: ["number", "null"], description: Extraction confidence 0-1 reported by the vision model }
-        uncertainFields:
-          type: array
-          description: Extracted fields the model could not clearly read; must be human-verified
-          items: { type: string }
-        notes: { type: ["string", "null"] }
-        importerType:
-          type: ["string", "null"]
-          enum: [private, dealer_used, new_vehicle_trader, null]
-          description: GRA importer category — drives the excise base formula
-        bodyType: { type: ["string", "null"], description: e.g. double_cab_pickup (drives the VAT exemption) }
-        isHybrid: { type: ["boolean", "null"] }
+        cifValue: { type: number, description: Cost, Insurance & Freight value, USD-scale, human-confirmed }
+        fobValue: { type: ["number", "null"], description: FOB component of CIF (USD-scale) }
+        freightValue: { type: ["number", "null"], description: Freight component of CIF (USD-scale) }
+        insuranceValue: { type: ["number", "null"], description: Insurance component of CIF (USD-scale) }
         yearOfImport: { type: ["integer", "null"] }
-        retailPrice: { type: ["number", "null"], description: USD retail price — required for new_vehicle_trader importers }
-        breakdown:
-          oneOf:
-            - $ref: "#/components/schemas/GraDutyBreakdown"
-            - type: "null"
-        reviewFlags:
+        sourceDocIds:
           type: ["array", "null"]
-          description: Human-review blockers (e.g. diesel_cc_gap_1800_2000); approval is blocked while set
-          items: { type: string }
-        missingInputs:
-          type: ["array", "null"]
-          description: Required duty inputs still blank — the officer must fill them before submission
-          items: { type: string }
-    GraDutyBreakdown:
-      type: object
-      required: [ageCategory, ccBand, importerType, formulaPath, dutyRatePct, vatRatePct]
-      properties:
-        ageCategory: { type: string, enum: [under_4, four_plus] }
-        ccBand: { type: string }
-        importerType: { type: string }
-        exciseBaseUsd: { type: ["number", "null"] }
-        formulaPath: { type: string }
-        exemptionApplied: { type: ["string", "null"] }
-        dutyRatePct: { type: number }
-        exciseRatePct: { type: ["number", "null"] }
-        vatRatePct: { type: number }
+          description: documents.id references every figure traces back to
+          items: { type: integer }
+        fieldConfidence:
+          type: ["object", "null"]
+          description: Per-field AI extraction confidence carried through for the duty pack
+          additionalProperties: { type: number }
+        notes: { type: ["string", "null"] }
     GraComputeRequest:
       type: object
       required: [cifValue]
@@ -9180,35 +9224,48 @@ components:
         engineCc: { type: ["integer", "null"] }
         yearOfManufacture: { type: ["integer", "null"] }
         yearOfImport: { type: ["integer", "null"] }
-        importerType: { type: ["string", "null"] }
-        bodyType: { type: ["string", "null"] }
-        isHybrid: { type: ["boolean", "null"] }
-        retailPrice: { type: ["number", "null"] }
     GraComputeResponse:
       type: object
-      required: [taxLines, totalPayable, reviewFlags, missingInputs]
+      required: [taxLines, totalPayable, reviewFlags, missingInputs, isEv, evSkipped]
       properties:
         taxLines:
           type: array
           items: { $ref: "#/components/schemas/GraTaxLine" }
         totalPayable: { type: number }
-        breakdown:
-          oneOf:
-            - $ref: "#/components/schemas/GraDutyBreakdown"
-            - type: "null"
         reviewFlags:
           type: array
           items: { type: string }
         missingInputs:
           type: array
           items: { type: string }
-    GraFilingSubmission:
+        isEv: { type: boolean }
+        evSkipped:
+          type: array
+          description: dealer_taxes rules skipped because the vehicle is electric (excludeEv)
+          items: { type: string }
+    GraReviewSubmission:
       type: object
       required: [draft]
       properties:
         draft: { $ref: "#/components/schemas/GraFilingDraft" }
         vehicleId: { type: ["integer", "null"], description: Imported vehicle this filing clears }
         dealId: { type: ["integer", "null"], description: Deal this filing clears customs for }
+    GraFilingSubmission:
+      type: object
+      description: Files the confirmed duty sheet. Requires the gra_filing gate to be RESOLVED (409 otherwise); taxLines must match the server recompute (422 otherwise).
+      required: [gateId, cif, exchangeRate, taxLines]
+      properties:
+        gateId: { type: integer, description: Resolved gra_filing gate that authorises this filing }
+        vehicleId: { type: ["integer", "null"] }
+        cif: { type: number, description: USD-scale CIF, must match the gated duty sheet }
+        exchangeRate: { type: number, description: Snapshotted usdExchangeRate, must match the gated sheet }
+        taxLines:
+          type: array
+          items: { $ref: "#/components/schemas/GraTaxLine" }
+        evExcluded: { type: ["boolean", "null"] }
+        sourceDocIds:
+          type: ["array", "null"]
+          items: { type: integer }
     GraFiling:
       type: object
       required:
@@ -9250,24 +9307,22 @@ components:
         fuelType: { type: string }
         hsCode: { type: string }
         cifValue: { type: number, description: USD-scale, human-confirmed }
-        importerType: { type: ["string", "null"] }
-        bodyType: { type: ["string", "null"] }
-        isHybrid: { type: ["boolean", "null"] }
-        yearOfImport: { type: ["integer", "null"] }
-        retailPrice: { type: ["number", "null"] }
-        breakdown:
-          oneOf:
-            - $ref: "#/components/schemas/GraDutyBreakdown"
-            - type: "null"
-        reviewFlags:
+        fobValue: { type: ["number", "null"] }
+        freightValue: { type: ["number", "null"] }
+        insuranceValue: { type: ["number", "null"] }
+        sourceDocIds:
           type: ["array", "null"]
-          items: { type: string }
-        exchangeRate: { type: number, description: usdExchangeRate snapshot at submit time }
+          items: { type: integer }
+        fieldConfidence:
+          type: ["object", "null"]
+          additionalProperties: { type: number }
+        yearOfImport: { type: ["integer", "null"] }
+        exchangeRate: { type: number, description: usdExchangeRate snapshot at review time — later rate drift never mutates a filed duty }
         evExcluded: { type: boolean }
         taxLines:
           type: array
           items: { $ref: "#/components/schemas/GraTaxLine" }
-        totalPayable: { type: number, description: USD-scale, server-computed }
+        totalPayable: { type: number, description: USD-scale, server-computed from dealer_taxes }
         sourceNotes: { type: ["string", "null"] }
         filedBy: { type: ["string", "null"] }
         filedAt: { type: ["string", "null"], format: date-time }

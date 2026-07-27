@@ -4966,6 +4966,50 @@ export interface GraExtractRequest {
   /** Base64-encoded document image (no data-URL prefix) */
   imageBase64: string;
   mediaType: GraExtractRequestMediaType;
+  /**
+     * documents.id of the uploaded customs/manifest/proforma file, for traceability
+     * @nullable
+     */
+  sourceDocId?: number | null;
+}
+
+/**
+ * Legible-only allowlist — the model NEVER returns TIN, VIN, owner or any duty figure; those are human-keyed from the source documents
+ */
+export interface GraExtractedFields {
+  /** @nullable */
+  make?: string | null;
+  /** @nullable */
+  model?: string | null;
+  /** @nullable */
+  year?: number | null;
+  /**
+     * CIF value exactly as printed on the document (USD-scale)
+     * @nullable
+     */
+  cifPrinted?: number | null;
+  /** @nullable */
+  engineCc?: number | null;
+  /** @nullable */
+  fuelType?: string | null;
+}
+
+/**
+ * Per-field confidence 0-1 for the fields that were kept
+ */
+export type GraExtractResponseConfidence = {[key: string]: number};
+
+export interface GraExtractResponse {
+  fields: GraExtractedFields;
+  /** Per-field confidence 0-1 for the fields that were kept */
+  confidence: GraExtractResponseConfidence;
+  /** Fields below MIN_AGENT_CONFIDENCE or illegible — dropped, flagged for human key-in, never auto-filled */
+  dropped: string[];
+  /**
+     * Model remark on legibility
+     * @nullable
+     */
+  notes?: string | null;
 }
 
 export type GraTaxLineKind = typeof GraTaxLineKind[keyof typeof GraTaxLineKind];
@@ -4983,49 +5027,32 @@ export interface GraTaxLine {
   rate: number;
   /** USD-scale amount computed server-side */
   amount: number;
+  /**
+     * Human-readable base the line was computed on
+     * @nullable
+     */
+  basis?: string | null;
+  /**
+     * USD-scale base the rate applied to (null for fixed lines)
+     * @nullable
+     */
+  baseAmount?: number | null;
 }
 
 /**
- * GRA importer category — drives the excise base formula
+ * Per-field AI extraction confidence carried through for the duty pack
  * @nullable
  */
-export type GraFilingDraftImporterType = typeof GraFilingDraftImporterType[keyof typeof GraFilingDraftImporterType] | null;
+export type GraFilingDraftFieldConfidence = {[key: string]: number} | null;
 
-
-export const GraFilingDraftImporterType = {
-  private: 'private',
-  dealer_used: 'dealer_used',
-  new_vehicle_trader: 'new_vehicle_trader',
-} as const;
-
-export type GraDutyBreakdownAgeCategory = typeof GraDutyBreakdownAgeCategory[keyof typeof GraDutyBreakdownAgeCategory];
-
-
-export const GraDutyBreakdownAgeCategory = {
-  under_4: 'under_4',
-  four_plus: 'four_plus',
-} as const;
-
-export interface GraDutyBreakdown {
-  ageCategory: GraDutyBreakdownAgeCategory;
-  ccBand: string;
-  importerType: string;
-  /** @nullable */
-  exciseBaseUsd?: number | null;
-  formulaPath: string;
-  /** @nullable */
-  exemptionApplied?: string | null;
-  dutyRatePct: number;
-  /** @nullable */
-  exciseRatePct?: number | null;
-  vatRatePct: number;
-}
-
+/**
+ * Human-confirmed filing inputs. TIN/VIN/owner are keyed by the officer from source docs; duty is NEVER part of the draft — the server computes it from dealer_taxes.
+ */
 export interface GraFilingDraft {
   ownerName: string;
-  /** Guyana Taxpayer Identification Number */
+  /** Guyana Taxpayer Identification Number — human-keyed */
   tin: string;
-  /** Chassis / VIN number */
+  /** Chassis / VIN number — human-keyed */
   vin: string;
   make: string;
   model: string;
@@ -5037,49 +5064,35 @@ export interface GraFilingDraft {
   hsCode: string;
   /** Cost */
   cifValue: number;
-  /** Deterministic server-computed duty/levy lines from the dealer's tax rules (never AI-computed) */
-  taxLines: GraTaxLine[];
-  /** Sum of taxLines */
-  totalPayable: number;
   /**
-     * Extraction confidence 0-1 reported by the vision model
+     * FOB component of CIF (USD-scale)
      * @nullable
      */
-  confidence?: number | null;
-  /** Extracted fields the model could not clearly read; must be human-verified */
-  uncertainFields: string[];
-  /** @nullable */
-  notes?: string | null;
+  fobValue?: number | null;
   /**
-     * GRA importer category — drives the excise base formula
+     * Freight component of CIF (USD-scale)
      * @nullable
      */
-  importerType?: GraFilingDraftImporterType;
+  freightValue?: number | null;
   /**
-     * e.g. double_cab_pickup (drives the VAT exemption)
+     * Insurance component of CIF (USD-scale)
      * @nullable
      */
-  bodyType?: string | null;
-  /** @nullable */
-  isHybrid?: boolean | null;
+  insuranceValue?: number | null;
   /** @nullable */
   yearOfImport?: number | null;
   /**
-     * USD retail price — required for new_vehicle_trader importers
+     * documents.id references every figure traces back to
      * @nullable
      */
-  retailPrice?: number | null;
-  breakdown?: GraDutyBreakdown | null;
+  sourceDocIds?: number[] | null;
   /**
-     * Human-review blockers (e.g. diesel_cc_gap_1800_2000); approval is blocked while set
+     * Per-field AI extraction confidence carried through for the duty pack
      * @nullable
      */
-  reviewFlags?: string[] | null;
-  /**
-     * Required duty inputs still blank — the officer must fill them before submission
-     * @nullable
-     */
-  missingInputs?: string[] | null;
+  fieldConfidence?: GraFilingDraftFieldConfidence;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export interface GraComputeRequest {
@@ -5093,25 +5106,19 @@ export interface GraComputeRequest {
   yearOfManufacture?: number | null;
   /** @nullable */
   yearOfImport?: number | null;
-  /** @nullable */
-  importerType?: string | null;
-  /** @nullable */
-  bodyType?: string | null;
-  /** @nullable */
-  isHybrid?: boolean | null;
-  /** @nullable */
-  retailPrice?: number | null;
 }
 
 export interface GraComputeResponse {
   taxLines: GraTaxLine[];
   totalPayable: number;
-  breakdown?: GraDutyBreakdown | null;
   reviewFlags: string[];
   missingInputs: string[];
+  isEv: boolean;
+  /** dealer_taxes rules skipped because the vehicle is electric (excludeEv) */
+  evSkipped: string[];
 }
 
-export interface GraFilingSubmission {
+export interface GraReviewSubmission {
   draft: GraFilingDraft;
   /**
      * Imported vehicle this filing clears
@@ -5124,6 +5131,30 @@ export interface GraFilingSubmission {
      */
   dealId?: number | null;
 }
+
+/**
+ * Files the confirmed duty sheet. Requires the gra_filing gate to be RESOLVED (409 otherwise); taxLines must match the server recompute (422 otherwise).
+ */
+export interface GraFilingSubmission {
+  /** Resolved gra_filing gate that authorises this filing */
+  gateId: number;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** USD-scale CIF */
+  cif: number;
+  /** Snapshotted usdExchangeRate */
+  exchangeRate: number;
+  taxLines: GraTaxLine[];
+  /** @nullable */
+  evExcluded?: boolean | null;
+  /** @nullable */
+  sourceDocIds?: number[] | null;
+}
+
+/**
+ * @nullable
+ */
+export type GraFilingFieldConfidence = {[key: string]: number} | null;
 
 export interface GraFiling {
   id: number;
@@ -5148,19 +5179,18 @@ export interface GraFiling {
   /** USD-scale */
   cifValue: number;
   /** @nullable */
-  importerType?: string | null;
+  fobValue?: number | null;
   /** @nullable */
-  bodyType?: string | null;
+  freightValue?: number | null;
   /** @nullable */
-  isHybrid?: boolean | null;
+  insuranceValue?: number | null;
+  /** @nullable */
+  sourceDocIds?: number[] | null;
+  /** @nullable */
+  fieldConfidence?: GraFilingFieldConfidence;
   /** @nullable */
   yearOfImport?: number | null;
-  /** @nullable */
-  retailPrice?: number | null;
-  breakdown?: GraDutyBreakdown | null;
-  /** @nullable */
-  reviewFlags?: string[] | null;
-  /** usdExchangeRate snapshot at submit time */
+  /** usdExchangeRate snapshot at review time — later rate drift never mutates a filed duty */
   exchangeRate: number;
   evExcluded: boolean;
   taxLines: GraTaxLine[];

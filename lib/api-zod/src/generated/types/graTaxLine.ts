@@ -14,4 +14,14 @@ export interface GraTaxLine {
   rate: number;
   /** USD-scale amount computed server-side */
   amount: number;
+  /**
+     * Human-readable base the line was computed on
+     * @nullable
+     */
+  basis?: string | null;
+  /**
+     * USD-scale base the rate applied to (null for fixed lines)
+     * @nullable
+     */
+  baseAmount?: number | null;
 }

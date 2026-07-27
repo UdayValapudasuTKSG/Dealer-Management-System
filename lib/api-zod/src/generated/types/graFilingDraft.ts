@@ -5,15 +5,16 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
-import type { GraDutyBreakdown } from './graDutyBreakdown';
-import type { GraFilingDraftImporterType } from './graFilingDraftImporterType';
-import type { GraTaxLine } from './graTaxLine';
+import type { GraFilingDraftFieldConfidence } from './graFilingDraftFieldConfidence';
 
+/**
+ * Human-confirmed filing inputs. TIN/VIN/owner are keyed by the officer from source docs; duty is NEVER part of the draft — the server computes it from dealer_taxes.
+ */
 export interface GraFilingDraft {
   ownerName: string;
-  /** Guyana Taxpayer Identification Number */
+  /** Guyana Taxpayer Identification Number — human-keyed */
   tin: string;
-  /** Chassis / VIN number */
+  /** Chassis / VIN number — human-keyed */
   vin: string;
   make: string;
   model: string;
@@ -25,47 +26,33 @@ export interface GraFilingDraft {
   hsCode: string;
   /** Cost */
   cifValue: number;
-  /** Deterministic server-computed duty/levy lines from the dealer's tax rules (never AI-computed) */
-  taxLines: GraTaxLine[];
-  /** Sum of taxLines */
-  totalPayable: number;
   /**
-     * Extraction confidence 0-1 reported by the vision model
+     * FOB component of CIF (USD-scale)
      * @nullable
      */
-  confidence?: number | null;
-  /** Extracted fields the model could not clearly read; must be human-verified */
-  uncertainFields: string[];
-  /** @nullable */
-  notes?: string | null;
+  fobValue?: number | null;
   /**
-     * GRA importer category — drives the excise base formula
+     * Freight component of CIF (USD-scale)
      * @nullable
      */
-  importerType?: GraFilingDraftImporterType;
+  freightValue?: number | null;
   /**
-     * e.g. double_cab_pickup (drives the VAT exemption)
+     * Insurance component of CIF (USD-scale)
      * @nullable
      */
-  bodyType?: string | null;
-  /** @nullable */
-  isHybrid?: boolean | null;
+  insuranceValue?: number | null;
   /** @nullable */
   yearOfImport?: number | null;
   /**
-     * USD retail price — required for new_vehicle_trader importers
+     * documents.id references every figure traces back to
      * @nullable
      */
-  retailPrice?: number | null;
-  breakdown?: GraDutyBreakdown | null;
+  sourceDocIds?: number[] | null;
   /**
-     * Human-review blockers (e.g. diesel_cc_gap_1800_2000); approval is blocked while set
+     * Per-field AI extraction confidence carried through for the duty pack
      * @nullable
      */
-  reviewFlags?: string[] | null;
-  /**
-     * Required duty inputs still blank — the officer must fill them before submission
-     * @nullable
-     */
-  missingInputs?: string[] | null;
+  fieldConfidence?: GraFilingDraftFieldConfidence;
+  /** @nullable */
+  notes?: string | null;
 }

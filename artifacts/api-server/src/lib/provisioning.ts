@@ -35,7 +35,7 @@ export const DEFAULT_AGENTS: {
   { key: "appraisal", name: "Appraisal", domain: "Trade-In", description: "Assists with trade-in valuations and appraisal intake.", status: "active" },
   { key: "finance", name: "F&I", domain: "Finance & Insurance", description: "Prepares finance applications and routes them to lenders.", status: "active" },
   { key: "inventory", name: "Inventory", domain: "Stock & Merchandising", description: "Keeps stock records current and flags ageing units.", status: "active" },
-  { key: "customs", name: "Customs", domain: "Compliance & Import", description: "Prepares GRA duty filings for imported vehicles.", status: "idle" },
+  { key: "gra_extract", name: "GRA Extract Agent", domain: "Compliance & Import", description: "Transcribes legible fields from import documents for GRA duty filings (server computes the duty).", status: "idle" },
   { key: "scheduler", name: "Scheduler", domain: "Appointments", description: "Books test drives and service appointments.", status: "active" },
   { key: "service", name: "Service", domain: "Aftersales", description: "Drafts service orders and keeps customers informed.", status: "active" },
   { key: "parts", name: "Parts", domain: "Parts & Supply", description: "Monitors parts stock and suggests reorders.", status: "active" },

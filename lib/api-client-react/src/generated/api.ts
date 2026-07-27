@@ -130,9 +130,10 @@ import type {
   GraComputeRequest,
   GraComputeResponse,
   GraExtractRequest,
+  GraExtractResponse,
   GraFiling,
-  GraFilingDraft,
   GraFilingSubmission,
+  GraReviewSubmission,
   HealthStatus,
   ImpersonationGrant,
   ImpersonationRequest,
@@ -13388,11 +13389,11 @@ export const getExtractGraFilingUrl = () => {
 }
 
 /**
- * @summary Extract a GRA vehicle-duty filing draft from an uploaded document image
+ * @summary Vision-extract LEGIBLE fields only (make/model/year/cifPrinted/engineCc/fuelType) from a customs document — never TIN/VIN/duty
  */
-export const extractGraFiling = async (graExtractRequest: GraExtractRequest, options?: RequestInit): Promise<GraFilingDraft> => {
+export const extractGraFiling = async (graExtractRequest: GraExtractRequest, options?: RequestInit): Promise<GraExtractResponse> => {
 
-  return customFetch<GraFilingDraft>(getExtractGraFilingUrl(),
+  return customFetch<GraExtractResponse>(getExtractGraFilingUrl(),
   {
     ...options,
     method: 'POST',
@@ -13437,7 +13438,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ExtractGraFilingMutationError = ErrorType<Error>
 
     /**
- * @summary Extract a GRA vehicle-duty filing draft from an uploaded document image
+ * @summary Vision-extract LEGIBLE fields only (make/model/year/cifPrinted/engineCc/fuelType) from a customs document — never TIN/VIN/duty
  */
 export const useExtractGraFiling = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extractGraFiling>>, TError,{data: BodyType<GraExtractRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -13448,6 +13449,77 @@ export const useExtractGraFiling = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getExtractGraFilingMutationOptions(options));
+    }
+
+export const getReviewGraFilingUrl = () => {
+
+
+
+
+  return `/api/gra/review`
+}
+
+/**
+ * @summary Submit the human-confirmed draft for officer review — computes the duty sheet server-side from dealer_taxes and raises the gra_filing gate
+ */
+export const reviewGraFiling = async (graReviewSubmission: GraReviewSubmission, options?: RequestInit): Promise<Gate> => {
+
+  return customFetch<Gate>(getReviewGraFilingUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(graReviewSubmission)
+  }
+);}
+
+
+
+
+
+export const getReviewGraFilingMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewGraFiling>>, TError,{data: BodyType<GraReviewSubmission>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewGraFiling>>, TError,{data: BodyType<GraReviewSubmission>}, TContext> => {
+
+const mutationKey = ['reviewGraFiling'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewGraFiling>>, {data: BodyType<GraReviewSubmission>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reviewGraFiling(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewGraFilingMutationResult = NonNullable<Awaited<ReturnType<typeof reviewGraFiling>>>
+    export type ReviewGraFilingMutationBody = BodyType<GraReviewSubmission>
+    export type ReviewGraFilingMutationError = ErrorType<Error>
+
+    /**
+ * @summary Submit the human-confirmed draft for officer review — computes the duty sheet server-side from dealer_taxes and raises the gra_filing gate
+ */
+export const useReviewGraFiling = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewGraFiling>>, TError,{data: BodyType<GraReviewSubmission>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewGraFiling>>,
+        TError,
+        {data: BodyType<GraReviewSubmission>},
+        TContext
+      > => {
+      return useMutation(getReviewGraFilingMutationOptions(options));
     }
 
 export const getListGraFilingsUrl = (params?: ListGraFilingsParams,) => {
@@ -13543,11 +13615,11 @@ export const getSubmitGraFilingUrl = () => {
 }
 
 /**
- * @summary Submit a completed GRA filing draft; raises a gra_filing decision gate and a pending filing snapshot
+ * @summary File the confirmed duty snapshot to GRA — requires a RESOLVED gra_filing gate (409 otherwise); taxLines must match the server recompute (422 otherwise)
  */
-export const submitGraFiling = async (graFilingSubmission: GraFilingSubmission, options?: RequestInit): Promise<Gate> => {
+export const submitGraFiling = async (graFilingSubmission: GraFilingSubmission, options?: RequestInit): Promise<GraFiling> => {
 
-  return customFetch<Gate>(getSubmitGraFilingUrl(),
+  return customFetch<GraFiling>(getSubmitGraFilingUrl(),
   {
     ...options,
     method: 'POST',
@@ -13592,7 +13664,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SubmitGraFilingMutationError = ErrorType<Error>
 
     /**
- * @summary Submit a completed GRA filing draft; raises a gra_filing decision gate and a pending filing snapshot
+ * @summary File the confirmed duty snapshot to GRA — requires a RESOLVED gra_filing gate (409 otherwise); taxLines must match the server recompute (422 otherwise)
  */
 export const useSubmitGraFiling = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGraFiling>>, TError,{data: BodyType<GraFilingSubmission>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -13614,7 +13686,7 @@ export const getComputeGraDutyUrl = () => {
 }
 
 /**
- * @summary Recompute the GRA duty breakdown server-side from officer-edited draft inputs
+ * @summary Recompute the duty sheet server-side from dealer_taxes for officer-edited draft inputs (pure, no writes)
  */
 export const computeGraDuty = async (graComputeRequest: GraComputeRequest, options?: RequestInit): Promise<GraComputeResponse> => {
 
@@ -13663,7 +13735,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ComputeGraDutyMutationError = ErrorType<Error>
 
     /**
- * @summary Recompute the GRA duty breakdown server-side from officer-edited draft inputs
+ * @summary Recompute the duty sheet server-side from dealer_taxes for officer-edited draft inputs (pure, no writes)
  */
 export const useComputeGraDuty = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof computeGraDuty>>, TError,{data: BodyType<GraComputeRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -13685,7 +13757,7 @@ export const getGetGraFilingPdfUrl = (id: number,) => {
 }
 
 /**
- * @summary GRA Import Duty Pack PDF — available only after the gra_filing gate is resolved
+ * @summary GRA Import Duty Pack PDF — available only after the gra_filing gate is resolved and the filing is filed
  */
 export const getGraFilingPdf = async (id: number, options?: RequestInit): Promise<Blob> => {
 
@@ -13732,7 +13804,7 @@ export type GetGraFilingPdfQueryError = ErrorType<Error>
 
 
 /**
- * @summary GRA Import Duty Pack PDF — available only after the gra_filing gate is resolved
+ * @summary GRA Import Duty Pack PDF — available only after the gra_filing gate is resolved and the filing is filed
  */
 
 export function useGetGraFilingPdf<TData = Awaited<ReturnType<typeof getGraFilingPdf>>, TError = ErrorType<Error>>(

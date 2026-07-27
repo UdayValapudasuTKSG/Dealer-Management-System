@@ -137,6 +137,16 @@ export function buildGraDutyPackPdf(
         ["Engine", `${filing.engineCc.toLocaleString()} cc ${filing.fuelType}`],
         ["HS Code", filing.hsCode],
         ["CIF Value", `${usd(filing.cifValue)}  /  ${gydFmt(toGyd(filing.cifValue))}`],
+        ...(filing.fobValue != null &&
+        filing.freightValue != null &&
+        filing.insuranceValue != null
+          ? ([
+              [
+                "CIF Breakdown",
+                `FOB ${usd(filing.fobValue)} + Frt ${usd(filing.freightValue)} + Ins ${usd(filing.insuranceValue)}`,
+              ],
+            ] as [string, string][])
+          : []),
       ],
       left + colW + 20,
       colW,
@@ -150,7 +160,7 @@ export function buildGraDutyPackPdf(
       .fontSize(7.8)
       .fillColor("#6b543c")
       .text(
-        `Source fields were AI-extracted from the uploaded customs documents (legible values only) and human-confirmed at the gra_filing gate before this pack was generated.${ctx.extractedFieldNotes ? ` Review notes: ${ctx.extractedFieldNotes}` : ""}`,
+        `AI transcription covered legible fields only (make/model/year/CIF/engine/fuel${filing.fieldConfidence && Object.keys(filing.fieldConfidence).length > 0 ? ` — confidence: ${Object.entries(filing.fieldConfidence).map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(", ")}` : ""}); TIN, VIN, owner and HS code were keyed by staff${filing.sourceDocIds && filing.sourceDocIds.length > 0 ? ` from source document(s) #${filing.sourceDocIds.join(", #")}` : ""}. All figures were human-confirmed at the gra_filing gate before this pack was generated.${ctx.extractedFieldNotes ? ` Review notes: ${ctx.extractedFieldNotes}` : ""}`,
         left + 10,
         y + 7,
         { width: contentW - 20 },
@@ -162,7 +172,7 @@ export function buildGraDutyPackPdf(
       .font("Helvetica-Bold")
       .fontSize(8)
       .fillColor("#A97142")
-      .text("DUTY & TAX ASSESSMENT — SERVER-COMPUTED FROM THE GRA RULE SET", left, y, {
+      .text("DUTY & TAX ASSESSMENT — SERVER-COMPUTED FROM THE DEALER'S GRA TAX RULES", left, y, {
         characterSpacing: 1.2,
       });
     y += 16;
@@ -225,23 +235,18 @@ export function buildGraDutyPackPdf(
       y += 18;
     };
 
-    const basisFor = (code: string): string => {
-      if (code === "import_duty") return "CIF value";
-      if (code === "excise") {
-        if (!bd) return "Excise base";
-        if (bd.ageCategory === "four_plus")
-          return bd.exciseRatePct == null ? "GRA flat rate (GY$800,000)" : "GRA 4+ yr formula";
-        if (bd.importerType === "dealer_used") return "1.5 × CIF + duty";
-        if (bd.importerType === "new_vehicle_trader") return "Retail price + duty";
-        return "CIF + duty";
-      }
-      if (code === "vat") return "CIF + duty + excise";
+    const basisFor = (l: (typeof filing.taxLines)[number]): string => {
+      if (l.basis) return l.basis;
+      if (l.kind === "fixed") return "Flat fee";
+      const code = l.code.toLowerCase();
+      if (code.includes("excise")) return "CIF + duty";
+      if (code.includes("vat")) return "CIF + duty + excise";
       return "CIF value";
     };
     filing.taxLines.forEach((l, i) => {
       row(
         l.name,
-        basisFor(l.code),
+        basisFor(l),
         l.kind === "percent" ? `${l.rate}%` : "flat",
         l.amount,
         i % 2 === 1,

@@ -5,18 +5,23 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
-import type { GraFilingDraft } from './graFilingDraft';
+import type { GraTaxLine } from './graTaxLine';
 
+/**
+ * Files the confirmed duty sheet. Requires the gra_filing gate to be RESOLVED (409 otherwise); taxLines must match the server recompute (422 otherwise).
+ */
 export interface GraFilingSubmission {
-  draft: GraFilingDraft;
-  /**
-     * Imported vehicle this filing clears
-     * @nullable
-     */
+  /** Resolved gra_filing gate that authorises this filing */
+  gateId: number;
+  /** @nullable */
   vehicleId?: number | null;
-  /**
-     * Deal this filing clears customs for
-     * @nullable
-     */
-  dealId?: number | null;
+  /** USD-scale CIF */
+  cif: number;
+  /** Snapshotted usdExchangeRate */
+  exchangeRate: number;
+  taxLines: GraTaxLine[];
+  /** @nullable */
+  evExcluded?: boolean | null;
+  /** @nullable */
+  sourceDocIds?: number[] | null;
 }

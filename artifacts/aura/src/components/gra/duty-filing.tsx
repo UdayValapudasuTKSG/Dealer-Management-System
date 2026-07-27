@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   useExtractGraFiling,
+  useReviewGraFiling,
   useSubmitGraFiling,
   useListGraFilings,
+  useListGates,
   useComputeGraDuty,
   getListGraFilingsQueryKey,
+  getListGatesQueryKey,
   getGetGraFilingPdfUrl,
   type GraFilingDraft,
+  type GraComputeResponse,
+  type GraExtractResponse,
 } from "@workspace/api-client-react";
 import type { GraExtractRequestMediaType } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -21,9 +25,10 @@ import {
   FileText,
   Sparkles,
   ShieldCheck,
-  ChevronRight,
   Check,
   ScanLine,
+  PenLine,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMoney } from "@/lib/format";
@@ -35,18 +40,41 @@ const ACCEPTED: Record<string, GraExtractRequestMediaType> = {
   "image/gif": "image/gif",
 };
 
-const MONEY_FIELDS: { key: keyof GraFilingDraft; label: string }[] = [
-  { key: "cifValue", label: "CIF Value (US$)" },
-];
+const EXTRACT_LABELS: Record<string, string> = {
+  make: "Make",
+  model: "Model",
+  year: "Year",
+  cifPrinted: "CIF value",
+  engineCc: "Engine (cc)",
+  fuelType: "Fuel type",
+};
+
+const EMPTY_DRAFT: GraFilingDraft = {
+  ownerName: "",
+  tin: "",
+  vin: "",
+  make: "",
+  model: "",
+  year: 0,
+  engineCc: 0,
+  fuelType: "",
+  hsCode: "",
+  cifValue: 0,
+  fobValue: null,
+  freightValue: null,
+  insuranceValue: null,
+  yearOfImport: new Date().getFullYear(),
+  sourceDocIds: null,
+  fieldConfidence: null,
+  notes: null,
+};
 
 /** Futuristic X-ray scan overlay: moving green rays + grid over the doc. */
 function XrayScanOverlay() {
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {/* Green x-ray tint over the document */}
       <div className="absolute inset-0 bg-emerald-950/55 mix-blend-multiply" />
       <div className="absolute inset-0 bg-emerald-400/[0.07]" />
-      {/* Scan grid */}
       <div
         className="absolute inset-0 opacity-30"
         style={{
@@ -55,7 +83,6 @@ function XrayScanOverlay() {
           backgroundSize: "26px 26px",
         }}
       />
-      {/* Primary sweeping ray */}
       <motion.div
         className="absolute inset-x-0 h-24 -translate-y-1/2"
         initial={{ top: "-12%" }}
@@ -66,26 +93,20 @@ function XrayScanOverlay() {
         <div className="absolute inset-x-0 top-1/2 h-24 -translate-y-full bg-gradient-to-t from-emerald-400/25 to-transparent" />
         <div className="absolute inset-x-0 top-1/2 h-10 bg-gradient-to-b from-emerald-400/20 to-transparent" />
       </motion.div>
-      {/* Secondary faint ray, opposite direction */}
       <motion.div
         className="absolute inset-x-0 h-px bg-emerald-300/50 shadow-[0_0_10px_2px_rgba(52,211,153,0.4)]"
         initial={{ top: "112%" }}
         animate={{ top: "-12%" }}
         transition={{ duration: 3.4, repeat: Infinity, ease: "linear" }}
       />
-      {/* Corner brackets */}
       {[
         "top-2 left-2 border-t-2 border-l-2",
         "top-2 right-2 border-t-2 border-r-2",
         "bottom-2 left-2 border-b-2 border-l-2",
         "bottom-2 right-2 border-b-2 border-r-2",
       ].map((pos) => (
-        <div
-          key={pos}
-          className={cn("absolute w-6 h-6 border-emerald-300/80", pos)}
-        />
+        <div key={pos} className={cn("absolute w-6 h-6 border-emerald-300/80", pos)} />
       ))}
-      {/* Status readout */}
       <div className="absolute bottom-3 inset-x-0 flex items-center justify-center">
         <motion.div
           animate={{ opacity: [1, 0.45, 1] }}
@@ -93,7 +114,7 @@ function XrayScanOverlay() {
           className="inline-flex items-center gap-2 rounded-full bg-black/70 text-emerald-300 text-[11px] font-bold uppercase tracking-[0.25em] px-4 py-1.5 ring-1 ring-emerald-400/40"
         >
           <ScanLine className="w-3.5 h-3.5" />
-          X-ray scan in progress
+          Transcribing legible fields
         </motion.div>
       </div>
     </div>
@@ -120,30 +141,26 @@ export function DutyFiling({
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [draft, setDraft] = useState<GraFilingDraft | null>(null);
+  const [extractMeta, setExtractMeta] = useState<Pick<
+    GraExtractResponse,
+    "confidence" | "dropped" | "notes"
+  > | null>(null);
+  const [computed, setComputed] = useState<GraComputeResponse | null>(null);
   const [submittedGateId, setSubmittedGateId] = useState<number | null>(null);
 
   const extract = useExtractGraFiling();
-  const submit = useSubmitGraFiling();
+  const review = useReviewGraFiling();
+  const file = useSubmitGraFiling();
   const compute = useComputeGraDuty();
   const money = useMoney();
 
   // Debounced server-side recompute: whenever the officer edits a duty input,
-  // POST /gra/compute refreshes the lines/total/breakdown/flags. The client
-  // never computes duty itself.
+  // POST /gra/compute refreshes the lines/total from the dealer's tax rules.
+  // The client NEVER computes duty itself.
   const computeRef = useRef(compute.mutate);
   computeRef.current = compute.mutate;
   const dutyInputs = draft
-    ? [
-        draft.cifValue,
-        draft.engineCc,
-        draft.fuelType,
-        draft.year,
-        draft.yearOfImport,
-        draft.importerType,
-        draft.bodyType,
-        draft.isHybrid,
-        draft.retailPrice,
-      ].join("|")
+    ? [draft.cifValue, draft.engineCc, draft.fuelType, draft.year, draft.yearOfImport].join("|")
     : null;
   useEffect(() => {
     if (!draft || submittedGateId) return;
@@ -152,40 +169,31 @@ export function DutyFiling({
         {
           data: {
             cifValue: draft.cifValue ?? 0,
-            engineCc: draft.engineCc ?? null,
-            fuelType: draft.fuelType ?? null,
-            yearOfManufacture: draft.year ?? null,
+            engineCc: draft.engineCc || null,
+            fuelType: draft.fuelType || null,
+            yearOfManufacture: draft.year || null,
             yearOfImport: draft.yearOfImport ?? null,
-            importerType: draft.importerType ?? null,
-            bodyType: draft.bodyType ?? null,
-            isHybrid: draft.isHybrid ?? null,
-            retailPrice: draft.retailPrice ?? null,
           },
         },
-        {
-          onSuccess: (r) => {
-            setDraft((prev) =>
-              prev
-                ? {
-                    ...prev,
-                    taxLines: r.taxLines,
-                    totalPayable: r.totalPayable,
-                    breakdown: r.breakdown ?? null,
-                    reviewFlags: r.reviewFlags,
-                    missingInputs: r.missingInputs,
-                  }
-                : prev,
-            );
-          },
-        },
+        { onSuccess: (r) => setComputed(r) },
       );
     }, 450);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dutyInputs, submittedGateId]);
 
-  // After submission, watch the filing so the PDF unlocks the moment the
-  // human gate is approved (server flips pending_gate → filed).
+  // After sending for review, watch the gate and the pending filing so the
+  // "File to GRA" step unlocks the moment the officer approves.
+  const gatesQuery = useListGates(undefined, {
+    query: {
+      queryKey: getListGatesQueryKey(undefined),
+      enabled: submittedGateId != null,
+      refetchInterval: 5000,
+    },
+  });
+  const gate = submittedGateId
+    ? gatesQuery.data?.find((g) => g.id === submittedGateId)
+    : undefined;
   const filingQuery = useListGraFilings(
     submittedGateId ? { gateId: submittedGateId } : undefined,
     {
@@ -199,9 +207,12 @@ export function DutyFiling({
     },
   );
   const filing = submittedGateId ? filingQuery.data?.[0] : undefined;
+  const gateApproved =
+    gate?.status === "approved" || gate?.status === "adjusted";
+  const gateRejected = gate?.status === "dismissed" || filing?.status === "rejected";
 
-  const handleFile = async (file: File) => {
-    const mediaType = ACCEPTED[file.type];
+  const handleFile = async (f: File) => {
+    const mediaType = ACCEPTED[f.type];
     if (!mediaType) {
       toast({
         title: "Unsupported file",
@@ -213,13 +224,14 @@ export function DutyFiling({
 
     setSubmittedGateId(null);
     setDraft(null);
-    setFileName(file.name);
+    setExtractMeta(null);
+    setFileName(f.name);
 
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
       reader.onerror = reject;
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(f);
     });
     setPreview(dataUrl);
 
@@ -229,25 +241,42 @@ export function DutyFiling({
       { data: { imageBase64: base64, mediaType } },
       {
         onSuccess: (result) => {
-          setDraft(
-            prefillNotes
-              ? {
-                  ...result,
-                  notes: [result.notes, prefillNotes]
-                    .filter(Boolean)
-                    .join(" — "),
-                }
-              : result,
-          );
+          setDraft({
+            ...EMPTY_DRAFT,
+            make: result.fields.make ?? "",
+            model: result.fields.model ?? "",
+            year: result.fields.year ?? 0,
+            engineCc: result.fields.engineCc ?? 0,
+            fuelType: result.fields.fuelType ?? "",
+            cifValue: result.fields.cifPrinted ?? 0,
+            fieldConfidence: result.confidence as Record<string, number>,
+            notes: [result.notes, prefillNotes].filter(Boolean).join(" — ") || null,
+          });
+          setExtractMeta({
+            confidence: result.confidence,
+            dropped: result.dropped,
+            notes: result.notes,
+          });
           toast({
-            title: "Scan complete",
-            description: "The duty pack was autofilled from the document.",
+            title: "Transcription complete",
+            description:
+              result.dropped.length > 0
+                ? `Legible fields filled in — key in the rest (${result.dropped.map((d) => EXTRACT_LABELS[d] ?? d).join(", ")}).`
+                : "Legible fields filled in. TIN, VIN, owner and HS code are always keyed in by staff.",
           });
         },
         onError: () => {
+          // Unreadable document (422) or service error: open a blank draft —
+          // everything is keyed in manually. Nothing is ever auto-filled.
+          setDraft({
+            ...EMPTY_DRAFT,
+            notes: prefillNotes ?? null,
+          });
+          setExtractMeta(null);
           toast({
             title: "Could not read the document",
-            description: "Try a clearer image of the import document.",
+            description:
+              "No field was legible enough to transcribe — enter the values manually from the paperwork.",
             variant: "destructive",
           });
         },
@@ -255,67 +284,147 @@ export function DutyFiling({
     );
   };
 
-  // Duty lines and the total are computed server-side from the dealer's
-  // configured tax rules — never recomputed (or editable) in the client.
-  const total = draft ? draft.totalPayable : 0;
-
-  const updateField = (key: keyof GraFilingDraft, value: string) => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      const isNumeric =
-        key === "year" ||
-        key === "engineCc" ||
-        key === "cifValue" ||
-        key === "yearOfImport" ||
-        key === "retailPrice";
-      return {
-        ...prev,
-        [key]: isNumeric ? Number(value.replace(/[^0-9.]/g, "")) || 0 : value,
-      };
-    });
+  const startManual = () => {
+    setSubmittedGateId(null);
+    setExtractMeta(null);
+    setDraft({ ...EMPTY_DRAFT, notes: prefillNotes ?? null });
   };
 
-  const handleSubmit = () => {
+  const total = computed?.totalPayable ?? 0;
+  const taxLines = computed?.taxLines ?? [];
+  const missingInputs = computed?.missingInputs ?? [];
+
+  const cifComponentsSet =
+    draft &&
+    draft.fobValue != null &&
+    draft.freightValue != null &&
+    draft.insuranceValue != null &&
+    (draft.fobValue > 0 || draft.freightValue > 0 || draft.insuranceValue > 0);
+  const cifMismatch =
+    cifComponentsSet &&
+    Math.abs(
+      (draft!.fobValue ?? 0) + (draft!.freightValue ?? 0) + (draft!.insuranceValue ?? 0) -
+        (draft!.cifValue ?? 0),
+    ) > 0.01;
+
+  const updateText = (key: keyof GraFilingDraft, value: string) =>
+    setDraft((prev) => (prev ? { ...prev, [key]: value } : prev));
+  const updateNumber = (key: keyof GraFilingDraft, value: string) =>
+    setDraft((prev) =>
+      prev
+        ? { ...prev, [key]: Number(value.replace(/[^0-9.]/g, "")) || 0 }
+        : prev,
+    );
+  const updateNullableNumber = (key: keyof GraFilingDraft, value: string) =>
+    setDraft((prev) =>
+      prev
+        ? {
+            ...prev,
+            [key]:
+              value.trim() === "" ? null : Number(value.replace(/[^0-9.]/g, "")) || 0,
+          }
+        : prev,
+    );
+
+  const missingIdentity =
+    !draft ||
+    !draft.ownerName.trim() ||
+    !draft.tin.trim() ||
+    !draft.vin.trim() ||
+    !draft.hsCode.trim() ||
+    !draft.make.trim() ||
+    !draft.model.trim();
+
+  const handleReview = () => {
     if (!draft) return;
-    submit.mutate(
+    review.mutate(
+      { data: { draft, vehicleId: vehicleId ?? null, dealId: dealId ?? null } },
+      {
+        onSuccess: (g) => {
+          setSubmittedGateId(g.id);
+          toast({
+            title: "Duty sheet sent for review",
+            description:
+              "An officer must approve the computation before it can be filed to GRA.",
+          });
+        },
+        onError: (err) => {
+          const msg =
+            (err as { data?: { error?: string } } | undefined)?.data?.error ??
+            "Please check the inputs and try again.";
+          toast({
+            title: "Could not send for review",
+            description: msg,
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  const handleFileToGra = () => {
+    if (!submittedGateId || !filing) return;
+    file.mutate(
       {
         data: {
-          draft,
-          vehicleId: vehicleId ?? null,
-          dealId: dealId ?? null,
+          gateId: submittedGateId,
+          vehicleId: filing.vehicleId ?? null,
+          cif: filing.cifValue,
+          exchangeRate: filing.exchangeRate,
+          taxLines: filing.taxLines,
+          evExcluded: filing.evExcluded,
+          sourceDocIds: filing.sourceDocIds ?? null,
         },
       },
       {
-        onSuccess: (gate) => {
-          setSubmittedGateId(gate.id);
+        onSuccess: () => {
+          void filingQuery.refetch();
           toast({
-            title: "Filing routed to a decision gate",
-            description: "A manager can now approve the duty pack on the deal.",
+            title: "Filed to GRA",
+            description: "The duty pack PDF is now available.",
           });
         },
-        onError: () => {
-          toast({
-            title: "Could not submit the filing",
-            description: "Please try again.",
-            variant: "destructive",
-          });
+        onError: (err) => {
+          const msg =
+            (err as { data?: { error?: string } } | undefined)?.data?.error ??
+            "Please try again.";
+          toast({ title: "Could not file", description: msg, variant: "destructive" });
         },
       },
     );
   };
 
-  // Ordered fields for the staggered auto-fill animation
-  const IDENTITY_FIELDS: { key: keyof GraFilingDraft; label: string }[] = [
-    { key: "ownerName", label: "Importer / Owner" },
-    { key: "tin", label: "TIN" },
-    { key: "vin", label: "Chassis / VIN" },
-    { key: "hsCode", label: "HS Code" },
+  const IDENTITY_FIELDS: {
+    key: keyof GraFilingDraft;
+    label: string;
+    numeric?: boolean;
+    manual?: boolean;
+  }[] = [
+    { key: "ownerName", label: "Importer / Owner", manual: true },
+    { key: "tin", label: "TIN", manual: true },
+    { key: "vin", label: "Chassis / VIN", manual: true },
+    { key: "hsCode", label: "HS Code", manual: true },
     { key: "make", label: "Make" },
     { key: "model", label: "Model" },
-    { key: "year", label: "Year" },
-    { key: "engineCc", label: "Engine (cc)" },
+    { key: "year", label: "Year", numeric: true },
+    { key: "engineCc", label: "Engine (cc)", numeric: true },
     { key: "fuelType", label: "Fuel Type" },
   ];
+
+  const confFor = (key: string): number | null => {
+    const map: Record<string, string> = {
+      make: "make",
+      model: "model",
+      year: "year",
+      engineCc: "engineCc",
+      fuelType: "fuelType",
+      cifValue: "cifPrinted",
+    };
+    const c = (extractMeta?.confidence as Record<string, number> | undefined)?.[
+      map[key] ?? ""
+    ];
+    return typeof c === "number" ? c : null;
+  };
 
   return (
     <div
@@ -334,8 +443,8 @@ export function DutyFiling({
               accept="image/png,image/jpeg,image/webp,image/gif"
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFile(file);
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
                 e.target.value = "";
               }}
             />
@@ -345,14 +454,13 @@ export function DutyFiling({
               tabIndex={0}
               onClick={() => fileRef.current?.click()}
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ")
-                  fileRef.current?.click();
+                if (e.key === "Enter" || e.key === " ") fileRef.current?.click();
               }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
-                const file = e.dataTransfer.files?.[0];
-                if (file) handleFile(file);
+                const f = e.dataTransfer.files?.[0];
+                if (f) handleFile(f);
               }}
               className="relative rounded-2xl border-2 border-dashed border-primary/30 bg-white/[0.03] hover:border-primary/60 hover:bg-primary/5 transition-colors cursor-pointer aspect-[4/3] flex flex-col items-center justify-center text-center p-6 overflow-hidden"
             >
@@ -386,6 +494,17 @@ export function DutyFiling({
                 )}
               </div>
             )}
+
+            {!draft && !extract.isPending && (
+              <Button
+                variant="outline"
+                onClick={startManual}
+                className="mt-4 w-full rounded-full gap-2"
+              >
+                <PenLine className="w-4 h-4" />
+                Enter details manually
+              </Button>
+            )}
           </CardContent>
         </Card>
 
@@ -398,18 +517,18 @@ export function DutyFiling({
               <ol className="space-y-3 text-sm text-muted-foreground">
                 <li className="flex gap-3">
                   <span className="font-semibold text-foreground">1.</span>
-                  Upload any import document — invoice, bill of lading, or
-                  customs declaration.
+                  Upload an import document — the scanner transcribes only the
+                  clearly legible fields (make, model, year, CIF, engine, fuel).
                 </li>
                 <li className="flex gap-3">
                   <span className="font-semibold text-foreground">2.</span>
-                  The X-ray scanner reads the vehicle and computes the GRA duty
-                  at standard rates.
+                  You key in the TIN, VIN, owner and HS code from the paperwork;
+                  the duty sheet is computed from this dealership's GRA tax rules.
                 </li>
                 <li className="flex gap-3">
                   <span className="font-semibold text-foreground">3.</span>
-                  Review, adjust if needed, and submit — it routes to a human
-                  approval gate.
+                  Send for review — after an officer approves the gate, file to
+                  GRA and download the duty pack PDF.
                 </li>
               </ol>
             </CardContent>
@@ -445,8 +564,8 @@ export function DutyFiling({
                       </motion.div>
                       <p className="text-lg font-medium">Scanning document</p>
                       <p className="text-muted-foreground max-w-sm mt-1">
-                        Extracting the vehicle, importer, and duty figures —
-                        fields will fill in automatically.
+                        Transcribing the legible fields — anything unclear is
+                        left for you to key in.
                       </p>
                     </>
                   ) : (
@@ -456,8 +575,8 @@ export function DutyFiling({
                       </div>
                       <p className="text-lg font-medium">No filing yet</p>
                       <p className="text-muted-foreground max-w-sm mt-1">
-                        Upload a document and the duty pack will appear here,
-                        autofilled and ready for your review.
+                        Upload a document (or enter details manually) and the
+                        duty sheet will appear here for your review.
                       </p>
                     </>
                   )}
@@ -473,132 +592,132 @@ export function DutyFiling({
             >
               <Card className="glass-panel border-none shadow-lg overflow-hidden">
                 <CardContent
-                  className={cn(
-                    "space-y-6",
-                    compact ? "p-5" : "p-6 md:p-8",
-                  )}
+                  className={cn("space-y-6", compact ? "p-5" : "p-6 md:p-8")}
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-emerald-400 mb-1">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        Autofilled by X-ray scan
-                      </div>
-                      <h2 className="text-xl font-semibold">
-                        Vehicle Duty Pack
-                      </h2>
+                      {extractMeta ? (
+                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-emerald-400 mb-1">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Legible fields transcribed
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground mb-1">
+                          <PenLine className="w-3.5 h-3.5" />
+                          Manual entry
+                        </div>
+                      )}
+                      <h2 className="text-xl font-semibold">Vehicle Duty Pack</h2>
                     </div>
                     {submittedGateId && (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold px-3 py-1.5">
                         <Check className="w-3.5 h-3.5" />
-                        Submitted
+                        In review
                       </span>
                     )}
                   </div>
 
-                  {/* Vehicle & owner — staggered auto-fill */}
+                  {extractMeta && extractMeta.dropped.length > 0 && (
+                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-300">
+                      Not legible on the document — key in from the paperwork:{" "}
+                      {extractMeta.dropped
+                        .map((d) => EXTRACT_LABELS[d] ?? d)
+                        .join(", ")}
+                      .
+                    </div>
+                  )}
+
+                  {/* Identity + vehicle fields */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {IDENTITY_FIELDS.map((f, i) => (
                       <ScanField
                         key={f.key}
                         index={i}
                         label={f.label}
-                        value={String(draft[f.key] ?? "")}
-                        onChange={(v) => updateField(f.key, v)}
+                        badge={
+                          f.manual
+                            ? "keyed in"
+                            : confFor(f.key) != null
+                              ? `${Math.round((confFor(f.key) ?? 0) * 100)}%`
+                              : undefined
+                        }
+                        value={String(draft[f.key] ?? "") === "0" ? "" : String(draft[f.key] ?? "")}
+                        disabled={!!submittedGateId}
+                        onChange={(v) =>
+                          f.numeric ? updateNumber(f.key, v) : updateText(f.key, v)
+                        }
                       />
                     ))}
                   </div>
 
-                  {/* Duty inputs — the document can't supply these; the officer must */}
+                  {/* Valuation — CIF and its composition */}
                   <div className="pt-2">
                     <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
-                      Duty & levies
+                      Valuation (US$)
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {MONEY_FIELDS.map((f, i) => (
-                        <ScanField
-                          key={f.key}
-                          index={IDENTITY_FIELDS.length + i}
-                          label={f.label}
-                          value={String(draft[f.key])}
-                          onChange={(v) => updateField(f.key, v)}
-                        />
-                      ))}
-                      <div className="space-y-1.5">
-                        <label className="text-xs uppercase tracking-widest text-muted-foreground">
-                          Importer type
-                        </label>
-                        <select
-                          value={draft.importerType ?? ""}
-                          onChange={(e) =>
-                            setDraft((prev) =>
-                              prev
-                                ? {
-                                    ...prev,
-                                    importerType: (e.target.value ||
-                                      null) as GraFilingDraft["importerType"],
-                                  }
-                                : prev,
-                            )
-                          }
-                          className="w-full h-9 rounded-md border border-border bg-white/[0.04] px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-                        >
-                          <option value="">Select…</option>
-                          <option value="private">Private individual</option>
-                          <option value="dealer_used">Dealer (used vehicle)</option>
-                          <option value="new_vehicle_trader">New-vehicle trader</option>
-                        </select>
-                      </div>
                       <ScanField
-                        index={IDENTITY_FIELDS.length + MONEY_FIELDS.length}
+                        index={IDENTITY_FIELDS.length}
+                        label="CIF Value (US$)"
+                        badge={
+                          confFor("cifValue") != null
+                            ? `${Math.round((confFor("cifValue") ?? 0) * 100)}%`
+                            : undefined
+                        }
+                        value={draft.cifValue ? String(draft.cifValue) : ""}
+                        disabled={!!submittedGateId}
+                        onChange={(v) => updateNumber("cifValue", v)}
+                      />
+                      <ScanField
+                        index={IDENTITY_FIELDS.length + 1}
                         label="Year of import"
                         value={String(draft.yearOfImport ?? "")}
-                        onChange={(v) => updateField("yearOfImport", v)}
+                        disabled={!!submittedGateId}
+                        onChange={(v) => updateNumber("yearOfImport", v)}
                       />
                       <ScanField
-                        index={IDENTITY_FIELDS.length + MONEY_FIELDS.length + 1}
-                        label="Body type (e.g. double cab pickup)"
-                        value={draft.bodyType ?? ""}
-                        onChange={(v) =>
-                          setDraft((prev) =>
-                            prev ? { ...prev, bodyType: v || null } : prev,
-                          )
-                        }
+                        index={IDENTITY_FIELDS.length + 2}
+                        label="FOB (US$)"
+                        value={draft.fobValue != null ? String(draft.fobValue) : ""}
+                        disabled={!!submittedGateId}
+                        onChange={(v) => updateNullableNumber("fobValue", v)}
                       />
-                      {draft.importerType === "new_vehicle_trader" && (
-                        <ScanField
-                          index={IDENTITY_FIELDS.length + MONEY_FIELDS.length + 2}
-                          label="Retail price (US$)"
-                          value={String(draft.retailPrice ?? "")}
-                          onChange={(v) => updateField("retailPrice", v)}
-                        />
-                      )}
-                      <label className="flex items-center gap-2 text-sm text-muted-foreground pt-6 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={draft.isHybrid ?? false}
-                          onChange={(e) =>
-                            setDraft((prev) =>
-                              prev ? { ...prev, isHybrid: e.target.checked } : prev,
-                            )
-                          }
-                          className="h-4 w-4 rounded border-border accent-[#A97142]"
-                        />
-                        Hybrid vehicle
-                      </label>
+                      <ScanField
+                        index={IDENTITY_FIELDS.length + 3}
+                        label="Freight (US$)"
+                        value={draft.freightValue != null ? String(draft.freightValue) : ""}
+                        disabled={!!submittedGateId}
+                        onChange={(v) => updateNullableNumber("freightValue", v)}
+                      />
+                      <ScanField
+                        index={IDENTITY_FIELDS.length + 4}
+                        label="Insurance (US$)"
+                        value={
+                          draft.insuranceValue != null ? String(draft.insuranceValue) : ""
+                        }
+                        disabled={!!submittedGateId}
+                        onChange={(v) => updateNullableNumber("insuranceValue", v)}
+                      />
                     </div>
-                    {/* Server-computed duty lines (dealer tax rules) — read-only */}
-                    <div className="mt-4 rounded-xl border border-border bg-white/[0.03] divide-y divide-border">
-                      {draft.taxLines.map((line, i) => (
+                    {cifMismatch && (
+                      <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
+                        FOB + freight + insurance does not equal the CIF value —
+                        correct the components before sending for review.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Server-computed duty lines (dealer tax rules) — read-only */}
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
+                      Duty & levies — computed from this dealership's GRA tax rules
+                    </div>
+                    <div className="rounded-xl border border-border bg-white/[0.03] divide-y divide-border">
+                      {taxLines.map((line) => (
                         <motion.div
                           key={line.code}
                           initial={{ opacity: 0, y: 6 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{
-                            delay:
-                              (IDENTITY_FIELDS.length + MONEY_FIELDS.length + i) *
-                              0.08,
-                          }}
                           className="flex items-center justify-between px-4 py-2.5 text-sm"
                         >
                           <span className="text-muted-foreground">
@@ -608,13 +727,18 @@ export function DutyFiling({
                                 {line.rate}%
                               </span>
                             )}
+                            {line.basis && (
+                              <span className="ml-1.5 text-xs opacity-50">
+                                on {line.basis}
+                              </span>
+                            )}
                           </span>
                           <span className="font-medium tabular-nums">
                             {money.dual(line.amount)}
                           </span>
                         </motion.div>
                       ))}
-                      {draft.taxLines.length === 0 && (
+                      {taxLines.length === 0 && (
                         <div className="px-4 py-2.5 text-sm text-muted-foreground">
                           {compute.isPending
                             ? "Computing duty…"
@@ -622,69 +746,36 @@ export function DutyFiling({
                         </div>
                       )}
                     </div>
-                    {draft.breakdown && (
-                      <div className="mt-2 text-xs text-muted-foreground px-1">
-                        {[
-                          draft.breakdown.ageCategory === "under_4"
-                            ? "Under 4 years"
-                            : "4 years & older",
-                          draft.breakdown.ccBand,
-                          draft.breakdown.exemptionApplied
-                            ? `VAT exemption: ${draft.breakdown.exemptionApplied.replaceAll("_", " ")}`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
+                    {computed && computed.evSkipped.length > 0 && (
+                      <div className="mt-2 text-xs text-emerald-600 dark:text-emerald-400 px-1">
+                        Electric vehicle — skipped: {computed.evSkipped.join(", ")}.
                       </div>
                     )}
                   </div>
 
-                  {(draft.missingInputs?.length ?? 0) > 0 && (
+                  {missingInputs.length > 0 && (
                     <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-300">
-                      Required before filing:{" "}
-                      {(draft.missingInputs ?? [])
+                      Required before review:{" "}
+                      {missingInputs
                         .map((f) =>
                           f === "cifValue"
                             ? "CIF value"
-                            : f === "importerType"
-                              ? "importer type"
-                              : f === "yearOfManufacture"
-                                ? "year"
-                                : f === "yearOfImport"
-                                  ? "year of import"
-                                  : f === "retailPrice"
-                                    ? "retail price"
-                                    : f === "engineCc"
-                                      ? "engine cc"
-                                      : f === "fuelType"
-                                        ? "fuel type (gasoline / diesel / electric)"
-                                        : f,
+                            : f === "engineCc"
+                              ? "engine cc"
+                              : f === "fuelType"
+                                ? "fuel type (petrol / diesel / hybrid / electric)"
+                                : f === "year"
+                                  ? "year of manufacture"
+                                  : f,
                         )
                         .join(", ")}
                       .
-                    </div>
-                  )}
-                  {(draft.reviewFlags?.length ?? 0) > 0 && (
-                    <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
-                      {draft.reviewFlags?.includes("diesel_cc_gap_1800_2000")
-                        ? "Diesel 1800–2000cc has no published GRA excise band — this must be resolved with the GRA before filing."
-                        : "This filing needs human resolution before it can be computed."}
-                    </div>
-                  )}
-
-                  {draft.uncertainFields.length > 0 && (
-                    <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-300">
-                      Verify before filing — not read confidently:{" "}
-                      {draft.uncertainFields.join(", ")}.
                     </div>
                   )}
 
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      delay: (IDENTITY_FIELDS.length + MONEY_FIELDS.length) * 0.08 + 0.2,
-                    }}
                     className="rounded-2xl bg-primary/5 border border-primary/10 p-5 flex items-center justify-between"
                   >
                     <div>
@@ -692,10 +783,11 @@ export function DutyFiling({
                         Total payable to GRA
                       </div>
                       <div className="text-3xl font-semibold tracking-tight">
-                        {money.gyd(total)}
+                        {money.gyd(submittedGateId && filing ? filing.totalPayable : total)}
                       </div>
                       <div className="text-sm text-muted-foreground mt-0.5 tabular-nums">
-                        {money.usd(total)} at GY${money.rate}/US$
+                        {money.usd(submittedGateId && filing ? filing.totalPayable : total)}{" "}
+                        at GY${submittedGateId && filing ? filing.exchangeRate : money.rate}/US$
                       </div>
                     </div>
                     <ShieldCheck className="w-10 h-10 text-primary/40" />
@@ -713,43 +805,57 @@ export function DutyFiling({
                           <FileText className="w-5 h-5" />
                           Download GRA Duty Pack (PDF)
                         </a>
-                      ) : filing?.status === "rejected" ? (
+                      ) : gateRejected ? (
                         <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-600 dark:text-rose-300">
-                          The filing was declined at the approval gate. Review
-                          the document and resubmit.
+                          The duty sheet was declined at the review gate. Correct
+                          the details and send it for review again.
                         </div>
+                      ) : gateApproved ? (
+                        <Button
+                          onClick={handleFileToGra}
+                          disabled={file.isPending || !filing}
+                          className="w-full h-12 rounded-full bg-primary hover:bg-primary/90 text-white gap-2 text-base"
+                        >
+                          {file.isPending ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <Send className="w-5 h-5" />
+                          )}
+                          File to GRA — generate the duty pack
+                        </Button>
                       ) : (
                         <div className="flex items-center justify-center gap-2 w-full rounded-full border border-primary/20 bg-primary/5 text-primary h-12 font-medium">
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Awaiting gate approval — PDF unlocks when approved
+                          Awaiting officer approval — filing unlocks when the gate
+                          is approved
                         </div>
                       )}
-                      <Link
-                        href="/deals"
-                        className="flex items-center justify-center gap-2 w-full rounded-full border border-border hover:bg-white/[0.04] h-11 text-sm font-medium transition-colors"
-                      >
-                        Review on the deal
-                        <ChevronRight className="w-4 h-4" />
-                      </Link>
                     </div>
                   ) : (
                     <Button
-                      onClick={handleSubmit}
+                      onClick={handleReview}
                       disabled={
-                        submit.isPending ||
+                        review.isPending ||
                         compute.isPending ||
-                        (draft.missingInputs?.length ?? 0) > 0 ||
-                        (draft.reviewFlags?.length ?? 0) > 0
+                        missingInputs.length > 0 ||
+                        missingIdentity ||
+                        !!cifMismatch
                       }
                       className="w-full h-12 rounded-full bg-primary hover:bg-primary/90 text-white gap-2 text-base"
                     >
-                      {submit.isPending ? (
+                      {review.isPending ? (
                         <Loader2 className="w-5 h-5 animate-spin" />
                       ) : (
                         <ShieldCheck className="w-5 h-5" />
                       )}
-                      Submit filing to a decision gate
+                      Send duty sheet for officer review
                     </Button>
+                  )}
+                  {!submittedGateId && missingIdentity && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      Importer, TIN, VIN, HS code, make and model must be keyed in
+                      before review — they are never auto-filled.
+                    </p>
                   )}
                 </CardContent>
               </Card>
@@ -767,30 +873,47 @@ function ScanField({
   value,
   index,
   onChange,
+  badge,
+  disabled,
 }: {
   label: string;
   value: string;
   index: number;
   onChange: (value: string) => void;
+  badge?: string;
+  disabled?: boolean;
 }) {
   return (
     <motion.div
       className="space-y-1.5"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.08, duration: 0.3 }}
+      transition={{ delay: index * 0.06, duration: 0.3 }}
     >
-      <label className="text-xs uppercase tracking-widest text-muted-foreground">
+      <label className="text-xs uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
         {label}
+        {badge && (
+          <span
+            className={cn(
+              "text-[10px] normal-case tracking-normal rounded-full px-1.5 py-px font-semibold",
+              badge === "keyed in"
+                ? "bg-white/[0.06] text-muted-foreground"
+                : "bg-emerald-500/10 text-emerald-500",
+            )}
+          >
+            {badge}
+          </span>
+        )}
       </label>
       <motion.div
         initial={{ boxShadow: "0 0 0 1px rgba(52,211,153,0.65), 0 0 14px rgba(52,211,153,0.35)" }}
         animate={{ boxShadow: "0 0 0 0px rgba(52,211,153,0), 0 0 0px rgba(52,211,153,0)" }}
-        transition={{ delay: index * 0.08 + 0.5, duration: 0.9 }}
+        transition={{ delay: index * 0.06 + 0.5, duration: 0.9 }}
         className="rounded-md"
       >
         <Input
           value={value}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
           className="bg-white/[0.04] border-border focus-visible:ring-primary/20"
         />

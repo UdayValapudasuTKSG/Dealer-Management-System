@@ -21,7 +21,7 @@
 - [Storage ACL fail-closed](storage-acl-fail-closed.md) — never LIKE-match user-supplied storage keys in reference checks; use eq / jsonb `@>` containment or `%`/`_` widens the match.
 - [Deal delivery progression](deal-delivery-progression.md) — deals have NO manual stage control; finance disbursement commits, the 9-step delivery workflow delivers.
 - [Idempotency replay middleware](idempotency-replay-middleware.md) — atomic insert claim; only res.json+2xx marks completed, client aborts must release the claim or retries replay null.
-- [GRA duty engine conventions](gra-duty-engine.md) — engine never guesses: missing inputs return missingInputs[], unpublished bands become blocking reviewFlags; server recomputes at submit and gate approval.
+- [GRA duty engine conventions](gra-duty-engine.md) — dealer_taxes-driven, server-only duty; gate approve authorises, filing recomputes with LINE-LEVEL drift check; extract is allowlisted, identity fields human-keyed.
 - [Agent-run idempotency ledger](agent-run-idempotency-ledger.md) — dedupe via agent_runs needs a stable refType/refId across ALL outcome paths; downstream entities go in affectedEntities.
 - [WhatsApp outbound providers](whatsapp-outbound-providers.md) — outbound queue selects Meta vs Twilio by WHATSAPP_PROVIDER; Twilio needs a WhatsApp-enabled From number, not the voice number.
 - [Shared-proxy IP rate limiting](shared-proxy-rate-limit.md) — per-IP limits behind the shared proxy collapse into one bucket; scope them to public prefixes, never global. Startup auth races need error-query refetch; "not found" only on true 404.

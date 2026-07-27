@@ -11,4 +11,9 @@ export interface GraExtractRequest {
   /** Base64-encoded document image (no data-URL prefix) */
   imageBase64: string;
   mediaType: GraExtractRequestMediaType;
+  /**
+     * documents.id of the uploaded customs/manifest/proforma file, for traceability
+     * @nullable
+     */
+  sourceDocId?: number | null;
 }

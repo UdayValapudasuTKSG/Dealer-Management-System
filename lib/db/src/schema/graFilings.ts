@@ -15,6 +15,10 @@ export type GraFilingTaxLine = {
   kind: "percent" | "fixed";
   rate: number;
   amount: number;
+  /** Human-readable basis the line was computed on (e.g. "CIF value", "CIF + duty + excise"). */
+  basis?: string;
+  /** USD-scale base amount the rate was applied to (null for fixed lines). */
+  baseAmount?: number | null;
 };
 
 /** Snapshot of the GRA rule path used to compute this filing's duty. */
@@ -59,6 +63,15 @@ export const graFilingsTable = pgTable("gra_filings", {
   fuelType: text("fuel_type").notNull(),
   hsCode: text("hs_code").notNull(),
   cifValue: doublePrecision("cif_value").notNull(),
+  // CIF composition (17-mB step 3): FOB + freight + insurance = CIF. Nullable —
+  // when all three are supplied they must sum to cifValue (422 otherwise).
+  fobValue: doublePrecision("fob_value"),
+  freightValue: doublePrecision("freight_value"),
+  insuranceValue: doublePrecision("insurance_value"),
+  // Traceability (R8.7): which uploaded documents each figure came from, and
+  // the per-field AI extraction confidence (human-confirmed at the gate).
+  sourceDocIds: jsonb("source_doc_ids").$type<number[] | null>(),
+  fieldConfidence: jsonb("field_confidence").$type<Record<string, number> | null>(),
   // Real-GRA-rules inputs (nullable so legacy rows still serialize).
   importerType: text("importer_type"), // private | dealer_used | new_vehicle_trader
   bodyType: text("body_type"),

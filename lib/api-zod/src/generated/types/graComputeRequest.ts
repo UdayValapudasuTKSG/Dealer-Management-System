@@ -17,12 +17,4 @@ export interface GraComputeRequest {
   yearOfManufacture?: number | null;
   /** @nullable */
   yearOfImport?: number | null;
-  /** @nullable */
-  importerType?: string | null;
-  /** @nullable */
-  bodyType?: string | null;
-  /** @nullable */
-  isHybrid?: boolean | null;
-  /** @nullable */
-  retailPrice?: number | null;
 }

@@ -49,6 +49,8 @@ export const dealersTable = pgTable("dealers", {
   name: text("name").notNull().unique(),
   city: text("city"),
   country: text("country"),
+  /** Dealer's GRA Taxpayer Identification Number — printed on duty packs, never AI-generated. */
+  tin: text("tin"),
   status: text("status").notNull().default("active"),
   // GYD per 1 USD — used to convert USD amounts into Guyana dollars in the UI.
   usdExchangeRate: doublePrecision("usd_exchange_rate")
