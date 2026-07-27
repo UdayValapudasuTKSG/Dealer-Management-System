@@ -209,6 +209,20 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       `This is a courtesy reminder that a payment of <strong>${d(x, "amount", "your scheduled amount")}</strong> is due on <strong>${d(x, "dueDate", "the scheduled date")}</strong>. If it's already on its way, please disregard this note.`,
     sample: { amount: "$2,150", dueDate: "July 25, 2026" },
   },
+  refund_confirmation: {
+    label: "Refund Confirmation",
+    description: "Confirms a cancellation refund has been issued.",
+    subject: (x) => `Your refund of ${d(x, "amount", "your deposit")} is on its way`,
+    heading: () => "Refund confirmed",
+    body: (x) =>
+      `Your reservation for the <strong>${d(x, "vehicle", "vehicle")}</strong> has been cancelled and a refund of <strong>${d(x, "amount", "your deposit")}</strong> has been issued via ${d(x, "method", "your original payment method")} (reference ${d(x, "reference", "on file")}). Please allow 3–5 business days for the funds to reflect. We'd love to welcome you back whenever the time is right.`,
+    sample: {
+      vehicle: "2026 Porsche Taycan Turbo",
+      amount: "$5,000",
+      method: "bank transfer",
+      reference: "RF-2026-0001",
+    },
+  },
   vehicle_ready: {
     label: "Vehicle Ready",
     description: "Tells the customer their vehicle is ready for pickup after service.",

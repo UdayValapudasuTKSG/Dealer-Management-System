@@ -21,6 +21,19 @@ export const DEAL_STAGES = [
 ] as const;
 export type DealStage = (typeof DEAL_STAGES)[number];
 
+/** Cancellation reason picklist (L9) — required when a deal/booking is cancelled. */
+export const CANCELLATION_REASONS = [
+  "customer_changed_mind",
+  "financing_declined",
+  "found_elsewhere",
+  "price",
+  "delivery_delay",
+  "vehicle_defect",
+  "duplicate",
+  "other",
+] as const;
+export type CancellationReason = (typeof CANCELLATION_REASONS)[number];
+
 /** Final Amount Payment Method (L6): how the balance settles. */
 export const DEAL_PAYMENT_METHODS = [
   "cash",
@@ -48,6 +61,8 @@ export const dealsTable = pgTable("deals", {
   finalPaymentMethod: text("final_payment_method"),
   salesAdvisor: text("sales_advisor"),
   salesAdvisorUserId: integer("sales_advisor_user_id"),
+  cancellationReason: text("cancellation_reason"),
+  cancellationNote: text("cancellation_note"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -56,6 +71,7 @@ export const dealsTable = pgTable("deals", {
 export const insertDealSchema = createInsertSchema(dealsTable, {
   stage: z.enum(DEAL_STAGES),
   finalPaymentMethod: z.enum(DEAL_PAYMENT_METHODS).nullable().optional(),
+  cancellationReason: z.enum(CANCELLATION_REASONS).nullable().optional(),
 }).omit({ dealerId: true,
   id: true,
   createdAt: true,

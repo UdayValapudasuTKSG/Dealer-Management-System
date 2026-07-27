@@ -26,6 +26,11 @@ import {
   SendBookingPaymentReminderResponse,
 } from "@workspace/api-zod";
 import { enqueueEmail } from "../lib/email";
+import {
+  refundBlockReason,
+  raiseRefundReleaseGate,
+  logCancellationEvent,
+} from "../lib/cancellation";
 import { logger } from "../lib/logger";
 import { ensureAccountForLead } from "../lib/accounts";
 import { applyPayment, issueInvoice, logPaymentEvent } from "../lib/invoicing";
@@ -665,6 +670,31 @@ router.patch("/bookings/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Cancel Reservation (L9): a cancellation with captured funds must still be
+  // inside the refundable-until-registration window; the refund itself (and
+  // the vehicle release) then waits on a manager-approved refund_release gate.
+  const isCancelling =
+    parsed.data.status === "cancelled" && before.status === "active";
+  const refundDue = isCancelling && before.amountPaid > 0.005;
+  if (isCancelling && !parsed.data.cancellationReason) {
+    res.status(422).json({
+      error: "cancellation_reason_required",
+      unmet: ["Select a cancellation reason before cancelling the reservation"],
+    });
+    return;
+  }
+  if (refundDue) {
+    const blocked = await refundBlockReason({
+      dealerId,
+      dealId: before.dealId,
+      vehicleId: before.vehicleId,
+    });
+    if (blocked) {
+      res.status(422).json({ error: "refund_window_closed", unmet: [blocked] });
+      return;
+    }
+  }
+
   const next: Record<string, unknown> = { ...parsed.data };
   // Recompute payment status when a payment is recorded without one.
   if (
@@ -707,7 +737,49 @@ router.patch("/bookings/:id", async (req, res): Promise<void> => {
     (booking!.status === "cancelled" || booking!.status === "expired") &&
     before.status === "active"
   ) {
-    await releaseVehicle(booking!.vehicleId, dealerId);
+    if (refundDue) {
+      // Hold NOT cleared yet — the refund_release gate approval releases it.
+      const gateId = await raiseRefundReleaseGate({
+        dealerId,
+        refType: "booking",
+        refId: booking!.id,
+        customerId: booking!.customerId,
+        customerName: booking!.customerName,
+        amount: booking!.amountPaid,
+        reasonCode: booking!.cancellationReason ?? "other",
+        reasonNote: booking!.cancellationNote,
+        evidence: [
+          { label: "Booking", value: `#${booking!.id}` },
+          {
+            label: "Vehicle",
+            value: await vehicleLabel(booking!.vehicleId, dealerId),
+          },
+          { label: "Vehicle hold", value: "Held until refund release is approved" },
+        ],
+      });
+      await logCancellationEvent({
+        dealerId,
+        customerId: booking!.customerId,
+        refType: "booking",
+        refId: booking!.id,
+        title: "Reservation cancelled — refund release pending",
+        detail: `Cancellation (${booking!.cancellationReason ?? "other"}) recorded with $${booking!.amountPaid.toLocaleString()} captured. Refund gate #${gateId} raised for manager approval; the vehicle hold stays in place until it is approved.`,
+        actor: booking!.createdBy ?? "Advisor",
+      });
+    } else {
+      await releaseVehicle(booking!.vehicleId, dealerId);
+      if (booking!.status === "cancelled") {
+        await logCancellationEvent({
+          dealerId,
+          customerId: booking!.customerId,
+          refType: "booking",
+          refId: booking!.id,
+          title: "Reservation cancelled",
+          detail: `Cancellation (${booking!.cancellationReason ?? "other"}) recorded with no captured funds; the vehicle hold was released.`,
+          actor: booking!.createdBy ?? "Advisor",
+        });
+      }
+    }
   }
 
   res.json(UpdateBookingResponse.parse(booking));

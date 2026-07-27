@@ -6783,6 +6783,8 @@ components:
         amountPaid: { type: number }
         paymentStatus: { type: string, enum: [pending, partial, paid, refunded] }
         status: { type: string, enum: [active, converted, expired, cancelled] }
+        cancellationReason: { type: ["string", "null"], enum: [customer_changed_mind, financing_declined, found_elsewhere, price, delivery_delay, vehicle_defect, duplicate, other, null] }
+        cancellationNote: { type: ["string", "null"] }
         expiresAt: { type: string, format: date-time }
         notes: { type: ["string", "null"] }
         createdBy: { type: ["string", "null"] }
@@ -6808,6 +6810,8 @@ components:
         amountPaid: { type: number, minimum: 0 }
         paymentStatus: { type: string, enum: [pending, partial, paid, refunded] }
         status: { type: string, enum: [active, converted, expired, cancelled] }
+        cancellationReason: { type: string, enum: [customer_changed_mind, financing_declined, found_elsewhere, price, delivery_delay, vehicle_defect, duplicate, other] }
+        cancellationNote: { type: string, maxLength: 1000 }
         expiresAt: { type: string, format: date-time }
         notes: { type: string }
     DeliveryStepState:
@@ -6863,7 +6867,7 @@ components:
         advisorUserId: { type: ["integer", "null"] }
         advisorName: { type: ["string", "null"] }
         vehicleLabel: { type: ["string", "null"] }
-        status: { type: string, enum: [in_progress, completed] }
+        status: { type: string, enum: [in_progress, completed, cancelled] }
         currentStep: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, delivery, signature, feedback] }
         steps:
           type: array
@@ -7806,6 +7810,8 @@ components:
         finalPaymentMethod: { type: ["string", "null"], enum: [cash, bank_financing, cheque, null] }
         salesAdvisor: { type: ["string", "null"] }
         salesAdvisorUserId: { type: ["integer", "null"] }
+        cancellationReason: { type: ["string", "null"], enum: [customer_changed_mind, financing_declined, found_elsewhere, price, delivery_delay, vehicle_defect, duplicate, other, null] }
+        cancellationNote: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
     DealInput:
       type: object
@@ -7845,6 +7851,8 @@ components:
         finalPaymentMethod: { type: string, enum: [cash, bank_financing, cheque] }
         salesAdvisor: { type: string }
         salesAdvisorUserId: { type: ["integer", "null"] }
+        cancellationReason: { type: string, enum: [customer_changed_mind, financing_declined, found_elsewhere, price, delivery_delay, vehicle_defect, duplicate, other] }
+        cancellationNote: { type: string, maxLength: 1000 }
 
     Appraisal:
       type: object
@@ -8110,6 +8118,7 @@ components:
         method: { type: string, enum: [cash, card, bank_transfer, cheque, mobile_money, financing] }
         reference: { type: ["string", "null"] }
         receivedBy: { type: ["string", "null"] }
+        gateId: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
     PaymentInput:
       type: object
@@ -8120,6 +8129,7 @@ components:
         method: { type: string, enum: [cash, card, bank_transfer, cheque, mobile_money, financing] }
         reference: { type: string }
         confirmDuplicate: { type: boolean, description: "Set true to record a payment whose reference already exists for this dealer (mobile-money collision confirm)" }
+        gateId: { type: integer, description: "L9: required when posting a cancellation refund — the approving refund_release gate. Refund is rejected (422 gate_not_approved) unless the gate is approved." }
     Receipt:
       type: object
       required: [id, receiptNumber, paymentId, invoiceId, invoiceNumber, customerName, amount, method, currency, createdAt]

@@ -50,11 +50,25 @@ const STAGE_LABEL: Record<string, string> = {
   finance: "Finance",
   committed: "Committed",
   delivered: "Delivered",
+  cancelled: "Cancelled",
+  lost: "Lost",
 };
+
+const CANCEL_REASONS: { value: string; label: string }[] = [
+  { value: "customer_changed_mind", label: "Customer changed mind" },
+  { value: "financing_declined", label: "Financing declined" },
+  { value: "found_elsewhere", label: "Found vehicle elsewhere" },
+  { value: "price", label: "Price" },
+  { value: "delivery_delay", label: "Delivery delay" },
+  { value: "vehicle_defect", label: "Vehicle defect" },
+  { value: "duplicate", label: "Duplicate deal" },
+  { value: "other", label: "Other" },
+];
 
 export default function Deals() {
   const { data: deals, isLoading } = useListDeals();
   const { data: gates } = useListGates({ status: "pending" });
+  const { data: approvedGates } = useListGates({ status: "approved" });
   const { data: vehicles } = useListVehicles();
   const { data: divisions } = useListDivisions();
   const { data: leads } = useListLeads();
@@ -69,6 +83,48 @@ export default function Deals() {
   const [attachDeal, setAttachDeal] = useState<Deal | null>(null);
   const [attachLeadId, setAttachLeadId] = useState<string>("");
   const [attachSearch, setAttachSearch] = useState("");
+  const [cancelDeal, setCancelDeal] = useState<Deal | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelNote, setCancelNote] = useState("");
+
+  const submitCancellation = async () => {
+    if (!cancelDeal || !cancelReason) return;
+    try {
+      await updateDeal.mutateAsync({
+        id: cancelDeal.id,
+        data: {
+          stage: "cancelled",
+          cancellationReason: cancelReason as never,
+          cancellationNote: cancelNote.trim() || undefined,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
+      queryClient.invalidateQueries({ predicate: (q) =>
+        String(q.queryKey[0] ?? "").includes("/gates") ||
+        String(q.queryKey[0] ?? "").includes("/vehicles"),
+      });
+      toast({
+        title: "Deal cancelled",
+        description:
+          "If funds were captured, a refund release request is now waiting for manager approval; otherwise the vehicle went back to available stock.",
+      });
+      setCancelDeal(null);
+      setCancelReason("");
+      setCancelNote("");
+    } catch (err) {
+      const detail = (
+        err as { response?: { data?: { error?: string; unmet?: string[] } } }
+      )?.response?.data;
+      toast({
+        title: "Could not cancel the deal",
+        description:
+          detail?.unmet?.[0] ??
+          detail?.error ??
+          (err instanceof Error ? err.message : undefined),
+        variant: "destructive",
+      });
+    }
+  };
 
   const refreshLeadLink = (leadIds: (number | null | undefined)[]) => {
     queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
@@ -165,10 +221,18 @@ export default function Deals() {
     if (!open && prefillVehicleId) navigate("/deals", { replace: true });
   };
 
-  const gatesForDeal = (dealId: number) =>
-    (gates ?? []).filter((g) => g.refType === "deal" && g.refId === dealId);
+  const gatesForDeal = (dealId: number) => [
+    ...(gates ?? []).filter((g) => g.refType === "deal" && g.refId === dealId),
+    // Approved refund gates stay visible so finance can record the refund.
+    ...(approvedGates ?? []).filter(
+      (g) =>
+        g.type === "refund_release" &&
+        g.refType === "deal" &&
+        g.refId === dealId,
+    ),
+  ];
 
-  const stages = ["desking", "committed", "delivered"];
+  const stages = ["desking", "committed", "delivered", "cancelled"];
 
   return (
     <>
@@ -563,7 +627,29 @@ export default function Deals() {
                                 </span>
                               </div>
                             )}
+                            {deal.stage === "cancelled" && (
+                              <div className="flex justify-between items-center pt-2">
+                                <span className="uppercase tracking-wider text-xs">
+                                  Reason
+                                </span>
+                                <span className="text-foreground text-xs font-semibold">
+                                  {CANCEL_REASONS.find(
+                                    (r) => r.value === deal.cancellationReason,
+                                  )?.label ?? "—"}
+                                </span>
+                              </div>
+                            )}
                           </div>
+                          {canEditDeals &&
+                            (deal.stage === "desking" ||
+                              deal.stage === "committed") && (
+                              <button
+                                onClick={() => setCancelDeal(deal)}
+                                className="mt-4 w-full text-center text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:text-destructive transition-colors py-1.5 rounded-full border border-border/50 hover:border-destructive/40"
+                              >
+                                Cancel &amp; Refund
+                              </button>
+                            )}
                         </CardContent>
                       </Card>
                       <AnimatePresence mode="popLayout">
@@ -660,6 +746,83 @@ export default function Deals() {
               {updateDeal.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
               <Link2 className="w-4 h-4" />
               Attach
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={cancelDeal != null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setCancelDeal(null);
+            setCancelReason("");
+            setCancelNote("");
+          }
+        }}
+      >
+        <DialogContent className="glass-panel border-white/10 sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl tracking-tight">
+              Cancel deal #{cancelDeal?.id}
+            </DialogTitle>
+            <DialogDescription>
+              {cancelDeal?.customerName
+                ? `${cancelDeal.customerName} — `
+                : ""}
+              If a deposit has been captured, cancelling raises a refund
+              release request for manager approval and the vehicle stays held
+              until it is approved. With no funds captured, the vehicle
+              returns to available stock immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Reason
+              </label>
+              <select
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="mt-1.5 w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary/60"
+              >
+                <option value="">Select a reason…</option>
+                {CANCEL_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Note (optional)
+              </label>
+              <Input
+                value={cancelNote}
+                onChange={(e) => setCancelNote(e.target.value)}
+                placeholder="Anything worth recording about this cancellation"
+                className="mt-1.5 bg-white/[0.04] border-white/10"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setCancelDeal(null)}
+              className="rounded-full px-5"
+            >
+              Keep deal
+            </Button>
+            <Button
+              onClick={submitCancellation}
+              disabled={!cancelReason || updateDeal.isPending}
+              variant="destructive"
+              className="rounded-full px-6 gap-2"
+            >
+              {updateDeal.isPending && (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              )}
+              Cancel deal
             </Button>
           </DialogFooter>
         </DialogContent>

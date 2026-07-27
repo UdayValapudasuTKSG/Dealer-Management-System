@@ -12,6 +12,7 @@ import {
   useSendBookingPaymentReminder,
   getListDeliveriesQueryKey,
   getListBookingsQueryKey,
+  getListGatesQueryKey,
 } from "@workspace/api-client-react";
 import type {
   Delivery,
@@ -37,8 +38,16 @@ import {
 } from "lucide-react";
 import { useMoney, formatGuyanaDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogHeader,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -1142,6 +1151,17 @@ function StepRow({
   );
 }
 
+const BOOKING_CANCEL_REASONS: { value: string; label: string }[] = [
+  { value: "customer_changed_mind", label: "Customer changed mind" },
+  { value: "financing_declined", label: "Financing declined" },
+  { value: "found_elsewhere", label: "Found vehicle elsewhere" },
+  { value: "price", label: "Price" },
+  { value: "delivery_delay", label: "Delivery delay" },
+  { value: "vehicle_defect", label: "Vehicle defect" },
+  { value: "duplicate", label: "Duplicate booking" },
+  { value: "other", label: "Other" },
+];
+
 function BookingsTab({ bookings }: { bookings: Booking[] }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -1149,6 +1169,46 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
   const money = (n: number) => rawMoney.gyd(n);
   const updateBooking = useUpdateBooking();
   const remind = useSendBookingPaymentReminder();
+  const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+
+  const submitBookingCancellation = () => {
+    if (!cancelBooking || !cancelReason) return;
+    updateBooking.mutate(
+      {
+        id: cancelBooking.id,
+        data: {
+          status: "cancelled",
+          cancellationReason: cancelReason as never,
+        },
+      },
+      {
+        onSuccess: () => {
+          invalidate();
+          qc.invalidateQueries({ queryKey: getListGatesQueryKey() });
+          toast({
+            title: "Booking cancelled",
+            description:
+              cancelBooking.amountPaid > 0
+                ? "A refund release request is now waiting for manager approval; the vehicle stays held until it is approved."
+                : "The vehicle has been released.",
+          });
+          setCancelBooking(null);
+          setCancelReason("");
+        },
+        onError: (err) => {
+          const detail = (
+            err as { response?: { data?: { error?: string; unmet?: string[] } } }
+          )?.response?.data;
+          toast({
+            title: "Could not cancel the booking",
+            description: detail?.unmet?.[0] ?? detail?.error ?? "Please try again.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: getListBookingsQueryKey() });
@@ -1279,20 +1339,7 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
                   </>
                 )}
                 <button
-                  onClick={() =>
-                    updateBooking.mutate(
-                      { id: b.id, data: { status: "cancelled" } },
-                      {
-                        onSuccess: () => {
-                          invalidate();
-                          toast({
-                            title: "Booking cancelled",
-                            description: "The vehicle has been released.",
-                          });
-                        },
-                      },
-                    )
-                  }
+                  onClick={() => setCancelBooking(b)}
                   className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-white/15 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/[0.05] transition-colors"
                 >
                   Cancel
@@ -1302,6 +1349,65 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
           </div>
         );
       })}
+      <Dialog
+        open={cancelBooking != null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setCancelBooking(null);
+            setCancelReason("");
+          }
+        }}
+      >
+        <DialogContent className="glass-panel border-white/10 sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl tracking-tight">
+              Cancel booking #{cancelBooking?.id}
+            </DialogTitle>
+            <DialogDescription>
+              {cancelBooking && cancelBooking.amountPaid > 0
+                ? `${money(cancelBooking.amountPaid)} has been captured — cancelling raises a refund release request for manager approval, and the vehicle stays held until it is approved.`
+                : "No funds captured — the vehicle returns to available stock immediately."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-1">
+            <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Reason
+            </label>
+            <select
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              className="mt-1.5 w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary/60"
+            >
+              <option value="">Select a reason…</option>
+              {BOOKING_CANCEL_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setCancelBooking(null)}
+              className="rounded-full px-5"
+            >
+              Keep booking
+            </Button>
+            <Button
+              onClick={submitBookingCancellation}
+              disabled={!cancelReason || updateBooking.isPending}
+              variant="destructive"
+              className="rounded-full px-6 gap-2"
+            >
+              {updateBooking.isPending && (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              )}
+              Cancel booking
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

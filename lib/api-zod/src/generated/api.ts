@@ -563,6 +563,8 @@ export const ListBookingsResponseItem = zod.object({
   "amountPaid": zod.number(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
   "status": zod.enum(['active', 'converted', 'expired', 'cancelled']),
+  "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "cancellationNote": zod.string().nullish(),
   "expiresAt": zod.coerce.date(),
   "notes": zod.string().nullish(),
   "createdBy": zod.string().nullish(),
@@ -610,6 +612,8 @@ export const CreateBookingResponse = zod.object({
   "amountPaid": zod.number(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
   "status": zod.enum(['active', 'converted', 'expired', 'cancelled']),
+  "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "cancellationNote": zod.string().nullish(),
   "expiresAt": zod.coerce.date(),
   "notes": zod.string().nullish(),
   "createdBy": zod.string().nullish(),
@@ -633,6 +637,8 @@ export const GetBookingResponse = zod.object({
   "amountPaid": zod.number(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
   "status": zod.enum(['active', 'converted', 'expired', 'cancelled']),
+  "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "cancellationNote": zod.string().nullish(),
   "expiresAt": zod.coerce.date(),
   "notes": zod.string().nullish(),
   "createdBy": zod.string().nullish(),
@@ -649,12 +655,16 @@ export const UpdateBookingParams = zod.object({
 
 export const updateBookingBodyAmountPaidMin = 0;
 
+export const updateBookingBodyCancellationNoteMax = 1000;
+
 
 
 export const UpdateBookingBody = zod.object({
   "amountPaid": zod.number().min(updateBookingBodyAmountPaidMin).optional(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']).optional(),
   "status": zod.enum(['active', 'converted', 'expired', 'cancelled']).optional(),
+  "cancellationReason": zod.enum(['customer_changed_mind', 'financing_declined', 'found_elsewhere', 'price', 'delivery_delay', 'vehicle_defect', 'duplicate', 'other']).optional(),
+  "cancellationNote": zod.string().max(updateBookingBodyCancellationNoteMax).optional(),
   "expiresAt": zod.coerce.date().optional(),
   "notes": zod.string().optional()
 })
@@ -671,6 +681,8 @@ export const UpdateBookingResponse = zod.object({
   "amountPaid": zod.number(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
   "status": zod.enum(['active', 'converted', 'expired', 'cancelled']),
+  "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "cancellationNote": zod.string().nullish(),
   "expiresAt": zod.coerce.date(),
   "notes": zod.string().nullish(),
   "createdBy": zod.string().nullish(),
@@ -697,6 +709,8 @@ export const SendBookingPaymentReminderResponse = zod.object({
   "amountPaid": zod.number(),
   "paymentStatus": zod.enum(['pending', 'partial', 'paid', 'refunded']),
   "status": zod.enum(['active', 'converted', 'expired', 'cancelled']),
+  "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "cancellationNote": zod.string().nullish(),
   "expiresAt": zod.coerce.date(),
   "notes": zod.string().nullish(),
   "createdBy": zod.string().nullish(),
@@ -722,7 +736,7 @@ export const ListDeliveriesResponseItem = zod.object({
   "advisorUserId": zod.number().nullish(),
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
-  "status": zod.enum(['in_progress', 'completed']),
+  "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
@@ -791,7 +805,7 @@ export const CreateDeliveryResponse = zod.object({
   "advisorUserId": zod.number().nullish(),
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
-  "status": zod.enum(['in_progress', 'completed']),
+  "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
@@ -855,7 +869,7 @@ export const GetDeliveryResponse = zod.object({
   "advisorUserId": zod.number().nullish(),
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
-  "status": zod.enum(['in_progress', 'completed']),
+  "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
@@ -933,7 +947,7 @@ export const UpdateDeliveryResponse = zod.object({
   "advisorUserId": zod.number().nullish(),
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
-  "status": zod.enum(['in_progress', 'completed']),
+  "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
@@ -1019,7 +1033,7 @@ export const AdvanceDeliveryResponse = zod.object({
   "advisorUserId": zod.number().nullish(),
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
-  "status": zod.enum(['in_progress', 'completed']),
+  "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
@@ -1095,7 +1109,7 @@ export const UpdateDeliveryPdiResponse = zod.object({
   "advisorUserId": zod.number().nullish(),
   "advisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
-  "status": zod.enum(['in_progress', 'completed']),
+  "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
@@ -2776,6 +2790,8 @@ export const ListDealsResponseItem = zod.object({
   "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
+  "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "cancellationNote": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListDealsResponse = zod.array(ListDealsResponseItem)
@@ -2818,6 +2834,8 @@ export const CreateDealResponse = zod.object({
   "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
+  "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "cancellationNote": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -2844,6 +2862,8 @@ export const GetDealResponse = zod.object({
   "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
+  "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "cancellationNote": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -2851,6 +2871,10 @@ export const GetDealResponse = zod.object({
 export const UpdateDealParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const updateDealBodyCancellationNoteMax = 1000;
+
+
 
 export const UpdateDealBody = zod.object({
   "customerId": zod.number().optional(),
@@ -2867,7 +2891,9 @@ export const UpdateDealBody = zod.object({
   "depositPaid": zod.boolean().optional(),
   "finalPaymentMethod": zod.enum(['cash', 'bank_financing', 'cheque']).optional(),
   "salesAdvisor": zod.string().optional(),
-  "salesAdvisorUserId": zod.number().nullish()
+  "salesAdvisorUserId": zod.number().nullish(),
+  "cancellationReason": zod.enum(['customer_changed_mind', 'financing_declined', 'found_elsewhere', 'price', 'delivery_delay', 'vehicle_defect', 'duplicate', 'other']).optional(),
+  "cancellationNote": zod.string().max(updateDealBodyCancellationNoteMax).optional()
 })
 
 export const UpdateDealResponse = zod.object({
@@ -2888,6 +2914,8 @@ export const UpdateDealResponse = zod.object({
   "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
+  "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "cancellationNote": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -3524,6 +3552,7 @@ export const ListPaymentsResponseItem = zod.object({
   "method": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'financing']),
   "reference": zod.string().nullish(),
   "receivedBy": zod.string().nullish(),
+  "gateId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListPaymentsResponse = zod.array(ListPaymentsResponseItem)
@@ -3537,7 +3566,8 @@ export const CreatePaymentBody = zod.object({
   "amount": zod.number(),
   "method": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'financing']),
   "reference": zod.string().optional(),
-  "confirmDuplicate": zod.boolean().optional().describe('Set true to record a payment whose reference already exists for this dealer (mobile-money collision confirm)')
+  "confirmDuplicate": zod.boolean().optional().describe('Set true to record a payment whose reference already exists for this dealer (mobile-money collision confirm)'),
+  "gateId": zod.number().optional().describe('L9: required when posting a cancellation refund — the approving refund_release gate. Refund is rejected (422 gate_not_approved) unless the gate is approved.')
 })
 
 export const CreatePaymentResponse = zod.object({
@@ -3548,6 +3578,7 @@ export const CreatePaymentResponse = zod.object({
   "method": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'financing']),
   "reference": zod.string().nullish(),
   "receivedBy": zod.string().nullish(),
+  "gateId": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -5038,6 +5069,8 @@ export const GetCustomerOverviewResponse = zod.object({
   "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
+  "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "cancellationNote": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 }),zod.null()]).optional(),
   "deals": zod.array(zod.object({
@@ -5058,6 +5091,8 @@ export const GetCustomerOverviewResponse = zod.object({
   "finalPaymentMethod": zod.union([zod.literal('cash'),zod.literal('bank_financing'),zod.literal('cheque'),zod.literal(null)]).nullish(),
   "salesAdvisor": zod.string().nullish(),
   "salesAdvisorUserId": zod.number().nullish(),
+  "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "cancellationNote": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "appraisals": zod.array(zod.object({

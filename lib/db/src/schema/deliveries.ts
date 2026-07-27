@@ -38,7 +38,11 @@ export const DELIVERY_STEP_LABELS: Record<DeliveryStep, string> = {
   feedback: "Feedback",
 };
 
-export const DELIVERY_STATUSES = ["in_progress", "completed"] as const;
+export const DELIVERY_STATUSES = [
+  "in_progress",
+  "completed",
+  "cancelled",
+] as const;
 export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
 
 export const deliveryStepStateSchema = z.object({

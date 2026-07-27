@@ -504,8 +504,8 @@ async function testRefundReleaseDeal() {
     .from(dealsTable)
     .where(eq(dealsTable.id, deal.id));
   check(
-    `${label}: deal.depositPaid = false`,
-    after.depositPaid === false,
+    `${label}: deal.depositPaid stays true until finance records the refund (L9)`,
+    after.depositPaid === true,
     `got ${after.depositPaid}`,
   );
 

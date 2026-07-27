@@ -17,5 +17,7 @@ export interface Payment {
   reference?: string | null;
   /** @nullable */
   receivedBy?: string | null;
+  /** @nullable */
+  gateId?: number | null;
   createdAt: Date;
 }

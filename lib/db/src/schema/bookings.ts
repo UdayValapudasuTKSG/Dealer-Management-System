@@ -40,6 +40,8 @@ export const bookingsTable = pgTable("bookings", {
   amountPaid: doublePrecision("amount_paid").notNull().default(0),
   paymentStatus: text("payment_status").notNull().default("pending"),
   status: text("status").notNull().default("active"),
+  cancellationReason: text("cancellation_reason"),
+  cancellationNote: text("cancellation_note"),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   notes: text("notes"),
   createdBy: text("created_by"),

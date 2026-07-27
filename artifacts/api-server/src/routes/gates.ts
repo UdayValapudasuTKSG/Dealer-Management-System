@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   db,
   gatesTable,
@@ -8,6 +8,8 @@ import {
   financeApplicationsTable,
   vehiclesTable,
   leadsTable,
+  bookingsTable,
+  deliveriesTable,
   timelineEventsTable,
   type Gate,
 } from "@workspace/db";
@@ -221,12 +223,42 @@ async function applyCascade(
       };
     }
     case "refund_release": {
+      // L9 cancellation approval: releases the vehicle hold (honoring other
+      // active bookings), cancels linked bookings, and voids the delivery
+      // workflow. Money does NOT move here — finance executes the refund as
+      // a negative payment referencing this gate (422 until it's approved).
       let vinReturned = false;
+      const releaseUnit = async (vehicleId: number) => {
+        const [otherHold] = await tx
+          .select({ id: bookingsTable.id })
+          .from(bookingsTable)
+          .where(
+            and(
+              eq(bookingsTable.vehicleId, vehicleId),
+              eq(bookingsTable.dealerId, gate.dealerId),
+              eq(bookingsTable.status, "active"),
+            ),
+          );
+        if (otherHold) return false;
+        const [updated] = await tx
+          .update(vehiclesTable)
+          .set({ status: "available", holdUntil: null, holdReason: null })
+          .where(
+            and(
+              eq(vehiclesTable.id, vehicleId),
+              eq(vehiclesTable.dealerId, gate.dealerId),
+              inArray(vehiclesTable.status, ["reserved", "booked"]),
+            ),
+          )
+          .returning({ id: vehiclesTable.id });
+        return Boolean(updated);
+      };
+
       if (gate.refId) {
         if (gate.refType === "vehicle") {
           await tx
             .update(vehiclesTable)
-            .set({ status: "available" })
+            .set({ status: "available", holdUntil: null, holdReason: null })
             .where(
               and(
                 eq(vehiclesTable.id, gate.refId),
@@ -235,22 +267,61 @@ async function applyCascade(
             );
           vinReturned = true;
         } else if (gate.refType === "deal") {
-          await tx
-            .update(dealsTable)
-            .set({ depositPaid: false })
+          const [deal] = await tx
+            .select()
+            .from(dealsTable)
             .where(
               and(
                 eq(dealsTable.id, gate.refId),
                 eq(dealsTable.dealerId, gate.dealerId),
               ),
             );
+          if (deal) {
+            await tx
+              .update(bookingsTable)
+              .set({
+                status: "cancelled",
+                cancellationReason: deal.cancellationReason ?? "other",
+              })
+              .where(
+                and(
+                  eq(bookingsTable.dealId, deal.id),
+                  eq(bookingsTable.dealerId, gate.dealerId),
+                  eq(bookingsTable.status, "active"),
+                ),
+              );
+            await tx
+              .update(deliveriesTable)
+              .set({ status: "cancelled" })
+              .where(
+                and(
+                  eq(deliveriesTable.dealId, deal.id),
+                  eq(deliveriesTable.dealerId, gate.dealerId),
+                  eq(deliveriesTable.status, "in_progress"),
+                ),
+              );
+            vinReturned = await releaseUnit(deal.vehicleId);
+          }
+        } else if (gate.refType === "booking") {
+          const [booking] = await tx
+            .select()
+            .from(bookingsTable)
+            .where(
+              and(
+                eq(bookingsTable.id, gate.refId),
+                eq(bookingsTable.dealerId, gate.dealerId),
+              ),
+            );
+          if (booking) {
+            vinReturned = await releaseUnit(booking.vehicleId);
+          }
         }
       }
       return {
-        title: "Refund released",
-        detail: `Reservation deposit of $${effectiveAmount.toLocaleString()} released to the customer${
+        title: "Refund release approved",
+        detail: `Refund of $${effectiveAmount.toLocaleString()} authorized for finance to execute${
           vinReturned ? "; the VIN is back in available stock" : ""
-        }.`,
+        }. The customer will be notified once the refund is recorded.`,
       };
     }
     case "stage_advance": {

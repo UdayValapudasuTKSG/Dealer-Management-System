@@ -1048,6 +1048,23 @@ export const BookingStatus = {
   cancelled: 'cancelled',
 } as const;
 
+/**
+ * @nullable
+ */
+export type BookingCancellationReason = typeof BookingCancellationReason[keyof typeof BookingCancellationReason] | null;
+
+
+export const BookingCancellationReason = {
+  customer_changed_mind: 'customer_changed_mind',
+  financing_declined: 'financing_declined',
+  found_elsewhere: 'found_elsewhere',
+  price: 'price',
+  delivery_delay: 'delivery_delay',
+  vehicle_defect: 'vehicle_defect',
+  duplicate: 'duplicate',
+  other: 'other',
+} as const;
+
 export interface Booking {
   id: number;
   vehicleId: number;
@@ -1064,6 +1081,10 @@ export interface Booking {
   amountPaid: number;
   paymentStatus: BookingPaymentStatus;
   status: BookingStatus;
+  /** @nullable */
+  cancellationReason?: BookingCancellationReason;
+  /** @nullable */
+  cancellationNote?: string | null;
   expiresAt: string;
   /** @nullable */
   notes?: string | null;
@@ -1122,11 +1143,28 @@ export const BookingUpdateStatus = {
   cancelled: 'cancelled',
 } as const;
 
+export type BookingUpdateCancellationReason = typeof BookingUpdateCancellationReason[keyof typeof BookingUpdateCancellationReason];
+
+
+export const BookingUpdateCancellationReason = {
+  customer_changed_mind: 'customer_changed_mind',
+  financing_declined: 'financing_declined',
+  found_elsewhere: 'found_elsewhere',
+  price: 'price',
+  delivery_delay: 'delivery_delay',
+  vehicle_defect: 'vehicle_defect',
+  duplicate: 'duplicate',
+  other: 'other',
+} as const;
+
 export interface BookingUpdate {
   /** @minimum 0 */
   amountPaid?: number;
   paymentStatus?: BookingUpdatePaymentStatus;
   status?: BookingUpdateStatus;
+  cancellationReason?: BookingUpdateCancellationReason;
+  /** @maxLength 1000 */
+  cancellationNote?: string;
   expiresAt?: string;
   notes?: string;
 }
@@ -1221,6 +1259,7 @@ export type DeliveryStatus = typeof DeliveryStatus[keyof typeof DeliveryStatus];
 export const DeliveryStatus = {
   in_progress: 'in_progress',
   completed: 'completed',
+  cancelled: 'cancelled',
 } as const;
 
 export type DeliveryCurrentStep = typeof DeliveryCurrentStep[keyof typeof DeliveryCurrentStep];
@@ -2821,6 +2860,23 @@ export const DealFinalPaymentMethod = {
   cheque: 'cheque',
 } as const;
 
+/**
+ * @nullable
+ */
+export type DealCancellationReason = typeof DealCancellationReason[keyof typeof DealCancellationReason] | null;
+
+
+export const DealCancellationReason = {
+  customer_changed_mind: 'customer_changed_mind',
+  financing_declined: 'financing_declined',
+  found_elsewhere: 'found_elsewhere',
+  price: 'price',
+  delivery_delay: 'delivery_delay',
+  vehicle_defect: 'vehicle_defect',
+  duplicate: 'duplicate',
+  other: 'other',
+} as const;
+
 export interface Deal {
   id: number;
   /** @nullable */
@@ -2847,6 +2903,10 @@ export interface Deal {
   salesAdvisor?: string | null;
   /** @nullable */
   salesAdvisorUserId?: number | null;
+  /** @nullable */
+  cancellationReason?: DealCancellationReason;
+  /** @nullable */
+  cancellationNote?: string | null;
   createdAt: string;
 }
 
@@ -2909,6 +2969,20 @@ export const DealUpdateFinalPaymentMethod = {
   cheque: 'cheque',
 } as const;
 
+export type DealUpdateCancellationReason = typeof DealUpdateCancellationReason[keyof typeof DealUpdateCancellationReason];
+
+
+export const DealUpdateCancellationReason = {
+  customer_changed_mind: 'customer_changed_mind',
+  financing_declined: 'financing_declined',
+  found_elsewhere: 'found_elsewhere',
+  price: 'price',
+  delivery_delay: 'delivery_delay',
+  vehicle_defect: 'vehicle_defect',
+  duplicate: 'duplicate',
+  other: 'other',
+} as const;
+
 export interface DealUpdate {
   customerId?: number;
   /** @nullable */
@@ -2927,6 +3001,9 @@ export interface DealUpdate {
   salesAdvisor?: string;
   /** @nullable */
   salesAdvisorUserId?: number | null;
+  cancellationReason?: DealUpdateCancellationReason;
+  /** @maxLength 1000 */
+  cancellationNote?: string;
 }
 
 export type AppraisalCondition = typeof AppraisalCondition[keyof typeof AppraisalCondition];
@@ -3416,6 +3493,8 @@ export interface Payment {
   reference?: string | null;
   /** @nullable */
   receivedBy?: string | null;
+  /** @nullable */
+  gateId?: number | null;
   createdAt: string;
 }
 
@@ -3438,6 +3517,8 @@ export interface PaymentInput {
   reference?: string;
   /** Set true to record a payment whose reference already exists for this dealer (mobile-money collision confirm) */
   confirmDuplicate?: boolean;
+  /** L9: required when posting a cancellation refund — the approving refund_release gate. Refund is rejected (422 gate_not_approved) unless the gate is approved. */
+  gateId?: number;
 }
 
 export interface Receipt {

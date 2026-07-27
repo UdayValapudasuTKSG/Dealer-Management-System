@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { BookingUpdateCancellationReason } from './bookingUpdateCancellationReason';
 import type { BookingUpdatePaymentStatus } from './bookingUpdatePaymentStatus';
 import type { BookingUpdateStatus } from './bookingUpdateStatus';
 
@@ -13,6 +14,9 @@ export interface BookingUpdate {
   amountPaid?: number;
   paymentStatus?: BookingUpdatePaymentStatus;
   status?: BookingUpdateStatus;
+  cancellationReason?: BookingUpdateCancellationReason;
+  /** @maxLength 1000 */
+  cancellationNote?: string;
   expiresAt?: Date;
   notes?: string;
 }

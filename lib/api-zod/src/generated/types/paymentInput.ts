@@ -14,4 +14,6 @@ export interface PaymentInput {
   reference?: string;
   /** Set true to record a payment whose reference already exists for this dealer (mobile-money collision confirm) */
   confirmDuplicate?: boolean;
+  /** L9: required when posting a cancellation refund — the approving refund_release gate. Refund is rejected (422 gate_not_approved) unless the gate is approved. */
+  gateId?: number;
 }

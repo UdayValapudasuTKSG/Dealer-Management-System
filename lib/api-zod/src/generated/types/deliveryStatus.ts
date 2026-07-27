@@ -12,4 +12,5 @@ export type DeliveryStatus = typeof DeliveryStatus[keyof typeof DeliveryStatus];
 export const DeliveryStatus = {
   in_progress: 'in_progress',
   completed: 'completed',
+  cancelled: 'cancelled',
 } as const;

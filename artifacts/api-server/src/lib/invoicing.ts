@@ -97,6 +97,9 @@ export type ApplyPaymentArgs = {
   reference?: string | null;
   receivedBy?: string | null;
   confirmDuplicate?: boolean;
+  /** L9: refund_release gate id — stamped on the ledger row inside the tx;
+   * a partial unique index guarantees at most one refund per gate. */
+  gateId?: number | null;
 };
 
 /**
@@ -110,7 +113,8 @@ export class PaymentGuardError extends Error {
       | "invoice_already_paid"
       | "reversal_exceeds_paid"
       | "overpayment"
-      | "duplicate_reference",
+      | "duplicate_reference"
+      | "refund_already_recorded",
     public extra: Record<string, unknown> = {},
   ) {
     super(code);
@@ -206,8 +210,25 @@ export async function applyPayment(args: ApplyPaymentArgs) {
         method: args.method,
         reference: args.reference ?? null,
         receivedBy: args.receivedBy ?? null,
+        gateId: args.gateId ?? null,
       })
-      .returning();
+      .returning()
+      .catch((err: unknown) => {
+        // Partial unique index payments_gate_id_unique: a concurrent request
+        // already recorded the refund for this gate.
+        if (
+          args.gateId != null &&
+          typeof err === "object" &&
+          err !== null &&
+          "code" in err &&
+          (err as { code?: string }).code === "23505"
+        ) {
+          throw new PaymentGuardError("refund_already_recorded", {
+            gateId: args.gateId,
+          });
+        }
+        throw err;
+      });
 
     const [{ paid }] = await tx
       .select({

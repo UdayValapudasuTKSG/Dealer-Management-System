@@ -35,6 +35,13 @@ import {
   ensureFinalInvoiceForDeal,
 } from "../lib/invoicing";
 import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
+import {
+  refundBlockReason,
+  capturedFundsForDeal,
+  raiseRefundReleaseGate,
+  cascadeDealCancellation,
+  logCancellationEvent,
+} from "../lib/cancellation";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
 import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
 
@@ -521,7 +528,19 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
     parsed.data.otdPrice = totalWithTax;
   }
 
+  // L9: captured funds snapshot for a cancellation, computed during the
+  // pre-checks and consumed by the post-update side effects.
+  let cancellationFunds: Awaited<ReturnType<typeof capturedFundsForDeal>> | null =
+    null;
+
   if (before && parsed.data.stage && parsed.data.stage !== before.stage) {
+    // Terminal stages never reactivate — history is retained, not reused.
+    if (before.stage === "cancelled" || before.stage === "lost") {
+      res.status(422).json({
+        error: `A ${before.stage} deal is terminal and cannot change stage`,
+      });
+      return;
+    }
     const fromIdx = DEAL_STAGE_ORDER.indexOf(before.stage);
     const toIdx = DEAL_STAGE_ORDER.indexOf(parsed.data.stage);
     if (fromIdx !== -1 && toIdx !== -1 && toIdx !== fromIdx + 1 && toIdx !== fromIdx - 1) {
@@ -529,6 +548,37 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
         error: `Deals move one stage at a time (${before.stage} → ${parsed.data.stage} is not allowed)`,
       });
       return;
+    }
+    // Cancel & Refund (L9): allowed from desking/committed only, requires a
+    // reason code, and the refundable-until-registration window must still
+    // be open whenever captured funds would need to be returned.
+    if (parsed.data.stage === "cancelled") {
+      if (before.stage === "delivered") {
+        res.status(409).json({
+          error:
+            "A delivered deal cannot be cancelled — handle returns through the manual goodwill process",
+        });
+        return;
+      }
+      if (!parsed.data.cancellationReason) {
+        res.status(422).json({
+          error: "cancellation_reason_required",
+          unmet: ["Select a cancellation reason before cancelling the deal"],
+        });
+        return;
+      }
+      cancellationFunds = await capturedFundsForDeal(before);
+      if (cancellationFunds.amount > 0.005) {
+        const blocked = await refundBlockReason({
+          dealerId,
+          dealId: before.id,
+          vehicleId: before.vehicleId,
+        });
+        if (blocked) {
+          res.status(422).json({ error: "refund_window_closed", unmet: [blocked] });
+          return;
+        }
+      }
     }
     // Deposit gate: a deal can't be committed until the deposit is recorded.
     if (
@@ -680,6 +730,58 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
   }
 
   await raiseBelowFloorGateIfNeeded(deal);
+
+  // Cancel & Refund side effects (L9). With captured funds the money and the
+  // hold both wait on a manager-approved refund_release gate; with nothing
+  // captured the unit releases immediately. History is retained either way.
+  if (before && before.stage !== "cancelled" && deal.stage === "cancelled") {
+    const actor = dealActor(res);
+    const funds = cancellationFunds ?? (await capturedFundsForDeal(before));
+    if (funds.amount > 0.005) {
+      const gateId = await raiseRefundReleaseGate({
+        dealerId,
+        refType: "deal",
+        refId: deal.id,
+        customerId: deal.customerId,
+        customerName: deal.customerName,
+        amount: funds.amount,
+        reasonCode: deal.cancellationReason ?? "other",
+        reasonNote: deal.cancellationNote,
+        evidence: [
+          { label: "Deal", value: `#${deal.id}` },
+          { label: "Invoices", value: funds.invoiceNumbers.join(", ") || "—" },
+          { label: "Invoice ID", value: String(funds.invoiceIds[0] ?? "") },
+          { label: "Vehicle hold", value: "Held until refund release is approved" },
+        ],
+      });
+      await logCancellationEvent({
+        dealerId,
+        customerId: deal.customerId,
+        refType: "deal",
+        refId: deal.id,
+        title: "Deal cancelled — refund release pending",
+        detail: `Cancellation (${deal.cancellationReason ?? "other"}) recorded with ${money(funds.amount)} captured. Refund gate #${gateId} raised for manager approval; the vehicle hold stays in place until it is approved.`,
+        actor,
+      });
+    } else {
+      const { vehicleReleased } = await cascadeDealCancellation({
+        deal,
+        reasonCode: deal.cancellationReason ?? "other",
+        reasonNote: deal.cancellationNote,
+        releaseVehicle: true,
+        actor,
+      });
+      await logCancellationEvent({
+        dealerId,
+        customerId: deal.customerId,
+        refType: "deal",
+        refId: deal.id,
+        title: "Deal cancelled",
+        detail: `Cancellation (${deal.cancellationReason ?? "other"}) recorded with no captured funds. ${vehicleReleased ? "The vehicle is back in available stock." : "The vehicle hold was left in place (another active booking or non-held status)."}`,
+        actor,
+      });
+    }
+  }
 
   // Delivering marks the unit sold (commit already VIN-locked it → booked).
   if (before && before.stage !== deal.stage) {

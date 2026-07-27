@@ -2,9 +2,13 @@ import { useState } from "react";
 import { Link } from "wouter";
 import {
   useResolveGate,
+  useCreatePayment,
   getListGatesQueryKey,
   getListTimelineQueryKey,
   getGetCustomerOverviewQueryKey,
+  getListInvoicesQueryKey,
+  getListDealsQueryKey,
+  getListBookingsQueryKey,
   type Gate,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -22,6 +26,7 @@ import {
   X,
   ArrowUpRight,
   Sparkles,
+  Banknote,
 } from "lucide-react";
 
 export const GATE_LABEL: Record<string, string> = {
@@ -107,6 +112,44 @@ export function GateCard({
       },
     },
   });
+
+  const recordRefund = useCreatePayment({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListGatesQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListTimelineQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
+        toast({
+          title: "Refund recorded",
+          description:
+            "The refund has been posted to the ledger and the customer has been notified by email.",
+        });
+        onResolved?.();
+      },
+      onError: (err) => {
+        const detail =
+          (err as { response?: { data?: { error?: string; unmet?: string[] } } })
+            ?.response?.data;
+        toast({
+          title: "Could not record the refund",
+          description: detail?.unmet?.[0] ?? detail?.error ?? "Please try again.",
+          variant: "destructive",
+        });
+      },
+    },
+  });
+
+  // L9: an approved refund_release gate is executed by finance as a negative
+  // payment against the reservation invoice, linked back to this gate.
+  const isApprovedRefund =
+    gate.type === "refund_release" &&
+    (gate.status === "approved" || gate.status === "adjusted");
+  const refundInvoiceId = Number(
+    gate.evidence.find((e) => e.label === "Invoice ID")?.value ?? "",
+  );
+  const refundAmount = gate.amount ?? 0;
 
   const meta = PRIORITY_META[gate.priority] ?? PRIORITY_META.normal;
   const evidence = gate.evidence.slice(0, 4);
@@ -213,7 +256,42 @@ export function GateCard({
 
           {/* Actions */}
           <div className="flex flex-wrap items-center gap-2 mt-5">
-            {adjusting ? (
+            {isApprovedRefund ? (
+              <>
+                <Button
+                  disabled={
+                    recordRefund.isPending ||
+                    !Number.isFinite(refundInvoiceId) ||
+                    refundInvoiceId <= 0 ||
+                    refundAmount <= 0
+                  }
+                  onClick={() =>
+                    recordRefund.mutate({
+                      data: {
+                        invoiceId: refundInvoiceId,
+                        amount: -Math.abs(refundAmount),
+                        method: "bank_transfer",
+                        gateId: gate.id,
+                      },
+                    })
+                  }
+                  className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-10 gap-2 shadow-lg shadow-primary/20"
+                >
+                  {recordRefund.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Banknote className="w-4 h-4" />
+                  )}
+                  Record refund of {money.gyd(Math.abs(refundAmount))}
+                </Button>
+                {(!Number.isFinite(refundInvoiceId) || refundInvoiceId <= 0) && (
+                  <span className="text-xs text-muted-foreground">
+                    No invoice on file — record this refund from the Finance
+                    ledger manually.
+                  </span>
+                )}
+              </>
+            ) : adjusting ? (
               <>
                 <Button
                   disabled={resolve.isPending || adjustValue === ""}

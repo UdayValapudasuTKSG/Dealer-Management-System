@@ -5,7 +5,9 @@ import {
   integer,
   doublePrecision,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { isNotNull } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { invoicesTable } from "./invoices";
@@ -31,10 +33,15 @@ export const paymentsTable = pgTable("payments", {
   method: text("method").notNull().default("bank_transfer"),
   reference: text("reference"),
   receivedBy: text("received_by"),
+  /** L9: links a refund ledger entry to the approving refund_release gate. */
+  gateId: integer("gate_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [
+  /** L9: at most ONE refund ledger row per refund_release gate (race-proof). */
+  uniqueIndex("payments_gate_id_unique").on(t.gateId).where(isNotNull(t.gateId)),
+]);
 
 export const insertPaymentSchema = createInsertSchema(paymentsTable, {
   method: z.enum(PAYMENT_METHODS),

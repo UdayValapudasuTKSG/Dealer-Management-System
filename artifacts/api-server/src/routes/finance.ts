@@ -10,9 +10,16 @@ import {
   invoicesTable,
   paymentsTable,
   receiptsTable,
+  gatesTable,
+  bookingsTable,
+  dealsTable,
+  customersTable,
+  vehiclesTable,
   insertFinanceDocumentSchema,
   type FinanceApplication,
 } from "@workspace/db";
+import { enqueueEmail } from "../lib/email";
+import { logCancellationEvent } from "../lib/cancellation";
 import {
   CreateFinanceApplicationBody,
   UpdateFinanceApplicationBody,
@@ -733,6 +740,68 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
     res.status(400).json({ error: "Payment amount cannot be zero" });
     return;
   }
+
+  // L9 refund execution: a payment referencing a refund_release gate must be
+  // a negative amount and the gate must already be manager-approved.
+  let refundGate: typeof gatesTable.$inferSelect | null = null;
+  if (parsed.data.gateId !== undefined) {
+    const [gate] = await db
+      .select()
+      .from(gatesTable)
+      .where(
+        and(
+          eq(gatesTable.id, parsed.data.gateId),
+          eq(gatesTable.dealerId, activeDealerId(res)),
+          eq(gatesTable.type, "refund_release"),
+        ),
+      );
+    if (!gate) {
+      res.status(404).json({ error: "Refund gate not found" });
+      return;
+    }
+    if (gate.status !== "approved" && gate.status !== "adjusted") {
+      res.status(422).json({
+        error: "gate_not_approved",
+        unmet: [
+          "The refund_release gate must be approved by a manager before finance can execute the refund",
+        ],
+      });
+      return;
+    }
+    if (parsed.data.amount >= 0) {
+      res.status(400).json({
+        error: "A refund against a refund_release gate must be a negative amount",
+      });
+      return;
+    }
+    const [existing] = await db
+      .select({ id: paymentsTable.id })
+      .from(paymentsTable)
+      .where(
+        and(
+          eq(paymentsTable.gateId, gate.id),
+          eq(paymentsTable.dealerId, activeDealerId(res)),
+        ),
+      );
+    if (existing) {
+      res.status(409).json({
+        error: "refund_already_recorded",
+        unmet: [`Refund for gate #${gate.id} was already recorded (payment #${existing.id})`],
+      });
+      return;
+    }
+    // Manager-approved cap: finance cannot refund more than the gate amount.
+    if (gate.amount != null && Math.abs(parsed.data.amount) > gate.amount + 0.005) {
+      res.status(422).json({
+        error: "refund_exceeds_approved",
+        unmet: [
+          `Refund of $${Math.abs(parsed.data.amount).toFixed(2)} exceeds the manager-approved amount of $${gate.amount.toFixed(2)} for gate #${gate.id}`,
+        ],
+      });
+      return;
+    }
+    refundGate = gate;
+  }
   const [invoice] = await db
     .select()
     .from(invoicesTable)
@@ -756,6 +825,35 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
     return;
   }
 
+  // L9: the refund must be posted against an invoice actually linked to the
+  // record the gate was raised for — never an unrelated invoice.
+  if (refundGate) {
+    let linked = false;
+    if (refundGate.refType === "deal" && refundGate.refId != null) {
+      linked = invoice.dealId === refundGate.refId;
+    } else if (refundGate.refType === "booking" && refundGate.refId != null) {
+      const [booking] = await db
+        .select({ dealId: bookingsTable.dealId })
+        .from(bookingsTable)
+        .where(
+          and(
+            eq(bookingsTable.id, refundGate.refId),
+            eq(bookingsTable.dealerId, activeDealerId(res)),
+          ),
+        );
+      linked = booking?.dealId != null && invoice.dealId === booking.dealId;
+    }
+    if (!linked) {
+      res.status(422).json({
+        error: "invoice_not_linked_to_gate",
+        unmet: [
+          `Invoice #${invoice.id} is not linked to the ${refundGate.refType} that refund gate #${refundGate.id} was raised for`,
+        ],
+      });
+      return;
+    }
+  }
+
   // All monetary guards (overpayment, reversal floor, duplicate reference)
   // run INSIDE applyPayment's transaction under an invoice row lock, so
   // concurrent postings cannot race past them.
@@ -769,6 +867,7 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
       reference: parsed.data.reference ?? null,
       receivedBy,
       confirmDuplicate: parsed.data.confirmDuplicate === true,
+      gateId: refundGate?.id ?? null,
     });
   } catch (err) {
     if (err instanceof PaymentGuardError) {
@@ -790,6 +889,14 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
             hint: "A payment with this reference already exists — resend with confirmDuplicate:true if it is genuinely a second payment",
           });
           return;
+        case "refund_already_recorded":
+          res.status(409).json({
+            error: err.code,
+            unmet: [
+              `Refund for gate #${refundGate?.id} was already recorded by a concurrent request`,
+            ],
+          });
+          return;
       }
     }
     throw err;
@@ -801,7 +908,115 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
     result.receipt.receiptNumber,
   );
 
-  res.status(201).json(CreatePaymentResponse.parse(result.payment));
+  // L9 refund side effects: the gate link is stamped on the ledger row inside
+  // applyPayment's transaction (unique per gate); here we flip the downstream
+  // records to their refunded terminal states and confirm to the customer
+  // (idempotent per gate via the email dedupe key).
+  const payment = result.payment;
+  if (refundGate) {
+    const dealerId = activeDealerId(res);
+    let vehicleId: number | null = null;
+    if (refundGate.refType === "deal" && refundGate.refId != null) {
+      const [deal] = await db
+        .select()
+        .from(dealsTable)
+        .where(
+          and(
+            eq(dealsTable.id, refundGate.refId),
+            eq(dealsTable.dealerId, dealerId),
+          ),
+        );
+      if (deal) {
+        vehicleId = deal.vehicleId;
+        await db
+          .update(dealsTable)
+          .set({ depositPaid: false })
+          .where(and(eq(dealsTable.id, deal.id), eq(dealsTable.dealerId, dealerId)));
+        await db
+          .update(bookingsTable)
+          .set({ paymentStatus: "refunded" })
+          .where(
+            and(
+              eq(bookingsTable.dealId, deal.id),
+              eq(bookingsTable.dealerId, dealerId),
+              eq(bookingsTable.status, "cancelled"),
+            ),
+          );
+      }
+    } else if (refundGate.refType === "booking" && refundGate.refId != null) {
+      const [booking] = await db
+        .update(bookingsTable)
+        .set({ paymentStatus: "refunded" })
+        .where(
+          and(
+            eq(bookingsTable.id, refundGate.refId),
+            eq(bookingsTable.dealerId, dealerId),
+          ),
+        )
+        .returning();
+      if (booking) vehicleId = booking.vehicleId;
+    }
+
+    const refundAmount = Math.abs(result.payment.amount);
+    const fmt = (n: number) =>
+      n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+    await logCancellationEvent({
+      dealerId,
+      customerId: refundGate.customerId,
+      refType: refundGate.refType === "booking" ? "booking" : "deal",
+      refId: refundGate.refId ?? 0,
+      title: "Refund executed",
+      detail: `Finance recorded a refund of ${fmt(refundAmount)} (receipt ${result.receipt.receiptNumber}) against gate #${refundGate.id}. The customer has been notified.`,
+      actor: receivedBy ?? "Finance",
+    });
+
+    if (refundGate.customerId != null) {
+      const [customer] = await db
+        .select({ name: customersTable.name, email: customersTable.email })
+        .from(customersTable)
+        .where(
+          and(
+            eq(customersTable.id, refundGate.customerId),
+            eq(customersTable.dealerId, dealerId),
+          ),
+        );
+      let vehicleName = "vehicle";
+      if (vehicleId != null) {
+        const [v] = await db
+          .select({
+            year: vehiclesTable.year,
+            make: vehiclesTable.make,
+            model: vehiclesTable.model,
+          })
+          .from(vehiclesTable)
+          .where(
+            and(
+              eq(vehiclesTable.id, vehicleId),
+              eq(vehiclesTable.dealerId, dealerId),
+            ),
+          );
+        if (v) vehicleName = `${v.year} ${v.make} ${v.model}`;
+      }
+      if (customer?.email) {
+        await enqueueEmail({
+          template: "refund_confirmation",
+          to: customer.email,
+          dealerId,
+          customerId: refundGate.customerId,
+          dedupeKey: `refund:${refundGate.id}`,
+          data: {
+            name: customer.name,
+            vehicle: vehicleName,
+            amount: fmt(refundAmount),
+            method: result.payment.method.replace(/_/g, " "),
+            reference: result.receipt.receiptNumber,
+          },
+        });
+      }
+    }
+  }
+
+  res.status(201).json(CreatePaymentResponse.parse(payment));
 });
 
 router.get("/receipts", async (_req, res): Promise<void> => {

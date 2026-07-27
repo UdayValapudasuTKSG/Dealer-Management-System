@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DealCancellationReason } from './dealCancellationReason';
 import type { DealFinalPaymentMethod } from './dealFinalPaymentMethod';
 import type { DealStage } from './dealStage';
 
@@ -34,5 +35,9 @@ export interface Deal {
   salesAdvisor?: string | null;
   /** @nullable */
   salesAdvisorUserId?: number | null;
+  /** @nullable */
+  cancellationReason?: DealCancellationReason;
+  /** @nullable */
+  cancellationNote?: string | null;
   createdAt: Date;
 }
