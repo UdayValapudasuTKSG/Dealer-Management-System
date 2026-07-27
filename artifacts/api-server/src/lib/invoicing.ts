@@ -4,6 +4,7 @@ import {
   bookingsTable,
   customersTable,
   dealersTable,
+  dealsTable,
   financeApplicationsTable,
   invoicesTable,
   paymentsTable,
@@ -337,6 +338,25 @@ export async function applyPayment(args: ApplyPaymentArgs) {
           eq(invoicesTable.dealerId, invoice.dealerId),
         ),
       );
+
+    // L6 coherence: fully paying a deal's reservation invoice records the
+    // deposit on the deal — the commit gate keys off deals.depositPaid.
+    if (
+      status === "paid" &&
+      invoice.kind === "reservation" &&
+      invoice.dealId != null &&
+      args.amount > 0
+    ) {
+      await tx
+        .update(dealsTable)
+        .set({ depositPaid: true })
+        .where(
+          and(
+            eq(dealsTable.id, invoice.dealId),
+            eq(dealsTable.dealerId, invoice.dealerId),
+          ),
+        );
+    }
 
     const [receipt] = await tx
       .insert(receiptsTable)
