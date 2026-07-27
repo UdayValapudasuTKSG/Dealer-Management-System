@@ -5008,6 +5008,7 @@ export type GateType = typeof GateType[keyof typeof GateType];
 
 export const GateType = {
   below_floor_price: 'below_floor_price',
+  fee_waiver: 'fee_waiver',
   credit_decline: 'credit_decline',
   capital_order: 'capital_order',
   gra_filing: 'gra_filing',
@@ -5771,6 +5772,16 @@ export const ListCustomersAccountType = {
 
 export type ListDealsParams = {
 stage?: string;
+};
+
+export type UpdateDeal422Messages = {[key: string]: string};
+
+export type UpdateDeal422 = {
+  error?: string;
+  unmet?: string[];
+  messages?: UpdateDeal422Messages;
+  gate?: string;
+  gateId?: number;
 };
 
 export type ListFinanceApplicationsParams = {

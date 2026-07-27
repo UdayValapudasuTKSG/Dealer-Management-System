@@ -11,6 +11,7 @@ export type GateType = typeof GateType[keyof typeof GateType];
 
 export const GateType = {
   below_floor_price: 'below_floor_price',
+  fee_waiver: 'fee_waiver',
   credit_decline: 'credit_decline',
   capital_order: 'capital_order',
   gra_filing: 'gra_filing',

@@ -31,6 +31,7 @@ import {
 
 export const GATE_LABEL: Record<string, string> = {
   below_floor_price: "Pricing Floor",
+  fee_waiver: "Fee Waiver",
   credit_decline: "Credit Decision",
   capital_order: "Capital Order",
   gra_filing: "GRA Filing",

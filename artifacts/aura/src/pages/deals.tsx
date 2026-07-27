@@ -9,7 +9,10 @@ import {
   useListLeads,
   useCreateDeal,
   useUpdateDeal,
+  useCreateBooking,
+  useListBookings,
   getListDealsQueryKey,
+  getListBookingsQueryKey,
   getGetLeadQueryKey,
   getGetLeadTimelineQueryKey,
 } from "@workspace/api-client-react";
@@ -26,7 +29,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, FileText, Link2, Loader2, Unlink, User } from "lucide-react";
+import {
+  Plus,
+  FileText,
+  Link2,
+  Loader2,
+  Unlink,
+  User,
+  Banknote,
+  ShieldCheck,
+} from "lucide-react";
 import { useAuthz } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
@@ -54,6 +66,13 @@ const STAGE_LABEL: Record<string, string> = {
   lost: "Lost",
 };
 
+const UNMET_LABEL: Record<string, string> = {
+  deposit_required: "Reservation deposit required",
+  below_floor_price: "Below-floor price needs manager approval",
+  capital_order: "Capital stock order needs manager approval",
+  financing_not_approved: "Bank financing not yet approved",
+};
+
 const CANCEL_REASONS: { value: string; label: string }[] = [
   { value: "customer_changed_mind", label: "Customer changed mind" },
   { value: "financing_declined", label: "Financing declined" },
@@ -76,6 +95,8 @@ export default function Deals() {
   const { toast } = useToast();
   const createDeal = useCreateDeal();
   const updateDeal = useUpdateDeal();
+  const createBooking = useCreateBooking();
+  const { data: bookings } = useListBookings();
   const { can } = useAuthz();
   const canEditDeals = can("deals", "edit");
   const canCreateDeals = can("deals", "create");
@@ -87,7 +108,27 @@ export default function Deals() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelNote, setCancelNote] = useState("");
 
-  const commitDeal = async (deal: Deal) => {
+  // Blocked-commit flow (R2.2): a 422 commit opens an actionable dialog with
+  // the unmet gate reasons plus "Record deposit" / "Apply trusted bypass".
+  const [blockedCommit, setBlockedCommit] = useState<{
+    deal: Deal;
+    unmet: string[];
+    messages: Record<string, string>;
+  } | null>(null);
+  const [blockedMode, setBlockedMode] = useState<
+    "reasons" | "deposit" | "bypass"
+  >("reasons");
+  const [depositAmount, setDepositAmount] = useState("");
+  const [waiverReason, setWaiverReason] = useState("");
+
+  const closeBlocked = () => {
+    setBlockedCommit(null);
+    setBlockedMode("reasons");
+    setDepositAmount("");
+    setWaiverReason("");
+  };
+
+  const commitDeal = async (deal: Deal): Promise<boolean> => {
     try {
       await updateDeal.mutateAsync({
         id: deal.id,
@@ -104,19 +145,123 @@ export default function Deals() {
         description:
           "The vehicle is now reserved for this customer. Delivery and GRA filing steps are unlocked.",
       });
+      return true;
     } catch (err) {
       const detail = (
         err as {
-          response?: { data?: { error?: string; unmet?: string[]; message?: string } };
+          response?: {
+            data?: {
+              error?: string;
+              unmet?: string[];
+              messages?: Record<string, string>;
+              message?: string;
+            };
+          };
         }
       )?.response?.data;
+      if (Array.isArray(detail?.unmet) && detail.unmet.length > 0) {
+        setBlockedMode("reasons");
+        setBlockedCommit({
+          deal,
+          unmet: detail.unmet,
+          messages: detail.messages ?? {},
+        });
+      } else {
+        toast({
+          title: "Deal can't be committed yet",
+          description:
+            detail?.message ??
+            detail?.error ??
+            (err instanceof Error ? err.message : undefined),
+          variant: "destructive",
+        });
+      }
+      return false;
+    }
+  };
+
+  const bookingExpiry = () =>
+    new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+
+  const refreshDepositState = () => {
+    queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListBookingsQueryKey() });
+    queryClient.invalidateQueries({
+      predicate: (q) =>
+        String(q.queryKey[0] ?? "").includes("/gates") ||
+        String(q.queryKey[0] ?? "").includes("/vehicles") ||
+        String(q.queryKey[0] ?? "").includes("/invoices"),
+    });
+  };
+
+  const bookingError = (err: unknown) =>
+    (err as { response?: { data?: { error?: string } } })?.response?.data
+      ?.error ?? (err instanceof Error ? err.message : undefined);
+
+  const submitDeposit = async () => {
+    if (!blockedCommit) return;
+    const deal = blockedCommit.deal;
+    const amount = Number(depositAmount);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    try {
+      await createBooking.mutateAsync({
+        data: {
+          vehicleId: deal.vehicleId,
+          customerId: deal.customerId ?? undefined,
+          customerName: deal.customerName || "Unknown Customer",
+          leadId: deal.leadId ?? undefined,
+          dealId: deal.id,
+          bookingAmount: amount,
+          amountPaid: amount,
+          expiresAt: bookingExpiry(),
+          notes: `Reservation deposit recorded from Deal Structuring (deal #${deal.id})`,
+        },
+      });
+      refreshDepositState();
       toast({
-        title: "Deal can't be committed yet",
+        title: "Deposit recorded",
         description:
-          detail?.unmet?.[0] ??
-          detail?.message ??
-          detail?.error ??
-          (err instanceof Error ? err.message : undefined),
+          "Reservation created, invoice paid and receipt issued. Committing the deal…",
+      });
+      closeBlocked();
+      await commitDeal(deal);
+    } catch (err) {
+      toast({
+        title: "Could not record the deposit",
+        description: bookingError(err),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const submitBypass = async () => {
+    if (!blockedCommit) return;
+    const deal = blockedCommit.deal;
+    if (!waiverReason.trim()) return;
+    try {
+      await createBooking.mutateAsync({
+        data: {
+          vehicleId: deal.vehicleId,
+          customerId: deal.customerId ?? undefined,
+          customerName: deal.customerName || "Unknown Customer",
+          leadId: deal.leadId ?? undefined,
+          dealId: deal.id,
+          bookingAmount: 0,
+          expiresAt: bookingExpiry(),
+          waiverReason: waiverReason.trim(),
+        },
+      });
+      refreshDepositState();
+      toast({
+        title: "Trusted bypass requested",
+        description:
+          "A fee-waiver gate is now waiting for manager approval on this deal — commit unlocks once it is approved.",
+      });
+      closeBlocked();
+    } catch (err) {
+      toast({
+        title: "Could not apply the trusted bypass",
+        description: bookingError(err),
         variant: "destructive",
       });
     }
@@ -258,6 +403,15 @@ export default function Deals() {
 
   const gatesForDeal = (dealId: number) => [
     ...(gates ?? []).filter((g) => g.refType === "deal" && g.refId === dealId),
+    // Pending fee-waiver (trusted bypass) gates live on the deal's booking.
+    ...(gates ?? []).filter(
+      (g) =>
+        g.type === "fee_waiver" &&
+        g.refType === "booking" &&
+        (bookings ?? []).some(
+          (b) => b.id === g.refId && b.dealId === dealId,
+        ),
+    ),
     // Approved refund gates stay visible so finance can record the refund.
     ...(approvedGates ?? []).filter(
       (g) =>
@@ -716,6 +870,162 @@ export default function Deals() {
         })}
       </div>
       )}
+
+      <Dialog
+        open={blockedCommit != null}
+        onOpenChange={(o) => {
+          if (!o) closeBlocked();
+        }}
+      >
+        <DialogContent className="glass-panel border-white/10 sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl tracking-tight">
+              {blockedMode === "deposit"
+                ? "Record reservation deposit"
+                : blockedMode === "bypass"
+                  ? "Apply trusted bypass (manager)"
+                  : "Deal can't be committed yet"}
+            </DialogTitle>
+            <DialogDescription>
+              {blockedMode === "deposit"
+                ? `Capture the reservation fee for ${blockedCommit?.deal.customerName || "this customer"} — AURA creates the booking, issues the reservation invoice, applies the payment and issues the receipt.`
+                : blockedMode === "bypass"
+                  ? "For fleet or repeat VIP buyers the reservation fee can be waived. This records a zero-fee reservation and raises a manager-approval gate — commit unlocks once a manager approves it."
+                  : `Deal #${blockedCommit?.deal.id}${blockedCommit?.deal.customerName ? ` (${blockedCommit.deal.customerName})` : ""} has unmet commit requirements.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {blockedMode === "reasons" && blockedCommit && (
+            <div className="space-y-4 py-1">
+              <ul className="space-y-2">
+                {blockedCommit.unmet.map((code) => (
+                  <li
+                    key={code}
+                    className="rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5"
+                  >
+                    <div className="text-sm font-semibold">
+                      {UNMET_LABEL[code] ?? code}
+                    </div>
+                    {blockedCommit.messages[code] && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {blockedCommit.messages[code]}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {blockedCommit.unmet.includes("deposit_required") && (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    onClick={() => setBlockedMode("deposit")}
+                    className="flex-1 bg-primary hover:bg-primary/90 text-white rounded-full gap-2"
+                  >
+                    <Banknote className="w-4 h-4" />
+                    Record deposit
+                  </Button>
+                  <Button
+                    onClick={() => setBlockedMode("bypass")}
+                    variant="outline"
+                    className="flex-1 rounded-full gap-2"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    Apply trusted bypass (manager)
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {blockedMode === "deposit" && (
+            <div className="space-y-3 py-1">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Deposit amount (US$)
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                  placeholder="1000"
+                  className="mt-1.5 bg-white/[0.04] border-white/10"
+                />
+                {Number(depositAmount) > 0 && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    ≈ {money.gyd(Number(depositAmount))} — cash receipt issued
+                    on capture.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {blockedMode === "bypass" && (
+            <div className="space-y-3 py-1">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                  Waiver reason
+                </label>
+                <Input
+                  value={waiverReason}
+                  onChange={(e) => setWaiverReason(e.target.value)}
+                  placeholder="Fleet account — repeat VIP buyer, fee waived per GM policy"
+                  className="mt-1.5 bg-white/[0.04] border-white/10"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            {blockedMode === "reasons" ? (
+              <Button
+                variant="ghost"
+                onClick={closeBlocked}
+                className="rounded-full px-5"
+              >
+                Close
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={() => setBlockedMode("reasons")}
+                  className="rounded-full px-5"
+                >
+                  Back
+                </Button>
+                {blockedMode === "deposit" ? (
+                  <Button
+                    onClick={submitDeposit}
+                    disabled={
+                      !(Number(depositAmount) > 0) ||
+                      createBooking.isPending ||
+                      updateDeal.isPending
+                    }
+                    className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
+                  >
+                    {(createBooking.isPending || updateDeal.isPending) && (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    )}
+                    Capture deposit &amp; commit
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={submitBypass}
+                    disabled={!waiverReason.trim() || createBooking.isPending}
+                    className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
+                  >
+                    {createBooking.isPending && (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    )}
+                    Request waiver approval
+                  </Button>
+                )}
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={attachDeal != null}

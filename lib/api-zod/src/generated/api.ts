@@ -5500,7 +5500,7 @@ export const GetCustomerOverviewResponse = zod.object({
 })),
   "openGates": zod.array(zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),
@@ -6186,7 +6186,7 @@ export const ListGatesQueryParams = zod.object({
 
 export const ListGatesResponseItem = zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),
@@ -6226,7 +6226,7 @@ export const ResolveGateBody = zod.object({
 
 export const ResolveGateResponse = zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),
@@ -6302,7 +6302,7 @@ export const ReviewGraFilingBody = zod.object({
 
 export const ReviewGraFilingResponse = zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),

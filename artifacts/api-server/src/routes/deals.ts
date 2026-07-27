@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, or, gt } from "drizzle-orm";
 import {
   db,
   dealsTable,
@@ -7,6 +7,7 @@ import {
   bookingsTable,
   gatesTable,
   leadsTable,
+  invoicesTable,
   timelineEventsTable,
   VIN_LENGTH,
   REGISTRATION_PATTERN,
@@ -331,6 +332,96 @@ async function raiseBelowFloorGateIfNeeded(
   });
 }
 
+/**
+ * Deposit gate (08-l6 §4b / 20-r2 §R2.2): the desking→committed hop is
+ * satisfied by REAL reservation money or a manager-approved trusted bypass —
+ * never by the ad-hoc deals.depositPaid boolean alone. Satisfiers:
+ *  1. an active/converted booking for this deal with bookingAmount>0 whose
+ *     reservation fee is fully paid, or
+ *  2. a manager-approved (approved/adjusted) fee_waiver gate on a zero-fee
+ *     waiver booking linked to the deal, or
+ *  3. a PAID reservation invoice linked to the deal (finance-pipeline path).
+ */
+async function dealDepositStatus(
+  deal: typeof dealsTable.$inferSelect,
+  dealerId: number,
+): Promise<{ satisfied: boolean; message: string }> {
+  const bookings = await db
+    .select()
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.dealerId, dealerId),
+        inArray(bookingsTable.status, ["active", "converted"]),
+        // STRICT deal linkage: only bookings explicitly attached to THIS deal
+        // can satisfy the deposit gate — a paid booking on the same vehicle or
+        // customer but a different (or no) deal must not unblock commit.
+        eq(bookingsTable.dealId, deal.id),
+      ),
+    );
+  if (
+    bookings.some(
+      (b) =>
+        b.bookingAmount > 0 &&
+        (b.paymentStatus === "paid" ||
+          b.amountPaid >= b.bookingAmount - 0.005),
+    )
+  ) {
+    return { satisfied: true, message: "" };
+  }
+
+  const waiverBookingIds = bookings
+    .filter((b) => b.waiverReason && b.bookingAmount <= 0)
+    .map((b) => b.id);
+  if (waiverBookingIds.length > 0) {
+    const waiverGates = await db
+      .select({ id: gatesTable.id, status: gatesTable.status })
+      .from(gatesTable)
+      .where(
+        and(
+          eq(gatesTable.dealerId, dealerId),
+          eq(gatesTable.type, "fee_waiver"),
+          eq(gatesTable.refType, "booking"),
+          inArray(gatesTable.refId, waiverBookingIds),
+        ),
+      );
+    if (
+      waiverGates.some(
+        (g) => g.status === "approved" || g.status === "adjusted",
+      )
+    ) {
+      return { satisfied: true, message: "" };
+    }
+    if (waiverGates.some((g) => g.status === "pending")) {
+      return {
+        satisfied: false,
+        message:
+          "Trusted-bypass waiver is waiting for manager approval — commit unlocks once the fee-waiver gate is approved",
+      };
+    }
+  }
+
+  const [paidInvoice] = await db
+    .select({ id: invoicesTable.id })
+    .from(invoicesTable)
+    .where(
+      and(
+        eq(invoicesTable.dealerId, dealerId),
+        eq(invoicesTable.kind, "reservation"),
+        eq(invoicesTable.dealId, deal.id),
+        eq(invoicesTable.status, "paid"),
+        gt(invoicesTable.amount, 0),
+      ),
+    );
+  if (paidInvoice) return { satisfied: true, message: "" };
+
+  return {
+    satisfied: false,
+    message:
+      "Record a reservation deposit (paid booking) or apply a manager-approved trusted bypass before committing the deal",
+  };
+}
+
 router.get("/deals", async (req, res): Promise<void> => {
   const query = ListDealsQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -581,21 +672,25 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
         }
       }
     }
-    // Deposit gate: a deal can't be committed until the deposit is recorded.
-    if (
-      parsed.data.stage === "committed" &&
-      !(parsed.data.depositPaid ?? before.depositPaid)
-    ) {
-      res.status(422).json({
-        error: "Deposit must be recorded before committing the deal",
-      });
-      return;
-    }
-    // Below-floor gate (L6): a deal discounted past the 5% floor cannot
-    // commit until a manager APPROVES the below_floor_price gate — and the
-    // approval must cover the CURRENT numbers (editing the discount after
-    // approval invalidates the stale approval and raises a fresh gate).
+    // Commit gates (08-l6 §4b / 20-r2 §R2.2): collect EVERY unmet condition
+    // and report them together as machine-readable codes in one 422, instead
+    // of failing one at a time.
     if (parsed.data.stage === "committed") {
+      const unmet: string[] = [];
+      const messages: Record<string, string> = {};
+      let belowFloorGateId: number | undefined;
+
+      // 1. Deposit: real reservation money or an approved trusted bypass.
+      const deposit = await dealDepositStatus(before, dealerId);
+      if (!deposit.satisfied) {
+        unmet.push("deposit_required");
+        messages.deposit_required = deposit.message;
+      }
+
+      // 2. Below-floor gate (L6): a deal discounted past the 5% floor cannot
+      // commit until a manager APPROVES the below_floor_price gate — and the
+      // approval must cover the CURRENT numbers (editing the discount after
+      // approval invalidates the stale approval and raises a fresh gate).
       const vehiclePrice = parsed.data.vehiclePrice ?? before.vehiclePrice;
       const discount = parsed.data.discount ?? before.discount;
       if (
@@ -647,29 +742,53 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
             gateId = fresh?.id;
           }
           const pct = Math.round((discount / vehiclePrice) * 1000) / 10;
-          res.status(422).json({
-            gate: "below_floor_price",
-            gateId,
-            unmet: [
-              `Discount ${pct}% exceeds the ${FLOOR_DISCOUNT_RATIO * 100}% floor — a sales manager must approve the below-floor price before commit`,
-            ],
-          });
-          return;
+          belowFloorGateId = gateId;
+          unmet.push("below_floor_price");
+          messages.below_floor_price = `Discount ${pct}% exceeds the ${FLOOR_DISCOUNT_RATIO * 100}% floor — a sales manager must approve the below-floor price before commit`;
         }
       }
-    }
-    // Financed settle gate (L6): a bank-financed deal can only commit once
-    // its finance application is approved or disbursed by the LOS.
-    const method =
-      parsed.data.finalPaymentMethod ?? before.finalPaymentMethod;
-    if (parsed.data.stage === "committed" && method === "bank_financing") {
-      const app = await approvedFinanceAppForDeal(before);
-      if (!app) {
+
+      // 3. Capital order (fleet/stock-order units): a pending capital_order
+      // gate on the deal's vehicle blocks commit until a manager approves it.
+      const [pendingCapital] = await db
+        .select({ id: gatesTable.id })
+        .from(gatesTable)
+        .where(
+          and(
+            eq(gatesTable.dealerId, dealerId),
+            eq(gatesTable.type, "capital_order"),
+            eq(gatesTable.refType, "vehicle"),
+            eq(gatesTable.refId, before.vehicleId),
+            eq(gatesTable.status, "pending"),
+          ),
+        );
+      if (pendingCapital) {
+        unmet.push("capital_order");
+        messages.capital_order =
+          "This unit is on a capital stock order awaiting manager approval — the capital_order gate must be approved before the deal can commit";
+      }
+
+      // 4. Financed settle gate (L6): a bank-financed deal can only commit
+      // once its finance application is approved or disbursed by the LOS.
+      const method =
+        parsed.data.finalPaymentMethod ?? before.finalPaymentMethod;
+      if (method === "bank_financing") {
+        const app = await approvedFinanceAppForDeal(before);
+        if (!app) {
+          unmet.push("financing_not_approved");
+          messages.financing_not_approved =
+            "A finance application linked to this deal must be approved or disbursed before a bank-financed deal can commit";
+        }
+      }
+
+      if (unmet.length > 0) {
         res.status(422).json({
-          error: "financing_not_approved",
-          unmet: [
-            "A finance application linked to this deal must be approved or disbursed before a bank-financed deal can commit",
-          ],
+          error: "commit_blocked",
+          unmet,
+          messages,
+          ...(belowFloorGateId != null
+            ? { gate: "below_floor_price", gateId: belowFloorGateId }
+            : {}),
         });
         return;
       }

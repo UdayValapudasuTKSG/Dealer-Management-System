@@ -234,6 +234,14 @@ async function main() {
       await q(`DELETE FROM gates WHERE ref_type='deal' AND ref_id=$1`, [bfDeal.id]);
       await q(`DELETE FROM deals WHERE id=$1`, [bfDeal.id]);
     });
+    // Deposit gate is now booking-based: give the fixture a paid booking so
+    // only the below-floor gate blocks the commit.
+    const [bfBooking] = await q(
+      `INSERT INTO bookings (dealer_id, vehicle_id, customer_name, deal_id, booking_amount, amount_paid, payment_status, status, expires_at)
+       VALUES ($1,$2,'V3 BelowFloor',$3,1000,1000,'paid','active', now() + interval '3 days') RETURNING id`,
+      [DEALER, veh.id, bfDeal.id],
+    );
+    cleanup.push(async () => void (await q(`DELETE FROM bookings WHERE id=$1`, [bfBooking.id])));
     const commit = await call("PATCH", `/deals/${bfDeal.id}`, {
       user: GM,
       dealerId: DEALER,
@@ -307,14 +315,21 @@ async function main() {
       [DEALER],
     );
     cleanup.push(async () => void (await q(`DELETE FROM vehicles WHERE id=$1`, [veh.id])));
-    const mk = async () =>
-      (
-        await q(
-          `INSERT INTO deals (dealer_id, customer_name, stage, vehicle_id, vehicle_price, discount, otd_price, deposit_paid)
-           VALUES ($1,'V3 VIN Fixture','desking',$2,50000,0,50000,true) RETURNING id`,
-          [DEALER, veh.id],
-        )
-      )[0];
+    const mk = async () => {
+      const [deal] = await q(
+        `INSERT INTO deals (dealer_id, customer_name, stage, vehicle_id, vehicle_price, discount, otd_price, deposit_paid)
+         VALUES ($1,'V3 VIN Fixture','desking',$2,50000,0,50000,true) RETURNING id`,
+        [DEALER, veh.id],
+      );
+      // Booking-based deposit gate: each fixture deal carries a paid booking.
+      const [bk] = await q(
+        `INSERT INTO bookings (dealer_id, vehicle_id, customer_name, deal_id, booking_amount, amount_paid, payment_status, status, expires_at)
+         VALUES ($1,$2,'V3 VIN Fixture',$3,1000,1000,'paid','active', now() + interval '3 days') RETURNING id`,
+        [DEALER, veh.id, deal.id],
+      );
+      cleanup.push(async () => void (await q(`DELETE FROM bookings WHERE id=$1`, [bk.id])));
+      return deal;
+    };
     const dealA = await mk();
     const dealB = await mk();
     cleanup.push(async () => void (await q(`DELETE FROM deals WHERE id IN ($1,$2)`, [dealA.id, dealB.id])));

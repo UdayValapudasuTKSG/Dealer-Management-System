@@ -514,6 +514,8 @@ export * from './timelineEvent';
 export * from './timelineEventDomain';
 export * from './unmetError';
 export * from './unmetResponse';
+export * from './updateDeal422';
+export * from './updateDeal422Messages';
 export * from './uploadUrlRequest';
 export * from './uploadUrlResponse';
 export * from './vehicle';

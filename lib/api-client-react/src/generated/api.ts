@@ -261,6 +261,7 @@ import type {
   TimelineEvent,
   UnmetError,
   UnmetResponse,
+  UpdateDeal422,
   UploadUrlRequest,
   UploadUrlResponse,
   Vehicle,
@@ -6064,7 +6065,7 @@ export const updateDeal = async (id: number,
 
 
 
-export const getUpdateDealMutationOptions = <TError = ErrorType<Error>,
+export const getUpdateDealMutationOptions = <TError = ErrorType<Error | UpdateDeal422>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDeal>>, TError,{id: number;data: BodyType<DealUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateDeal>>, TError,{id: number;data: BodyType<DealUpdate>}, TContext> => {
 
@@ -6093,9 +6094,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateDealMutationResult = NonNullable<Awaited<ReturnType<typeof updateDeal>>>
     export type UpdateDealMutationBody = BodyType<DealUpdate>
-    export type UpdateDealMutationError = ErrorType<Error>
+    export type UpdateDealMutationError = ErrorType<Error | UpdateDeal422>
 
-    export const useUpdateDeal = <TError = ErrorType<Error>,
+    export const useUpdateDeal = <TError = ErrorType<Error | UpdateDeal422>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDeal>>, TError,{id: number;data: BodyType<DealUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateDeal>>,

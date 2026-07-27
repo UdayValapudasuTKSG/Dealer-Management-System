@@ -2045,6 +2045,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "422":
+          description: "Commit blocked — machine-readable unmet gate codes (deposit_required, below_floor_price, capital_order, financing_not_approved) with human-readable messages"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  unmet:
+                    type: array
+                    items: { type: string }
+                  messages:
+                    type: object
+                    additionalProperties: { type: string }
+                  gate: { type: string }
+                  gateId: { type: integer }
 
   /appraisals:
     get:
@@ -9290,7 +9306,7 @@ components:
       required: [id, type, status, priority, title, summary, evidence, createdAt]
       properties:
         id: { type: integer }
-        type: { type: string, enum: [below_floor_price, credit_decline, capital_order, gra_filing, refund_release, stage_advance, recall_damage] }
+        type: { type: string, enum: [below_floor_price, fee_waiver, credit_decline, capital_order, gra_filing, refund_release, stage_advance, recall_damage] }
         status: { type: string, enum: [pending, approved, adjusted, dismissed] }
         priority: { type: string, enum: [high, normal, low] }
         customerId: { type: ["integer", "null"] }

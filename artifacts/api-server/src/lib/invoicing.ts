@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import {
   db,
   bookingsTable,
@@ -354,6 +354,22 @@ export async function applyPayment(args: ApplyPaymentArgs) {
           and(
             eq(dealsTable.id, invoice.dealId),
             eq(dealsTable.dealerId, invoice.dealerId),
+          ),
+        );
+      // Keep the booking-based deposit gate consistent: paying the
+      // reservation invoice settles the linked booking's fee too.
+      await tx
+        .update(bookingsTable)
+        .set({
+          amountPaid: sql`${bookingsTable.bookingAmount}`,
+          paymentStatus: "paid",
+        })
+        .where(
+          and(
+            eq(bookingsTable.dealerId, invoice.dealerId),
+            eq(bookingsTable.dealId, invoice.dealId),
+            inArray(bookingsTable.status, ["active", "converted"]),
+            gt(bookingsTable.bookingAmount, 0),
           ),
         );
     }
