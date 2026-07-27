@@ -27,6 +27,10 @@ import {
 } from "@workspace/api-zod";
 import { enqueueEmail } from "../lib/email";
 import {
+  notifyReservationPending,
+  notifyCancellation,
+} from "../lib/notify-triggers";
+import {
   refundBlockReason,
   raiseRefundReleaseGate,
   logCancellationEvent,
@@ -327,6 +331,38 @@ async function bookingRecipient(
   };
 }
 
+/** Full contact card (email + phone) for a booking's customer. */
+async function bookingContact(
+  booking: Booking,
+): Promise<{ email: string | null; phone: string | null }> {
+  if (!booking.customerId) return { email: null, phone: null };
+  const [c] = await db
+    .select({ email: customersTable.email, phone: customersTable.phone })
+    .from(customersTable)
+    .where(
+      and(
+        eq(customersTable.id, booking.customerId),
+        eq(customersTable.dealerId, booking.dealerId),
+      ),
+    );
+  return { email: c?.email ?? null, phone: c?.phone ?? null };
+}
+
+/** The advisor on the booking's lead (owner), when the booking came from one. */
+async function bookingAdvisorUserId(booking: Booking): Promise<number | null> {
+  if (!booking.leadId) return null;
+  const [lead] = await db
+    .select({ ownerUserId: leadsTable.ownerUserId })
+    .from(leadsTable)
+    .where(
+      and(
+        eq(leadsTable.id, booking.leadId),
+        eq(leadsTable.dealerId, booking.dealerId),
+      ),
+    );
+  return lead?.ownerUserId ?? null;
+}
+
 router.get("/bookings", async (req, res): Promise<void> => {
   const query = ListBookingsQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -596,18 +632,38 @@ router.post("/bookings", async (req, res): Promise<void> => {
 
   void (async () => {
     const { email, name } = await bookingRecipient(booking!);
-    if (!email) return;
-    await enqueueEmail({
-      template: "vehicle_booking",
-      to: email,
-      dealerId: booking!.dealerId,
-      customerId: booking!.customerId,
-      data: {
-        name,
-        vehicle: await vehicleLabel(booking!.vehicleId, booking!.dealerId),
-        amount: money(booking!.bookingAmount),
-      },
-    });
+    const vehicleName = await vehicleLabel(booking!.vehicleId, booking!.dealerId);
+    if (email) {
+      await enqueueEmail({
+        template: "vehicle_booking",
+        to: email,
+        dealerId: booking!.dealerId,
+        customerId: booking!.customerId,
+        data: {
+          name,
+          vehicle: vehicleName,
+          amount: money(booking!.bookingAmount),
+        },
+      });
+    }
+    // R6.2 #6 Reservation Pending — fee not yet (fully) received: nudge the
+    // customer (WhatsApp + Email) and put an In-App row on the advisor.
+    if (booking!.paymentStatus !== "paid" && booking!.bookingAmount > 0) {
+      const contact = await bookingContact(booking!);
+      notifyReservationPending({
+        bookingId: booking!.id,
+        dealerId: booking!.dealerId,
+        customerId: booking!.customerId,
+        leadId: booking!.leadId,
+        customerName: name,
+        customerEmail: contact.email,
+        customerPhone: contact.phone,
+        vehicle: vehicleName,
+        amount: money(booking!.bookingAmount - booking!.amountPaid),
+        expiresAt: booking!.expiresAt,
+        advisorUserId: await bookingAdvisorUserId(booking!),
+      });
+    }
   })().catch((err) =>
     logger.error({ err, bookingId: booking!.id }, "booking email failed"),
   );
@@ -780,6 +836,18 @@ router.patch("/bookings/:id", async (req, res): Promise<void> => {
         });
       }
     }
+  }
+
+  // R6.2 #9 Cancellation → reporting/division managers (In-App + Email).
+  if (booking!.status === "cancelled" && before.status === "active") {
+    notifyCancellation({
+      dealerId,
+      entityType: "booking",
+      entityId: booking!.id,
+      label: `Reservation #${booking!.id} — ${booking!.customerName}`,
+      reason: booking!.cancellationReason ?? booking!.cancellationNote,
+      advisorUserId: await bookingAdvisorUserId(booking!),
+    });
   }
 
   res.json(UpdateBookingResponse.parse(booking));

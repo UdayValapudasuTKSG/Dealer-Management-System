@@ -7634,12 +7634,15 @@ export const GetCalendarResponse = zod.object({
 export const ListNotificationsResponseItem = zod.object({
   "id": zod.number(),
   "userId": zod.number(),
-  "type": zod.enum(['approval', 'assignment', 'task', 'email', 'system']),
+  "type": zod.string(),
   "title": zod.string(),
   "body": zod.string().nullish(),
   "link": zod.string().nullish(),
   "read": zod.boolean(),
-  "createdAt": zod.coerce.date()
+  "entityType": zod.string().nullish(),
+  "entityId": zod.number().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date().nullish()
 })
 export const ListNotificationsResponse = zod.array(ListNotificationsResponseItem)
 

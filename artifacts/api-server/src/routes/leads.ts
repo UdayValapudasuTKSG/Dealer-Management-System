@@ -97,6 +97,11 @@ import { autoAssignLead, stampLeadAssignment } from "../lib/lead-assignment";
 import { findOpenDuplicate, mergeIntoExistingLead } from "../lib/lead-dedup";
 import { telephonyAdapter } from "../lib/telephony";
 import { enqueueEmail, enqueueWhatsapp, notifyUser } from "../lib/email";
+import {
+  notifyLeadNew,
+  notifyLeadAssigned,
+  notifyManagerNote,
+} from "../lib/notify-triggers";
 import { ensureAccountForLead } from "../lib/accounts";
 import { activeDealerId, hasPermission } from "../middlewares/rbac";
 import {
@@ -323,6 +328,8 @@ router.post("/leads", async (req, res): Promise<void> => {
     .returning();
 
   if (lead) onLeadCreated(lead);
+  // R6.2 #1 New Lead → division sales managers (In-App + Email).
+  if (lead) notifyLeadNew(lead);
   // Quote agent (A3): auto-generate the Code from inventory + tax config.
   if (lead) autoQuoteOnLeadCreated(lead);
 
@@ -442,6 +449,18 @@ router.post("/leads/:id/notes", async (req, res): Promise<void> => {
       refId: lead.id,
     })
     .returning();
+
+  // R6.2 #15 Manager note → owning advisor (In-App), skipping self-notes.
+  if (lead.ownerUserId && lead.ownerUserId !== res.locals.user?.id) {
+    notifyManagerNote({
+      dealerId: lead.dealerId,
+      noteId: event!.id,
+      advisorUserId: lead.ownerUserId,
+      authorName: actor,
+      excerpt: `${lead.name}: ${body.data.text.slice(0, 140)}`,
+      link: `/pipeline/${lead.id}`,
+    });
+  }
 
   res.status(201).json(CreateLeadNoteResponse.parse(event));
 });
@@ -1199,14 +1218,8 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
     actorName(res),
   );
 
-  await notifyUser({
-    userId: advisor.id,
-    dealerId: lead!.dealerId,
-    type: "assignment",
-    title: `Lead assigned: ${lead!.name}`,
-    body: "A new lead is now yours — make first contact and update the status.",
-    link: "/pipeline",
-  });
+  // R6.2 #2 Assigned Lead → advisor (In-App + Email, key lead:assigned:{id}:{uid}).
+  notifyLeadAssigned(lead!);
 
   if (lead!.email) {
     const vehicle = await vehicleLabel(lead!.dealerId, lead!.interestedVehicleId);

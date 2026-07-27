@@ -5386,28 +5386,23 @@ export interface CalendarResponse {
   scope: CalendarResponseScope;
 }
 
-export type NotificationType = typeof NotificationType[keyof typeof NotificationType];
-
-
-export const NotificationType = {
-  approval: 'approval',
-  assignment: 'assignment',
-  task: 'task',
-  email: 'email',
-  system: 'system',
-} as const;
-
 export interface Notification {
   id: number;
   userId: number;
-  type: NotificationType;
+  type: string;
   title: string;
   /** @nullable */
   body?: string | null;
   /** @nullable */
   link?: string | null;
   read: boolean;
+  /** @nullable */
+  entityType?: string | null;
+  /** @nullable */
+  entityId?: number | null;
   createdAt: string;
+  /** @nullable */
+  updatedAt?: string | null;
 }
 
 export interface MarkNotificationsReadRequest {

@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import {
   db,
   bookingsTable,
+  customersTable,
   dealersTable,
   financeApplicationsTable,
   invoicesTable,
@@ -16,6 +17,8 @@ import {
 } from "@workspace/db";
 import { computeTaxes, ensureDealerTaxes } from "./taxes";
 import { logger } from "./logger";
+import { enqueueEmail, enqueueWhatsapp, notifyUsers } from "./email";
+import { financeUsers } from "./notify-matrix";
 
 /**
  * Invoicing + payment ledger helpers (L6). All amounts USD-scale; each
@@ -76,6 +79,88 @@ export async function issueInvoice(args: IssueInvoiceArgs): Promise<Invoice> {
       .where(eq(invoicesTable.id, row!.id))
       .returning();
     return numbered!;
+  }).then(async (invoice) => {
+    // R6.2 #7 Invoice Generated — fire-and-forget so notification hiccups
+    // never roll back or delay the invoice itself.
+    notifyInvoiceIssued(invoice).catch((err) =>
+      logger.error({ err, invoiceId: invoice.id }, "invoice notification failed"),
+    );
+    return invoice;
+  });
+}
+
+/**
+ * R6.2 trigger #7 — Invoice Generated. Customer gets the invoice by Email
+ * (PDF attached) and WhatsApp (fallback cascade to email → in-app on failure
+ * or opt-out); the finance team gets an In-App row deduped on the invoice.
+ * Canonical key: invoice:issued:{invoiceId} (channel-suffixed in the outbox
+ * because dedupe keys are globally unique across channels).
+ */
+async function notifyInvoiceIssued(invoice: Invoice): Promise<void> {
+  const key = `invoice:issued:${invoice.id}`;
+  const [customer] = invoice.customerId
+    ? await db
+        .select()
+        .from(customersTable)
+        .where(
+          and(
+            eq(customersTable.id, invoice.customerId),
+            eq(customersTable.dealerId, invoice.dealerId),
+          ),
+        )
+    : [];
+
+  const data: Record<string, string> = {
+    invoiceNumber: invoice.invoiceNumber,
+    customerName: invoice.customerName,
+    amount: String(invoice.amount),
+    total: `US$${invoice.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+    kind: invoice.kind,
+    description: invoice.description ?? "",
+    dueDate: invoice.dueDate ?? "",
+    exchangeRate: String(invoice.exchangeRate ?? 209),
+    issuedAt: new Date().toISOString(),
+    taxLines: JSON.stringify(invoice.taxLines ?? []),
+    vehicle: invoice.description ?? "",
+  };
+
+  const finance = await financeUsers(invoice.dealerId);
+  const firstFinance = finance[0];
+
+  if (customer?.email) {
+    await enqueueEmail({
+      template: "invoice.generated",
+      to: customer.email,
+      dealerId: invoice.dealerId,
+      customerId: invoice.customerId,
+      data,
+      dedupeKey: `${key}:email`,
+      notifyUserId: firstFinance,
+    });
+  }
+  if (customer?.phone) {
+    await enqueueWhatsapp({
+      kind: "invoice.generated",
+      to: customer.phone,
+      dealerId: invoice.dealerId,
+      customerId: invoice.customerId,
+      summary: `Invoice ${invoice.invoiceNumber} issued`,
+      body: `Hello ${invoice.customerName}, your AURA invoice ${invoice.invoiceNumber} (${data.total}) has been issued${invoice.dueDate ? `, due ${invoice.dueDate}` : ""}. The full invoice PDF has been emailed to you — reply here if you have any questions.`,
+      dedupeKey: `${key}:whatsapp`,
+      fallbackEmail: customer.email
+        ? { to: customer.email, template: "invoice.generated", data }
+        : undefined,
+      notifyUserId: firstFinance,
+    });
+  }
+  await notifyUsers(finance, {
+    dealerId: invoice.dealerId,
+    type: "invoice.generated",
+    title: `Invoice ${invoice.invoiceNumber} issued — ${invoice.customerName}`,
+    body: `${invoice.kind.replace(/_/g, " ")} invoice for ${data.total}${invoice.dueDate ? `, due ${invoice.dueDate}` : ""}.`,
+    link: "/finance",
+    entityType: "invoice",
+    entityId: invoice.id,
   });
 }
 

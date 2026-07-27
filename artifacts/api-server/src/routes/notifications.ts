@@ -26,7 +26,7 @@ router.get("/notifications", async (_req, res): Promise<void> => {
         eq(notificationsTable.dealerId, dealerId),
       ),
     )
-    .orderBy(desc(notificationsTable.createdAt))
+    .orderBy(desc(notificationsTable.updatedAt))
     .limit(100);
   res.json(ListNotificationsResponse.parse(rows));
 });

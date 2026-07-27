@@ -121,9 +121,62 @@ async function upsertConversation(
 }
 
 async function endConversation(phone: string): Promise<void> {
+  // Opt-out records live on this row (R6.4) — expire the session instead of
+  // deleting when the phone has opted out, so the STOP preference survives.
+  const [row] = await db
+    .select({ optedOutAt: whatsappConversationsTable.optedOutAt })
+    .from(whatsappConversationsTable)
+    .where(eq(whatsappConversationsTable.phone, phone));
+  if (row?.optedOutAt) {
+    await db
+      .update(whatsappConversationsTable)
+      .set({ expiresAt: new Date(), updatedAt: new Date() })
+      .where(eq(whatsappConversationsTable.phone, phone));
+    return;
+  }
   await db
     .delete(whatsappConversationsTable)
     .where(eq(whatsappConversationsTable.phone, phone));
+}
+
+// ---------------------------------------------------------------------------
+// R6.4 WhatsApp opt-out — STOP suppresses all outbound WhatsApp for the
+// phone (outbox downgrades to Email → In-App); START re-enables it.
+// ---------------------------------------------------------------------------
+
+const OPT_OUT_KEYWORDS = new Set(["stop", "unsubscribe", "opt out", "optout"]);
+const OPT_IN_KEYWORDS = new Set(["start", "unstop", "resume"]);
+
+/**
+ * Intercepts STOP/START keywords BEFORE any bot logic (they must work even
+ * when the concierge agent is paused). Returns the confirmation reply if the
+ * message was an opt keyword, null otherwise.
+ */
+export async function handleOptKeyword(
+  phone: string,
+  text: string | null,
+): Promise<string | null> {
+  const keyword = (text ?? "").trim().toLowerCase();
+  const isOut = OPT_OUT_KEYWORDS.has(keyword);
+  const isIn = OPT_IN_KEYWORDS.has(keyword);
+  if (!isOut && !isIn) return null;
+  const now = new Date();
+  await db
+    .insert(whatsappConversationsTable)
+    .values({
+      phone,
+      step: "done",
+      optedOutAt: isOut ? now : null,
+      expiresAt: now, // no active bot session — just the preference record
+    })
+    .onConflictDoUpdate({
+      target: whatsappConversationsTable.phone,
+      set: { optedOutAt: isOut ? now : null, updatedAt: now },
+    });
+  logger.info({ phone, optOut: isOut }, "whatsapp opt keyword processed");
+  return isOut
+    ? "You've been unsubscribed from WhatsApp updates. We won't message you here again — important updates will reach you by email instead. Reply START to re-subscribe."
+    : "Welcome back — WhatsApp updates are switched on again.";
 }
 
 /** Map a bare numeric reply ("2") to the option id it referred to, using the
@@ -555,6 +608,18 @@ export async function handleWhatsappMessage(
   const t = recordingTransport(rawTransport);
   try {
     const dealerId = await defaultDealerId();
+    // R6.4: STOP/START must always work — even when the bot is paused.
+    const optReply = await handleOptKeyword(phone, msg.text);
+    if (optReply) {
+      await recordWhatsappMessage({
+        phone,
+        direction: "in",
+        body: msg.text ?? "",
+        dealerId,
+      });
+      await t.sendText(phone, optReply);
+      return;
+    }
     // Kill switch: when the concierge agent is paused for this dealer, log
     // the inbound message but do not run the bot.
     if (!(await isAgentEnabled(dealerId, "concierge"))) {
@@ -784,6 +849,18 @@ export async function handleWhatsappOneShot(
   const t = recordingTransport(rawTransport);
   try {
     const dealerId = await defaultDealerId();
+    // R6.4: STOP/START must always work — even when the bot is paused.
+    const optReply = await handleOptKeyword(msg.from, msg.text);
+    if (optReply) {
+      await recordWhatsappMessage({
+        phone: msg.from,
+        direction: "in",
+        body: msg.text ?? "",
+        dealerId,
+      });
+      await t.sendText(msg.from, optReply);
+      return;
+    }
     if (!(await isAgentEnabled(dealerId, "concierge"))) {
       await recordAgentRun({
         dealerId,

@@ -12,6 +12,7 @@ import {
   type Lead,
 } from "@workspace/db";
 import { enqueueEmail, notifyUser } from "./email";
+import { notifyLeadAssigned } from "./notify-triggers";
 import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -137,6 +138,9 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
     if (!updated) return null; // raced with a manual assignment
 
     await stampLeadAssignment(updated.dealerId, advisor.id);
+
+    // R6.2 #2 Assigned Lead → advisor (In-App + Email, keyed per assignee).
+    notifyLeadAssigned(updated);
 
     const reasoning = advisor.lastLeadAssignedAt
       ? `Routed by round robin — ${advisorName} was last assigned a lead on ${advisor.lastLeadAssignedAt.toISOString().slice(0, 10)}, the longest wait on the team.`

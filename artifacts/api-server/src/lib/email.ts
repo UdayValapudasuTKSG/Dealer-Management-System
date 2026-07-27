@@ -6,13 +6,17 @@ import {
   notificationsTable,
   tasksTable,
   timelineEventsTable,
+  whatsappConversationsTable,
   EMAIL_TEMPLATES,
   type EmailTemplate,
   type EmailLog,
   type WhatsappKind,
+  type NotificationType,
 } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { buildQuotePdf } from "./quote-pdf";
+import { buildInvoicePdfFromPayload } from "./document-pdfs";
 import { testDriveIcsFromPayload } from "./calendar";
 import {
   whatsappConfig,
@@ -321,6 +325,173 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       `This is a test message from the AURA Dealership OS email engine. If you're reading this, your Gmail SMTP configuration is working perfectly.`,
     sample: {},
   },
+
+  // -------------------------------------------------------------------------
+  // R6.2 notification-matrix templates (dotted ids). Internal-facing ones are
+  // addressed to staff; customer-facing ones follow the concierge voice.
+  // -------------------------------------------------------------------------
+  "lead.new": {
+    label: "New Lead (Internal)",
+    description: "Alerts sales managers that a new lead arrived.",
+    subject: (x) => `New lead: ${d(x, "name", "Unnamed")} — ${d(x, "vehicle", "no vehicle yet")}`,
+    heading: (x) => `New ${d(x, "source", "inbound")} lead`,
+    body: (x) =>
+      `<strong>${d(x, "name", "A new customer")}</strong> just came in via <strong>${d(x, "source", "an inbound channel")}</strong>${x.vehicle ? ` asking about <strong>${x.vehicle}</strong>` : ""}. Review and assign an advisor before the response clock runs down.`,
+    sample: { name: "Alex Mensah", source: "Website", vehicle: "2026 Toyota Land Cruiser" },
+  },
+  "lead.assigned": {
+    label: "Lead Assigned (Internal)",
+    description: "Tells an advisor a lead is now theirs.",
+    subject: (x) => `Lead assigned to you: ${d(x, "name", "new customer")}`,
+    heading: () => "A lead is now yours",
+    body: (x) =>
+      `<strong>${d(x, "name", "A customer")}</strong>${x.vehicle ? ` (interested in <strong>${x.vehicle}</strong>)` : ""} has been assigned to you. First contact within the SLA window keeps the pipeline green.`,
+    sample: { name: "Alex Mensah", vehicle: "2026 Toyota Land Cruiser" },
+  },
+  "lead.sla.breach.advisor": {
+    label: "SLA Breach — Advisor (Internal)",
+    description: "First-contact SLA breached; advisor must act.",
+    subject: (x) => `SLA breached: ${d(x, "name", "lead")} still uncontacted`,
+    heading: () => "First-contact SLA breached",
+    body: (x) =>
+      `<strong>${d(x, "name", "A lead")}</strong> has passed the <strong>${d(x, "sla", "24-hour")}</strong> first-contact window without an outreach on record. Contact them now and log the touch.`,
+    sample: { name: "Alex Mensah", sla: "24-hour" },
+  },
+  "lead.sla.breach.manager": {
+    label: "SLA Breach — Manager (Internal)",
+    description: "Escalates a breached lead to the manager.",
+    subject: (x) => `Escalation: ${d(x, "name", "lead")} breached first-contact SLA`,
+    heading: () => "Lead escalation",
+    body: (x) =>
+      `<strong>${d(x, "name", "A lead")}</strong> assigned to <strong>${d(x, "advisor", "an advisor")}</strong> has breached the first-contact SLA. Consider reassigning or stepping in.`,
+    sample: { name: "Alex Mensah", advisor: "Nana Adjei" },
+  },
+  "testdrive.reminder.24h": {
+    label: "Test Drive Reminder (24h)",
+    description: "Reminds the customer of tomorrow's test drive.",
+    subject: (x) => `Tomorrow: your test drive — ${d(x, "vehicle", "your vehicle")}`,
+    heading: (x) => `See you tomorrow, ${d(x, "name", "we're ready")}`,
+    body: (x) =>
+      `Your test drive of the <strong>${d(x, "vehicle", "vehicle")}</strong> is booked for <strong>${d(x, "when", "tomorrow")}</strong>. The car will be fuelled, detailed and waiting. Reply if you need to reschedule.`,
+    sample: { name: "Alex", vehicle: "2026 Bentley Continental GT", when: "tomorrow at 10:00" },
+  },
+  "reservation.pending": {
+    label: "Reservation Pending",
+    description: "Nudges the customer to complete a pending reservation.",
+    subject: (x) => `Your reservation on ${d(x, "vehicle", "the vehicle")} is waiting`,
+    heading: () => "Your reservation is almost complete",
+    body: (x) =>
+      `The <strong>${d(x, "vehicle", "vehicle")}</strong> is being held for you${x.until ? ` until <strong>${x.until}</strong>` : ""}. Complete the reservation to lock it in — after that the hold is released.`,
+    sample: { vehicle: "2025 BMW X7", until: "Friday 5 PM" },
+  },
+  "invoice.generated": {
+    label: "Invoice Generated",
+    description: "Sends the customer their invoice (PDF attached).",
+    subject: (x) => `Your AURA invoice ${d(x, "invoiceNumber", "")}`.trim(),
+    heading: () => "Your invoice is ready",
+    body: (x) =>
+      `Invoice <strong>${d(x, "invoiceNumber", "")}</strong> for the <strong>${d(x, "vehicle", "vehicle")}</strong> has been issued — total <strong>${d(x, "total", "")}</strong>${x.dueDate ? `, due <strong>${x.dueDate}</strong>` : ""}. The PDF is attached; your advisor is on hand for any question.`,
+    sample: { invoiceNumber: "INV-2043", vehicle: "2026 Toyota Land Cruiser", total: "$86,400", dueDate: "August 12" },
+  },
+  "document.missing.internal": {
+    label: "Missing Document (Internal)",
+    description: "Flags a missing/expiring compliance document to staff.",
+    subject: (x) => `Document needed: ${d(x, "doc", "compliance document")} — ${d(x, "name", "record")}`,
+    heading: () => "Document gap detected",
+    body: (x) =>
+      `<strong>${d(x, "doc", "A required document")}</strong> is missing or expiring on <strong>${d(x, "name", "this record")}</strong>. Chase it down before it blocks the next gate.`,
+    sample: { doc: "Proof of insurance", name: "Deal #88 — Alex Mensah" },
+  },
+  "document.request.customer": {
+    label: "Document Request (Customer)",
+    description: "Asks the customer for an outstanding document.",
+    subject: (x) => `One document needed: ${d(x, "doc", "a document")}`,
+    heading: (x) => `Almost there, ${d(x, "name", "one item left")}`,
+    body: (x) =>
+      `To keep everything moving we just need your <strong>${d(x, "doc", "document")}</strong>. Reply to this email with a photo or scan, or hand it to your advisor at the showroom.`,
+    sample: { name: "Alex", doc: "valid driver's licence" },
+  },
+  "cancellation.manager": {
+    label: "Cancellation (Internal)",
+    description: "Notifies the manager of a cancellation.",
+    subject: (x) => `Cancelled: ${d(x, "what", "a record")}`,
+    heading: () => "Cancellation logged",
+    body: (x) =>
+      `<strong>${d(x, "what", "A record")}</strong> was cancelled${x.reason ? ` — reason: <strong>${x.reason}</strong>` : ""}. Review for follow-up or recovery outreach.`,
+    sample: { what: "Deal #88 — Alex Mensah", reason: "financing declined" },
+  },
+  "refund.approved.finance": {
+    label: "Refund Approved (Internal)",
+    description: "Tells finance a refund gate was approved and needs paying.",
+    subject: (x) => `Refund approved — process payout for ${d(x, "name", "customer")}`,
+    heading: () => "Refund cleared for payout",
+    body: (x) =>
+      `A refund of <strong>${d(x, "amount", "")}</strong> for <strong>${d(x, "name", "the customer")}</strong> has been approved. Process the payout and record the payment against the invoice.`,
+    sample: { amount: "$5,000", name: "Alex Mensah" },
+  },
+  "refund.customer": {
+    label: "Refund Processed (Customer)",
+    description: "Confirms the customer's refund has been paid.",
+    subject: () => "Your refund has been processed",
+    heading: (x) => `Your refund is on its way, ${d(x, "name", "")}`.trim(),
+    body: (x) =>
+      `Your refund of <strong>${d(x, "amount", "")}</strong> has been processed${x.method ? ` via <strong>${x.method}</strong>` : ""}. Depending on your bank it may take a few business days to appear.`,
+    sample: { name: "Alex", amount: "$5,000", method: "bank transfer" },
+  },
+  "delivery.ready": {
+    label: "Delivery Ready",
+    description: "Invites the customer to collect their vehicle.",
+    subject: (x) => `Your ${d(x, "vehicle", "vehicle")} is ready for delivery`,
+    heading: (x) => `It's ready, ${d(x, "name", "and it's beautiful")}`,
+    body: (x) =>
+      `Your <strong>${d(x, "vehicle", "vehicle")}</strong> has cleared preparation and is ready for handover${x.when ? ` — scheduled for <strong>${x.when}</strong>` : ""}. Your advisor will walk you through every detail at collection.`,
+    sample: { name: "Alex", vehicle: "2026 Bentley Continental GT", when: "Saturday 11:00" },
+  },
+  "delivered.service.handoff": {
+    label: "Service Handoff (Internal)",
+    description: "Tells the service team a vehicle was delivered — aftercare begins.",
+    subject: (x) => `Aftercare handoff: ${d(x, "vehicle", "vehicle")} delivered`,
+    heading: () => "New vehicle in aftercare",
+    body: (x) =>
+      `<strong>${d(x, "vehicle", "A vehicle")}</strong> was delivered to <strong>${d(x, "name", "the customer")}</strong>. The service cadence starts now — first check-in lands on the schedule automatically.`,
+    sample: { vehicle: "2026 Toyota Land Cruiser", name: "Alex Mensah" },
+  },
+  "case.opened": {
+    label: "Service Case Opened (Internal)",
+    description: "Alerts the assigned service advisor to a new case.",
+    subject: (x) => `New service case: ${d(x, "title", "case")}`,
+    heading: () => "A service case needs you",
+    body: (x) =>
+      `Case <strong>${d(x, "title", "")}</strong> for <strong>${d(x, "name", "a customer")}</strong> has been opened and assigned to you. Triage it and set expectations with the customer.`,
+    sample: { title: "Brake noise — front left", name: "Alex Mensah" },
+  },
+  "manager.note.advisor": {
+    label: "Manager Note (Internal)",
+    description: "Flags a manager note on a record to the owning advisor.",
+    subject: (x) => `Manager note on ${d(x, "what", "your record")}`,
+    heading: () => "A note from your manager",
+    body: (x) =>
+      `<strong>${d(x, "manager", "Your manager")}</strong> left a note on <strong>${d(x, "what", "one of your records")}</strong>: <em>${d(x, "note", "")}</em>`,
+    sample: { manager: "Priya Persaud", what: "Lead — Alex Mensah", note: "Offer the extended warranty at delivery." },
+  },
+  "feedback.survey": {
+    label: "Feedback Survey",
+    description: "Post-milestone CSAT survey invitation.",
+    subject: () => "Two minutes to shape your AURA experience",
+    heading: (x) => `How did we do, ${d(x, "name", "")}?`.trim(),
+    body: (x) =>
+      `Thank you${x.context ? ` for ${x.context}` : ""}. We'd love two minutes of your time — your feedback goes straight to the general manager and shapes how we look after you next.`,
+    sample: { name: "Alex", context: "your recent delivery" },
+  },
+  "service.cadence.due": {
+    label: "Service Cadence Due",
+    description: "Scheduled aftercare check-in for a delivered vehicle.",
+    subject: (x) => `Time for your ${d(x, "vehicle", "vehicle")} check-in`,
+    heading: () => "A little care goes a long way",
+    body: (x) =>
+      `Your <strong>${d(x, "vehicle", "vehicle")}</strong> is due its <strong>${d(x, "milestone", "scheduled")}</strong> check-in. Reply to this email or message your concierge and we'll arrange everything, including pickup.`,
+    sample: { vehicle: "2026 Toyota Land Cruiser", milestone: "6-month" },
+  },
 };
 
 export function renderEmail(
@@ -407,6 +578,12 @@ export type EnqueueOptions = {
   dedupeKey?: string;
   /** Scheduled send: worker won't touch the item before this time. */
   sendAt?: Date;
+  /**
+   * R6.4 cascade: internal user to notify In-App if this email terminally
+   * fails (retry cap reached) — the guaranteed floor for customer-facing
+   * sends. Stored in the payload so the worker can act on it.
+   */
+  notifyUserId?: number;
 };
 
 /**
@@ -426,7 +603,12 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
       template: opts.template,
       channel: "email",
       status: "queued",
-      payload: opts.data ?? {},
+      payload: {
+        ...(opts.data ?? {}),
+        ...(opts.notifyUserId != null
+          ? { notifyUserId: String(opts.notifyUserId) }
+          : {}),
+      },
       dedupeKey: opts.dedupeKey ?? null,
       nextAttemptAt: opts.sendAt ?? null,
     })
@@ -458,7 +640,30 @@ export type EnqueueWhatsappOptions = {
   actor?: string;
   dedupeKey?: string;
   sendAt?: Date;
+  /**
+   * R6.4 fallback cascade WhatsApp → Email → In-App: when the recipient has
+   * opted out (or the send terminally fails), the same logical event is
+   * re-enqueued as this email with a channel-suffixed dedupeKey so it is not
+   * deduped against the failed/suppressed WhatsApp row.
+   */
+  fallbackEmail?: {
+    to: string;
+    template: EmailTemplate;
+    data?: TemplateData;
+  };
+  /** Internal user notified In-App if every channel terminally fails. */
+  notifyUserId?: number;
 };
+
+/** R6.4: true when the phone has an explicit WhatsApp opt-out on record. */
+export async function isWhatsappOptedOut(phone: string): Promise<boolean> {
+  const digits = phone.replace(/\D/g, "");
+  const [row] = await db
+    .select({ optedOutAt: whatsappConversationsTable.optedOutAt })
+    .from(whatsappConversationsTable)
+    .where(eq(whatsappConversationsTable.phone, digits));
+  return Boolean(row?.optedOutAt);
+}
 
 /**
  * Enqueue an outbound WhatsApp message through the same DB-backed outbox.
@@ -468,13 +673,66 @@ export type EnqueueWhatsappOptions = {
 export async function enqueueWhatsapp(
   opts: EnqueueWhatsappOptions,
 ): Promise<EmailLog> {
+  const digits = opts.to.replace(/\D/g, "");
+
+  // R6.4 opt-out enforcement at the enqueue boundary: a suppressed row is
+  // still written (status "cancelled") so the outbox log shows WHY nothing
+  // went out, then the cascade downgrades to Email (or In-App notice).
+  if (await isWhatsappOptedOut(digits)) {
+    const [row] = await db
+      .insert(emailLogsTable)
+      .values({
+        dealerId: opts.dealerId,
+        customerId: opts.customerId ?? null,
+        leadId: opts.leadId ?? null,
+        recipient: digits,
+        subject: opts.summary ?? opts.body.slice(0, 140),
+        template: opts.kind,
+        channel: "whatsapp",
+        status: "cancelled",
+        lastError: "Recipient has opted out of WhatsApp (STOP)",
+        payload: { body: opts.body },
+        dedupeKey: opts.dedupeKey ?? null,
+      })
+      .onConflictDoNothing({ target: emailLogsTable.dedupeKey })
+      .returning();
+    if (opts.fallbackEmail) {
+      await enqueueEmail({
+        template: opts.fallbackEmail.template,
+        to: opts.fallbackEmail.to,
+        dealerId: opts.dealerId,
+        customerId: opts.customerId ?? null,
+        leadId: opts.leadId ?? null,
+        data: opts.fallbackEmail.data,
+        dedupeKey: opts.dedupeKey ? `${opts.dedupeKey}:optOutEmail` : undefined,
+        notifyUserId: opts.notifyUserId,
+      });
+    } else if (opts.notifyUserId != null) {
+      await notifyUser({
+        dealerId: opts.dealerId,
+        userId: opts.notifyUserId,
+        type: "channel.delivery.failed",
+        title: "WhatsApp suppressed — customer opted out",
+        body: `${opts.summary ?? opts.kind}: recipient ${digits} has opted out of WhatsApp and no email is on file. Reach out manually.`,
+        entityType: row ? "email_log" : undefined,
+        entityId: row?.id,
+      });
+    }
+    if (row) return row;
+    const [existing] = await db
+      .select()
+      .from(emailLogsTable)
+      .where(eq(emailLogsTable.dedupeKey, opts.dedupeKey!));
+    return existing!;
+  }
+
   const [row] = await db
     .insert(emailLogsTable)
     .values({
       dealerId: opts.dealerId,
       customerId: opts.customerId ?? null,
       leadId: opts.leadId ?? null,
-      recipient: opts.to.replace(/\D/g, ""),
+      recipient: digits,
       subject: opts.summary ?? opts.body.slice(0, 140),
       template: opts.kind,
       channel: "whatsapp",
@@ -482,6 +740,16 @@ export async function enqueueWhatsapp(
       payload: {
         body: opts.body,
         ...(opts.actor ? { actor: opts.actor } : {}),
+        ...(opts.fallbackEmail
+          ? {
+              fallbackEmailTo: opts.fallbackEmail.to,
+              fallbackEmailTemplate: opts.fallbackEmail.template,
+              fallbackEmailData: JSON.stringify(opts.fallbackEmail.data ?? {}),
+            }
+          : {}),
+        ...(opts.notifyUserId != null
+          ? { notifyUserId: String(opts.notifyUserId) }
+          : {}),
       },
       dedupeKey: opts.dedupeKey ?? null,
       nextAttemptAt: opts.sendAt ?? null,
@@ -524,15 +792,82 @@ function readyFilter(channel: "email" | "whatsapp") {
 }
 
 /** Mark an item failed and schedule its next retry with exponential backoff. */
-async function markFailed(itemId: number, attempts: number, message: string) {
+async function markFailed(item: EmailLog, attempts: number, message: string) {
+  const terminal = attempts >= MAX_ATTEMPTS;
   await db
     .update(emailLogsTable)
     .set({
       status: "failed",
       lastError: message,
-      nextAttemptAt: attempts < MAX_ATTEMPTS ? backoffDate(attempts) : null,
+      nextAttemptAt: terminal ? null : backoffDate(attempts),
     })
-    .where(eq(emailLogsTable.id, itemId));
+    .where(eq(emailLogsTable.id, item.id));
+  if (!terminal) return;
+
+  // R6.4 terminal-failure cascade: WhatsApp → Email → In-App.
+  try {
+    const payload = item.payload ?? {};
+    const notifyUserId = payload.notifyUserId
+      ? Number(payload.notifyUserId)
+      : null;
+    if (
+      item.channel === "whatsapp" &&
+      payload.fallbackEmailTo &&
+      payload.fallbackEmailTemplate &&
+      isKnownTemplate(payload.fallbackEmailTemplate)
+    ) {
+      let data: TemplateData = {};
+      try {
+        data = JSON.parse(payload.fallbackEmailData ?? "{}") as TemplateData;
+      } catch {
+        // ignore malformed fallback data — send with empty data
+      }
+      await enqueueEmail({
+        template: payload.fallbackEmailTemplate,
+        to: payload.fallbackEmailTo,
+        dealerId: item.dealerId,
+        customerId: item.customerId,
+        leadId: item.leadId,
+        data,
+        dedupeKey: item.dedupeKey ? `${item.dedupeKey}:fallbackEmail` : undefined,
+        notifyUserId: notifyUserId ?? undefined,
+      });
+      logger.info(
+        { id: item.id, dedupeKey: item.dedupeKey },
+        "whatsapp terminally failed — fallback email enqueued",
+      );
+    } else if (notifyUserId != null && Number.isFinite(notifyUserId)) {
+      await notifyUser({
+        dealerId: item.dealerId,
+        userId: notifyUserId,
+        type: "channel.delivery.failed",
+        title: `${item.channel === "whatsapp" ? "WhatsApp" : "Email"} delivery failed`,
+        body: `"${item.subject}" to ${item.recipient} failed after ${attempts} attempts: ${message}. Reach out manually or retry from the outbox.`,
+        link: "/settings/emails",
+        entityType: "email_log",
+        entityId: item.id,
+      });
+      logger.info(
+        { id: item.id, notifyUserId },
+        "terminal delivery failure — in-app notice created",
+      );
+    }
+    if (item.customerId) {
+      await db.insert(timelineEventsTable).values({
+        dealerId: item.dealerId,
+        customerId: item.customerId,
+        domain: "system",
+        kind: "delivery_failed",
+        title: `${item.channel === "whatsapp" ? "WhatsApp" : "Email"} delivery failed (${attempts} attempts)`,
+        detail: `"${item.subject}" to ${item.recipient}: ${message}`,
+        actor: "AURA Outbox",
+        refType: "email_log",
+        refId: item.id,
+      });
+    }
+  } catch (err) {
+    logger.error({ err, id: item.id }, "terminal-failure cascade failed");
+  }
 }
 
 async function processWhatsappQueue(): Promise<void> {
@@ -555,7 +890,7 @@ async function processWhatsappQueue(): Promise<void> {
       .where(eq(emailLogsTable.id, item.id));
     if (!metaCfg && !twilioCfg) {
       await markFailed(
-        item.id,
+        item,
         attempts,
         "WhatsApp sending is not configured (no Meta Cloud API or Twilio WhatsApp credentials).",
       );
@@ -583,7 +918,7 @@ async function processWhatsappQueue(): Promise<void> {
       logger.info({ id: item.id, kind: item.template }, "whatsapp sent");
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await markFailed(item.id, attempts, message);
+      await markFailed(item, attempts, message);
       logger.error({ err, id: item.id }, "whatsapp send failed");
     }
   }
@@ -620,6 +955,20 @@ export async function processQueue(): Promise<void> {
         let attachments:
           | { filename: string; content: Buffer; contentType: string }[]
           | undefined;
+        if (item.template === "invoice.generated") {
+          const pdf = await buildInvoicePdfFromPayload(item.payload ?? {});
+          const ref = (item.payload?.invoiceNumber ?? `INV-${item.id}`).replace(
+            /[^A-Za-z0-9-]/g,
+            "",
+          );
+          attachments = [
+            {
+              filename: `AURA-Invoice-${ref}.pdf`,
+              content: pdf,
+              contentType: "application/pdf",
+            },
+          ];
+        }
         if (item.template === "vehicle_quote") {
           const pdf = await buildQuotePdf(item.payload ?? {});
           const ref = (item.payload?.quoteRef ?? `Q-${item.id}`).replace(
@@ -691,7 +1040,7 @@ export async function processQueue(): Promise<void> {
         logger.info({ id: item.id, template: item.template }, "email sent");
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        await markFailed(item.id, item.attempts + 1, message);
+        await markFailed(item, item.attempts + 1, message);
         logger.error({ err, id: item.id }, "email send failed");
       }
     }
@@ -792,37 +1141,65 @@ export function startEmailWorker(): void {
 // Notifications helper — other modules call this
 // ---------------------------------------------------------------------------
 
-export async function notifyUser(opts: {
+export type NotifyUserOptions = {
   userId: number;
   dealerId: number;
-  type: "approval" | "assignment" | "task" | "email" | "system";
+  type: NotificationType;
   title: string;
   body?: string;
   link?: string;
-}): Promise<void> {
-  await db.insert(notificationsTable).values({
+  /**
+   * R6.3 natural-key dedupe scope. When both are set, a repeat notification
+   * for the same (dealer, user, type, entity) UPSERTS the existing row —
+   * refreshing title/body, marking it unread and bumping updatedAt — instead
+   * of stacking duplicates in the bell.
+   */
+  entityType?: string;
+  entityId?: number;
+};
+
+export async function notifyUser(opts: NotifyUserOptions): Promise<void> {
+  const values = {
     userId: opts.userId,
     dealerId: opts.dealerId,
     type: opts.type,
     title: opts.title,
     body: opts.body ?? null,
     link: opts.link ?? null,
-  });
+    entityType: opts.entityType ?? null,
+    entityId: opts.entityId ?? null,
+  };
+  if (opts.entityType && opts.entityId != null) {
+    await db
+      .insert(notificationsTable)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [
+          notificationsTable.dealerId,
+          notificationsTable.userId,
+          notificationsTable.type,
+          notificationsTable.entityType,
+          notificationsTable.entityId,
+        ],
+        targetWhere: sql`entity_type is not null and entity_id is not null`,
+        set: {
+          title: opts.title,
+          body: opts.body ?? null,
+          link: opts.link ?? null,
+          read: false,
+          updatedAt: new Date(),
+        },
+      });
+    return;
+  }
+  await db.insert(notificationsTable).values(values);
 }
 
 export async function notifyUsers(
   userIds: number[],
-  opts: Omit<Parameters<typeof notifyUser>[0], "userId">,
+  opts: Omit<NotifyUserOptions, "userId">,
 ): Promise<void> {
-  if (userIds.length === 0) return;
-  await db.insert(notificationsTable).values(
-    userIds.map((userId) => ({
-      userId,
-      dealerId: opts.dealerId,
-      type: opts.type,
-      title: opts.title,
-      body: opts.body ?? null,
-      link: opts.link ?? null,
-    })),
-  );
+  for (const userId of userIds) {
+    await notifyUser({ ...opts, userId });
+  }
 }

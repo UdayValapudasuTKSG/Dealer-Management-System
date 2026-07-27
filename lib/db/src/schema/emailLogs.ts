@@ -31,6 +31,25 @@ export const EMAIL_TEMPLATES = [
   "outreach",
   "smtp_test",
   "owner_invite",
+  // R6.2 matrix template ids (dealer-overridable via emails/templates)
+  "lead.new",
+  "lead.assigned",
+  "lead.sla.breach.advisor",
+  "lead.sla.breach.manager",
+  "testdrive.reminder.24h",
+  "reservation.pending",
+  "invoice.generated",
+  "document.missing.internal",
+  "document.request.customer",
+  "cancellation.manager",
+  "refund.approved.finance",
+  "refund.customer",
+  "delivery.ready",
+  "delivered.service.handoff",
+  "case.opened",
+  "manager.note.advisor",
+  "feedback.survey",
+  "service.cadence.due",
 ] as const;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 
@@ -39,6 +58,15 @@ export const WHATSAPP_KINDS = [
   "whatsapp_message",
   "test_drive_reminder",
   "outreach",
+  // R6.2 matrix WhatsApp sends (same logical templates as email)
+  "lead.sla.reminder",
+  "testdrive.reminder.24h",
+  "reservation.pending",
+  "invoice.generated",
+  "document.request.customer",
+  "refund.customer",
+  "feedback.survey",
+  "service.cadence.due",
 ] as const;
 export type WhatsappKind = (typeof WHATSAPP_KINDS)[number];
 

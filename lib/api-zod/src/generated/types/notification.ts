@@ -5,17 +5,22 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
-import type { NotificationType } from './notificationType';
 
 export interface Notification {
   id: number;
   userId: number;
-  type: NotificationType;
+  type: string;
   title: string;
   /** @nullable */
   body?: string | null;
   /** @nullable */
   link?: string | null;
   read: boolean;
+  /** @nullable */
+  entityType?: string | null;
+  /** @nullable */
+  entityId?: number | null;
   createdAt: Date;
+  /** @nullable */
+  updatedAt?: Date | null;
 }

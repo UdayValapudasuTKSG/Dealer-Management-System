@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, or, ilike, sql } from "drizzle-orm";
+import { eq, desc, and, or, ilike, sql, isNotNull } from "drizzle-orm";
 import multer from "multer";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import {
@@ -73,6 +73,7 @@ import {
 } from "@workspace/api-zod";
 import { storage } from "../lib/storage";
 import { activeDealerId } from "../middlewares/rbac";
+import { notifyManagerNote } from "../lib/notify-triggers";
 import {
   guardUntrusted,
   isAgentEnabled,
@@ -1076,6 +1077,32 @@ router.post("/customers/:id/notes", async (req, res): Promise<void> => {
     .insert(customerNotesTable)
     .values({ customerId: params.data.id, dealerId, body: body.data.body, author })
     .returning();
+
+  // R6.2 #15 Manager note → the customer's owning advisor (most recent lead
+  // owner), In-App only, skipping self-notes.
+  const [ownedLead] = await db
+    .select({ ownerUserId: leadsTable.ownerUserId })
+    .from(leadsTable)
+    .where(
+      and(
+        eq(leadsTable.customerId, params.data.id),
+        eq(leadsTable.dealerId, dealerId),
+        isNotNull(leadsTable.ownerUserId),
+      ),
+    )
+    .orderBy(desc(leadsTable.createdAt))
+    .limit(1);
+  if (ownedLead?.ownerUserId && ownedLead.ownerUserId !== res.locals.user?.id) {
+    notifyManagerNote({
+      dealerId,
+      noteId: note!.id,
+      advisorUserId: ownedLead.ownerUserId,
+      authorName: author ?? "Staff",
+      excerpt: `${customer.name}: ${body.data.body.slice(0, 140)}`,
+      link: `/customers/${customer.id}`,
+    });
+  }
+
   res.status(201).json(CreateCustomerNoteResponse.parse(note));
 });
 

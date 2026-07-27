@@ -57,6 +57,12 @@ import { enqueueEmail, notifyUser } from "../lib/email";
 import { onDealStageChanged } from "../lib/email-triggers";
 import { logger } from "../lib/logger";
 import { activeDealerId } from "../middlewares/rbac";
+import {
+  notifyDeliveryReady,
+  notifyDeliveredServiceHandoff,
+  notifyFeedbackSurvey,
+} from "../lib/notify-triggers";
+import { usersWithPermission } from "../lib/notify-matrix";
 
 const router: IRouter = Router();
 
@@ -625,6 +631,22 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       })().catch((err) =>
         logger.error({ err }, "delivery schedule email failed"),
       );
+      // R6.2 #12 Delivery Ready → delivery + sales advisors (In-App + Email):
+      // invoice + appointment are both cleared once this step completes.
+      void (async () => {
+        const advisorUserIds = await usersWithPermission(
+          delivery.dealerId,
+          "deliveries",
+          ["edit", "admin"],
+        );
+        notifyDeliveryReady({
+          dealerId: delivery.dealerId,
+          deliveryId: delivery.id,
+          customerName: delivery.customerName ?? "Customer",
+          vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
+          advisorUserIds,
+        });
+      })().catch((err) => logger.error({ err }, "delivery-ready notify failed"));
       break;
     }
     case "signature":
@@ -888,16 +910,19 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
             refId: asset?.id ?? null,
           });
 
-          if (serviceAdvisor) {
-            await notifyUser({
-              userId: serviceAdvisor.id,
+          // R6.2 #13 Delivered → service handoff (In-App + Email), keyed on
+          // the asset so a retried completion never double-notifies.
+          if (asset) {
+            notifyDeliveredServiceHandoff({
               dealerId: delivery.dealerId,
-              type: "system",
-              title: `New vehicle in your care: ${label ?? `Vehicle #${delivery.vehicleId}`}`,
-              body: `${delivery.customerName ?? "A customer"} took delivery. The vehicle is now a lifetime asset on their account — you own the service relationship.`,
-              link: `/customers/${delivery.customerId}`,
+              assetId: asset.id,
+              customerName: delivery.customerName ?? "the customer",
+              vehicle: label ?? `Vehicle #${delivery.vehicleId}`,
+              serviceAdvisorUserId: serviceAdvisor?.id ?? null,
             });
+          }
 
+          if (serviceAdvisor) {
             // Ownership-phase kickoff: the advisor calls the customer within
             // 5 business days of delivery (GMT-4 business calendar).
             const introDue = addBusinessDays(
@@ -922,18 +947,35 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       }
     }
 
+    // R6.2 #16 Feedback survey → customer (WhatsApp + Email), keyed on the
+    // delivery (replaces the old single-channel feedback_request email).
     void (async () => {
-      const { email, name } = await customerEmailFor(delivery);
-      if (!email) return;
-      await enqueueEmail({
-        template: "feedback_request",
-        to: email,
+      const [customer] = delivery.customerId
+        ? await db
+            .select({
+              name: customersTable.name,
+              email: customersTable.email,
+              phone: customersTable.phone,
+            })
+            .from(customersTable)
+            .where(
+              and(
+                eq(customersTable.id, delivery.customerId),
+                eq(customersTable.dealerId, delivery.dealerId),
+              ),
+            )
+        : [];
+      notifyFeedbackSurvey({
         dealerId: delivery.dealerId,
+        entityType: "delivery",
+        entityId: delivery.id,
         customerId: delivery.customerId,
-        dedupeKey: `delivery:${delivery.id}:csat`,
-        data: { name, vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId) },
+        customerName: customer?.name ?? delivery.customerName ?? "Customer",
+        customerEmail: customer?.email ?? null,
+        customerPhone: customer?.phone ?? null,
+        vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
       });
-    })().catch((err) => logger.error({ err }, "feedback email failed"));
+    })().catch((err) => logger.error({ err }, "feedback survey notify failed"));
   }
 
   res.json(AdvanceDeliveryResponse.parse((await enrich([updated!], activeDealerId(res)))[0]));

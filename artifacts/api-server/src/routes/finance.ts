@@ -18,7 +18,6 @@ import {
   insertFinanceDocumentSchema,
   type FinanceApplication,
 } from "@workspace/db";
-import { enqueueEmail } from "../lib/email";
 import { logCancellationEvent } from "../lib/cancellation";
 import {
   CreateFinanceApplicationBody,
@@ -71,6 +70,7 @@ import { buildReceiptPdf } from "../lib/document-pdfs";
 import { storage } from "../lib/storage";
 import { getLosConnector } from "../lib/los";
 import { activeDealerId } from "../middlewares/rbac";
+import { notifyRefundPaid } from "../lib/notify-triggers";
 import { idempotent } from "../middlewares/idempotency";
 import {
   applyFinanceStatusEffects,
@@ -972,7 +972,11 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
 
     if (refundGate.customerId != null) {
       const [customer] = await db
-        .select({ name: customersTable.name, email: customersTable.email })
+        .select({
+          name: customersTable.name,
+          email: customersTable.email,
+          phone: customersTable.phone,
+        })
         .from(customersTable)
         .where(
           and(
@@ -997,20 +1001,19 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
           );
         if (v) vehicleName = `${v.year} ${v.make} ${v.model}`;
       }
-      if (customer?.email) {
-        await enqueueEmail({
-          template: "refund_confirmation",
-          to: customer.email,
+      // R6.2 #11 Refund executed → customer confirmation on Email + WhatsApp,
+      // both keyed on the payment (refund:paid:{paymentId}:channel).
+      if (customer) {
+        notifyRefundPaid({
           dealerId,
+          paymentId: result.payment.id,
           customerId: refundGate.customerId,
-          dedupeKey: `refund:${refundGate.id}`,
-          data: {
-            name: customer.name,
-            vehicle: vehicleName,
-            amount: fmt(refundAmount),
-            method: result.payment.method.replace(/_/g, " "),
-            reference: result.receipt.receiptNumber,
-          },
+          customerName: customer.name,
+          customerEmail: customer.email,
+          customerPhone: customer.phone,
+          amount: fmt(refundAmount),
+          reference: result.receipt.receiptNumber,
+          vehicle: vehicleName,
         });
       }
     }

@@ -9485,12 +9485,15 @@ components:
       properties:
         id: { type: integer }
         userId: { type: integer }
-        type: { type: string, enum: [approval, assignment, task, email, system] }
+        type: { type: string }
         title: { type: string }
         body: { type: ["string", "null"] }
         link: { type: ["string", "null"] }
         read: { type: boolean }
+        entityType: { type: ["string", "null"] }
+        entityId: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
+        updatedAt: { type: ["string", "null"], format: date-time }
     MarkNotificationsReadRequest:
       type: object
       properties:

@@ -29,6 +29,12 @@ export const whatsappConversationsTable = pgTable(
      * transports (Twilio) map numbered replies back to option ids.
      */
     menu: text("menu"),
+    /**
+     * R6.4 explicit opt-out: set when the customer sends STOP/UNSUBSCRIBE (or
+     * clears the preference). While set, ALL outbound WhatsApp to this phone
+     * is suppressed and downgraded to Email → In-App. Cleared by "START".
+     */
+    optedOutAt: timestamp("opted_out_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

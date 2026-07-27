@@ -8,6 +8,7 @@ import {
   type CaseStatus,
 } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
+import { notifyCaseOpened } from "../lib/notify-triggers";
 import {
   ListCasesQueryParams,
   CreateCaseBody,
@@ -114,6 +115,14 @@ router.post("/cases", async (req, res): Promise<void> => {
       refId: body.data.customerId,
     });
   }
+  // R6.2 #14 Case opened → service manager + service users (In-App + Email).
+  notifyCaseOpened({
+    dealerId,
+    caseId: created!.id,
+    title: created!.title,
+    customerName: created!.customerName,
+  });
+
   res.status(201).json(created);
 });
 

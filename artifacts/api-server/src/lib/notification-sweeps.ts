@@ -1,0 +1,393 @@
+import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
+import {
+  db,
+  assetsTable,
+  customersTable,
+  leadsTable,
+  testDrivesTable,
+} from "@workspace/db";
+import {
+  enqueueEmail,
+  enqueueWhatsapp,
+  notifyUser,
+  type TemplateData,
+} from "./email";
+import { divisionSalesManagers } from "./notify-matrix";
+import { logger } from "./logger";
+
+/**
+ * R6.2 scheduled-sweep triggers (#3, #4a/4b, #5, #17). Each sweep is
+ * idempotent by construction: In-App rows dedupe on their natural key
+ * (userId + type + entity), and outbox rows carry the trigger's canonical
+ * dedupeKey, so overlapping sweep runs can never double-send.
+ */
+
+const HOUR = 60 * 60 * 1000;
+
+// ---------------------------------------------------------------------------
+// #3 / #4a / #4b — 24h first-contact SLA on assigned leads.
+// A lead still in phase "new" has, by the NC-3 machine, no logged first
+// contact (the contact log is exactly what advances it to "contacted").
+// ---------------------------------------------------------------------------
+async function sweepLeadSla(): Promise<void> {
+  const now = Date.now();
+  const rows = await db
+    .select({
+      id: leadsTable.id,
+      dealerId: leadsTable.dealerId,
+      name: leadsTable.name,
+      ownerUserId: leadsTable.ownerUserId,
+      divisionId: leadsTable.divisionId,
+      stageEnteredAt: leadsTable.stageEnteredAt,
+      createdAt: leadsTable.createdAt,
+    })
+    .from(leadsTable)
+    .where(
+      and(
+        eq(leadsTable.phase, "new"),
+        isNotNull(leadsTable.ownerUserId),
+      ),
+    );
+
+  for (const lead of rows) {
+    const advisorId = lead.ownerUserId;
+    if (!advisorId) continue;
+    const start = (lead.stageEnteredAt ?? lead.createdAt).getTime();
+    const age = now - start;
+    try {
+      if (age >= 24 * HOUR) {
+        // #4a breach → advisor (In-App + Email).
+        await notifyUser({
+          userId: advisorId,
+          dealerId: lead.dealerId,
+          type: "lead.sla.breach.advisor",
+          title: `SLA breached — ${lead.name}`,
+          body: "24 hours have passed with no logged first contact on this lead. Reach out now and log the contact.",
+          link: `/pipeline/${lead.id}`,
+          entityType: "lead",
+          entityId: lead.id,
+        });
+        await enqueueInternalEmail({
+          dealerId: lead.dealerId,
+          userId: advisorId,
+          template: "lead.sla.breach.advisor",
+          dedupeKey: `lead:sla24:breach:${lead.id}:advisor`,
+          data: { name: lead.name },
+        });
+        // #4b breach escalation → reporting manager(s), distinct key.
+        // Spec #4b fallback order: explicit reportingManagerUserId first,
+        // then the division Sales Manager(s) (which itself falls back to the
+        // GMs only when no division SM matches).
+        const explicit = await explicitReportingManager(
+          lead.dealerId,
+          advisorId,
+        );
+        let managers =
+          explicit != null
+            ? [explicit]
+            : await divisionSalesManagers(
+                lead.dealerId,
+                lead.divisionId ?? null,
+              );
+        managers = managers.filter((id) => id !== advisorId);
+        for (const managerId of managers) {
+          await notifyUser({
+            userId: managerId,
+            dealerId: lead.dealerId,
+            type: "lead.sla.breach.manager",
+            title: `SLA breach escalation — ${lead.name}`,
+            body: "An assigned lead passed the 24h first-contact SLA with no outreach logged. Review with the advisor.",
+            link: `/pipeline/${lead.id}`,
+            entityType: "lead",
+            entityId: lead.id,
+          });
+          await enqueueInternalEmail({
+            dealerId: lead.dealerId,
+            userId: managerId,
+            template: "lead.sla.breach.manager",
+            dedupeKey: `lead:sla24:breach:${lead.id}:manager:u${managerId}`,
+            data: { name: lead.name },
+          });
+        }
+      } else if (age >= 20 * HOUR) {
+        // #3 approaching (~T-4h) → advisor In-App reminder (one per window).
+        // Spec adds WhatsApp "if advisor opted in" — advisors have no stored
+        // phone/opt-in today, so In-App (the guaranteed floor) is the only
+        // deliverable channel for this internal reminder.
+        await notifyUser({
+          userId: advisorId,
+          dealerId: lead.dealerId,
+          type: "lead.sla.reminder",
+          title: `First-contact SLA closing — ${lead.name}`,
+          body: "Less than 4 hours remain on the 24h first-contact SLA. Make contact and log it to stop the clock.",
+          link: `/pipeline/${lead.id}`,
+          entityType: "lead",
+          entityId: lead.id,
+        });
+      }
+    } catch (err) {
+      logger.error({ err, leadId: lead.id }, "lead SLA sweep item failed");
+    }
+  }
+}
+
+/** Explicit reporting manager from the employee master, or null. */
+async function explicitReportingManager(
+  dealerId: number,
+  userId: number,
+): Promise<number | null> {
+  const { dealerUsersTable } = await import("@workspace/db");
+  const [row] = await db
+    .select({ managerId: dealerUsersTable.reportingManagerUserId })
+    .from(dealerUsersTable)
+    .where(
+      and(
+        eq(dealerUsersTable.dealerId, dealerId),
+        eq(dealerUsersTable.userId, userId),
+      ),
+    );
+  return row?.managerId ?? null;
+}
+
+/** Email an internal user by id via the outbox (skips users without email). */
+async function enqueueInternalEmail(opts: {
+  dealerId: number;
+  userId: number;
+  template: Parameters<typeof enqueueEmail>[0]["template"];
+  dedupeKey: string;
+  data: TemplateData;
+}): Promise<void> {
+  const { usersTable } = await import("@workspace/db");
+  const [user] = await db
+    .select({ email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.id, opts.userId));
+  if (!user?.email) return;
+  await enqueueEmail({
+    template: opts.template,
+    to: user.email,
+    dealerId: opts.dealerId,
+    data: opts.data,
+    dedupeKey: opts.dedupeKey,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// #5 — Test-drive reminder at T-24h: customer (WhatsApp + Email) + advisor
+// (In-App), key testdrive:remind24:{leadId}:{driveId}.
+// ---------------------------------------------------------------------------
+async function sweepTestDriveReminders(): Promise<void> {
+  const now = new Date();
+  const in24h = new Date(now.getTime() + 24 * HOUR);
+  const drives = await db
+    .select({
+      id: testDrivesTable.id,
+      dealerId: testDrivesTable.dealerId,
+      leadId: testDrivesTable.leadId,
+      customerId: testDrivesTable.customerId,
+      scheduledAt: testDrivesTable.scheduledAt,
+      branch: testDrivesTable.branch,
+    })
+    .from(testDrivesTable)
+    .where(
+      and(
+        eq(testDrivesTable.status, "scheduled"),
+        gte(testDrivesTable.scheduledAt, now),
+        lte(testDrivesTable.scheduledAt, in24h),
+      ),
+    );
+
+  for (const drive of drives) {
+    try {
+      const [lead] = await db
+        .select({
+          id: leadsTable.id,
+          name: leadsTable.name,
+          email: leadsTable.email,
+          phone: leadsTable.phone,
+          ownerUserId: leadsTable.ownerUserId,
+        })
+        .from(leadsTable)
+        .where(
+          and(
+            eq(leadsTable.id, drive.leadId),
+            eq(leadsTable.dealerId, drive.dealerId),
+          ),
+        );
+      if (!lead) continue;
+      const key = `testdrive:remind24:${drive.leadId}:${drive.id}`;
+      const when = drive.scheduledAt.toLocaleString("en-US", {
+        timeZone: "America/Guyana",
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      const data: TemplateData = {
+        name: lead.name,
+        date: when,
+        ...(drive.branch ? { branch: drive.branch } : {}),
+      };
+      if (lead.email) {
+        await enqueueEmail({
+          template: "testdrive.reminder.24h",
+          to: lead.email,
+          dealerId: drive.dealerId,
+          customerId: drive.customerId,
+          leadId: lead.id,
+          data,
+          dedupeKey: `${key}:email`,
+          notifyUserId: lead.ownerUserId ?? undefined,
+        });
+      }
+      if (lead.phone) {
+        await enqueueWhatsapp({
+          kind: "testdrive.reminder.24h",
+          to: lead.phone,
+          dealerId: drive.dealerId,
+          customerId: drive.customerId,
+          leadId: lead.id,
+          summary: `Test-drive reminder — ${when}`,
+          body: `Hello ${lead.name}, a reminder that your test drive is booked for ${when}${drive.branch ? ` at our ${drive.branch} showroom` : ""}. Reply YES to confirm or NO to release the slot.`,
+          dedupeKey: `${key}:whatsapp`,
+          fallbackEmail: lead.email
+            ? { to: lead.email, template: "testdrive.reminder.24h", data }
+            : undefined,
+          notifyUserId: lead.ownerUserId ?? undefined,
+        });
+      }
+      if (lead.ownerUserId) {
+        await notifyUser({
+          userId: lead.ownerUserId,
+          dealerId: drive.dealerId,
+          type: "testdrive.reminder.advisor",
+          title: `Test drive tomorrow — ${lead.name}`,
+          body: `${lead.name} is booked for a test drive on ${when}${drive.branch ? ` (${drive.branch})` : ""}. The customer has been sent a confirm/decline reminder.`,
+          link: `/pipeline/${lead.id}`,
+          entityType: "test_drive",
+          entityId: drive.id,
+        });
+      }
+    } catch (err) {
+      logger.error({ err, driveId: drive.id }, "test-drive reminder failed");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// #17 — Service cadence approaching: active assets nearing a 6-month service
+// interval since delivery. dueWindow = the upcoming interval index, bounding
+// the nudge to one per cycle: cadence:{assetId}:{dueWindow}.
+// ---------------------------------------------------------------------------
+const CADENCE_MONTHS = 6;
+const APPROACH_DAYS = 30;
+
+async function sweepServiceCadence(): Promise<void> {
+  const assets = await db
+    .select()
+    .from(assetsTable)
+    .where(eq(assetsTable.status, "active"));
+
+  const now = Date.now();
+  for (const asset of assets) {
+    try {
+      const delivered = asset.deliveredAt.getTime();
+      const monthsSince = (now - delivered) / (30.44 * 24 * HOUR);
+      const nextWindow = Math.floor(monthsSince / CADENCE_MONTHS) + 1;
+      const dueAt =
+        delivered + nextWindow * CADENCE_MONTHS * 30.44 * 24 * HOUR;
+      // Only nudge inside the approach window before the due date.
+      if (dueAt - now > APPROACH_DAYS * 24 * HOUR) continue;
+
+      const [customer] = await db
+        .select({
+          name: customersTable.name,
+          email: customersTable.email,
+          phone: customersTable.phone,
+        })
+        .from(customersTable)
+        .where(
+          and(
+            eq(customersTable.id, asset.accountId),
+            eq(customersTable.dealerId, asset.dealerId),
+          ),
+        );
+      if (!customer) continue;
+      const key = `cadence:${asset.id}:${nextWindow}`;
+      const dueLabel = new Date(dueAt).toLocaleDateString("en-US", {
+        month: "long",
+        year: "numeric",
+        timeZone: "America/Guyana",
+      });
+      const data: TemplateData = { name: customer.name, due: dueLabel };
+      if (customer.email) {
+        await enqueueEmail({
+          template: "service.cadence.due",
+          to: customer.email,
+          dealerId: asset.dealerId,
+          customerId: asset.accountId,
+          data,
+          dedupeKey: `${key}:email`,
+          notifyUserId: asset.serviceAdvisorUserId ?? undefined,
+        });
+      }
+      if (customer.phone) {
+        await enqueueWhatsapp({
+          kind: "service.cadence.due",
+          to: customer.phone,
+          dealerId: asset.dealerId,
+          customerId: asset.accountId,
+          summary: `Service due ${dueLabel}`,
+          body: `Hello ${customer.name}, your vehicle's scheduled service window is coming up (${dueLabel}). Reply to this message or contact your Service Advisor to book a convenient slot.`,
+          dedupeKey: `${key}:whatsapp`,
+          fallbackEmail: customer.email
+            ? { to: customer.email, template: "service.cadence.due", data }
+            : undefined,
+          notifyUserId: asset.serviceAdvisorUserId ?? undefined,
+        });
+      }
+      if (asset.serviceAdvisorUserId) {
+        await notifyUser({
+          userId: asset.serviceAdvisorUserId,
+          dealerId: asset.dealerId,
+          type: "service.cadence.due",
+          title: `Service window approaching — ${customer.name}`,
+          body: `The vehicle delivered ${new Date(asset.deliveredAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })} is due for its interval service around ${dueLabel}. The customer has been nudged to book.`,
+          link: `/customers/${asset.accountId}`,
+          entityType: "asset",
+          entityId: asset.id,
+        });
+      }
+    } catch (err) {
+      logger.error({ err, assetId: asset.id }, "service cadence sweep failed");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Worker
+// ---------------------------------------------------------------------------
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+let sweepTimer: ReturnType<typeof setInterval> | null = null;
+
+export async function runNotificationSweeps(): Promise<void> {
+  await sweepLeadSla();
+  await sweepTestDriveReminders();
+  await sweepServiceCadence();
+}
+
+export function startNotificationSweeps(): void {
+  if (sweepTimer) return;
+  sweepTimer = setInterval(() => {
+    runNotificationSweeps().catch((err) =>
+      logger.error({ err }, "notification sweep run failed"),
+    );
+  }, SWEEP_INTERVAL_MS);
+  setTimeout(() => {
+    runNotificationSweeps().catch((err) =>
+      logger.error({ err }, "notification sweep run failed"),
+    );
+  }, 8_000);
+  logger.info("notification sweep worker started");
+}

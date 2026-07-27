@@ -21,6 +21,7 @@ import {
 import { computeDraftDuty, taxLinesMatch } from "../lib/gra-duty";
 import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 import { activeDealerId } from "../middlewares/rbac";
+import { notifyRefundApproved } from "../lib/notify-triggers";
 import {
   ListGatesQueryParams,
   ListGatesResponse,
@@ -513,6 +514,23 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Gate already resolved" });
     return;
   }
+
+  // R6.2 #10 Approved-for-Refund → finance/AP users (In-App + Email).
+  if (updated.type === "refund_release" && action !== "dismiss") {
+    notifyRefundApproved({
+      dealerId: updated.dealerId,
+      gateId: updated.id,
+      label: updated.customerName ?? updated.title,
+      amount:
+        updated.amount != null
+          ? updated.amount.toLocaleString("en-US", {
+              style: "currency",
+              currency: "USD",
+            })
+          : undefined,
+    });
+  }
+
   res.json(ResolveGateResponse.parse(updated));
 });
 

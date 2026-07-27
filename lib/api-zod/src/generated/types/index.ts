@@ -369,7 +369,6 @@ export * from './metricPrediction';
 export * from './metricPredictionTrend';
 export * from './metricPredictionUnit';
 export * from './notification';
-export * from './notificationType';
 export * from './notifyOwnerInput';
 export * from './notifyOwnerResult';
 export * from './outreachInput';

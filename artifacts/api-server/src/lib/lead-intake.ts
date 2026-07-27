@@ -6,14 +6,14 @@ import {
   timelineEventsTable,
   type Lead,
 } from "@workspace/db";
-import { notifyUsers } from "./email";
+import { notifyLeadNew } from "./notify-triggers";
 import { onLeadCreated } from "./email-triggers";
 import { autoAssignLead } from "./lead-assignment";
 import { findOpenDuplicate, mergeIntoExistingLead } from "./lead-dedup";
 import { notifyUser } from "./email";
 import { runIntakeOrchestration } from "./intake-orchestration";
 import { autoQuoteOnLeadCreated } from "./quotes";
-import { dealerStaffIdsByRole } from "./tenancy";
+
 import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -164,30 +164,9 @@ export async function createInboundLead(opts: {
   // Intake agent: nearest showroom + WhatsApp quote share (fire-and-forget).
   runIntakeOrchestration(assigned ?? lead!);
 
-  try {
-    const coordinatorIds = await dealerStaffIdsByRole(opts.dealerId, [
-      "Marketing Coordinator",
-      "Sales Manager",
-      "General Manager",
-    ]);
-    const routing = assigned?.assignedTo
-      ? `AURA routed it to ${assigned.assignedTo}.`
-      : "Awaiting advisor assignment.";
-    await notifyUsers(
-      coordinatorIds,
-      {
-        dealerId: opts.dealerId,
-        type: "assignment",
-        title: `New ${opts.channelLabel} lead: ${opts.name}`,
-        body: opts.vehicle
-          ? `Interested in the ${opts.vehicle.label}. ${routing}`
-          : `New ${opts.channelLabel} enquiry captured. ${routing}`,
-        link: "/pipeline",
-      },
-    );
-  } catch (err) {
-    logger.error({ err }, "Failed to notify coordinators of inbound lead");
-  }
+  // R6.2 #1 New Lead → division sales managers (In-App + Email, deduped on
+  // the lead) — replaces the old ad-hoc coordinator broadcast.
+  notifyLeadNew(lead!);
 
   return assigned ?? lead!;
 }
