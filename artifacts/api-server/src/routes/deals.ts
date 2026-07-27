@@ -340,7 +340,8 @@ async function raiseBelowFloorGateIfNeeded(
  *     reservation fee is fully paid, or
  *  2. a manager-approved (approved/adjusted) fee_waiver gate on a zero-fee
  *     waiver booking linked to the deal, or
- *  3. a PAID reservation invoice linked to the deal (finance-pipeline path).
+ *  3. a PAID invoice linked to the deal (finance-pipeline path) — reservation
+ *     (deposit) or final (full balance settled implies the deposit is covered).
  */
 async function dealDepositStatus(
   deal: typeof dealsTable.$inferSelect,
@@ -407,7 +408,7 @@ async function dealDepositStatus(
     .where(
       and(
         eq(invoicesTable.dealerId, dealerId),
-        eq(invoicesTable.kind, "reservation"),
+        inArray(invoicesTable.kind, ["reservation", "final"]),
         eq(invoicesTable.dealId, deal.id),
         eq(invoicesTable.status, "paid"),
         gt(invoicesTable.amount, 0),
