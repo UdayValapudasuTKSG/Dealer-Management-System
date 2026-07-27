@@ -6,17 +6,33 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChecklistItem } from './checklistItem';
+import type { ConditionRecord } from './conditionRecord';
+import type { JobCardPayType } from './jobCardPayType';
 import type { JobCardStatus } from './jobCardStatus';
 
 export interface JobCard {
   id: number;
   serviceOrderId: number;
+  /** @nullable */
+  assetId?: number | null;
   title: string;
   status: JobCardStatus;
   /** @nullable */
   technicianUserId?: number | null;
   /** @nullable */
   technicianName?: string | null;
+  /** @nullable */
+  bay?: string | null;
+  /** @nullable */
+  scheduledAt?: Date | null;
+  /** @nullable */
+  durationMins?: number | null;
+  payType: JobCardPayType;
+  quoteTotal: number;
+  /** @nullable */
+  quoteApprovedAt?: Date | null;
+  intake?: ConditionRecord | null;
+  outtake?: ConditionRecord | null;
   checklist: ChecklistItem[];
   laborHours: number;
   laborRate: number;

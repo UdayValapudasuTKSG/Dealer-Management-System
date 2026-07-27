@@ -15,7 +15,14 @@ import { z } from "zod/v4";
  * (lead / deal / service_order / delivery), with a simple open → in_progress
  * → resolved → closed lifecycle.
  */
-export const CASE_TYPES = ["complaint", "exception", "inquiry"] as const;
+export const CASE_TYPES = [
+  "complaint",
+  "exception",
+  "inquiry",
+  "feedback",
+  "profile",
+  "escalation",
+] as const;
 export type CaseType = (typeof CASE_TYPES)[number];
 
 export const CASE_SEVERITIES = ["low", "medium", "high"] as const;

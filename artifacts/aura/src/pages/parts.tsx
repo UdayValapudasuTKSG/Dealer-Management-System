@@ -8,6 +8,7 @@ import {
   getListSuppliersQueryKey,
   useListPartPurchases,
   useCreatePartPurchase,
+  useReceivePartPurchase,
   getListPartPurchasesQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -234,6 +235,11 @@ function PartsTab() {
                   <tr key={p.id} className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors">
                     <td className={cn("px-4 font-medium", density === "compact" ? "py-2.5" : "py-3.5")}>
                       {p.name}
+                      {p.status && p.status !== "active" && (
+                        <span className="ml-2 rounded-full bg-white/[0.08] text-muted-foreground px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
+                          {p.status}
+                        </span>
+                      )}
                       {low && (
                         <span className="ml-2 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
                           Reorder
@@ -274,7 +280,14 @@ function PartsTab() {
                         {p.location && ` · Bin ${p.location}`}
                       </div>
                       <h3 className="font-bold leading-tight">{p.name}</h3>
-                      <div className="text-xs text-muted-foreground mt-0.5">{p.category}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {p.category}
+                        {p.status && p.status !== "active" && (
+                          <span className="ml-2 rounded-full bg-white/[0.08] px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
+                            {p.status}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {low && (
                       <Badge className="bg-primary/15 text-primary border-none rounded-full text-[10px] font-bold uppercase tracking-widest gap-1 shrink-0">
@@ -437,6 +450,43 @@ function CreatePurchaseDialog() {
   );
 }
 
+function ReceivePurchaseDialog({ purchaseId, outstanding }: { purchaseId: number; outstanding: number }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const receive = useReceivePartPurchase();
+  return (
+    <CreateRecordDialog
+      title="Receive Stock"
+      description={`Post received units against this order (${outstanding} outstanding). Backordered job lines are filled automatically.`}
+      pending={receive.isPending}
+      submitLabel="Receive"
+      trigger={
+        <Button size="sm" className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs gap-1.5">
+          <Package className="w-3.5 h-3.5" /> Receive
+        </Button>
+      }
+      fields={[
+        { name: "qtyReceived", label: "Quantity received", type: "number", required: true, span: "full", defaultValue: String(outstanding) },
+      ]}
+      onSubmit={async (values) => {
+        const v = values as Record<string, unknown>;
+        try {
+          await receive.mutateAsync({ id: purchaseId, data: { qtyReceived: Number(v.qtyReceived) } });
+          queryClient.invalidateQueries({ queryKey: getListPartPurchasesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
+          toast({ title: "Stock received", description: "Inventory updated; backorders released." });
+        } catch (e: unknown) {
+          const msg =
+            (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+            "Could not receive stock.";
+          toast({ title: "Receive failed", description: msg, variant: "destructive" });
+          throw e;
+        }
+      }}
+    />
+  );
+}
+
 function PurchasesTab() {
   const money = useMoney();
   const { data: purchases, isLoading } = useListPartPurchases();
@@ -469,11 +519,31 @@ function PurchasesTab() {
                 {format(new Date(p.createdAt), "MMM d, yyyy")}
               </div>
             </div>
-            <div className="text-right">
-              <div className="font-light text-xl">+{p.quantity}</div>
-              <div className="text-sm text-muted-foreground">
-                @ {money.gyd(p.unitCost)}
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <div className="font-light text-xl">
+                  {p.status === "ordered" ? `${p.qtyReceived ?? 0}/${p.quantity}` : `+${p.quantity}`}
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  @ {money.gyd(p.unitCost)}
+                </div>
               </div>
+              <Badge
+                className={cn(
+                  "border-none rounded-full text-[10px] font-bold uppercase tracking-widest",
+                  p.status === "received"
+                    ? "bg-primary/15 text-primary"
+                    : "bg-white/[0.08] text-muted-foreground",
+                )}
+              >
+                {p.status ?? "received"}
+              </Badge>
+              {p.status === "ordered" && (
+                <ReceivePurchaseDialog
+                  purchaseId={p.id}
+                  outstanding={p.quantity - (p.qtyReceived ?? 0)}
+                />
+              )}
             </div>
           </CardContent>
         </Card>

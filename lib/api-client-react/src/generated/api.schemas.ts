@@ -3562,6 +3562,18 @@ export const ServiceOrderType = {
   warranty: 'warranty',
   recall: 'recall',
   inspection: 'inspection',
+  comeback: 'comeback',
+  unscheduled: 'unscheduled',
+} as const;
+
+export type ServiceOrderPayType = typeof ServiceOrderPayType[keyof typeof ServiceOrderPayType];
+
+
+export const ServiceOrderPayType = {
+  customer: 'customer',
+  warranty: 'warranty',
+  goodwill: 'goodwill',
+  rectify: 'rectify',
 } as const;
 
 export type ServiceOrderStatus = typeof ServiceOrderStatus[keyof typeof ServiceOrderStatus];
@@ -3584,7 +3596,12 @@ export interface ServiceOrder {
   /** @nullable */
   customerName?: string | null;
   vehicleInfo: string;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** @nullable */
+  assetId?: number | null;
   type: ServiceOrderType;
+  payType?: ServiceOrderPayType;
   status: ServiceOrderStatus;
   scheduledDate: string;
   /** @nullable */
@@ -3609,6 +3626,18 @@ export const ServiceOrderInputType = {
   warranty: 'warranty',
   recall: 'recall',
   inspection: 'inspection',
+  comeback: 'comeback',
+  unscheduled: 'unscheduled',
+} as const;
+
+export type ServiceOrderInputPayType = typeof ServiceOrderInputPayType[keyof typeof ServiceOrderInputPayType];
+
+
+export const ServiceOrderInputPayType = {
+  customer: 'customer',
+  warranty: 'warranty',
+  goodwill: 'goodwill',
+  rectify: 'rectify',
 } as const;
 
 export type ServiceOrderInputStatus = typeof ServiceOrderInputStatus[keyof typeof ServiceOrderInputStatus];
@@ -3629,7 +3658,10 @@ export interface ServiceOrderInput {
   customerName?: string;
   /** @minLength 1 */
   vehicleInfo: string;
+  vehicleId?: number;
+  assetId?: number;
   type: ServiceOrderInputType;
+  payType?: ServiceOrderInputPayType;
   status?: ServiceOrderInputStatus;
   scheduledDate: string;
   complaint?: string;
@@ -3649,6 +3681,18 @@ export const ServiceOrderUpdateType = {
   warranty: 'warranty',
   recall: 'recall',
   inspection: 'inspection',
+  comeback: 'comeback',
+  unscheduled: 'unscheduled',
+} as const;
+
+export type ServiceOrderUpdatePayType = typeof ServiceOrderUpdatePayType[keyof typeof ServiceOrderUpdatePayType];
+
+
+export const ServiceOrderUpdatePayType = {
+  customer: 'customer',
+  warranty: 'warranty',
+  goodwill: 'goodwill',
+  rectify: 'rectify',
 } as const;
 
 export type ServiceOrderUpdateStatus = typeof ServiceOrderUpdateStatus[keyof typeof ServiceOrderUpdateStatus];
@@ -3666,6 +3710,7 @@ export const ServiceOrderUpdateStatus = {
 
 export interface ServiceOrderUpdate {
   type?: ServiceOrderUpdateType;
+  payType?: ServiceOrderUpdatePayType;
   status?: ServiceOrderUpdateStatus;
   scheduledDate?: string;
   complaint?: string;
@@ -3692,6 +3737,15 @@ export interface ChecklistItem {
   done: boolean;
 }
 
+export interface ConditionRecord {
+  odometer?: number;
+  fuelLevel?: string;
+  loanerIssued?: boolean;
+  notes?: string;
+  signature?: string;
+  recordedAt?: string;
+}
+
 export type JobCardStatus = typeof JobCardStatus[keyof typeof JobCardStatus];
 
 
@@ -3704,15 +3758,39 @@ export const JobCardStatus = {
   cancelled: 'cancelled',
 } as const;
 
+export type JobCardPayType = typeof JobCardPayType[keyof typeof JobCardPayType];
+
+
+export const JobCardPayType = {
+  customer: 'customer',
+  warranty: 'warranty',
+  goodwill: 'goodwill',
+  rectify: 'rectify',
+} as const;
+
 export interface JobCard {
   id: number;
   serviceOrderId: number;
+  /** @nullable */
+  assetId?: number | null;
   title: string;
   status: JobCardStatus;
   /** @nullable */
   technicianUserId?: number | null;
   /** @nullable */
   technicianName?: string | null;
+  /** @nullable */
+  bay?: string | null;
+  /** @nullable */
+  scheduledAt?: string | null;
+  /** @nullable */
+  durationMins?: number | null;
+  payType: JobCardPayType;
+  quoteTotal: number;
+  /** @nullable */
+  quoteApprovedAt?: string | null;
+  intake?: ConditionRecord | null;
+  outtake?: ConditionRecord | null;
   checklist: ChecklistItem[];
   laborHours: number;
   laborRate: number;
@@ -3725,12 +3803,26 @@ export interface JobCard {
   createdAt: string;
 }
 
+export type JobCardInputPayType = typeof JobCardInputPayType[keyof typeof JobCardInputPayType];
+
+
+export const JobCardInputPayType = {
+  customer: 'customer',
+  warranty: 'warranty',
+  goodwill: 'goodwill',
+  rectify: 'rectify',
+} as const;
+
 export interface JobCardInput {
   serviceOrderId: number;
   /** @minLength 1 */
   title: string;
   technicianUserId?: number;
   technicianName?: string;
+  bay?: string;
+  scheduledAt?: string;
+  durationMins?: number;
+  payType?: JobCardInputPayType;
   checklist?: ChecklistItem[];
   laborHours?: number;
   laborRate?: number;
@@ -3749,11 +3841,29 @@ export const JobCardUpdateStatus = {
   cancelled: 'cancelled',
 } as const;
 
+export type JobCardUpdatePayType = typeof JobCardUpdatePayType[keyof typeof JobCardUpdatePayType];
+
+
+export const JobCardUpdatePayType = {
+  customer: 'customer',
+  warranty: 'warranty',
+  goodwill: 'goodwill',
+  rectify: 'rectify',
+} as const;
+
 export interface JobCardUpdate {
   title?: string;
   status?: JobCardUpdateStatus;
   technicianUserId?: number;
   technicianName?: string;
+  bay?: string;
+  scheduledAt?: string;
+  durationMins?: number;
+  payType?: JobCardUpdatePayType;
+  quoteTotal?: number;
+  approveQuote?: boolean;
+  intake?: ConditionRecord;
+  outtake?: ConditionRecord;
   checklist?: ChecklistItem[];
   laborHours?: number;
   laborRate?: number;
@@ -3776,6 +3886,8 @@ export interface JobCardPart {
   kind: JobCardPartKind;
   quantity: number;
   unitPrice: number;
+  unitCost?: number;
+  backordered?: boolean;
   createdAt: string;
 }
 
@@ -3897,6 +4009,15 @@ export interface CoveragePlanUpdate {
   notes?: string;
 }
 
+export type PartStatus = typeof PartStatus[keyof typeof PartStatus];
+
+
+export const PartStatus = {
+  active: 'active',
+  superseded: 'superseded',
+  obsolete: 'obsolete',
+} as const;
+
 export interface Part {
   id: number;
   sku: string;
@@ -3908,10 +4029,22 @@ export interface Part {
   unitPrice: number;
   stock: number;
   reorderLevel: number;
+  status?: PartStatus;
+  /** @nullable */
+  supersededByPartId?: number | null;
   /** @nullable */
   location?: string | null;
   createdAt: string;
 }
+
+export type PartInputStatus = typeof PartInputStatus[keyof typeof PartInputStatus];
+
+
+export const PartInputStatus = {
+  active: 'active',
+  superseded: 'superseded',
+  obsolete: 'obsolete',
+} as const;
 
 export interface PartInput {
   /** @minLength 1 */
@@ -3924,8 +4057,19 @@ export interface PartInput {
   unitPrice?: number;
   stock?: number;
   reorderLevel?: number;
+  status?: PartInputStatus;
+  supersededByPartId?: number;
   location?: string;
 }
+
+export type PartUpdateStatus = typeof PartUpdateStatus[keyof typeof PartUpdateStatus];
+
+
+export const PartUpdateStatus = {
+  active: 'active',
+  superseded: 'superseded',
+  obsolete: 'obsolete',
+} as const;
 
 export interface PartUpdate {
   sku?: string;
@@ -3936,6 +4080,9 @@ export interface PartUpdate {
   unitPrice?: number;
   stock?: number;
   reorderLevel?: number;
+  status?: PartUpdateStatus;
+  /** @nullable */
+  supersededByPartId?: number | null;
   location?: string;
 }
 
@@ -3959,17 +4106,39 @@ export interface SupplierInput {
   phone?: string;
 }
 
+export type PartPurchaseStatus = typeof PartPurchaseStatus[keyof typeof PartPurchaseStatus];
+
+
+export const PartPurchaseStatus = {
+  ordered: 'ordered',
+  partially_received: 'partially_received',
+  received: 'received',
+  cancelled: 'cancelled',
+} as const;
+
 export interface PartPurchase {
   id: number;
   partId: number;
   /** @nullable */
   supplierId?: number | null;
   quantity: number;
+  qtyReceived: number;
+  status: PartPurchaseStatus;
+  /** @nullable */
+  expectedDate?: string | null;
   unitCost: number;
   /** @nullable */
   reference?: string | null;
   createdAt: string;
 }
+
+export type PartPurchaseInputStatus = typeof PartPurchaseInputStatus[keyof typeof PartPurchaseInputStatus];
+
+
+export const PartPurchaseInputStatus = {
+  ordered: 'ordered',
+  received: 'received',
+} as const;
 
 export interface PartPurchaseInput {
   partId: number;
@@ -3977,7 +4146,34 @@ export interface PartPurchaseInput {
   /** @minimum 1 */
   quantity: number;
   unitCost?: number;
+  status?: PartPurchaseInputStatus;
+  expectedDate?: string;
   reference?: string;
+}
+
+export interface PartPurchaseReceiveBody {
+  /** @minimum 1 */
+  qtyReceived: number;
+}
+
+export type ServiceOrderAdvanceBodyTargetStatus = typeof ServiceOrderAdvanceBodyTargetStatus[keyof typeof ServiceOrderAdvanceBodyTargetStatus];
+
+
+export const ServiceOrderAdvanceBodyTargetStatus = {
+  acknowledged: 'acknowledged',
+  in_progress: 'in_progress',
+  on_hold: 'on_hold',
+  resolved: 'resolved',
+  closed: 'closed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface ServiceOrderAdvanceBody {
+  targetStatus: ServiceOrderAdvanceBodyTargetStatus;
+}
+
+export interface ServiceOrderAdvanceUnmet {
+  unmet: string[];
 }
 
 export type AgentStatus = typeof AgentStatus[keyof typeof AgentStatus];
@@ -4235,6 +4431,9 @@ export const CaseType = {
   complaint: 'complaint',
   exception: 'exception',
   inquiry: 'inquiry',
+  feedback: 'feedback',
+  profile: 'profile',
+  escalation: 'escalation',
 } as const;
 
 export type CaseSeverity = typeof CaseSeverity[keyof typeof CaseSeverity];
@@ -4293,6 +4492,9 @@ export const CaseCreateType = {
   complaint: 'complaint',
   exception: 'exception',
   inquiry: 'inquiry',
+  feedback: 'feedback',
+  profile: 'profile',
+  escalation: 'escalation',
 } as const;
 
 export type CaseCreateSeverity = typeof CaseCreateSeverity[keyof typeof CaseCreateSeverity];
@@ -4330,6 +4532,9 @@ export const CaseUpdateType = {
   complaint: 'complaint',
   exception: 'exception',
   inquiry: 'inquiry',
+  feedback: 'feedback',
+  profile: 'profile',
+  escalation: 'escalation',
 } as const;
 
 export type CaseUpdateSeverity = typeof CaseUpdateSeverity[keyof typeof CaseUpdateSeverity];

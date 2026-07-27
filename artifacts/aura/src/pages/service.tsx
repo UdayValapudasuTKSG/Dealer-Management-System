@@ -4,6 +4,7 @@ import { useFocusParam, useFocusHighlight } from "@/lib/use-focus-param";
 import {
   useListServiceOrders,
   useCreateServiceOrder,
+  useAdvanceServiceOrder,
   getListServiceOrdersQueryKey,
   useSendServiceReminder,
   useListJobCards,
@@ -27,6 +28,8 @@ import {
   useCreateCase,
   getListCasesQueryKey,
   type JobCard,
+  type ServiceOrder,
+  type ServiceOrderAdvanceBodyTargetStatus,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -86,6 +89,29 @@ const TABS = [
   { key: "coverage", label: "Warranty & AMC", icon: ShieldCheck },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
+
+/* Adjacent-only case state machine — mirrors SERVICE_ADVANCE_MAP server-side. */
+const ORDER_NEXT: Partial<Record<ServiceOrder["status"], ServiceOrderAdvanceBodyTargetStatus>> = {
+  open: "acknowledged",
+  acknowledged: "in_progress",
+  in_progress: "resolved",
+  on_hold: "in_progress",
+  resolved: "closed",
+};
+
+const ORDER_NEXT_LABEL: Record<string, string> = {
+  acknowledged: "Acknowledge",
+  in_progress: "Start work",
+  resolved: "Mark resolved",
+  closed: "Close case",
+};
+
+const PAY_TYPE_LABEL: Record<string, string> = {
+  customer: "Customer pay",
+  warranty: "Warranty",
+  goodwill: "Goodwill",
+  rectify: "Rectify",
+};
 
 const JOB_STATUS_LABEL: Record<string, string> = {
   open: "Open",
@@ -278,6 +304,8 @@ function CreateBookingDialog() {
             { value: "warranty", label: "Warranty" },
             { value: "recall", label: "Recall" },
             { value: "inspection", label: "Inspection" },
+            { value: "comeback", label: "Comeback" },
+            { value: "unscheduled", label: "Unscheduled" },
           ],
         },
         { name: "scheduledDate", label: "Scheduled date", type: "date", required: true, span: "half" },
@@ -292,6 +320,44 @@ function CreateBookingDialog() {
         toast({ title: "Booking created", description: "AURA scheduled the service bay." });
       }}
     />
+  );
+}
+
+/* One-step advance CTA — server validates gates and returns 422 {unmet}. */
+function AdvanceOrderButton({ order }: { order: ServiceOrder }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const advance = useAdvanceServiceOrder();
+  const target = ORDER_NEXT[order.status];
+  if (!target) return null;
+  return (
+    <Button
+      size="sm"
+      disabled={advance.isPending}
+      className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs gap-1.5"
+      onClick={async () => {
+        try {
+          await advance.mutateAsync({ id: order.id, data: { targetStatus: target } });
+          queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
+          toast({
+            title: "Case advanced",
+            description: `RO #${order.id} → ${target.replace(/_/g, " ")}.`,
+          });
+        } catch (e: unknown) {
+          const data = (e as { response?: { data?: { unmet?: string[]; error?: string } } })
+            ?.response?.data;
+          const msg = data?.unmet?.join(" · ") ?? data?.error ?? "Could not advance the case.";
+          toast({ title: "Advance blocked", description: msg, variant: "destructive" });
+        }
+      }}
+    >
+      {advance.isPending ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : (
+        <Wrench className="w-3.5 h-3.5" />
+      )}
+      {ORDER_NEXT_LABEL[target]}
+    </Button>
   );
 }
 
@@ -414,6 +480,11 @@ function BookingsTab() {
                       RO #{order.id.toString().padStart(5, "0")}
                       <span className="w-1 h-1 rounded-full bg-primary" />
                       <span className="text-muted-foreground">{order.type}</span>
+                      {order.payType && order.payType !== "customer" && (
+                        <span className="rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-bold">
+                          {PAY_TYPE_LABEL[order.payType] ?? order.payType}
+                        </span>
+                      )}
                     </div>
                     <h3 className="font-bold text-xl leading-tight mb-1">{order.vehicleInfo}</h3>
                     {order.complaint && (
@@ -499,6 +570,7 @@ function BookingsTab() {
                     >
                       <Mail className="w-3.5 h-3.5" /> Remind
                     </Button>
+                    <AdvanceOrderButton order={order} />
                     <OpenCaseButton
                       customerId={order.customerId ?? null}
                       customerName={order.customerName ?? null}
@@ -725,6 +797,11 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
                   <span className={cn(l.kind === "return" && "text-muted-foreground line-through")}>
                     {l.partName} × {l.quantity}
                     {l.kind === "return" && " (returned)"}
+                    {l.backordered && (
+                      <span className="ml-2 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
+                        Backordered
+                      </span>
+                    )}
                   </span>
                   <span className="text-muted-foreground">
                     {money.gyd(l.unitPrice * l.quantity)}
@@ -796,6 +873,42 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
             />
           </div>
         </div>
+
+        {(card.quoteTotal ?? 0) > 0 && (
+          <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-0.5">
+                Customer quote
+              </div>
+              <div className="font-light text-xl tracking-tight">
+                {money.gyd(card.quoteTotal ?? 0)}
+              </div>
+            </div>
+            {card.quoteApprovedAt ? (
+              <Badge className="bg-primary/15 text-primary border-none rounded-full text-[10px] font-bold uppercase tracking-widest gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                Approved {format(new Date(card.quoteApprovedAt), "MMM d")}
+              </Badge>
+            ) : technicianView ? (
+              <Badge className="bg-white/[0.06] text-muted-foreground border-none rounded-full text-[10px] font-bold uppercase tracking-widest">
+                Awaiting approval
+              </Badge>
+            ) : (
+              <Button
+                size="sm"
+                disabled={update.isPending}
+                className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs gap-1.5"
+                onClick={async () => {
+                  await update.mutateAsync({ id: card.id, data: { approveQuote: true } });
+                  invalidate();
+                  toast({ title: "Quote approved", description: "Customer approval recorded." });
+                }}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" /> Approve Quote
+              </Button>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center gap-2 flex-wrap">
           {next && (

@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ServiceOrderPayType } from './serviceOrderPayType';
 import type { ServiceOrderStatus } from './serviceOrderStatus';
 import type { ServiceOrderType } from './serviceOrderType';
 
@@ -15,7 +16,12 @@ export interface ServiceOrder {
   /** @nullable */
   customerName?: string | null;
   vehicleInfo: string;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** @nullable */
+  assetId?: number | null;
   type: ServiceOrderType;
+  payType?: ServiceOrderPayType;
   status: ServiceOrderStatus;
   scheduledDate: Date;
   /** @nullable */

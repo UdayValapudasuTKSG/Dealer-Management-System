@@ -2671,6 +2671,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /service-orders/{id}/advance:
+    post:
+      operationId: advanceServiceOrder
+      tags: [service]
+      summary: Advance a service case one step, enforcing the manager review gate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceOrderAdvanceBody"
+      responses:
+        "200":
+          description: Advanced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceOrder"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Unmet gate requirements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceOrderAdvanceUnmet"
+
   /service-orders/{id}/remind:
     post:
       operationId: sendServiceReminder
@@ -3178,6 +3214,42 @@ paths:
                 $ref: "#/components/schemas/PartPurchase"
         "404":
           description: Part not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /part-purchases/{id}/receive:
+    post:
+      operationId: receivePartPurchase
+      tags: [parts]
+      summary: Receive goods against an ordered purchase (increments stock, resolves backorders)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartPurchaseReceiveBody"
+      responses:
+        "200":
+          description: Receipt recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartPurchase"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Over-receipt or purchase not receivable
           content:
             application/json:
               schema:
@@ -8169,7 +8241,10 @@ components:
         customerId: { type: ["integer", "null"] }
         customerName: { type: ["string", "null"] }
         vehicleInfo: { type: string }
-        type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
+        vehicleId: { type: ["integer", "null"] }
+        assetId: { type: ["integer", "null"] }
+        type: { type: string, enum: [maintenance, repair, warranty, recall, inspection, comeback, unscheduled] }
+        payType: { type: string, enum: [customer, warranty, goodwill, rectify] }
         status: { type: string, enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled] }
         scheduledDate: { type: string, format: date }
         complaint: { type: ["string", "null"] }
@@ -8188,7 +8263,10 @@ components:
         customerId: { type: integer }
         customerName: { type: string }
         vehicleInfo: { type: string, minLength: 1 }
-        type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
+        vehicleId: { type: integer }
+        assetId: { type: integer }
+        type: { type: string, enum: [maintenance, repair, warranty, recall, inspection, comeback, unscheduled] }
+        payType: { type: string, enum: [customer, warranty, goodwill, rectify] }
         status: { type: string, enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled] }
         scheduledDate: { type: string, format: date }
         complaint: { type: string }
@@ -8202,7 +8280,8 @@ components:
     ServiceOrderUpdate:
       type: object
       properties:
-        type: { type: string, enum: [maintenance, repair, warranty, recall, inspection] }
+        type: { type: string, enum: [maintenance, repair, warranty, recall, inspection, comeback, unscheduled] }
+        payType: { type: string, enum: [customer, warranty, goodwill, rectify] }
         status: { type: string, enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled] }
         scheduledDate: { type: string, format: date }
         complaint: { type: string }
@@ -8235,16 +8314,41 @@ components:
         label: { type: string }
         done: { type: boolean }
 
+    ConditionRecord:
+      type: object
+      properties:
+        odometer: { type: integer }
+        fuelLevel: { type: string }
+        loanerIssued: { type: boolean }
+        notes: { type: string }
+        signature: { type: string }
+        recordedAt: { type: string }
+
     JobCard:
       type: object
-      required: [id, serviceOrderId, title, status, checklist, laborHours, laborRate, createdAt]
+      required: [id, serviceOrderId, title, status, payType, quoteTotal, checklist, laborHours, laborRate, createdAt]
       properties:
         id: { type: integer }
         serviceOrderId: { type: integer }
+        assetId: { type: ["integer", "null"] }
         title: { type: string }
         status: { type: string, enum: [open, in_progress, on_hold, completed, closed, cancelled] }
         technicianUserId: { type: ["integer", "null"] }
         technicianName: { type: ["string", "null"] }
+        bay: { type: ["string", "null"] }
+        scheduledAt: { type: ["string", "null"], format: date-time }
+        durationMins: { type: ["integer", "null"] }
+        payType: { type: string, enum: [customer, warranty, goodwill, rectify] }
+        quoteTotal: { type: number }
+        quoteApprovedAt: { type: ["string", "null"], format: date-time }
+        intake:
+          oneOf:
+            - $ref: "#/components/schemas/ConditionRecord"
+            - type: "null"
+        outtake:
+          oneOf:
+            - $ref: "#/components/schemas/ConditionRecord"
+            - type: "null"
         checklist:
           type: array
           items: { $ref: "#/components/schemas/ChecklistItem" }
@@ -8262,6 +8366,10 @@ components:
         title: { type: string, minLength: 1 }
         technicianUserId: { type: integer }
         technicianName: { type: string }
+        bay: { type: string }
+        scheduledAt: { type: string, format: date-time }
+        durationMins: { type: integer }
+        payType: { type: string, enum: [customer, warranty, goodwill, rectify] }
         checklist:
           type: array
           items: { $ref: "#/components/schemas/ChecklistItem" }
@@ -8275,6 +8383,14 @@ components:
         status: { type: string, enum: [open, in_progress, on_hold, completed, closed, cancelled] }
         technicianUserId: { type: integer }
         technicianName: { type: string }
+        bay: { type: string }
+        scheduledAt: { type: string, format: date-time }
+        durationMins: { type: integer }
+        payType: { type: string, enum: [customer, warranty, goodwill, rectify] }
+        quoteTotal: { type: number }
+        approveQuote: { type: boolean }
+        intake: { $ref: "#/components/schemas/ConditionRecord" }
+        outtake: { $ref: "#/components/schemas/ConditionRecord" }
         checklist:
           type: array
           items: { $ref: "#/components/schemas/ChecklistItem" }
@@ -8293,6 +8409,8 @@ components:
         kind: { type: string, enum: [issue, return] }
         quantity: { type: integer }
         unitPrice: { type: number }
+        unitCost: { type: number }
+        backordered: { type: boolean }
         createdAt: { type: string, format: date-time }
     JobCardPartInput:
       type: object
@@ -8374,6 +8492,8 @@ components:
         unitPrice: { type: number }
         stock: { type: integer }
         reorderLevel: { type: integer }
+        status: { type: string, enum: [active, superseded, obsolete] }
+        supersededByPartId: { type: ["integer", "null"] }
         location: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
     PartInput:
@@ -8388,6 +8508,8 @@ components:
         unitPrice: { type: number }
         stock: { type: integer }
         reorderLevel: { type: integer }
+        status: { type: string, enum: [active, superseded, obsolete] }
+        supersededByPartId: { type: integer }
         location: { type: string }
     PartUpdate:
       type: object
@@ -8400,6 +8522,8 @@ components:
         unitPrice: { type: number }
         stock: { type: integer }
         reorderLevel: { type: integer }
+        status: { type: string, enum: [active, superseded, obsolete] }
+        supersededByPartId: { type: ["integer", "null"] }
         location: { type: string }
 
     Supplier:
@@ -8423,12 +8547,15 @@ components:
 
     PartPurchase:
       type: object
-      required: [id, partId, quantity, unitCost, createdAt]
+      required: [id, partId, quantity, qtyReceived, status, unitCost, createdAt]
       properties:
         id: { type: integer }
         partId: { type: integer }
         supplierId: { type: ["integer", "null"] }
         quantity: { type: integer }
+        qtyReceived: { type: integer }
+        status: { type: string, enum: [ordered, partially_received, received, cancelled] }
+        expectedDate: { type: ["string", "null"], format: date }
         unitCost: { type: number }
         reference: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
@@ -8440,7 +8567,26 @@ components:
         supplierId: { type: integer }
         quantity: { type: integer, minimum: 1 }
         unitCost: { type: number }
+        status: { type: string, enum: [ordered, received] }
+        expectedDate: { type: string, format: date }
         reference: { type: string }
+    PartPurchaseReceiveBody:
+      type: object
+      required: [qtyReceived]
+      properties:
+        qtyReceived: { type: integer, minimum: 1 }
+    ServiceOrderAdvanceBody:
+      type: object
+      required: [targetStatus]
+      properties:
+        targetStatus: { type: string, enum: [acknowledged, in_progress, on_hold, resolved, closed, cancelled] }
+    ServiceOrderAdvanceUnmet:
+      type: object
+      required: [unmet]
+      properties:
+        unmet:
+          type: array
+          items: { type: string }
 
     Agent:
       type: object
@@ -8593,7 +8739,7 @@ components:
         description: { type: ["string", "null"] }
         type:
           type: string
-          enum: [complaint, exception, inquiry]
+          enum: [complaint, exception, inquiry, feedback, profile, escalation]
         severity:
           type: string
           enum: [low, medium, high]
@@ -8617,7 +8763,7 @@ components:
         description: { type: ["string", "null"] }
         type:
           type: string
-          enum: [complaint, exception, inquiry]
+          enum: [complaint, exception, inquiry, feedback, profile, escalation]
         severity:
           type: string
           enum: [low, medium, high]
@@ -8631,7 +8777,7 @@ components:
         description: { type: ["string", "null"] }
         type:
           type: string
-          enum: [complaint, exception, inquiry]
+          enum: [complaint, exception, inquiry, feedback, profile, escalation]
         severity:
           type: string
           enum: [low, medium, high]

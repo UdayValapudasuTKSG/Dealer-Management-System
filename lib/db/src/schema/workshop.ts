@@ -7,7 +7,10 @@ import {
   date,
   timestamp,
   jsonb,
+  boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -38,6 +41,10 @@ export type Supplier = typeof suppliersTable.$inferSelect;
 // Parts inventory
 // ---------------------------------------------------------------------------
 
+/** Part lifecycle (Module C): active | superseded | obsolete. */
+export const PART_STATUSES = ["active", "superseded", "obsolete"] as const;
+export type PartStatus = (typeof PART_STATUSES)[number];
+
 export const partsTable = pgTable("parts", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
@@ -49,6 +56,8 @@ export const partsTable = pgTable("parts", {
   unitPrice: doublePrecision("unit_price").notNull().default(0),
   stock: integer("stock").notNull().default(0),
   reorderLevel: integer("reorder_level").notNull().default(5),
+  status: text("status").notNull().default("active"),
+  supersededByPartId: integer("superseded_by_part_id"),
   location: text("location"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -66,6 +75,15 @@ export type Part = typeof partsTable.$inferSelect;
 // Part purchases (manual purchase records; receiving increments stock)
 // ---------------------------------------------------------------------------
 
+/** PO lifecycle (Module C): ordered → partially_received → received (+ cancelled). Legacy rows default received. */
+export const PART_PURCHASE_STATUSES = [
+  "ordered",
+  "partially_received",
+  "received",
+  "cancelled",
+] as const;
+export type PartPurchaseStatus = (typeof PART_PURCHASE_STATUSES)[number];
+
 export const partPurchasesTable = pgTable("part_purchases", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
@@ -74,6 +92,9 @@ export const partPurchasesTable = pgTable("part_purchases", {
     .references(() => partsTable.id),
   supplierId: integer("supplier_id").references(() => suppliersTable.id),
   quantity: integer("quantity").notNull(),
+  qtyReceived: integer("qty_received").notNull().default(0),
+  status: text("status").notNull().default("received"),
+  expectedDate: date("expected_date", { mode: "string" }),
   unitCost: doublePrecision("unit_cost").notNull().default(0),
   reference: text("reference"),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -104,30 +125,60 @@ export const JOB_CARD_STATUSES = [
 ] as const;
 export type JobCardStatus = (typeof JOB_CARD_STATUSES)[number];
 
-export const jobCardsTable = pgTable("job_cards", {
-  id: serial("id").primaryKey(),
-  dealerId: integer("dealer_id").notNull(),
-  serviceOrderId: integer("service_order_id").notNull(),
-  title: text("title").notNull(),
-  status: text("status").notNull().default("open"),
-  technicianUserId: integer("technician_user_id"),
-  technicianName: text("technician_name"),
-  checklist: jsonb("checklist")
-    .$type<ChecklistItem[]>()
-    .notNull()
-    .default([]),
-  laborHours: doublePrecision("labor_hours").notNull().default(0),
-  laborRate: doublePrecision("labor_rate").notNull().default(120),
-  notes: text("notes"),
-  startedAt: timestamp("started_at", { withTimezone: true }),
-  completedAt: timestamp("completed_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+/** Intake / outtake condition snapshot recorded on the work order (L11 §7/§10). */
+export type ConditionRecord = {
+  odometer?: number;
+  fuelLevel?: string;
+  loanerIssued?: boolean;
+  notes?: string;
+  signature?: string;
+  recordedAt?: string;
+};
+
+export const jobCardsTable = pgTable(
+  "job_cards",
+  {
+    id: serial("id").primaryKey(),
+    dealerId: integer("dealer_id").notNull(),
+    serviceOrderId: integer("service_order_id").notNull(),
+    assetId: integer("asset_id"),
+    title: text("title").notNull(),
+    status: text("status").notNull().default("open"),
+    technicianUserId: integer("technician_user_id"),
+    technicianName: text("technician_name"),
+    bay: text("bay"),
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    durationMins: integer("duration_mins"),
+    payType: text("pay_type").notNull().default("customer"),
+    quoteTotal: doublePrecision("quote_total").notNull().default(0),
+    quoteApprovedAt: timestamp("quote_approved_at", { withTimezone: true }),
+    intake: jsonb("intake").$type<ConditionRecord | null>(),
+    outtake: jsonb("outtake").$type<ConditionRecord | null>(),
+    checklist: jsonb("checklist")
+      .$type<ChecklistItem[]>()
+      .notNull()
+      .default([]),
+    laborHours: doublePrecision("labor_hours").notNull().default(0),
+    laborRate: doublePrecision("labor_rate").notNull().default(120),
+    notes: text("notes"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // L11 invariant: exactly one active work order per asset — the second
+    // open attempt must 409, enforced by the database, not just the route.
+    uniqueIndex("job_cards_active_asset_unique")
+      .on(t.assetId)
+      .where(sql`${t.status} in ('open', 'in_progress', 'on_hold') and ${t.assetId} is not null`),
+  ],
+);
 
 export const insertJobCardSchema = createInsertSchema(jobCardsTable, {
   status: z.enum(JOB_CARD_STATUSES),
+  payType: z.enum(["customer", "warranty", "goodwill", "rectify"]),
   checklist: z.array(z.object({ label: z.string(), done: z.boolean() })),
 }).omit({ dealerId: true, id: true, createdAt: true, startedAt: true, completedAt: true });
 export type InsertJobCard = z.infer<typeof insertJobCardSchema>;
@@ -150,6 +201,8 @@ export const jobCardPartsTable = pgTable("job_card_parts", {
   kind: text("kind").notNull().default("issue"),
   quantity: integer("quantity").notNull(),
   unitPrice: doublePrecision("unit_price").notNull().default(0),
+  unitCost: doublePrecision("unit_cost").notNull().default(0),
+  backordered: boolean("backordered").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

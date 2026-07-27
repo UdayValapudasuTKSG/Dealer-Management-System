@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { PartInputStatus } from './partInputStatus';
 
 export interface PartInput {
   /** @minLength 1 */
@@ -17,5 +18,7 @@ export interface PartInput {
   unitPrice?: number;
   stock?: number;
   reorderLevel?: number;
+  status?: PartInputStatus;
+  supersededByPartId?: number;
   location?: string;
 }

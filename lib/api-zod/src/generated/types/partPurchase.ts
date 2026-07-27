@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { PartPurchaseStatus } from './partPurchaseStatus';
 
 export interface PartPurchase {
   id: number;
@@ -12,6 +13,10 @@ export interface PartPurchase {
   /** @nullable */
   supplierId?: number | null;
   quantity: number;
+  qtyReceived: number;
+  status: PartPurchaseStatus;
+  /** @nullable */
+  expectedDate?: Date | null;
   unitCost: number;
   /** @nullable */
   reference?: string | null;

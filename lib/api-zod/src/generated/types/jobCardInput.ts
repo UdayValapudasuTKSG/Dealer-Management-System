@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChecklistItem } from './checklistItem';
+import type { JobCardInputPayType } from './jobCardInputPayType';
 
 export interface JobCardInput {
   serviceOrderId: number;
@@ -13,6 +14,10 @@ export interface JobCardInput {
   title: string;
   technicianUserId?: number;
   technicianName?: string;
+  bay?: string;
+  scheduledAt?: Date;
+  durationMins?: number;
+  payType?: JobCardInputPayType;
   checklist?: ChecklistItem[];
   laborHours?: number;
   laborRate?: number;

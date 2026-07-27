@@ -17,6 +17,9 @@ import {
   usersTable,
   rolesTable,
   dealerUsersTable,
+  gatesTable,
+  timelineEventsTable,
+  partPurchasesTable,
 } from "@workspace/db";
 import {
   CreateServiceOrderBody,
@@ -57,6 +60,9 @@ import {
   UpdateCoveragePlanResponse,
   SendCoverageReminderParams,
   SendCoverageReminderResponse,
+  AdvanceServiceOrderParams,
+  AdvanceServiceOrderBody,
+  AdvanceServiceOrderResponse,
 } from "@workspace/api-zod";
 import { onServiceOrderCompleted } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
@@ -127,10 +133,38 @@ router.post("/service-orders", async (req, res): Promise<void> => {
     parsed.data.technicianUserId ??
     (await resolveDealerUserIdByName(createDealerId, parsed.data.technician));
 
+  // Pay-type resolution: explicit wins; warranty/recall work defaults to
+  // warranty pay; otherwise an active coverage plan (by date window) for the
+  // customer flips the default from customer-pay to warranty-pay.
+  let payType = parsed.data.payType;
+  if (!payType) {
+    if (parsed.data.type === "warranty" || parsed.data.type === "recall") {
+      payType = "warranty";
+    } else if (parsed.data.customerId != null) {
+      const today = new Date().toISOString().slice(0, 10);
+      const [plan] = await db
+        .select({ id: coveragePlansTable.id })
+        .from(coveragePlansTable)
+        .where(
+          and(
+            eq(coveragePlansTable.dealerId, createDealerId),
+            eq(coveragePlansTable.customerId, parsed.data.customerId),
+            sql`${coveragePlansTable.startDate} <= ${today}`,
+            sql`${coveragePlansTable.endDate} >= ${today}`,
+          ),
+        )
+        .limit(1);
+      payType = plan ? "warranty" : "customer";
+    } else {
+      payType = "customer";
+    }
+  }
+
   const [order] = await db
     .insert(serviceOrdersTable)
     .values({
       ...parsed.data,
+      payType,
       technicianUserId,
       dealerId: createDealerId,
       scheduledDate: toDateString(parsed.data.scheduledDate)!,
@@ -261,6 +295,174 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
 });
 
 // ---------------------------------------------------------------------------
+// Service case advance (adjacent-only NC-3 machine + manager review gate)
+// ---------------------------------------------------------------------------
+
+/** Adjacent-only transitions for the 7-status service case machine. */
+const SERVICE_ADVANCE_MAP: Record<string, string[]> = {
+  open: ["acknowledged", "cancelled"],
+  acknowledged: ["in_progress", "cancelled"],
+  in_progress: ["on_hold", "resolved", "cancelled"],
+  on_hold: ["in_progress", "cancelled"],
+  resolved: ["closed"],
+  closed: [],
+  cancelled: [],
+};
+
+/** Pay types whose closure needs an approved manager gate (money the dealer eats). */
+const GATED_PAY_TYPES = new Set(["warranty", "goodwill", "rectify"]);
+
+router.post("/service-orders/:id/advance", async (req, res): Promise<void> => {
+  const params = AdvanceServiceOrderParams.safeParse(req.params);
+  const parsed = AdvanceServiceOrderBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({
+      error: (params.success ? parsed : params).error?.message ?? "Invalid",
+    });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [order] = await db
+    .select()
+    .from(serviceOrdersTable)
+    .where(
+      and(
+        eq(serviceOrdersTable.id, params.data.id),
+        eq(serviceOrdersTable.dealerId, dealerId),
+      ),
+    );
+  if (!order) {
+    res.status(404).json({ error: "Service order not found" });
+    return;
+  }
+  const target = parsed.data.targetStatus;
+  if (!(SERVICE_ADVANCE_MAP[order.status] ?? []).includes(target)) {
+    res.status(422).json({
+      unmet: [
+        `Cannot move a ${order.status} case to ${target} — transitions are one step at a time`,
+      ],
+    });
+    return;
+  }
+
+  const unmet: string[] = [];
+
+  if (target === "resolved") {
+    // All active work must be finished before the case can resolve.
+    const cards = await db
+      .select({ id: jobCardsTable.id, status: jobCardsTable.status })
+      .from(jobCardsTable)
+      .where(
+        and(
+          eq(jobCardsTable.serviceOrderId, order.id),
+          eq(jobCardsTable.dealerId, dealerId),
+        ),
+      );
+    const unfinished = cards.filter(
+      (c) => !["completed", "closed", "cancelled"].includes(c.status),
+    );
+    if (unfinished.length > 0) {
+      unmet.push(
+        `${unfinished.length} job card(s) still open — complete or cancel them first`,
+      );
+    }
+  }
+
+  if (target === "closed") {
+    // Customer-pay work needs an issued invoice before pickup.
+    if (order.payType === "customer") {
+      const [invoice] = await db
+        .select({ id: serviceInvoicesTable.id })
+        .from(serviceInvoicesTable)
+        .where(
+          and(
+            eq(serviceInvoicesTable.serviceOrderId, order.id),
+            eq(serviceInvoicesTable.dealerId, dealerId),
+          ),
+        )
+        .limit(1);
+      if (!invoice) unmet.push("No service invoice issued for this case yet");
+    }
+    // Recall work and dealer-funded pay types need explicit manager approval
+    // before the case closes (mirrors the pipeline stage_advance gate).
+    if (GATED_PAY_TYPES.has(order.payType) || order.type === "recall") {
+      const [gate] = await db
+        .select()
+        .from(gatesTable)
+        .where(
+          and(
+            eq(gatesTable.dealerId, dealerId),
+            eq(gatesTable.type, "stage_advance"),
+            eq(gatesTable.refType, "service_order"),
+            eq(gatesTable.refId, order.id),
+          ),
+        )
+        .orderBy(desc(gatesTable.createdAt))
+        .limit(1);
+      if (!gate || gate.status === "dismissed") {
+        await db.insert(gatesTable).values({
+          dealerId,
+          type: "stage_advance",
+          status: "pending",
+          priority: "normal",
+          customerId: order.customerId ?? null,
+          customerName: order.customerName ?? null,
+          refType: "service_order",
+          refId: order.id,
+          title: `Close ${order.payType}-pay service case #${order.id}`,
+          summary: `${order.vehicleInfo} — ${order.type} case funded as ${order.payType}. Manager sign-off required before closing.`,
+          evidence: [
+            { label: "Pay type", value: order.payType },
+            { label: "Case type", value: order.type },
+          ],
+        });
+        unmet.push("Manager approval requested — pending review");
+      } else if (gate.status === "pending") {
+        unmet.push("Manager approval pending review");
+      }
+    }
+  }
+
+  if (unmet.length > 0) {
+    res.status(422).json({ unmet });
+    return;
+  }
+
+  const [before] = [order];
+  const [updated] = await db
+    .update(serviceOrdersTable)
+    .set({ status: target })
+    .where(
+      and(
+        eq(serviceOrdersTable.id, order.id),
+        eq(serviceOrdersTable.dealerId, dealerId),
+      ),
+    )
+    .returning();
+
+  if (updated && before) onServiceOrderCompleted(before, updated);
+
+  // Closing the case writes the pickup into the customer's service history.
+  if (updated && target === "closed" && updated.customerId != null) {
+    await db.insert(timelineEventsTable).values({
+      dealerId,
+      customerId: updated.customerId,
+      domain: "service",
+      kind: "service_case_closed",
+      title: `Service case #${updated.id} closed — vehicle picked up`,
+      detail: `${updated.vehicleInfo} — ${updated.type} (${updated.payType}-pay) completed.`,
+      actor: res.locals.user?.name ?? "Service",
+      isAgent: false,
+      cause: `Service order #${updated.id}`,
+      refType: "service_order",
+      refId: updated.id,
+    });
+  }
+
+  res.json(AdvanceServiceOrderResponse.parse(updated));
+});
+
+// ---------------------------------------------------------------------------
 // Technicians
 // ---------------------------------------------------------------------------
 
@@ -338,10 +540,36 @@ router.post("/job-cards", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Service order not found" });
     return;
   }
-  const [card] = await db
-    .insert(jobCardsTable)
-    .values({ ...parsed.data, dealerId: order.dealerId })
-    .returning();
+  let card: typeof jobCardsTable.$inferSelect | undefined;
+  try {
+    // Asset + pay type flow down from the case unless explicitly overridden.
+    [card] = await db
+      .insert(jobCardsTable)
+      .values({
+        ...parsed.data,
+        assetId: order.assetId ?? null,
+        payType: parsed.data.payType ?? order.payType,
+        scheduledAt: parsed.data.scheduledAt
+          ? new Date(parsed.data.scheduledAt)
+          : null,
+        dealerId: order.dealerId,
+      })
+      .returning();
+  } catch (err) {
+    // Partial unique index: one active job card per asset at a time.
+    if (
+      err instanceof Error &&
+      "code" in err &&
+      (err as { code?: string }).code === "23505"
+    ) {
+      res.status(409).json({
+        error:
+          "active_job_card_exists: this vehicle already has an active job card — complete or close it first",
+      });
+      return;
+    }
+    throw err;
+  }
 
   if (card?.technicianUserId != null) {
     void notifyUser({
@@ -380,7 +608,13 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const patch: Record<string, unknown> = { ...parsed.data };
+  const { approveQuote, scheduledAt, ...updateFields } = parsed.data;
+  const patch: Record<string, unknown> = { ...updateFields };
+  if (scheduledAt !== undefined) patch.scheduledAt = new Date(scheduledAt);
+  // Quote approval is a one-way timestamp: customer signed off on the estimate.
+  if (approveQuote && !existing.quoteApprovedAt) {
+    patch.quoteApprovedAt = new Date();
+  }
   if (
     parsed.data.status === "in_progress" &&
     existing.status === "open" &&
@@ -468,7 +702,7 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Job card not found" });
     return;
   }
-  const [part] = await db
+  let [part] = await db
     .select()
     .from(partsTable)
     .where(
@@ -481,12 +715,31 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Part not found" });
     return;
   }
-  if (kind === "issue" && part.stock < parsed.data.quantity) {
+  // Supersession redirect: an old part number transparently resolves to its
+  // replacement; obsolete parts with no successor are dead ends.
+  if (part.status === "superseded" && part.supersededByPartId != null) {
+    const [successor] = await db
+      .select()
+      .from(partsTable)
+      .where(
+        and(
+          eq(partsTable.id, part.supersededByPartId),
+          eq(partsTable.dealerId, card.dealerId),
+        ),
+      );
+    if (successor) part = successor;
+  }
+  if (part.status === "obsolete") {
     res.status(422).json({
-      error: `Insufficient stock: ${part.stock} of ${part.name} available`,
+      error: `${part.name} (${part.sku}) is obsolete and cannot be issued`,
     });
     return;
   }
+
+  // Backorder path: an issue that exceeds stock does NOT fail — the line is
+  // flagged backordered, the job card goes on hold, and a draft PO is raised.
+  const backordered = kind === "issue" && part.stock < parsed.data.quantity;
+  const currentPart = part;
 
   const [line] = await db.transaction(async (tx) => {
     const inserted = await tx
@@ -494,21 +747,49 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
       .values({
         dealerId: card.dealerId,
         jobCardId: card.id,
-        partId: part.id,
-        partName: part.name,
+        partId: currentPart.id,
+        partName: currentPart.name,
         kind,
         quantity: parsed.data.quantity,
-        unitPrice: part.unitPrice,
+        unitPrice: currentPart.unitPrice,
+        unitCost: currentPart.unitCost,
+        backordered,
       })
       .returning();
-    const delta =
-      kind === "issue" ? -parsed.data.quantity : parsed.data.quantity;
-    await tx
-      .update(partsTable)
-      .set({ stock: sql`${partsTable.stock} + ${delta}` })
-      .where(
-        and(eq(partsTable.id, part.id), eq(partsTable.dealerId, card.dealerId)),
-      );
+    if (backordered) {
+      const shortfall = parsed.data.quantity - currentPart.stock;
+      await tx
+        .update(jobCardsTable)
+        .set({ status: "on_hold" })
+        .where(
+          and(
+            eq(jobCardsTable.id, card.id),
+            eq(jobCardsTable.dealerId, card.dealerId),
+          ),
+        );
+      await tx.insert(partPurchasesTable).values({
+        dealerId: card.dealerId,
+        partId: currentPart.id,
+        supplierId: currentPart.supplierId,
+        quantity: Math.max(shortfall, currentPart.reorderLevel),
+        qtyReceived: 0,
+        status: "ordered",
+        unitCost: currentPart.unitCost,
+        reference: `Backorder — job card #${card.id}`,
+      });
+    } else {
+      const delta =
+        kind === "issue" ? -parsed.data.quantity : parsed.data.quantity;
+      await tx
+        .update(partsTable)
+        .set({ stock: sql`${partsTable.stock} + ${delta}` })
+        .where(
+          and(
+            eq(partsTable.id, currentPart.id),
+            eq(partsTable.dealerId, card.dealerId),
+          ),
+        );
+    }
     return inserted;
   });
 

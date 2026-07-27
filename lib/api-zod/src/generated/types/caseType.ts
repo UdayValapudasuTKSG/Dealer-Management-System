@@ -13,4 +13,7 @@ export const CaseType = {
   complaint: 'complaint',
   exception: 'exception',
   inquiry: 'inquiry',
+  feedback: 'feedback',
+  profile: 'profile',
+  escalation: 'escalation',
 } as const;

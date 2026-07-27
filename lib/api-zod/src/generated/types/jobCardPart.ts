@@ -15,5 +15,7 @@ export interface JobCardPart {
   kind: JobCardPartKind;
   quantity: number;
   unitPrice: number;
+  unitCost?: number;
+  backordered?: boolean;
   createdAt: Date;
 }

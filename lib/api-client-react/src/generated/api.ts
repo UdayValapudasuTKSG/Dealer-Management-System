@@ -203,6 +203,7 @@ import type {
   PartInput,
   PartPurchase,
   PartPurchaseInput,
+  PartPurchaseReceiveBody,
   PartUpdate,
   Payment,
   PaymentInput,
@@ -231,6 +232,8 @@ import type {
   ServiceInvoice,
   ServiceInvoiceUpdate,
   ServiceOrder,
+  ServiceOrderAdvanceBody,
+  ServiceOrderAdvanceUnmet,
   ServiceOrderInput,
   ServiceOrderUpdate,
   StageChecklistConfig,
@@ -8157,6 +8160,78 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getUpdateServiceOrderMutationOptions(options));
     }
 
+export const getAdvanceServiceOrderUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-orders/${id}/advance`
+}
+
+/**
+ * @summary Advance a service case one step, enforcing the manager review gate
+ */
+export const advanceServiceOrder = async (id: number,
+    serviceOrderAdvanceBody: ServiceOrderAdvanceBody, options?: RequestInit): Promise<ServiceOrder> => {
+
+  return customFetch<ServiceOrder>(getAdvanceServiceOrderUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(serviceOrderAdvanceBody)
+  }
+);}
+
+
+
+
+
+export const getAdvanceServiceOrderMutationOptions = <TError = ErrorType<Error | ServiceOrderAdvanceUnmet>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof advanceServiceOrder>>, TError,{id: number;data: BodyType<ServiceOrderAdvanceBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof advanceServiceOrder>>, TError,{id: number;data: BodyType<ServiceOrderAdvanceBody>}, TContext> => {
+
+const mutationKey = ['advanceServiceOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof advanceServiceOrder>>, {id: number;data: BodyType<ServiceOrderAdvanceBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  advanceServiceOrder(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdvanceServiceOrderMutationResult = NonNullable<Awaited<ReturnType<typeof advanceServiceOrder>>>
+    export type AdvanceServiceOrderMutationBody = BodyType<ServiceOrderAdvanceBody>
+    export type AdvanceServiceOrderMutationError = ErrorType<Error | ServiceOrderAdvanceUnmet>
+
+    /**
+ * @summary Advance a service case one step, enforcing the manager review gate
+ */
+export const useAdvanceServiceOrder = <TError = ErrorType<Error | ServiceOrderAdvanceUnmet>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof advanceServiceOrder>>, TError,{id: number;data: BodyType<ServiceOrderAdvanceBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof advanceServiceOrder>>,
+        TError,
+        {id: number;data: BodyType<ServiceOrderAdvanceBody>},
+        TContext
+      > => {
+      return useMutation(getAdvanceServiceOrderMutationOptions(options));
+    }
+
 export const getSendServiceReminderUrl = (id: number,) => {
 
 
@@ -9791,6 +9866,78 @@ export const useCreatePartPurchase = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getCreatePartPurchaseMutationOptions(options));
+    }
+
+export const getReceivePartPurchaseUrl = (id: number,) => {
+
+
+
+
+  return `/api/part-purchases/${id}/receive`
+}
+
+/**
+ * @summary Receive goods against an ordered purchase (increments stock, resolves backorders)
+ */
+export const receivePartPurchase = async (id: number,
+    partPurchaseReceiveBody: PartPurchaseReceiveBody, options?: RequestInit): Promise<PartPurchase> => {
+
+  return customFetch<PartPurchase>(getReceivePartPurchaseUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partPurchaseReceiveBody)
+  }
+);}
+
+
+
+
+
+export const getReceivePartPurchaseMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receivePartPurchase>>, TError,{id: number;data: BodyType<PartPurchaseReceiveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof receivePartPurchase>>, TError,{id: number;data: BodyType<PartPurchaseReceiveBody>}, TContext> => {
+
+const mutationKey = ['receivePartPurchase'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof receivePartPurchase>>, {id: number;data: BodyType<PartPurchaseReceiveBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  receivePartPurchase(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReceivePartPurchaseMutationResult = NonNullable<Awaited<ReturnType<typeof receivePartPurchase>>>
+    export type ReceivePartPurchaseMutationBody = BodyType<PartPurchaseReceiveBody>
+    export type ReceivePartPurchaseMutationError = ErrorType<Error>
+
+    /**
+ * @summary Receive goods against an ordered purchase (increments stock, resolves backorders)
+ */
+export const useReceivePartPurchase = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receivePartPurchase>>, TError,{id: number;data: BodyType<PartPurchaseReceiveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof receivePartPurchase>>,
+        TError,
+        {id: number;data: BodyType<PartPurchaseReceiveBody>},
+        TContext
+      > => {
+      return useMutation(getReceivePartPurchaseMutationOptions(options));
     }
 
 export const getListTestDrivesUrl = (params?: ListTestDrivesParams,) => {

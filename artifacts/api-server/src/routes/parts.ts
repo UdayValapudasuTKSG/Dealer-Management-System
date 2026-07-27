@@ -21,7 +21,12 @@ import {
   ListPartPurchasesResponse,
   CreatePartPurchaseBody,
   CreatePartPurchaseResponse,
+  ReceivePartPurchaseParams,
+  ReceivePartPurchaseBody,
+  ReceivePartPurchaseResponse,
 } from "@workspace/api-zod";
+import { jobCardPartsTable, jobCardsTable } from "@workspace/db";
+import { inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -138,23 +143,181 @@ router.post("/part-purchases", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Part not found" });
     return;
   }
+  // status "ordered" creates an open PO awaiting goods; the legacy default
+  // ("received") keeps the old immediate-receipt behavior intact.
+  const isOrdered = parsed.data.status === "ordered";
   const [purchase] = await db.transaction(async (tx) => {
     const inserted = await tx
       .insert(partPurchasesTable)
-      .values({ ...parsed.data, dealerId: part.dealerId })
-      .returning();
-    await tx
-      .update(partsTable)
-      .set({
-        stock: sql`${partsTable.stock} + ${parsed.data.quantity}`,
-        ...(parsed.data.unitCost != null
-          ? { unitCost: parsed.data.unitCost }
-          : {}),
+      .values({
+        ...parsed.data,
+        // date({mode:"string"}) column: the generated Zod coerces to Date.
+        expectedDate:
+          parsed.data.expectedDate instanceof Date
+            ? parsed.data.expectedDate.toISOString().slice(0, 10)
+            : (parsed.data.expectedDate ?? null),
+        qtyReceived: isOrdered ? 0 : parsed.data.quantity,
+        status: isOrdered ? "ordered" : "received",
+        dealerId: part.dealerId,
       })
-      .where(eq(partsTable.id, parsed.data.partId));
+      .returning();
+    if (!isOrdered) {
+      await tx
+        .update(partsTable)
+        .set({
+          stock: sql`${partsTable.stock} + ${parsed.data.quantity}`,
+          ...(parsed.data.unitCost != null
+            ? { unitCost: parsed.data.unitCost }
+            : {}),
+        })
+        .where(eq(partsTable.id, parsed.data.partId));
+    }
     return inserted;
   });
   res.status(201).json(CreatePartPurchaseResponse.parse(purchase));
+});
+
+router.post("/part-purchases/:id/receive", async (req, res): Promise<void> => {
+  const params = ReceivePartPurchaseParams.safeParse(req.params);
+  const parsed = ReceivePartPurchaseBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({
+      error: (params.success ? parsed : params).error?.message ?? "Invalid",
+    });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [purchase] = await db
+    .select()
+    .from(partPurchasesTable)
+    .where(
+      and(
+        eq(partPurchasesTable.id, params.data.id),
+        eq(partPurchasesTable.dealerId, dealerId),
+      ),
+    );
+  if (!purchase) {
+    res.status(404).json({ error: "Purchase order not found" });
+    return;
+  }
+  if (purchase.status !== "ordered" && purchase.status !== "partially_received") {
+    res.status(422).json({
+      error: `Purchase is ${purchase.status} — nothing left to receive`,
+    });
+    return;
+  }
+  const remaining = purchase.quantity - purchase.qtyReceived;
+  if (parsed.data.qtyReceived > remaining) {
+    res.status(422).json({
+      error: `Over-receipt: only ${remaining} unit(s) outstanding on this order`,
+    });
+    return;
+  }
+  const [part] = await db
+    .select()
+    .from(partsTable)
+    .where(
+      and(eq(partsTable.id, purchase.partId), eq(partsTable.dealerId, dealerId)),
+    );
+  if (!part) {
+    res.status(404).json({ error: "Part not found" });
+    return;
+  }
+
+  const received = parsed.data.qtyReceived;
+  const newQtyReceived = purchase.qtyReceived + received;
+  // Weighted-average cost: blend the on-hand value with the receipt value.
+  const onHand = Math.max(part.stock, 0);
+  const newCost =
+    purchase.unitCost > 0 && onHand + received > 0
+      ? Math.round(
+          ((onHand * part.unitCost + received * purchase.unitCost) /
+            (onHand + received)) *
+            100,
+        ) / 100
+      : part.unitCost;
+
+  const updated = await db.transaction(async (tx) => {
+    const [po] = await tx
+      .update(partPurchasesTable)
+      .set({
+        qtyReceived: newQtyReceived,
+        status: newQtyReceived >= purchase.quantity ? "received" : "partially_received",
+      })
+      .where(
+        and(
+          eq(partPurchasesTable.id, purchase.id),
+          eq(partPurchasesTable.dealerId, dealerId),
+        ),
+      )
+      .returning();
+    await tx
+      .update(partsTable)
+      .set({ stock: sql`${partsTable.stock} + ${received}`, unitCost: newCost })
+      .where(
+        and(eq(partsTable.id, part.id), eq(partsTable.dealerId, dealerId)),
+      );
+
+    // Backorder resolution: fill waiting job-card lines oldest-first while
+    // stock lasts, and release job cards that no longer wait on any part.
+    let available = onHand + received;
+    const waiting = await tx
+      .select()
+      .from(jobCardPartsTable)
+      .where(
+        and(
+          eq(jobCardPartsTable.dealerId, dealerId),
+          eq(jobCardPartsTable.partId, part.id),
+          eq(jobCardPartsTable.backordered, true),
+        ),
+      )
+      .orderBy(jobCardPartsTable.createdAt);
+    const touchedCards = new Set<number>();
+    for (const line of waiting) {
+      if (line.quantity > available) continue;
+      available -= line.quantity;
+      await tx
+        .update(jobCardPartsTable)
+        .set({ backordered: false })
+        .where(eq(jobCardPartsTable.id, line.id));
+      await tx
+        .update(partsTable)
+        .set({ stock: sql`${partsTable.stock} - ${line.quantity}` })
+        .where(
+          and(eq(partsTable.id, part.id), eq(partsTable.dealerId, dealerId)),
+        );
+      touchedCards.add(line.jobCardId);
+    }
+    if (touchedCards.size > 0) {
+      const stillWaiting = await tx
+        .select({ jobCardId: jobCardPartsTable.jobCardId })
+        .from(jobCardPartsTable)
+        .where(
+          and(
+            eq(jobCardPartsTable.dealerId, dealerId),
+            inArray(jobCardPartsTable.jobCardId, [...touchedCards]),
+            eq(jobCardPartsTable.backordered, true),
+          ),
+        );
+      const blocked = new Set(stillWaiting.map((r) => r.jobCardId));
+      const releasable = [...touchedCards].filter((id) => !blocked.has(id));
+      if (releasable.length > 0) {
+        await tx
+          .update(jobCardsTable)
+          .set({ status: "in_progress" })
+          .where(
+            and(
+              eq(jobCardsTable.dealerId, dealerId),
+              inArray(jobCardsTable.id, releasable),
+              eq(jobCardsTable.status, "on_hold"),
+            ),
+          );
+      }
+    }
+    return po;
+  });
+
+  res.json(ReceivePartPurchaseResponse.parse(updated));
 });
 
 export default router;

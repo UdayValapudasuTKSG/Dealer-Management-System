@@ -14,6 +14,7 @@ import {
   dealerUsersTable,
   timelineEventsTable,
   assetsTable,
+  tasksTable,
   reviewsTable,
   documentsTable,
   serviceOrdersTable,
@@ -58,6 +59,23 @@ import { logger } from "../lib/logger";
 import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
+
+/**
+ * Adds N business days (Mon–Fri) to a date, evaluated in the dealership's
+ * GMT-4 calendar so weekend boundaries land on the right local day.
+ */
+function addBusinessDays(from: Date, days: number): Date {
+  const result = new Date(from.getTime());
+  let remaining = days;
+  while (remaining > 0) {
+    result.setTime(result.getTime() + 24 * 60 * 60 * 1000);
+    // Local dealership day-of-week at GMT-4.
+    const local = new Date(result.getTime() - 4 * 60 * 60 * 1000);
+    const dow = local.getUTCDay();
+    if (dow !== 0 && dow !== 6) remaining -= 1;
+  }
+  return result;
+}
 
 const money = (n: number) =>
   `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
@@ -878,6 +896,24 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
               title: `New vehicle in your care: ${label ?? `Vehicle #${delivery.vehicleId}`}`,
               body: `${delivery.customerName ?? "A customer"} took delivery. The vehicle is now a lifetime asset on their account — you own the service relationship.`,
               link: `/customers/${delivery.customerId}`,
+            });
+
+            // Ownership-phase kickoff: the advisor calls the customer within
+            // 5 business days of delivery (GMT-4 business calendar).
+            const introDue = addBusinessDays(
+              delivery.deliveredAt ?? new Date(),
+              5,
+            );
+            await db.insert(tasksTable).values({
+              dealerId: delivery.dealerId,
+              title: `Intro call — ${delivery.customerName ?? `customer #${delivery.customerId}`}`,
+              description: `Welcome ${delivery.customerName ?? "the customer"} to the ownership phase for ${label ?? `vehicle #${delivery.vehicleId}`}: introduce yourself as their Service Advisor, confirm first-service expectations, and log any concerns.`,
+              assigneeUserId: serviceAdvisor.id,
+              dueDate: introDue.toISOString().slice(0, 10),
+              dueAt: introDue,
+              kind: "manual",
+              priority: "normal",
+              status: "open",
             });
           }
         }

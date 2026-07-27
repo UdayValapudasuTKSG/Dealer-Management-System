@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChecklistItem } from './checklistItem';
+import type { ConditionRecord } from './conditionRecord';
+import type { JobCardUpdatePayType } from './jobCardUpdatePayType';
 import type { JobCardUpdateStatus } from './jobCardUpdateStatus';
 
 export interface JobCardUpdate {
@@ -13,6 +15,14 @@ export interface JobCardUpdate {
   status?: JobCardUpdateStatus;
   technicianUserId?: number;
   technicianName?: string;
+  bay?: string;
+  scheduledAt?: Date;
+  durationMins?: number;
+  payType?: JobCardUpdatePayType;
+  quoteTotal?: number;
+  approveQuote?: boolean;
+  intake?: ConditionRecord;
+  outtake?: ConditionRecord;
   checklist?: ChecklistItem[];
   laborHours?: number;
   laborRate?: number;

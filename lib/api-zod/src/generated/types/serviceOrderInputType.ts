@@ -15,4 +15,6 @@ export const ServiceOrderInputType = {
   warranty: 'warranty',
   recall: 'recall',
   inspection: 'inspection',
+  comeback: 'comeback',
+  unscheduled: 'unscheduled',
 } as const;
