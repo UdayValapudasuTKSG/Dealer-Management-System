@@ -197,3 +197,15 @@ id = "rACn8XpIpG7CBeWGoyYHo"
 uri = "file://.local/demo/GRA-2026-01812-duty-pack.pdf"
 type = "pdf"
 title = "GRA Import Duty Pack — GRA-2026-01812 (2024 Toyota Hilux)"
+
+[[outputs]]
+id = "U7n2gu8PiD4fQNlgekDOE"
+uri = "file://exports/quote-EST-00011.pdf"
+type = "pdf"
+title = "Vehicle Quotation PDF (CAM Motors, USD + GYD)"
+
+[[outputs]]
+id = "J6l70p4p4mJRUYrdcVeGo"
+uri = "file://exports/customer-1-data-export.json"
+type = "unspecified"
+title = "Customer Data Export (DSAR bundle, C1–C5)"

@@ -1,6 +1,7 @@
 export * from "./vehicles";
 export * from "./leads";
 export * from "./customers";
+export * from "./dsarRequests";
 export * from "./contacts";
 export * from "./assets";
 export * from "./customerDocuments";

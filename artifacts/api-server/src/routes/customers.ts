@@ -20,6 +20,8 @@ import {
   timelineEventsTable,
   gatesTable,
   insertCustomerDocumentSchema,
+  dsarRequestsTable,
+  type DsarRequest as DsarRequestRow,
   type CustomerPersona,
   type Customer,
   type Vehicle,
@@ -70,9 +72,17 @@ import {
   ListAccountAssetsResponse,
   GetAccountRelationsParams,
   GetAccountRelationsResponse,
+  GetCustomerExportResponse,
+  EraseCustomerDataResponse,
 } from "@workspace/api-zod";
 import { storage } from "../lib/storage";
-import { activeDealerId } from "../middlewares/rbac";
+import { activeDealerId, hasPermission } from "../middlewares/rbac";
+import { idempotent } from "../middlewares/idempotency";
+import {
+  processExport,
+  runErasureSaga,
+  erasureHolds,
+} from "../lib/privacy";
 import { notifyManagerNote } from "../lib/notify-triggers";
 import {
   guardUntrusted,
@@ -1476,5 +1486,152 @@ router.get("/customers/:id/overview", async (req, res): Promise<void> => {
 
   res.json(GetCustomerOverviewResponse.parse(overview));
 });
+
+// ---------------------------------------------------------------------------
+// R10.4 / R10.5 — data-subject requests (privacy/DSAR). Both are 202 async.
+// ---------------------------------------------------------------------------
+
+router.get("/customers/:id/export", async (req, res): Promise<void> => {
+  const params = GetCustomerParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [customer] = await db
+    .select({ id: customersTable.id })
+    .from(customersTable)
+    .where(
+      and(
+        eq(customersTable.id, params.data.id),
+        eq(customersTable.dealerId, dealerId),
+      ),
+    );
+  if (!customer) {
+    res.status(404).json({ error: "Customer not found" });
+    return;
+  }
+  const actor =
+    res.locals.user?.name ?? res.locals.user?.email ?? "unknown";
+  const [request] = await db
+    .insert(dsarRequestsTable)
+    .values({
+      dealerId,
+      customerId: customer.id,
+      kind: "export",
+      status: "processing",
+      requestedBy: actor,
+    })
+    .returning();
+  // Fire-and-forget: assemble the bundle asynchronously (R10.4 NC-1).
+  void processExport(request, actor);
+  res.status(202).json(GetCustomerExportResponse.parse(serializeDsar(request)));
+});
+
+router.get(
+  "/customers/:id/export/:requestId",
+  async (req, res): Promise<void> => {
+    const customerId = Number(req.params.id);
+    const requestId = Number(req.params.requestId);
+    if (!Number.isInteger(customerId) || !Number.isInteger(requestId)) {
+      res.status(400).json({ error: "invalid id" });
+      return;
+    }
+    const [request] = await db
+      .select()
+      .from(dsarRequestsTable)
+      .where(
+        and(
+          eq(dsarRequestsTable.id, requestId),
+          eq(dsarRequestsTable.customerId, customerId),
+          eq(dsarRequestsTable.dealerId, activeDealerId(res)),
+        ),
+      );
+    if (!request) {
+      res.status(404).json({ error: "DSAR request not found" });
+      return;
+    }
+    res.json(GetCustomerExportResponse.parse(serializeDsar(request)));
+  },
+);
+
+router.post(
+  "/customers/:id/erase",
+  idempotent("customers.erase"),
+  async (req, res): Promise<void> => {
+    const params = GetCustomerParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const user = res.locals.user;
+    // Erasure is destructive: customers ADMIN category required (not create).
+    if (!user || !hasPermission(user, "customers", "admin")) {
+      res.status(403).json({
+        error: "forbidden",
+        message: "Erasure requires customers admin permission",
+      });
+      return;
+    }
+    const dealerId = activeDealerId(res);
+    const [customer] = await db
+      .select({ id: customersTable.id, erasedAt: customersTable.erasedAt })
+      .from(customersTable)
+      .where(
+        and(
+          eq(customersTable.id, params.data.id),
+          eq(customersTable.dealerId, dealerId),
+        ),
+      );
+    if (!customer) {
+      res.status(404).json({ error: "Customer not found" });
+      return;
+    }
+    const actor = user.name ?? user.email ?? "unknown";
+    // R10.5 legal holds defer erasure: 422 unmet[] + a blocked dsar row.
+    const unmet = await erasureHolds(dealerId, customer.id);
+    if (unmet.length > 0) {
+      const [blocked] = await db
+        .insert(dsarRequestsTable)
+        .values({
+          dealerId,
+          customerId: customer.id,
+          kind: "erase",
+          status: "blocked",
+          requestedBy: actor,
+          unmet,
+        })
+        .returning();
+      res.status(422).json({
+        error: "legal_hold",
+        unmet,
+        request: serializeDsar(blocked),
+      });
+      return;
+    }
+    const [request] = await db
+      .insert(dsarRequestsTable)
+      .values({
+        dealerId,
+        customerId: customer.id,
+        kind: "erase",
+        status: "processing",
+        requestedBy: actor,
+      })
+      .returning();
+    void runErasureSaga(request, actor);
+    res
+      .status(202)
+      .json(EraseCustomerDataResponse.parse(serializeDsar(request)));
+  },
+);
+
+function serializeDsar(r: DsarRequestRow): Record<string, unknown> {
+  return {
+    ...r,
+    createdAt: r.createdAt.toISOString(),
+    completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+  };
+}
 
 export default router;

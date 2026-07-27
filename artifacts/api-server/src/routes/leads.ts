@@ -1026,7 +1026,7 @@ router.get(
       res.status(404).json({ error: "Quote not found" });
       return;
     }
-    const pdf = await buildQuotePdf(quotePdfPayload(quote));
+    const pdf = await buildQuotePdf(await quotePdfPayload(quote));
     const safeName =
       `${quote.customerName} - ${quote.quoteNumber}-R${quote.version}.pdf`.replace(
         /[^\w .-]+/g,
@@ -1084,7 +1084,7 @@ router.post(
         to: lead.email,
         dealerId: lead.dealerId,
         customerId: lead.customerId,
-        data: quotePdfPayload(quote),
+        data: await quotePdfPayload(quote),
       });
     } else {
       const to = waDigits(lead.phone ?? "");

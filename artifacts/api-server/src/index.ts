@@ -4,6 +4,7 @@ import { startEmailWorker } from "./lib/email";
 import { startGmailIntakeWorker } from "./lib/gmail-intake";
 import { startAdvanceProposalWorker } from "./lib/advance-proposals";
 import { startNotificationSweeps } from "./lib/notification-sweeps";
+import { startRetentionSweeps } from "./lib/retention-sweeps";
 import { migrateLegacyAttachments } from "./lib/documents-migrate";
 import { startMetricsFlusher } from "./lib/metrics";
 import { logPendingInfraSeams } from "./lib/infra-seams";
@@ -33,6 +34,7 @@ app.listen(port, (err) => {
   startGmailIntakeWorker();
   startAdvanceProposalWorker();
   startNotificationSweeps();
+  startRetentionSweeps();
   void migrateLegacyAttachments();
   startMetricsFlusher();
   logPendingInfraSeams();

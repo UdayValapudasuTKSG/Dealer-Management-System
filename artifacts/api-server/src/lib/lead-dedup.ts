@@ -34,6 +34,15 @@ export type DedupCandidate = {
   variant?: string | null;
   color?: string | null;
   notes?: string | null;
+  /**
+   * R10.3 consent captured with this submission (per-channel). On merge it is
+   * carried forward ONLY for channels with no existing entry — an existing
+   * consent decision is never upgraded by a later submission.
+   */
+  marketingConsent?: Record<
+    string,
+    { granted: boolean; basis: string; capturedAt: string; sourceEvent: string }
+  > | null;
 };
 
 /**
@@ -132,6 +141,19 @@ export async function mergeIntoExistingLead(
   // Fill in any missing contact point from the new submission.
   if (!existing.email && input.email) patch.email = input.email;
   if (!existing.phone && input.phone) patch.phone = input.phone;
+
+  // R10.3: carry consent forward per channel; NEVER overwrite an existing
+  // entry (a prior opt-out cannot be upgraded by a later form submission).
+  if (input.marketingConsent) {
+    const current = existing.marketingConsent ?? {};
+    const added: typeof current = {};
+    for (const [channel, entry] of Object.entries(input.marketingConsent)) {
+      if (!(channel in current)) added[channel] = entry;
+    }
+    if (Object.keys(added).length > 0) {
+      patch.marketingConsent = { ...current, ...added };
+    }
+  }
 
   let lead = existing;
   if (Object.keys(patch).length > 0) {

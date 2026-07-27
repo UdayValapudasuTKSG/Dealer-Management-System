@@ -79,6 +79,14 @@ export const leadsTable = pgTable("leads", {
     .$type<LeadAttachment[]>()
     .notNull()
     .default([]),
+  // R10.3 per-channel marketing consent captured at intake (opt-in model;
+  // absent = not granted). Carried forward on dedup merge, never upgraded.
+  marketingConsent: jsonb("marketing_consent").$type<
+    Record<
+      string,
+      { granted: boolean; basis: string; capturedAt: string; sourceEvent: string }
+    >
+  >(),
   aiScore: integer("ai_score").notNull().default(50),
   notes: text("notes"),
   // Salesforce-parity record fields

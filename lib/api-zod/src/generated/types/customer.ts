@@ -7,6 +7,7 @@
  */
 import type { CustomerAccountType } from './customerAccountType';
 import type { CustomerLoyaltyTier } from './customerLoyaltyTier';
+import type { CustomerMarketingConsent } from './customerMarketingConsent';
 
 export interface Customer {
   id: number;
@@ -42,5 +43,9 @@ export interface Customer {
   lifetimeValue: number;
   vehiclesOwned: number;
   loyaltyTier: CustomerLoyaltyTier;
+  /** @nullable */
+  marketingConsent?: CustomerMarketingConsent;
+  /** @nullable */
+  erasedAt?: Date | null;
   createdAt: Date;
 }

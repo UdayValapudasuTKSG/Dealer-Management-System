@@ -1602,7 +1602,8 @@ export const CreateEnquiryBody = zod.object({
   "variant": zod.string().optional(),
   "color": zod.string().optional(),
   "preferredBranch": zod.string().optional(),
-  "comments": zod.string().optional()
+  "comments": zod.string().optional(),
+  "marketingConsent": zod.boolean().optional()
 })
 
 
@@ -2630,6 +2631,13 @@ export const ListCustomersResponseItem = zod.object({
   "lifetimeValue": zod.number(),
   "vehiclesOwned": zod.number(),
   "loyaltyTier": zod.enum(['new', 'silver', 'gold', 'platinum']),
+  "marketingConsent": zod.record(zod.string(), zod.object({
+  "granted": zod.boolean(),
+  "basis": zod.string(),
+  "capturedAt": zod.string(),
+  "sourceEvent": zod.string()
+})).nullish(),
+  "erasedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListCustomersResponse = zod.array(ListCustomersResponseItem)
@@ -2681,6 +2689,13 @@ export const CreateCustomerResponse = zod.object({
   "lifetimeValue": zod.number(),
   "vehiclesOwned": zod.number(),
   "loyaltyTier": zod.enum(['new', 'silver', 'gold', 'platinum']),
+  "marketingConsent": zod.record(zod.string(), zod.object({
+  "granted": zod.boolean(),
+  "basis": zod.string(),
+  "capturedAt": zod.string(),
+  "sourceEvent": zod.string()
+})).nullish(),
+  "erasedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -2710,6 +2725,13 @@ export const GetCustomerResponse = zod.object({
   "lifetimeValue": zod.number(),
   "vehiclesOwned": zod.number(),
   "loyaltyTier": zod.enum(['new', 'silver', 'gold', 'platinum']),
+  "marketingConsent": zod.record(zod.string(), zod.object({
+  "granted": zod.boolean(),
+  "basis": zod.string(),
+  "capturedAt": zod.string(),
+  "sourceEvent": zod.string()
+})).nullish(),
+  "erasedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -2764,6 +2786,13 @@ export const UpdateCustomerResponse = zod.object({
   "lifetimeValue": zod.number(),
   "vehiclesOwned": zod.number(),
   "loyaltyTier": zod.enum(['new', 'silver', 'gold', 'platinum']),
+  "marketingConsent": zod.record(zod.string(), zod.object({
+  "granted": zod.boolean(),
+  "basis": zod.string(),
+  "capturedAt": zod.string(),
+  "sourceEvent": zod.string()
+})).nullish(),
+  "erasedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -5115,6 +5144,13 @@ export const GetCustomerOverviewResponse = zod.object({
   "lifetimeValue": zod.number(),
   "vehiclesOwned": zod.number(),
   "loyaltyTier": zod.enum(['new', 'silver', 'gold', 'platinum']),
+  "marketingConsent": zod.record(zod.string(), zod.object({
+  "granted": zod.boolean(),
+  "basis": zod.string(),
+  "capturedAt": zod.string(),
+  "sourceEvent": zod.string()
+})).nullish(),
+  "erasedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 }),
   "contacts": zod.array(zod.object({
@@ -5971,6 +6007,88 @@ export const DeleteCustomerNoteParams = zod.object({
 })
 
 export const DeleteCustomerNoteResponse = zod.void()
+
+
+/**
+ * @summary R10.4 data-subject export — accepted async, returns the DSAR request
+ */
+export const ExportCustomerDataParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ExportCustomerDataResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "kind": zod.enum(['export', 'erase']),
+  "status": zod.enum(['processing', 'completed', 'failed', 'blocked']),
+  "requestedBy": zod.string().optional(),
+  "bundle": zod.record(zod.string(), zod.unknown()).nullish(),
+  "steps": zod.array(zod.object({
+  "step": zod.string(),
+  "completedAt": zod.string(),
+  "detail": zod.string().optional()
+})).optional(),
+  "unmet": zod.array(zod.string()).nullish(),
+  "pendingBackupErasure": zod.boolean(),
+  "error": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Fetch a DSAR export request (bundle present when completed)
+ */
+export const GetCustomerExportParams = zod.object({
+  "id": zod.coerce.number(),
+  "requestId": zod.coerce.number()
+})
+
+export const GetCustomerExportResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "kind": zod.enum(['export', 'erase']),
+  "status": zod.enum(['processing', 'completed', 'failed', 'blocked']),
+  "requestedBy": zod.string().optional(),
+  "bundle": zod.record(zod.string(), zod.unknown()).nullish(),
+  "steps": zod.array(zod.object({
+  "step": zod.string(),
+  "completedAt": zod.string(),
+  "detail": zod.string().optional()
+})).optional(),
+  "unmet": zod.array(zod.string()).nullish(),
+  "pendingBackupErasure": zod.boolean(),
+  "error": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary R10.5 right-to-be-forgotten — anonymize C1/C2, purge C4/C5, retain C3 de-linked
+ */
+export const EraseCustomerDataParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const EraseCustomerDataResponse = zod.object({
+  "id": zod.number(),
+  "customerId": zod.number(),
+  "kind": zod.enum(['export', 'erase']),
+  "status": zod.enum(['processing', 'completed', 'failed', 'blocked']),
+  "requestedBy": zod.string().optional(),
+  "bundle": zod.record(zod.string(), zod.unknown()).nullish(),
+  "steps": zod.array(zod.object({
+  "step": zod.string(),
+  "completedAt": zod.string(),
+  "detail": zod.string().optional()
+})).optional(),
+  "unmet": zod.array(zod.string()).nullish(),
+  "pendingBackupErasure": zod.boolean(),
+  "error": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "completedAt": zod.coerce.date().nullish()
+})
 
 
 /**

@@ -4,6 +4,7 @@ import {
   leadsTable,
   vehiclesTable,
   quotesTable,
+  dealersTable,
   timelineEventsTable,
   activityTable,
   agentsTable,
@@ -252,10 +253,23 @@ export async function quoteById(
 }
 
 /** Map a stored quote to the string payload the PDF builder + email queue expect. */
-export function quotePdfPayload(quote: Quote): Record<string, string> {
+export async function quotePdfPayload(
+  quote: Quote,
+): Promise<Record<string, string>> {
   const money = (n: number) =>
     `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  const [dealer] = await db
+    .select({ rate: dealersTable.usdExchangeRate, name: dealersTable.name })
+    .from(dealersTable)
+    .where(eq(dealersTable.id, quote.dealerId))
+    .limit(1);
+  const rate = dealer?.rate ?? 209;
+  const gyd = (n: number) =>
+    `GYD ${Math.round(n * rate).toLocaleString("en-US")}`;
   return {
+    totalGyd: gyd(quote.total),
+    dealerName: dealer?.name ?? "",
+    exchangeRateNote: `GYD figures at the dealership rate of ${rate} GYD/USD`,
     name: quote.customerName,
     address: quote.customerAddress ?? "",
     vehicle: `${quote.modelYear} ${quote.vehicleLine}`,

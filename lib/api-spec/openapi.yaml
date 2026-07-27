@@ -4166,6 +4166,61 @@ paths:
       responses:
         "204":
           description: Deleted
+  /customers/{id}/export:
+    get:
+      operationId: exportCustomerData
+      tags: [customers]
+      summary: R10.4 data-subject export — accepted async, returns the DSAR request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "202":
+          description: Export accepted; poll the request until status=completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DsarRequest"
+  /customers/{id}/export/{requestId}:
+    get:
+      operationId: getCustomerExport
+      tags: [customers]
+      summary: Fetch a DSAR export request (bundle present when completed)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: DSAR request with bundle when completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DsarRequest"
+  /customers/{id}/erase:
+    post:
+      operationId: eraseCustomerData
+      tags: [customers]
+      summary: R10.5 right-to-be-forgotten — anonymize C1/C2, purge C4/C5, retain C3 de-linked
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "202":
+          description: Erasure saga accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DsarRequest"
   /customers/{id}/documents:
     get:
       operationId: listCustomerDocuments
@@ -7505,6 +7560,42 @@ components:
         color: { type: string }
         preferredBranch: { type: string }
         comments: { type: string }
+        # R10.3 explicit opt-in checkbox on the web form; absent/false = no consent.
+        marketingConsent: { type: boolean }
+    MarketingConsentEntry:
+      type: object
+      required: [granted, basis, capturedAt, sourceEvent]
+      properties:
+        granted: { type: boolean }
+        basis: { type: string }
+        capturedAt: { type: string }
+        sourceEvent: { type: string }
+    DsarRequest:
+      type: object
+      required: [id, customerId, kind, status, pendingBackupErasure, createdAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: integer }
+        kind: { type: string, enum: [export, erase] }
+        status: { type: string, enum: [processing, completed, failed, blocked] }
+        requestedBy: { type: string }
+        bundle: { type: ["object", "null"], additionalProperties: true }
+        steps:
+          type: array
+          items:
+            type: object
+            required: [step, completedAt]
+            properties:
+              step: { type: string }
+              completedAt: { type: string }
+              detail: { type: string }
+        unmet:
+          type: ["array", "null"]
+          items: { type: string }
+        pendingBackupErasure: { type: boolean }
+        error: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
     EnquiryVehicle:
       type: object
       required: [id, year, make, model, name, version, color, price]
@@ -7695,6 +7786,11 @@ components:
         lifetimeValue: { type: number }
         vehiclesOwned: { type: integer }
         loyaltyTier: { type: string, enum: [new, silver, gold, platinum] }
+        marketingConsent:
+          type: ["object", "null"]
+          additionalProperties:
+            $ref: "#/components/schemas/MarketingConsentEntry"
+        erasedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     CustomerInput:
       type: object

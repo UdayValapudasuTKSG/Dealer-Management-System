@@ -37,6 +37,15 @@ export function buildQuotePdf(data: QuotePdfData): Promise<Buffer> {
       .fontSize(8.5)
       .fillColor("#9a9a9a")
       .text("DEALERSHIP OPERATING SYSTEM", left, 66, { characterSpacing: 2 });
+    if (data.dealerName && data.dealerName.trim()) {
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(9.5)
+        .fillColor("#e8e8e8")
+        .text(data.dealerName.trim().toUpperCase(), left, 82, {
+          characterSpacing: 1,
+        });
+    }
     doc
       .font("Helvetica-Bold")
       .fontSize(15)
@@ -220,7 +229,35 @@ export function buildQuotePdf(data: QuotePdfData): Promise<Buffer> {
         width: right - colUnit - 12,
         align: "right",
       });
-    y += 40;
+    y += 20;
+    if (data.totalGyd && data.totalGyd.trim()) {
+      doc
+        .font("Helvetica")
+        .fontSize(10)
+        .fillColor("#555555")
+        .text("Total (GYD equivalent)", left + 12, y);
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(10)
+        .fillColor("#333333")
+        .text(data.totalGyd, colUnit, y, {
+          width: right - colUnit - 12,
+          align: "right",
+        });
+      y += 16;
+      if (data.exchangeRateNote && data.exchangeRateNote.trim()) {
+        doc
+          .font("Helvetica")
+          .fontSize(7.5)
+          .fillColor("#999999")
+          .text(data.exchangeRateNote, left + 12, y, {
+            width: contentW - 24,
+            align: "right",
+          });
+        y += 12;
+      }
+    }
+    y += 12;
 
     // ---- Notes -------------------------------------------------------------
     doc

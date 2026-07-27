@@ -68,9 +68,38 @@ export async function createInboundLead(opts: {
   vehicle?: MatchedVehicle | null;
   /** Human label for the channel, used in timeline copy ("Facebook Lead Ad") */
   channelLabel: string;
+  /** R10.3 consent captured at intake (per-channel); carried through dedup. */
+  marketingConsent?: Record<
+    string,
+    { granted: boolean; basis: string; capturedAt: string; sourceEvent: string }
+  > | null;
   /** Timeline actor name ("Meta Lead Ads" / "WhatsApp") */
   actor: string;
 }): Promise<Lead> {
+  // R10.3: an inbound WhatsApp contact is an explicit opt-in for the
+  // WhatsApp channel ONLY (never inferred for email). Other channels must
+  // pass consent explicitly.
+  function intakeConsent(o: {
+    channel: string;
+    phone?: string | null;
+    marketingConsent?: Record<
+      string,
+      { granted: boolean; basis: string; capturedAt: string; sourceEvent: string }
+    > | null;
+  }) {
+    if (o.marketingConsent) return o.marketingConsent;
+    if (o.channel === "whatsapp" && o.phone) {
+      return {
+        whatsapp: {
+          granted: true,
+          basis: "whatsapp_inbound_optin",
+          capturedAt: new Date().toISOString(),
+          sourceEvent: `whatsapp:${o.phone}`,
+        },
+      };
+    }
+    return null;
+  }
   // Dedup agent (A1): a matching open lead (normalized email OR phone within
   // this dealer) absorbs the enquiry instead of creating a duplicate.
   const duplicate = await findOpenDuplicate(
@@ -99,6 +128,7 @@ export async function createInboundLead(opts: {
         notes: opts.notes
           ? `${opts.channelLabel} enquiry:\n${opts.notes}`
           : `Repeat enquiry via ${opts.channelLabel}.`,
+        marketingConsent: intakeConsent(opts),
       },
       opts.channelLabel,
     );
@@ -135,6 +165,7 @@ export async function createInboundLead(opts: {
       variant: opts.vehicle?.variant ?? null,
       color: opts.vehicle?.color ?? null,
       notes: opts.notes ?? null,
+      marketingConsent: intakeConsent(opts),
     })
     .returning();
 

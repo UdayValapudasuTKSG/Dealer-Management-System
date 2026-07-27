@@ -19,4 +19,5 @@ export interface EnquiryInput {
   color?: string;
   preferredBranch?: string;
   comments?: string;
+  marketingConsent?: boolean;
 }

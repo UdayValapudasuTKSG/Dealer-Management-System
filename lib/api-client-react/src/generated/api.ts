@@ -104,6 +104,7 @@ import type {
   Document,
   DocumentExtractionReviewBody,
   DocumentInput,
+  DsarRequest,
   DuplicateAccountError,
   EmailLog,
   EmailSettings,
@@ -12835,6 +12836,236 @@ export const useDeleteCustomerNote = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteCustomerNoteMutationOptions(options));
+    }
+
+export const getExportCustomerDataUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/export`
+}
+
+/**
+ * @summary R10.4 data-subject export — accepted async, returns the DSAR request
+ */
+export const exportCustomerData = async (id: number, options?: RequestInit): Promise<DsarRequest> => {
+
+  return customFetch<DsarRequest>(getExportCustomerDataUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportCustomerDataQueryKey = (id: number,) => {
+    return [
+    `/api/customers/${id}/export`
+    ] as const;
+    }
+
+
+export const getExportCustomerDataQueryOptions = <TData = Awaited<ReturnType<typeof exportCustomerData>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportCustomerData>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportCustomerDataQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportCustomerData>>> = ({ signal }) => exportCustomerData(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportCustomerData>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportCustomerDataQueryResult = NonNullable<Awaited<ReturnType<typeof exportCustomerData>>>
+export type ExportCustomerDataQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary R10.4 data-subject export — accepted async, returns the DSAR request
+ */
+
+export function useExportCustomerData<TData = Awaited<ReturnType<typeof exportCustomerData>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportCustomerData>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportCustomerDataQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetCustomerExportUrl = (id: number,
+    requestId: number,) => {
+
+
+
+
+  return `/api/customers/${id}/export/${requestId}`
+}
+
+/**
+ * @summary Fetch a DSAR export request (bundle present when completed)
+ */
+export const getCustomerExport = async (id: number,
+    requestId: number, options?: RequestInit): Promise<DsarRequest> => {
+
+  return customFetch<DsarRequest>(getGetCustomerExportUrl(id,requestId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCustomerExportQueryKey = (id: number,
+    requestId: number,) => {
+    return [
+    `/api/customers/${id}/export/${requestId}`
+    ] as const;
+    }
+
+
+export const getGetCustomerExportQueryOptions = <TData = Awaited<ReturnType<typeof getCustomerExport>>, TError = ErrorType<unknown>>(id: number,
+    requestId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerExport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCustomerExportQueryKey(id,requestId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCustomerExport>>> = ({ signal }) => getCustomerExport(id,requestId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && requestId !== null && requestId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCustomerExport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCustomerExportQueryResult = NonNullable<Awaited<ReturnType<typeof getCustomerExport>>>
+export type GetCustomerExportQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Fetch a DSAR export request (bundle present when completed)
+ */
+
+export function useGetCustomerExport<TData = Awaited<ReturnType<typeof getCustomerExport>>, TError = ErrorType<unknown>>(
+ id: number,
+    requestId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCustomerExport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCustomerExportQueryOptions(id,requestId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getEraseCustomerDataUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/erase`
+}
+
+/**
+ * @summary R10.5 right-to-be-forgotten — anonymize C1/C2, purge C4/C5, retain C3 de-linked
+ */
+export const eraseCustomerData = async (id: number, options?: RequestInit): Promise<DsarRequest> => {
+
+  return customFetch<DsarRequest>(getEraseCustomerDataUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getEraseCustomerDataMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof eraseCustomerData>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof eraseCustomerData>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['eraseCustomerData'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof eraseCustomerData>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  eraseCustomerData(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EraseCustomerDataMutationResult = NonNullable<Awaited<ReturnType<typeof eraseCustomerData>>>
+
+    export type EraseCustomerDataMutationError = ErrorType<unknown>
+
+    /**
+ * @summary R10.5 right-to-be-forgotten — anonymize C1/C2, purge C4/C5, retain C3 de-linked
+ */
+export const useEraseCustomerData = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof eraseCustomerData>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof eraseCustomerData>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getEraseCustomerDataMutationOptions(options));
     }
 
 export const getListCustomerDocumentsUrl = (id: number,) => {

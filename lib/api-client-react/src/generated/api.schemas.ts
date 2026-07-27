@@ -2216,6 +2216,62 @@ export interface EnquiryInput {
   color?: string;
   preferredBranch?: string;
   comments?: string;
+  marketingConsent?: boolean;
+}
+
+export interface MarketingConsentEntry {
+  granted: boolean;
+  basis: string;
+  capturedAt: string;
+  sourceEvent: string;
+}
+
+export type DsarRequestKind = typeof DsarRequestKind[keyof typeof DsarRequestKind];
+
+
+export const DsarRequestKind = {
+  export: 'export',
+  erase: 'erase',
+} as const;
+
+export type DsarRequestStatus = typeof DsarRequestStatus[keyof typeof DsarRequestStatus];
+
+
+export const DsarRequestStatus = {
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed',
+  blocked: 'blocked',
+} as const;
+
+/**
+ * @nullable
+ */
+export type DsarRequestBundle = { [key: string]: unknown } | null;
+
+export type DsarRequestStepsItem = {
+  step: string;
+  completedAt: string;
+  detail?: string;
+};
+
+export interface DsarRequest {
+  id: number;
+  customerId: number;
+  kind: DsarRequestKind;
+  status: DsarRequestStatus;
+  requestedBy?: string;
+  /** @nullable */
+  bundle?: DsarRequestBundle;
+  steps?: DsarRequestStepsItem[];
+  /** @nullable */
+  unmet?: string[] | null;
+  pendingBackupErasure: boolean;
+  /** @nullable */
+  error?: string | null;
+  createdAt: string;
+  /** @nullable */
+  completedAt?: string | null;
 }
 
 export interface EnquiryVehicle {
@@ -2420,6 +2476,11 @@ export const CustomerLoyaltyTier = {
   platinum: 'platinum',
 } as const;
 
+/**
+ * @nullable
+ */
+export type CustomerMarketingConsent = {[key: string]: MarketingConsentEntry} | null;
+
 export interface Customer {
   id: number;
   accountType: CustomerAccountType;
@@ -2454,6 +2515,10 @@ export interface Customer {
   lifetimeValue: number;
   vehiclesOwned: number;
   loyaltyTier: CustomerLoyaltyTier;
+  /** @nullable */
+  marketingConsent?: CustomerMarketingConsent;
+  /** @nullable */
+  erasedAt?: string | null;
   createdAt: string;
 }
 

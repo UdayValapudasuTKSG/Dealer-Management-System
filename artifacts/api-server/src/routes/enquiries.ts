@@ -62,6 +62,7 @@ router.post("/enquiries", async (req, res): Promise<void> => {
     color,
     preferredBranch,
     comments,
+    marketingConsent,
   } = parsed.data;
 
   // Public showroom is cross-dealer; the enquiry's dealer is derived from the
@@ -118,6 +119,16 @@ router.post("/enquiries", async (req, res): Promise<void> => {
 
   // Dedup agent: a matching open lead absorbs this enquiry instead of
   // creating a duplicate record.
+  // R10.3 explicit opt-in: consent is recorded EITHER WAY (granted or
+  // declined) with basis + source event so the decision is provable.
+  const consentEntry = {
+    granted: marketingConsent === true,
+    basis: "web_form_checkbox",
+    capturedAt: new Date().toISOString(),
+    sourceEvent: "enquiry:web_form",
+  };
+  const consentPatch = { email: consentEntry, whatsapp: consentEntry };
+
   const duplicate = await findOpenDuplicate(dealerId, {
     name,
     email,
@@ -138,6 +149,7 @@ router.post("/enquiries", async (req, res): Promise<void> => {
         variant: variant ?? matchedVariant,
         color: color ?? matchedColor,
         notes: noteParts.length ? noteParts.join("\n") : null,
+        marketingConsent: consentPatch,
       },
       "Website enquiry",
     );
@@ -162,6 +174,7 @@ router.post("/enquiries", async (req, res): Promise<void> => {
       color: color ?? matchedColor,
       preferredBranch: preferredBranch ?? null,
       notes: noteParts.length ? noteParts.join("\n") : null,
+      marketingConsent: consentPatch,
     })
     .returning();
 
