@@ -22,7 +22,10 @@ import {
   getListOutstandingBalancesQueryKey,
   useListLeads,
   useListCustomers,
+  useListDeals,
+  getListDealsQueryKey,
   type PaymentInput,
+  type InvoiceInput,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -92,6 +95,7 @@ export default function Finance() {
   const { data: outstanding } = useListOutstandingBalances();
   const { data: leads } = useListLeads();
   const { data: customers } = useListCustomers();
+  const { data: deals } = useListDeals();
 
   const createApp = useCreateFinanceApplication();
   const createBank = useCreateBank();
@@ -414,15 +418,47 @@ export default function Finance() {
               }
               fields={[
                 { name: "customerName", label: "Customer", type: "text", required: true, span: "full" },
+                {
+                  name: "kind", label: "Kind", type: "select", span: "half", defaultValue: "final",
+                  options: [
+                    { value: "reservation", label: "Reservation (deposit)" },
+                    { value: "final", label: "Final (balance)" },
+                  ],
+                },
+                {
+                  name: "dealId", label: "Linked deal (optional)", type: "select", span: "half",
+                  options: (deals ?? [])
+                    .filter((d) => d.stage === "desking" || d.stage === "committed")
+                    .map((d) => ({
+                      value: String(d.id),
+                      label: `Deal #${d.id} — ${d.customerName ?? "Unknown"} (${money(d.otdPrice)})`,
+                    })),
+                },
                 { name: "amount", label: "Amount", type: "number", required: true, span: "half" },
                 { name: "dueDate", label: "Due date", type: "date", span: "half" },
-                { name: "description", label: "Description", type: "textarea", span: "full", placeholder: "Vehicle balance, accessories, service…" },
+                { name: "description", label: "Description", type: "textarea", span: "full", placeholder: "Reservation deposit, vehicle balance, accessories, service…" },
               ]}
               onSubmit={async (values) => {
-                await createInvoice.mutateAsync({ data: values as never });
+                const v = values as Record<string, unknown>;
+                const payload: InvoiceInput = {
+                  customerName: v.customerName as string,
+                  amount: Number(v.amount),
+                  kind: (v.kind as InvoiceInput["kind"]) || "final",
+                  dealId: v.dealId ? Number(v.dealId) : undefined,
+                  dueDate: (v.dueDate as string) || undefined,
+                  description: (v.description as string) || undefined,
+                };
+                await createInvoice.mutateAsync({ data: payload });
                 queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
                 queryClient.invalidateQueries({ queryKey: getListOutstandingBalancesQueryKey() });
-                toast({ title: "Invoice issued" });
+                queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
+                toast({
+                  title: "Invoice issued",
+                  description:
+                    payload.kind === "reservation" && payload.dealId
+                      ? "Once this reservation invoice is fully paid, the deal's deposit requirement is satisfied."
+                      : undefined,
+                });
               }}
             />
             <CreateRecordDialog
