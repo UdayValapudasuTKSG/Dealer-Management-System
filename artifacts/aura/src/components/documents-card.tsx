@@ -452,8 +452,8 @@ function ProposalCard({
       await onDone();
     } catch {
       toast({
-        title: "Review failed",
-        description: "Could not process the proposal — try again.",
+        title: "Could not process AI pre-fill",
+        description: "The proposal review didn't go through — try again.",
         variant: "destructive",
       });
     }

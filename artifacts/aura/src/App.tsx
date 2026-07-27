@@ -10,6 +10,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Shell } from "@/components/layout/shell";
 import { AuthProvider, useAuthz } from "@/lib/auth";
+import { roleHome } from "@/lib/role-home";
 import { SignInPage, SignUpPage } from "@/pages/auth-pages";
 
 import Landing from "@/pages/landing";
@@ -239,6 +240,11 @@ function AppRoutes() {
                 <Route path="/admin">
                   <RedirectToRealm />
                 </Route>
+                {/* Role-aware workspace entry — each persona lands on the
+                    page that matches its daily work (01-personas). */}
+                <Route path="/home">
+                  <RoleHomeRedirect />
+                </Route>
                 <Route path="/pipeline" component={Leads} />
                 <Route path="/leads" component={Leads} />
                 <Route path="/command-center" component={Dashboard} />
@@ -339,6 +345,17 @@ function DealershipGate({ children }: { children: React.ReactNode }) {
     return <DealerSuspended dealerName={activeDealer.dealerName} />;
   }
   return <>{children}</>;
+}
+
+/** Redirects to the signed-in user's role landing page (01-personas).
+    Super admins land on the Platform Console — a separate artifact at
+    /realm/, so that case is a full-page navigation, not a wouter redirect. */
+function RoleHomeRedirect() {
+  const { me, isLoading } = useAuthz();
+  if (isLoading || !me) return null;
+  const home = roleHome(me.roleName, me.isSuperAdmin);
+  if (home.startsWith("/realm")) return <RedirectToRealm />;
+  return <Redirect to={home} replace />;
 }
 
 /** Full-page navigation to the standalone AURA Realm artifact at /realm/. */

@@ -75,14 +75,12 @@ function OwnerChip({ owner }: { owner: string }) {
 export function ActionChain({
   lead,
   stage,
-  onOpenWorkflow,
   canEdit,
   pendingGates,
   onGateResolved,
 }: {
   lead: Lead;
   stage: StageNavStage | undefined;
-  onOpenWorkflow: () => void;
   canEdit: boolean;
   pendingGates: any[];
   onGateResolved?: () => void;
@@ -283,7 +281,7 @@ export function ActionChain({
           )}
         </MotionDiv>
 
-        {/* Step 2: Reviews (if any) */}
+        {/* Step 2: Approvals (pending gates, if any) */}
         {gatesPending && (
           <MotionDiv
             initial={{ opacity: 0, x: -10 }}
@@ -469,14 +467,6 @@ export function ActionChain({
                       Advance to {reviewStage.label}
                     </Button>
                   )}
-                  <Button
-                    variant="ghost"
-                    onClick={onOpenWorkflow}
-                    className="gap-2 h-11 px-4 rounded-xl"
-                  >
-                    <Workflow className="w-4 h-4" />
-                    Open workflow
-                  </Button>
                 </div>
               )
             )}

@@ -392,7 +392,7 @@ export default function Landing() {
           ))}
           <div className="w-[1px] h-4 bg-white/20"></div>
           <Link
-            href="/command-center"
+            href="/home"
             className="text-xs font-bold tracking-[0.1em] uppercase text-primary hover:text-primary-foreground transition-colors"
           >
             Sign In
@@ -434,7 +434,7 @@ export default function Landing() {
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
               <Link
-                href="/command-center"
+                href="/home"
                 className="group relative inline-flex items-center justify-center gap-3 h-16 px-10 rounded-full bg-primary/10 border border-primary text-white text-sm font-bold uppercase tracking-[0.15em] overflow-hidden transition-all hover:bg-primary"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
@@ -546,7 +546,7 @@ export default function Landing() {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
             <Link
-              href="/command-center"
+              href="/home"
               className="inline-flex items-center justify-center gap-2 h-14 px-8 rounded-full bg-primary text-white text-sm font-bold uppercase tracking-wider shadow-[0_0_30px_rgba(169,113,66,0.3)] hover:bg-primary/90 hover:scale-105 transition-all"
             >
               Sign In to Workspace

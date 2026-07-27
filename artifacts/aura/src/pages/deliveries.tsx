@@ -1021,7 +1021,7 @@ function HandoverVerificationBanner({
         },
         onError: (err: unknown) =>
           toast({
-            title: "Review failed",
+            title: "Verification failed",
             description:
               (err as { response?: { data?: { error?: string } } })?.response
                 ?.data?.error ?? "Try again.",

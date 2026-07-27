@@ -47,22 +47,10 @@ import {
   CircleAlert,
   History,
   ArrowUpRight,
-  ArrowRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatGuyanaDateTime } from "@/lib/format";
-
-const NEXT_ADVANCE: Record<
-  string,
-  { toStage: "qualified" | "test_drive" | "proposal" | "negotiation" | "sold"; label: string } | undefined
-> = {
-  new: { toStage: "qualified", label: "Qualified" },
-  contacted: { toStage: "test_drive", label: "Test Drive" },
-  qualified: { toStage: "proposal", label: "Proposal" },
-  proposal: { toStage: "negotiation", label: "Negotiation" },
-  negotiation: { toStage: "sold", label: "Sold" },
-};
 
 const STATUS_LABEL: Record<string, string> = {
   new: "New",
@@ -297,21 +285,8 @@ export function LeadWorkflowDialog({
                 </div>
               </SectionCard>
 
-              {/* Stage advancing lives in the workbench Action Chain — this
-                  dialog only handles the supporting actions. */}
-              {NEXT_ADVANCE[l.phase] && (
-                <SectionCard icon={ArrowRight} title="Next Stage">
-                  <p className="text-xs text-muted-foreground">
-                    Next stage:{" "}
-                    <span className="text-foreground font-semibold">
-                      {NEXT_ADVANCE[l.phase]!.label}
-                    </span>
-                    . Advance from the Action Chain on the lead page — it shows
-                    the readiness checklist and any pending approvals.
-                  </p>
-                </SectionCard>
-              )}
-
+              {/* Stage advancing lives ONLY in the workbench Action Chain —
+                  this dialog holds the supporting actions. */}
               <SectionCard icon={History} title="Status">
                 <Select
                   value={l.status}

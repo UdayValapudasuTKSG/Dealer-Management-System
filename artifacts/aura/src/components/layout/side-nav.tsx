@@ -278,26 +278,50 @@ function UserCard({ collapsed = false }: { collapsed?: boolean }) {
   );
 }
 
-/* Roles that get the full operational menu. Everyone else (Sales Advisors,
-   technicians, coordinators…) gets the minimal focused menu: My Day,
-   Pipeline, Inventory, Customers — still gated by their RBAC permissions. */
+/* Role-adaptive menus (01-personas.md). Managers and the GM get the full
+   clustered menu; every other persona gets a focused "Workspace" menu scoped
+   to its daily work. RBAC (`can`) and entitlements still filter every item,
+   so this only ever narrows what a role could already see. */
 const FULL_MENU_ROLES = new Set([
   "General Manager",
   "Sales Manager",
   "Service Manager",
   "Finance Manager",
+  "Dealer Admin",
+  "Admin",
 ]);
 
-const MINIMAL_CLUSTER: Cluster = {
-  label: "Workspace",
-  items: [
-    { name: "My Day", href: "/command-center", module: "", icon: LayoutDashboard },
-    { name: "Pipeline", href: "/pipeline", module: "leads", icon: Waypoints },
-    { name: "Inventory", href: "/inventory", module: "inventory", icon: Car },
-    { name: "Service", href: "/service", module: "service", icon: Wrench },
-    { name: "Customers", href: "/customers", module: "customers", icon: Users },
-  ],
+const ITEM: Record<string, NavItem> = {
+  myDay: { name: "My Day", href: "/command-center", module: "", icon: LayoutDashboard },
+  reports: { name: "Reports", href: "/reports", module: "reports", icon: BarChart3 },
+  pipeline: { name: "Pipeline", href: "/pipeline", module: "leads", icon: Waypoints },
+  inventory: { name: "Inventory", href: "/inventory", module: "inventory", icon: Car },
+  deliveries: { name: "Deliveries", href: "/deliveries", module: "deliveries", icon: Truck },
+  service: { name: "Service", href: "/service", module: "service", icon: Wrench, ent: "service_module" },
+  workshop: { name: "Workshop", href: "/service", module: "service", icon: Wrench, ent: "service_module" },
+  parts: { name: "Parts", href: "/parts", module: "parts", icon: Package, ent: "parts_module" },
+  customers: { name: "Accounts", href: "/customers", module: "customers", icon: Users },
 };
+
+/* Focused menus per persona — first item is that persona's home. */
+const ROLE_WORKSPACE: Record<string, NavItem[]> = {
+  "Sales Advisor": [ITEM.myDay, ITEM.pipeline, ITEM.inventory, ITEM.customers],
+  "Delivery Advisor": [ITEM.deliveries, ITEM.myDay, ITEM.inventory, ITEM.customers],
+  "Service Advisor": [ITEM.service, ITEM.myDay, ITEM.customers],
+  Technician: [ITEM.workshop],
+  "Parts Advisor": [ITEM.parts, ITEM.service, ITEM.inventory],
+  "Marketing Manager": [ITEM.reports, ITEM.myDay, ITEM.pipeline, ITEM.customers],
+  "Marketing Coordinator": [ITEM.reports, ITEM.myDay, ITEM.pipeline, ITEM.customers],
+  "Marketing Advisor": [ITEM.reports, ITEM.myDay, ITEM.pipeline, ITEM.customers],
+};
+
+const DEFAULT_WORKSPACE: NavItem[] = [
+  ITEM.myDay,
+  ITEM.pipeline,
+  ITEM.inventory,
+  ITEM.service,
+  ITEM.customers,
+];
 
 function useNavClusters() {
   const { can, me, entitled } = useAuthz();
@@ -305,7 +329,14 @@ function useNavClusters() {
   const fullMenu =
     !!me && (me.isSuperAdmin || FULL_MENU_ROLES.has(me.roleName ?? ""));
 
-  const source = fullMenu ? CLUSTERS : [MINIMAL_CLUSTER];
+  const source = fullMenu
+    ? CLUSTERS
+    : [
+        {
+          label: "Workspace",
+          items: ROLE_WORKSPACE[me?.roleName ?? ""] ?? DEFAULT_WORKSPACE,
+        },
+      ];
 
   const clusters = source.map((c) => ({
     ...c,

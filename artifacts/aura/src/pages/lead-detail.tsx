@@ -57,7 +57,7 @@ import {
   ShieldCheck,
   Trash2,
   User,
-  Workflow,
+  ClipboardList,
   X,
   XCircle,
 } from "lucide-react";
@@ -1126,11 +1126,12 @@ export default function LeadDetail() {
               </Button>
             )}
             <Button
+              variant="outline"
               onClick={() => setWorkflowOpen(true)}
-              className="gap-1.5 glow-red"
+              className="gap-1.5"
             >
-              <Workflow className="w-4 h-4" />
-              Workflow
+              <ClipboardList className="w-4 h-4" />
+              Lead actions
             </Button>
             {(canEdit || canDelete) && (
               <DropdownMenu>
@@ -1259,7 +1260,6 @@ export default function LeadDetail() {
                   <ActionChain
                     lead={lead}
                     stage={stagesWithAlerts[journeyIndex]}
-                    onOpenWorkflow={() => setWorkflowOpen(true)}
                     canEdit={canEdit}
                     pendingGates={chainGates}
                     onGateResolved={() => {
@@ -1491,7 +1491,7 @@ export default function LeadDetail() {
                           onClick={() => setWorkflowOpen(true)}
                           className="text-[11px] text-primary hover:underline"
                         >
-                          Change via Workflow
+                          Change in Lead actions
                         </button>
                       </span>
                     </InlineField>
