@@ -173,7 +173,7 @@ export async function mergeIntoExistingLead(
 
   await db.insert(activityTable).values({
     dealerId: lead.dealerId,
-    agentKey: "sales",
+    agentKey: "intake_dedup",
     actor: AGENT_ACTOR,
     isAi: true,
     action: "Merged duplicate lead",

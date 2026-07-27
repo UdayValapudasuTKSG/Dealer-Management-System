@@ -7,7 +7,6 @@ import {
   dealersTable,
   type Lead,
 } from "@workspace/db";
-import { enqueueWhatsapp } from "./email";
 import { whatsappConfig } from "./whatsapp";
 import { isAgentEnabled, recordAgentRun } from "./agent-governance";
 import { logger } from "./logger";
@@ -24,7 +23,7 @@ import { logger } from "./logger";
 // Fire-and-forget: never throws into the request path.
 // ---------------------------------------------------------------------------
 
-const AGENT_KEY = "sales";
+const AGENT_KEY = "intake_dedup";
 const AGENT_ACTOR = "AURA Intake Agent";
 
 /** Demo showrooms with the address keywords that map to them. */
@@ -150,7 +149,10 @@ async function orchestrate(lead: Lead): Promise<void> {
     );
   }
 
-  // 2) WhatsApp quote share.
+  // 2) WhatsApp quote share — DRAFT ONLY (R3.3 / NC: no customer-facing
+  // message is ever auto-sent). The drafted message is held as a
+  // needs_review outreach run; a human approves and sends it via the
+  // Approve & Send flow.
   if (fresh.phone && fresh.interestedVehicleId && whatsappConfig()) {
     const summary = await latestQuoteSummary(fresh);
     if (summary) {
@@ -159,18 +161,20 @@ async function orchestrate(lead: Lead): Promise<void> {
         `Hi ${fresh.name.split(" ")[0]}, thanks for your enquiry with ${dealer}! ` +
         `Here is your personalised estimate: ${summary} ` +
         `${fresh.assignedTo ? `${fresh.assignedTo} is your advisor and ` : "Our team "}will be in touch shortly — reply here any time.`;
-      await enqueueWhatsapp({
+      await recordAgentRun({
         dealerId: fresh.dealerId,
-        customerId: fresh.customerId,
-        leadId: fresh.id,
-        to: fresh.phone,
-        kind: "outreach",
-        summary: "Auto-quote shared on WhatsApp",
-        body,
-        actor: AGENT_ACTOR,
-        dedupeKey: `intake-quote-wa-${fresh.id}`,
+        agentKey: "outreach",
+        runType: "whatsapp_quote_draft",
+        inputSource: "leads",
+        inputSummary: `New ${fresh.channel} lead #${fresh.id} with a priced quote`,
+        outputSummary: `Draft WhatsApp quote message: ${body}`,
+        status: "needs_review",
+        reviewReason:
+          "Customer-facing message — requires human Approve & Send (never auto-sent)",
+        refType: "lead",
+        refId: fresh.id,
       });
-      actions.push("auto-quote shared via WhatsApp");
+      actions.push("WhatsApp quote drafted for human review (not sent)");
     }
   }
 

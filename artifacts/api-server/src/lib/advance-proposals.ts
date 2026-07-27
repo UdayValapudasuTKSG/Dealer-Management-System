@@ -30,7 +30,7 @@ import { logger } from "./logger";
 // Deterministic plain code — no LLM. Kill-switch aware per dealer.
 // ---------------------------------------------------------------------------
 
-const AGENT_KEY = "sales";
+const AGENT_KEY = "pipeline_suggestions";
 const AGENT_ACTOR = "AURA Pipeline Agent";
 const INTERVAL_MS = 5 * 60 * 1000;
 const STALLED_AFTER_DAYS = 5;

@@ -435,7 +435,7 @@ async function completeFlow(
   lead.customerId = await ensureAccountForLead(lead, "whatsapp");
   await recordAgentRun({
     dealerId,
-    agentKey: "concierge",
+    agentKey: "intake_dedup",
     runType: "whatsapp_lead_capture",
     inputSource: "whatsapp",
     inputSummary: freeTextAnswer ?? vehicle?.label ?? null,
@@ -622,7 +622,7 @@ export async function handleWhatsappMessage(
     }
     // Kill switch: when the concierge agent is paused for this dealer, log
     // the inbound message but do not run the bot.
-    if (!(await isAgentEnabled(dealerId, "concierge"))) {
+    if (!(await isAgentEnabled(dealerId, "intake_dedup"))) {
       await recordWhatsappMessage({
         phone,
         direction: "in",
@@ -631,7 +631,7 @@ export async function handleWhatsappMessage(
       });
       await recordAgentRun({
         dealerId,
-        agentKey: "concierge",
+        agentKey: "intake_dedup",
         runType: "whatsapp_bot_reply",
         inputSource: "whatsapp",
         inputSummary: msg.text ?? msg.replyTitle ?? null,
@@ -861,10 +861,10 @@ export async function handleWhatsappOneShot(
       await t.sendText(msg.from, optReply);
       return;
     }
-    if (!(await isAgentEnabled(dealerId, "concierge"))) {
+    if (!(await isAgentEnabled(dealerId, "intake_dedup"))) {
       await recordAgentRun({
         dealerId,
-        agentKey: "concierge",
+        agentKey: "intake_dedup",
         runType: "whatsapp_one_shot_intake",
         inputSource: "whatsapp",
         inputSummary: msg.text ?? msg.replyTitle ?? null,
@@ -901,7 +901,7 @@ export async function handleWhatsappOneShot(
     lead.customerId = await ensureAccountForLead(lead, "whatsapp");
     await recordAgentRun({
       dealerId,
-      agentKey: "concierge",
+      agentKey: "intake_dedup",
       runType: "whatsapp_lead_capture",
       inputSource: "whatsapp",
       inputSummary: body || null,

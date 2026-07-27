@@ -175,10 +175,10 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
     `Use the real lead names and ids provided. Be precise and honest — do not inflate positivity.`,
   ].join("\n");
 
-  if (!(await isAgentEnabled(dealerId, "analyst"))) {
+  if (!(await isAgentEnabled(dealerId, "sentiment_digest"))) {
     await recordAgentRun({
       dealerId,
-      agentKey: "analyst",
+      agentKey: "sentiment_digest",
       runType: "sentiment_analysis",
       inputSource: "sentiment",
       status: "blocked",
@@ -230,7 +230,7 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
 
     await recordAgentRun({
       dealerId,
-      agentKey: "analyst",
+      agentKey: "sentiment_digest",
       runType: "sentiment_analysis",
       inputSource: "sentiment",
       inputSummary: `${items.length} notes analysed`,
@@ -243,7 +243,7 @@ router.get("/dashboard/sentiment", async (req, res): Promise<void> => {
     req.log.error({ err }, "Sentiment analysis request failed");
     await recordAgentRun({
       dealerId,
-      agentKey: "analyst",
+      agentKey: "sentiment_digest",
       runType: "sentiment_analysis",
       inputSource: "sentiment",
       status: "error",

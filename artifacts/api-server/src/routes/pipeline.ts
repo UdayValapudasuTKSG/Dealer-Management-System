@@ -46,10 +46,10 @@ router.get("/pipeline/suggestions", async (req, res): Promise<void> => {
   const label = PHASE_LABEL[phase] ?? phase;
 
   const dealerId = activeDealerId(res);
-  if (!(await isAgentEnabled(dealerId, "sales"))) {
+  if (!(await isAgentEnabled(dealerId, "pipeline_suggestions"))) {
     await recordAgentRun({
       dealerId,
-      agentKey: "sales",
+      agentKey: "pipeline_suggestions",
       runType: "pipeline_suggestions",
       inputSource: "pipeline",
       inputSummary: `phase=${phase}`,
@@ -153,7 +153,7 @@ router.get("/pipeline/suggestions", async (req, res): Promise<void> => {
 
     await recordAgentRun({
       dealerId,
-      agentKey: "sales",
+      agentKey: "pipeline_suggestions",
       runType: "pipeline_suggestions",
       inputSource: "pipeline",
       inputSummary: `phase=${phase}, ${leads.length} leads`,
@@ -165,7 +165,7 @@ router.get("/pipeline/suggestions", async (req, res): Promise<void> => {
     req.log.error({ err }, "Pipeline suggestions request failed");
     await recordAgentRun({
       dealerId,
-      agentKey: "sales",
+      agentKey: "pipeline_suggestions",
       runType: "pipeline_suggestions",
       inputSource: "pipeline",
       inputSummary: `phase=${phase}`,

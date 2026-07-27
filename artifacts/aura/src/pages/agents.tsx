@@ -43,6 +43,57 @@ const DOMAIN_ICON: Record<string, LucideIcon> = {
   documents: FileText,
 };
 
+// Mirrors the server's closed agent catalog (agent-governance.ts).
+const AUTONOMOUS_KEYS = new Set([
+  "intake_dedup",
+  "call_sentiment",
+  "case_classifier",
+]);
+
+const CLASS_BADGE: Record<string, { label: string; className: string }> = {
+  autonomous: {
+    label: "Autonomous · audited",
+    className: "bg-primary/10 text-primary ring-primary/25",
+  },
+  hitl: {
+    label: "Human-approved",
+    className: "bg-emerald-500/10 text-emerald-600 ring-emerald-500/25",
+  },
+};
+
+/** Deterministic system automations — plain code, never an LLM, and
+ * deliberately NOT kill-switchable (they are core business logic). */
+const SYSTEM_AUTOMATIONS = [
+  {
+    key: "round_robin",
+    name: "Round-Robin Assignment",
+    domain: "Lead Routing",
+    description:
+      "Assigns each new lead to the next advisor in rotation. Deterministic code — always on.",
+  },
+  {
+    key: "quote_tax",
+    name: "Quote & Tax Engine",
+    domain: "Pricing",
+    description:
+      "Generates priced estimates from inventory with the dealer's configured taxes. Deterministic code — always on.",
+  },
+  {
+    key: "auto_desk",
+    name: "Auto-Desk",
+    domain: "Deals",
+    description:
+      "Desks a draft deal when a lead with a vehicle reaches Negotiation. Deterministic code — always on.",
+  },
+  {
+    key: "vin_allocation",
+    name: "VIN Allocation",
+    domain: "Inventory",
+    description:
+      "Allocates a physical VIN to a committed deal. Deterministic code — always on.",
+  },
+];
+
 const STATUS_STYLE: Record<string, string> = {
   active: "bg-emerald-500/15 text-emerald-600 ring-emerald-500/30",
   idle: "bg-amber-500/15 text-amber-600 ring-amber-500/30",
@@ -366,6 +417,21 @@ export default function Agents() {
                         {agent.status}
                       </span>
                     </div>
+                    {(() => {
+                      const badge = AUTONOMOUS_KEYS.has(agent.key)
+                        ? CLASS_BADGE.autonomous
+                        : CLASS_BADGE.hitl;
+                      return (
+                        <span
+                          className={cn(
+                            "self-start rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1",
+                            badge!.className,
+                          )}
+                        >
+                          {badge!.label}
+                        </span>
+                      );
+                    })()}
                     <p className="text-xs text-muted-foreground leading-relaxed flex-1">
                       {agent.description}
                     </p>
@@ -414,6 +480,40 @@ export default function Agents() {
                   </motion.div>
                 );
               })}
+        </div>
+
+        {/* Deterministic system automations — never LLM, never switchable */}
+        <div className="rounded-2xl bg-card border border-border/60 shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Gauge className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">
+              System automations
+            </h2>
+            <span className="ml-auto text-[11px] text-muted-foreground">
+              Deterministic code — always on
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {SYSTEM_AUTOMATIONS.map((s) => (
+              <div
+                key={s.key}
+                className="rounded-xl border border-border/50 bg-foreground/[0.02] p-4 flex flex-col gap-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-sm">{s.name}</div>
+                  <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground ring-1 ring-border">
+                    System
+                  </span>
+                </div>
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                  {s.domain}
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {s.description}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Governance console — Admin/Leadership only */}

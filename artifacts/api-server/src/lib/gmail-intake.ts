@@ -317,7 +317,7 @@ export async function pollGmailInbox(): Promise<void> {
     return;
   }
   // Kill switch: dealer paused the email intake agent — skip polling entirely.
-  if (!(await isAgentEnabled(await defaultDealerId(), "sales"))) return;
+  if (!(await isAgentEnabled(await defaultDealerId(), "intake_dedup"))) return;
   polling = true;
   const client = new ImapFlow({
     host: "imap.gmail.com",
@@ -408,7 +408,7 @@ export async function pollGmailInbox(): Promise<void> {
             );
             await recordAgentRun({
               dealerId,
-              agentKey: "sales",
+              agentKey: "intake_dedup",
               runType: "email_intake",
               inputSource: "gmail",
               inputSummary: subject || "(no subject)",
@@ -451,7 +451,7 @@ export async function pollGmailInbox(): Promise<void> {
           if (!(extraction.isEnquiry && gateReason)) {
             await recordAgentRun({
               dealerId: await defaultDealerId(),
-              agentKey: "sales",
+              agentKey: "intake_dedup",
               runType: "email_intake",
               inputSource: "gmail",
               inputSummary: subject || "(no subject)",

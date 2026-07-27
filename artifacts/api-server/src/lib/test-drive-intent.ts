@@ -48,7 +48,7 @@ import { logger } from "./logger";
 // outcome lands on the lead timeline + agent governance.
 // ---------------------------------------------------------------------------
 
-const AGENT_KEY = "sales";
+const AGENT_KEY = "test_drive_availability";
 const AGENT_ACTOR = "AURA Sales Agent";
 const RUN_TYPE = "test_drive_intent_auto";
 const OPEN_HOUR = 9; // aligned with the self-service booking window

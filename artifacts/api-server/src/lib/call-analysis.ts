@@ -28,7 +28,7 @@ import {
 // aware; fire-and-forget; never throws into the request path.
 // ---------------------------------------------------------------------------
 
-const AGENT_KEY = "sales";
+const AGENT_KEY = "call_sentiment";
 const AGENT_ACTOR = "AURA Sales Agent";
 const VALID = ["positive", "neutral", "negative"] as const;
 

@@ -15,6 +15,11 @@ import {
   SendAnthropicMessageBody,
 } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
+import {
+  isAgentEnabled,
+  recordAgentRun,
+  guardUntrusted,
+} from "../../lib/agent-governance";
 
 const router: IRouter = Router();
 
@@ -204,6 +209,24 @@ router.post(
       return;
     }
 
+    // Concierge kill switch (R3) — this chat surface is the same governed
+    // HITL concierge agent; when paused for the dealer it is unreachable.
+    if (!(await isAgentEnabled(conversation.dealerId, "concierge"))) {
+      await recordAgentRun({
+        dealerId: conversation.dealerId,
+        agentKey: "concierge",
+        runType: "chat_turn",
+        inputSource: "concierge_chat",
+        status: "blocked",
+        errorMessage: "Agent paused by kill switch",
+      });
+      res.status(409).json({
+        error: "The Concierge assistant is paused for this dealership.",
+      });
+      return;
+    }
+    const startedAt = Date.now();
+
     await db.insert(messages).values({
       conversationId: id,
       dealerId: conversation.dealerId,
@@ -222,7 +245,12 @@ router.post(
       .reverse()
       .map((m) => ({
         role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-        content: m.content,
+        // User-typed chat content is untrusted — wrap it in the shared
+        // injection guard so pasted "instructions" are treated as data.
+        content:
+          m.role === "assistant"
+            ? m.content
+            : guardUntrusted("user_message", m.content, 8000),
       }));
 
     const systemPrompt = await buildSystemPrompt(conversation.dealerId);
@@ -285,6 +313,17 @@ router.post(
       await persist();
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
+      await recordAgentRun({
+        dealerId: conversation.dealerId,
+        agentKey: "concierge",
+        runType: "chat_turn",
+        inputSource: "concierge_chat",
+        inputSummary: `Conversation #${id}`,
+        outputSummary: fullResponse.slice(0, 300),
+        refType: "conversation",
+        refId: id,
+        latencyMs: Date.now() - startedAt,
+      });
     } catch (err) {
       if (clientClosed) {
         // Expected abort after client disconnect — partial already persisted.

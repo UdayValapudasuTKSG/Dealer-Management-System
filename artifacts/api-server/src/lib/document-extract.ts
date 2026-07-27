@@ -12,6 +12,7 @@ import {
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { ObjectStorageService } from "./objectStorage";
 import { logger } from "./logger";
+import { recordAgentRun } from "./agent-governance";
 
 // ---------------------------------------------------------------------------
 // Agent A5 — document pre-fill.
@@ -25,7 +26,7 @@ import { logger } from "./logger";
 // fields regardless of what the model returns.
 // ---------------------------------------------------------------------------
 
-export const DOCUMENT_AGENT_KEY = "documents";
+export const DOCUMENT_AGENT_KEY = "doc_prefill";
 const AGENT_ACTOR = "AURA Documents Agent (A5)";
 
 /** Lead fields A5 is allowed to propose. Everything else is discarded. */
@@ -229,6 +230,24 @@ Only include fields you are confident about. If nothing is extractable, return {
           eq(agentsTable.dealerId, doc.dealerId),
         ),
       );
+    await recordAgentRun({
+      dealerId: doc.dealerId,
+      agentKey: DOCUMENT_AGENT_KEY,
+      runType: "document_prefill",
+      inputSource: "documents",
+      inputSummary: `${doc.fileName} (${doc.type}) on lead #${lead.id}`,
+      outputSummary:
+        fields.length > 0
+          ? `Proposed ${fields.length} pre-fill field(s) for advisor review`
+          : "No confident field values found",
+      status: fields.length > 0 ? "needs_review" : "completed",
+      reviewReason:
+        fields.length > 0
+          ? "Pre-fill proposals require advisor accept/reject before any lead field changes"
+          : undefined,
+      refType: "lead",
+      refId: lead.id,
+    });
   } catch (err) {
     logger.error({ err, documentId: doc.id }, "A5 document extraction failed");
     await db
@@ -236,5 +255,16 @@ Only include fields you are confident about. If nothing is extractable, return {
       .set({ extractionStatus: "failed" })
       .where(eq(documentsTable.id, doc.id))
       .catch(() => {});
+    await recordAgentRun({
+      dealerId: doc.dealerId,
+      agentKey: DOCUMENT_AGENT_KEY,
+      runType: "document_prefill",
+      inputSource: "documents",
+      inputSummary: `${doc.fileName} (${doc.type})`,
+      status: "error",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      refType: "document",
+      refId: doc.id,
+    }).catch(() => {});
   }
 }

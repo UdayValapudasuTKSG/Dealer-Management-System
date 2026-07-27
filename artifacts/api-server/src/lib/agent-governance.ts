@@ -22,6 +22,48 @@ import { incrementMetric } from "./metrics";
 // back to a human decision.
 // ---------------------------------------------------------------------------
 
+/**
+ * R3 — the complete, CLOSED agent catalog. Three classes:
+ *  - autonomous: the only LLM actors allowed to write the data plane on
+ *    their own authority (internal-only, audited, kill-switchable).
+ *  - hitl: advisory/HITL LLM — draft/suggest/extract/navigate; a human
+ *    commits every outbound or state-changing action. Kill-switchable.
+ *  - Deterministic SYSTEM actions (round_robin, quote_tax, vin_allocation)
+ *    are plain transactional code — NOT LLM, NOT kill-switchable, and NOT
+ *    part of this registry (they carry no semantic kill-switch key).
+ */
+export const AUTONOMOUS_AGENT_KEYS = [
+  "intake_dedup",
+  "call_sentiment",
+  "case_classifier",
+] as const;
+
+export const HITL_AGENT_KEYS = [
+  "doc_prefill",
+  "outreach",
+  "test_drive_availability",
+  "pipeline_suggestions",
+  "sentiment_digest",
+  "persona_recommend",
+  "concierge",
+  "gra_extract",
+] as const;
+
+/** The complete set of valid kill-switch semantic keys (R3.4). */
+export const AGENT_SEMANTIC_KEYS = [
+  ...AUTONOMOUS_AGENT_KEYS,
+  ...HITL_AGENT_KEYS,
+] as const;
+
+export type AgentSemanticKey = (typeof AGENT_SEMANTIC_KEYS)[number];
+
+export function agentClass(key: string): "autonomous" | "hitl" | null {
+  if ((AUTONOMOUS_AGENT_KEYS as readonly string[]).includes(key))
+    return "autonomous";
+  if ((HITL_AGENT_KEYS as readonly string[]).includes(key)) return "hitl";
+  return null;
+}
+
 /** Model confidence below this must NOT be auto-applied — fall back to human. */
 export const MIN_AGENT_CONFIDENCE = 0.6;
 

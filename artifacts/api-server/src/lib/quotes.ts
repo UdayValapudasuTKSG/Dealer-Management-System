@@ -23,8 +23,8 @@ import { recordAgentRun } from "./agent-governance";
 // and prior versions are always retained.
 // ---------------------------------------------------------------------------
 
-export const QUOTE_AGENT_ACTOR = "AURA Quote Agent";
-const AGENT_KEY = "sales";
+export const QUOTE_AGENT_ACTOR = "AURA System";
+const AGENT_KEY = "quote_tax";
 
 const longDate = (d: Date) =>
   d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
@@ -144,8 +144,9 @@ export async function generateQuoteForLead(
   if (opts.isAgent) {
     await recordAgentRun({
       dealerId: lead.dealerId,
-      agentKey: "sales",
+      agentKey: "quote_tax",
       runType: "quote_generation",
+      autonomy: "system",
       inputSource: "quotes",
       inputSummary: `Lead #${lead.id}, trigger=${opts.trigger}`,
       outputSummary: detail,
@@ -176,15 +177,11 @@ export async function generateQuoteForLead(
       dealerId: lead.dealerId,
       agentKey: AGENT_KEY,
       actor: QUOTE_AGENT_ACTOR,
-      isAi: true,
+      isAi: false,
       action: version === 1 ? "Generated quotation Code" : "Regenerated quotation Code",
       entity: lead.name,
       detail,
     });
-    await db
-      .update(agentsTable)
-      .set({ tasksToday: sql`${agentsTable.tasksToday} + 1` })
-      .where(and(eq(agentsTable.key, AGENT_KEY), eq(agentsTable.dealerId, lead.dealerId)));
   }
 
   return quote!;

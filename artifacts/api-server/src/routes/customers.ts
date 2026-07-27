@@ -927,10 +927,10 @@ router.post(
       `The vehicleId MUST be one of the ids listed above. The reason is 1-2 sentences, warm and confident, referencing the client's persona.`,
     ].join("\n");
 
-    if (!(await isAgentEnabled(dealerId, "concierge"))) {
+    if (!(await isAgentEnabled(dealerId, "persona_recommend"))) {
       await recordAgentRun({
         dealerId,
-        agentKey: "concierge",
+        agentKey: "persona_recommend",
         runType: "vehicle_recommendation",
         inputSource: "customers",
         refType: "customer",
@@ -994,7 +994,7 @@ router.post(
 
       await recordAgentRun({
         dealerId,
-        agentKey: "concierge",
+        agentKey: "persona_recommend",
         runType: "vehicle_recommendation",
         inputSource: "customers",
         inputSummary: `Customer #${customerId}`,
@@ -1010,7 +1010,7 @@ router.post(
       req.log.error({ err }, "Vehicle recommendation request failed");
       await recordAgentRun({
         dealerId,
-        agentKey: "concierge",
+        agentKey: "persona_recommend",
         runType: "vehicle_recommendation",
         inputSource: "customers",
         refType: "customer",

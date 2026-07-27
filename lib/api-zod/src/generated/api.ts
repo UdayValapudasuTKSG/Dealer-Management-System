@@ -4723,7 +4723,7 @@ export const ListAgentRunsResponseItem = zod.object({
   "errorMessage": zod.string().nullish(),
   "refType": zod.string().nullish(),
   "refId": zod.number().nullish(),
-  "autonomy": zod.enum(['advisory', 'autonomous']),
+  "autonomy": zod.enum(['advisory', 'autonomous', 'system']),
   "affectedEntities": zod.array(zod.object({
   "type": zod.string(),
   "id": zod.number()
@@ -4777,7 +4777,7 @@ export const ReviewAgentRunResponse = zod.object({
   "errorMessage": zod.string().nullish(),
   "refType": zod.string().nullish(),
   "refId": zod.number().nullish(),
-  "autonomy": zod.enum(['advisory', 'autonomous']),
+  "autonomy": zod.enum(['advisory', 'autonomous', 'system']),
   "affectedEntities": zod.array(zod.object({
   "type": zod.string(),
   "id": zod.number()

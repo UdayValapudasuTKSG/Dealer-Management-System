@@ -8678,7 +8678,7 @@ components:
         refId: { type: ["integer", "null"] }
         autonomy:
           type: string
-          enum: [advisory, autonomous]
+          enum: [advisory, autonomous, system]
         affectedEntities:
           type: array
           items:

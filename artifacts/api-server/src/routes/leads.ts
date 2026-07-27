@@ -1477,18 +1477,15 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
     .from(dealsTable)
     .where(and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, lead.id)));
 
-  // AUTO-DESK AGENT: when a lead advances into Negotiation with a vehicle
-  // selected but no deal on file, the sales agent desks a draft deal
-  // automatically (vehicle price, no discount) so the advisor negotiates from
-  // real numbers instead of being blocked by the deal_created gate. Manual
-  // desking by the advisor at any earlier point takes precedence — the agent
-  // only acts when NO deal exists. Governed: per-dealer kill switch + run
-  // record + audit log, per platform agent-governance rules.
+  // AUTO-DESK: when a lead advances into Negotiation with a vehicle selected
+  // but no deal on file, a draft deal is desked automatically at the listed
+  // price. This is DETERMINISTIC transactional code triggered by the human's
+  // advance action — not an AI write, so it carries no kill switch (R3.2);
+  // it is audited as a system action.
   if (
     toStage === "negotiation" &&
     leadDeals.length === 0 &&
-    lead.interestedVehicleId &&
-    (await isAgentEnabled(dealerId, "sales"))
+    lead.interestedVehicleId
   ) {
     const startedAt = Date.now();
     const [vehicle] = await db
@@ -1525,15 +1522,16 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
           kind: "deal_created",
           title: "Deal auto-desked by AURA",
           detail: `Draft deal #${autoDeal.id} created at the vehicle's listed price when the lead entered Negotiation — review and adjust the numbers.`,
-          actor: "AURA Sales Agent",
-          isAgent: true,
+          actor: "AURA System",
+          isAgent: false,
           refType: "lead",
           refId: lead.id,
         });
         await recordAgentRun({
           dealerId,
-          agentKey: "sales",
+          agentKey: "auto_desk",
           runType: "auto_desk_deal",
+          autonomy: "system",
           inputSource: "stage_advance",
           inputSummary: `Lead #${lead.id} advanced to Negotiation with no deal on file`,
           outputSummary: `Drafted deal #${autoDeal.id} at listed price for vehicle #${vehicle.id}`,
@@ -2458,7 +2456,7 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
       .limit(8),
   ]);
 
-  const agentEnabled = await isAgentEnabled(dealerId, "sales");
+  const agentEnabled = await isAgentEnabled(dealerId, "pipeline_suggestions");
 
   // 1) Deterministic core: actions + risk from the REAL advance checklist.
   //    This part always runs — even with the agent paused, the advisor gets
@@ -2488,7 +2486,7 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
   if (!agentEnabled) {
     await recordAgentRun({
       dealerId,
-      agentKey: "sales",
+      agentKey: "pipeline_suggestions",
       runType: "lead_agent_brief",
       inputSource: "leads",
       refType: "lead",
@@ -2600,7 +2598,7 @@ router.get("/leads/:id/agent-brief", async (req, res): Promise<void> => {
   });
   await recordAgentRun({
     dealerId,
-    agentKey: "sales",
+    agentKey: "pipeline_suggestions",
     runType: "lead_agent_brief",
     inputSource: "leads",
     inputSummary: `Lead #${lead.id} (${lead.phase})`,
@@ -2858,7 +2856,7 @@ router.post(
       .from(agentsTable)
       .where(
         and(
-          eq(agentsTable.key, "sales"),
+          eq(agentsTable.key, "call_sentiment"),
           eq(agentsTable.dealerId, lead.dealerId),
         ),
       );
@@ -2902,7 +2900,7 @@ router.post(
         : "neutral";
       await recordAgentRun({
         dealerId: lead.dealerId,
-        agentKey: "sales",
+        agentKey: "call_sentiment",
         runType: "call_sentiment_suggestion",
         inputSource: "leads",
         inputSummary: body.data.notes,
@@ -2920,7 +2918,7 @@ router.post(
       req.log.error({ err }, "Call sentiment suggestion failed");
       await recordAgentRun({
         dealerId: lead.dealerId,
-        agentKey: "sales",
+        agentKey: "call_sentiment",
         runType: "call_sentiment_suggestion",
         inputSource: "leads",
         refType: "lead",

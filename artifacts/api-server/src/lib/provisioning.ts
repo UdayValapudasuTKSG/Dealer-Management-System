@@ -30,19 +30,19 @@ export const DEFAULT_AGENTS: {
   description: string;
   status: string;
 }[] = [
-  { key: "concierge", name: "Concierge", domain: "Customer Experience", description: "Greets and qualifies inbound customers across chat and WhatsApp.", status: "active" },
-  { key: "sales", name: "Sales", domain: "Sales & Pipeline", description: "Captures enquiries, auto-assigns leads, and desks draft deals.", status: "active" },
-  { key: "appraisal", name: "Appraisal", domain: "Trade-In", description: "Assists with trade-in valuations and appraisal intake.", status: "active" },
-  { key: "finance", name: "F&I", domain: "Finance & Insurance", description: "Prepares finance applications and routes them to lenders.", status: "active" },
-  { key: "inventory", name: "Inventory", domain: "Stock & Merchandising", description: "Keeps stock records current and flags ageing units.", status: "active" },
-  { key: "gra_extract", name: "GRA Extract Agent", domain: "Compliance & Import", description: "Transcribes legible fields from import documents for GRA duty filings (server computes the duty).", status: "idle" },
-  { key: "scheduler", name: "Scheduler", domain: "Appointments", description: "Books test drives and service appointments.", status: "active" },
-  { key: "service", name: "Service", domain: "Aftersales", description: "Drafts service orders and keeps customers informed.", status: "active" },
-  { key: "parts", name: "Parts", domain: "Parts & Supply", description: "Monitors parts stock and suggests reorders.", status: "active" },
-  { key: "ledger", name: "Ledger", domain: "Accounting", description: "Reconciles invoices and payments.", status: "active" },
-  { key: "retention", name: "Retention", domain: "Loyalty & Win-back", description: "Runs follow-ups and win-back outreach.", status: "active" },
-  { key: "analyst", name: "Analyst", domain: "Intelligence", description: "Analyzes call sentiment and pipeline health.", status: "idle" },
-  { key: "documents", name: "Documents", domain: "leads", description: "Extracts and files customer documents.", status: "active" },
+  // Autonomous internal writers (A1/A6/A16) — audited, kill-switchable, never customer-facing.
+  { key: "intake_dedup", name: "Intake & Dedup", domain: "Lead Intake", description: "Parses inbound enquiries (email/WhatsApp/web), dedupes against existing leads and creates or merges the lead record.", status: "active" },
+  { key: "call_sentiment", name: "Call Sentiment", domain: "Sales Calls", description: "Analyzes call transcripts and notes, writing sentiment and summary onto the call log.", status: "active" },
+  { key: "case_classifier", name: "Case Classifier", domain: "Aftersales", description: "Classifies new service cases (type and severity) so they route to the right queue.", status: "active" },
+  // HITL / advisory — draft, suggest, extract or navigate; a human commits every action.
+  { key: "doc_prefill", name: "Document Prefill", domain: "Documents", description: "Extracts fields from uploaded customer documents to prefill forms — a human verifies before use.", status: "active" },
+  { key: "outreach", name: "Outreach Drafts", domain: "Sales & Pipeline", description: "Drafts customer messages for human Approve & Send — never sends on its own.", status: "active" },
+  { key: "test_drive_availability", name: "Test-Drive Availability", domain: "Appointments", description: "Suggests test-drive slots and detects booking intent — a human confirms the booking.", status: "active" },
+  { key: "pipeline_suggestions", name: "Pipeline Suggestions", domain: "Sales & Pipeline", description: "Surfaces next-best actions, stage-advance proposals and lead briefs for advisors.", status: "active" },
+  { key: "sentiment_digest", name: "Sentiment Digest", domain: "Intelligence", description: "Summarizes customer sentiment across recent interactions for the daily briefing.", status: "active" },
+  { key: "persona_recommend", name: "Persona & Recommendations", domain: "Customer Experience", description: "Builds customer personas and recommends vehicles for advisors to present.", status: "active" },
+  { key: "concierge", name: "Concierge", domain: "In-App Assistant", description: "In-app navigation and Q&A assistant for staff — never messages customers.", status: "active" },
+  { key: "gra_extract", name: "GRA Extract", domain: "Compliance & Import", description: "Transcribes legible fields from import documents for GRA duty filings (server computes the duty).", status: "idle" },
 ];
 
 /** Idempotently ensure the global default role catalog exists (roles are

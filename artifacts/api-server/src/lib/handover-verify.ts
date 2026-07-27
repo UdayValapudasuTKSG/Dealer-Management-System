@@ -16,6 +16,7 @@ import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { ObjectStorageService } from "./objectStorage";
 import { DOCUMENT_AGENT_KEY } from "./document-extract";
 import { logger } from "./logger";
+import { recordAgentRun } from "./agent-governance";
 
 // ---------------------------------------------------------------------------
 // A5 — signed handover sheet verification (L8 step 6).
@@ -316,6 +317,24 @@ Omit any field you cannot read confidently. If nothing is legible, return {"summ
           eq(agentsTable.dealerId, doc.dealerId),
         ),
       );
+    await recordAgentRun({
+      dealerId: doc.dealerId,
+      agentKey: DOCUMENT_AGENT_KEY,
+      runType: "handover_sheet_verify",
+      inputSource: "documents",
+      inputSummary: `${doc.fileName} on delivery #${delivery.id}`,
+      outputSummary:
+        fields.length === 0
+          ? "Sheet not legible — manual verification required"
+          : verification.allMatch
+            ? "Signed handover sheet matches the delivery record"
+            : "Signed handover sheet does NOT match — flagged for the advisor",
+      status: "needs_review",
+      reviewReason:
+        "OCR verification is advisory — the advisor confirms the handover",
+      refType: "delivery",
+      refId: delivery.id,
+    });
   } catch (err) {
     logger.error({ err, documentId: doc.id }, "handover sheet OCR failed");
     await db
@@ -323,5 +342,16 @@ Omit any field you cannot read confidently. If nothing is legible, return {"summ
       .set({ extractionStatus: "failed" })
       .where(eq(documentsTable.id, doc.id))
       .catch(() => {});
+    await recordAgentRun({
+      dealerId: doc.dealerId,
+      agentKey: DOCUMENT_AGENT_KEY,
+      runType: "handover_sheet_verify",
+      inputSource: "documents",
+      inputSummary: doc.fileName,
+      status: "error",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      refType: "document",
+      refId: doc.id,
+    }).catch(() => {});
   }
 }

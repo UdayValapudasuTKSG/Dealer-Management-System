@@ -38,7 +38,7 @@ import {
 import { logger } from "../lib/logger";
 import { ensureAccountForLead } from "../lib/accounts";
 import { applyPayment, issueInvoice, logPaymentEvent } from "../lib/invoicing";
-import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
+import { recordAgentRun } from "../lib/agent-governance";
 import { defaultDivisionId } from "./divisions";
 import { activeDealerId } from "../middlewares/rbac";
 
@@ -219,7 +219,9 @@ async function preBookFollowThrough(
         .where(
           and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, leadId)),
         );
-      if (leadDeals.length === 0 && (await isAgentEnabled(dealerId, "sales"))) {
+      // Deterministic transactional side effect of the human's booking action
+      // — not an AI write, so no kill switch (R3.2); audited as system.
+      if (leadDeals.length === 0) {
         const startedAt = Date.now();
         const [vehicle] = await db
           .select()
@@ -259,15 +261,16 @@ async function preBookFollowThrough(
               kind: "deal_created",
               title: "Deal auto-desked by AURA at pre-book",
               detail: `Draft deal #${autoDeal.id} created at the vehicle's listed price when the reservation was placed — review and adjust the numbers.`,
-              actor: "AURA Sales Agent",
-              isAgent: true,
+              actor: "AURA System",
+              isAgent: false,
               refType: "lead",
               refId: leadId,
             });
             await recordAgentRun({
               dealerId,
-              agentKey: "sales",
+              agentKey: "auto_desk",
               runType: "auto_desk_deal",
+              autonomy: "system",
               inputSource: "pre_book",
               inputSummary: `Reservation #${booking.id} placed for lead #${leadId} with no deal on file`,
               outputSummary: `Drafted deal #${autoDeal.id} at listed price for vehicle #${vehicle.id}`,

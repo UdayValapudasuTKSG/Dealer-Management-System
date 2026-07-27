@@ -9,6 +9,7 @@ import {
 } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
 import { notifyCaseOpened } from "../lib/notify-triggers";
+import { runCaseClassifier } from "../lib/case-classifier";
 import {
   ListCasesQueryParams,
   CreateCaseBody,
@@ -115,6 +116,14 @@ router.post("/cases", async (req, res): Promise<void> => {
       refId: body.data.customerId,
     });
   }
+  // A16 case classifier — fire-and-forget autonomous classification of the
+  // new case (kill-switch + confidence-floor governed; never blocks the
+  // request; on any failure the case stays open with its defaults).
+  runCaseClassifier(created!, {
+    humanSetType: body.data.type != null,
+    humanSetSeverity: body.data.severity != null,
+  });
+
   // R6.2 #14 Case opened → service manager + service users (In-App + Email).
   notifyCaseOpened({
     dealerId,

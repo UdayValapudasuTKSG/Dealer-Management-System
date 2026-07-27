@@ -4227,6 +4227,7 @@ export type AgentRunAutonomy = typeof AgentRunAutonomy[keyof typeof AgentRunAuto
 export const AgentRunAutonomy = {
   advisory: 'advisory',
   autonomous: 'autonomous',
+  system: 'system',
 } as const;
 
 export type AgentRunAffectedEntitiesItem = {

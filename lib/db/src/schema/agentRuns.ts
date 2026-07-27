@@ -26,7 +26,7 @@ export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
  * autonomously wrote state (created/updated records without a human in the
  * loop). Autonomous runs surface distinctly in the governance console.
  */
-export const AGENT_RUN_AUTONOMY = ["advisory", "autonomous"] as const;
+export const AGENT_RUN_AUTONOMY = ["advisory", "autonomous", "system"] as const;
 export type AgentRunAutonomy = (typeof AGENT_RUN_AUTONOMY)[number];
 
 export type AgentRunAffectedEntity = { type: string; id: number };

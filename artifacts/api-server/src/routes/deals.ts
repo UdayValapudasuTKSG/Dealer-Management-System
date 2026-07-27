@@ -11,7 +11,7 @@ import {
   VIN_LENGTH,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
-import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
+import { recordAgentRun } from "../lib/agent-governance";
 import { activeDealerId } from "../middlewares/rbac";
 import { idempotent } from "../middlewares/idempotency";
 import {
@@ -240,13 +240,14 @@ async function allocateVehicleOnCommit(
     };
   }
 
-  // Audit: deterministic A11 run (advisory-off dealers still allocate — the
-  // state machine is core; the kill switch only silences the agent audit).
-  if (await isAgentEnabled(dealerId, "inventory")) {
+  // Audit: deterministic A11 system action — plain transactional code, not
+  // an AI write, so it carries NO kill switch (R3.2) and always records.
+  {
     await recordAgentRun({
       dealerId,
-      agentKey: "inventory",
+      agentKey: "vin_allocation",
       runType: "vin_allocation",
+      autonomy: "system",
       inputSource: "deal_commit",
       inputSummary: `Deal #${deal.id} committed — allocating VIN ${vehicle.vin}`,
       outputSummary: `VIN ${vehicle.vin} hard-locked (${vehicle.status} → booked, hold ${VIN_LOCK_HOLD_HOURS}h)`,

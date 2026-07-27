@@ -28,8 +28,8 @@ import { logger } from "./logger";
 // Never throws: on any failure the lead simply stays unassigned for a human.
 // ---------------------------------------------------------------------------
 
-const AGENT_KEY = "sales";
-const AGENT_ACTOR = "AURA Sales Agent";
+const AGENT_KEY = "round_robin";
+const AGENT_ACTOR = "AURA System";
 
 type Candidate = {
   id: number;
@@ -154,7 +154,7 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
       title: `Assigned to ${advisorName}`,
       detail: reasoning,
       actor: AGENT_ACTOR,
-      isAgent: true,
+      isAgent: false,
       refType: "lead",
       refId: updated.id,
     });
@@ -163,20 +163,11 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
       dealerId: updated.dealerId,
       agentKey: AGENT_KEY,
       actor: AGENT_ACTOR,
-      isAi: true,
+      isAi: false,
       action: "Auto-assigned new lead",
       entity: updated.name,
       detail: reasoning,
     });
-    await db
-      .update(agentsTable)
-      .set({ tasksToday: sql`${agentsTable.tasksToday} + 1` })
-      .where(
-        and(
-          eq(agentsTable.key, AGENT_KEY),
-          eq(agentsTable.dealerId, updated.dealerId),
-        ),
-      );
 
     await notifyUser({
       userId: advisor.id,
