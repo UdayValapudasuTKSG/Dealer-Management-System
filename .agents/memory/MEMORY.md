@@ -28,3 +28,4 @@
 - [Payment & gate guard atomicity](payment-gate-atomicity.md) — monetary guards run inside applyPayment tx under invoice FOR UPDATE + advisory lock; gate resolve is compare-and-set on pending.
 - [Delivery advance gates](delivery-advance-gates.md) — body-supplied gated fields (signature, plate, deliveredAt) must merge into the gate-eval copy before computeUnmet, or valid advances 422.
 - [Refund gate execution](refund-gate-execution.md) — gate-authorized refunds need in-tx unique gateId stamp, invoice-to-gate linkage check, and approved-amount cap; prechecks alone race.
+- [Field-permission redaction testing](field-permission-redaction.md) — grants key off dealer_users.role_id (not role name), ~30s cache; redact money from ALL payload series incl. secondary charts.

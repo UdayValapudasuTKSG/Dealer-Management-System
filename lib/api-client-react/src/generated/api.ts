@@ -137,7 +137,7 @@ import type {
   HealthStatus,
   ImpersonationGrant,
   ImpersonationRequest,
-  InventoryBreakdownItem,
+  InventoryBreakdown,
   Invoice,
   InvoiceInput,
   InvoiceUpdate,
@@ -225,7 +225,7 @@ import type {
   RolePermissionsInput,
   RoleUpdate,
   RoleWithPermissions,
-  SalesPoint,
+  SalesPerformance,
   SearchResults,
   SendQuoteInput,
   SendQuoteResult,
@@ -11238,11 +11238,11 @@ export const getGetSalesPerformanceUrl = () => {
 }
 
 /**
- * @summary Monthly revenue and unit sales
+ * @summary Monthly sales series plus advisor and division leaderboards
  */
-export const getSalesPerformance = async ( options?: RequestInit): Promise<SalesPoint[]> => {
+export const getSalesPerformance = async ( options?: RequestInit): Promise<SalesPerformance> => {
 
-  return customFetch<SalesPoint[]>(getGetSalesPerformanceUrl(),
+  return customFetch<SalesPerformance>(getGetSalesPerformanceUrl(),
   {
     ...options,
     method: 'GET'
@@ -11285,7 +11285,7 @@ export type GetSalesPerformanceQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Monthly revenue and unit sales
+ * @summary Monthly sales series plus advisor and division leaderboards
  */
 
 export function useGetSalesPerformance<TData = Awaited<ReturnType<typeof getSalesPerformance>>, TError = ErrorType<unknown>>(
@@ -11315,11 +11315,11 @@ export const getGetInventoryBreakdownUrl = () => {
 }
 
 /**
- * @summary Inventory counts grouped by powertrain
+ * @summary Stock composition by status, powertrain, aging bucket and hold exposure
  */
-export const getInventoryBreakdown = async ( options?: RequestInit): Promise<InventoryBreakdownItem[]> => {
+export const getInventoryBreakdown = async ( options?: RequestInit): Promise<InventoryBreakdown> => {
 
-  return customFetch<InventoryBreakdownItem[]>(getGetInventoryBreakdownUrl(),
+  return customFetch<InventoryBreakdown>(getGetInventoryBreakdownUrl(),
   {
     ...options,
     method: 'GET'
@@ -11362,7 +11362,7 @@ export type GetInventoryBreakdownQueryError = ErrorType<unknown>
 
 
 /**
- * @summary Inventory counts grouped by powertrain
+ * @summary Stock composition by status, powertrain, aging bucket and hold exposure
  */
 
 export function useGetInventoryBreakdown<TData = Awaited<ReturnType<typeof getInventoryBreakdown>>, TError = ErrorType<unknown>>(

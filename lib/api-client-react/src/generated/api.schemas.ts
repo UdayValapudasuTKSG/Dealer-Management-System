@@ -4586,6 +4586,12 @@ export interface Activity {
   createdAt: string;
 }
 
+export type DashboardSummaryDeltas = {
+  leads?: number;
+  units?: number;
+  gross?: number;
+};
+
 export interface DashboardSummary {
   totalLeads: number;
   activeDeals: number;
@@ -4595,6 +4601,13 @@ export interface DashboardSummary {
   agentTasksToday: number;
   conversionRate: number;
   avgResponseSeconds: number;
+  mtdUnits?: number;
+  mtdGross?: number;
+  availableInventoryValue?: number;
+  outstandingAr?: number;
+  todayTasks?: number;
+  todayAppointments?: number;
+  deltas?: DashboardSummaryDeltas;
 }
 
 export interface PipelineStage {
@@ -4610,9 +4623,60 @@ export interface SalesPoint {
   units: number;
 }
 
+export interface AdvisorPerformance {
+  name: string;
+  units: number;
+  gross: number;
+  avgDiscount: number;
+  closeRate: number;
+  avgCycleDays: number;
+  isMe: boolean;
+}
+
+export interface DivisionPerformance {
+  /** @nullable */
+  divisionId: number | null;
+  name: string;
+  units: number;
+  gross: number;
+  openLeads: number;
+}
+
+export interface SalesPerformance {
+  series: SalesPoint[];
+  leaderboard: AdvisorPerformance[];
+  divisions: DivisionPerformance[];
+}
+
 export interface InventoryBreakdownItem {
   powertrain: string;
   count: number;
+}
+
+export interface InventoryStatusItem {
+  status: string;
+  count: number;
+  value: number;
+}
+
+export interface InventoryAgingBucket {
+  bucket: string;
+  count: number;
+  value: number;
+}
+
+export type InventoryBreakdownHolds = {
+  count: number;
+  value: number;
+};
+
+export interface InventoryBreakdown {
+  byStatus: InventoryStatusItem[];
+  byPowertrain: InventoryBreakdownItem[];
+  aging: InventoryAgingBucket[];
+  holds: InventoryBreakdownHolds;
+  totalCount: number;
+  totalValue: number;
 }
 
 export interface ForecastPoint {
@@ -5746,22 +5810,36 @@ export type GetReportParams = {
 type: GetReportType;
 from?: string;
 to?: string;
+divisionId?: number;
+/**
+ * Server-side export; returns a file instead of JSON.
+ */
+format?: GetReportFormat;
 };
 
 export type GetReportType = typeof GetReportType[keyof typeof GetReportType];
 
 
 export const GetReportType = {
-  'lead-conversion': 'lead-conversion',
-  sales: 'sales',
-  revenue: 'revenue',
-  inventory: 'inventory',
-  finance: 'finance',
-  delivery: 'delivery',
-  service: 'service',
-  'employee-performance': 'employee-performance',
-  marketing: 'marketing',
-  'customer-retention': 'customer-retention',
+  sales_pipeline: 'sales_pipeline',
+  sales_performance: 'sales_performance',
+  inventory_aging: 'inventory_aging',
+  finance_applications: 'finance_applications',
+  service_workshop: 'service_workshop',
+  parts_inventory: 'parts_inventory',
+  revenue_receivables: 'revenue_receivables',
+  tax_gra: 'tax_gra',
+  delivery_operations: 'delivery_operations',
+  agent_activity: 'agent_activity',
+} as const;
+
+export type GetReportFormat = typeof GetReportFormat[keyof typeof GetReportFormat];
+
+
+export const GetReportFormat = {
+  csv: 'csv',
+  xlsx: 'xlsx',
+  pdf: 'pdf',
 } as const;
 
 export type GlobalSearchParams = {

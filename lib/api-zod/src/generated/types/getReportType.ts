@@ -10,14 +10,14 @@ export type GetReportType = typeof GetReportType[keyof typeof GetReportType];
 
 
 export const GetReportType = {
-  'lead-conversion': 'lead-conversion',
-  sales: 'sales',
-  revenue: 'revenue',
-  inventory: 'inventory',
-  finance: 'finance',
-  delivery: 'delivery',
-  service: 'service',
-  'employee-performance': 'employee-performance',
-  marketing: 'marketing',
-  'customer-retention': 'customer-retention',
+  sales_pipeline: 'sales_pipeline',
+  sales_performance: 'sales_performance',
+  inventory_aging: 'inventory_aging',
+  finance_applications: 'finance_applications',
+  service_workshop: 'service_workshop',
+  parts_inventory: 'parts_inventory',
+  revenue_receivables: 'revenue_receivables',
+  tax_gra: 'tax_gra',
+  delivery_operations: 'delivery_operations',
+  agent_activity: 'agent_activity',
 } as const;

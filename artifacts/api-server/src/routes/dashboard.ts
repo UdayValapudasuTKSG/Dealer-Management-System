@@ -1,6 +1,20 @@
 import { Router, type IRouter } from "express";
 import { and, avg, eq, gte } from "drizzle-orm";
-import { db, leadsTable, dealsTable, vehiclesTable, serviceOrdersTable, agentsTable, agentRunsTable } from "@workspace/db";
+import {
+  db,
+  leadsTable,
+  dealsTable,
+  vehiclesTable,
+  serviceOrdersTable,
+  agentsTable,
+  agentRunsTable,
+  invoicesTable,
+  paymentsTable,
+  tasksTable,
+  testDrivesTable,
+  divisionsTable,
+  deliveriesTable,
+} from "@workspace/db";
 import { activeDealerId, type AuthedUser } from "../middlewares/rbac";
 import type { Response } from "express";
 import {
@@ -83,7 +97,17 @@ const scopeServiceOrders = <T extends { technicianUserId: number | null; technic
 router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
   const scope = requestScope(res);
-  const [allLeads, allDeals, vehicles, allServiceOrders, agents] = await Promise.all([
+  const [
+    allLeads,
+    allDeals,
+    vehicles,
+    allServiceOrders,
+    agents,
+    invoices,
+    payments,
+    tasks,
+    testDrives,
+  ] = await Promise.all([
     db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
     db.select().from(dealsTable).where(eq(dealsTable.dealerId, dealerId)),
     db.select().from(vehiclesTable).where(eq(vehiclesTable.dealerId, dealerId)),
@@ -92,6 +116,13 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
       .from(serviceOrdersTable)
       .where(eq(serviceOrdersTable.dealerId, dealerId)),
     db.select().from(agentsTable).where(eq(agentsTable.dealerId, dealerId)),
+    db.select().from(invoicesTable).where(eq(invoicesTable.dealerId, dealerId)),
+    db.select().from(paymentsTable).where(eq(paymentsTable.dealerId, dealerId)),
+    db.select().from(tasksTable).where(eq(tasksTable.dealerId, dealerId)),
+    db
+      .select()
+      .from(testDrivesTable)
+      .where(eq(testDrivesTable.dealerId, dealerId)),
   ]);
 
   // Real agent latency over the last 7 days of this dealer's runs.
@@ -137,6 +168,61 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     ? Math.round((wonLeads / totalLeads) * 1000) / 10
     : 0;
 
+  /* --- R5 additions: MTD output, inventory value, AR, today's schedule --- */
+  const GUYANA_OFFSET_MS = 4 * 3600 * 1000; // GMT-4, no DST
+  const guyanaDayKey = (d: Date | string) =>
+    new Date(new Date(d).getTime() - GUYANA_OFFSET_MS).toISOString().slice(0, 10);
+  const guyanaMonth = (d: Date | string) => guyanaDayKey(d).slice(0, 7);
+  const todayKey = guyanaDayKey(now);
+  const thisMonth = guyanaMonth(now);
+  const prevMonth = guyanaMonth(
+    new Date(now.getFullYear(), now.getMonth() - 1, 15),
+  );
+
+  const deliveredMtd = deals.filter(
+    (d) => d.stage === "delivered" && guyanaMonth(d.createdAt) === thisMonth,
+  );
+  const deliveredPrev = deals.filter(
+    (d) => d.stage === "delivered" && guyanaMonth(d.createdAt) === prevMonth,
+  );
+  const mtdUnits = deliveredMtd.length;
+  const mtdGross = deliveredMtd.reduce((s, d) => s + (d.otdPrice || 0), 0);
+  const prevGross = deliveredPrev.reduce((s, d) => s + (d.otdPrice || 0), 0);
+  const leadsMtd = leads.filter((l) => guyanaMonth(l.createdAt) === thisMonth).length;
+  const leadsPrev = leads.filter((l) => guyanaMonth(l.createdAt) === prevMonth).length;
+
+  const availableInventoryValue = vehicles
+    .filter((v) => v.status === "available")
+    .reduce((s, v) => s + (v.price || 0), 0);
+
+  const paidByInvoice = new Map<number, number>();
+  for (const p of payments)
+    paidByInvoice.set(p.invoiceId, (paidByInvoice.get(p.invoiceId) ?? 0) + p.amount);
+  const outstandingAr = invoices
+    .filter((i) => !["paid", "void"].includes(i.status))
+    .reduce((s, i) => s + Math.max(0, i.amount - (paidByInvoice.get(i.id) ?? 0)), 0);
+
+  /* Persona-scope the schedule: advisors count only their own tasks and
+     appointments; managers count those tied to their division's leads. */
+  const scopedLeadIds = new Set(leads.map((l) => l.id));
+  const scopedTasks = tasks.filter((t) =>
+    scope.broad ? true : t.assigneeUserId === scope.userId,
+  );
+  const scopedTestDrives = testDrives.filter((t) =>
+    scope.broad ? true : t.leadId != null && scopedLeadIds.has(t.leadId),
+  );
+  const todayTasks = scopedTasks.filter(
+    (t) => t.status !== "done" && t.dueDate === todayKey,
+  ).length;
+  const todayAppointments = scopedTestDrives.filter(
+    (t) =>
+      !["cancelled", "expired"].includes(t.status) &&
+      guyanaDayKey(t.scheduledAt) === todayKey,
+  ).length;
+
+  const deltaPct = (cur: number, prev: number) =>
+    prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : cur > 0 ? 100 : 0;
+
   const summary = {
     totalLeads,
     activeDeals,
@@ -146,6 +232,17 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     agentTasksToday,
     conversionRate,
     avgResponseSeconds,
+    mtdUnits,
+    mtdGross,
+    availableInventoryValue,
+    outstandingAr,
+    todayTasks,
+    todayAppointments,
+    deltas: {
+      leads: deltaPct(leadsMtd, leadsPrev),
+      units: deltaPct(mtdUnits, deliveredPrev.length),
+      gross: deltaPct(mtdGross, prevGross),
+    },
   };
 
   res.json(GetDashboardSummaryResponse.parse(summary));
@@ -177,11 +274,21 @@ router.get("/dashboard/pipeline", async (_req, res): Promise<void> => {
 router.get("/dashboard/sales-performance", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
   const scope = requestScope(res);
-  const allDeals = await db
-    .select()
-    .from(dealsTable)
-    .where(eq(dealsTable.dealerId, dealerId));
+  const user = res.locals.user as AuthedUser | undefined;
+  const [allDeals, allLeads, divisions, allDeliveries] = await Promise.all([
+    db.select().from(dealsTable).where(eq(dealsTable.dealerId, dealerId)),
+    db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
+    db.select().from(divisionsTable).where(eq(divisionsTable.dealerId, dealerId)),
+    db
+      .select()
+      .from(deliveriesTable)
+      .where(eq(deliveriesTable.dealerId, dealerId)),
+  ]);
+  const deliveredAtByDeal = new Map<number, Date>();
+  for (const dl of allDeliveries)
+    if (dl.deliveredAt) deliveredAtByDeal.set(dl.dealId, dl.deliveredAt);
   const deals = scopeDeals(scope, allDeals);
+  const leads = scopeLeads(scope, allLeads);
   const closed = deals.filter(
     (d) => d.stage === "delivered" || d.stage === "committed",
   );
@@ -208,7 +315,96 @@ router.get("/dashboard/sales-performance", async (_req, res): Promise<void> => {
     };
   });
 
-  res.json(GetSalesPerformanceResponse.parse(series));
+  /* Leaderboard over the persona-scoped deal set (advisors see only their
+     own row; managers/leadership see everyone). */
+  const dayDiff = (a: Date | string, b: Date | string) =>
+    Math.max(
+      0,
+      Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000),
+    );
+  const meNameKey = user?.name?.trim().toLowerCase() || null;
+  const byAdvisor = new Map<
+    string,
+    {
+      units: number;
+      gross: number;
+      discount: number;
+      deals: number;
+      won: number;
+      cycle: number[];
+      isMe: boolean;
+    }
+  >();
+  for (const d of deals) {
+    const key = d.salesAdvisor?.trim() || "Unassigned";
+    const e =
+      byAdvisor.get(key) ??
+      {
+        units: 0,
+        gross: 0,
+        discount: 0,
+        deals: 0,
+        won: 0,
+        cycle: [],
+        isMe:
+          (d.salesAdvisorUserId != null && d.salesAdvisorUserId === user?.id) ||
+          (meNameKey != null && key.toLowerCase() === meNameKey),
+      };
+    e.deals += 1;
+    e.discount += d.discount || 0;
+    if (d.stage === "delivered") {
+      e.units += 1;
+      e.gross += d.otdPrice || 0;
+      e.won += 1;
+      const dAt = deliveredAtByDeal.get(d.id);
+      if (dAt) e.cycle.push(dayDiff(d.createdAt, dAt));
+    } else if (d.stage === "committed") e.won += 1;
+    byAdvisor.set(key, e);
+  }
+  const leaderboard = [...byAdvisor.entries()]
+    .sort((a, b) => b[1].gross - a[1].gross)
+    .map(([name, e]) => ({
+      name,
+      units: e.units,
+      gross: e.gross,
+      avgDiscount: e.deals ? Math.round(e.discount / e.deals) : 0,
+      closeRate: e.deals ? Math.round((e.won / e.deals) * 1000) / 10 : 0,
+      avgCycleDays: e.cycle.length
+        ? Math.round(e.cycle.reduce((a, b) => a + b, 0) / e.cycle.length)
+        : 0,
+      isMe: e.isMe,
+    }));
+
+  const OPEN_PHASES = ["new", "contacted", "qualified", "proposal", "negotiation"];
+  const divisionRows = [
+    ...divisions.map((dv) => ({ divisionId: dv.id as number | null, name: dv.name })),
+    { divisionId: null as number | null, name: "Unassigned" },
+  ].map((dv) => {
+    const dvDeals = deals.filter(
+      (d) => d.stage === "delivered" && (d.divisionId ?? null) === dv.divisionId,
+    );
+    return {
+      divisionId: dv.divisionId,
+      name: dv.name,
+      units: dvDeals.length,
+      gross: dvDeals.reduce((s, d) => s + (d.otdPrice || 0), 0),
+      openLeads: leads.filter(
+        (l) =>
+          OPEN_PHASES.includes(l.phase) && (l.divisionId ?? null) === dv.divisionId,
+      ).length,
+    };
+  });
+  const divisionsOut = divisionRows.filter(
+    (d) => d.divisionId != null || d.units > 0 || d.openLeads > 0,
+  );
+
+  res.json(
+    GetSalesPerformanceResponse.parse({
+      series,
+      leaderboard,
+      divisions: divisionsOut,
+    }),
+  );
 });
 
 function linearRegression(ys: number[]): {
@@ -393,16 +589,71 @@ router.get("/dashboard/inventory-breakdown", async (_req, res): Promise<void> =>
     .select()
     .from(vehiclesTable)
     .where(eq(vehiclesTable.dealerId, dealerId));
+  const now = new Date();
+  const dayDiff = (a: Date | string) =>
+    Math.max(
+      0,
+      Math.round((now.getTime() - new Date(a).getTime()) / 86400000),
+    );
+  const inStock = vehicles.filter(
+    (v) => !["sold", "delivered"].includes(v.status),
+  );
+
+  const statusMap = new Map<string, { count: number; value: number }>();
+  for (const v of vehicles) {
+    const e = statusMap.get(v.status) ?? { count: 0, value: 0 };
+    e.count += 1;
+    e.value += v.price || 0;
+    statusMap.set(v.status, e);
+  }
+  const byStatus = [...statusMap.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .map(([status, e]) => ({ status, count: e.count, value: e.value }));
+
   const counts = new Map<string, number>();
   for (const v of vehicles) {
     counts.set(v.powertrain, (counts.get(v.powertrain) ?? 0) + 1);
   }
-  const breakdown = Array.from(counts.entries()).map(([powertrain, count]) => ({
-    powertrain,
-    count,
-  }));
+  const byPowertrain = Array.from(counts.entries()).map(
+    ([powertrain, count]) => ({ powertrain, count }),
+  );
 
-  res.json(GetInventoryBreakdownResponse.parse(breakdown));
+  const BUCKETS = [
+    { bucket: "0-30 d", min: 0, max: 30 },
+    { bucket: "31-60 d", min: 31, max: 60 },
+    { bucket: "61-90 d", min: 61, max: 90 },
+    { bucket: "90+ d", min: 91, max: Infinity },
+  ];
+  const aging = BUCKETS.map((b) => {
+    const rows = inStock.filter((v) => {
+      const d = dayDiff(v.createdAt);
+      return d >= b.min && d <= b.max;
+    });
+    return {
+      bucket: b.bucket,
+      count: rows.length,
+      value: rows.reduce((s, v) => s + (v.price || 0), 0),
+    };
+  });
+
+  const heldRows = inStock.filter(
+    (v) => v.holdUntil && new Date(v.holdUntil) > now,
+  );
+  const holds = {
+    count: heldRows.length,
+    value: heldRows.reduce((s, v) => s + (v.price || 0), 0),
+  };
+
+  res.json(
+    GetInventoryBreakdownResponse.parse({
+      byStatus,
+      byPowertrain,
+      aging,
+      holds,
+      totalCount: inStock.length,
+      totalValue: inStock.reduce((s, v) => s + (v.price || 0), 0),
+    }),
+  );
 });
 
 export default router;

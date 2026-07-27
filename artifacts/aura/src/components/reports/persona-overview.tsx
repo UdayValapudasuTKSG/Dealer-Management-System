@@ -1,17 +1,18 @@
-import { useMemo } from "react";
 import { Link } from "wouter";
 import {
-  useListLeads,
-  useListDeals,
-  useListDivisions,
-  useListBookings,
-  useListInvoices,
+  useGetDashboardSummary,
+  useGetSalesPerformance,
+  useGetInventoryBreakdown,
   useGetSentimentAnalysis,
-  getListBookingsQueryKey,
-  getListInvoicesQueryKey,
+  getGetInventoryBreakdownQueryKey,
   getGetSentimentAnalysisQueryKey,
 } from "@workspace/api-client-react";
-import type { Lead, Deal } from "@workspace/api-client-react";
+import type {
+  AdvisorPerformance,
+  DivisionPerformance,
+  InventoryBreakdown,
+  SalesPoint,
+} from "@workspace/api-client-react";
 import { useAuthz } from "@/lib/auth";
 import { useMoney } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,9 +20,6 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   Tooltip,
@@ -30,30 +28,28 @@ import {
   Target,
   Users,
   Timer,
-  FileClock,
-  BookmarkCheck,
-  Quote,
+  Landmark,
+  Layers,
+  CalendarClock,
+  TrendingUp,
+  TrendingDown,
   ArrowRight,
 } from "lucide-react";
 
-/* Reports is the persona-aware analytics home, rebuilt (2026-07) as ONE
-   compact dashboard: a KPI strip on top, then a tight grid of small-multiple
-   widgets. Scoped to the viewer's role:
-   - Advisors: their own funnel, conversion and response-time.
-   - Sales Managers: team pipeline, SLA compliance, top performers.
-   - Leadership (GM / super-admin): division-aware performance + sentiment.
-   All figures come from existing list endpoints — no new data. Long tables
-   are condensed; drill-down goes to Detailed Reports / module pages. */
+/* Reports is the persona-aware analytics home. Rebuilt (2026-07, R5) on
+   SERVER-COMPUTED dashboard endpoints — summary, sales-performance and
+   inventory-breakdown — so every figure matches the detailed reports and
+   respects server-side persona scoping (advisors get only their own rows;
+   the leaderboard marks the viewer with `isMe`). No client-side list
+   aggregation remains here. */
 
 const SERIES_COLORS = [
-  "hsl(218 72% 52%)",
-  "hsl(185 42% 44%)",
+  "hsl(27 44% 46%)",
+  "hsl(35 55% 60%)",
   "hsl(0 0% 62%)",
-  "hsl(218 50% 34%)",
-  "hsl(185 32% 30%)",
+  "hsl(20 35% 34%)",
+  "hsl(40 30% 45%)",
   "hsl(0 0% 40%)",
-  "hsl(28 60% 52%)",
-  "hsl(340 45% 50%)",
 ];
 
 const TOOLTIP_STYLE = {
@@ -65,70 +61,45 @@ const TOOLTIP_STYLE = {
   fontSize: "12px",
 } as const;
 
-/* DMS stage labels are a label-only mapping over lead phase. */
-const FUNNEL_STAGES: { key: string; label: string; match: (l: Lead) => boolean }[] = [
-  { key: "new", label: "New", match: (l) => l.phase === "new" },
-  { key: "contacted", label: "Contacted", match: (l) => l.phase === "contacted" },
-  { key: "engaged", label: "Engaged", match: (l) => l.phase === "qualified" || l.phase === "proposal" },
-  { key: "prebook", label: "Pre-Book", match: (l) => l.phase === "negotiation" },
-  { key: "won", label: "Won", match: (l) => l.phase === "won" },
-];
+const AXIS_TICK = { fontSize: 10, fill: "hsl(var(--muted-foreground))" } as const;
 
-const SOURCE_LABEL: Record<string, string> = {
-  website: "Website",
-  walk_in: "Walk-In",
-  phone: "Phone",
-  facebook: "Facebook",
-  instagram: "Instagram",
-  whatsapp: "WhatsApp",
-  referral: "Referral",
-  gmail: "Email",
-};
-
-function avgResponseHours(leads: Lead[]): number | null {
-  const durations = leads
-    .filter((l) => l.contactedDate)
-    .map(
-      (l) =>
-        (new Date(l.contactedDate as string).getTime() -
-          new Date(l.createdAt).getTime()) /
-        3_600_000,
-    )
-    .filter((h) => h >= 0);
-  if (durations.length === 0) return null;
-  return durations.reduce((a, b) => a + b, 0) / durations.length;
-}
-
-function slaCompliancePct(leads: Lead[]): number | null {
-  const contacted = leads.filter((l) => l.contactedDate);
-  if (contacted.length === 0) return null;
-  const within = contacted.filter(
-    (l) =>
-      new Date(l.contactedDate as string).getTime() -
-        new Date(l.createdAt).getTime() <=
-      24 * 3_600_000,
-  );
-  return Math.round((within.length / contacted.length) * 100);
-}
-
-function fmtHours(h: number | null): string {
-  if (h == null) return "—";
-  if (h < 1) return `${Math.round(h * 60)}m`;
-  if (h < 48) return `${h.toFixed(1)}h`;
-  return `${(h / 24).toFixed(1)}d`;
+function fmtSeconds(s: number): string {
+  if (s <= 0) return "—";
+  if (s < 60) return `${Math.round(s)}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  if (s < 172800) return `${(s / 3600).toFixed(1)}h`;
+  return `${(s / 86400).toFixed(1)}d`;
 }
 
 /* ---------- compact building blocks ---------- */
+
+function Delta({ value }: { value: number | undefined }) {
+  if (value == null || value === 0) return null;
+  const up = value > 0;
+  const Icon = up ? TrendingUp : TrendingDown;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-[10px] font-semibold tabular-nums ${
+        up ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+      }`}
+    >
+      <Icon className="h-3 w-3" />
+      {Math.abs(value)}%
+    </span>
+  );
+}
 
 function Kpi({
   label,
   value,
   sub,
+  delta,
   icon: Icon,
 }: {
   label: string;
   value: string;
   sub?: string;
+  delta?: number;
   icon?: typeof Target;
 }) {
   return (
@@ -140,9 +111,10 @@ function Kpi({
             {label}
           </p>
         </div>
-        <p className="mt-1 text-lg font-bold tracking-tight leading-none">
-          {value}
-        </p>
+        <div className="mt-1 flex items-baseline gap-2">
+          <p className="text-lg font-bold tracking-tight leading-none">{value}</p>
+          <Delta value={delta} />
+        </div>
         {sub && (
           <p className="mt-1 text-[11px] text-muted-foreground truncate">{sub}</p>
         )}
@@ -181,220 +153,85 @@ function Widget({
   );
 }
 
-const AXIS_TICK = { fontSize: 10, fill: "hsl(var(--muted-foreground))" } as const;
-
-/* Mini horizontal funnel: label + bar + count per stage, no axes. */
-function MiniFunnel({ leads }: { leads: Lead[] }) {
-  const rows = FUNNEL_STAGES.map((s) => ({
-    label: s.label,
-    value: leads.filter(s.match).length,
-  }));
-  const max = Math.max(1, ...rows.map((r) => r.value));
+function Empty({ text }: { text: string }) {
   return (
-    <div className="h-full flex flex-col justify-center gap-1.5 px-2 pb-1">
-      {rows.map((r, i) => (
-        <div key={r.label} className="flex items-center gap-2 text-[11px]">
-          <span className="w-16 shrink-0 text-muted-foreground truncate">
-            {r.label}
-          </span>
-          <div className="flex-1 h-3 rounded-full bg-foreground/[0.05] overflow-hidden">
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${(r.value / max) * 100}%`,
-                background: SERIES_COLORS[i % SERIES_COLORS.length],
-                minWidth: r.value > 0 ? 6 : 0,
-              }}
-            />
-          </div>
-          <span className="w-6 shrink-0 text-right tabular-nums font-semibold">
-            {r.value}
-          </span>
-        </div>
-      ))}
+    <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+      {text}
     </div>
   );
 }
 
-function SourceDonut({ leads }: { leads: Lead[] }) {
-  const bySource = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const l of leads) {
-      const key = SOURCE_LABEL[l.source] ?? l.source;
-      map.set(key, (map.get(key) ?? 0) + 1);
-    }
-    return Array.from(map.entries())
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [leads]);
+/* ---------- widgets over server data ---------- */
 
-  if (bySource.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-        No leads yet.
-      </div>
-    );
-  }
-  const top = bySource.slice(0, 5);
-  return (
-    <div className="h-full flex items-center gap-1">
-      <div className="h-full w-1/2 min-w-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={bySource}
-              dataKey="value"
-              nameKey="label"
-              innerRadius="55%"
-              outerRadius="88%"
-              paddingAngle={3}
-              stroke="none"
-            >
-              {bySource.map((_, i) => (
-                <Cell key={i} fill={SERIES_COLORS[i % SERIES_COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="w-1/2 space-y-1 pr-2">
-        {top.map((s, i) => (
-          <div key={s.label} className="flex items-center gap-1.5 text-[11px]">
-            <span
-              className="h-2 w-2 rounded-full shrink-0"
-              style={{ background: SERIES_COLORS[i % SERIES_COLORS.length] }}
-            />
-            <span className="truncate text-muted-foreground">{s.label}</span>
-            <span className="ml-auto tabular-nums font-semibold">{s.value}</span>
-          </div>
-        ))}
-        {bySource.length > 5 && (
-          <p className="text-[10px] text-muted-foreground">
-            +{bySource.length - 5} more
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AdvisorBars({ leads }: { leads: Lead[] }) {
-  const byAdvisor = useMemo(() => {
-    const map = new Map<string, { active: number; won: number }>();
-    for (const l of leads) {
-      if (l.phase === "lost") continue;
-      const key = l.assignedTo?.trim() || "Unassigned";
-      const row = map.get(key) ?? { active: 0, won: 0 };
-      if (l.phase === "won") row.won += 1;
-      else row.active += 1;
-      map.set(key, row);
-    }
-    return Array.from(map.entries())
-      .map(([name, v]) => {
-        const short = name.includes("@") ? name.split("@")[0] : name.split(" ")[0];
-        return { name: short.length > 10 ? `${short.slice(0, 9)}…` : short, ...v };
-      })
-      .sort((a, b) => b.active + b.won - (a.active + a.won))
-      .slice(0, 6);
-  }, [leads]);
-
-  if (byAdvisor.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-        No pipeline yet.
-      </div>
-    );
-  }
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={byAdvisor} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={AXIS_TICK} interval={0} />
-        <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={AXIS_TICK} width={24} />
-        <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} />
-        <Bar dataKey="active" name="Active" stackId="p" fill={SERIES_COLORS[0]} maxBarSize={22} />
-        <Bar dataKey="won" name="Won" stackId="p" fill={SERIES_COLORS[1]} radius={[4, 4, 0, 0]} maxBarSize={22} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-function ChannelBars({ leads }: { leads: Lead[] }) {
-  const channelRows = useMemo(() => {
-    const map = new Map<string, { leads: number; won: number }>();
-    for (const l of leads) {
-      const key = SOURCE_LABEL[l.source] ?? l.source;
-      const row = map.get(key) ?? { leads: 0, won: 0 };
-      row.leads += 1;
-      if (l.phase === "won") row.won += 1;
-      map.set(key, row);
-    }
-    return Array.from(map.entries())
-      .map(([name, v]) => ({ name, ...v }))
-      .sort((a, b) => b.leads - a.leads)
-      .slice(0, 6);
-  }, [leads]);
-
-  if (channelRows.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-        No leads yet.
-      </div>
-    );
-  }
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={channelRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={AXIS_TICK} interval={0} />
-        <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={AXIS_TICK} width={24} />
-        <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)" }} />
-        <Bar dataKey="leads" name="Leads" fill={SERIES_COLORS[0]} radius={[4, 4, 0, 0]} maxBarSize={18} />
-        <Bar dataKey="won" name="Won" fill={SERIES_COLORS[1]} radius={[4, 4, 0, 0]} maxBarSize={18} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-function TopPerformers({ deals }: { deals: Deal[] }) {
+function SalesTrend({ series }: { series: SalesPoint[] }) {
   const money = useMoney();
-  const topPerformers = useMemo(() => {
-    const map = new Map<string, { units: number; revenue: number }>();
-    for (const d of deals) {
-      if (d.stage !== "delivered") continue;
-      const key = d.salesAdvisor?.trim() || "Unassigned";
-      const row = map.get(key) ?? { units: 0, revenue: 0 };
-      row.units += 1;
-      row.revenue += d.otdPrice;
-      map.set(key, row);
-    }
-    return Array.from(map.entries())
-      .map(([name, v]) => ({ name, ...v }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 4);
-  }, [deals]);
-
-  if (topPerformers.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-        No deliveries yet.
-      </div>
-    );
+  if (series.every((p) => p.revenue === 0 && p.units === 0)) {
+    return <Empty text="No sales in the last 6 months." />;
   }
   return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={AXIS_TICK} interval={0} />
+        <YAxis
+          axisLine={false}
+          tickLine={false}
+          tick={AXIS_TICK}
+          width={40}
+          tickFormatter={(v: number) => {
+            const g = v * money.rate;
+            return g >= 1_000_000
+              ? `${Math.round(g / 1_000_000)}M`
+              : g >= 1000
+                ? `${Math.round(g / 1000)}k`
+                : String(Math.round(g));
+          }}
+        />
+        <Tooltip
+          contentStyle={TOOLTIP_STYLE}
+          itemStyle={{ color: "hsl(var(--foreground))" }}
+          cursor={{ fill: "hsl(var(--foreground) / 0.04)" }}
+          formatter={(v: number, name: string) =>
+            name === "Revenue" ? [money.gyd(v), name] : [v, name]
+          }
+        />
+        <Bar dataKey="revenue" name="Revenue" fill={SERIES_COLORS[0]} radius={[4, 4, 0, 0]} maxBarSize={26} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function Leaderboard({ rows }: { rows: AdvisorPerformance[] }) {
+  const money = useMoney();
+  const top = rows.slice(0, 5);
+  if (top.length === 0) return <Empty text="No deal activity yet." />;
+  return (
     <div className="h-full flex flex-col justify-center gap-1.5 px-2 pb-1">
-      {topPerformers.map((p, i) => (
-        <div key={p.name} className="flex items-center gap-2">
+      {top.map((p, i) => (
+        <div
+          key={p.name}
+          className={`flex items-center gap-2 rounded-lg px-1.5 py-0.5 ${
+            p.isMe ? "bg-primary/10 ring-1 ring-primary/30" : ""
+          }`}
+        >
           <span className="w-5 h-5 rounded-full bg-foreground/5 text-foreground text-[10px] font-bold flex items-center justify-center tabular-nums shrink-0">
             {i + 1}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium truncate leading-tight">{p.name}</p>
+            <p className="text-xs font-medium truncate leading-tight">
+              {p.name}
+              {p.isMe && (
+                <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-gold">
+                  You
+                </span>
+              )}
+            </p>
             <p className="text-[10px] text-muted-foreground leading-tight">
-              {p.units} delivered
+              {p.units} delivered · {p.closeRate}% close
+              {p.avgCycleDays > 0 ? ` · ${p.avgCycleDays}d cycle` : ""}
             </p>
           </div>
           <span className="text-[11px] font-semibold tabular-nums shrink-0">
-            {money.gyd(p.revenue)}
+            {money.gyd(p.gross)}
           </span>
         </div>
       ))}
@@ -402,59 +239,64 @@ function TopPerformers({ deals }: { deals: Deal[] }) {
   );
 }
 
-function DivisionMini({ leads, deals }: { leads: Lead[]; deals: Deal[] }) {
+function DivisionTable({ rows }: { rows: DivisionPerformance[] }) {
   const money = useMoney();
-  const { data: divisions } = useListDivisions();
-
-  const divisionRows = useMemo(() => {
-    const divs = [
-      ...(divisions ?? []).map((d) => ({ id: d.id as number | null, name: d.name })),
-      { id: null, name: "Unassigned" },
-    ];
-    return divs
-      .map((div) => {
-        const dLeads = leads.filter((l) => (l.divisionId ?? null) === div.id);
-        const dDeals = deals.filter((d) => (d.divisionId ?? null) === div.id);
-        const delivered = dDeals.filter((d) => d.stage === "delivered");
-        return {
-          name: div.name,
-          leads: dLeads.length,
-          delivered: delivered.length,
-          revenue: delivered.reduce((s, d) => s + d.otdPrice, 0),
-        };
-      })
-      .filter((r) => r.leads > 0 || r.delivered > 0)
-      .slice(0, 4);
-  }, [divisions, leads, deals]);
-
-  if (divisionRows.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-        No division activity yet.
-      </div>
-    );
-  }
+  if (rows.length === 0) return <Empty text="No division activity yet." />;
   return (
     <div className="h-full flex flex-col justify-center gap-1.5 px-2 pb-1">
       <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         <span>Division</span>
-        <span className="text-right">Leads</span>
-        <span className="text-right">Deliv.</span>
-        <span className="text-right">Revenue</span>
+        <span className="text-right">Open</span>
+        <span className="text-right">Units</span>
+        <span className="text-right">Gross</span>
       </div>
-      {divisionRows.map((r) => (
+      {rows.slice(0, 4).map((r) => (
         <div
           key={r.name}
           className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 text-[11px] items-center"
         >
           <span className="font-medium truncate">{r.name}</span>
-          <span className="text-right tabular-nums">{r.leads}</span>
-          <span className="text-right tabular-nums">{r.delivered}</span>
+          <span className="text-right tabular-nums">{r.openLeads}</span>
+          <span className="text-right tabular-nums">{r.units}</span>
           <span className="text-right tabular-nums font-semibold">
-            {money.gyd(r.revenue)}
+            {money.gyd(r.gross)}
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function InventoryAging({ data }: { data: InventoryBreakdown }) {
+  const money = useMoney();
+  if (data.totalCount === 0) return <Empty text="No vehicles in stock." />;
+  const max = Math.max(1, ...data.aging.map((b) => b.count));
+  return (
+    <div className="h-full flex flex-col justify-center gap-1.5 px-2 pb-1">
+      {data.aging.map((b, i) => (
+        <div key={b.bucket} className="flex items-center gap-2 text-[11px]">
+          <span className="w-14 shrink-0 text-muted-foreground truncate">
+            {b.bucket}
+          </span>
+          <div className="flex-1 h-3 rounded-full bg-foreground/[0.05] overflow-hidden">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${(b.count / max) * 100}%`,
+                background: SERIES_COLORS[i % SERIES_COLORS.length],
+                minWidth: b.count > 0 ? 6 : 0,
+              }}
+            />
+          </div>
+          <span className="w-6 shrink-0 text-right tabular-nums font-semibold">
+            {b.count}
+          </span>
+        </div>
+      ))}
+      <p className="text-[10px] text-muted-foreground pt-0.5">
+        {data.totalCount} in stock · {money.gyd(data.totalValue)}
+        {data.holds.count > 0 ? ` · ${data.holds.count} on hold` : ""}
+      </p>
     </div>
   );
 }
@@ -469,13 +311,7 @@ function SentimentMini() {
     },
   });
 
-  if (!sentiment) {
-    return (
-      <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-        Sentiment analysis unavailable.
-      </div>
-    );
-  }
+  if (!sentiment) return <Empty text="Sentiment analysis unavailable." />;
   return (
     <div className="h-full flex flex-col justify-center gap-2 px-2 pb-1">
       <div className="flex items-baseline gap-2">
@@ -524,243 +360,121 @@ const MANAGER_ROLES = new Set([
 export function PersonaOverview() {
   const { me, can } = useAuthz();
   const money = useMoney();
-  const { data: leads } = useListLeads();
-  const { data: deals } = useListDeals();
 
   const isLeadership =
     !!me && (me.isSuperAdmin || me.roleName === "General Manager");
   const isManager = !!me && !isLeadership && MANAGER_ROLES.has(me.roleName ?? "");
   const isAdvisor = !!me && !isLeadership && !isManager;
 
-  const allLeads = leads ?? [];
-  const allDeals = deals ?? [];
-
-  /* Advisors see only their own records (same scoping as the briefing). */
-  const nameKey = me?.name?.trim().toLowerCase() ?? null;
-  const myId = me?.id ?? null;
-  const matchesMe = (
-    userId: number | null | undefined,
-    name: string | null | undefined,
-  ) =>
-    (myId != null && userId === myId) ||
-    (userId == null &&
-      nameKey != null &&
-      (name ?? "").trim().toLowerCase() === nameKey);
-
-  const scopedLeads = isAdvisor
-    ? allLeads.filter((l) => matchesMe(l.ownerUserId, l.assignedTo))
-    : allLeads;
-  const scopedDeals = isAdvisor
-    ? allDeals.filter((d) => matchesMe(d.salesAdvisorUserId, d.salesAdvisor))
-    : allDeals;
-
-  const canDeliveries = can("deliveries", "view");
-  const canFinance = can("finance", "view");
-
-  const { data: bookings } = useListBookings(undefined, {
+  const { data: summary } = useGetDashboardSummary();
+  const { data: sales } = useGetSalesPerformance();
+  const canInventory = can("inventory", "view");
+  const { data: inventory } = useGetInventoryBreakdown({
     query: {
-      queryKey: getListBookingsQueryKey(),
-      enabled: canDeliveries,
+      queryKey: getGetInventoryBreakdownQueryKey(),
+      enabled: canInventory,
       retry: 1,
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
     },
   });
-  const { data: invoices } = useListInvoices(undefined, {
-    query: {
-      queryKey: getListInvoicesQueryKey(),
-      enabled: canFinance,
-      retry: 1,
-      staleTime: 5 * 60 * 1000,
-      refetchOnWindowFocus: false,
-    },
-  });
-
-  /* KPI strip figures (all from the scoped datasets). */
-  const active = scopedLeads.filter((l) => l.phase !== "lost");
-  const won = scopedLeads.filter((l) => l.phase === "won");
-  const conversion =
-    active.length > 0 ? Math.round((won.length / active.length) * 100) : 0;
-  const delivered = scopedDeals.filter((d) => d.stage === "delivered");
-  const revenue = delivered.reduce((s, d) => s + d.otdPrice, 0);
-  const sla = slaCompliancePct(scopedLeads);
-  const overdue = scopedLeads.filter(
-    (l) =>
-      !l.contactedDate &&
-      l.phase !== "lost" &&
-      Date.now() - new Date(l.createdAt).getTime() > 24 * 3_600_000,
-  ).length;
-
-  const quoteToOrder = useMemo(() => {
-    const quoted = scopedLeads.filter((l) => l.quotationSent);
-    if (quoted.length === 0) return null;
-    const dealLeadIds = new Set(
-      scopedDeals.filter((d) => d.leadId != null).map((d) => d.leadId),
-    );
-    const ordered = quoted.filter(
-      (l) => l.phase === "won" || dealLeadIds.has(l.id),
-    );
-    return {
-      pct: Math.round((ordered.length / quoted.length) * 100),
-      quoted: quoted.length,
-      ordered: ordered.length,
-    };
-  }, [scopedLeads, scopedDeals]);
-
-  const reservation = useMemo(() => {
-    const considered = (bookings ?? []).filter((b) => b.status !== "cancelled");
-    if (considered.length === 0) return null;
-    const converted = considered.filter((b) => b.status === "converted");
-    return {
-      pct: Math.round((converted.length / considered.length) * 100),
-      converted: converted.length,
-      total: considered.length,
-    };
-  }, [bookings]);
-
-  const pendingInvoices = useMemo(() => {
-    const pending = (invoices ?? []).filter(
-      (i) => i.status === "issued" || i.status === "partially_paid",
-    );
-    return {
-      count: pending.length,
-      amount: pending.reduce((s, i) => s + i.amount, 0),
-    };
-  }, [invoices]);
 
   const WIDGET_H = "h-[168px]";
+  const showFinanceKpis = !isAdvisor && summary?.outstandingAr != null;
 
   return (
     <div className="space-y-3">
-      {/* KPI strip */}
+      {/* KPI strip — all figures server-computed and persona-scoped */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <Kpi
-          label={isAdvisor ? "My Active Leads" : "Active Leads"}
-          value={String(active.length - won.length)}
-          icon={Users}
-        />
-        <Kpi
-          label="Conversion"
-          value={`${conversion}%`}
-          sub={`${won.length} won of ${active.length}`}
+          label={isAdvisor ? "My MTD Deliveries" : "MTD Deliveries"}
+          value={String(summary?.mtdUnits ?? 0)}
+          delta={summary?.deltas?.units}
+          sub={
+            summary?.mtdGross != null
+              ? `${money.gyd(summary.mtdGross)} gross`
+              : undefined
+          }
           icon={Target}
         />
         <Kpi
+          label={isAdvisor ? "My Active Leads" : "Active Leads"}
+          value={String(summary?.totalLeads ?? 0)}
+          delta={summary?.deltas?.leads}
+          sub={`${summary?.conversionRate ?? 0}% conversion`}
+          icon={Users}
+        />
+        <Kpi
           label="Avg Response"
-          value={fmtHours(avgResponseHours(scopedLeads))}
+          value={fmtSeconds(summary?.avgResponseSeconds ?? 0)}
           sub="Enquiry to first contact"
           icon={Timer}
         />
-        <Kpi
-          label={isAdvisor ? "My Revenue" : "Delivered Revenue"}
-          value={money.gyd(revenue)}
-          sub={`${delivered.length} delivered`}
-        />
-        {!isAdvisor && (
+        {showFinanceKpis ? (
           <Kpi
-            label="24h SLA"
-            value={sla == null ? "—" : `${sla}%`}
-            sub="Contacted within 24h"
-            icon={Timer}
-          />
-        )}
-        {!isAdvisor && (
-          <Kpi label="Overdue Contacts" value={String(overdue)} sub="Past 24h SLA" />
-        )}
-        <Kpi
-          label="Quote-to-Order"
-          value={quoteToOrder ? `${quoteToOrder.pct}%` : "—"}
-          sub={
-            quoteToOrder
-              ? `${quoteToOrder.ordered} of ${quoteToOrder.quoted} quotes`
-              : "No quotations yet"
-          }
-          icon={Quote}
-        />
-        {canDeliveries && !isAdvisor ? (
-          <Kpi
-            label="Reservations"
-            value={reservation ? `${reservation.pct}%` : "—"}
+            label="Outstanding AR"
+            value={money.gyd(summary?.outstandingAr ?? 0)}
             sub={
-              reservation
-                ? `${reservation.converted} of ${reservation.total} converted`
-                : "No active bookings"
+              summary?.availableInventoryValue != null
+                ? `${money.gyd(summary.availableInventoryValue)} stock value`
+                : undefined
             }
-            icon={BookmarkCheck}
-          />
-        ) : canFinance && !isAdvisor ? (
-          <Kpi
-            label="Pending Invoices"
-            value={String(pendingInvoices.count)}
-            sub={`${money.gyd(pendingInvoices.amount)} outstanding`}
-            icon={FileClock}
+            icon={Landmark}
           />
         ) : (
           <Kpi
-            label={isAdvisor ? "My Won" : "Team Won"}
-            value={String(won.length)}
-            sub="Converted leads"
-            icon={Target}
+            label="Today"
+            value={String(
+              (summary?.todayTasks ?? 0) + (summary?.todayAppointments ?? 0),
+            )}
+            sub={`${summary?.todayTasks ?? 0} tasks · ${summary?.todayAppointments ?? 0} appointments`}
+            icon={CalendarClock}
           />
         )}
       </div>
 
-      {/* Small-multiple widget grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
-        <div className={`${WIDGET_H} min-w-0`}>
+      {/* Widget grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
+        <div className={WIDGET_H}>
           <Widget
-            title={isAdvisor ? "My Funnel" : "Pipeline Funnel"}
-            action={{ label: "Pipeline", href: "/pipeline" }}
+            title={isAdvisor ? "My Sales Trend" : "Sales Trend"}
+            action={{ label: "Reports", href: "/reports#detailed-reports" }}
           >
-            <MiniFunnel leads={scopedLeads} />
+            <SalesTrend series={sales?.series ?? []} />
           </Widget>
         </div>
-        <div className={`${WIDGET_H} min-w-0`}>
-          <Widget title="Leads by Source">
-            <SourceDonut leads={scopedLeads} />
+        <div className={WIDGET_H}>
+          <Widget
+            title={isAdvisor ? "My Performance" : "Top Performers"}
+            action={{ label: "Deals", href: "/deals" }}
+          >
+            <Leaderboard rows={sales?.leaderboard ?? []} />
           </Widget>
         </div>
-        {isAdvisor ? (
-          <div className={`${WIDGET_H} min-w-0`}>
-            <Widget title="Channel Win Rate">
-              <ChannelBars leads={scopedLeads} />
+        {isLeadership ? (
+          <div className={WIDGET_H}>
+            <Widget title="Divisions" action={{ label: "Pipeline", href: "/pipeline" }}>
+              <DivisionTable rows={sales?.divisions ?? []} />
             </Widget>
           </div>
-        ) : (
-          <div className={`${WIDGET_H} min-w-0`}>
-            <Widget title="Pipeline by Advisor">
-              <AdvisorBars leads={scopedLeads} />
+        ) : canInventory && inventory ? (
+          <div className={WIDGET_H}>
+            <Widget title="Inventory Aging" action={{ label: "Inventory", href: "/inventory" }}>
+              <InventoryAging data={inventory} />
             </Widget>
           </div>
-        )}
-        {!isAdvisor && (
-          <div className={`${WIDGET_H} min-w-0`}>
-            <Widget title="Top Performers">
-              <TopPerformers deals={scopedDeals} />
+        ) : null}
+        {isLeadership && canInventory && inventory && (
+          <div className={WIDGET_H}>
+            <Widget title="Inventory Aging" action={{ label: "Inventory", href: "/inventory" }}>
+              <InventoryAging data={inventory} />
             </Widget>
           </div>
         )}
         {isLeadership && (
-          <div className={`${WIDGET_H} min-w-0`}>
-            <Widget
-              title="Division Performance"
-              action={{ label: "Detail", href: "/reports#detailed-reports" }}
-            >
-              <DivisionMini leads={allLeads} deals={allDeals} />
-            </Widget>
-          </div>
-        )}
-        {isLeadership && (
-          <div className={`${WIDGET_H} min-w-0`}>
+          <div className={WIDGET_H}>
             <Widget title="Customer Sentiment">
               <SentimentMini />
-            </Widget>
-          </div>
-        )}
-        {isManager && (
-          <div className={`${WIDGET_H} min-w-0`}>
-            <Widget title="Channel Performance">
-              <ChannelBars leads={scopedLeads} />
             </Widget>
           </div>
         )}

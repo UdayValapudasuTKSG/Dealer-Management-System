@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DashboardSummaryDeltas } from './dashboardSummaryDeltas';
 
 export interface DashboardSummary {
   totalLeads: number;
@@ -15,4 +16,11 @@ export interface DashboardSummary {
   agentTasksToday: number;
   conversionRate: number;
   avgResponseSeconds: number;
+  mtdUnits?: number;
+  mtdGross?: number;
+  availableInventoryValue?: number;
+  outstandingAr?: number;
+  todayTasks?: number;
+  todayAppointments?: number;
+  deltas?: DashboardSummaryDeltas;
 }

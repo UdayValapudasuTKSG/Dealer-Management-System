@@ -3660,30 +3660,26 @@ paths:
     get:
       operationId: getSalesPerformance
       tags: [dashboard]
-      summary: Monthly revenue and unit sales
+      summary: Monthly sales series plus advisor and division leaderboards
       responses:
         "200":
-          description: Sales performance series
+          description: Sales performance payload
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/SalesPoint"
+                $ref: "#/components/schemas/SalesPerformance"
   /dashboard/inventory-breakdown:
     get:
       operationId: getInventoryBreakdown
       tags: [dashboard]
-      summary: Inventory counts grouped by powertrain
+      summary: Stock composition by status, powertrain, aging bucket and hold exposure
       responses:
         "200":
           description: Inventory breakdown
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/InventoryBreakdownItem"
+                $ref: "#/components/schemas/InventoryBreakdown"
   /dashboard/predictions:
     get:
       operationId: getPredictiveAnalytics
@@ -3729,16 +3725,16 @@ paths:
           schema:
             type: string
             enum:
-              - lead-conversion
-              - sales
-              - revenue
-              - inventory
-              - finance
-              - delivery
-              - service
-              - employee-performance
-              - marketing
-              - customer-retention
+              - sales_pipeline
+              - sales_performance
+              - inventory_aging
+              - finance_applications
+              - service_workshop
+              - parts_inventory
+              - revenue_receivables
+              - tax_gra
+              - delivery_operations
+              - agent_activity
         - name: from
           in: query
           required: false
@@ -3747,6 +3743,17 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: divisionId
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: format
+          in: query
+          required: false
+          description: Server-side export; returns a file instead of JSON.
+          schema:
+            type: string
+            enum: [csv, xlsx, pdf]
       responses:
         "200":
           description: Report payload
@@ -8860,6 +8867,18 @@ components:
         agentTasksToday: { type: integer }
         conversionRate: { type: number }
         avgResponseSeconds: { type: integer }
+        mtdUnits: { type: integer }
+        mtdGross: { type: number }
+        availableInventoryValue: { type: number }
+        outstandingAr: { type: number }
+        todayTasks: { type: integer }
+        todayAppointments: { type: integer }
+        deltas:
+          type: object
+          properties:
+            leads: { type: number }
+            units: { type: number }
+            gross: { type: number }
     PipelineStage:
       type: object
       required: [phase, label, count, value]
@@ -8875,12 +8894,86 @@ components:
         month: { type: string }
         revenue: { type: number }
         units: { type: integer }
+    AdvisorPerformance:
+      type: object
+      required: [name, units, gross, avgDiscount, closeRate, avgCycleDays, isMe]
+      properties:
+        name: { type: string }
+        units: { type: integer }
+        gross: { type: number }
+        avgDiscount: { type: number }
+        closeRate: { type: number }
+        avgCycleDays: { type: number }
+        isMe: { type: boolean }
+    DivisionPerformance:
+      type: object
+      required: [divisionId, name, units, gross, openLeads]
+      properties:
+        divisionId: { type: ["integer", "null"] }
+        name: { type: string }
+        units: { type: integer }
+        gross: { type: number }
+        openLeads: { type: integer }
+    SalesPerformance:
+      type: object
+      required: [series, leaderboard, divisions]
+      properties:
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalesPoint"
+        leaderboard:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdvisorPerformance"
+        divisions:
+          type: array
+          items:
+            $ref: "#/components/schemas/DivisionPerformance"
     InventoryBreakdownItem:
       type: object
       required: [powertrain, count]
       properties:
         powertrain: { type: string }
         count: { type: integer }
+    InventoryStatusItem:
+      type: object
+      required: [status, count, value]
+      properties:
+        status: { type: string }
+        count: { type: integer }
+        value: { type: number }
+    InventoryAgingBucket:
+      type: object
+      required: [bucket, count, value]
+      properties:
+        bucket: { type: string }
+        count: { type: integer }
+        value: { type: number }
+    InventoryBreakdown:
+      type: object
+      required: [byStatus, byPowertrain, aging, holds, totalCount, totalValue]
+      properties:
+        byStatus:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryStatusItem"
+        byPowertrain:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryBreakdownItem"
+        aging:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryAgingBucket"
+        holds:
+          type: object
+          required: [count, value]
+          properties:
+            count: { type: integer }
+            value: { type: number }
+        totalCount: { type: integer }
+        totalValue: { type: number }
     ForecastPoint:
       type: object
       required: [month, isProjection]

@@ -4856,7 +4856,18 @@ export const GetDashboardSummaryResponse = zod.object({
   "serviceOrdersOpen": zod.number(),
   "agentTasksToday": zod.number(),
   "conversionRate": zod.number(),
-  "avgResponseSeconds": zod.number()
+  "avgResponseSeconds": zod.number(),
+  "mtdUnits": zod.number().optional(),
+  "mtdGross": zod.number().optional(),
+  "availableInventoryValue": zod.number().optional(),
+  "outstandingAr": zod.number().optional(),
+  "todayTasks": zod.number().optional(),
+  "todayAppointments": zod.number().optional(),
+  "deltas": zod.object({
+  "leads": zod.number().optional(),
+  "units": zod.number().optional(),
+  "gross": zod.number().optional()
+}).optional()
 })
 
 
@@ -4873,24 +4884,58 @@ export const GetPipelineResponse = zod.array(GetPipelineResponseItem)
 
 
 /**
- * @summary Monthly revenue and unit sales
+ * @summary Monthly sales series plus advisor and division leaderboards
  */
-export const GetSalesPerformanceResponseItem = zod.object({
+export const GetSalesPerformanceResponse = zod.object({
+  "series": zod.array(zod.object({
   "month": zod.string(),
   "revenue": zod.number(),
   "units": zod.number()
+})),
+  "leaderboard": zod.array(zod.object({
+  "name": zod.string(),
+  "units": zod.number(),
+  "gross": zod.number(),
+  "avgDiscount": zod.number(),
+  "closeRate": zod.number(),
+  "avgCycleDays": zod.number(),
+  "isMe": zod.boolean()
+})),
+  "divisions": zod.array(zod.object({
+  "divisionId": zod.number().nullable(),
+  "name": zod.string(),
+  "units": zod.number(),
+  "gross": zod.number(),
+  "openLeads": zod.number()
+}))
 })
-export const GetSalesPerformanceResponse = zod.array(GetSalesPerformanceResponseItem)
 
 
 /**
- * @summary Inventory counts grouped by powertrain
+ * @summary Stock composition by status, powertrain, aging bucket and hold exposure
  */
-export const GetInventoryBreakdownResponseItem = zod.object({
+export const GetInventoryBreakdownResponse = zod.object({
+  "byStatus": zod.array(zod.object({
+  "status": zod.string(),
+  "count": zod.number(),
+  "value": zod.number()
+})),
+  "byPowertrain": zod.array(zod.object({
   "powertrain": zod.string(),
   "count": zod.number()
+})),
+  "aging": zod.array(zod.object({
+  "bucket": zod.string(),
+  "count": zod.number(),
+  "value": zod.number()
+})),
+  "holds": zod.object({
+  "count": zod.number(),
+  "value": zod.number()
+}),
+  "totalCount": zod.number(),
+  "totalValue": zod.number()
 })
-export const GetInventoryBreakdownResponse = zod.array(GetInventoryBreakdownResponseItem)
 
 
 /**
@@ -4954,9 +4999,11 @@ export const GetSentimentAnalysisResponse = zod.object({
  * @summary Aggregated report over live data for a date range
  */
 export const GetReportQueryParams = zod.object({
-  "type": zod.enum(['lead-conversion', 'sales', 'revenue', 'inventory', 'finance', 'delivery', 'service', 'employee-performance', 'marketing', 'customer-retention']),
+  "type": zod.enum(['sales_pipeline', 'sales_performance', 'inventory_aging', 'finance_applications', 'service_workshop', 'parts_inventory', 'revenue_receivables', 'tax_gra', 'delivery_operations', 'agent_activity']),
   "from": zod.coerce.string().optional(),
-  "to": zod.coerce.string().optional()
+  "to": zod.coerce.string().optional(),
+  "divisionId": zod.coerce.number().optional(),
+  "format": zod.enum(['csv', 'xlsx', 'pdf']).optional().describe('Server-side export; returns a file instead of JSON.')
 })
 
 export const GetReportResponse = zod.object({

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useGetReport } from "@workspace/api-client-react";
-import type { Report } from "@workspace/api-client-react";
+import { useGetReport, GetReportType } from "@workspace/api-client-react";
+import type { Report, GetReportFormat } from "@workspace/api-client-react";
 import { useAuthz } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,9 @@ import {
   Landmark,
   Truck,
   Wrench,
-  Users,
-  Megaphone,
-  HeartHandshake,
+  Boxes,
+  Receipt,
+  Bot,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -36,48 +36,40 @@ import {
   Legend,
 } from "recharts";
 import { motion } from "framer-motion";
-import * as XLSX from "xlsx";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import { useToast } from "@/hooks/use-toast";
 import { PageHero } from "@/components/layout/page-hero";
 import { PersonaOverview } from "@/components/reports/persona-overview";
 
-type ReportType =
-  | "lead-conversion"
-  | "sales"
-  | "revenue"
-  | "inventory"
-  | "finance"
-  | "delivery"
-  | "service"
-  | "employee-performance"
-  | "marketing"
-  | "customer-retention";
+type ReportType = (typeof GetReportType)[keyof typeof GetReportType];
 
+/* R5.1 — the 10 canonical report types. `module` mirrors the server-side
+   RBAC gate; `minTier` mirrors REPORT_MIN_TIER (manager-floor types are
+   hidden from advisors — the server also 403s them). */
 const REPORT_TYPES: {
   type: ReportType;
   label: string;
   module: string;
+  minTier: "advisor" | "manager";
   icon: typeof Target;
 }[] = [
-  { type: "lead-conversion", label: "Lead Conversion", module: "leads", icon: Target },
-  { type: "sales", label: "Sales", module: "deals", icon: BarChart3 },
-  { type: "revenue", label: "Revenue", module: "finance", icon: TrendingUp },
-  { type: "inventory", label: "Inventory", module: "inventory", icon: Layers },
-  { type: "finance", label: "Finance", module: "finance", icon: Landmark },
-  { type: "delivery", label: "Delivery", module: "deliveries", icon: Truck },
-  { type: "service", label: "Service", module: "service", icon: Wrench },
-  { type: "employee-performance", label: "Employee Performance", module: "dashboard", icon: Users },
-  { type: "marketing", label: "Marketing", module: "leads", icon: Megaphone },
-  { type: "customer-retention", label: "Customer Retention", module: "customers", icon: HeartHandshake },
+  { type: "sales_pipeline", label: "Sales Pipeline", module: "leads", minTier: "advisor", icon: Target },
+  { type: "sales_performance", label: "Sales Performance", module: "deals", minTier: "advisor", icon: BarChart3 },
+  { type: "inventory_aging", label: "Inventory & Aging", module: "inventory", minTier: "advisor", icon: Layers },
+  { type: "finance_applications", label: "Finance Applications", module: "finance", minTier: "manager", icon: Landmark },
+  { type: "service_workshop", label: "Service & Workshop", module: "service", minTier: "manager", icon: Wrench },
+  { type: "parts_inventory", label: "Parts Inventory", module: "parts", minTier: "manager", icon: Boxes },
+  { type: "revenue_receivables", label: "Revenue & Receivables", module: "finance", minTier: "manager", icon: TrendingUp },
+  { type: "tax_gra", label: "Tax & GRA", module: "gra", minTier: "manager", icon: Receipt },
+  { type: "delivery_operations", label: "Delivery Operations", module: "deliveries", minTier: "advisor", icon: Truck },
+  { type: "agent_activity", label: "Agent Activity", module: "settings", minTier: "manager", icon: Bot },
 ];
 
 const PIE_COLORS = [
-  "hsl(218 72% 52%)",
-  "hsl(185 42% 44%)",
+  "hsl(27 44% 46%)",
+  "hsl(35 55% 60%)",
   "hsl(0 0% 62%)",
-  "hsl(218 50% 34%)",
-  "hsl(185 32% 30%)",
+  "hsl(20 35% 34%)",
+  "hsl(40 30% 45%)",
   "hsl(0 0% 40%)",
 ];
 
@@ -95,76 +87,73 @@ function isoDaysAgo(days: number) {
   return d.toISOString().slice(0, 10);
 }
 
-function exportCsv(report: Report) {
-  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
-  const lines = [
-    report.table.columns.map(esc).join(","),
-    ...report.table.rows.map((r) => r.map(esc).join(",")),
-  ];
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+/* Server-side export: the API renders CSV/XLSX/PDF itself (and writes the
+   audit + activity trail). Raw fetch — file downloads have no generated
+   hooks. Headers mirror the shared custom-fetch (dealer + dev persona). */
+async function downloadExport(
+  type: ReportType,
+  from: string,
+  to: string,
+  format: GetReportFormat,
+): Promise<void> {
+  const headers: Record<string, string> = {};
+  try {
+    const dealerId = localStorage.getItem("aura-dealer-id");
+    if (dealerId) headers["x-dealer-id"] = dealerId;
+    const testEmail = localStorage.getItem("aura-test-user-email");
+    if (testEmail) headers["x-test-user-email"] = testEmail;
+  } catch {
+    /* localStorage unavailable — skip */
+  }
+  const qs = new URLSearchParams({ type, from, to, format });
+  const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
+  const res = await fetch(`${apiBase}/reports?${qs.toString()}`, {
+    credentials: "include",
+    headers,
+  });
+  if (!res.ok) {
+    throw new Error(`Export failed (HTTP ${res.status})`);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const match = /filename="?([^";]+)"?/.exec(disposition);
+  const filename = match?.[1] ?? `${type}-report-${from}-to-${to}.${format}`;
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `${report.type}-report-${report.from}-to-${report.to}.csv`;
+  a.download = filename;
   a.click();
   URL.revokeObjectURL(a.href);
 }
 
-function exportExcel(report: Report) {
-  const wb = XLSX.utils.book_new();
-  const kpiSheet = XLSX.utils.aoa_to_sheet([
-    ["Metric", "Value"],
-    ...report.kpis.map((k) => [k.label, k.value]),
-  ]);
-  const tableSheet = XLSX.utils.aoa_to_sheet([
-    report.table.columns,
-    ...report.table.rows,
-  ]);
-  XLSX.utils.book_append_sheet(wb, kpiSheet, "Summary");
-  XLSX.utils.book_append_sheet(wb, tableSheet, "Detail");
-  XLSX.writeFile(wb, `${report.type}-report-${report.from}-to-${report.to}.xlsx`);
-}
-
-function exportPdf(report: Report) {
-  const doc = new jsPDF();
-  doc.setFontSize(18);
-  doc.text(`${report.label} Report`, 14, 18);
-  doc.setFontSize(10);
-  doc.setTextColor(120);
-  doc.text(`AURA Dealership OS · ${report.from} to ${report.to}`, 14, 25);
-  autoTable(doc, {
-    startY: 32,
-    head: [["Metric", "Value"]],
-    body: report.kpis.map((k) => [k.label, k.value + (k.sub ? ` (${k.sub})` : "")]),
-    theme: "grid",
-    headStyles: { fillColor: [180, 20, 20] },
-  });
-  autoTable(doc, {
-    startY:
-      (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable
-        ?.finalY != null
-        ? (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable
-            .finalY + 8
-        : 60,
-    head: [report.table.columns],
-    body: report.table.rows,
-    theme: "striped",
-    headStyles: { fillColor: [180, 20, 20] },
-  });
-  doc.save(`${report.type}-report-${report.from}-to-${report.to}.pdf`);
-}
+const MANAGER_ROLES = new Set([
+  "Sales Manager",
+  "Service Manager",
+  "Finance Manager",
+]);
 
 export default function Reports() {
-  const { can } = useAuthz();
-  const visible = REPORT_TYPES.filter((r) => can(r.module, "view"));
+  const { me, can } = useAuthz();
+
+  const isLeadership =
+    !!me && (me.isSuperAdmin || me.roleName === "General Manager");
+  const isManager = !!me && !isLeadership && MANAGER_ROLES.has(me.roleName ?? "");
+  const isAdvisor = !!me && !isLeadership && !isManager;
+
+  const visible = REPORT_TYPES.filter(
+    (r) => can(r.module, "view") && (r.minTier === "advisor" || !isAdvisor),
+  );
   const [selected, setSelected] = useState<ReportType | null>(null);
   const [from, setFrom] = useState(isoDaysAgo(180));
   const [to, setTo] = useState(isoDaysAgo(0));
 
-  const active = selected ?? visible[0]?.type ?? null;
+  const active =
+    selected && visible.some((r) => r.type === selected)
+      ? selected
+      : visible[0]?.type ?? null;
   const activeDef = REPORT_TYPES.find((r) => r.type === active);
 
   const { data: report, isLoading, isError } = useGetReport(
-    { type: (active ?? "sales") as ReportType, from, to },
+    { type: active ?? "sales_pipeline", from, to },
   );
 
   if (visible.length === 0) {
@@ -183,7 +172,6 @@ export default function Reports() {
   return (
     <div className="h-full overflow-y-auto">
       <PageHero
-
         eyebrow="Intelligence"
         title="Reports"
         subtitle="Performance, revenue and pipeline analytics — scoped to your role."
@@ -261,7 +249,7 @@ export default function Reports() {
             different date range.
           </div>
         ) : (
-          <ReportBody report={report} />
+          <ReportBody report={report} from={from} to={to} />
         )}
         </div>
       </div>
@@ -269,7 +257,33 @@ export default function Reports() {
   );
 }
 
-function ReportBody({ report }: { report: Report }) {
+function ReportBody({
+  report,
+  from,
+  to,
+}: {
+  report: Report;
+  from: string;
+  to: string;
+}) {
+  const { toast } = useToast();
+  const [exporting, setExporting] = useState<GetReportFormat | null>(null);
+
+  const doExport = async (format: GetReportFormat) => {
+    setExporting(format);
+    try {
+      await downloadExport(report.type as ReportType, from, to, format);
+    } catch {
+      toast({
+        title: "Export failed",
+        description: "The report could not be exported. Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setExporting(null);
+    }
+  };
+
   const chartData = useMemo(
     () =>
       report.chart.points.map((p) => ({
@@ -281,26 +295,47 @@ function ReportBody({ report }: { report: Report }) {
   );
   const fmt = (v: number) =>
     report.chart.currency
-      ? `$${v >= 1000 ? `${Math.round(v / 1000)}k` : v}`
+      ? `${
+          v >= 1_000_000_000
+            ? `${(v / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`
+            : v >= 1_000_000
+              ? `${Math.round(v / 1_000_000)}M`
+              : v >= 1000
+                ? `${Math.round(v / 1000)}k`
+                : v
+        }`
       : String(v);
 
   return (
     <div className="space-y-4">
-      {/* Export bar */}
+      {/* Export bar — server-rendered files with audit trail */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {report.label} · {report.from} → {report.to}
         </p>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => exportPdf(report)}>
-            <FileDown className="h-4 w-4 mr-1.5" /> PDF
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => exportExcel(report)}>
-            <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Excel
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => exportCsv(report)}>
-            <FileText className="h-4 w-4 mr-1.5" /> CSV
-          </Button>
+          {(
+            [
+              { format: "pdf" as const, label: "PDF", icon: FileDown },
+              { format: "xlsx" as const, label: "Excel", icon: FileSpreadsheet },
+              { format: "csv" as const, label: "CSV", icon: FileText },
+            ]
+          ).map(({ format, label, icon: Icon }) => (
+            <Button
+              key={format}
+              variant="outline"
+              size="sm"
+              disabled={exporting !== null}
+              onClick={() => void doExport(format)}
+            >
+              {exporting === format ? (
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+              ) : (
+                <Icon className="h-4 w-4 mr-1.5" />
+              )}
+              {label}
+            </Button>
+          ))}
         </div>
       </div>
 

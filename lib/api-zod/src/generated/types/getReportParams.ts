@@ -5,10 +5,16 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { GetReportFormat } from './getReportFormat';
 import type { GetReportType } from './getReportType';
 
 export type GetReportParams = {
 type: GetReportType;
 from?: string;
 to?: string;
+divisionId?: number;
+/**
+ * Server-side export; returns a file instead of JSON.
+ */
+format?: GetReportFormat;
 };
