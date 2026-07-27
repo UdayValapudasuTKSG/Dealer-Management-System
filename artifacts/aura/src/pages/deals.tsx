@@ -87,6 +87,41 @@ export default function Deals() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelNote, setCancelNote] = useState("");
 
+  const commitDeal = async (deal: Deal) => {
+    try {
+      await updateDeal.mutateAsync({
+        id: deal.id,
+        data: { stage: "committed" },
+      });
+      queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
+      queryClient.invalidateQueries({
+        predicate: (q) =>
+          String(q.queryKey[0] ?? "").includes("/gates") ||
+          String(q.queryKey[0] ?? "").includes("/vehicles"),
+      });
+      toast({
+        title: "Deal committed",
+        description:
+          "The vehicle is now reserved for this customer. Delivery and GRA filing steps are unlocked.",
+      });
+    } catch (err) {
+      const detail = (
+        err as {
+          response?: { data?: { error?: string; unmet?: string[]; message?: string } };
+        }
+      )?.response?.data;
+      toast({
+        title: "Deal can't be committed yet",
+        description:
+          detail?.unmet?.[0] ??
+          detail?.message ??
+          detail?.error ??
+          (err instanceof Error ? err.message : undefined),
+        variant: "destructive",
+      });
+    }
+  };
+
   const submitCancellation = async () => {
     if (!cancelDeal || !cancelReason) return;
     try {
@@ -640,6 +675,15 @@ export default function Deals() {
                               </div>
                             )}
                           </div>
+                          {canEditDeals && deal.stage === "desking" && (
+                            <button
+                              onClick={() => commitDeal(deal)}
+                              disabled={updateDeal.isPending}
+                              className="mt-4 w-full text-center text-xs font-semibold uppercase tracking-widest text-primary-foreground bg-primary hover:bg-primary/90 transition-colors py-2 rounded-full disabled:opacity-60"
+                            >
+                              Commit Deal
+                            </button>
+                          )}
                           {canEditDeals &&
                             (deal.stage === "desking" ||
                               deal.stage === "committed") && (
