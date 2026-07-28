@@ -931,6 +931,7 @@ export default function LeadDetail() {
     if (g.refType === "lead" && g.refId === lead.id) return true;
     if (g.refType === "deal" && linkedDeal?.id != null && g.refId === linkedDeal.id) return true;
     if (g.refType === "vehicle" && lead.interestedVehicleId != null && g.refId === lead.interestedVehicleId) return true;
+    if (g.refType === "vehicle" && linkedDeal?.vehicleId != null && g.refId === linkedDeal.vehicleId) return true;
     return false;
   });
 
