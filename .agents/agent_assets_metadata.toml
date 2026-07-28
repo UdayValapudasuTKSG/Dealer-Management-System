@@ -209,3 +209,15 @@ id = "J6l70p4p4mJRUYrdcVeGo"
 uri = "file://exports/customer-1-data-export.json"
 type = "unspecified"
 title = "Customer Data Export (DSAR bundle, C1–C5)"
+
+[[outputs]]
+id = "iP5dQ_vUlQ0H_Y9ea-UJb"
+uri = "file://exports/sample-gra-commercial-invoice.png"
+type = "image"
+title = "Sample GRA Commercial Invoice (upload this)"
+
+[[outputs]]
+id = "Z8luVWQHw4ol6p5oocCrI"
+uri = "file://exports/sample-gra-commercial-invoice.pdf"
+type = "pdf"
+title = "Sample GRA Commercial Invoice (PDF copy)"
