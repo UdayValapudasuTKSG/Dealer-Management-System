@@ -19,13 +19,15 @@
     "verify-isolation-p5": "tsx ./src/verify-isolation-p5.ts",
     "seed-payment-demo": "tsx ./src/seed-payment-demo.ts",
     "verify-gra-duty": "tsx ./src/verify-gra-duty.ts",
-    "backfill-pdi-status": "tsx ./src/backfill-pdi-status.ts"
+    "backfill-pdi-status": "tsx ./src/backfill-pdi-status.ts",
+    "migrate-gt-salesforce": "tsx ./src/migrate-gt-salesforce.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
     "@workspace/db": "workspace:*",
     "@workspace/gra-duty": "workspace:*",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "catalog:",
