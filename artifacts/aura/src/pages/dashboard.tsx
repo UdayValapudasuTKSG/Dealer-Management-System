@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Redirect, useLocation } from "wouter";
 import { buildTriage, isTodayDateOnly } from "@/lib/triage";
 import {
@@ -38,6 +38,7 @@ import {
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuthz } from "@/lib/auth";
+import { Pagination } from "@/components/pagination";
 import type { TriageItem, TriageBucket } from "@/lib/triage";
 
 function greeting() {
@@ -505,10 +506,31 @@ function DashboardInner() {
     allItems.some((i) => t.kinds.includes(i.kind)),
   );
 
-  const sections: { bucket: TriageBucket; items: TriageItem[] }[] = (
-    ["urgent", "today", "later"] as const
-  )
-    .map((b) => ({ bucket: b, items: filtered.filter((i) => i.bucket === b) }))
+  /* Paginate the triage queue: the flat filtered list is already ordered
+     urgent → today → later, so we slice it and rebuild the visible
+     sections from the current page only. */
+  const TRIAGE_PAGE_SIZE = 15;
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [severityFilter, typeFilter]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / TRIAGE_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pagedItems = filtered.slice(
+    (safePage - 1) * TRIAGE_PAGE_SIZE,
+    safePage * TRIAGE_PAGE_SIZE,
+  );
+
+  const sections: {
+    bucket: TriageBucket;
+    items: TriageItem[];
+    total: number;
+  }[] = (["urgent", "today", "later"] as const)
+    .map((b) => ({
+      bucket: b,
+      items: pagedItems.filter((i) => i.bucket === b),
+      total: filtered.filter((i) => i.bucket === b).length,
+    }))
     .filter((s) => s.items.length > 0);
 
   const firstName = (myName ?? "").trim().split(" ")[0] || null;
@@ -646,7 +668,7 @@ function DashboardInner() {
                       {SEVERITY_META[s.bucket].hint}
                     </span>
                     <span className="ml-auto bg-foreground/10 text-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full tabular-nums">
-                      {s.items.length}
+                      {s.total}
                     </span>
                   </div>
                   <div className="space-y-2">
@@ -656,6 +678,21 @@ function DashboardInner() {
                   </div>
                 </motion.div>
               ))
+            )}
+
+            {filtered.length > TRIAGE_PAGE_SIZE && (
+              <div className="space-y-1">
+                <Pagination
+                  page={safePage}
+                  pageCount={pageCount}
+                  onPageChange={setPage}
+                />
+                <p className="text-center text-xs text-muted-foreground tabular-nums">
+                  {(safePage - 1) * TRIAGE_PAGE_SIZE + 1}–
+                  {Math.min(safePage * TRIAGE_PAGE_SIZE, filtered.length)} of{" "}
+                  {filtered.length} items
+                </p>
+              </div>
             )}
           </div>
 
