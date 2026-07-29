@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
+import { Pagination } from "@/components/pagination";
 import { PageHero } from "@/components/layout/page-hero";
 import {
   Car,
@@ -60,23 +61,6 @@ import {
 } from "lucide-react";
 import { useUpload } from "@workspace/object-storage-web";
 import { motion, AnimatePresence } from "framer-motion";
-
-/** Windowed page list, e.g. 1 … 4 5 6 … 19 (always shows first/last). */
-function pageNumbers(current: number, total: number): (number | "…")[] {
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-  const pages = new Set<number>([1, total, current - 1, current, current + 1]);
-  const sorted = [...pages]
-    .filter((p) => p >= 1 && p <= total)
-    .sort((a, b) => a - b);
-  const out: (number | "…")[] = [];
-  let prev = 0;
-  for (const p of sorted) {
-    if (prev && p - prev > 1) out.push("…");
-    out.push(p);
-    prev = p;
-  }
-  return out;
-}
 
 function powertrainLabel(pt: string) {
   return pt === "EV" ? "Electric" : pt;
@@ -541,50 +525,12 @@ export default function Inventory() {
         )}
 
         {/* Pagination */}
-        {!isLoading && pageCount > 1 && (
-          <div className="flex items-center justify-center gap-2 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full px-4"
-              disabled={safePage <= 1}
-              onClick={() => setPage(safePage - 1)}
-            >
-              Previous
-            </Button>
-            {pageNumbers(safePage, pageCount).map((p, i) =>
-              p === "…" ? (
-                <span
-                  key={`gap-${i}`}
-                  className="px-1.5 text-sm text-muted-foreground select-none"
-                >
-                  …
-                </span>
-              ) : (
-                <button
-                  key={p}
-                  onClick={() => setPage(p)}
-                  aria-current={p === safePage ? "page" : undefined}
-                  className={`h-9 min-w-9 rounded-full px-2 text-sm font-medium tabular-nums transition-colors ${
-                    p === safePage
-                      ? "bg-primary text-white shadow-lg shadow-primary/30"
-                      : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
-                  }`}
-                >
-                  {p}
-                </button>
-              ),
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full px-4"
-              disabled={safePage >= pageCount}
-              onClick={() => setPage(safePage + 1)}
-            >
-              Next
-            </Button>
-          </div>
+        {!isLoading && (
+          <Pagination
+            page={safePage}
+            pageCount={pageCount}
+            onPageChange={setPage}
+          />
         )}
       </div>
 

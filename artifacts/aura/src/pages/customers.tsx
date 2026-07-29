@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useListCustomers,
@@ -15,6 +16,7 @@ import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
+import { Pagination } from "@/components/pagination";
 
 const TypeBadge = ({ type }: { type?: string }) =>
   type === "business" ? (
@@ -47,6 +49,20 @@ export default function Customers() {
 
   const comfortable = density === "comfortable";
 
+  const PAGE_SIZE = layout === "list" ? 25 : comfortable ? 24 : 30;
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [layout, density]);
+  const total = customers?.length ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const paged = useMemo(
+    () =>
+      (customers ?? []).slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [customers, safePage, PAGE_SIZE],
+  );
+
   return (
     <>
     <PageHero
@@ -58,6 +74,16 @@ export default function Customers() {
     />
     <Page className="space-y-5">
       <div className="flex items-center justify-end gap-3">
+            <p className="text-sm text-muted-foreground tabular-nums mr-auto">
+              {total === 0
+                ? "0 accounts"
+                : total <= PAGE_SIZE
+                  ? `${total} account${total === 1 ? "" : "s"}`
+                  : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(
+                      safePage * PAGE_SIZE,
+                      total,
+                    )} of ${total} accounts`}
+            </p>
             <ViewControls
               layout={layout}
               onLayoutChange={setLayout}
@@ -138,7 +164,7 @@ export default function Customers() {
               </tr>
             </thead>
             <tbody>
-              {customers?.map((customer) => (
+              {paged.map((customer) => (
                 <tr
                   key={customer.id}
                   onClick={() => navigate(`/customers/${customer.id}`)}
@@ -199,7 +225,7 @@ export default function Customers() {
         </div>
       ) : comfortable ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {customers?.map((customer, i) => (
+          {paged.map((customer, i) => (
             <motion.div
               key={customer.id}
               initial={{ opacity: 0, y: 20 }}
@@ -275,7 +301,7 @@ export default function Customers() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {customers?.map((customer, i) => (
+          {paged.map((customer, i) => (
             <motion.div
               key={customer.id}
               initial={{ opacity: 0, y: 12 }}
@@ -342,6 +368,20 @@ export default function Customers() {
             </motion.div>
           ))}
         </div>
+      )}
+
+      {!isLoading && (
+        <Pagination
+          page={safePage}
+          pageCount={pageCount}
+          onPageChange={(p) => {
+            setPage(p);
+            document
+              .querySelector("main, [data-page-scroll]")
+              ?.scrollTo({ top: 0 });
+            window.scrollTo({ top: 0 });
+          }}
+        />
       )}
     </Page>
     </>
