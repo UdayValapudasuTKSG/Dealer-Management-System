@@ -219,17 +219,24 @@ async function main() {
       email: customersTable.email,
       phone: customersTable.phone,
       accountType: customersTable.accountType,
+      tags: customersTable.tags,
     })
     .from(customersTable)
     .where(eq(customersTable.dealerId, DEALER_ID));
   const custByEmail = new Map<string, number>();
   const custByPhone = new Map<string, number>();
   const businessByName = new Map<string, number>();
+  // Primary idempotency key: the Salesforce record id, stored as an
+  // `sf:<Id>` tag on the customer. Survives re-runs even for records with
+  // no email/phone (which identity-field dedupe cannot catch).
+  const custBySfId = new Map<string, number>();
   for (const c of existingCustomers) {
     if (c.email) custByEmail.set(emailKey(c.email), c.id);
     if (c.phone && phoneKey(c.phone)) custByPhone.set(phoneKey(c.phone), c.id);
     if (c.accountType === "business")
       businessByName.set(c.name.trim().toLowerCase(), c.id);
+    for (const t of c.tags ?? [])
+      if (t.startsWith("sf:")) custBySfId.set(t.slice(3), c.id);
   }
 
   const existingLeads = await db
@@ -379,6 +386,7 @@ async function main() {
       // PEOPLE can share a name, two businesses with the same name at the
       // same dealer are the same account.
       const dupId =
+        custBySfId.get(r.Id) ??
         (email ? custByEmail.get(email) : undefined) ??
         (phoneKey(phone) ? custByPhone.get(phoneKey(phone)) : undefined) ??
         (accountType === "business"
@@ -411,7 +419,7 @@ async function main() {
             country:
               r.BillingCountry || (accountType === "person" ? "Guyana" : null),
             company: accountType === "business" ? name : null,
-            tags: ["salesforce-import"],
+            tags: ["salesforce-import", `sf:${r.Id}`],
             createdAt: parseDate(r.CreatedDate) ?? new Date(),
           })
           .returning({ id: customersTable.id });
@@ -448,6 +456,7 @@ async function main() {
         reports.contacts.imported += Math.max(contacts.length, 1);
       }
       sfAccountToCustomerId.set(r.Id, customerId);
+      custBySfId.set(r.Id, customerId);
       if (email) custByEmail.set(email, customerId);
       if (phoneKey(phone)) custByPhone.set(phoneKey(phone), customerId);
       if (accountType === "business")
