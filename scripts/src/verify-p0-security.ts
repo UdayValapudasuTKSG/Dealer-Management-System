@@ -15,7 +15,12 @@ import {
 //      read-only blocks writes (403), elevated still hard-blocks money (403)
 
 const BASE = process.env.API_BASE ?? "http://localhost:80/api";
-const GM = "gm@aura-demo.com"; // dealer 2 member
+// Dedicated ephemeral GM identity: created at startup as a dealer-2 member
+// with NO dealer-1 membership (the tenant-isolation tests depend on that),
+// deleted again in the finally block. Never reuse a shared demo account here
+// — its memberships can legitimately change (e.g. gm@aura-demo.com was later
+// added to dealer 1) and silently invalidate the suite's premise.
+const GM = "p0-test-gm@aura-test.local";
 // SUPER_ADMIN_EMAIL may be a comma-separated list; the persona header needs a
 // super admin that also EXISTS in the users table — resolved at runtime.
 const SUPER_CANDIDATES = (
@@ -107,6 +112,30 @@ async function main() {
     SUPER = candidate;
     tempSuperEmail = candidate;
   }
+
+  // Ephemeral GM: a dealer-2 member with no other memberships.
+  const gmRole = await pool
+    .query(
+      `SELECT du.role_id FROM dealer_users du
+       JOIN roles r ON r.id = du.role_id
+       WHERE du.dealer_id = 2
+       ORDER BY (r.name ILIKE '%manager%') DESC
+       LIMIT 1`,
+    )
+    .then((r) => r.rows[0]?.role_id as number | undefined);
+  if (!gmRole) throw new Error("No dealer-2 role found to seed the test GM");
+  await pool.query(`DELETE FROM users WHERE lower(email) = $1`, [GM]);
+  const gmUserId = await pool
+    .query(
+      `INSERT INTO users (clerk_id, email, name, status)
+       VALUES ($1, $2, 'P0 Test GM', 'active') RETURNING id`,
+      [`p0-test-gm-${Date.now()}`, GM],
+    )
+    .then((r) => r.rows[0].id as number);
+  await pool.query(
+    `INSERT INTO dealer_users (dealer_id, user_id, role_id) VALUES (2, $1, $2)`,
+    [gmUserId, gmRole],
+  );
 
   // ---- fixtures --------------------------------------------------------
   const [foreignVehicle] = await db
@@ -398,6 +427,7 @@ async function main() {
         tempSuperEmail,
       ]);
     }
+    await pool.query(`DELETE FROM users WHERE lower(email) = $1`, [GM]);
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);

@@ -51,17 +51,45 @@ async function req(
 
 async function main() {
   // Pick a dealer-1 member (non-super-admin) and dealer-2 foreign rows.
-  const { rows: memberRows } = await pool.query(
-    `select u.email, du.dealer_id from dealer_users du
-     join users u on u.id = du.user_id
-     where du.dealer_id = 2 and u.email <> $1
-     order by du.id limit 1`,
-    [SUPER],
+  // Ephemeral dealer-A identity: a General Manager who is a member of
+  // dealer 2 ONLY. Never reuse a shared demo account — its memberships can
+  // legitimately change over time (gm@aura-demo.com was later added to
+  // dealer 1) and silently break the non-member 403 premise.
+  const userA = "iso-test-gm@aura-test.local";
+  const gmRoleId = await pool
+    .query(`select id from roles where name = 'General Manager' limit 1`)
+    .then((r) => r.rows[0]?.id as number | undefined);
+  if (!gmRoleId) throw new Error("General Manager role not found");
+  await pool.query(`delete from users where lower(email) = $1`, [userA]);
+  const userAId = await pool
+    .query(
+      `insert into users (clerk_id, email, name, status)
+       values ($1, $2, 'Iso Test GM', 'active') returning id`,
+      [`iso-test-gm-${Date.now()}`, userA],
+    )
+    .then((r) => r.rows[0].id as number);
+  await pool.query(
+    `insert into dealer_users (dealer_id, user_id, role_id) values (2, $1, $2)`,
+    [userAId, gmRoleId],
   );
-  const userA = memberRows[0]?.email as string | undefined;
-  if (!userA) throw new Error("No dealer-2 member found for testing");
-  console.log(`Dealer-A user: ${userA}`);
+  console.log(`Dealer-A user: ${userA} (ephemeral)`);
 
+  try {
+    await run(userA);
+  } finally {
+    await pool.query(`delete from users where lower(email) = $1`, [userA]);
+  }
+
+  console.log(`\n${pass} passed, ${fail} failed`);
+  if (failures.length) {
+    console.log("Failures:");
+    for (const f of failures) console.log(`  - ${f}`);
+  }
+  await pool.end();
+  process.exit(fail > 0 ? 1 : 0);
+}
+
+async function run(userA: string) {
   // Dealer 1 has no seed data — create scratch foreign rows so the 404
   // isolation checks exercise REAL cross-tenant ids, cleaned up at the end.
   const q = async (sqlText: string, params: unknown[] = []) =>
@@ -348,13 +376,6 @@ async function main() {
     check("P3 dealer user cannot read policies → 403", r.status === 403, `got ${r.status}`);
   }
 
-  console.log(`\n${pass} passed, ${fail} failed`);
-  if (failures.length) {
-    console.log("Failures:");
-    for (const f of failures) console.log(`  - ${f}`);
-  }
-  await pool.end();
-  process.exit(fail > 0 ? 1 : 0);
 }
 
 main().catch((err) => {

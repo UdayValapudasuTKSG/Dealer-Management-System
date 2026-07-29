@@ -36,6 +36,7 @@ import {
   leadSourcesTable,
   dealersTable,
   divisionsTable,
+  assetsTable,
 } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 
@@ -139,6 +140,7 @@ const reports: Record<string, Report> = {
   customers: newReport(),
   contacts: newReport(),
   leads: newReport(),
+  assets: newReport(),
 };
 
 // ---------------------------------------------------------------- main
@@ -581,6 +583,100 @@ async function main() {
         });
       }
       reports.leads.imported++;
+    }
+
+    // -------------------------------------------- Stage 4: assets (ownership)
+    // Salesforce Asset rows link Accounts to the vehicles they own. Import
+    // them into AURA's assets table (lifetime ownership records) and backfill
+    // the denormalized lifetimeValue / vehiclesOwned on customers.
+    const vehicleSheetById = new Map(
+      sheetRows(wb, "Vehicle").map((v) => [v.Id, v]),
+    );
+    const existingAssets = await dbc
+      .select({
+        accountId: assetsTable.accountId,
+        vehicleId: assetsTable.vehicleId,
+      })
+      .from(assetsTable)
+      .where(eq(assetsTable.dealerId, DEALER_ID));
+    const assetKeys = new Set(
+      existingAssets.map((a) => `${a.accountId}:${a.vehicleId}`),
+    );
+
+    for (const a of sheetRows(wb, "Asset")) {
+      const ref = `${a.Name} (${a.Id})`;
+      if (a.IsDeleted === "true") {
+        reports.assets.skipped.push({ reason: "deleted in Salesforce", ref });
+        continue;
+      }
+      const customerId =
+        sfAccountToCustomerId.get(a.AccountId) ??
+        custBySfId.get(a.AccountId) ??
+        null;
+      if (!customerId) {
+        reports.assets.skipped.push({
+          reason: "account not imported (test/deleted/unknown)",
+          ref,
+        });
+        continue;
+      }
+      const sfVehicle = vehicleSheetById.get(a.VehicleId);
+      const vin = normVin(sfVehicle?.VehicleIdentificationNumber || "");
+      const vehicleId = isValidVin(vin) ? vinToId.get(vin) : undefined;
+      if (!vehicleId) {
+        reports.assets.skipped.push({
+          reason: "vehicle not imported (missing/placeholder VIN)",
+          ref,
+        });
+        continue;
+      }
+      if (
+        customerId > 0 &&
+        vehicleId > 0 &&
+        assetKeys.has(`${customerId}:${vehicleId}`)
+      ) {
+        reports.assets.skipped.push({
+          reason: "duplicate (already exists)",
+          ref,
+        });
+        continue;
+      }
+      assetKeys.add(`${customerId}:${vehicleId}`);
+
+      if (execute) {
+        await dbc.insert(assetsTable).values({
+          dealerId: DEALER_ID,
+          accountId: customerId,
+          vehicleId,
+          deliveredAt:
+            parseDate(a.Actual_Delivery_Date__c) ??
+            parseDate(a.CreatedDate) ??
+            new Date(),
+          status: "active",
+        });
+      }
+      reports.assets.imported++;
+    }
+
+    // Recompute denormalized customer rollups from the assets table.
+    // Idempotent: full recompute, so re-runs always converge.
+    if (execute) {
+      await dbc.execute(sql`
+        UPDATE customers c
+        SET vehicles_owned = COALESCE(s.cnt, 0),
+            lifetime_value = COALESCE(s.ltv, 0)
+        FROM customers c2
+        LEFT JOIN (
+          SELECT a.account_id,
+                 COUNT(*)::int AS cnt,
+                 COALESCE(SUM(v.price), 0) AS ltv
+          FROM assets a
+          JOIN vehicles v ON v.id = a.vehicle_id
+          WHERE a.dealer_id = ${DEALER_ID}
+          GROUP BY a.account_id
+        ) s ON s.account_id = c2.id
+        WHERE c.id = c2.id AND c.dealer_id = ${DEALER_ID}
+      `);
     }
   };
 
