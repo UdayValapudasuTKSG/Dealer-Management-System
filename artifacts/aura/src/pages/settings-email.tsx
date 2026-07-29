@@ -1,4 +1,5 @@
 import { PageHero } from "@/components/layout/page-hero";
+import { SettingsTabs } from "@/components/settings-nav";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -104,6 +105,7 @@ export default function SettingsEmail() {
       accent="Engine"
       subtitle="Gmail SMTP delivery, branded templates and the outbound queue."
     />
+    <SettingsTabs />
     <Page className="space-y-5 pt-0">
 
       {/* Status + test send */}

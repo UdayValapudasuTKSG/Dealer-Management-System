@@ -1,4 +1,5 @@
 import { PageHero } from "@/components/layout/page-hero";
+import { SettingsTabs } from "@/components/settings-nav";
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -166,6 +167,7 @@ export default function SettingsRoles() {
         </Button>
       }
     />
+    <SettingsTabs />
     <div className="w-full px-5 md:px-8 pb-8 space-y-6">
 
       {isLoading ? (

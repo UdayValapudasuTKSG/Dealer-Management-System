@@ -1,4 +1,5 @@
 import { PageHero } from "@/components/layout/page-hero";
+import { SettingsTabs } from "@/components/settings-nav";
 import { useState } from "react";
 import { useListAuditLogs } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
@@ -67,6 +68,7 @@ export default function SettingsAudit() {
       accent="Logs"
       subtitle="Every sign-in and change across the dealership, newest first."
     />
+    <SettingsTabs />
     <div className="w-full px-5 md:px-8 pb-8 space-y-6">
 
       <div className="flex flex-wrap items-center gap-3">
