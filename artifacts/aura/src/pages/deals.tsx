@@ -38,6 +38,12 @@ import {
   User,
   Banknote,
   ShieldCheck,
+  CheckCircle2,
+  ArrowRight,
+  Truck,
+  PenTool,
+  Ban,
+  Clock,
 } from "lucide-react";
 import { useAuthz } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
@@ -49,6 +55,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
 import { useMoney } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const METHOD_LABEL: Record<string, string> = {
   cash: "Cash",
@@ -64,6 +71,13 @@ const STAGE_LABEL: Record<string, string> = {
   delivered: "Delivered",
   cancelled: "Cancelled",
   lost: "Lost",
+};
+
+const STAGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  desking: PenTool,
+  committed: CheckCircle2,
+  delivered: Truck,
+  cancelled: Ban,
 };
 
 const UNMET_LABEL: Record<string, string> = {
@@ -83,6 +97,58 @@ const CANCEL_REASONS: { value: string; label: string }[] = [
   { value: "duplicate", label: "Duplicate deal" },
   { value: "other", label: "Other" },
 ];
+
+function DealStageTracker({ stage }: { stage: string }) {
+  const allStages = ["desking", "committed", "delivered"];
+  if (stage === "cancelled" || stage === "lost") {
+    return (
+      <div className="flex items-center gap-2 mt-3 px-3 py-2 bg-destructive/10 border border-destructive/20 rounded-xl">
+        <Ban className="w-4 h-4 text-destructive" />
+        <span className="text-xs font-semibold uppercase tracking-widest text-destructive">
+          {STAGE_LABEL[stage]}
+        </span>
+      </div>
+    );
+  }
+
+  const activeIdx = allStages.indexOf(stage);
+
+  return (
+    <div className="mt-3 flex items-center justify-between relative">
+      <div className="absolute left-[15%] right-[15%] top-1/2 -translate-y-1/2 h-0.5 bg-border/40 rounded-full" />
+      {allStages.map((s, i) => {
+        const Icon = STAGE_ICONS[s] || CheckCircle2;
+        const isPast = i < activeIdx;
+        const isActive = i === activeIdx;
+
+        return (
+          <div key={s} className="relative flex flex-col items-center gap-1.5 z-10 w-1/3">
+            <div
+              className={cn(
+                "w-7 h-7 rounded-full flex items-center justify-center border-2 bg-card transition-colors",
+                isActive ? "border-primary text-primary shadow-[0_0_12px_rgba(169,113,66,0.3)]" : 
+                isPast ? "border-primary bg-primary text-primary-foreground" : 
+                "border-border/60 text-muted-foreground"
+              )}
+            >
+              <Icon className="w-3.5 h-3.5" />
+            </div>
+            <span
+              className={cn(
+                "text-[10px] uppercase tracking-widest font-semibold",
+                isActive ? "text-primary" : 
+                isPast ? "text-foreground" : 
+                "text-muted-foreground"
+              )}
+            >
+              {STAGE_LABEL[s]}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function Deals() {
   const { data: deals, isLoading } = useListDeals();
@@ -108,8 +174,6 @@ export default function Deals() {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelNote, setCancelNote] = useState("");
 
-  // Blocked-commit flow (R2.2): a 422 commit opens an actionable dialog with
-  // the unmet gate reasons plus "Record deposit" / "Apply trusted bypass".
   const [blockedCommit, setBlockedCommit] = useState<{
     deal: Deal;
     unmet: string[];
@@ -426,7 +490,6 @@ export default function Deals() {
   return (
     <>
     <PageHero
-
       eyebrow="Sales Desk"
       title="Deal"
       accent="Structuring"
@@ -558,92 +621,132 @@ export default function Deals() {
                 <th className="px-4 py-3 font-semibold hidden lg:table-cell">Method</th>
                 <th className="px-4 py-3 font-semibold hidden lg:table-cell">Advisor</th>
                 <th className="px-4 py-3 font-semibold">Lead</th>
+                <th className="px-4 py-3 font-semibold text-right">Next Action</th>
               </tr>
             </thead>
             <tbody>
-              {(deals ?? []).map((deal) => (
-                <tr
-                  key={deal.id}
-                  id={`deal-${deal.id}`}
-                  className={`border-b border-white/5 hover:bg-foreground/[0.03] transition-colors ${
-                    deal.customerId ? "cursor-pointer" : ""
-                  } ${compact ? "" : "h-14"} ${
-                    isFocused(deal.id) ? "bg-primary/10 ring-1 ring-inset ring-primary/50" : ""
-                  }`}
-                  onClick={() =>
-                    deal.customerId && navigate(`/customers/${deal.customerId}`)
-                  }
-                >
-                  <td className={`px-4 font-medium ${compact ? "py-2.5" : "py-3.5"}`}>
-                    {deal.customerName || "Unknown Customer"}
-                  </td>
-                  <td className="px-4 py-2">
-                    <span className="rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-semibold">
-                      {STAGE_LABEL[deal.stage] ?? deal.stage}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
-                    {divisions?.find((d) => d.id === deal.divisionId)?.name ??
-                      "—"}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums font-semibold">
-                    {money.gyd(deal.otdPrice)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-primary hidden md:table-cell">
-                    -{money.gyd(deal.discount)}
-                  </td>
-                  <td className="px-4 py-2 text-center hidden md:table-cell">
-                    {deal.depositPaid ? (
-                      <span className="text-emerald-400 text-xs font-semibold">Paid</span>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">Pending</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
-                    {deal.finalPaymentMethod
-                      ? METHOD_LABEL[deal.finalPaymentMethod]
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
-                    {deal.salesAdvisor ?? "—"}
-                  </td>
-                  <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-                    {deal.leadId != null ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <Link
-                          href={`/lead/${deal.leadId}`}
-                          className="inline-flex items-center gap-1 text-primary hover:underline text-xs font-medium"
-                        >
-                          <User className="w-3 h-3" />
-                          {leadName(deal.leadId)}
-                        </Link>
-                        {canEditDeals && (
-                          <button
-                            onClick={() => openAttach(deal)}
-                            aria-label="Change lead link"
-                            className="text-muted-foreground hover:text-primary transition-colors"
-                          >
-                            <Link2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+              {(deals ?? []).map((deal) => {
+                const dealGates = gatesForDeal(deal.id);
+                const hasPendingGates = dealGates.length > 0;
+                return (
+                  <tr
+                    key={deal.id}
+                    id={`deal-${deal.id}`}
+                    className={`border-b border-white/5 hover:bg-foreground/[0.03] transition-colors ${
+                      deal.customerId ? "cursor-pointer" : ""
+                    } ${compact ? "" : "h-14"} ${
+                      isFocused(deal.id) ? "bg-primary/10 ring-1 ring-inset ring-primary/50" : ""
+                    }`}
+                    onClick={() =>
+                      deal.customerId && navigate(`/customers/${deal.customerId}`)
+                    }
+                  >
+                    <td className={`px-4 font-medium ${compact ? "py-2.5" : "py-3.5"}`}>
+                      {deal.customerName || "Unknown Customer"}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className="rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-semibold">
+                        {STAGE_LABEL[deal.stage] ?? deal.stage}
                       </span>
-                    ) : canEditDeals ? (
-                      <button
-                        onClick={() => openAttach(deal)}
-                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
-                      >
-                        <Link2 className="w-3.5 h-3.5" />
-                        Attach to lead
-                      </button>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
+                      {divisions?.find((d) => d.id === deal.divisionId)?.name ?? "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                      {money.gyd(deal.otdPrice)}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-primary hidden md:table-cell">
+                      -{money.gyd(deal.discount)}
+                    </td>
+                    <td className="px-4 py-2 text-center hidden md:table-cell">
+                      {deal.depositPaid ? (
+                        <span className="text-emerald-400 text-xs font-semibold">Paid</span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">Pending</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
+                      {deal.finalPaymentMethod
+                        ? METHOD_LABEL[deal.finalPaymentMethod]
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
+                      {deal.salesAdvisor ?? "—"}
+                    </td>
+                    <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                      {deal.leadId != null ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Link
+                            href={`/lead/${deal.leadId}`}
+                            className="inline-flex items-center gap-1 text-primary hover:underline text-xs font-medium"
+                          >
+                            <User className="w-3 h-3" />
+                            {leadName(deal.leadId)}
+                          </Link>
+                          {canEditDeals && (
+                            <button
+                              onClick={() => openAttach(deal)}
+                              aria-label="Change lead link"
+                              className="text-muted-foreground hover:text-primary transition-colors"
+                            >
+                              <Link2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </span>
+                      ) : canEditDeals ? (
+                        <button
+                          onClick={() => openAttach(deal)}
+                          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          <Link2 className="w-3.5 h-3.5" />
+                          Attach to lead
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                      {deal.stage === "desking" && canEditDeals ? (
+                        <span className="inline-flex items-center gap-2">
+                          {hasPendingGates && (
+                            <span className="text-xs font-semibold text-amber-500 inline-flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5" /> Approvals
+                            </span>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-7 text-xs px-3 rounded-full font-medium"
+                            onClick={() => commitDeal(deal)}
+                            disabled={updateDeal.isPending}
+                          >
+                            Commit Deal <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                          </Button>
+                        </span>
+                      ) : hasPendingGates ? (
+                        <span className="text-xs font-semibold text-amber-500 inline-flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5" /> Pending Approvals
+                        </span>
+                      ) : deal.stage === "committed" ? (
+                        <Link href="/deliveries">
+                          <Button 
+                            size="sm" 
+                            variant="secondary"
+                            className="h-7 text-xs px-3 rounded-full font-medium"
+                          >
+                            Go to Deliveries <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                          </Button>
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">None</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {(deals ?? []).length === 0 && !isLoading && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                  <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground text-sm">
                     No deals yet.
                   </td>
                 </tr>
@@ -658,11 +761,16 @@ export default function Deals() {
           return (
             <div
               key={stage}
-              className="w-[340px] shrink-0 flex flex-col rounded-3xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-5"
+              className="w-[360px] shrink-0 flex flex-col rounded-3xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-4"
             >
-              <div className="flex items-center justify-between mb-5 px-1">
+              <div className="flex items-center justify-between mb-4 px-2">
                 <div className="flex items-center gap-2.5">
-                  <span className="w-2 h-2 rounded-full bg-primary" />
+                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                    {(() => {
+                      const Icon = STAGE_ICONS[stage] || CheckCircle2;
+                      return <Icon className="w-4 h-4" />;
+                    })()}
+                  </div>
                   <h3 className="font-semibold text-sm uppercase tracking-widest text-foreground">
                     {STAGE_LABEL[stage] ?? stage}
                   </h3>
@@ -672,7 +780,7 @@ export default function Deals() {
                 </span>
               </div>
 
-              <div className="space-y-3.5 flex-1 overflow-y-auto pr-1.5 -mr-1.5 hide-scrollbar">
+              <div className="space-y-4 flex-1 overflow-y-auto pr-1.5 -mr-1.5 hide-scrollbar">
                 {isLoading ? (
                   [1].map((i) => (
                     <div
@@ -685,184 +793,217 @@ export default function Deals() {
                     Empty
                   </div>
                 ) : (
-                  stageDeals.map((deal, i) => (
-                    <motion.div
-                      key={deal.id}
-                      id={`deal-${deal.id}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: stageIndex * 0.06 + i * 0.04 }}
-                    >
-                      <Card className={`border shadow-sm hover:shadow-xl hover:shadow-primary/10 hover:border-primary/40 transition-all duration-300 rounded-2xl bg-white/[0.04] hover:bg-white/[0.07] overflow-hidden group ${
-                        isFocused(deal.id) ? "border-primary ring-2 ring-primary/50" : "border-white/10"
-                      }`}>
-                        <CardContent className="p-5">
-                          <div className="flex justify-between items-start mb-4 gap-3">
-                            {deal.customerId ? (
-                              <Link
-                                href={`/customers/${deal.customerId}`}
-                                className="font-semibold text-base leading-tight truncate hover:text-primary transition-colors"
-                              >
-                                {deal.customerName || "Unknown Customer"}
-                              </Link>
-                            ) : (
-                              <div className="font-semibold text-base leading-tight truncate">
-                                {deal.customerName || "Unknown Customer"}
-                              </div>
-                            )}
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {canEditDeals && (
-                                <button
-                                  onClick={() => openAttach(deal)}
-                                  aria-label={
-                                    deal.leadId != null
-                                      ? "Change lead link"
-                                      : "Attach to lead"
-                                  }
-                                  title={
-                                    deal.leadId != null
-                                      ? "Change lead link"
-                                      : "Attach to lead"
-                                  }
-                                  className="w-8 h-8 rounded-full bg-foreground/[0.05] flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                  stageDeals.map((deal, i) => {
+                    const dealGates = gatesForDeal(deal.id);
+                    const hasPendingGates = dealGates.length > 0;
+                    return (
+                      <motion.div
+                        key={deal.id}
+                        id={`deal-${deal.id}`}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: stageIndex * 0.06 + i * 0.04 }}
+                      >
+                        <Card className={`border shadow-sm hover:shadow-xl hover:shadow-primary/10 hover:border-primary/40 transition-all duration-300 rounded-[1.25rem] bg-white/[0.04] hover:bg-white/[0.07] overflow-hidden group flex flex-col ${
+                          isFocused(deal.id) ? "border-primary ring-2 ring-primary/50" : "border-white/10"
+                        }`}>
+                          <CardContent className="p-5 flex-1">
+                            <div className="flex justify-between items-start mb-4 gap-3">
+                              {deal.customerId ? (
+                                <Link
+                                  href={`/customers/${deal.customerId}`}
+                                  className="font-semibold text-lg leading-tight truncate hover:text-primary transition-colors"
                                 >
-                                  <Link2 className="w-4 h-4" />
-                                </button>
-                              )}
-                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                <FileText className="w-4 h-4 text-primary" />
-                              </div>
-                            </div>
-                          </div>
-
-                          {deal.leadId != null && (
-                            <Link
-                              href={`/lead/${deal.leadId}`}
-                              className="inline-flex items-center gap-1.5 mb-3 text-xs font-medium text-primary bg-primary/10 rounded-full px-2.5 py-1 hover:bg-primary/15 transition-colors"
-                            >
-                              <User className="w-3 h-3" />
-                              {leadName(deal.leadId)}
-                            </Link>
-                          )}
-
-                          <div className="font-light text-3xl mb-4 tracking-tight text-primary">
-                            {money.dual(deal.otdPrice)}
-                          </div>
-
-                          <div className="space-y-2 text-sm font-medium text-muted-foreground pt-4 border-t border-border/50">
-                            <div className="flex justify-between items-center">
-                              <span className="uppercase tracking-wider text-xs">
-                                MSRP
-                              </span>
-                              <span className="text-foreground">
-                                {money.gyd(deal.vehiclePrice)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center text-primary">
-                              <span className="uppercase tracking-wider text-xs">
-                                Discount
-                              </span>
-                              <span>-{money.gyd(deal.discount)}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="uppercase tracking-wider text-xs">
-                                Settlement
-                              </span>
-                              {canEditDeals && deal.stage === "desking" ? (
-                                <select
-                                  value={deal.finalPaymentMethod ?? "cash"}
-                                  onChange={async (e) => {
-                                    try {
-                                      await updateDeal.mutateAsync({
-                                        id: deal.id,
-                                        data: {
-                                          finalPaymentMethod: e.target
-                                            .value as "cash" | "bank_financing" | "cheque",
-                                        },
-                                      });
-                                      queryClient.invalidateQueries({
-                                        queryKey: getListDealsQueryKey(),
-                                      });
-                                    } catch (err) {
-                                      toast({
-                                        title: "Could not update payment method",
-                                        description:
-                                          err instanceof Error ? err.message : undefined,
-                                        variant: "destructive",
-                                      });
-                                    }
-                                  }}
-                                  className="bg-transparent border border-border/60 rounded-full px-2.5 py-1 text-xs font-semibold text-foreground focus:outline-none focus:border-primary/60"
-                                >
-                                  <option value="cash">Cash</option>
-                                  <option value="bank_financing">Bank Financing</option>
-                                  <option value="cheque">Cheque</option>
-                                </select>
+                                  {deal.customerName || "Unknown Customer"}
+                                </Link>
                               ) : (
-                                <span className="text-foreground">
-                                  {deal.finalPaymentMethod
-                                    ? METHOD_LABEL[deal.finalPaymentMethod]
-                                    : "—"}
+                                <div className="font-semibold text-lg leading-tight truncate">
+                                  {deal.customerName || "Unknown Customer"}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {canEditDeals && (
+                                  <button
+                                    onClick={() => openAttach(deal)}
+                                    aria-label={
+                                      deal.leadId != null
+                                        ? "Change lead link"
+                                        : "Attach to lead"
+                                    }
+                                    title={
+                                      deal.leadId != null
+                                        ? "Change lead link"
+                                        : "Attach to lead"
+                                    }
+                                    className="w-8 h-8 rounded-full bg-foreground/[0.05] flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                  >
+                                    <Link2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {deal.leadId != null && (
+                              <Link
+                                href={`/lead/${deal.leadId}`}
+                                className="inline-flex items-center gap-1.5 mb-4 text-xs font-medium text-primary bg-primary/10 rounded-full px-2.5 py-1 hover:bg-primary/15 transition-colors"
+                              >
+                                <User className="w-3 h-3" />
+                                {leadName(deal.leadId)}
+                              </Link>
+                            )}
+
+                            <div className="font-light text-3xl mb-1 tracking-tight text-primary">
+                              {money.dual(deal.otdPrice)}
+                            </div>
+
+                            <DealStageTracker stage={deal.stage} />
+
+                            <div className="space-y-2 text-sm font-medium text-muted-foreground pt-5 mt-5 border-t border-border/50">
+                              <div className="flex justify-between items-center">
+                                <span className="uppercase tracking-wider text-[10px]">
+                                  MSRP
                                 </span>
+                                <span className="text-foreground text-xs">
+                                  {money.gyd(deal.vehiclePrice)}
+                                </span>
+                              </div>
+                              {deal.discount > 0 && (
+                                <div className="flex justify-between items-center text-primary">
+                                  <span className="uppercase tracking-wider text-[10px]">
+                                    Discount
+                                  </span>
+                                  <span className="text-xs">-{money.gyd(deal.discount)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between items-center">
+                                <span className="uppercase tracking-wider text-[10px]">
+                                  Settlement
+                                </span>
+                                {canEditDeals && deal.stage === "desking" ? (
+                                  <select
+                                    value={deal.finalPaymentMethod ?? "cash"}
+                                    onChange={async (e) => {
+                                      try {
+                                        await updateDeal.mutateAsync({
+                                          id: deal.id,
+                                          data: {
+                                            finalPaymentMethod: e.target
+                                              .value as "cash" | "bank_financing" | "cheque",
+                                          },
+                                        });
+                                        queryClient.invalidateQueries({
+                                          queryKey: getListDealsQueryKey(),
+                                        });
+                                      } catch (err) {
+                                        toast({
+                                          title: "Could not update payment method",
+                                          description:
+                                            err instanceof Error ? err.message : undefined,
+                                          variant: "destructive",
+                                        });
+                                      }
+                                    }}
+                                    className="bg-transparent border border-border/60 rounded-full px-2 py-0.5 text-xs font-semibold text-foreground focus:outline-none focus:border-primary/60"
+                                  >
+                                    <option value="cash">Cash</option>
+                                    <option value="bank_financing">Bank Financing</option>
+                                    <option value="cheque">Cheque</option>
+                                  </select>
+                                ) : (
+                                  <span className="text-foreground text-xs">
+                                    {deal.finalPaymentMethod
+                                      ? METHOD_LABEL[deal.finalPaymentMethod]
+                                      : "—"}
+                                  </span>
+                                )}
+                              </div>
+                              {deal.monthlyPayment && (
+                                <div className="flex justify-between items-center pt-1.5">
+                                  <span className="uppercase tracking-wider text-[10px]">
+                                    Monthly
+                                  </span>
+                                  <span className="text-foreground text-xs font-bold">
+                                    {money.gyd(Number(deal.monthlyPayment))}/mo
+                                  </span>
+                                </div>
+                              )}
+                              {deal.stage === "cancelled" && (
+                                <div className="flex justify-between items-center pt-1.5">
+                                  <span className="uppercase tracking-wider text-[10px]">
+                                    Reason
+                                  </span>
+                                  <span className="text-foreground text-[11px] font-semibold">
+                                    {CANCEL_REASONS.find(
+                                      (r) => r.value === deal.cancellationReason,
+                                    )?.label ?? "—"}
+                                  </span>
+                                </div>
                               )}
                             </div>
-                            {deal.monthlyPayment && (
-                              <div className="flex justify-between items-center pt-2">
-                                <span className="uppercase tracking-wider text-xs">
-                                  Monthly
-                                </span>
-                                <span className="text-foreground font-bold">
-                                  {money.gyd(Number(deal.monthlyPayment))}/mo
-                                </span>
+                          </CardContent>
+
+                          {/* Action Footer */}
+                          <div className="p-3 bg-white/[0.02] border-t border-border/50 flex flex-col gap-2">
+                            {hasPendingGates && (
+                              <div className="py-1 flex items-center justify-center gap-2 text-amber-500 font-medium text-xs">
+                                <Clock className="w-4 h-4" />
+                                Waiting for Approvals
                               </div>
                             )}
-                            {deal.stage === "cancelled" && (
-                              <div className="flex justify-between items-center pt-2">
-                                <span className="uppercase tracking-wider text-xs">
-                                  Reason
-                                </span>
-                                <span className="text-foreground text-xs font-semibold">
-                                  {CANCEL_REASONS.find(
-                                    (r) => r.value === deal.cancellationReason,
-                                  )?.label ?? "—"}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          {canEditDeals && deal.stage === "desking" && (
-                            <button
-                              onClick={() => commitDeal(deal)}
-                              disabled={updateDeal.isPending}
-                              className="mt-4 w-full text-center text-xs font-semibold uppercase tracking-widest text-primary-foreground bg-primary hover:bg-primary/90 transition-colors py-2 rounded-full disabled:opacity-60"
-                            >
-                              Commit Deal
-                            </button>
-                          )}
-                          {canEditDeals &&
-                            (deal.stage === "desking" ||
-                              deal.stage === "committed") && (
+                            <>
+                                {canEditDeals && deal.stage === "desking" && (
+                                  <Button
+                                    onClick={() => commitDeal(deal)}
+                                    disabled={updateDeal.isPending}
+                                    className="w-full text-xs font-bold uppercase tracking-widest text-primary-foreground bg-primary hover:bg-primary/90 transition-colors h-10 rounded-xl disabled:opacity-60 gap-2"
+                                  >
+                                    Commit Deal <ArrowRight className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {!hasPendingGates && deal.stage === "committed" && (
+                                  <Link href="/deliveries">
+                                    <Button
+                                      variant="secondary"
+                                      className="w-full text-xs font-bold uppercase tracking-widest h-10 rounded-xl gap-2 bg-primary/10 hover:bg-primary/20 text-primary border-none"
+                                    >
+                                      Go to Deliveries <ArrowRight className="w-4 h-4" />
+                                    </Button>
+                                  </Link>
+                                )}
+                                {deal.stage === "delivered" && (
+                                  <div className="py-2 flex items-center justify-center gap-2 text-emerald-500 font-medium text-xs">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    Deal Completed
+                                  </div>
+                                )}
+                              </>
+
+                            {canEditDeals && (deal.stage === "desking" || deal.stage === "committed") && (
                               <button
                                 onClick={() => setCancelDeal(deal)}
-                                className="mt-4 w-full text-center text-xs font-semibold uppercase tracking-widest text-muted-foreground hover:text-destructive transition-colors py-1.5 rounded-full border border-border/50 hover:border-destructive/40"
+                                className="w-full text-center text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-destructive transition-colors py-2 rounded-xl"
                               >
                                 Cancel &amp; Refund
                               </button>
                             )}
-                        </CardContent>
-                      </Card>
-                      <AnimatePresence mode="popLayout">
-                        {gatesForDeal(deal.id).map((gate) => (
-                          <div key={gate.id} className="mt-4">
-                            <GateCard
-                              gate={gate}
-                              label={GATE_LABEL[gate.type]}
-                              showCustomerLink={false}
-                            />
                           </div>
-                        ))}
-                      </AnimatePresence>
-                    </motion.div>
-                  ))
+                        </Card>
+
+                        <AnimatePresence mode="popLayout">
+                          {dealGates.map((gate) => (
+                            <div key={gate.id} className="mt-3">
+                              <GateCard
+                                gate={gate}
+                                label={GATE_LABEL[gate.type]}
+                                showCustomerLink={false}
+                              />
+                            </div>
+                          ))}
+                        </AnimatePresence>
+                      </motion.div>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -976,134 +1117,163 @@ export default function Deals() {
             </div>
           )}
 
-          <DialogFooter className="gap-2">
-            {blockedMode === "reasons" ? (
+          <DialogFooter className="mt-2">
+            {blockedMode !== "reasons" && (
               <Button
                 variant="ghost"
-                onClick={closeBlocked}
-                className="rounded-full px-5"
+                onClick={() => setBlockedMode("reasons")}
+                className="rounded-full mr-auto"
               >
-                Close
+                Back
               </Button>
-            ) : (
-              <>
-                <Button
-                  variant="ghost"
-                  onClick={() => setBlockedMode("reasons")}
-                  className="rounded-full px-5"
-                >
-                  Back
-                </Button>
-                {blockedMode === "deposit" ? (
-                  <Button
-                    onClick={submitDeposit}
-                    disabled={
-                      !(Number(depositAmount) > 0) ||
-                      createBooking.isPending ||
-                      updateDeal.isPending
-                    }
-                    className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
-                  >
-                    {(createBooking.isPending || updateDeal.isPending) && (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    )}
-                    Capture deposit &amp; commit
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={submitBypass}
-                    disabled={!waiverReason.trim() || createBooking.isPending}
-                    className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
-                  >
-                    {createBooking.isPending && (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    )}
-                    Request waiver approval
-                  </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={closeBlocked}
+              className="rounded-full"
+            >
+              Cancel
+            </Button>
+            {blockedMode === "deposit" && (
+              <Button
+                disabled={
+                  createBooking.isPending ||
+                  !depositAmount ||
+                  Number(depositAmount) <= 0
+                }
+                onClick={submitDeposit}
+                className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
+              >
+                {createBooking.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 )}
-              </>
+                Capture &amp; Commit
+              </Button>
+            )}
+            {blockedMode === "bypass" && (
+              <Button
+                disabled={createBooking.isPending || !waiverReason.trim()}
+                onClick={submitBypass}
+                className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
+              >
+                {createBooking.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                Request Bypass
+              </Button>
             )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Attach to Lead Dialog */}
       <Dialog
         open={attachDeal != null}
         onOpenChange={(o) => {
           if (!o) setAttachDeal(null);
         }}
       >
-        <DialogContent className="glass-panel border-white/10 sm:max-w-[480px]">
+        <DialogContent className="glass-panel border-white/10">
           <DialogHeader>
             <DialogTitle className="text-xl tracking-tight">
-              {attachDeal?.leadId != null ? "Change lead link" : "Attach to lead"}
+              Attach to Pipeline Lead
             </DialogTitle>
             <DialogDescription>
-              Link deal #{attachDeal?.id}
-              {attachDeal?.customerName ? ` (${attachDeal.customerName})` : ""} to a
-              pipeline lead so its stage checklist recognizes the deal.
+              Link this deal to a sales lead so the timeline includes it.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-1">
-            <Input
-              placeholder="Search leads…"
-              value={attachSearch}
-              onChange={(e) => setAttachSearch(e.target.value)}
-              className="bg-white/[0.04] border-white/10"
-            />
-            <div className="max-h-64 overflow-y-auto rounded-xl border border-white/10 divide-y divide-white/5">
-              {filteredLeads.length === 0 ? (
-                <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  No matching leads.
+
+          <div className="py-2 space-y-4">
+            <div>
+              <Input
+                placeholder="Search leads..."
+                value={attachSearch}
+                onChange={(e) => setAttachSearch(e.target.value)}
+                className="bg-white/[0.04] border-white/10"
+              />
+            </div>
+            <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-2">
+              {filteredLeads.map((l) => (
+                <label
+                  key={l.id}
+                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                    attachLeadId === String(l.id)
+                      ? "bg-primary/10 border-primary/50 text-foreground"
+                      : "bg-white/[0.02] border-white/5 text-muted-foreground hover:bg-white/[0.04] hover:text-foreground"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="attach_lead"
+                    value={String(l.id)}
+                    checked={attachLeadId === String(l.id)}
+                    onChange={(e) => setAttachLeadId(e.target.value)}
+                    className="sr-only"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm truncate">
+                      {l.name}
+                    </div>
+                    {(l.email || l.phone) && (
+                      <div className="text-xs truncate mt-0.5 opacity-70">
+                        {l.email}
+                        {l.email && l.phone && " · "}
+                        {l.phone}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[10px] uppercase tracking-widest font-bold opacity-60">
+                    {l.phase}
+                  </span>
+                </label>
+              ))}
+              {filteredLeads.length === 0 && (
+                <div className="text-center py-8 text-sm text-muted-foreground">
+                  No leads found.
                 </div>
-              ) : (
-                filteredLeads.map((l) => (
-                  <button
-                    key={l.id}
-                    onClick={() => setAttachLeadId(String(l.id))}
-                    className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors ${
-                      attachLeadId === String(l.id)
-                        ? "bg-primary/15 text-primary"
-                        : "hover:bg-foreground/[0.04]"
-                    }`}
-                  >
-                    <span className="font-medium truncate">{l.name}</span>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {l.phone || l.email || ""}
-                    </span>
-                  </button>
-                ))
               )}
             </div>
           </div>
-          <DialogFooter className="gap-2">
-            {attachDeal?.leadId != null && (
+
+          <DialogFooter className="sm:justify-between">
+            <div className="flex items-center gap-2">
+              {attachDeal?.leadId != null && (
+                <Button
+                  variant="outline"
+                  onClick={detachFromLead}
+                  disabled={updateDeal.isPending}
+                  className="rounded-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/20 gap-2"
+                >
+                  <Unlink className="w-4 h-4" />
+                  Detach Link
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
               <Button
-                variant="outline"
-                onClick={detachFromLead}
-                disabled={updateDeal.isPending}
-                className="gap-1.5"
+                variant="ghost"
+                onClick={() => setAttachDeal(null)}
+                className="rounded-full"
               >
-                <Unlink className="w-3.5 h-3.5" />
-                Detach
+                Cancel
               </Button>
-            )}
-            <Button
-              onClick={attachToLead}
-              disabled={
-                !attachLeadId ||
-                attachLeadId === String(attachDeal?.leadId ?? "") ||
-                updateDeal.isPending
-              }
-              className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
-            >
-              {updateDeal.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              <Link2 className="w-4 h-4" />
-              Attach
-            </Button>
+              <Button
+                disabled={!attachLeadId || updateDeal.isPending}
+                onClick={attachToLead}
+                className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
+              >
+                {updateDeal.isPending && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                <Link2 className="w-4 h-4" />
+                Attach Lead
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel Deal Dialog */}
       <Dialog
         open={cancelDeal != null}
         onOpenChange={(o) => {
@@ -1114,69 +1284,72 @@ export default function Deals() {
           }
         }}
       >
-        <DialogContent className="glass-panel border-white/10 sm:max-w-[480px]">
+        <DialogContent className="glass-panel border-white/10">
           <DialogHeader>
-            <DialogTitle className="text-xl tracking-tight">
-              Cancel deal #{cancelDeal?.id}
+            <DialogTitle className="text-xl tracking-tight text-destructive">
+              Cancel Deal
             </DialogTitle>
             <DialogDescription>
-              {cancelDeal?.customerName
-                ? `${cancelDeal.customerName} — `
-                : ""}
-              If a deposit has been captured, cancelling raises a refund
-              release request for manager approval and the vehicle stays held
-              until it is approved. With no funds captured, the vehicle
-              returns to available stock immediately.
+              Cancelling releases the vehicle hold. If a reservation fee was
+              paid, a refund-release gate will be raised for manager approval.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-1">
+
+          <div className="py-2 space-y-4">
             <div>
-              <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Reason
+              <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">
+                Primary Reason
               </label>
               <select
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                className="mt-1.5 w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary/60"
+                className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/10 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
               >
-                <option value="">Select a reason…</option>
+                <option value="" disabled>
+                  Select a reason...
+                </option>
                 {CANCEL_REASONS.map((r) => (
-                  <option key={r.value} value={r.value}>
+                  <option key={r.value} value={r.value} className="bg-background">
                     {r.label}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Note (optional)
+              <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">
+                Notes (Optional)
               </label>
-              <Input
+              <textarea
                 value={cancelNote}
                 onChange={(e) => setCancelNote(e.target.value)}
-                placeholder="Anything worth recording about this cancellation"
-                className="mt-1.5 bg-white/[0.04] border-white/10"
+                placeholder="Additional context about the cancellation..."
+                className="w-full min-h-[100px] p-3 rounded-xl bg-white/[0.04] border border-white/10 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
               />
             </div>
           </div>
-          <DialogFooter className="gap-2">
+
+          <DialogFooter>
             <Button
               variant="ghost"
-              onClick={() => setCancelDeal(null)}
-              className="rounded-full px-5"
+              onClick={() => {
+                setCancelDeal(null);
+                setCancelReason("");
+                setCancelNote("");
+              }}
+              className="rounded-full"
             >
-              Keep deal
+              Keep Deal Open
             </Button>
             <Button
-              onClick={submitCancellation}
               disabled={!cancelReason || updateDeal.isPending}
+              onClick={submitCancellation}
               variant="destructive"
               className="rounded-full px-6 gap-2"
             >
               {updateDeal.isPending && (
                 <Loader2 className="w-4 h-4 animate-spin" />
               )}
-              Cancel deal
+              Cancel &amp; Refund
             </Button>
           </DialogFooter>
         </DialogContent>
