@@ -87,7 +87,7 @@ export default function DealerDetail() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 md:px-8 py-8 space-y-6 font-sans">
+    <div className="w-full px-4 md:px-6 py-8 space-y-6 font-sans">
       <div className="flex items-center gap-4 text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500 mb-2">
         <Link href="/network" className="hover:text-zinc-900 flex items-center gap-1.5 transition-colors">
           <ArrowLeft className="w-3 h-3" /> Back to Network

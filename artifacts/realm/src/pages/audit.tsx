@@ -49,7 +49,7 @@ export default function Audit() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-4 md:px-8 py-8 space-y-6 font-sans">
+    <div className="w-full px-4 md:px-6 py-8 space-y-6 font-sans">
       <PageHeader 
         eyebrow="SECURITY" 
         title="Platform Audit Log" 

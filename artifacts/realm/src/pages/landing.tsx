@@ -15,7 +15,7 @@ export default function Landing() {
       </header>
 
       <main className="flex-1 flex items-center justify-center relative z-10 px-4">
-        <div className="text-center max-w-3xl mx-auto glass-strong p-12 sm:p-16 rounded-[2rem] hover-elevate">
+        <div className="text-center w-full max-w-4xl mx-auto glass-strong p-12 sm:p-16 rounded-[2rem] hover-elevate">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-zinc-50 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-700 mb-8">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />

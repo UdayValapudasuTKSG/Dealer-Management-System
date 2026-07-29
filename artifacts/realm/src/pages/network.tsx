@@ -53,7 +53,7 @@ export default function Network() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-4 md:px-8 py-8 space-y-6 font-sans">
+    <div className="w-full px-4 md:px-6 py-8 space-y-6 font-sans">
       <PageHeader 
         eyebrow="NETWORK"
         title="Dealership Network"
@@ -203,7 +203,7 @@ function AgentPoliciesPanel() {
           </div>
           <Switch checked={masterOn} onCheckedChange={(v) => toggle("__all__", v)} disabled={update.isPending} />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2.5">
           {POLICY_AGENT_KEYS.map(key => (
             <div key={key} className={`flex items-center justify-between rounded-lg border border-black/5 px-3 py-2 ${!masterOn ? "opacity-50" : ""}`}>
               <span className="text-[12px] font-medium text-zinc-800 capitalize">{key}</span>
