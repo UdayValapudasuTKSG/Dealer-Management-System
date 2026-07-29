@@ -61,6 +61,23 @@ import {
 import { useUpload } from "@workspace/object-storage-web";
 import { motion, AnimatePresence } from "framer-motion";
 
+/** Windowed page list, e.g. 1 … 4 5 6 … 19 (always shows first/last). */
+function pageNumbers(current: number, total: number): (number | "…")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages = new Set<number>([1, total, current - 1, current, current + 1]);
+  const sorted = [...pages]
+    .filter((p) => p >= 1 && p <= total)
+    .sort((a, b) => a - b);
+  const out: (number | "…")[] = [];
+  let prev = 0;
+  for (const p of sorted) {
+    if (prev && p - prev > 1) out.push("…");
+    out.push(p);
+    prev = p;
+  }
+  return out;
+}
+
 function powertrainLabel(pt: string) {
   return pt === "EV" ? "Electric" : pt;
 }
@@ -272,8 +289,24 @@ export default function Inventory() {
     );
   }, [vehicles, body, division, powertrain, query]);
 
+  const PAGE_SIZE = density === "compact" ? 32 : 24;
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [body, division, powertrain, query, layout, density]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const paged = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage, PAGE_SIZE],
+  );
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [safePage]);
+
   return (
-    <div className="h-full overflow-y-auto">
+    <div ref={scrollRef} className="h-full overflow-y-auto">
       {/* Compact uniform header (2026-07: the tall centered showroom hero is gone) */}
       <PageHero
         eyebrow="Operations"
@@ -346,7 +379,14 @@ export default function Inventory() {
           </div>
           <div className="flex flex-wrap items-center gap-4">
             <p className="text-sm text-muted-foreground tabular-nums">
-              {filtered.length} vehicle{filtered.length === 1 ? "" : "s"}
+              {filtered.length === 0
+                ? "0 vehicles"
+                : filtered.length <= PAGE_SIZE
+                  ? `${filtered.length} vehicle${filtered.length === 1 ? "" : "s"}`
+                  : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(
+                      safePage * PAGE_SIZE,
+                      filtered.length,
+                    )} of ${filtered.length} vehicles`}
             </p>
             <ViewControls
               layout={layout}
@@ -443,7 +483,7 @@ export default function Inventory() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((vehicle) => (
+                {paged.map((vehicle) => (
                   <tr
                     key={vehicle.id}
                     className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors cursor-pointer"
@@ -489,7 +529,7 @@ export default function Inventory() {
                 : "lg:grid-cols-3 gap-8"
             }`}
           >
-            {filtered.map((vehicle, i) => (
+            {paged.map((vehicle, i) => (
               <VehicleCard
                 key={vehicle.id}
                 vehicle={vehicle}
@@ -497,6 +537,53 @@ export default function Inventory() {
                 onSelect={() => setSelected(vehicle)}
               />
             ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!isLoading && pageCount > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full px-4"
+              disabled={safePage <= 1}
+              onClick={() => setPage(safePage - 1)}
+            >
+              Previous
+            </Button>
+            {pageNumbers(safePage, pageCount).map((p, i) =>
+              p === "…" ? (
+                <span
+                  key={`gap-${i}`}
+                  className="px-1.5 text-sm text-muted-foreground select-none"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  aria-current={p === safePage ? "page" : undefined}
+                  className={`h-9 min-w-9 rounded-full px-2 text-sm font-medium tabular-nums transition-colors ${
+                    p === safePage
+                      ? "bg-primary text-white shadow-lg shadow-primary/30"
+                      : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground"
+                  }`}
+                >
+                  {p}
+                </button>
+              ),
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full px-4"
+              disabled={safePage >= pageCount}
+              onClick={() => setPage(safePage + 1)}
+            >
+              Next
+            </Button>
           </div>
         )}
       </div>
