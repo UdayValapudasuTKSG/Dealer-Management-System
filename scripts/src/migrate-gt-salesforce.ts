@@ -340,7 +340,7 @@ async function main() {
               engineNumber: isValidVin(engine) ? engine : null,
               variant,
               price: usd,
-              powertrain: isHybrid ? "hybrid" : "ev",
+              powertrain: isHybrid ? "Hybrid" : "EV",
               mileageKm: 0,
               exteriorColor,
               bodyType: "SUV",
@@ -533,11 +533,24 @@ async function main() {
           name,
           email: r.Email || null,
           phone: phone || null,
-          channel: source === "walk_in" ? "walk_in" : "web",
+          channel:
+            source === "walk_in"
+              ? "walkin"
+              : SOCIAL_PLATFORM_CODES.has(source)
+                ? "social"
+                : "web",
           source,
           sourceDetail,
           phase,
-          status: phase === "won" ? "converted" : "open",
+          // Valid status enum: new/assigned/contacted/qualified/…/converted.
+          status:
+            phase === "won"
+              ? "converted"
+              : phase === "qualified"
+                ? "qualified"
+                : phase === "contacted"
+                  ? "contacted"
+                  : "new",
           customerId: customerId && customerId > 0 ? customerId : null,
           variant: modelInterest || null,
           color: r.Vehicle_Color__c || null,
