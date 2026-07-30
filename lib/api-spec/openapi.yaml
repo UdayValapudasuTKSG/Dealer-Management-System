@@ -5049,6 +5049,48 @@ paths:
                   $ref: "#/components/schemas/Agent"
         "404":
           description: Dealer not found
+  /platform/dealers/{id}/agents/overview:
+    get:
+      operationId: getDealerAgentsOverview
+      tags: [platform]
+      summary: Per-dealer AI agent roster with governance metrics and success-criteria evaluation (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Agents with metrics and success criteria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DealerAgentOverview"
+        "404":
+          description: Dealer not found
+  /platform/dealers/{id}/agent-runs:
+    get:
+      operationId: listDealerAgentRuns
+      tags: [platform]
+      summary: Recent agent runs for a dealer (super admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Recent agent runs, newest first (capped at 100)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentRun"
+        "404":
+          description: Dealer not found
   /platform/dealers/{id}/agents/{agentId}:
     patch:
       operationId: updateDealerAgent
@@ -8771,6 +8813,33 @@ components:
       type: object
       properties:
         status: { type: string, enum: [active, idle, paused] }
+    AgentSuccessCriterion:
+      type: object
+      required: [key, label, target, met]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        target: { type: string, description: "Human-readable target, e.g. '≥ 70%'" }
+        actual: { type: ["string", "null"], description: "Human-readable observed value; null when no data yet" }
+        met: { type: ["boolean", "null"], description: "null when there is not enough data to evaluate" }
+    DealerAgentOverview:
+      type: object
+      required: [agent, metrics, criteria, health]
+      properties:
+        agent:
+          $ref: "#/components/schemas/Agent"
+        metrics:
+          oneOf:
+            - $ref: "#/components/schemas/AgentMetrics"
+            - type: "null"
+        criteria:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentSuccessCriterion"
+        health:
+          type: string
+          enum: [meeting, at_risk, no_data]
+          description: "meeting = all evaluable criteria pass; at_risk = at least one fails; no_data = no runs yet"
     AgentRun:
       type: object
       required: [id, agentKey, runType, inputSource, status, autonomy, affectedEntities, createdAt]

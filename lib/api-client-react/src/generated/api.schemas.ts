@@ -4274,6 +4274,60 @@ export interface AgentUpdate {
   status?: AgentUpdateStatus;
 }
 
+export interface AgentSuccessCriterion {
+  key: string;
+  label: string;
+  /** Human-readable target, e.g. '≥ 70%' */
+  target: string;
+  /**
+     * Human-readable observed value; null when no data yet
+     * @nullable
+     */
+  actual?: string | null;
+  /**
+     * null when there is not enough data to evaluate
+     * @nullable
+     */
+  met: boolean | null;
+}
+
+/**
+ * meeting = all evaluable criteria pass; at_risk = at least one fails; no_data = no runs yet
+ */
+export type DealerAgentOverviewHealth = typeof DealerAgentOverviewHealth[keyof typeof DealerAgentOverviewHealth];
+
+
+export const DealerAgentOverviewHealth = {
+  meeting: 'meeting',
+  at_risk: 'at_risk',
+  no_data: 'no_data',
+} as const;
+
+export interface AgentMetrics {
+  agentKey: string;
+  runs: number;
+  accepted: number;
+  overridden: number;
+  errors: number;
+  blocked: number;
+  /** 0-100, accepted / (accepted+overridden) */
+  acceptanceRate: number;
+  /** @nullable */
+  avgConfidence?: number | null;
+  /** @nullable */
+  avgLatencyMs?: number | null;
+  /** @nullable */
+  lastRunAt?: string | null;
+}
+
+export interface DealerAgentOverview {
+  agent: Agent;
+  metrics: AgentMetrics | null;
+  criteria: AgentSuccessCriterion[];
+  /** meeting = all evaluable criteria pass; at_risk = at least one fails; no_data = no runs yet */
+  health: DealerAgentOverviewHealth;
+}
+
 export type AgentRunStatus = typeof AgentRunStatus[keyof typeof AgentRunStatus];
 
 
@@ -4339,23 +4393,6 @@ export const AgentRunReviewDecision = {
 
 export interface AgentRunReview {
   decision: AgentRunReviewDecision;
-}
-
-export interface AgentMetrics {
-  agentKey: string;
-  runs: number;
-  accepted: number;
-  overridden: number;
-  errors: number;
-  blocked: number;
-  /** 0-100, accepted / (accepted+overridden) */
-  acceptanceRate: number;
-  /** @nullable */
-  avgConfidence?: number | null;
-  /** @nullable */
-  avgLatencyMs?: number | null;
-  /** @nullable */
-  lastRunAt?: string | null;
 }
 
 export type TestDriveStatus = typeof TestDriveStatus[keyof typeof TestDriveStatus];

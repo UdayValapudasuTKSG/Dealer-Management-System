@@ -88,6 +88,7 @@ import type {
   DealInput,
   DealUpdate,
   Dealer,
+  DealerAgentOverview,
   DealerInput,
   DealerMember,
   DealerMemberInput,
@@ -15653,6 +15654,160 @@ export function useListDealerAgents<TData = Awaited<ReturnType<typeof listDealer
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListDealerAgentsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDealerAgentsOverviewUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/agents/overview`
+}
+
+/**
+ * @summary Per-dealer AI agent roster with governance metrics and success-criteria evaluation (super admin only)
+ */
+export const getDealerAgentsOverview = async (id: number, options?: RequestInit): Promise<DealerAgentOverview[]> => {
+
+  return customFetch<DealerAgentOverview[]>(getGetDealerAgentsOverviewUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDealerAgentsOverviewQueryKey = (id: number,) => {
+    return [
+    `/api/platform/dealers/${id}/agents/overview`
+    ] as const;
+    }
+
+
+export const getGetDealerAgentsOverviewQueryOptions = <TData = Awaited<ReturnType<typeof getDealerAgentsOverview>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDealerAgentsOverview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDealerAgentsOverviewQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDealerAgentsOverview>>> = ({ signal }) => getDealerAgentsOverview(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDealerAgentsOverview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDealerAgentsOverviewQueryResult = NonNullable<Awaited<ReturnType<typeof getDealerAgentsOverview>>>
+export type GetDealerAgentsOverviewQueryError = ErrorType<void>
+
+
+/**
+ * @summary Per-dealer AI agent roster with governance metrics and success-criteria evaluation (super admin only)
+ */
+
+export function useGetDealerAgentsOverview<TData = Awaited<ReturnType<typeof getDealerAgentsOverview>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDealerAgentsOverview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDealerAgentsOverviewQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListDealerAgentRunsUrl = (id: number,) => {
+
+
+
+
+  return `/api/platform/dealers/${id}/agent-runs`
+}
+
+/**
+ * @summary Recent agent runs for a dealer (super admin only)
+ */
+export const listDealerAgentRuns = async (id: number, options?: RequestInit): Promise<AgentRun[]> => {
+
+  return customFetch<AgentRun[]>(getListDealerAgentRunsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListDealerAgentRunsQueryKey = (id: number,) => {
+    return [
+    `/api/platform/dealers/${id}/agent-runs`
+    ] as const;
+    }
+
+
+export const getListDealerAgentRunsQueryOptions = <TData = Awaited<ReturnType<typeof listDealerAgentRuns>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealerAgentRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListDealerAgentRunsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listDealerAgentRuns>>> = ({ signal }) => listDealerAgentRuns(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listDealerAgentRuns>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListDealerAgentRunsQueryResult = NonNullable<Awaited<ReturnType<typeof listDealerAgentRuns>>>
+export type ListDealerAgentRunsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Recent agent runs for a dealer (super admin only)
+ */
+
+export function useListDealerAgentRuns<TData = Awaited<ReturnType<typeof listDealerAgentRuns>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listDealerAgentRuns>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListDealerAgentRunsQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -7,6 +7,7 @@ import {
   usersTable,
   rolesTable,
   agentsTable,
+  agentRunsTable,
   agentPoliciesTable,
   AGENT_POLICY_MASTER_KEY,
   auditLogsTable,
@@ -34,6 +35,10 @@ import {
   ListPlatformUsersResponse,
   ListDealerAgentsParams,
   ListDealerAgentsResponse,
+  GetDealerAgentsOverviewParams,
+  GetDealerAgentsOverviewResponse,
+  ListDealerAgentRunsParams,
+  ListDealerAgentRunsResponse,
   UpdateDealerAgentParams,
   UpdateDealerAgentBody,
   UpdateDealerAgentResponse,
@@ -770,6 +775,209 @@ router.get(
       .where(eq(agentsTable.dealerId, params.data.id))
       .orderBy(asc(agentsTable.id));
     res.json(ListDealerAgentsResponse.parse(rows));
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Per-dealer agent oversight: roster + governance metrics + success criteria.
+// Criteria are evaluated server-side so realm and any future consumer agree
+// on what "healthy" means for each agent.
+// ---------------------------------------------------------------------------
+
+/** Agents that write records directly (no human in the loop). */
+const AUTONOMOUS_AGENT_KEYS = new Set([
+  "intake_dedup",
+  "call_sentiment",
+  "case_classifier",
+]);
+
+type AgentMetricRow = {
+  agentKey: string;
+  runs: number;
+  accepted: number;
+  overridden: number;
+  errors: number;
+  blocked: number;
+  acceptanceRate: number;
+  avgConfidence: number | null;
+  avgLatencyMs: number | null;
+  lastRunAt: string | null;
+};
+
+async function dealerAgentMetrics(dealerId: number): Promise<Map<string, AgentMetricRow>> {
+  const rows = await db
+    .select({
+      agentKey: agentRunsTable.agentKey,
+      runs: sql<number>`count(*)::int`,
+      accepted: sql<number>`count(*) filter (where ${agentRunsTable.status} = 'accepted')::int`,
+      overridden: sql<number>`count(*) filter (where ${agentRunsTable.status} = 'overridden')::int`,
+      errors: sql<number>`count(*) filter (where ${agentRunsTable.status} = 'error')::int`,
+      blocked: sql<number>`count(*) filter (where ${agentRunsTable.status} = 'blocked')::int`,
+      avgConfidence: sql<number | null>`avg(${agentRunsTable.confidence})`,
+      avgLatencyMs: sql<number | null>`avg(${agentRunsTable.latencyMs})::int`,
+      lastRunAt: sql<string | null>`max(${agentRunsTable.createdAt})`,
+    })
+    .from(agentRunsTable)
+    .where(eq(agentRunsTable.dealerId, dealerId))
+    .groupBy(agentRunsTable.agentKey);
+  return new Map(
+    rows.map((r) => {
+      const reviewed = r.accepted + r.overridden;
+      return [
+        r.agentKey,
+        {
+          ...r,
+          acceptanceRate: reviewed > 0 ? (r.accepted / reviewed) * 100 : 0,
+          avgConfidence: r.avgConfidence == null ? null : Number(r.avgConfidence),
+          lastRunAt: r.lastRunAt == null ? null : new Date(r.lastRunAt).toISOString(),
+        },
+      ];
+    }),
+  );
+}
+
+const pct = (n: number) => `${n.toFixed(1)}%`;
+
+/** Evaluate the success criteria for one agent from its aggregate metrics. */
+function evaluateAgentCriteria(agentKey: string, m: AgentMetricRow | null) {
+  const criteria: {
+    key: string;
+    label: string;
+    target: string;
+    actual: string | null;
+    met: boolean | null;
+  }[] = [];
+  const runs = m?.runs ?? 0;
+  const hasData = runs > 0;
+
+  criteria.push({
+    key: "activity",
+    label: "Handling work (has recorded runs)",
+    target: "≥ 1 run",
+    actual: hasData ? `${runs} runs` : null,
+    met: hasData ? true : null,
+  });
+
+  const errorRate = hasData ? (m!.errors / runs) * 100 : null;
+  criteria.push({
+    key: "error_rate",
+    label: "Error rate stays low",
+    target: "≤ 5%",
+    actual: errorRate == null ? null : pct(errorRate),
+    met: errorRate == null ? null : errorRate <= 5,
+  });
+
+  const blockedRate = hasData ? (m!.blocked / runs) * 100 : null;
+  criteria.push({
+    key: "blocked_rate",
+    label: "Rarely blocked by governance guardrails",
+    target: "≤ 10%",
+    actual: blockedRate == null ? null : pct(blockedRate),
+    met: blockedRate == null ? null : blockedRate <= 10,
+  });
+
+  if (AUTONOMOUS_AGENT_KEYS.has(agentKey)) {
+    // Autonomous writers: overrides mean humans had to undo its work.
+    const overrideRate = hasData ? (m!.overridden / runs) * 100 : null;
+    criteria.push({
+      key: "override_rate",
+      label: "Autonomous writes rarely overridden",
+      target: "≤ 10%",
+      actual: overrideRate == null ? null : pct(overrideRate),
+      met: overrideRate == null ? null : overrideRate <= 10,
+    });
+  } else {
+    // HITL/advisory agents: judged on human acceptance of their drafts.
+    const reviewed = (m?.accepted ?? 0) + (m?.overridden ?? 0);
+    criteria.push({
+      key: "acceptance_rate",
+      label: "Suggestions accepted by staff",
+      target: "≥ 70%",
+      actual: reviewed > 0 ? pct(m!.acceptanceRate) : null,
+      met: reviewed > 0 ? m!.acceptanceRate >= 70 : null,
+    });
+  }
+
+  criteria.push({
+    key: "confidence",
+    label: "Average model confidence",
+    target: "≥ 0.6",
+    actual: m?.avgConfidence == null ? null : m.avgConfidence.toFixed(2),
+    met: m?.avgConfidence == null ? null : m.avgConfidence >= 0.6,
+  });
+
+  criteria.push({
+    key: "latency",
+    label: "Responds fast enough",
+    target: "≤ 8s avg",
+    actual: m?.avgLatencyMs == null ? null : `${(m.avgLatencyMs / 1000).toFixed(1)}s`,
+    met: m?.avgLatencyMs == null ? null : m.avgLatencyMs <= 8000,
+  });
+
+  const health = !hasData
+    ? ("no_data" as const)
+    : criteria.some((c) => c.met === false)
+      ? ("at_risk" as const)
+      : ("meeting" as const);
+  return { criteria, health };
+}
+
+router.get(
+  "/platform/dealers/:id/agents/overview",
+  async (req, res): Promise<void> => {
+    const params = GetDealerAgentsOverviewParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [dealer] = await db
+      .select({ id: dealersTable.id })
+      .from(dealersTable)
+      .where(eq(dealersTable.id, params.data.id));
+    if (!dealer) {
+      res.status(404).json({ error: "Dealer not found" });
+      return;
+    }
+    const [agents, metricsByKey] = await Promise.all([
+      db
+        .select()
+        .from(agentsTable)
+        .where(eq(agentsTable.dealerId, params.data.id))
+        .orderBy(asc(agentsTable.id)),
+      dealerAgentMetrics(params.data.id),
+    ]);
+    const overview = agents.map((agent) => {
+      const m = metricsByKey.get(agent.key) ?? null;
+      const { criteria, health } = evaluateAgentCriteria(agent.key, m);
+      return { agent, metrics: m, criteria, health };
+    });
+    res.json(GetDealerAgentsOverviewResponse.parse(overview));
+  },
+);
+
+router.get(
+  "/platform/dealers/:id/agent-runs",
+  async (req, res): Promise<void> => {
+    const params = ListDealerAgentRunsParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [dealer] = await db
+      .select({ id: dealersTable.id })
+      .from(dealersTable)
+      .where(eq(dealersTable.id, params.data.id));
+    if (!dealer) {
+      res.status(404).json({ error: "Dealer not found" });
+      return;
+    }
+    const rows = await db
+      .select()
+      .from(agentRunsTable)
+      .where(eq(agentRunsTable.dealerId, params.data.id))
+      .orderBy(desc(agentRunsTable.createdAt))
+      .limit(100);
+    res.json(ListDealerAgentRunsResponse.parse(rows));
   },
 );
 

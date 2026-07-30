@@ -48,7 +48,6 @@ const CLUSTERS: Cluster[] = [
     items: [
       { name: "My Day", href: "/command-center", module: "", icon: LayoutDashboard },
       { name: "Reports", href: "/reports", module: "", icon: BarChart3 },
-      { name: "AI Agents", href: "/agents", module: "", icon: Bot, ent: "ai_agents" },
     ],
   },
   {

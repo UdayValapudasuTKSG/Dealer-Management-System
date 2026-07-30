@@ -7047,6 +7047,80 @@ export const ListDealerAgentsResponse = zod.array(ListDealerAgentsResponseItem)
 
 
 /**
+ * @summary Per-dealer AI agent roster with governance metrics and success-criteria evaluation (super admin only)
+ */
+export const GetDealerAgentsOverviewParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetDealerAgentsOverviewResponseItem = zod.object({
+  "agent": zod.object({
+  "id": zod.number(),
+  "key": zod.string(),
+  "name": zod.string(),
+  "domain": zod.string(),
+  "description": zod.string(),
+  "status": zod.enum(['active', 'idle', 'paused']),
+  "tasksToday": zod.number(),
+  "successRate": zod.number()
+}),
+  "metrics": zod.union([zod.object({
+  "agentKey": zod.string(),
+  "runs": zod.number(),
+  "accepted": zod.number(),
+  "overridden": zod.number(),
+  "errors": zod.number(),
+  "blocked": zod.number(),
+  "acceptanceRate": zod.number().describe('0-100, accepted \/ (accepted+overridden)'),
+  "avgConfidence": zod.number().nullish(),
+  "avgLatencyMs": zod.number().nullish(),
+  "lastRunAt": zod.coerce.date().nullish()
+}),zod.null()]),
+  "criteria": zod.array(zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "target": zod.string().describe('Human-readable target, e.g. \'≥ 70%\''),
+  "actual": zod.string().nullish().describe('Human-readable observed value; null when no data yet'),
+  "met": zod.boolean().nullable().describe('null when there is not enough data to evaluate')
+})),
+  "health": zod.enum(['meeting', 'at_risk', 'no_data']).describe('meeting = all evaluable criteria pass; at_risk = at least one fails; no_data = no runs yet')
+})
+export const GetDealerAgentsOverviewResponse = zod.array(GetDealerAgentsOverviewResponseItem)
+
+
+/**
+ * @summary Recent agent runs for a dealer (super admin only)
+ */
+export const ListDealerAgentRunsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListDealerAgentRunsResponseItem = zod.object({
+  "id": zod.number(),
+  "agentKey": zod.string(),
+  "runType": zod.string(),
+  "inputSource": zod.string(),
+  "inputSummary": zod.string().nullish(),
+  "outputSummary": zod.string().nullish(),
+  "confidence": zod.number().nullish(),
+  "status": zod.enum(['completed', 'accepted', 'overridden', 'error', 'blocked', 'needs_review']),
+  "errorMessage": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "autonomy": zod.enum(['advisory', 'autonomous', 'system']),
+  "affectedEntities": zod.array(zod.object({
+  "type": zod.string(),
+  "id": zod.number()
+})),
+  "changeSummary": zod.string().nullish(),
+  "reviewReason": zod.string().nullish(),
+  "latencyMs": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListDealerAgentRunsResponse = zod.array(ListDealerAgentRunsResponseItem)
+
+
+/**
  * @summary Flip a dealer agent's kill switch (super admin only)
  */
 export const UpdateDealerAgentParams = zod.object({

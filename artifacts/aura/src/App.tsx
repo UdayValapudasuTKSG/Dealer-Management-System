@@ -29,7 +29,6 @@ import CustomerDetail from "@/pages/customer-detail";
 import LeadDetail from "@/pages/lead-detail";
 import VehicleDetailPage from "@/pages/vehicle-detail";
 import TeamProfile from "@/pages/team-profile";
-import Agents from "@/pages/agents";
 import SettingsHub from "@/pages/settings-hub";
 import SettingsUsers from "@/pages/settings-users";
 import SettingsEmail from "@/pages/settings-email";
@@ -272,7 +271,6 @@ function AppRoutes() {
                 <Route path="/calendar">
                   <Redirect to="/command-center" />
                 </Route>
-                <Route path="/agents" component={Agents} />
                 {/* GRA duty filing lives in the pipeline (lead workbench) and
                     delivery workflow now — no standalone page (2026-07) */}
                 <Route path="/gra">

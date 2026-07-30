@@ -14,6 +14,7 @@ import { SignInPage } from "@/pages/auth-pages";
 import Dashboard from "@/pages/dashboard";
 import Network from "@/pages/network";
 import DealerDetail from "@/pages/dealer-detail";
+import AgentsPage from "@/pages/agents";
 import Users from "@/pages/users";
 import Audit from "@/pages/audit";
 import AccessDenied from "@/pages/access-denied";
@@ -155,6 +156,7 @@ function AppRoutes() {
       <Route path="/" component={Dashboard} />
       <Route path="/network" component={Network} />
       <Route path="/network/:id" component={DealerDetail} />
+      <Route path="/agents" component={AgentsPage} />
       <Route path="/users" component={Users} />
       <Route path="/audit" component={Audit} />
       <Route component={NotFound} />
