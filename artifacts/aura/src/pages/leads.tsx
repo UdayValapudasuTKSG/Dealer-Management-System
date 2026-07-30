@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   useListDeals,
@@ -28,6 +28,7 @@ import { VehicleCascade } from "@/components/vehicle-cascade";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/hooks/use-view-mode";
+import { Pagination } from "@/components/pagination";
 import { ViewControls } from "@/components/view-controls";
 import { useAuthz } from "@/lib/auth";
 import { CONTACT_SLA_HOURS, hoursSince, humanHours } from "@/lib/triage";
@@ -288,6 +289,18 @@ export default function Leads() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, tab, myId, myName]);
+
+  const PAGE_SIZE = layout === "list" ? 25 : compact ? 30 : 24;
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    setPage(1);
+  }, [tab, search, layout, density]);
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const paged = useMemo(
+    () => visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [visible, safePage, PAGE_SIZE],
+  );
 
   const TABS: { key: TabKey; label: string }[] = [
     { key: "all", label: "All" },
@@ -550,7 +563,7 @@ export default function Leads() {
                 </tr>
               </thead>
               <tbody>
-                {visible.map((r) => (
+                {paged.map((r) => (
                   <tr
                     key={r.lead.id}
                     onClick={() => navigate(`/lead/${r.lead.id}`)}
@@ -615,7 +628,7 @@ export default function Leads() {
         ) : (
           /* Card view — compact cards */
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-            {visible.map((r, i) => (
+            {paged.map((r, i) => (
               <motion.div
                 key={r.lead.id}
                 initial={{ opacity: 0, y: 8 }}
@@ -700,6 +713,29 @@ export default function Leads() {
               </motion.div>
             ))}
           </div>
+        )}
+
+        {!isLoading && visible.length > 0 && (
+          <>
+            {visible.length > PAGE_SIZE && (
+              <div className="text-center text-xs text-muted-foreground tabular-nums">
+                Showing {(safePage - 1) * PAGE_SIZE + 1}–
+                {Math.min(safePage * PAGE_SIZE, visible.length)} of{" "}
+                {visible.length}
+              </div>
+            )}
+            <Pagination
+              page={safePage}
+              pageCount={pageCount}
+              onPageChange={(p) => {
+                setPage(p);
+                document
+                  .querySelector("main, [data-page-scroll]")
+                  ?.scrollTo({ top: 0 });
+                window.scrollTo({ top: 0 });
+              }}
+            />
+          </>
         )}
       </Page>
     </>
