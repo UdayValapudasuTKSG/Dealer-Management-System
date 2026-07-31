@@ -97,13 +97,13 @@ export const DEFAULT_STAGE_CHECKLISTS: Record<ChecklistStage, StageChecklistItem
     ],
     test_drive: [
       { key: "call_logged", label: "At least one call logged with an outcome", enabled: true },
-      { key: "test_drive_booked", label: "Test-drive slot booked", enabled: true },
-      { key: "licence_on_file", label: "Driver's licence number on file", enabled: true },
-      { key: "waiver_signed", label: "Test-drive waiver signed", enabled: true },
-      { key: "vehicle_available", label: "Interested vehicle is available for a drive", enabled: true },
+      { key: "test_drive_booked", label: "Test-drive slot booked", enabled: false },
+      { key: "licence_on_file", label: "Driver's licence number on file", enabled: false },
+      { key: "waiver_signed", label: "Test-drive waiver signed", enabled: false },
+      { key: "vehicle_available", label: "Interested vehicle is available for a drive", enabled: false },
     ],
     proposal: [
-      { key: "test_drive_completed", label: "Test drive completed (or explicitly booked)", enabled: true },
+      { key: "test_drive_completed", label: "Test drive completed (or explicitly booked)", enabled: false },
       { key: "quote_sent", label: "Quotation sent to the customer", enabled: true },
     ],
     negotiation: [

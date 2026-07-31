@@ -406,6 +406,9 @@ async function reservationCreditForDeal(deal: Deal): Promise<number> {
         inArray(bookingsTable.status, ["active", "converted"]),
         or(
           eq(bookingsTable.dealId, deal.id),
+          deal.leadId != null
+            ? eq(bookingsTable.leadId, deal.leadId)
+            : undefined,
           and(
             eq(bookingsTable.vehicleId, deal.vehicleId),
             deal.customerId != null

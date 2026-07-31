@@ -359,7 +359,9 @@ export function CallDialog({
             Call {leadName}
           </DialogTitle>
           <DialogDescription>
-            {browserCalling ? (
+            {afterLiveCall ? (
+              <>Call complete — add an optional note below, then hit Done.</>
+            ) : browserCalling ? (
               <>Call {leadPhone} straight from your browser — duration and outcome are captured automatically.</>
             ) : leadPhone ? (
               <>
