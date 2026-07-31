@@ -273,16 +273,56 @@ export default function Inventory() {
     );
   }, [vehicles, body, division, powertrain, query]);
 
+  // Group identical models (same make/model/year/trim) into one inventory
+  // entry — bulk-imported stock often has dozens of units per model, each
+  // with its own VIN. Clicking a grouped entry opens a unit picker.
+  const STATUS_RANK: Record<string, number> = {
+    available: 0,
+    in_transit: 1,
+    reserved: 2,
+    booked: 3,
+    service: 4,
+    sold: 5,
+    delivered: 6,
+  };
+  const groups = useMemo(() => {
+    const map = new Map<string, Vehicle[]>();
+    for (const v of filtered) {
+      const key = `${v.make}|${v.model}|${v.year}|${v.trim ?? ""}`.toLowerCase();
+      const arr = map.get(key);
+      if (arr) arr.push(v);
+      else map.set(key, [v]);
+    }
+    return Array.from(map.values()).map((units) => {
+      const sorted = [...units].sort(
+        (a, b) =>
+          (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9),
+      );
+      return { rep: sorted[0], units: sorted };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered]);
+
+  const [unitGroup, setUnitGroup] = useState<{
+    rep: Vehicle;
+    units: Vehicle[];
+  } | null>(null);
+
+  const openGroup = (g: { rep: Vehicle; units: Vehicle[] }) => {
+    if (g.units.length === 1) setSelected(g.units[0]);
+    else setUnitGroup(g);
+  };
+
   const PAGE_SIZE = density === "compact" ? 32 : 24;
   const [page, setPage] = useState(1);
   useEffect(() => {
     setPage(1);
   }, [body, division, powertrain, query, layout, density]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
   const paged = useMemo(
-    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filtered, safePage, PAGE_SIZE],
+    () => groups.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [groups, safePage, PAGE_SIZE],
   );
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -365,12 +405,12 @@ export default function Inventory() {
             <p className="text-sm text-muted-foreground tabular-nums">
               {filtered.length === 0
                 ? "0 vehicles"
-                : filtered.length <= PAGE_SIZE
-                  ? `${filtered.length} vehicle${filtered.length === 1 ? "" : "s"}`
+                : groups.length <= PAGE_SIZE
+                  ? `${groups.length} model${groups.length === 1 ? "" : "s"} · ${filtered.length} vehicle${filtered.length === 1 ? "" : "s"}`
                   : `${(safePage - 1) * PAGE_SIZE + 1}–${Math.min(
                       safePage * PAGE_SIZE,
-                      filtered.length,
-                    )} of ${filtered.length} vehicles`}
+                      groups.length,
+                    )} of ${groups.length} models · ${filtered.length} vehicles`}
             </p>
             <ViewControls
               layout={layout}
@@ -467,41 +507,64 @@ export default function Inventory() {
                 </tr>
               </thead>
               <tbody>
-                {paged.map((vehicle) => (
-                  <tr
-                    key={vehicle.id}
-                    className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors cursor-pointer"
-                    onClick={() => setSelected(vehicle)}
-                  >
-                    <td
-                      className={`px-4 font-medium ${
-                        density === "compact" ? "py-2.5" : "py-3.5"
-                      }`}
+                {paged.map((g) => {
+                  const vehicle = g.rep;
+                  const n = g.units.length;
+                  const availableN = g.units.filter(
+                    (u) => u.status === "available",
+                  ).length;
+                  const colours = new Set(
+                    g.units.map((u) => u.exteriorColor).filter(Boolean),
+                  );
+                  return (
+                    <tr
+                      key={vehicle.id}
+                      className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors cursor-pointer"
+                      onClick={() => openGroup(g)}
                     >
-                      {vehicle.year} {vehicle.make} {vehicle.model}
-                      {vehicle.trim ? (
-                        <span className="text-muted-foreground font-normal"> · {vehicle.trim}</span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">
-                      {vehicle.powertrain === "EV" ? "Electric" : vehicle.powertrain}
-                    </td>
-                    <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">
-                      {vehicle.bodyType}
-                    </td>
-                    <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
-                      {vehicle.exteriorColor}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className="rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-semibold capitalize">
-                        {vehicle.status.replace(/_/g, " ")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums font-semibold">
-                      {money.gyd(vehicle.price)}
-                    </td>
-                  </tr>
-                ))}
+                      <td
+                        className={`px-4 font-medium ${
+                          density === "compact" ? "py-2.5" : "py-3.5"
+                        }`}
+                      >
+                        {vehicle.year} {vehicle.make} {vehicle.model}
+                        {vehicle.trim ? (
+                          <span className="text-muted-foreground font-normal"> · {vehicle.trim}</span>
+                        ) : null}
+                        {n > 1 && (
+                          <span className="ml-2 rounded-full bg-foreground/[0.08] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-foreground/70 tabular-nums">
+                            ×{n} units
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">
+                        {vehicle.powertrain === "EV" ? "Electric" : vehicle.powertrain}
+                      </td>
+                      <td className="px-4 py-2 text-muted-foreground hidden md:table-cell">
+                        {vehicle.bodyType}
+                      </td>
+                      <td className="px-4 py-2 text-muted-foreground hidden lg:table-cell">
+                        {colours.size > 1
+                          ? `${colours.size} colours`
+                          : vehicle.exteriorColor}
+                      </td>
+                      <td className="px-4 py-2">
+                        {n > 1 ? (
+                          <span className="rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-semibold">
+                            {availableN} available
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-semibold capitalize">
+                            {vehicle.status.replace(/_/g, " ")}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                        {money.gyd(vehicle.price)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -513,13 +576,19 @@ export default function Inventory() {
                 : "lg:grid-cols-3 gap-8"
             }`}
           >
-            {paged.map((vehicle, i) => (
-              <VehicleCard
-                key={vehicle.id}
-                vehicle={vehicle}
-                delay={i * 0.05}
-                onSelect={() => setSelected(vehicle)}
-              />
+            {paged.map((g, i) => (
+              <div key={g.rep.id} className="relative">
+                <VehicleCard
+                  vehicle={g.rep}
+                  delay={i * 0.05}
+                  onSelect={() => openGroup(g)}
+                />
+                {g.units.length > 1 && (
+                  <span className="absolute top-3 right-3 z-10 rounded-full bg-black/70 backdrop-blur px-2.5 py-1 text-[11px] font-bold text-white tabular-nums shadow-lg pointer-events-none">
+                    ×{g.units.length} in stock
+                  </span>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -533,6 +602,67 @@ export default function Inventory() {
           />
         )}
       </div>
+
+      {/* Unit picker — one model, many VINs */}
+      <Dialog
+        open={unitGroup !== null}
+        onOpenChange={(o) => !o && setUnitGroup(null)}
+      >
+        <DialogContent className="max-w-2xl">
+          {unitGroup && (
+            <>
+              <DialogTitle className="flex items-baseline gap-2">
+                {unitGroup.rep.year} {unitGroup.rep.make} {unitGroup.rep.model}
+                {unitGroup.rep.trim ? (
+                  <span className="text-muted-foreground font-normal text-base">
+                    {unitGroup.rep.trim}
+                  </span>
+                ) : null}
+                <span className="ml-auto text-sm font-semibold text-muted-foreground tabular-nums">
+                  {unitGroup.units.length} units
+                </span>
+              </DialogTitle>
+              <div className="divide-y divide-white/5 -mx-2">
+                {unitGroup.units.map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => {
+                      setSelected(u);
+                      setUnitGroup(null);
+                    }}
+                    className="w-full flex items-center gap-3 px-2 py-3 text-left hover:bg-foreground/[0.05] rounded-lg transition-colors"
+                  >
+                    <span className="shrink-0 w-9 h-9 rounded-lg bg-foreground/[0.05] flex items-center justify-center">
+                      <Fingerprint className="w-4 h-4 text-muted-foreground" />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-mono text-sm truncate">
+                        {u.vin || (
+                          <span className="text-muted-foreground italic">
+                            No VIN recorded
+                          </span>
+                        )}
+                      </span>
+                      <span className="block text-xs text-muted-foreground truncate">
+                        {[u.exteriorColor, u.registration]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-semibold capitalize">
+                      {u.status.replace(/_/g, " ")}
+                    </span>
+                    <span className="shrink-0 tabular-nums font-semibold text-sm">
+                      {money.gyd(u.price)}
+                    </span>
+                    <ArrowRight className="shrink-0 w-4 h-4 text-muted-foreground" />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <VehicleDetail
         vehicle={selected}
