@@ -221,3 +221,9 @@ id = "Z8luVWQHw4ol6p5oocCrI"
 uri = "file://exports/sample-gra-commercial-invoice.pdf"
 type = "pdf"
 title = "Sample GRA Commercial Invoice (PDF copy)"
+
+[[outputs]]
+id = "dHZIqRQ2rHItv_EBZhZmn"
+uri = "file://docs/AURA-GCP-Architecture.pdf"
+type = "pdf"
+title = "AURA — GCP Enterprise Architecture (DEV & PROD)"
