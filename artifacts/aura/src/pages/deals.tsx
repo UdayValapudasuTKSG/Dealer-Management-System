@@ -558,7 +558,7 @@ export default function Deals() {
       className="pb-3"
       action={heroActions}
     />
-    <Page fill className="pt-0">
+    <Page className="pt-0">
       {layout === "list" ? (
         <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
           <table className="w-full text-sm">
@@ -707,7 +707,7 @@ export default function Deals() {
           </table>
         </div>
       ) : (
-      <div className="flex gap-4 overflow-x-auto pb-4 flex-1 hide-scrollbar -mx-1 px-1">
+      <div className="flex gap-4 items-start overflow-x-auto pb-4 hide-scrollbar -mx-1 px-1">
         {stages.map((stage, stageIndex) => {
           const stageDeals = deals?.filter((d) => d.stage === stage) ?? [];
           return (
@@ -732,7 +732,7 @@ export default function Deals() {
                 </span>
               </div>
 
-              <div className="space-y-3 flex-1 overflow-y-auto pr-1.5 -mr-1.5 hide-scrollbar">
+              <div className="space-y-3">
                 {isLoading ? (
                   [1].map((i) => (
                     <div
