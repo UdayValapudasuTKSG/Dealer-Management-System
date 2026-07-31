@@ -166,7 +166,7 @@ export function CreateRecordDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="glass-panel border-white/10 sm:max-w-[440px] p-5 gap-3">
+      <DialogContent className="glass-panel border-white/10 sm:max-w-[600px] p-5 gap-3">
         <DialogHeader className="space-y-0.5">
           <DialogTitle className="text-base tracking-tight">{title}</DialogTitle>
           {description && (
@@ -175,12 +175,12 @@ export function CreateRecordDialog({
             </DialogDescription>
           )}
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 py-1">
+        <div className="grid grid-cols-3 gap-x-3 gap-y-2.5 py-1">
           {fields.map((f, i) => (
             <Fragment key={f.name}>
             {f.section && f.section !== fields[i - 1]?.section && (
               <div
-                className={`col-span-2 flex items-center gap-3 ${i > 0 ? "mt-1" : ""}`}
+                className={`col-span-3 flex items-center gap-3 ${i > 0 ? "mt-1" : ""}`}
               >
                 <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/80">
                   {f.section}
@@ -189,7 +189,7 @@ export function CreateRecordDialog({
               </div>
             )}
             <div
-              className={`flex flex-col gap-1 ${f.span === "half" ? "col-span-1" : "col-span-2"}`}
+              className={`flex flex-col gap-1 ${f.span === "half" ? "col-span-1" : "col-span-3"}`}
             >
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 {f.label}
