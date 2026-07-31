@@ -435,16 +435,8 @@ export default function Deals() {
 
   const stages = ["desking", "committed", "delivered", "cancelled"];
 
-  return (
-    <>
-    <PageHero
-      eyebrow="Sales Desk"
-      title="Deal"
-      accent="Structuring"
-      subtitle="Bespoke negotiation and closing."
-    />
-    <Page fill>
-      <div className="mb-4 shrink-0 flex items-center justify-end gap-3">
+  const heroActions = (
+    <div className="flex items-center gap-3">
           <ViewControls
             layout={layout}
             onLayoutChange={setLayout}
@@ -553,8 +545,20 @@ export default function Deals() {
             }}
           />
           )}
-      </div>
+    </div>
+  );
 
+  return (
+    <>
+    <PageHero
+      eyebrow="Sales Desk"
+      title="Deal"
+      accent="Structuring"
+      subtitle="Bespoke negotiation and closing."
+      className="pb-3"
+      action={heroActions}
+    />
+    <Page fill className="pt-0">
       {layout === "list" ? (
         <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
           <table className="w-full text-sm">
