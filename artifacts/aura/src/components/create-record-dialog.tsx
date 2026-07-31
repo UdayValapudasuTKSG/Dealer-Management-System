@@ -166,16 +166,16 @@ export function CreateRecordDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="glass-panel border-white/10 sm:max-w-[560px]">
-        <DialogHeader>
-          <DialogTitle className="text-xl tracking-tight">{title}</DialogTitle>
+      <DialogContent className="glass-panel border-white/10 sm:max-w-[440px] p-5 gap-3">
+        <DialogHeader className="space-y-0.5">
+          <DialogTitle className="text-base tracking-tight">{title}</DialogTitle>
           {description && (
-            <DialogDescription className="text-muted-foreground">
+            <DialogDescription className="text-xs text-muted-foreground">
               {description}
             </DialogDescription>
           )}
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-4 py-2">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 py-1">
           {fields.map((f, i) => (
             <Fragment key={f.name}>
             {f.section && f.section !== fields[i - 1]?.section && (
@@ -189,9 +189,9 @@ export function CreateRecordDialog({
               </div>
             )}
             <div
-              className={`flex flex-col gap-1.5 ${f.span === "half" ? "col-span-1" : "col-span-2"}`}
+              className={`flex flex-col gap-1 ${f.span === "half" ? "col-span-1" : "col-span-2"}`}
             >
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 {f.label}
                 {f.required && <span className="text-primary"> *</span>}
               </Label>
@@ -199,7 +199,7 @@ export function CreateRecordDialog({
                 f.render?.(values[f.name], (v) => set(f.name, v))
               ) : f.type === "select" ? (
                 <Select value={values[f.name]} onValueChange={(v) => set(f.name, v)}>
-                  <SelectTrigger className="bg-white/[0.04] border-white/10">
+                  <SelectTrigger className="h-8 text-xs bg-white/[0.04] border-white/10">
                     <SelectValue placeholder={f.placeholder ?? "Select"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -216,7 +216,7 @@ export function CreateRecordDialog({
                   placeholder={f.placeholder}
                   onChange={(e) => set(f.name, e.target.value)}
                   onBlur={() => setTouched((t) => ({ ...t, [f.name]: true }))}
-                  className={`bg-white/[0.04] min-h-[72px] ${
+                  className={`bg-white/[0.04] min-h-[56px] text-xs ${
                     touched[f.name] && errors[f.name]
                       ? "border-red-500/60 focus-visible:ring-red-500/30"
                       : "border-white/10"
@@ -246,7 +246,7 @@ export function CreateRecordDialog({
                   placeholder={f.placeholder}
                   onChange={(e) => set(f.name, e.target.value)}
                   onBlur={() => setTouched((t) => ({ ...t, [f.name]: true }))}
-                  className={`bg-white/[0.04] ${
+                  className={`h-8 text-xs bg-white/[0.04] ${
                     touched[f.name] && errors[f.name]
                       ? "border-red-500/60 focus-visible:ring-red-500/30"
                       : "border-white/10"
@@ -254,21 +254,22 @@ export function CreateRecordDialog({
                 />
               )}
               {touched[f.name] && errors[f.name] && (
-                <p className="text-xs text-red-400">{errors[f.name]}</p>
+                <p className="text-[11px] text-red-400">{errors[f.name]}</p>
               )}
             </div>
             </Fragment>
           ))}
         </div>
-        <div className="flex items-center gap-2 rounded-xl bg-primary/5 border border-primary/15 px-3 py-2 text-xs text-muted-foreground">
-          <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+        <div className="flex items-center gap-2 rounded-lg bg-primary/5 border border-primary/15 px-2.5 py-1.5 text-[11px] text-muted-foreground">
+          <Sparkles className="w-3 h-3 text-primary shrink-0" />
           AURA will enrich, score, and route this record automatically once created.
         </div>
         <DialogFooter>
           <Button
+            size="sm"
             onClick={handleSubmit}
             disabled={missingRequired || pending}
-            className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
+            className="bg-primary hover:bg-primary/90 text-white rounded-full px-5 gap-2"
           >
             {pending && <Loader2 className="w-4 h-4 animate-spin" />}
             {submitLabel}
