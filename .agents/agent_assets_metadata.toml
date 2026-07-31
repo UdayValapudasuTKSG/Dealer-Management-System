@@ -227,3 +227,9 @@ id = "dHZIqRQ2rHItv_EBZhZmn"
 uri = "file://docs/AURA-GCP-Architecture.pdf"
 type = "pdf"
 title = "AURA — GCP Architecture (growth-ready PROD)"
+
+[[outputs]]
+id = "8EuhbEvLmA6oSv6bQFqo6"
+uri = "file://docs/aura-styling-components.zip"
+type = "unspecified"
+title = "AURA & Realm — styling and UI components (zip)"
