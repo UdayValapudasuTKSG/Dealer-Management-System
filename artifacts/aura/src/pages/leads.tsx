@@ -559,7 +559,6 @@ export default function Leads() {
                   <th className="px-4 py-3 font-semibold">Phase</th>
                   <th className="px-4 py-3 font-semibold">Advisor</th>
                   <th className="px-4 py-3 font-semibold">Contact SLA</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -614,11 +613,6 @@ export default function Leads() {
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap">
                       <SlaChip sla={r.sla} />
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap">
-                      <span className="inline-flex items-center text-[10px] font-semibold uppercase tracking-wider text-foreground/70 bg-foreground/[0.06] px-2 py-0.5 rounded-full">
-                        {STATUS_LABEL[r.lead.status] ?? r.lead.status}
-                      </span>
                     </td>
                   </tr>
                 ))}
