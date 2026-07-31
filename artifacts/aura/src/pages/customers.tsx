@@ -49,7 +49,7 @@ export default function Customers() {
 
   const comfortable = density === "comfortable";
 
-  const PAGE_SIZE = layout === "list" ? 25 : comfortable ? 24 : 30;
+  const PAGE_SIZE = layout === "list" ? 25 : comfortable ? 12 : 20;
   const [page, setPage] = useState(1);
   useEffect(() => {
     setPage(1);
@@ -63,18 +63,9 @@ export default function Customers() {
     [customers, safePage, PAGE_SIZE],
   );
 
-  return (
-    <>
-    <PageHero
-
-      eyebrow="Relationships"
-      title="Account"
-      accent="Portfolio"
-      subtitle="Lifetime relationships and loyalty."
-    />
-    <Page className="space-y-5">
-      <div className="flex items-center justify-end gap-3">
-            <p className="text-sm text-muted-foreground tabular-nums mr-auto">
+  const heroActions = (
+    <div className="flex items-center gap-3">
+            <p className="text-sm text-muted-foreground tabular-nums">
               {total === 0
                 ? "0 accounts"
                 : total <= PAGE_SIZE
@@ -96,8 +87,8 @@ export default function Customers() {
               pending={createCustomer.isPending}
               submitLabel="Add Account"
               trigger={
-                <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-                  <Plus className="w-5 h-5" />
+                <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-4 h-9 text-sm shadow-md shadow-primary/20 gap-1.5 font-medium tracking-wide">
+                  <Plus className="w-4 h-4" />
                   Add Account
                 </Button>
               }
@@ -143,8 +134,20 @@ export default function Customers() {
                 toast({ title: "Account added", description: "AURA is enriching the new profile." });
               }}
             />
-      </div>
+    </div>
+  );
 
+  return (
+    <>
+    <PageHero
+      eyebrow="Relationships"
+      title="Account"
+      accent="Portfolio"
+      subtitle="Lifetime relationships and loyalty."
+      className="pb-3"
+      action={heroActions}
+    />
+    <Page className="space-y-4 pt-0">
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {[...Array(8)].map((_, i) => (
