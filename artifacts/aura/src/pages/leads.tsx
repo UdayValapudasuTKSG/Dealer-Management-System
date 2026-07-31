@@ -335,28 +335,8 @@ export default function Leads() {
     );
   }
 
-  return (
-    <>
-      <PageHero
-        eyebrow="Sales"
-        title="Pipeline"
-        subtitle="Every lead, from first enquiry to delivery."
-        className="pb-3"
-      />
-      <Page className="space-y-3 pt-0">
-        {/* Command row: search + view toggle + New Lead */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[220px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search name, model, phone or email…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-9 rounded-full bg-foreground/[0.04] border border-white/10 pl-9 pr-4 text-sm focus:outline-none focus:border-primary/50"
-            />
-          </div>
-          <div className="flex items-center gap-3 ml-auto">
+  const heroActions = (
+    <div className="flex items-center gap-3">
             <ViewControls
               layout={layout}
               onLayoutChange={setLayout}
@@ -517,11 +497,32 @@ export default function Leads() {
                 }
               }}
             />
-          </div>
-        </div>
+    </div>
+  );
 
-        {/* Tab strip with counts */}
-        <div className="flex flex-wrap gap-1.5">
+  return (
+    <>
+      <PageHero
+        eyebrow="Sales"
+        title="Pipeline"
+        subtitle="Every lead, from first enquiry to delivery."
+        className="pb-3"
+        action={heroActions}
+      />
+      <Page className="space-y-3 pt-0">
+        {/* Command row: search + phase tabs on one line */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-[280px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search name, model, phone or email…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full h-9 rounded-full bg-foreground/[0.04] border border-white/10 pl-9 pr-4 text-sm focus:outline-none focus:border-primary/50"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -539,6 +540,7 @@ export default function Leads() {
               </span>
             </button>
           ))}
+          </div>
         </div>
 
         {isLoading ? (
