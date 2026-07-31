@@ -374,13 +374,16 @@ export default function Leads() {
                 </Button>
               }
               fields={[
-                { name: "name", label: "Name", type: "text", required: true, span: "full", placeholder: "Kojo Asante" },
+                { name: "name", label: "Name", type: "text", required: true, span: "full", placeholder: "Kojo Asante", section: "Prospect" },
+                { name: "phone", label: "Phone", type: "phone", required: true, span: "half", placeholder: "+592 …", section: "Prospect" },
+                { name: "email", label: "Email", type: "email", required: true, span: "half", placeholder: "kojo@email.com", section: "Prospect" },
                 {
                   name: "channel",
                   label: "Channel",
                   type: "select",
                   required: true,
                   span: "half",
+                  section: "Enquiry",
                   defaultValue: "web",
                   options: [
                     { value: "web", label: "Web" },
@@ -395,6 +398,7 @@ export default function Leads() {
                   type: "custom",
                   required: true,
                   span: "full",
+                  section: "Enquiry",
                   render: (_value, set) => (
                     <VehicleCascade
                       vehicles={(vehicles ?? []).map((v) => ({
@@ -416,7 +420,9 @@ export default function Leads() {
                   name: "source",
                   label: "Source",
                   type: "select",
+                  required: true,
                   span: "half",
+                  section: "Enquiry",
                   defaultValue: "website",
                   options:
                     leadSources && leadSources.length > 0
@@ -438,6 +444,7 @@ export default function Leads() {
                         type: "custom" as const,
                         required: true,
                         span: "half" as const,
+                        section: "Enquiry",
                         render: (_value: string, set: (v: string) => void) => (
                           <select
                             value={sourceDetail}
@@ -462,7 +469,9 @@ export default function Leads() {
                   name: "priority",
                   label: "Priority",
                   type: "select",
+                  required: true,
                   span: "half",
+                  section: "Enquiry",
                   defaultValue: "medium",
                   options: [
                     { value: "high", label: "High" },
@@ -470,11 +479,7 @@ export default function Leads() {
                     { value: "low", label: "Low" },
                   ],
                 },
-                { name: "address", label: "Address", type: "text", span: "full", placeholder: "Optional — Lot 12 Main Street, Georgetown" },
-                { name: "preferredBranch", label: "Preferred branch", type: "text", span: "half", placeholder: "Optional" },
-                { name: "email", label: "Email", type: "email", span: "half", placeholder: "kojo@email.com" },
-                { name: "phone", label: "Phone", type: "phone", span: "half", placeholder: "+233 …" },
-                { name: "notes", label: "Notes", type: "textarea", span: "full", placeholder: "What are they looking for?" },
+                { name: "notes", label: "Notes", type: "textarea", span: "full", placeholder: "Optional — what are they looking for?", section: "Details" },
               ]}
               onSubmit={async (values) => {
                 const payload = { ...values };

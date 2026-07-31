@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +48,9 @@ export type FieldDef = {
   /** For number fields: lower/upper bounds. */
   min?: number;
   max?: number;
+  /** Optional section heading — fields sharing the same section render under
+   * one labelled group with a divider. */
+  section?: string;
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -173,9 +176,19 @@ export function CreateRecordDialog({
           )}
         </DialogHeader>
         <div className="grid grid-cols-2 gap-4 py-2">
-          {fields.map((f) => (
+          {fields.map((f, i) => (
+            <Fragment key={f.name}>
+            {f.section && f.section !== fields[i - 1]?.section && (
+              <div
+                className={`col-span-2 flex items-center gap-3 ${i > 0 ? "mt-1" : ""}`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/80">
+                  {f.section}
+                </span>
+                <span className="h-px flex-1 bg-white/10" aria-hidden="true" />
+              </div>
+            )}
             <div
-              key={f.name}
               className={`flex flex-col gap-1.5 ${f.span === "half" ? "col-span-1" : "col-span-2"}`}
             >
               <Label className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -244,6 +257,7 @@ export function CreateRecordDialog({
                 <p className="text-xs text-red-400">{errors[f.name]}</p>
               )}
             </div>
+            </Fragment>
           ))}
         </div>
         <div className="flex items-center gap-2 rounded-xl bg-primary/5 border border-primary/15 px-3 py-2 text-xs text-muted-foreground">
