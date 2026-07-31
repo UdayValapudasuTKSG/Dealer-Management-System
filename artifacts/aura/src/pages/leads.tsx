@@ -341,8 +341,9 @@ export default function Leads() {
         eyebrow="Sales"
         title="Pipeline"
         subtitle="Every lead, from first enquiry to delivery."
+        className="pb-3"
       />
-      <Page className="space-y-5 pt-0">
+      <Page className="space-y-3 pt-0">
         {/* Command row: search + view toggle + New Lead */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[220px] max-w-md">
@@ -352,7 +353,7 @@ export default function Leads() {
               placeholder="Search name, model, phone or email…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-full bg-foreground/[0.04] border border-white/10 pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-primary/50"
+              className="w-full h-9 rounded-full bg-foreground/[0.04] border border-white/10 pl-9 pr-4 text-sm focus:outline-none focus:border-primary/50"
             />
           </div>
           <div className="flex items-center gap-3 ml-auto">
@@ -368,8 +369,8 @@ export default function Leads() {
               pending={createLead.isPending}
               submitLabel="Add to pipeline"
               trigger={
-                <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-                  <Plus className="w-5 h-5" />
+                <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-4 h-9 text-sm shadow-md shadow-primary/20 gap-1.5 font-medium tracking-wide">
+                  <Plus className="w-4 h-4" />
                   New Lead
                 </Button>
               }
@@ -526,7 +527,7 @@ export default function Leads() {
               key={t.key}
               onClick={() => setTab(t.key)}
               className={cn(
-                "rounded-full px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors",
+                "rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wider transition-colors",
                 tab === t.key
                   ? "bg-primary text-white"
                   : "bg-foreground/[0.05] text-muted-foreground hover:text-foreground",
