@@ -98,58 +98,6 @@ const CANCEL_REASONS: { value: string; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
-function DealStageTracker({ stage }: { stage: string }) {
-  const allStages = ["desking", "committed", "delivered"];
-  if (stage === "cancelled" || stage === "lost") {
-    return (
-      <div className="flex items-center gap-2 mt-3 px-3 py-2 bg-destructive/10 border border-destructive/20 rounded-xl">
-        <Ban className="w-4 h-4 text-destructive" />
-        <span className="text-xs font-semibold uppercase tracking-widest text-destructive">
-          {STAGE_LABEL[stage]}
-        </span>
-      </div>
-    );
-  }
-
-  const activeIdx = allStages.indexOf(stage);
-
-  return (
-    <div className="mt-2 flex items-center justify-between relative">
-      <div className="absolute left-[15%] right-[15%] top-1/2 -translate-y-1/2 h-0.5 bg-border/40 rounded-full" />
-      {allStages.map((s, i) => {
-        const Icon = STAGE_ICONS[s] || CheckCircle2;
-        const isPast = i < activeIdx;
-        const isActive = i === activeIdx;
-
-        return (
-          <div key={s} className="relative flex flex-col items-center gap-1.5 z-10 w-1/3">
-            <div
-              className={cn(
-                "w-6 h-6 rounded-full flex items-center justify-center border-2 bg-card transition-colors",
-                isActive ? "border-primary text-primary shadow-[0_0_12px_rgba(169,113,66,0.3)]" : 
-                isPast ? "border-primary bg-primary text-primary-foreground" : 
-                "border-border/60 text-muted-foreground"
-              )}
-            >
-              <Icon className="w-3 h-3" />
-            </div>
-            <span
-              className={cn(
-                "text-[9px] uppercase tracking-widest font-semibold",
-                isActive ? "text-primary" : 
-                isPast ? "text-foreground" : 
-                "text-muted-foreground"
-              )}
-            >
-              {STAGE_LABEL[s]}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function Deals() {
   const { data: deals, isLoading } = useListDeals();
   const { data: gates } = useListGates({ status: "pending" });
@@ -761,7 +709,7 @@ export default function Deals() {
           return (
             <div
               key={stage}
-              className="w-[300px] shrink-0 flex flex-col rounded-2xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-3"
+              className="flex-1 min-w-[260px] flex flex-col rounded-2xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-3"
             >
               <div className="flex items-center justify-between mb-2.5 px-1.5">
                 <div className="flex items-center gap-2">
@@ -857,9 +805,7 @@ export default function Deals() {
                               {money.dual(deal.otdPrice)}
                             </div>
 
-                            <DealStageTracker stage={deal.stage} />
-
-                            <div className="space-y-1.5 text-sm font-medium text-muted-foreground pt-3 mt-3 border-t border-border/50">
+                            <div className="space-y-1.5 text-sm font-medium text-muted-foreground pt-2.5 mt-2.5 border-t border-border/50">
                               <div className="flex justify-between items-center">
                                 <span className="uppercase tracking-wider text-[10px]">
                                   MSRP
@@ -951,42 +897,41 @@ export default function Deals() {
                                 Waiting for Approvals
                               </div>
                             )}
-                            <>
-                                {canEditDeals && deal.stage === "desking" && (
+                            <div className="flex items-center gap-1.5">
+                              {canEditDeals && deal.stage === "desking" && (
+                                <Button
+                                  onClick={() => commitDeal(deal)}
+                                  disabled={updateDeal.isPending}
+                                  className="flex-1 text-[11px] font-bold uppercase tracking-widest text-primary-foreground bg-primary hover:bg-primary/90 transition-colors h-8 rounded-lg disabled:opacity-60 gap-1.5"
+                                >
+                                  Commit Deal <ArrowRight className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                              {!hasPendingGates && deal.stage === "committed" && (
+                                <Link href="/deliveries" className="flex-1">
                                   <Button
-                                    onClick={() => commitDeal(deal)}
-                                    disabled={updateDeal.isPending}
-                                    className="w-full text-[11px] font-bold uppercase tracking-widest text-primary-foreground bg-primary hover:bg-primary/90 transition-colors h-8 rounded-lg disabled:opacity-60 gap-1.5"
+                                    variant="secondary"
+                                    className="w-full text-[11px] font-bold uppercase tracking-widest h-8 rounded-lg gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary border-none"
                                   >
-                                    Commit Deal <ArrowRight className="w-3.5 h-3.5" />
+                                    Go to Deliveries <ArrowRight className="w-3.5 h-3.5" />
                                   </Button>
-                                )}
-                                {!hasPendingGates && deal.stage === "committed" && (
-                                  <Link href="/deliveries">
-                                    <Button
-                                      variant="secondary"
-                                      className="w-full text-[11px] font-bold uppercase tracking-widest h-8 rounded-lg gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary border-none"
-                                    >
-                                      Go to Deliveries <ArrowRight className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </Link>
-                                )}
-                                {deal.stage === "delivered" && (
-                                  <div className="py-1 flex items-center justify-center gap-2 text-emerald-500 font-medium text-xs">
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    Deal Completed
-                                  </div>
-                                )}
-                              </>
-
-                            {canEditDeals && (deal.stage === "desking" || deal.stage === "committed") && (
-                              <button
-                                onClick={() => setCancelDeal(deal)}
-                                className="w-full text-center text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-destructive transition-colors py-1 rounded-lg"
-                              >
-                                Cancel &amp; Refund
-                              </button>
-                            )}
+                                </Link>
+                              )}
+                              {deal.stage === "delivered" && (
+                                <div className="flex-1 py-1 flex items-center justify-center gap-2 text-emerald-500 font-medium text-xs">
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  Deal Completed
+                                </div>
+                              )}
+                              {canEditDeals && (deal.stage === "desking" || deal.stage === "committed") && (
+                                <button
+                                  onClick={() => setCancelDeal(deal)}
+                                  className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-destructive transition-colors px-2.5 h-8 rounded-lg border border-border/60 hover:border-destructive/40"
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </Card>
 
