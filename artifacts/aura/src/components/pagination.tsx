@@ -21,14 +21,23 @@ export function Pagination({
   page,
   pageCount,
   onPageChange,
+  pageSize,
+  pageSizeOptions = [10, 20, 30, 50],
+  onPageSizeChange,
 }: {
   page: number;
   pageCount: number;
   onPageChange: (page: number) => void;
+  pageSize?: number;
+  pageSizeOptions?: number[];
+  onPageSizeChange?: (size: number) => void;
 }) {
-  if (pageCount <= 1) return null;
+  const showSize = pageSize != null && onPageSizeChange != null;
+  if (pageCount <= 1 && !showSize) return null;
   return (
-    <div className="flex items-center justify-center gap-2 pt-2">
+    <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+      {pageCount > 1 && (
+      <>
       <Button
         variant="outline"
         size="sm"
@@ -70,6 +79,24 @@ export function Pagination({
       >
         Next
       </Button>
+      </>
+      )}
+      {showSize && (
+        <label className="ml-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          Per page
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            className="h-8 rounded-full bg-foreground/[0.04] border border-white/10 px-2.5 text-xs font-medium text-foreground focus:outline-none focus:border-primary/50"
+          >
+            {pageSizeOptions.map((n) => (
+              <option key={n} value={n} className="bg-background">
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
     </div>
   );
 }

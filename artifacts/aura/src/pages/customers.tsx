@@ -49,11 +49,13 @@ export default function Customers() {
 
   const comfortable = density === "comfortable";
 
-  const PAGE_SIZE = layout === "list" ? 25 : comfortable ? 12 : 20;
+  const [pageSize, setPageSize] = useState<number | null>(null);
+  const PAGE_SIZE =
+    pageSize ?? (layout === "list" ? 25 : comfortable ? 12 : 20);
   const [page, setPage] = useState(1);
   useEffect(() => {
     setPage(1);
-  }, [layout, density]);
+  }, [layout, density, pageSize]);
   const total = customers?.length ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -377,6 +379,8 @@ export default function Customers() {
         <Pagination
           page={safePage}
           pageCount={pageCount}
+          pageSize={PAGE_SIZE}
+          onPageSizeChange={setPageSize}
           onPageChange={(p) => {
             setPage(p);
             document
