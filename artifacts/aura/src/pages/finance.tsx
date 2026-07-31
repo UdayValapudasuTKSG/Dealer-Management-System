@@ -128,8 +128,8 @@ export default function Finance() {
       open={appDialogOpen}
       onOpenChange={setAppDialogOpen}
       trigger={
-        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-          <Plus className="w-5 h-5" />
+        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-4 h-9 text-sm shadow-md shadow-primary/20 gap-1.5 font-medium tracking-wide">
+          <Plus className="w-4 h-4" />
           New Application
         </Button>
       }
@@ -181,21 +181,20 @@ export default function Finance() {
   return (
     <>
     <PageHero
-
       eyebrow="Finance Desk"
       title="Finance"
       subtitle="Credit applications, lender routing, invoicing and settlements."
+      className="pb-3"
       action={tab === "applications" ? newApplicationDialog : undefined}
     />
-    <Page className="space-y-5">
-
-      <div className="flex items-center justify-between flex-wrap gap-4">
+    <Page className="space-y-4 pt-0">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex gap-1 bg-white/[0.03] border border-white/10 rounded-full p-1">
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`relative px-4 py-2 rounded-full text-sm font-medium tracking-wide transition-colors flex items-center gap-2 ${
+              className={`relative px-3 py-1.5 rounded-full text-sm font-medium tracking-wide transition-colors flex items-center gap-1.5 ${
                 tab === t.id ? "text-white" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -206,7 +205,7 @@ export default function Finance() {
                   transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
                 />
               )}
-              <t.icon className="w-4 h-4 relative z-10" />
+              <t.icon className="w-3.5 h-3.5 relative z-10" />
               <span className="relative z-10">{t.label}</span>
             </button>
           ))}
@@ -219,7 +218,7 @@ export default function Finance() {
             onDensityChange={setDensity}
           />
           {connector && (
-            <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground bg-white/[0.03] border border-white/10 rounded-full px-4 py-2">
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-widest text-muted-foreground bg-white/[0.03] border border-white/10 rounded-full px-3 py-1.5">
               <Wifi className={`w-3.5 h-3.5 ${connector.mode === "live" ? "text-emerald-400" : "text-amber-400"}`} />
               {connector.connector} LOS · {connector.mode === "live" ? "Live" : "Sandbox"}
             </div>
@@ -274,53 +273,53 @@ export default function Finance() {
       )}
 
       {tab === "applications" && layout !== "list" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
           {isLoading ? (
-            [...Array(6)].map((_, i) => <div key={i} className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />)
+            [...Array(6)].map((_, i) => <div key={i} className="h-48 bg-white/[0.05] rounded-2xl animate-pulse" />)
           ) : apps?.length === 0 ? (
             <p className="text-muted-foreground col-span-full py-12 text-center">No credit applications yet.</p>
           ) : (
             apps?.map((app, i) => (
               <motion.div key={app.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
                 <Card
-                  className="glass-panel border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl overflow-hidden group cursor-pointer"
+                  className="glass-panel border-none shadow-sm hover:shadow-xl transition-all duration-300 rounded-2xl overflow-hidden group cursor-pointer"
                   onClick={() => setDetailId(app.id)}
                 >
-                  <div className={`h-1.5 w-full ${["approved", "disbursed"].includes(app.status) ? "bg-primary" : "bg-white/10"}`} />
-                  <CardContent className="p-6 md:p-8">
-                    <div className="flex justify-between items-start mb-6">
-                      <div>
-                        <h3 className="font-bold text-2xl leading-tight mb-1 group-hover:text-primary transition-colors">{app.customerName}</h3>
-                        <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                          <Building className="w-4 h-4" />
+                  <div className={`h-1 w-full ${["approved", "disbursed"].includes(app.status) ? "bg-primary" : "bg-white/10"}`} />
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start mb-3 gap-2">
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-base leading-tight mb-0.5 truncate group-hover:text-primary transition-colors">{app.customerName}</h3>
+                        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                          <Building className="w-3.5 h-3.5" />
                           {app.lender || "Pending Lender"}
                         </div>
                       </div>
-                      <Badge className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest border-none ${statusBadgeClass(app.status)}`}>
+                      <Badge className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest border-none shrink-0 ${statusBadgeClass(app.status)}`}>
                         {FINANCE_STATUS_LABEL[app.status] ?? app.status}
                       </Badge>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4 py-6 border-y border-border/50">
+                    <div className="grid grid-cols-3 gap-3 py-3 border-y border-border/50">
                       <div>
-                        <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-1">Amount</div>
-                        <div className="font-light text-2xl tracking-tight">{money(app.amount)}</div>
+                        <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mb-0.5">Amount</div>
+                        <div className="font-light text-lg tracking-tight truncate">{money(app.amount)}</div>
                       </div>
                       <div>
-                        <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-1">Term</div>
-                        <div className="font-light text-2xl tracking-tight flex items-baseline gap-1">
-                          {app.termMonths} <span className="text-sm font-medium text-muted-foreground mb-1 uppercase tracking-widest">MO</span>
+                        <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mb-0.5">Term</div>
+                        <div className="font-light text-lg tracking-tight flex items-baseline gap-1">
+                          {app.termMonths} <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-widest">MO</span>
                         </div>
                       </div>
                       <div>
-                        <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-1">Rate</div>
-                        <div className="font-light text-2xl tracking-tight text-primary flex items-baseline gap-1">
-                          {app.apr} <span className="text-sm font-medium text-primary/60 mb-1 uppercase tracking-widest">APR</span>
+                        <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mb-0.5">Rate</div>
+                        <div className="font-light text-lg tracking-tight text-primary flex items-baseline gap-1">
+                          {app.apr} <span className="text-[10px] font-medium text-primary/60 uppercase tracking-widest">APR</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="pt-5 text-xs uppercase tracking-widest text-muted-foreground flex items-center justify-between">
+                    <div className="pt-3 text-[10px] uppercase tracking-widest text-muted-foreground flex items-center justify-between">
                       <span>{app.statusHistory.at(-1)?.note ? "Latest activity" : "Created"}</span>
                       <span>{formatGuyanaDate(app.statusHistory.at(-1)?.at ?? app.createdAt)}</span>
                     </div>
@@ -328,7 +327,7 @@ export default function Finance() {
                 </Card>
                 <AnimatePresence mode="popLayout">
                   {gatesForApp(app.id).map((gate) => (
-                    <div key={gate.id} className="mt-4">
+                    <div key={gate.id} className="mt-3">
                       <GateCard gate={gate} label={GATE_LABEL[gate.type]} showCustomerLink={false} />
                     </div>
                   ))}
@@ -340,7 +339,7 @@ export default function Finance() {
       )}
 
       {tab === "banks" && (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <div className="flex justify-end">
             <CreateRecordDialog
               title="Add Bank"
@@ -348,7 +347,7 @@ export default function Finance() {
               pending={createBank.isPending}
               submitLabel="Add bank"
               trigger={
-                <Button variant="outline" className="rounded-full gap-2 border-white/15">
+                <Button variant="outline" size="sm" className="rounded-full gap-1.5 border-white/15 h-9">
                   <Plus className="w-4 h-4" /> Add Bank
                 </Button>
               }
@@ -368,20 +367,60 @@ export default function Finance() {
               }}
             />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {layout === "list" ? (
+            <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 font-semibold">Bank</th>
+                    <th className="px-4 py-3 font-semibold hidden md:table-cell">Code</th>
+                    <th className="px-4 py-3 font-semibold text-right">Base APR</th>
+                    <th className="px-4 py-3 font-semibold text-right">Max Term</th>
+                    <th className="px-4 py-3 font-semibold hidden lg:table-cell">Contact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(banks ?? []).map((bank) => (
+                    <tr key={bank.id} className="border-b border-white/5 last:border-0">
+                      <td className={`px-4 font-medium ${compactRow}`}>
+                        {bank.name}
+                        <div className="text-xs text-muted-foreground font-normal">{bank.address ?? ""}</div>
+                      </td>
+                      <td className="px-4 py-2 font-mono text-xs text-muted-foreground hidden md:table-cell">{bank.code ?? "—"}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-primary font-semibold">{bank.baseApr != null ? `${bank.baseApr}%` : "—"}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{bank.maxTermMonths != null ? `${bank.maxTermMonths} mo` : "—"}</td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground hidden lg:table-cell">
+                        {[bank.contactPhone, bank.contactEmail].filter(Boolean).join(" · ") || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                  {(banks ?? []).length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground text-sm">No banks registered yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {banks?.map((bank, i) => (
               <motion.div key={bank.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
-                <Card className="glass-panel border-none rounded-3xl h-full">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="w-11 h-11 rounded-2xl bg-primary/10 flex items-center justify-center">
-                        <Landmark className="w-5 h-5 text-primary" />
+                <Card className="glass-panel border-none rounded-2xl h-full">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                          <Landmark className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-sm truncate">{bank.name}</h3>
+                          <p className="text-xs text-muted-foreground truncate">{bank.address ?? "—"}</p>
+                        </div>
                       </div>
-                      {bank.code && <span className="text-xs font-mono text-muted-foreground">{bank.code}</span>}
+                      {bank.code && <span className="text-xs font-mono text-muted-foreground shrink-0">{bank.code}</span>}
                     </div>
-                    <h3 className="font-bold text-lg mb-1">{bank.name}</h3>
-                    <p className="text-sm text-muted-foreground mb-4">{bank.address ?? "—"}</p>
-                    <div className="flex gap-6 text-sm">
+                    <div className="flex gap-5 text-sm border-t border-border/50 pt-3">
                       <div>
                         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Base APR</div>
                         <div className="text-primary font-semibold">{bank.baseApr != null ? `${bank.baseApr}%` : "—"}</div>
@@ -390,29 +429,30 @@ export default function Finance() {
                         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Max Term</div>
                         <div className="font-semibold">{bank.maxTermMonths != null ? `${bank.maxTermMonths} mo` : "—"}</div>
                       </div>
-                    </div>
-                    <div className="mt-4 text-xs text-muted-foreground space-y-0.5">
-                      {bank.contactPhone && <div>{bank.contactPhone}</div>}
-                      {bank.contactEmail && <div>{bank.contactEmail}</div>}
+                      <div className="ml-auto text-right text-xs text-muted-foreground space-y-0.5 min-w-0">
+                        {bank.contactPhone && <div className="truncate">{bank.contactPhone}</div>}
+                        {bank.contactEmail && <div className="truncate">{bank.contactEmail}</div>}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               </motion.div>
             ))}
           </div>
+          )}
         </div>
       )}
 
       {tab === "invoices" && (
-        <div className="space-y-6">
-          <div className="flex justify-end gap-3">
+        <div className="space-y-4">
+          <div className="flex justify-end gap-2">
             <CreateRecordDialog
               title="New Invoice"
               description="Issue an invoice to a customer."
               pending={createInvoice.isPending}
               submitLabel="Issue invoice"
               trigger={
-                <Button variant="outline" className="rounded-full gap-2 border-white/15">
+                <Button variant="outline" size="sm" className="rounded-full gap-1.5 border-white/15 h-9">
                   <Plus className="w-4 h-4" /> New Invoice
                 </Button>
               }
@@ -467,7 +507,7 @@ export default function Finance() {
               pending={createPayment.isPending}
               submitLabel="Record payment"
               trigger={
-                <Button className="bg-primary hover:bg-primary/90 text-white rounded-full gap-2">
+                <Button size="sm" className="bg-primary hover:bg-primary/90 text-white rounded-full gap-1.5 h-9">
                   <Plus className="w-4 h-4" /> Record Payment
                 </Button>
               }
@@ -525,13 +565,13 @@ export default function Finance() {
             />
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-4">Invoices</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-3">Invoices</h3>
               <div className="space-y-3">
                 {invoices?.length === 0 && <p className="text-sm text-muted-foreground italic">No invoices yet.</p>}
                 {invoices?.map((inv) => (
-                  <div key={inv.id} className="glass-panel rounded-2xl px-5 py-4 flex items-center gap-4">
+                  <div key={inv.id} className="glass-panel rounded-2xl px-4 py-3 flex items-center gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold flex items-center gap-2">
                         {inv.customerName}
@@ -566,11 +606,11 @@ export default function Finance() {
               </div>
             </div>
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-4">Payments</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-3">Payments</h3>
               <div className="space-y-3">
                 {payments?.length === 0 && <p className="text-sm text-muted-foreground italic">No payments recorded yet.</p>}
                 {payments?.map((p) => (
-                  <div key={p.id} className="glass-panel rounded-2xl px-5 py-4 flex items-center gap-4">
+                  <div key={p.id} className="glass-panel rounded-2xl px-4 py-3 flex items-center gap-4">
                     <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                       <CreditCard className="w-4 h-4 text-primary" />
                     </div>
@@ -591,13 +631,13 @@ export default function Finance() {
       )}
 
       {tab === "receipts" && (
-        <div className="space-y-3 max-w-3xl">
+        <div className="space-y-2.5 max-w-3xl">
           {receipts?.length === 0 && <p className="text-sm text-muted-foreground italic">No receipts issued yet — receipts are generated automatically when payments are recorded.</p>}
           {receipts?.map((r) => (
             <button
               key={r.id}
               onClick={() => setReceiptId(r.id)}
-              className="w-full text-left glass-panel rounded-2xl px-5 py-4 flex items-center gap-4 hover:border-primary/40 transition-colors"
+              className="w-full text-left glass-panel rounded-2xl px-4 py-3 flex items-center gap-4 hover:border-primary/40 transition-colors"
             >
               <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
                 <ReceiptIcon className="w-4 h-4 text-emerald-400" />
@@ -620,12 +660,12 @@ export default function Finance() {
       <ReceiptDetailDialog receiptId={receiptId} onClose={() => setReceiptId(null)} />
 
       {tab === "outstanding" && (
-        <div className="space-y-3 max-w-4xl">
+        <div className="space-y-2.5 max-w-4xl">
           {outstanding?.length === 0 && <p className="text-sm text-muted-foreground italic">Nothing outstanding — all invoices are settled.</p>}
           {outstanding?.map((o) => {
             const pct = o.amount > 0 ? Math.min((o.paidAmount / o.amount) * 100, 100) : 0;
             return (
-              <div key={o.invoiceId} className="glass-panel rounded-2xl px-5 py-4">
+              <div key={o.invoiceId} className="glass-panel rounded-2xl px-4 py-3">
                 <div className="flex items-center gap-4 mb-3">
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold">{o.customerName}</div>
