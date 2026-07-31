@@ -175,12 +175,12 @@ export function CreateRecordDialog({
             </DialogDescription>
           )}
         </DialogHeader>
-        <div className="grid grid-cols-3 gap-x-3 gap-y-2.5 py-1">
+        <div className="flex flex-wrap gap-x-3 gap-y-2.5 py-1">
           {fields.map((f, i) => (
             <Fragment key={f.name}>
             {f.section && f.section !== fields[i - 1]?.section && (
               <div
-                className={`col-span-3 flex items-center gap-3 ${i > 0 ? "mt-1" : ""}`}
+                className={`w-full flex items-center gap-3 ${i > 0 ? "mt-1" : ""}`}
               >
                 <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary/80">
                   {f.section}
@@ -189,7 +189,11 @@ export function CreateRecordDialog({
               </div>
             )}
             <div
-              className={`flex flex-col gap-1 ${f.span === "half" ? "col-span-1" : "col-span-3"}`}
+              className={`flex flex-col gap-1 ${
+                f.span === "half"
+                  ? "flex-1 basis-[30%] min-w-[140px]"
+                  : "w-full"
+              }`}
             >
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 {f.label}
