@@ -29,7 +29,6 @@ import CustomerDetail from "@/pages/customer-detail";
 import LeadDetail from "@/pages/lead-detail";
 import VehicleDetailPage from "@/pages/vehicle-detail";
 import TeamProfile from "@/pages/team-profile";
-import SettingsHub from "@/pages/settings-hub";
 import SettingsUsers from "@/pages/settings-users";
 import SettingsEmail from "@/pages/settings-email";
 import SettingsRoles from "@/pages/settings-roles";
@@ -312,9 +311,7 @@ function AppRoutes() {
                   </RequireSettings>
                 </Route>
                 <Route path="/settings">
-                  <RequireSettings>
-                    <SettingsHub />
-                  </RequireSettings>
+                  <Redirect to="/settings/users" replace />
                 </Route>
                 <Route component={NotFound} />
               </Switch>
