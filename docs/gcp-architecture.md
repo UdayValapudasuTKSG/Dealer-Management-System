@@ -21,7 +21,7 @@ Traffic profile: Guyana-only users, ~1,000 transactions/day (low volume — size
   with Docker via container-optimized OS, or a hardened Debian image + systemd).
   - PROD: `e2-standard-2`, min 2 / max 6, autoscale on CPU 60% + LB serving capacity, multi-zone
     (southamerica-east1-b/c) for zonal-failure tolerance.
-  - DEV: `e2-small`, min 1 / max 2, single zone, can be scheduled off outside working hours.
+  - DEV: `e2-standard-2` (medium), min 2 / max 4, multi-zone — sized for active product development with high uptime; keep autoscaling headroom rather than scheduling it off.
 - **No public IPs on any VM.** Egress via **Cloud NAT**; admin access via **IAP TCP tunneling**
   (no SSH ports open, no bastion needed).
 - Frontends (AURA/Realm static builds) served from **Cloud Storage + Cloud CDN** behind the same
@@ -124,7 +124,7 @@ At 1,000 TPM/day these are the smallest sensible tiers — the design scales 100
 
 | Dimension | DEV (`aura-dev`) | PROD (`aura-prod`) |
 |---|---|---|
-| VMs | e2-small ×1–2, single zone, auto-shutdown nights | e2-standard-2 ×2–6, multi-zone MIG, Shielded |
+| VMs | e2-standard-2 ×2–4, multi-zone MIG | e2-standard-2 ×2–6, multi-zone MIG, Shielded |
 | Cloud SQL | single-zone small, 7-day backup | Regional HA, PITR, 30-day + cross-region backups, CMEK |
 | Firestore | own DB, relaxed TTLs | TTL + daily backups, VPC-SC perimeter |
 | Redis | Basic 1 GB | Standard (HA) 1 GB, AUTH + TLS |
@@ -132,7 +132,7 @@ At 1,000 TPM/day these are the smallest sensible tiers — the design scales 100
 | IAP on Realm | optional | required |
 | Access | devs deploy freely via CI | CI-only deploys, no human standing access, Binary Auth |
 | Domains | `dev.yourdomain.gy` | `app.yourdomain.gy` (+ `realm.` subdomain) |
-| Est. monthly cost | ~US$150–250 | ~US$600–900 |
+| Est. monthly cost | ~US$300–450 | ~US$600–900 |
 
 ## 10. CI/CD & IaC
 
