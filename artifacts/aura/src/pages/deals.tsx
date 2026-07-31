@@ -114,7 +114,7 @@ function DealStageTracker({ stage }: { stage: string }) {
   const activeIdx = allStages.indexOf(stage);
 
   return (
-    <div className="mt-3 flex items-center justify-between relative">
+    <div className="mt-2 flex items-center justify-between relative">
       <div className="absolute left-[15%] right-[15%] top-1/2 -translate-y-1/2 h-0.5 bg-border/40 rounded-full" />
       {allStages.map((s, i) => {
         const Icon = STAGE_ICONS[s] || CheckCircle2;
@@ -125,17 +125,17 @@ function DealStageTracker({ stage }: { stage: string }) {
           <div key={s} className="relative flex flex-col items-center gap-1.5 z-10 w-1/3">
             <div
               className={cn(
-                "w-7 h-7 rounded-full flex items-center justify-center border-2 bg-card transition-colors",
+                "w-6 h-6 rounded-full flex items-center justify-center border-2 bg-card transition-colors",
                 isActive ? "border-primary text-primary shadow-[0_0_12px_rgba(169,113,66,0.3)]" : 
                 isPast ? "border-primary bg-primary text-primary-foreground" : 
                 "border-border/60 text-muted-foreground"
               )}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className="w-3 h-3" />
             </div>
             <span
               className={cn(
-                "text-[10px] uppercase tracking-widest font-semibold",
+                "text-[9px] uppercase tracking-widest font-semibold",
                 isActive ? "text-primary" : 
                 isPast ? "text-foreground" : 
                 "text-muted-foreground"
@@ -496,7 +496,7 @@ export default function Deals() {
       subtitle="Bespoke negotiation and closing."
     />
     <Page fill>
-      <div className="mb-8 shrink-0 flex items-center justify-end gap-3">
+      <div className="mb-4 shrink-0 flex items-center justify-end gap-3">
           <ViewControls
             layout={layout}
             onLayoutChange={setLayout}
@@ -512,8 +512,8 @@ export default function Deals() {
             open={deskOpen}
             onOpenChange={handleOpenChange}
             trigger={
-              <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-                <Plus className="w-5 h-5" />
+              <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-4 h-9 text-sm shadow-md shadow-primary/20 gap-1.5 font-medium tracking-wide">
+                <Plus className="w-4 h-4" />
                 Desk New Deal
               </Button>
             }
@@ -755,32 +755,32 @@ export default function Deals() {
           </table>
         </div>
       ) : (
-      <div className="flex gap-6 overflow-x-auto pb-4 flex-1 hide-scrollbar -mx-1 px-1">
+      <div className="flex gap-4 overflow-x-auto pb-4 flex-1 hide-scrollbar -mx-1 px-1">
         {stages.map((stage, stageIndex) => {
           const stageDeals = deals?.filter((d) => d.stage === stage) ?? [];
           return (
             <div
               key={stage}
-              className="w-[360px] shrink-0 flex flex-col rounded-3xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-4"
+              className="w-[300px] shrink-0 flex flex-col rounded-2xl bg-white/[0.03] backdrop-blur-2xl border border-white/10 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-3"
             >
-              <div className="flex items-center justify-between mb-4 px-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+              <div className="flex items-center justify-between mb-2.5 px-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center">
                     {(() => {
                       const Icon = STAGE_ICONS[stage] || CheckCircle2;
-                      return <Icon className="w-4 h-4" />;
+                      return <Icon className="w-3.5 h-3.5" />;
                     })()}
                   </div>
-                  <h3 className="font-semibold text-sm uppercase tracking-widest text-foreground">
+                  <h3 className="font-semibold text-xs uppercase tracking-widest text-foreground">
                     {STAGE_LABEL[stage] ?? stage}
                   </h3>
                 </div>
-                <span className="bg-primary/10 text-primary min-w-7 h-7 px-2 rounded-full text-xs font-bold flex items-center justify-center">
+                <span className="bg-primary/10 text-primary min-w-6 h-6 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center">
                   {stageDeals.length}
                 </span>
               </div>
 
-              <div className="space-y-4 flex-1 overflow-y-auto pr-1.5 -mr-1.5 hide-scrollbar">
+              <div className="space-y-3 flex-1 overflow-y-auto pr-1.5 -mr-1.5 hide-scrollbar">
                 {isLoading ? (
                   [1].map((i) => (
                     <div
@@ -807,17 +807,17 @@ export default function Deals() {
                         <Card className={`border shadow-sm hover:shadow-xl hover:shadow-primary/10 hover:border-primary/40 transition-all duration-300 rounded-[1.25rem] bg-white/[0.04] hover:bg-white/[0.07] overflow-hidden group flex flex-col ${
                           isFocused(deal.id) ? "border-primary ring-2 ring-primary/50" : "border-white/10"
                         }`}>
-                          <CardContent className="p-5 flex-1">
-                            <div className="flex justify-between items-start mb-4 gap-3">
+                          <CardContent className="p-3.5 flex-1">
+                            <div className="flex justify-between items-start mb-2 gap-2">
                               {deal.customerId ? (
                                 <Link
                                   href={`/customers/${deal.customerId}`}
-                                  className="font-semibold text-lg leading-tight truncate hover:text-primary transition-colors"
+                                  className="font-semibold text-sm leading-tight truncate hover:text-primary transition-colors"
                                 >
                                   {deal.customerName || "Unknown Customer"}
                                 </Link>
                               ) : (
-                                <div className="font-semibold text-lg leading-tight truncate">
+                                <div className="font-semibold text-sm leading-tight truncate">
                                   {deal.customerName || "Unknown Customer"}
                                 </div>
                               )}
@@ -835,9 +835,9 @@ export default function Deals() {
                                         ? "Change lead link"
                                         : "Attach to lead"
                                     }
-                                    className="w-8 h-8 rounded-full bg-foreground/[0.05] flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                    className="w-6 h-6 rounded-full bg-foreground/[0.05] flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                                   >
-                                    <Link2 className="w-4 h-4" />
+                                    <Link2 className="w-3.5 h-3.5" />
                                   </button>
                                 )}
                               </div>
@@ -846,20 +846,20 @@ export default function Deals() {
                             {deal.leadId != null && (
                               <Link
                                 href={`/lead/${deal.leadId}`}
-                                className="inline-flex items-center gap-1.5 mb-4 text-xs font-medium text-primary bg-primary/10 rounded-full px-2.5 py-1 hover:bg-primary/15 transition-colors"
+                                className="inline-flex items-center gap-1.5 mb-2 text-[11px] font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5 hover:bg-primary/15 transition-colors"
                               >
                                 <User className="w-3 h-3" />
                                 {leadName(deal.leadId)}
                               </Link>
                             )}
 
-                            <div className="font-light text-3xl mb-1 tracking-tight text-primary">
+                            <div className="font-light text-lg mb-0.5 tracking-tight text-primary truncate">
                               {money.dual(deal.otdPrice)}
                             </div>
 
                             <DealStageTracker stage={deal.stage} />
 
-                            <div className="space-y-2 text-sm font-medium text-muted-foreground pt-5 mt-5 border-t border-border/50">
+                            <div className="space-y-1.5 text-sm font-medium text-muted-foreground pt-3 mt-3 border-t border-border/50">
                               <div className="flex justify-between items-center">
                                 <span className="uppercase tracking-wider text-[10px]">
                                   MSRP
@@ -944,7 +944,7 @@ export default function Deals() {
                           </CardContent>
 
                           {/* Action Footer */}
-                          <div className="p-3 bg-white/[0.02] border-t border-border/50 flex flex-col gap-2">
+                          <div className="p-2 bg-white/[0.02] border-t border-border/50 flex flex-col gap-1">
                             {hasPendingGates && (
                               <div className="py-1 flex items-center justify-center gap-2 text-amber-500 font-medium text-xs">
                                 <Clock className="w-4 h-4" />
@@ -956,23 +956,23 @@ export default function Deals() {
                                   <Button
                                     onClick={() => commitDeal(deal)}
                                     disabled={updateDeal.isPending}
-                                    className="w-full text-xs font-bold uppercase tracking-widest text-primary-foreground bg-primary hover:bg-primary/90 transition-colors h-10 rounded-xl disabled:opacity-60 gap-2"
+                                    className="w-full text-[11px] font-bold uppercase tracking-widest text-primary-foreground bg-primary hover:bg-primary/90 transition-colors h-8 rounded-lg disabled:opacity-60 gap-1.5"
                                   >
-                                    Commit Deal <ArrowRight className="w-4 h-4" />
+                                    Commit Deal <ArrowRight className="w-3.5 h-3.5" />
                                   </Button>
                                 )}
                                 {!hasPendingGates && deal.stage === "committed" && (
                                   <Link href="/deliveries">
                                     <Button
                                       variant="secondary"
-                                      className="w-full text-xs font-bold uppercase tracking-widest h-10 rounded-xl gap-2 bg-primary/10 hover:bg-primary/20 text-primary border-none"
+                                      className="w-full text-[11px] font-bold uppercase tracking-widest h-8 rounded-lg gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary border-none"
                                     >
-                                      Go to Deliveries <ArrowRight className="w-4 h-4" />
+                                      Go to Deliveries <ArrowRight className="w-3.5 h-3.5" />
                                     </Button>
                                   </Link>
                                 )}
                                 {deal.stage === "delivered" && (
-                                  <div className="py-2 flex items-center justify-center gap-2 text-emerald-500 font-medium text-xs">
+                                  <div className="py-1 flex items-center justify-center gap-2 text-emerald-500 font-medium text-xs">
                                     <CheckCircle2 className="w-4 h-4" />
                                     Deal Completed
                                   </div>
@@ -982,7 +982,7 @@ export default function Deals() {
                             {canEditDeals && (deal.stage === "desking" || deal.stage === "committed") && (
                               <button
                                 onClick={() => setCancelDeal(deal)}
-                                className="w-full text-center text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-destructive transition-colors py-2 rounded-xl"
+                                className="w-full text-center text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hover:text-destructive transition-colors py-1 rounded-lg"
                               >
                                 Cancel &amp; Refund
                               </button>
