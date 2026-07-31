@@ -113,11 +113,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient, me?.isSuperAdmin],
   );
 
+  // "view" is the master visibility switch for a module — it must be granted
+  // explicitly and is NOT implied by "admin". Other categories are still
+  // implied by "admin".
   const can = (module: string, category: string) =>
     !!me?.permissions?.some(
       (p) =>
         p.module === module &&
-        (p.category === category || p.category === "admin"),
+        (p.category === category ||
+          (p.category === "admin" && category !== "view")),
     );
 
   // Missing key = enabled (per-dealer entitlements are deny-list flags).

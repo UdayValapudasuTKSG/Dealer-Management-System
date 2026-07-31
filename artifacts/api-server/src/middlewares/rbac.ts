@@ -647,6 +647,14 @@ export function hasPermission(
   module: PermissionModule | string,
   category: PermissionCategory | string,
 ): boolean {
+  // "view" is the master visibility switch for a module: it must be granted
+  // explicitly and is NOT implied by "admin". All other categories are still
+  // implied by "admin".
+  if (category === "view") {
+    return user.permissions.some(
+      (p) => p.module === module && p.category === "view",
+    );
+  }
   return user.permissions.some(
     (p) =>
       p.module === module && (p.category === category || p.category === "admin"),

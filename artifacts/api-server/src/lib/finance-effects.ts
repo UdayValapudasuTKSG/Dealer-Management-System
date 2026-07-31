@@ -46,7 +46,8 @@ async function financeUserIds(dealerId: number): Promise<number[]> {
       and(
         eq(dealerUsersTable.dealerId, dealerId),
         eq(rolePermissionsTable.module, "finance"),
-        inArray(rolePermissionsTable.category, ["view", "admin"]),
+        // view is the explicit visibility switch — admin does not imply it
+        eq(rolePermissionsTable.category, "view"),
         eq(usersTable.status, "active"),
       ),
     );

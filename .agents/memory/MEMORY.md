@@ -8,6 +8,7 @@
 - [Anthropic SSE chat](anthropic-sse-chat.md) — correctness rules for the streaming AI chat (server SSE + client fetch stream, persist-on-abort).
 - [Drizzle date + Zod coercion](drizzle-date-zod.md) — `date({mode:"string"})` columns break inserts when Orval Zod coerces to Date; convert to YYYY-MM-DD before insert/update.
 - [AURA dashboard conventions](aura-dashboard.md) — non-obvious KPI semantics (percentages pre-scaled 0–100, monthlyRevenue, server-side aggregates).
+- [RBAC view is explicit](rbac-view-explicit.md) — "view" is a master visibility switch NOT implied by "admin"; visibility checks and notification recipient queries must test explicit view.
 - [RBAC roles seed can get wiped](rbac-seed-wipe.md) — blanket 403s for everyone usually means the roles table is empty (drizzle push wiped seed, FK nulled role_ids); re-seed + restore roles.
 - [Drizzle push NOT NULL columns](drizzle-push-notnull-additive.md) — push prompts/truncates on new NOT NULL columns in populated tables; pre-migrate additively via SQL, then push applies clean.
 - [Webhook signature testing](webhook-signature-testing.md) — test signed webhooks via a dummy-secret second server instance; background procs die between bash calls, so start+curl+kill in one command.

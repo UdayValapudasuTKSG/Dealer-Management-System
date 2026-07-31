@@ -19,7 +19,9 @@ import {
 export async function usersWithPermission(
   dealerId: number,
   module: PermissionModule,
-  categories: string[] = ["view", "admin"],
+  // "view" is the master visibility switch — admin does NOT imply view, so
+  // module-scoped notifications go only to roles with an explicit view grant.
+  categories: string[] = ["view"],
 ): Promise<number[]> {
   const rows = await db
     .select({ id: usersTable.id })
