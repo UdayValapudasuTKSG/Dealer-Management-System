@@ -178,7 +178,7 @@ function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
     { name: "model", label: "Model", type: "text", required: true, span: "half", placeholder: "i7", defaultValue: existing?.model },
     { name: "trim", label: "Trim", type: "text", span: "half", placeholder: "xDrive60 M Sport", defaultValue: existing?.trim ?? undefined },
     { name: "year", label: "Year", type: "number", required: true, span: "half", placeholder: "2026", defaultValue: existing ? String(existing.year) : undefined },
-    { name: "vin", label: "VIN (17 characters)", type: "text", span: "half", placeholder: "WBY73AW0XPCK00000", defaultValue: existing?.vin ?? undefined },
+    { name: "vin", label: "VIN (17 characters)", type: "text", span: "half", placeholder: "WBY73AW0XPCK00000", defaultValue: existing?.vin ?? undefined, validate: (v) => (v.length === 17 ? null : "VIN must be exactly 17 characters") },
     ...(divisions && divisions.length > 0
       ? [
           {
@@ -197,8 +197,8 @@ function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
           } as FieldDef,
         ]
       : []),
-    { name: "engineNumber", label: "Engine Number (17 characters)", type: "text", span: "half", placeholder: "ENG1234567890ABCD", defaultValue: existing?.engineNumber ?? undefined },
-    { name: "registration", label: "Registration (e.g. PAB1234)", type: "text", span: "half", placeholder: "PAB1234", defaultValue: existing?.registration ?? undefined },
+    { name: "engineNumber", label: "Engine Number (17 characters)", type: "text", span: "half", placeholder: "ENG1234567890ABCD", defaultValue: existing?.engineNumber ?? undefined, validate: (v) => (v.length === 17 ? null : "Engine number must be exactly 17 characters") },
+    { name: "registration", label: "Registration (e.g. PAB1234)", type: "text", span: "half", placeholder: "PAB1234", defaultValue: existing?.registration ?? undefined, validate: (v) => (/^[A-Z]{3}[0-9]{1,4}$/.test(v) ? null : "Format: 3 letters + 1–4 digits, e.g. PAB1234") },
     { name: "price", label: "Price ($)", type: "number", required: true, span: "half", placeholder: "125000", defaultValue: existing ? String(existing.price) : undefined },
     {
       name: "powertrain",
@@ -226,7 +226,7 @@ function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
       defaultValue: existing?.bodyType,
       options: bodyOptions,
     },
-    { name: "engine", label: "Engine # (17 characters)", type: "text", span: "half", placeholder: "ENG0000000PCK0001", defaultValue: existing?.engine ?? undefined },
+    { name: "engine", label: "Engine # (17 characters)", type: "text", span: "half", placeholder: "ENG0000000PCK0001", defaultValue: existing?.engine ?? undefined, validate: (v) => (v.length === 17 ? null : "Engine number must be exactly 17 characters") },
     { name: "transmission", label: "Transmission", type: "text", span: "half", placeholder: "8-speed automatic", defaultValue: existing?.transmission ?? undefined },
     {
       name: "status",

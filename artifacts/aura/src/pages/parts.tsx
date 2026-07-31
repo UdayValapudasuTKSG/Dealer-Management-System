@@ -344,8 +344,8 @@ function CreateSupplierDialog() {
       fields={[
         { name: "name", label: "Company", type: "text", required: true, span: "full", placeholder: "Bosch Guyana Ltd" },
         { name: "contactName", label: "Contact", type: "text", span: "half" },
-        { name: "email", label: "Email", type: "text", span: "half" },
-        { name: "phone", label: "Phone", type: "text", span: "half" },
+        { name: "email", label: "Email", type: "email", span: "half" },
+        { name: "phone", label: "Phone", type: "phone", span: "half" },
       ]}
       onSubmit={async (values) => {
         await create.mutateAsync({ data: values as never });

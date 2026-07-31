@@ -357,8 +357,8 @@ export default function Finance() {
                 { name: "code", label: "Code", type: "text", span: "half", placeholder: "DBL" },
                 { name: "baseApr", label: "Base APR (%)", type: "number", span: "half", placeholder: "8.5" },
                 { name: "maxTermMonths", label: "Max term (months)", type: "number", span: "half", placeholder: "72" },
-                { name: "contactPhone", label: "Phone", type: "text", span: "half" },
-                { name: "contactEmail", label: "Email", type: "text", span: "full" },
+                { name: "contactPhone", label: "Phone", type: "phone", span: "half" },
+                { name: "contactEmail", label: "Email", type: "email", span: "full" },
                 { name: "address", label: "Address", type: "text", span: "full" },
               ]}
               onSubmit={async (values) => {

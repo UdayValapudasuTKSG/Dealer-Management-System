@@ -68,8 +68,8 @@ export function ProfileTab({ customer }: { customer: Customer }) {
 
   const editFields: FieldDef[] = [
     { name: "name", label: "Full name", type: "text", required: true, span: "full", defaultValue: customer.name },
-    { name: "email", label: "Email", type: "text", span: "half", defaultValue: customer.email ?? "" },
-    { name: "phone", label: "Phone", type: "text", span: "half", defaultValue: customer.phone ?? "" },
+    { name: "email", label: "Email", type: "email", span: "half", defaultValue: customer.email ?? "" },
+    { name: "phone", label: "Phone", type: "phone", span: "half", defaultValue: customer.phone ?? "" },
     { name: "whatsapp", label: "WhatsApp", type: "text", span: "half", defaultValue: customer.whatsapp ?? "" },
     { name: "dateOfBirth", label: "Date of birth", type: "date", span: "half", defaultValue: customer.dateOfBirth ?? "" },
     { name: "occupation", label: "Occupation", type: "text", span: "half", defaultValue: customer.occupation ?? "" },

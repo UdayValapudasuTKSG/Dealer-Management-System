@@ -472,8 +472,8 @@ export default function Leads() {
                 },
                 { name: "address", label: "Address", type: "text", span: "full", placeholder: "Optional — Lot 12 Main Street, Georgetown" },
                 { name: "preferredBranch", label: "Preferred branch", type: "text", span: "half", placeholder: "Optional" },
-                { name: "email", label: "Email", type: "text", span: "half", placeholder: "kojo@email.com" },
-                { name: "phone", label: "Phone", type: "text", span: "half", placeholder: "+233 …" },
+                { name: "email", label: "Email", type: "email", span: "half", placeholder: "kojo@email.com" },
+                { name: "phone", label: "Phone", type: "phone", span: "half", placeholder: "+233 …" },
                 { name: "notes", label: "Notes", type: "textarea", span: "full", placeholder: "What are they looking for?" },
               ]}
               onSubmit={async (values) => {

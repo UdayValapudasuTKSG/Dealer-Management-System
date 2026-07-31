@@ -558,14 +558,14 @@ function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
     {
       name: "email",
       label: "Email",
-      type: "text",
+      type: "email",
       span: "half",
       defaultValue: lead.email ?? undefined,
     },
     {
       name: "phone",
       label: "Phone",
-      type: "text",
+      type: "phone",
       span: "half",
       defaultValue: lead.phone ?? undefined,
     },

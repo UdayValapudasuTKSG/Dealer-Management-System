@@ -24,7 +24,15 @@ import { Loader2, Sparkles } from "lucide-react";
 export type FieldDef = {
   name: string;
   label: string;
-  type: "text" | "number" | "select" | "date" | "textarea" | "custom";
+  type:
+    | "text"
+    | "number"
+    | "select"
+    | "date"
+    | "textarea"
+    | "custom"
+    | "email"
+    | "phone";
   required?: boolean;
   placeholder?: string;
   options?: { value: string; label: string }[];
@@ -34,7 +42,43 @@ export type FieldDef = {
   /** Optional observer so pages can react to a field change (e.g. show a
    * dependent field or prefill sibling fields via setField). */
   onChange?: (value: string, setField: (name: string, value: string) => void) => void;
+  /** Optional custom validator; return an error message or null. Runs after
+   * the built-in type checks. */
+  validate?: (value: string) => string | null;
+  /** For number fields: lower/upper bounds. */
+  min?: number;
+  max?: number;
 };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PHONE_RE = /^\+?[0-9()\-\s]{7,20}$/;
+
+/** Built-in per-type validation. Empty values are only an error when the
+ * field is required (blank optional fields are always fine). */
+export function fieldError(f: FieldDef, raw: string | undefined): string | null {
+  const value = (raw ?? "").trim();
+  if (!value) return f.required ? `${f.label} is required` : null;
+  switch (f.type) {
+    case "email":
+      if (!EMAIL_RE.test(value)) return "Enter a valid email address";
+      break;
+    case "phone":
+      if (!PHONE_RE.test(value)) return "Enter a valid phone number";
+      break;
+    case "number": {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return "Enter a valid number";
+      if (f.min !== undefined && n < f.min) return `Must be at least ${f.min}`;
+      if (f.max !== undefined && n > f.max) return `Must be at most ${f.max}`;
+      break;
+    }
+    case "date":
+      if (Number.isNaN(new Date(value).getTime()))
+        return "Enter a valid date";
+      break;
+  }
+  return f.validate?.(value) ?? null;
+}
 
 type CreateRecordDialogProps = {
   trigger: ReactNode;
@@ -69,12 +113,14 @@ export function CreateRecordDialog({
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(fields.map((f) => [f.name, f.defaultValue ?? ""])),
   );
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (open) {
       setValues(
         Object.fromEntries(fields.map((f) => [f.name, f.defaultValue ?? ""])),
       );
+      setTouched({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -87,16 +133,27 @@ export function CreateRecordDialog({
     fields.find((f) => f.name === name)?.onChange?.(value, setField);
   };
 
+  const errors = Object.fromEntries(
+    fields.map((f) => [f.name, fieldError(f, values[f.name])]),
+  ) as Record<string, string | null>;
+  const hasErrors = fields.some((f) => errors[f.name] !== null);
+
   const handleSubmit = async () => {
+    if (hasErrors) {
+      // Reveal every problem at once instead of failing silently.
+      setTouched(Object.fromEntries(fields.map((f) => [f.name, true])));
+      return;
+    }
     const payload: Record<string, unknown> = {};
     for (const f of fields) {
       const raw = values[f.name];
       if (raw === undefined || raw === "") continue;
-      payload[f.name] = f.type === "number" ? Number(raw) : raw;
+      payload[f.name] = f.type === "number" ? Number(raw) : raw.trim();
     }
     await onSubmit(payload);
     setOpen(false);
     setValues(Object.fromEntries(fields.map((f) => [f.name, f.defaultValue ?? ""])));
+    setTouched({});
   };
 
   const missingRequired = fields.some(
@@ -145,16 +202,46 @@ export function CreateRecordDialog({
                   value={values[f.name]}
                   placeholder={f.placeholder}
                   onChange={(e) => set(f.name, e.target.value)}
-                  className="bg-white/[0.04] border-white/10 min-h-[72px]"
+                  onBlur={() => setTouched((t) => ({ ...t, [f.name]: true }))}
+                  className={`bg-white/[0.04] min-h-[72px] ${
+                    touched[f.name] && errors[f.name]
+                      ? "border-red-500/60 focus-visible:ring-red-500/30"
+                      : "border-white/10"
+                  }`}
                 />
               ) : (
                 <Input
-                  type={f.type === "number" ? "number" : f.type === "date" ? "date" : "text"}
+                  type={
+                    f.type === "number"
+                      ? "number"
+                      : f.type === "date"
+                        ? "date"
+                        : f.type === "email"
+                          ? "email"
+                          : f.type === "phone"
+                            ? "tel"
+                            : "text"
+                  }
+                  inputMode={
+                    f.type === "number"
+                      ? "decimal"
+                      : f.type === "phone"
+                        ? "tel"
+                        : undefined
+                  }
                   value={values[f.name]}
                   placeholder={f.placeholder}
                   onChange={(e) => set(f.name, e.target.value)}
-                  className="bg-white/[0.04] border-white/10"
+                  onBlur={() => setTouched((t) => ({ ...t, [f.name]: true }))}
+                  className={`bg-white/[0.04] ${
+                    touched[f.name] && errors[f.name]
+                      ? "border-red-500/60 focus-visible:ring-red-500/30"
+                      : "border-white/10"
+                  }`}
                 />
+              )}
+              {touched[f.name] && errors[f.name] && (
+                <p className="text-xs text-red-400">{errors[f.name]}</p>
               )}
             </div>
           ))}
