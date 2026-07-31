@@ -23,6 +23,13 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
@@ -359,47 +366,59 @@ export default function Inventory() {
       <div className="w-full px-5 md:px-8 pb-8 space-y-6">
         {/* Toolbar: body/powertrain/division filters, count, view controls, admin actions */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-5">
-          <div className="flex flex-wrap items-center gap-2">
-            {bodyTypes.map((bt) => (
-              <FilterChip
-                key={bt}
-                active={body === bt}
-                onClick={() => setBody(bt)}
-                label={bt === "all" ? "All" : bt}
-              />
-            ))}
-            {powertrains.length > 1 && (
-              <span className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
+          <div className="flex flex-wrap items-center gap-3">
+            <Select value={body} onValueChange={setBody}>
+              <SelectTrigger className="w-[160px] h-10 rounded-full border-white/15 bg-foreground/[0.03] px-4">
+                <SelectValue placeholder="Body type" />
+              </SelectTrigger>
+              <SelectContent>
+                {bodyTypes.map((bt) => (
+                  <SelectItem key={bt} value={bt}>
+                    {bt === "all" ? "All body types" : bt}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={powertrain} onValueChange={setPowertrain}>
+              <SelectTrigger className="w-[170px] h-10 rounded-full border-white/15 bg-foreground/[0.03] px-4">
+                <SelectValue placeholder="Powertrain" />
+              </SelectTrigger>
+              <SelectContent>
+                {powertrains.map((pt) => (
+                  <SelectItem key={pt} value={pt}>
+                    {pt === "all" ? "All powertrains" : powertrainLabel(pt)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(divisions ?? []).length > 0 && (
+              <Select value={division} onValueChange={setDivision}>
+                <SelectTrigger className="w-[170px] h-10 rounded-full border-white/15 bg-foreground/[0.03] px-4">
+                  <SelectValue placeholder="Division" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All divisions</SelectItem>
+                  {(divisions ?? []).map((d) => (
+                    <SelectItem key={d.id} value={String(d.id)}>
+                      {d.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
-            {powertrains.map((pt) => (
-              <FilterChip
-                key={pt}
-                active={powertrain === pt}
-                onClick={() => setPowertrain(pt)}
-                label={pt === "all" ? "All powertrains" : powertrainLabel(pt)}
-                subtle
-              />
-            ))}
-            {(divisions?.length ?? 0) > 0 && (
-              <span className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
+            {(body !== "all" || powertrain !== "all" || division !== "all") && (
+              <button
+                onClick={() => {
+                  setBody("all");
+                  setPowertrain("all");
+                  setDivision("all");
+                }}
+                className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                Clear
+              </button>
             )}
-            {(divisions ?? []).length > 0 &&
-              ["all", ...(divisions ?? []).map((d) => String(d.id))].map(
-                (dv) => (
-                  <FilterChip
-                    key={`div-${dv}`}
-                    active={division === dv}
-                    onClick={() => setDivision(dv)}
-                    label={
-                      dv === "all"
-                        ? "All divisions"
-                        : (divisions?.find((d) => String(d.id) === dv)?.name ??
-                          dv)
-                    }
-                    subtle
-                  />
-                ),
-              )}
           </div>
           <div className="flex flex-wrap items-center gap-4">
             <p className="text-sm text-muted-foreground tabular-nums">
@@ -671,34 +690,6 @@ export default function Inventory() {
         onUpdated={(v) => setSelected(v)}
       />
     </div>
-  );
-}
-
-function FilterChip({
-  active,
-  onClick,
-  label,
-  subtle,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  subtle?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={active}
-      className={`px-5 h-10 rounded-full text-sm font-medium tracking-wide transition-all duration-300 ${
-        active
-          ? "bg-primary text-white shadow-lg shadow-primary/30"
-          : subtle
-            ? "bg-transparent text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30"
-            : "bg-white/[0.05] text-foreground hover:bg-white/[0.1]"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
 
