@@ -254,8 +254,16 @@ function AppRoutes() {
                 <Route path="/approvals">
                   <Redirect to="/deals" />
                 </Route>
-                <Route path="/service" component={Service} />
-                <Route path="/parts" component={Parts} />
+                <Route path="/service">
+                  <RequireModule module="service" label="Service">
+                    <Service />
+                  </RequireModule>
+                </Route>
+                <Route path="/parts">
+                  <RequireModule module="parts" label="Parts">
+                    <Parts />
+                  </RequireModule>
+                </Route>
                 {/* Workshop is merged into Service as the "My Jobs" tab (2026-07) */}
                 <Route path="/workshop">
                   <Redirect to="/service" />
@@ -364,15 +372,25 @@ function RedirectToRealm() {
   return null;
 }
 
-function RequireSettings({ children }: { children: React.ReactNode }) {
+function RequireModule({
+  module,
+  label,
+  children,
+}: {
+  module: string;
+  label: string;
+  children: React.ReactNode;
+}) {
   const { me, can } = useAuthz();
-  if (me && !can("settings", "view")) {
+  if (me && !can(module, "view")) {
     return (
       <div className="p-8 flex flex-col items-center justify-center min-h-[50vh] text-center">
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-8 py-10 max-w-md">
-          <h2 className="text-xl font-bold tracking-tight">Access denied</h2>
+          <h2 className="text-xl font-bold tracking-tight">
+            You are not authorized to see this page
+          </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Your role does not include access to Settings. Contact an
+            Your role does not include access to {label}. Contact an
             administrator if you believe this is a mistake.
           </p>
         </div>
@@ -380,6 +398,14 @@ function RequireSettings({ children }: { children: React.ReactNode }) {
     );
   }
   return <>{children}</>;
+}
+
+function RequireSettings({ children }: { children: React.ReactNode }) {
+  return (
+    <RequireModule module="settings" label="Settings">
+      {children}
+    </RequireModule>
+  );
 }
 
 function RedirectToSignInPage() {
