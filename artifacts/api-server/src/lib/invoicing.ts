@@ -7,6 +7,7 @@ import {
   dealsTable,
   financeApplicationsTable,
   invoicesTable,
+  leadsTable,
   paymentsTable,
   receiptsTable,
   timelineEventsTable,
@@ -356,6 +357,28 @@ export async function applyPayment(args: ApplyPaymentArgs) {
             eq(dealsTable.dealerId, invoice.dealerId),
           ),
         );
+      // Mirror the deposit onto the deal's lead so the lead page's
+      // "Reservation Fee Paid" reflects the settled reservation invoice.
+      const [paidDeal] = await tx
+        .select({ leadId: dealsTable.leadId })
+        .from(dealsTable)
+        .where(
+          and(
+            eq(dealsTable.id, invoice.dealId),
+            eq(dealsTable.dealerId, invoice.dealerId),
+          ),
+        );
+      if (paidDeal?.leadId != null) {
+        await tx
+          .update(leadsTable)
+          .set({ reservationFeePaid: true })
+          .where(
+            and(
+              eq(leadsTable.id, paidDeal.leadId),
+              eq(leadsTable.dealerId, invoice.dealerId),
+            ),
+          );
+      }
       // Keep the booking-based deposit gate consistent: paying the
       // reservation invoice settles the linked booking's fee too.
       await tx

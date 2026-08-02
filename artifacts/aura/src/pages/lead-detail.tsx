@@ -10,6 +10,8 @@ import {
   useUpdateLead,
   useListVehicles,
   useListDeals,
+  useListInvoices,
+  useListOutstandingBalances,
   useListDeliveries,
   useListLeadCalls,
   useListLeadQuotes,
@@ -600,6 +602,8 @@ export default function LeadDetail() {
   const { data: quoteVersions } = useListLeadQuotes(id);
   const sendInvite = useSendTestDriveInvite();
   const { data: allDeals } = useListDeals();
+  const { data: allInvoices } = useListInvoices();
+  const { data: outstandingBalances } = useListOutstandingBalances();
   const { data: allDeliveries } = useListDeliveries();
   const { data: calls } = useListLeadCalls(id);
   const gatesQuery = useListGates();
@@ -806,6 +810,41 @@ export default function LeadDetail() {
         (lead.customerId != null && d.customerId === lead.customerId),
     )
     .sort((a, b) => dealRank(b.stage) - dealRank(a.stage))[0];
+
+  // Reservation invoice + payment progress for this lead's deals.
+  const leadDealIds = new Set(
+    (allDeals ?? [])
+      .filter(
+        (d) =>
+          d.leadId === lead.id ||
+          (lead.customerId != null && d.customerId === lead.customerId),
+      )
+      .map((d) => d.id),
+  );
+  const reservationInvoice = (allInvoices ?? []).find(
+    (inv) =>
+      inv.kind === "reservation" &&
+      inv.dealId != null &&
+      leadDealIds.has(inv.dealId) &&
+      inv.status !== "void",
+  );
+  const reservationOutstanding = reservationInvoice
+    ? (outstandingBalances ?? []).find(
+        (o) => o.invoiceId === reservationInvoice.id,
+      )
+    : undefined;
+  const reservationPaid = reservationInvoice
+    ? reservationInvoice.status === "paid"
+      ? reservationInvoice.amount
+      : (reservationOutstanding?.paidAmount ?? 0)
+    : null;
+  const reservationDue = reservationInvoice
+    ? reservationInvoice.status === "paid"
+      ? 0
+      : (reservationOutstanding?.balance ??
+        reservationInvoice.amount - (reservationPaid ?? 0))
+    : null;
+
   const journeyIndex = (() => {
     switch (lead.phase) {
       case "new":
@@ -1683,6 +1722,28 @@ export default function LeadDetail() {
                     >
                       <Bool value={lead.reservationFeePaid} />
                     </InlineField>
+                    {reservationInvoice && (
+                      <>
+                        <InlineField label="Reservation Invoice">
+                          <span className="font-mono text-xs">
+                            {reservationInvoice.invoiceNumber}
+                          </span>
+                        </InlineField>
+                        <InlineField label="Reservation Amount">
+                          {money.gyd(reservationInvoice.amount)}
+                        </InlineField>
+                        <InlineField label="Amount Paid">
+                          <span className={reservationPaid ? "text-emerald-500" : undefined}>
+                            {money.gyd(reservationPaid ?? 0)}
+                          </span>
+                        </InlineField>
+                        <InlineField label="Remaining To Pay">
+                          <span className={reservationDue ? "text-amber-500" : "text-emerald-500"}>
+                            {money.gyd(reservationDue ?? 0)}
+                          </span>
+                        </InlineField>
+                      </>
+                    )}
                     <InlineField
                       label="Financing Qualified"
                       canEdit={canEdit}
