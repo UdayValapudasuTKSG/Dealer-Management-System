@@ -378,7 +378,7 @@ export function CallDialog({
         </DialogHeader>
 
         {browserCalling && (
-          <div className="rounded-xl ring-1 ring-white/10 bg-foreground/[0.03] p-4 flex items-center justify-between gap-3">
+          <div className="min-w-0 rounded-xl ring-1 ring-white/10 bg-foreground/[0.03] p-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-semibold truncate">
                 {liveState === "idle" && "Ready to dial"}
@@ -387,7 +387,7 @@ export function CallDialog({
                 {liveState === "in_call" && `On call — ${formatElapsed(elapsed)}`}
                 {liveState === "ended" && "Call ended"}
               </div>
-              <div className="text-xs text-muted-foreground truncate">
+              <div className="text-xs text-muted-foreground break-words">
                 {liveState === "ended"
                   ? "Recorded automatically — AI is transcribing the call, scoring sentiment, and posting a summary to the lead. Add anything extra below."
                   : leadPhone}
