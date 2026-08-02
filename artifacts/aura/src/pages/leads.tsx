@@ -466,8 +466,11 @@ export default function Leads() {
               onSubmit={async (values) => {
                 const payload = { ...values };
                 if (payload.interestedVehicleId != null) {
+                  payload.interestedVehicleId = Number(
+                    payload.interestedVehicleId,
+                  );
                   const v = (vehicles ?? []).find(
-                    (x) => x.id === Number(payload.interestedVehicleId),
+                    (x) => x.id === payload.interestedVehicleId,
                   );
                   if (v) {
                     const version = v.trim || v.variant;
@@ -477,10 +480,9 @@ export default function Leads() {
                       .filter(Boolean)
                       .join(" ");
                   }
-                  // DMS spec: lead capture records only a MODEL of interest;
-                  // the specific unit/VIN is bound at Vehicle Allocated, so
-                  // no unit id is persisted at capture time.
-                  delete payload.interestedVehicleId;
+                  // The vehicle id records the MODEL of interest so the lead
+                  // page, quotes and deal desking can key off it; the actual
+                  // unit/VIN is still only bound at Vehicle Allocated.
                 }
                 const result = await createLead.mutateAsync({
                   data: payload as never,
