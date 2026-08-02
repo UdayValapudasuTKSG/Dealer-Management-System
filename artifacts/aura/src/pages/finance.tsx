@@ -26,6 +26,8 @@ import {
   getListDealsQueryKey,
   type PaymentInput,
   type InvoiceInput,
+  type Invoice,
+  type OutstandingBalance,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -80,6 +82,7 @@ export default function Finance() {
   const compactRow = density === "compact" ? "py-2.5" : "py-3.5";
   const [detailId, setDetailId] = useState<number | null>(null);
   const [receiptId, setReceiptId] = useState<number | null>(null);
+  const [invoiceId, setInvoiceId] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const rawMoney = useMoney();
@@ -571,7 +574,12 @@ export default function Finance() {
               <div className="space-y-3">
                 {invoices?.length === 0 && <p className="text-sm text-muted-foreground italic">No invoices yet.</p>}
                 {invoices?.map((inv) => (
-                  <div key={inv.id} className="glass-panel rounded-2xl px-4 py-3 flex items-center gap-4">
+                  <button
+                    key={inv.id}
+                    type="button"
+                    onClick={() => setInvoiceId(inv.id)}
+                    className="w-full text-left glass-panel rounded-2xl px-4 py-3 flex items-center gap-4 hover:border-primary/40 transition-colors"
+                  >
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold flex items-center gap-2">
                         {inv.customerName}
@@ -601,7 +609,7 @@ export default function Finance() {
                         {inv.status.replace("_", " ")}
                       </Badge>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -658,6 +666,11 @@ export default function Finance() {
       )}
 
       <ReceiptDetailDialog receiptId={receiptId} onClose={() => setReceiptId(null)} />
+      <InvoiceDetailDialog
+        invoice={invoices?.find((i) => i.id === invoiceId) ?? null}
+        outstanding={outstanding?.find((o) => o.invoiceId === invoiceId) ?? null}
+        onClose={() => setInvoiceId(null)}
+      />
 
       {tab === "outstanding" && (
         <div className="space-y-2.5 max-w-4xl">
@@ -692,6 +705,217 @@ export default function Finance() {
       <ApplicationDetailDialog appId={detailId} onClose={() => setDetailId(null)} />
     </Page>
     </>
+  );
+}
+
+function InvoiceDetailDialog({
+  invoice,
+  outstanding,
+  onClose,
+}: {
+  invoice: Invoice | null;
+  outstanding: OutstandingBalance | null;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const rawMoney = useMoney();
+  const money = (n: number) => rawMoney.gyd(n);
+  const createPayment = useCreatePayment();
+
+  const balance = outstanding
+    ? outstanding.balance
+    : invoice && invoice.status !== "paid" && invoice.status !== "void"
+      ? invoice.amount
+      : 0;
+  const payable =
+    !!invoice && (invoice.status === "issued" || invoice.status === "partially_paid");
+
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState<PaymentInput["method"]>("bank_transfer");
+  const [reference, setReference] = useState("");
+  const [showPay, setShowPay] = useState(false);
+  useEffect(() => {
+    if (invoice) {
+      setAmount(balance > 0 ? String(Math.round(balance)) : "");
+      setMethod("bank_transfer");
+      setReference("");
+      setShowPay(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoice?.id]);
+
+  const submitPayment = async () => {
+    if (!invoice) return;
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      toast({ title: "Enter a valid amount", variant: "destructive" });
+      return;
+    }
+    const payload = {
+      invoiceId: invoice.id,
+      amount: amt,
+      method,
+      reference: reference || undefined,
+    };
+    try {
+      try {
+        await createPayment.mutateAsync({ data: payload });
+      } catch (err: unknown) {
+        const apiErr = err as { status?: number; data?: { error?: string } };
+        if (
+          apiErr.status === 409 &&
+          apiErr.data?.error === "duplicate_reference" &&
+          window.confirm(
+            "A payment with this reference already exists for this dealership. Record it again as a separate payment?",
+          )
+        ) {
+          await createPayment.mutateAsync({ data: { ...payload, confirmDuplicate: true } });
+        } else {
+          throw err;
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListReceiptsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListOutstandingBalancesQueryKey() });
+      toast({ title: "Payment recorded", description: "A receipt was issued automatically." });
+      onClose();
+    } catch (err: unknown) {
+      const apiErr = err as { data?: { error?: string }; message?: string };
+      toast({
+        title: "Could not record payment",
+        description: apiErr.data?.error ?? apiErr.message ?? "Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <Dialog open={invoice != null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-primary" />
+            {invoice?.invoiceNumber ?? "Invoice"}
+          </DialogTitle>
+        </DialogHeader>
+        {invoice && (
+          <div className="space-y-4">
+            <div className="text-center py-4 border-y border-border/50">
+              <div className="text-3xl font-light tracking-tight">{money(invoice.amount)}</div>
+              {balance > 0 && balance < invoice.amount && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  {money(invoice.amount - balance)} paid · {money(balance)} due
+                </div>
+              )}
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground uppercase tracking-wider text-xs">Customer</span>
+                <span className="font-medium">{invoice.customerName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground uppercase tracking-wider text-xs">Kind</span>
+                <span className="capitalize">{invoice.kind}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground uppercase tracking-wider text-xs">Status</span>
+                <span className="capitalize">{invoice.status.replace(/_/g, " ")}</span>
+              </div>
+              {invoice.dueDate && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground uppercase tracking-wider text-xs">Due date</span>
+                  <span>{invoice.dueDate}</span>
+                </div>
+              )}
+              {invoice.description && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground uppercase tracking-wider text-xs shrink-0">Description</span>
+                  <span className="text-right break-words min-w-0">{invoice.description}</span>
+                </div>
+              )}
+              {(invoice.taxLines ?? []).map((t) => (
+                <div key={t.name} className="flex justify-between">
+                  <span className="text-muted-foreground uppercase tracking-wider text-xs">{t.name}</span>
+                  <span>{money(t.amount)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between">
+                <span className="text-muted-foreground uppercase tracking-wider text-xs">Issued</span>
+                <span>{formatGuyanaDate(invoice.createdAt)}</span>
+              </div>
+            </div>
+
+            {payable && !showPay && (
+              <Button
+                className="w-full bg-primary hover:bg-primary/90 text-white rounded-full h-10 gap-1.5"
+                onClick={() => setShowPay(true)}
+              >
+                <Plus className="w-4 h-4" /> Record Payment
+              </Button>
+            )}
+            {payable && showPay && (
+              <div className="space-y-3 rounded-2xl border border-border/60 p-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                      Amount (GYD)
+                    </label>
+                    <input
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="w-full h-10 rounded-md border border-border/60 bg-transparent px-3 text-sm tabular-nums focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                      Method
+                    </label>
+                    <select
+                      value={method}
+                      onChange={(e) => setMethod(e.target.value as PaymentInput["method"])}
+                      className="w-full h-10 rounded-md border border-border/60 bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="card">Card</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      <option value="cheque">Cheque</option>
+                      <option value="mobile_money">Mobile Money</option>
+                      <option value="financing">Financing</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                    Reference (optional)
+                  </label>
+                  <input
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    placeholder="Transfer / cheque number"
+                    className="w-full h-10 rounded-md border border-border/60 bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
+                  />
+                </div>
+                <Button
+                  className="w-full bg-primary hover:bg-primary/90 text-white rounded-full h-10"
+                  disabled={createPayment.isPending}
+                  onClick={submitPayment}
+                >
+                  {createPayment.isPending ? "Recording…" : `Record ${amount ? money(Number(amount) || 0) : "payment"}`}
+                </Button>
+              </div>
+            )}
+            {!payable && invoice.status === "paid" && (
+              <p className="text-xs text-muted-foreground text-center">
+                This invoice is fully paid — see the Receipts tab for the receipt.
+              </p>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
