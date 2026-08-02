@@ -84,7 +84,7 @@ const STAGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
 
 const UNMET_LABEL: Record<string, string> = {
   deposit_required: "Reservation deposit required",
-  below_floor_price: "Below-floor price needs manager approval",
+  below_floor_price: "Discount needs manager approval",
   capital_order: "Capital stock order needs manager approval",
   financing_not_approved: "Bank financing not yet approved",
 };
@@ -522,7 +522,8 @@ export default function Deals() {
                 placeholder: "72000",
                 defaultValue: prefillVehicle ? String(prefillVehicle.price) : undefined,
               },
-              { name: "discount", label: "Discount", type: "number", span: "half", placeholder: "0" },
+              { name: "discount", label: "Discount (GYD)", type: "number", span: "half", placeholder: "0" },
+              { name: "discountPercent", label: "Discount (%)", type: "number", span: "half", placeholder: "e.g. 3" },
               {
                 name: "stage",
                 label: "Stage",
@@ -551,6 +552,15 @@ export default function Deals() {
               const payload = { ...values };
               if (payload.vehicleId != null) payload.vehicleId = Number(payload.vehicleId);
               if (payload.leadId != null) payload.leadId = Number(payload.leadId);
+              // Discount can be entered as % or GYD — % converts off the
+              // vehicle price; if both are given, the GYD amount wins.
+              const pct = Number(payload.discountPercent ?? 0);
+              delete payload.discountPercent;
+              if ((payload.discount == null || Number(payload.discount) === 0) && pct > 0) {
+                payload.discount = Math.round(
+                  (Number(payload.vehiclePrice ?? 0) * pct) / 100,
+                );
+              }
               await createDeal.mutateAsync({ data: payload as never });
               refreshLeadLink([
                 payload.leadId != null ? (payload.leadId as number) : null,

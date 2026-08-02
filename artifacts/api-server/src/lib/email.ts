@@ -85,8 +85,8 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     subject: (x) => `We received your enquiry, ${d(x, "name", "there")}`,
     heading: (x) => `Welcome to AURA, ${d(x, "name", "there")}`,
     body: (x) =>
-      `Thank you for your interest in the <strong>${d(x, "vehicle", "vehicle of your choice")}</strong>. Your personal concierge has been assigned and will reach out shortly with availability, pricing and a tailored walk-through.`,
-    cta: () => ({ label: "Your concierge is on it" }),
+      `Thank you for your interest in the <strong>${d(x, "vehicle", "vehicle of your choice")}</strong>. Your personal sales advisor has been assigned and will reach out shortly with availability, pricing and a tailored walk-through.`,
+    cta: () => ({ label: "Your sales advisor is on it" }),
     sample: { name: "Alex Mensah", vehicle: "2026 Aston Martin DB12" },
   },
   vehicle_quote: {
@@ -98,7 +98,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       `Thank you for your interest in the <strong>${d(x, "vehicle", "vehicle of your choice")}</strong>. Your personalised quotation is attached as a PDF — it covers the ${d(x, "color", "selected")} finish at <strong>${d(x, "total", "the current showroom price")}</strong> and is valid until <strong>${d(x, "validUntil", "the date shown on the quote")}</strong>. ${
         x.link
           ? "Ready to take the wheel? Reserve your test-drive slot below — it takes under a minute."
-          : "Your concierge will follow up shortly to arrange a viewing or test drive."
+          : "Your sales advisor will follow up shortly to arrange a viewing or test drive."
       }`,
     cta: (x) =>
       x.link
@@ -146,7 +146,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     cta: (x) =>
       x.mapsLink
         ? { label: "Directions to the showroom", href: x.mapsLink }
-        : { label: "Showroom concierge will greet you" },
+        : { label: "Showroom sales advisor will greet you" },
     sample: { vehicle: "2026 BMW i7", date: "Friday, July 18", time: "10:30 AM" },
   },
   test_drive_owner_invite: {
@@ -253,7 +253,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     subject: () => "Welcome to the family — delivery complete",
     heading: (x) => `The keys are yours, ${d(x, "name", "and it suits you")}`,
     body: (x) =>
-      `Your <strong>${d(x, "vehicle", "new vehicle")}</strong> has been delivered. Every AURA vehicle includes our concierge aftercare — service bookings, warranty and support are one message away.`,
+      `Your <strong>${d(x, "vehicle", "new vehicle")}</strong> has been delivered. Every AURA vehicle includes our sales advisor aftercare — service bookings, warranty and support are one message away.`,
     sample: { name: "Alex", vehicle: "2026 Bentley Continental GT" },
   },
   service_reminder: {
@@ -262,7 +262,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     subject: (x) => `Service due — ${d(x, "vehicle", "your vehicle")}`,
     heading: () => "Time for a little care",
     body: (x) =>
-      `Your <strong>${d(x, "vehicle", "vehicle")}</strong> is due for <strong>${d(x, "service", "scheduled maintenance")}</strong>${x.date ? ` around <strong>${x.date}</strong>` : ""}. Reply to this email or call your concierge and we'll arrange pickup.`,
+      `Your <strong>${d(x, "vehicle", "vehicle")}</strong> is due for <strong>${d(x, "service", "scheduled maintenance")}</strong>${x.date ? ` around <strong>${x.date}</strong>` : ""}. Reply to this email or call your sales advisor and we'll arrange pickup.`,
     sample: { vehicle: "2025 BMW X7", service: "20,000 km service", date: "August 2" },
   },
   warranty_reminder: {
@@ -328,7 +328,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
 
   // -------------------------------------------------------------------------
   // R6.2 notification-matrix templates (dotted ids). Internal-facing ones are
-  // addressed to staff; customer-facing ones follow the concierge voice.
+  // addressed to staff; customer-facing ones follow the sales advisor voice.
   // -------------------------------------------------------------------------
   "lead.new": {
     label: "New Lead (Internal)",
@@ -489,7 +489,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     subject: (x) => `Time for your ${d(x, "vehicle", "vehicle")} check-in`,
     heading: () => "A little care goes a long way",
     body: (x) =>
-      `Your <strong>${d(x, "vehicle", "vehicle")}</strong> is due its <strong>${d(x, "milestone", "scheduled")}</strong> check-in. Reply to this email or message your concierge and we'll arrange everything, including pickup.`,
+      `Your <strong>${d(x, "vehicle", "vehicle")}</strong> is due its <strong>${d(x, "milestone", "scheduled")}</strong> check-in. Reply to this email or message your sales advisor and we'll arrange everything, including pickup.`,
     sample: { vehicle: "2026 Toyota Land Cruiser", milestone: "6-month" },
   },
 };
@@ -542,7 +542,7 @@ export function renderEmail(
         <tr>
           <td style="padding:36px 44px 32px;">
             <div style="border-top:1px solid #262626;padding-top:20px;font-size:11px;color:#6f6f6f;line-height:1.6;">
-              AURA Dealership — Premium Automotive Concierge<br/>
+              AURA Dealership — Premium Automotive Sales Advisory<br/>
               You are receiving this because of your relationship with our showroom.
             </div>
           </td>

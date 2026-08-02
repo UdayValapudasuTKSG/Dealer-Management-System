@@ -259,7 +259,11 @@ export async function quotePdfPayload(
   const money = (n: number) =>
     `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
   const [dealer] = await db
-    .select({ name: dealersTable.name })
+    .select({
+      name: dealersTable.name,
+      city: dealersTable.city,
+      country: dealersTable.country,
+    })
     .from(dealersTable)
     .where(eq(dealersTable.id, quote.dealerId))
     .limit(1);
@@ -268,6 +272,7 @@ export async function quotePdfPayload(
   return {
     totalGyd: gyd(quote.total),
     dealerName: dealer?.name ?? "",
+    dealerAddress: [dealer?.city, dealer?.country].filter(Boolean).join(", "),
     exchangeRateNote: "All figures in GYD",
     name: quote.customerName,
     address: quote.customerAddress ?? "",

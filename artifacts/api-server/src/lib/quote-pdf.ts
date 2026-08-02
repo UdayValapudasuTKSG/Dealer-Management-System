@@ -5,8 +5,15 @@ export type QuotePdfData = Record<string, string>;
 const val = (d: QuotePdfData, key: string, fallback = "—") =>
   d[key] && d[key].trim() ? d[key].trim() : fallback;
 
+const GREEN = "#2e7d32";
+const HEADER_BG = "#cfe0cc";
+const LABEL_GREY = "#8a8a8a";
+const TEXT = "#222222";
+
 /**
- * Render an AURA-branded vehicle quotation PDF and return it as a Buffer.
+ * Render a dealer-branded vehicle estimate PDF (classic "Estimate" layout:
+ * dealer letterhead, green title, customer block, line-item table with
+ * subtotal/tax/total, acceptance lines and disclaimer) and return a Buffer.
  * All inputs arrive as strings (email queue payloads are Record<string,string>).
  */
 export function buildQuotePdf(data: QuotePdfData): Promise<Buffer> {
@@ -17,282 +24,224 @@ export function buildQuotePdf(data: QuotePdfData): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const pageW = doc.page.width; // 595.28
-    const left = 54;
-    const right = pageW - 54;
+    const pageW = doc.page.width;
+    const left = 46;
+    const right = pageW - 46;
     const contentW = right - left;
+    const dealerName = val(data, "dealerName", "AURA Dealership");
 
-    // ---- Header band -------------------------------------------------------
-    doc.rect(0, 0, pageW, 118).fill("#0a0a0a");
-    doc.rect(0, 118, pageW, 4).fill("#b30f16");
-    doc
-      .fillColor("#ffffff")
-      .font("Helvetica-Bold")
-      .fontSize(26)
-      .text("AURA", left, 34, { continued: true })
-      .fillColor("#e01313")
-      .text(".OS");
-    doc
-      .font("Helvetica")
-      .fontSize(8.5)
-      .fillColor("#9a9a9a")
-      .text("DEALERSHIP OPERATING SYSTEM", left, 66, { characterSpacing: 2 });
-    if (data.dealerName && data.dealerName.trim()) {
-      doc
-        .font("Helvetica-Bold")
-        .fontSize(9.5)
-        .fillColor("#e8e8e8")
-        .text(data.dealerName.trim().toUpperCase(), left, 82, {
-          characterSpacing: 1,
-        });
-    }
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(15)
-      .fillColor("#ffffff")
-      .text("VEHICLE QUOTATION", left, 34, {
-        width: contentW,
-        align: "right",
-      });
-    doc
-      .font("Helvetica")
-      .fontSize(9)
-      .fillColor("#c9c9c9")
-      .text(`Quote ${val(data, "quoteRef", "")}`, left, 58, {
-        width: contentW,
-        align: "right",
-      })
-      .text(`Issued ${val(data, "issuedOn", "")}`, left, 72, {
-        width: contentW,
-        align: "right",
-      })
-      .text(`Valid until ${val(data, "validUntil", "")}`, left, 86, {
-        width: contentW,
-        align: "right",
-      });
-
-    // ---- Prepared for ------------------------------------------------------
-    let y = 152;
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .fillColor("#b30f16")
-      .text("PREPARED FOR", left, y, { characterSpacing: 1.5 });
-    y += 15;
+    // ---- Letterhead --------------------------------------------------------
     doc
       .font("Helvetica-Bold")
       .fontSize(13)
-      .fillColor("#111111")
-      .text(val(data, "name", "Valued Customer"), left, y);
-    y += 18;
-    if (data.address && data.address.trim()) {
-      doc
-        .font("Helvetica")
-        .fontSize(9.5)
-        .fillColor("#555555")
-        .text(data.address.trim(), left, y, { width: contentW });
-      y += 16;
-    }
-    y += 12;
-
-    // ---- Vehicle details ---------------------------------------------------
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .fillColor("#b30f16")
-      .text("VEHICLE DETAILS", left, y, { characterSpacing: 1.5 });
-    y += 16;
-
-    const rows: [string, string][] = [
-      ["Vehicle", val(data, "vehicle")],
-      ["Model", val(data, "model")],
-      ["Model Year", val(data, "modelYear")],
-      ["Version", val(data, "version")],
-      ["Color", val(data, "color")],
-      ["Manufacturer", val(data, "manufacturer")],
-      ["Mfg. Date", val(data, "mfgDate")],
-    ];
-    const rowH = 24;
-    for (let i = 0; i < rows.length; i++) {
-      const [label, value] = rows[i]!;
-      const ry = y + i * rowH;
-      if (i % 2 === 0) {
-        doc.rect(left, ry, contentW, rowH).fill("#f5f5f5");
-      }
-      doc
-        .font("Helvetica-Bold")
-        .fontSize(9.5)
-        .fillColor("#555555")
-        .text(label, left + 12, ry + 7, { width: 130 });
-      doc
-        .font("Helvetica")
-        .fontSize(10)
-        .fillColor("#111111")
-        .text(value, left + 150, ry + 6.5, { width: contentW - 162 });
-    }
-    y += rows.length * rowH + 30;
-
-    // ---- Pricing table -----------------------------------------------------
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .fillColor("#b30f16")
-      .text("PRICING", left, y, { characterSpacing: 1.5 });
-    y += 16;
-
-    const colQty = right - 260;
-    const colUnit = right - 180;
-    const colAmt = right - 90;
-
-    doc.rect(left, y, contentW, 26).fill("#0a0a0a");
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .fillColor("#ffffff")
-      .text("DESCRIPTION", left + 12, y + 8.5)
-      .text("QTY", colQty, y + 8.5, { width: 60, align: "right" })
-      .text("UNIT PRICE", colUnit, y + 8.5, { width: 80, align: "right" })
-      .text("AMOUNT", colAmt, y + 8.5, { width: 90 - 12, align: "right" });
-    y += 26;
-
-    doc.rect(left, y, contentW, 30).fill("#fafafa");
-    doc
-      .font("Helvetica")
-      .fontSize(10)
-      .fillColor("#111111")
-      .text(val(data, "vehicle"), left + 12, y + 9, {
-        width: colQty - left - 24,
-      })
-      .text(val(data, "quantity", "1"), colQty, y + 9, {
-        width: 60,
-        align: "right",
-      })
-      .text(val(data, "unitPrice"), colUnit, y + 9, {
-        width: 80,
-        align: "right",
-      })
-      .text(val(data, "subtotal", val(data, "total")), colAmt, y + 9, {
-        width: 90 - 12,
-        align: "right",
-      });
-    y += 30;
-
-    // ---- Tax breakdown (deterministic engine output) -----------------------
-    let taxLines: { name: string; amount: string }[] = [];
-    try {
-      taxLines = data.taxLines ? JSON.parse(data.taxLines) : [];
-    } catch {
-      taxLines = [];
-    }
-    if (taxLines.length > 0) {
-      for (const line of taxLines) {
+      .fillColor(TEXT)
+      .text(dealerName, left, 44);
+    let hy = 62;
+    for (const key of ["dealerAddress", "dealerPhone", "dealerEmail"]) {
+      if (data[key] && data[key].trim()) {
         doc
           .font("Helvetica")
-          .fontSize(9.5)
+          .fontSize(8.5)
           .fillColor("#555555")
-          .text(line.name, left + 12, y + 6, { width: colAmt - left - 24 })
-          .text(line.amount, colAmt, y + 6, {
-            width: 90 - 12,
-            align: "right",
-          });
-        y += 20;
+          .text(data[key].trim(), left, hy);
+        hy += 12;
       }
-      doc
-        .font("Helvetica-Bold")
-        .fontSize(9.5)
-        .fillColor("#333333")
-        .text("Total taxes & fees", left + 12, y + 6)
-        .text(val(data, "totalTax"), colAmt, y + 6, {
-          width: 90 - 12,
-          align: "right",
-        });
-      y += 24;
     }
+    // Wordmark, top-right.
+    doc
+      .font("Helvetica-BoldOblique")
+      .fontSize(14)
+      .fillColor(TEXT)
+      .text(dealerName.toUpperCase(), left, 46, {
+        width: contentW,
+        align: "right",
+      });
+
+    // ---- Title -------------------------------------------------------------
+    let y = 130;
+    doc
+      .font("Helvetica")
+      .fontSize(18)
+      .fillColor(GREEN)
+      .text("Estimate", left, y);
+    y += 34;
+
+    // ---- Customer block (left) + estimate meta (right) ---------------------
+    const metaX = right - 220;
+    doc
+      .font("Helvetica")
+      .fontSize(8)
+      .fillColor(LABEL_GREY)
+      .text("NAME", left, y, { characterSpacing: 0.5 });
+    doc
+      .text("ESTIMATE", metaX, y, { width: 100, align: "right" })
+      .text(val(data, "quoteRef", ""), metaX + 110, y, {
+        width: 110,
+        align: "right",
+      });
+    y += 13;
+    doc
+      .font("Helvetica")
+      .fontSize(9.5)
+      .fillColor(TEXT)
+      .text(val(data, "name", "Valued Customer"), left, y);
+    doc
+      .font("Helvetica")
+      .fontSize(8)
+      .fillColor(LABEL_GREY)
+      .text("DATE", metaX, y + 1, { width: 100, align: "right" });
+    doc
+      .fontSize(9.5)
+      .fillColor(TEXT)
+      .text(val(data, "issuedOn", ""), metaX + 110, y, {
+        width: 110,
+        align: "right",
+      });
+    y += 20;
+    doc
+      .font("Helvetica")
+      .fontSize(8)
+      .fillColor(LABEL_GREY)
+      .text("ADDRESS", left, y, { characterSpacing: 0.5 });
+    y += 13;
+    const address = data.address && data.address.trim() ? data.address.trim() : "—";
+    doc
+      .font("Helvetica")
+      .fontSize(9.5)
+      .fillColor(TEXT)
+      .text(address, left, y, { width: contentW / 2, lineGap: 2 });
+    y += doc.heightOfString(address, { width: contentW / 2, lineGap: 2 }) + 26;
+
+    // ---- Line-item table ---------------------------------------------------
+    const colDate = left;
+    const colDesc = left + 140;
+    const colQty = right - 200;
+    const colAmt = right - 110;
+
+    doc.rect(left, y, contentW, 22).fill(HEADER_BG);
+    doc
+      .font("Helvetica")
+      .fontSize(8)
+      .fillColor("#4a5a4a")
+      .text("DATE", colDate + 10, y + 7, { characterSpacing: 0.5 })
+      .text("DESCRIPTION", colDesc, y + 7, { characterSpacing: 0.5 })
+      .text("QTY", colQty, y + 7, { width: 60, align: "right", characterSpacing: 0.5 })
+      .text("AMOUNT", colAmt, y + 7, { width: 110 - 10, align: "right", characterSpacing: 0.5 });
+    y += 34;
+
+    // Description block: headline + secondary lines.
+    const descLines = [
+      val(data, "vehicle"),
+      data.model && data.model.trim() ? data.model.trim() : "",
+      data.modelYear && data.modelYear.trim()
+        ? `Manufactured Year: ${data.modelYear.trim()}`
+        : "",
+    ].filter(Boolean);
+
+    doc
+      .font("Helvetica")
+      .fontSize(9.5)
+      .fillColor(TEXT)
+      .text(val(data, "issuedOn", ""), colDate + 10, y);
+    let dy = y;
+    const descW = colQty - colDesc - 12;
+    for (let i = 0; i < descLines.length; i++) {
+      doc
+        .font("Helvetica")
+        .fontSize(i === 0 ? 9.5 : 8.5)
+        .fillColor(i === 0 ? TEXT : "#555555")
+        .text(descLines[i]!, colDesc, dy, { width: descW });
+      dy += doc.heightOfString(descLines[i]!, { width: descW }) + 2;
+    }
+    doc
+      .font("Helvetica")
+      .fontSize(9.5)
+      .fillColor(TEXT)
+      .text(val(data, "quantity", "1"), colQty, y, { width: 60, align: "right" })
+      .text(val(data, "subtotal", val(data, "total")), colAmt, y, {
+        width: 110 - 10,
+        align: "right",
+      });
+    y = Math.max(dy, y + 14) + 16;
 
     doc
       .moveTo(left, y)
       .lineTo(right, y)
+      .strokeColor("#e0e0e0")
+      .lineWidth(0.8)
+      .stroke();
+    y += 18;
+
+    // ---- Totals (right-aligned block) --------------------------------------
+    const labelX = right - 260;
+    const totalRow = (
+      label: string,
+      value: string,
+      opts: { bold?: boolean; rule?: boolean } = {},
+    ) => {
+      doc
+        .font("Helvetica")
+        .fontSize(8.5)
+        .fillColor(LABEL_GREY)
+        .text(label, labelX, y + 1, { width: 130, align: "right", characterSpacing: 0.5 });
+      doc
+        .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
+        .fontSize(opts.bold ? 10 : 9.5)
+        .fillColor(TEXT)
+        .text(value, right - 120, y, { width: 120, align: "right" });
+      y += 18;
+      if (opts.rule) {
+        doc
+          .moveTo(labelX, y - 4)
+          .lineTo(right, y - 4)
+          .dash(1.5, { space: 2 })
+          .strokeColor("#cccccc")
+          .lineWidth(0.7)
+          .stroke()
+          .undash();
+        y += 4;
+      }
+    };
+    totalRow("SUBTOTAL", val(data, "subtotal", val(data, "total")));
+    totalRow("TAX", val(data, "totalTax", "0.00"), { rule: true });
+    totalRow("TOTAL", val(data, "total"), { bold: true });
+    y += 30;
+
+    // ---- Acceptance --------------------------------------------------------
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor(LABEL_GREY)
+      .text("Accepted By", left, y);
+    y += 36;
+    doc.text("Accepted Date", left, y);
+    y += 46;
+
+    // ---- Disclaimer --------------------------------------------------------
+    doc
+      .moveTo(left, y)
+      .lineTo(right, y)
       .strokeColor("#dddddd")
-      .lineWidth(1)
+      .lineWidth(0.8)
       .stroke();
     y += 14;
     doc
       .font("Helvetica-Bold")
-      .fontSize(12)
-      .fillColor("#111111")
-      .text("Total", left + 12, y, { continued: false });
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(14)
-      .fillColor("#b30f16")
-      .text(val(data, "total"), colUnit, y - 2, {
-        width: right - colUnit - 12,
-        align: "right",
-      });
-    y += 20;
-    if (data.totalGyd && data.totalGyd.trim()) {
-      doc
-        .font("Helvetica")
-        .fontSize(10)
-        .fillColor("#555555")
-        .text("Total (GYD equivalent)", left + 12, y);
-      doc
-        .font("Helvetica-Bold")
-        .fontSize(10)
-        .fillColor("#333333")
-        .text(data.totalGyd, colUnit, y, {
-          width: right - colUnit - 12,
-          align: "right",
-        });
-      y += 16;
-      if (data.exchangeRateNote && data.exchangeRateNote.trim()) {
-        doc
-          .font("Helvetica")
-          .fontSize(7.5)
-          .fillColor("#999999")
-          .text(data.exchangeRateNote, left + 12, y, {
-            width: contentW - 24,
-            align: "right",
-          });
-        y += 12;
-      }
-    }
+      .fontSize(7.5)
+      .fillColor("#444444")
+      .text("DISCLAIMER", left, y, { characterSpacing: 0.5 });
     y += 12;
-
-    // ---- Notes -------------------------------------------------------------
     doc
       .font("Helvetica")
-      .fontSize(9)
-      .fillColor("#777777")
+      .fontSize(7.5)
+      .fillColor("#666666")
       .text(
-        "This quotation reflects the current showroom list price and is valid until the date shown above. " +
-          "Final on-the-road pricing may vary with optional extras, registration, insurance and any applicable duties. " +
-          "Your AURA concierge will be delighted to arrange a viewing, test drive or tailored finance plan.",
+        "All vehicles are subject to availability at the time of order confirmation. Allocation is on a first-come, " +
+          `first-served basis and is not guaranteed until a deposit or bank letter of undertaking is received and confirmed by ${dealerName}. ` +
+          "Pricing, availability, and colors may change without notice. This quotation is valid for 60 days and does not constitute a binding agreement.",
         left,
         y,
-        { width: contentW, lineGap: 2 },
-      );
-
-    // ---- Footer ------------------------------------------------------------
-    const footY = doc.page.height - 70;
-    doc.rect(0, footY, pageW, 70).fill("#0a0a0a");
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(10)
-      .fillColor("#ffffff")
-      .text("AURA Dealership", left, footY + 20, { continued: true })
-      .font("Helvetica")
-      .fillColor("#9a9a9a")
-      .text("  —  Premium Automotive Concierge");
-    doc
-      .font("Helvetica")
-      .fontSize(8)
-      .fillColor("#6f6f6f")
-      .text(
-        "Generated by the AURA lead engine. Reply to this email and your concierge will take it from there.",
-        left,
-        footY + 38,
-        { width: contentW },
+        { width: contentW, lineGap: 2.5 },
       );
 
     doc.end();

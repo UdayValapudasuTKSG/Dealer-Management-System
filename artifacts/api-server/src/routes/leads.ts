@@ -11,6 +11,7 @@ import {
   emailLogsTable,
   whatsappMessagesTable,
   dealsTable,
+  dealersTable,
   bookingsTable,
   callLogsTable,
   agentsTable,
@@ -975,6 +976,19 @@ router.get("/leads/:id/quote.pdf", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!payload.dealerName) {
+    const [dealer] = await db
+      .select({ name: dealersTable.name, city: dealersTable.city, country: dealersTable.country })
+      .from(dealersTable)
+      .where(eq(dealersTable.id, ctx.lead.dealerId))
+      .limit(1);
+    if (dealer) {
+      payload.dealerName = dealer.name;
+      payload.dealerAddress = [dealer.city, dealer.country]
+        .filter(Boolean)
+        .join(", ");
+    }
+  }
   const pdf = await buildQuotePdf(payload);
   const safeName = `${ctx.lead.name} - ${ctx.quoteRef}.pdf`.replace(
     /[^\w .-]+/g,

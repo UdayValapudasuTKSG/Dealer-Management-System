@@ -290,9 +290,13 @@ async function raiseBelowFloorGateIfNeeded(
   deal: typeof dealsTable.$inferSelect,
 ): Promise<void> {
   if (deal.vehiclePrice <= 0) return;
+  // Any discount requires manager approval; below-floor ones are flagged
+  // as high-priority margin breaches.
+  if (deal.discount <= 0) return;
   const floor = deal.vehiclePrice * (1 - FLOOR_DISCOUNT_RATIO);
   const effective = deal.vehiclePrice - deal.discount;
-  if (effective >= floor) return;
+  const belowFloor = effective < floor;
+  const pct = Math.round((deal.discount / deal.vehiclePrice) * 1000) / 10;
 
   const [existing] = await db
     .select({ id: gatesTable.id })
@@ -312,20 +316,26 @@ async function raiseBelowFloorGateIfNeeded(
     dealerId: deal.dealerId,
     type: "below_floor_price",
     status: "pending",
-    priority: "high",
+    priority: belowFloor ? "high" : "normal",
     customerId: deal.customerId ?? null,
     customerName: deal.customerName,
     refType: "deal",
     refId: deal.id,
-    title: `Below-floor price — ${deal.customerName ?? `Deal #${deal.id}`}`,
-    summary: `Discount of ${money(deal.discount)} takes the selling price to ${money(effective)}, below the ${money(floor)} floor (${FLOOR_DISCOUNT_RATIO * 100}% margin guard).`,
-    recommendation:
-      "Approve the discount, adjust it back above floor, or dismiss if the numbers were entered in error.",
+    title: belowFloor
+      ? `Below-floor price — ${deal.customerName ?? `Deal #${deal.id}`}`
+      : `Discount approval — ${deal.customerName ?? `Deal #${deal.id}`}`,
+    summary: belowFloor
+      ? `Discount of ${money(deal.discount)} (${pct}%) takes the selling price to ${money(effective)}, below the ${money(floor)} floor (${FLOOR_DISCOUNT_RATIO * 100}% margin guard).`
+      : `Discount of ${money(deal.discount)} (${pct}%) takes the selling price to ${money(effective)}. All discounts require manager approval before commit.`,
+    recommendation: belowFloor
+      ? "Approve the discount, adjust it back above floor, or dismiss if the numbers were entered in error."
+      : "Approve the discount, adjust it, or dismiss if the numbers were entered in error.",
     amount: effective,
     floorAmount: floor,
     evidence: [
       { label: "Vehicle price", value: money(deal.vehiclePrice) },
       { label: "Discount", value: money(deal.discount) },
+      { label: "Discount %", value: `${pct}%` },
       { label: "Effective price", value: money(effective) },
       { label: "Floor price", value: money(floor) },
     ],
@@ -688,16 +698,14 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
         messages.deposit_required = deposit.message;
       }
 
-      // 2. Below-floor gate (L6): a deal discounted past the 5% floor cannot
-      // commit until a manager APPROVES the below_floor_price gate — and the
-      // approval must cover the CURRENT numbers (editing the discount after
-      // approval invalidates the stale approval and raises a fresh gate).
+      // 2. Discount gate (L6): ANY discounted deal cannot commit until a
+      // manager APPROVES the below_floor_price gate — and the approval must
+      // cover the CURRENT numbers (editing the discount after approval
+      // invalidates the stale approval and raises a fresh gate). Below-floor
+      // discounts are additionally flagged as high-priority margin breaches.
       const vehiclePrice = parsed.data.vehiclePrice ?? before.vehiclePrice;
       const discount = parsed.data.discount ?? before.discount;
-      if (
-        vehiclePrice > 0 &&
-        discount / vehiclePrice > FLOOR_DISCOUNT_RATIO
-      ) {
+      if (vehiclePrice > 0 && discount > 0) {
         const effective = vehiclePrice - discount;
         const gates = await db
           .select()
@@ -745,7 +753,10 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
           const pct = Math.round((discount / vehiclePrice) * 1000) / 10;
           belowFloorGateId = gateId;
           unmet.push("below_floor_price");
-          messages.below_floor_price = `Discount ${pct}% exceeds the ${FLOOR_DISCOUNT_RATIO * 100}% floor — a sales manager must approve the below-floor price before commit`;
+          messages.below_floor_price =
+            discount / vehiclePrice > FLOOR_DISCOUNT_RATIO
+              ? `Discount ${pct}% exceeds the ${FLOOR_DISCOUNT_RATIO * 100}% floor — a sales manager must approve the below-floor price before commit`
+              : `Discount ${pct}% requires manager approval — a sales manager must approve the discount before commit`;
         }
       }
 

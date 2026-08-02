@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 
 export const GATE_LABEL: Record<string, string> = {
-  below_floor_price: "Pricing Floor",
+  below_floor_price: "Discount Approval",
   fee_waiver: "Fee Waiver",
   credit_decline: "Credit Decision",
   capital_order: "Capital Order",
@@ -81,6 +81,17 @@ export function GateCard({
   const [adjustValue, setAdjustValue] = useState(
     gate.amount ? String(gate.amount) : "",
   );
+  const [adjustPercent, setAdjustPercent] = useState("");
+  // Vehicle price from the gate evidence lets managers adjust a discount by
+  // percentage; hidden when the gate carries no vehicle-price evidence.
+  const adjustBase = (() => {
+    const raw = gate.evidence.find(
+      (e) => e.label === "Vehicle price",
+    )?.value;
+    if (!raw) return null;
+    const n = Number(String(raw).replace(/[^\d.]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
 
   const resolve = useResolveGate({
     mutation: {
@@ -243,7 +254,7 @@ export function GateCard({
 
           {/* Adjust input */}
           {adjusting && (
-            <div className="mt-4 flex items-center gap-2">
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground">GYD</span>
               <Input
                 type="number"
@@ -252,6 +263,28 @@ export function GateCard({
                 placeholder="Adjusted amount"
                 className="max-w-[220px] h-10 rounded-xl"
               />
+              {adjustBase != null && adjustBase > 0 && (
+                <>
+                  <span className="text-sm font-medium text-muted-foreground ml-2">
+                    or %
+                  </span>
+                  <Input
+                    type="number"
+                    value={adjustPercent}
+                    onChange={(e) => {
+                      setAdjustPercent(e.target.value);
+                      const p = Number(e.target.value);
+                      if (Number.isFinite(p) && p >= 0) {
+                        setAdjustValue(
+                          String(Math.round((adjustBase * p) / 100)),
+                        );
+                      }
+                    }}
+                    placeholder="%"
+                    className="max-w-[100px] h-10 rounded-xl"
+                  />
+                </>
+              )}
             </div>
           )}
 

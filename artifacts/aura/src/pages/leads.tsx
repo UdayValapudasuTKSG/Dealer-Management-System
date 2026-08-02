@@ -449,9 +449,9 @@ export default function Leads() {
                   : []),
                 {
                   name: "priority",
-                  label: "Priority",
+                  label: "Priority (optional)",
                   type: "select",
-                  required: true,
+                  required: false,
                   span: "half",
                   section: "Enquiry",
                   defaultValue: "medium",
