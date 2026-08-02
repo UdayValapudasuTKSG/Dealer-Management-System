@@ -18,6 +18,7 @@ import {
   type InvoiceTaxLine,
 } from "@workspace/db";
 import { computeTaxes, ensureDealerTaxes } from "./taxes";
+import { ensureAccountForLead } from "./accounts";
 import { logger } from "./logger";
 import { enqueueEmail, enqueueWhatsapp, notifyUsers } from "./email";
 import { financeUsers } from "./notify-matrix";
@@ -220,7 +221,10 @@ export class PaymentGuardError extends Error {
 export async function applyPayment(args: ApplyPaymentArgs) {
   const { invoice } = args;
   const exchangeRate = await dealerExchangeRate(invoice.dealerId);
-  return db.transaction(async (tx) => {
+  // Set inside the transaction when a reservation invoice is fully paid;
+  // consumed after commit to ensure the lead has a linked account.
+  let reservationLeadId: number | null = null;
+  const result = await db.transaction(async (tx) => {
     // Serialize concurrent postings against this invoice.
     const [locked] = await tx
       .select()
@@ -369,6 +373,7 @@ export async function applyPayment(args: ApplyPaymentArgs) {
           ),
         );
       if (paidDeal?.leadId != null) {
+        reservationLeadId = paidDeal.leadId;
         await tx
           .update(leadsTable)
           .set({ reservationFeePaid: true })
@@ -416,6 +421,27 @@ export async function applyPayment(args: ApplyPaymentArgs) {
 
     return { payment: row!, receipt: receipt!, invoiceStatus: status, paid };
   });
+
+  // Post-commit: a settled reservation means real business — make sure the
+  // lead is linked to a customer account with a primary contact (the Pre-Book
+  // "account linked" checklist item). Manual Finance-tab invoices bypass the
+  // booking flow that normally does this.
+  if (reservationLeadId != null) {
+    const [lead] = await db
+      .select()
+      .from(leadsTable)
+      .where(
+        and(
+          eq(leadsTable.id, reservationLeadId),
+          eq(leadsTable.dealerId, invoice.dealerId),
+        ),
+      );
+    if (lead && !lead.customerId) {
+      await ensureAccountForLead(lead, "reservation");
+    }
+  }
+
+  return result;
 }
 
 /** Reservation fee credit for a deal: paid amounts on matching bookings. */
