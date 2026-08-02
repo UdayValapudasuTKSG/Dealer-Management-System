@@ -176,28 +176,55 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
       });
     }
 
-    // Self-service booking invite — lets the customer block a test-drive
-    // slot from a unique link (skipped when a drive is already scheduled).
-    if (!lead.testDriveAt) {
-      const link = testDriveBookingUrl(lead.testDriveToken);
-      const vehicleLabel = v
-        ? `${v.year} ${v.make} ${v.model}`
-        : fallbackVehicleName;
-      if (link) {
-        await send({
-          dealerId: lead.dealerId,
-          template: "test_drive_invite",
-          to,
-          customerId: lead.customerId,
-          data: {
-            name,
-            link,
-            ...(vehicleLabel ? { vehicle: vehicleLabel } : {}),
-          },
-        });
-      }
-    }
+    // NOTE: the self-service test-drive booking invite is NOT sent
+    // automatically — staff trigger it from the lead page when appropriate
+    // (see sendTestDriveInviteEmail).
   });
+}
+
+/**
+ * Manually-triggered self-service test-drive booking invite. Sent only when
+ * staff hit the CTA on the lead page — never automatically.
+ */
+export async function sendTestDriveInviteEmail(
+  lead: Lead,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const { to, name } = await leadRecipient(lead);
+  if (!to) {
+    return {
+      ok: false,
+      status: 422,
+      error: "This lead has no email address on file.",
+    };
+  }
+  if (lead.testDriveAt) {
+    return {
+      ok: false,
+      status: 409,
+      error: "A test drive is already scheduled for this lead.",
+    };
+  }
+  const link = testDriveBookingUrl(lead.testDriveToken);
+  if (!link) {
+    return {
+      ok: false,
+      status: 503,
+      error: "The public booking link is unavailable in this environment.",
+    };
+  }
+  const vehicle = await vehicleName(lead.dealerId, lead.interestedVehicleId);
+  await send({
+    dealerId: lead.dealerId,
+    template: "test_drive_invite",
+    to,
+    customerId: lead.customerId,
+    data: {
+      name,
+      link,
+      ...(vehicle ? { vehicle } : {}),
+    },
+  });
+  return { ok: true };
 }
 
 /** Lead updated → advisor introduction / test-drive confirmation. */

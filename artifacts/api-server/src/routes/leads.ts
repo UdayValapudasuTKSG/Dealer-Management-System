@@ -91,7 +91,11 @@ import {
   ListLeadSourcesResponse,
 } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
-import { onLeadCreated, onLeadUpdated } from "../lib/email-triggers";
+import {
+  onLeadCreated,
+  onLeadUpdated,
+  sendTestDriveInviteEmail,
+} from "../lib/email-triggers";
 import { fetchRecordingAudio } from "../lib/call-transcription";
 import { autoAssignLead, stampLeadAssignment } from "../lib/lead-assignment";
 import { findOpenDuplicate, mergeIntoExistingLead } from "../lib/lead-dedup";
@@ -504,6 +508,32 @@ router.post("/leads/:id/notify-owner", async (req, res): Promise<void> => {
 
   res.json(NotifyLeadOwnerResponse.parse({ ok: true }));
 });
+
+router.post(
+  "/leads/:id/send-test-drive-invite",
+  async (req, res): Promise<void> => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "Invalid lead id" });
+      return;
+    }
+    const dealerId = activeDealerId(res);
+    const [lead] = await db
+      .select()
+      .from(leadsTable)
+      .where(and(eq(leadsTable.id, id), eq(leadsTable.dealerId, dealerId)));
+    if (!lead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const result = await sendTestDriveInviteEmail(lead);
+    if (!result.ok) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.json({ ok: true });
+  },
+);
 
 const REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const waDigits = (s: string): string => s.replace(/\D/g, "");

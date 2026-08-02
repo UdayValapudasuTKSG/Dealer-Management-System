@@ -18344,6 +18344,77 @@ export const useMarkNotificationsRead = <TError = ErrorType<unknown>,
       return useMutation(getMarkNotificationsReadMutationOptions(options));
     }
 
+export const getSendTestDriveInviteUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/send-test-drive-invite`
+}
+
+/**
+ * @summary Email the customer their self-service test-drive booking link (manual CTA — never sent automatically)
+ */
+export const sendTestDriveInvite = async (id: number, options?: RequestInit): Promise<NotifyOwnerResult> => {
+
+  return customFetch<NotifyOwnerResult>(getSendTestDriveInviteUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSendTestDriveInviteMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendTestDriveInvite>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendTestDriveInvite>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['sendTestDriveInvite'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendTestDriveInvite>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  sendTestDriveInvite(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendTestDriveInviteMutationResult = NonNullable<Awaited<ReturnType<typeof sendTestDriveInvite>>>
+
+    export type SendTestDriveInviteMutationError = ErrorType<Error>
+
+    /**
+ * @summary Email the customer their self-service test-drive booking link (manual CTA — never sent automatically)
+ */
+export const useSendTestDriveInvite = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendTestDriveInvite>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendTestDriveInvite>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getSendTestDriveInviteMutationOptions(options));
+    }
+
 export const getNotifyLeadOwnerUrl = (id: number,) => {
 
 

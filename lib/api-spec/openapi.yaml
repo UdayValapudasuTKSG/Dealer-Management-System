@@ -5822,6 +5822,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/MarkNotificationsReadResult"
 
+  /leads/{id}/send-test-drive-invite:
+    post:
+      operationId: sendTestDriveInvite
+      tags: [leads]
+      summary: Email the customer their self-service test-drive booking link (manual CTA — never sent automatically)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Invite email queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotifyOwnerResult"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: A test drive is already scheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Lead has no email address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /leads/{id}/notify-owner:
     post:
       operationId: notifyLeadOwner

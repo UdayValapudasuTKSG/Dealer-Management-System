@@ -15,6 +15,7 @@ import {
   useListLeadQuotes,
   useGenerateLeadQuote,
   useSendLeadQuote,
+  useSendTestDriveInvite,
   useListGates,
   useCreateDeal,
   useDeleteLead,
@@ -597,6 +598,7 @@ export default function LeadDetail() {
   const { data: timeline } = useGetLeadTimeline(id);
   const { data: quote } = useGetLeadQuote(id);
   const { data: quoteVersions } = useListLeadQuotes(id);
+  const sendInvite = useSendTestDriveInvite();
   const { data: allDeals } = useListDeals();
   const { data: allDeliveries } = useListDeliveries();
   const { data: calls } = useListLeadCalls(id);
@@ -1711,6 +1713,49 @@ export default function LeadDetail() {
                   <Section title="Test Drive">
                     <InlineField label="Test Drive Scheduled">
                       <Bool value={testDriveScheduled} />
+                    </InlineField>
+                    <InlineField label="Booking Invite">
+                      {testDriveScheduled ? (
+                        <span className="text-xs text-muted-foreground">
+                          Already scheduled
+                        </span>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5 text-xs"
+                          disabled={sendInvite.isPending || !lead.email}
+                          onClick={() =>
+                            sendInvite.mutate(
+                              { id: lead.id },
+                              {
+                                onSuccess: () =>
+                                  toast({
+                                    title: "Booking invite sent",
+                                    description: `${lead.name} received an email with their self-service test-drive booking link.`,
+                                  }),
+                                onError: (e: unknown) =>
+                                  toast({
+                                    title: "Could not send the invite",
+                                    description:
+                                      (e as { response?: { data?: { error?: string } } })
+                                        ?.response?.data?.error ??
+                                      "Please try again.",
+                                    variant: "destructive",
+                                  }),
+                              },
+                            )
+                          }
+                        >
+                          {sendInvite.isPending ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Send className="w-3.5 h-3.5" />
+                          )}
+                          {lead.email ? "Send booking invite" : "No email on file"}
+                        </Button>
+                      )}
                     </InlineField>
                     <InlineField label="Test Drive Date">
                       {lead.testDriveAt

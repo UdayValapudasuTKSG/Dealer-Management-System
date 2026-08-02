@@ -7900,6 +7900,18 @@ export const MarkNotificationsReadResponse = zod.object({
 
 
 /**
+ * @summary Email the customer their self-service test-drive booking link (manual CTA — never sent automatically)
+ */
+export const SendTestDriveInviteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendTestDriveInviteResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Send an in-app push notification to the lead owner with a suggested action
  */
 export const NotifyLeadOwnerParams = zod.object({
