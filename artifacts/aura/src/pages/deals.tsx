@@ -11,6 +11,8 @@ import {
   useUpdateDeal,
   useCreateBooking,
   useListBookings,
+  useListInvoices,
+  useListOutstandingBalances,
   getListDealsQueryKey,
   getListBookingsQueryKey,
   getGetLeadQueryKey,
@@ -111,6 +113,18 @@ export default function Deals() {
   const updateDeal = useUpdateDeal();
   const createBooking = useCreateBooking();
   const { data: bookings } = useListBookings();
+  const { data: invoices } = useListInvoices();
+  const { data: outstandingBalances } = useListOutstandingBalances();
+
+  // Amount already paid against a deal (across its non-void invoices).
+  const paidForDeal = (dealId: number): number =>
+    (invoices ?? [])
+      .filter((inv) => inv.dealId === dealId && inv.status !== "void")
+      .reduce((sum, inv) => {
+        if (inv.status === "paid") return sum + inv.amount;
+        const o = (outstandingBalances ?? []).find((x) => x.invoiceId === inv.id);
+        return sum + (o?.paidAmount ?? 0);
+      }, 0);
   const { can } = useAuthz();
   const canEditDeals = can("deals", "edit");
   const canCreateDeals = can("deals", "create");
@@ -868,6 +882,33 @@ export default function Deals() {
                                   </span>
                                 )}
                               </div>
+                              {(deal.stage === "desking" ||
+                                deal.stage === "committed") &&
+                                deal.otdPrice > 0 && (
+                                  <>
+                                    <div className="flex justify-between items-center">
+                                      <span className="uppercase tracking-wider text-[10px]">
+                                        Paid
+                                      </span>
+                                      <span className="text-emerald-500 text-xs">
+                                        {money.gyd(paidForDeal(deal.id))}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                      <span className="uppercase tracking-wider text-[10px]">
+                                        Remaining
+                                      </span>
+                                      <span className="text-foreground text-xs font-bold">
+                                        {money.gyd(
+                                          Math.max(
+                                            deal.otdPrice - paidForDeal(deal.id),
+                                            0,
+                                          ),
+                                        )}
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
                               {deal.monthlyPayment && (
                                 <div className="flex justify-between items-center pt-1.5">
                                   <span className="uppercase tracking-wider text-[10px]">

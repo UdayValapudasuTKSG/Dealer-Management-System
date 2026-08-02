@@ -107,6 +107,7 @@ import {
   notifyManagerNote,
 } from "../lib/notify-triggers";
 import { ensureAccountForLead } from "../lib/accounts";
+import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 import { activeDealerId, hasPermission } from "../middlewares/rbac";
 import {
   MIN_AGENT_CONFIDENCE,
@@ -1528,6 +1529,13 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
         ),
       );
     if (vehicle) {
+      // Deterministic OTD from the tax engine — same rule as manual desking:
+      // the deal must never sit at 0 OTD or downstream (invoices, commit
+      // gates, remaining-balance displays) all read zero.
+      const taxRules = await ensureDealerTaxes(dealerId);
+      const { totalWithTax } = computeTaxes(vehicle.price, taxRules, {
+        powertrain: vehicle.powertrain ?? null,
+      });
       const [autoDeal] = await db
         .insert(dealsTable)
         .values({
@@ -1537,6 +1545,7 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
           customerName: lead.name,
           vehicleId: vehicle.id,
           vehiclePrice: vehicle.price,
+          otdPrice: totalWithTax,
           discount: 0,
           divisionId:
             vehicle.divisionId ?? (await defaultDivisionId(dealerId)),

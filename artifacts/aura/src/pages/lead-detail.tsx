@@ -844,6 +844,18 @@ export default function LeadDetail() {
       : (reservationOutstanding?.balance ??
         reservationInvoice.amount - (reservationPaid ?? 0))
     : null;
+  // Total paid across ALL of the lead's deal invoices, and the balance still
+  // owed toward the deal's out-the-door price.
+  const dealPaidTotal = (allInvoices ?? [])
+    .filter(
+      (inv) =>
+        inv.dealId != null && leadDealIds.has(inv.dealId) && inv.status !== "void",
+    )
+    .reduce((sum, inv) => {
+      if (inv.status === "paid") return sum + inv.amount;
+      const o = (outstandingBalances ?? []).find((x) => x.invoiceId === inv.id);
+      return sum + (o?.paidAmount ?? 0);
+    }, 0);
 
   const journeyIndex = (() => {
     switch (lead.phase) {
@@ -1737,11 +1749,31 @@ export default function LeadDetail() {
                             {money.gyd(reservationPaid ?? 0)}
                           </span>
                         </InlineField>
-                        <InlineField label="Remaining To Pay">
+                        <InlineField label="Reservation Remaining">
                           <span className={reservationDue ? "text-amber-500" : "text-emerald-500"}>
                             {money.gyd(reservationDue ?? 0)}
                           </span>
                         </InlineField>
+                        {linkedDeal && linkedDeal.otdPrice > 0 && (
+                          <>
+                            <InlineField label="Deal Total (OTD)">
+                              {money.gyd(linkedDeal.otdPrice)}
+                            </InlineField>
+                            <InlineField label="Balance Remaining">
+                              <span
+                                className={
+                                  linkedDeal.otdPrice - dealPaidTotal > 0
+                                    ? "text-amber-500"
+                                    : "text-emerald-500"
+                                }
+                              >
+                                {money.gyd(
+                                  Math.max(linkedDeal.otdPrice - dealPaidTotal, 0),
+                                )}
+                              </span>
+                            </InlineField>
+                          </>
+                        )}
                       </>
                     )}
                     <InlineField
