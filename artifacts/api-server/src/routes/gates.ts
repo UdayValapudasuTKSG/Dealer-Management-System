@@ -525,7 +525,7 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
         updated.amount != null
           ? updated.amount.toLocaleString("en-US", {
               style: "currency",
-              currency: "USD",
+              currency: "GYD",
             })
           : undefined,
     });

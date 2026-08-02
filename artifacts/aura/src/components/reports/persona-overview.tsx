@@ -178,7 +178,7 @@ function SalesTrend({ series }: { series: SalesPoint[] }) {
           tick={AXIS_TICK}
           width={40}
           tickFormatter={(v: number) => {
-            const g = v * money.rate;
+            const g = v;
             return g >= 1_000_000
               ? `${Math.round(g / 1_000_000)}M`
               : g >= 1000

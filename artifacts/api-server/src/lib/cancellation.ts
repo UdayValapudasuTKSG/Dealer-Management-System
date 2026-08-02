@@ -15,7 +15,7 @@ import {
 } from "@workspace/db";
 
 const money = (n: number) =>
-  n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  `GY$${Math.round(n).toLocaleString("en-US")}`;
 
 /**
  * L9 refundable-until-registration rule: once the delivery's registration

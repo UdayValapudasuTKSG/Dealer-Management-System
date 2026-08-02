@@ -156,7 +156,7 @@ async function main() {
     .from(dealersTable)
     .where(eq(dealersTable.id, DEALER_ID));
   if (!dealer) throw new Error(`Dealer ${DEALER_ID} not found`);
-  const fx = Number(dealer.usdExchangeRate) || 209;
+  const fx = 1; // GYD-only: imported prices are already GYD
 
   // Default division: only assume GT for dealer 1; otherwise use the
   // dealer's sole division, or leave null (ambiguous — don't guess).

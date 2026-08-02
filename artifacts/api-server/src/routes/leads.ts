@@ -855,7 +855,7 @@ async function leadQuoteContext(
 }
 
 const quoteMoney = (n: number) =>
-  `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
 const quoteLongDate = (d: Date) =>
   d.toLocaleDateString("en-US", {

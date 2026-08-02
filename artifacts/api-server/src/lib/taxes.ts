@@ -2,7 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import { db, dealerTaxesTable, DEFAULT_DEALER_TAXES, type DealerTax } from "@workspace/db";
 
 /**
- * Deterministic tax engine (no LLM). Given a taxable base (USD-scale) and a
+ * Deterministic tax engine (no LLM). Given a taxable base (GYD) and a
  * dealer's configured rules, computes each applicable line and the total.
  * Consumed by the quotation flow and available for tests.
  */

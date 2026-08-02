@@ -1030,7 +1030,7 @@ export default function Deals() {
             <div className="space-y-3 py-1">
               <div>
                 <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Deposit amount (US$)
+                  Deposit amount (GYD)
                 </label>
                 <Input
                   type="number"

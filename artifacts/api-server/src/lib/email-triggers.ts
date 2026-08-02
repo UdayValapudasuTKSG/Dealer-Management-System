@@ -16,7 +16,7 @@ import { logger } from "./logger";
 // ---------------------------------------------------------------------------
 
 const money = (n: number) =>
-  `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
 async function customerEmail(
   dealerId: number,

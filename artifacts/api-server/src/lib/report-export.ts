@@ -33,7 +33,7 @@ function buildCsv(payload: ReportPayload, meta: ExportMeta): string {
     `Range,${guyanaDateLabel(payload.from)} - ${guyanaDateLabel(payload.to)}`,
   );
   lines.push(
-    `Money,GYD (USD x ${meta.usdExchangeRate}),Generated,${nowGuyana()} (Guyana)`,
+    `Money,GYD,Generated,${nowGuyana()} (Guyana)`,
   );
   lines.push("");
   lines.push("KPI,Value,Note");
@@ -61,7 +61,7 @@ async function buildXlsx(
     `Range: ${guyanaDateLabel(payload.from)} – ${guyanaDateLabel(payload.to)}`,
   ]);
   ws.addRow([
-    `Money in GYD (USD × ${meta.usdExchangeRate}) · Generated ${nowGuyana()} (Guyana)`,
+    `Money in GYD · Generated ${nowGuyana()} (Guyana)`,
   ]);
   ws.addRow([]);
   const kpiHeader = ws.addRow(["KPI", "Value", "Note"]);
@@ -105,7 +105,7 @@ function buildPdf(payload: ReportPayload, meta: ExportMeta): Promise<Buffer> {
         `Range: ${guyanaDateLabel(payload.from)} – ${guyanaDateLabel(payload.to)}`,
       )
       .text(
-        `Money in GYD (USD × ${meta.usdExchangeRate}) · Generated ${nowGuyana()} (Guyana time)`,
+        `Money in GYD · Generated ${nowGuyana()} (Guyana time)`,
       );
     doc.moveDown(1);
 

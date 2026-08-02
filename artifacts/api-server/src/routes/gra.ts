@@ -326,7 +326,7 @@ router.post("/gra/review", async (req, res): Promise<void> => {
   }
 
   const both = (n: number) =>
-    `US$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })} / ${gyd(n * exchangeRate)}`;
+    gyd(n);
 
   const { gate } = await db.transaction(async (tx) => {
     const [gateRow] = await tx
@@ -380,7 +380,7 @@ router.post("/gra/review", async (req, res): Promise<void> => {
               ]
             : []),
           { label: "Total Payable", value: both(duty.totalPayable) },
-          { label: "Exchange rate snapshot", value: `US$1 = GY$${exchangeRate}` },
+          
         ],
       })
       .returning();
@@ -561,7 +561,7 @@ router.post(
         domain: "finance",
         kind: "gra_filing_filed",
         title: `GRA duty pack filed — ${filing.filingRef}`,
-        detail: `${filing.year} ${filing.make} ${filing.model} (VIN ${filing.vin}); total duty US$${filing.totalPayable.toLocaleString()} at GY$${filing.exchangeRate}/US$. Authorised via gate #${gate.id}.`,
+        detail: `${filing.year} ${filing.make} ${filing.model} (VIN ${filing.vin}); total duty GY$${Math.round(filing.totalPayable).toLocaleString()}. Authorised via gate #${gate.id}.`,
         actor,
         isAgent: false,
         cause: "GRA filing submitted after officer approval",

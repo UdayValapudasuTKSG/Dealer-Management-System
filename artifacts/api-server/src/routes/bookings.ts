@@ -45,7 +45,7 @@ import { activeDealerId } from "../middlewares/rbac";
 const router: IRouter = Router();
 
 const money = (n: number) =>
-  `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
 async function vehicleLabel(
   vehicleId: number,

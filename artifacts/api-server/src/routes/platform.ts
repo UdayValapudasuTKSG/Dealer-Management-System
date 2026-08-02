@@ -191,8 +191,9 @@ router.post("/platform/dealers", async (req, res): Promise<void> => {
       city: body.data.city ?? null,
       country: body.data.country ?? null,
       status: "provisioning",
-      ...(body.data.usdExchangeRate !== undefined
-        ? { usdExchangeRate: body.data.usdExchangeRate }
+      // Exchange rates removed — the system is GYD-only; ignore any client value.
+      ...(false
+        ? { usdExchangeRate: 1 }
         : {}),
       ...(body.data.entitlements !== undefined
         ? { entitlements: body.data.entitlements }
@@ -430,8 +431,9 @@ router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
       ...(body.data.country !== undefined
         ? { country: body.data.country }
         : {}),
-      ...(body.data.usdExchangeRate !== undefined
-        ? { usdExchangeRate: body.data.usdExchangeRate }
+      // Exchange rates removed — the system is GYD-only; ignore any client value.
+      ...(false
+        ? { usdExchangeRate: 1 }
         : {}),
       ...(body.data.entitlements !== undefined
         ? { entitlements: body.data.entitlements }

@@ -719,15 +719,7 @@ function ReceiptDetailDialog({
           <div className="space-y-4">
             <div className="text-center py-4 border-y border-border/50">
               <div className="text-3xl font-light tracking-tight">
-                GY$
-                {Math.round(
-                  receipt.amount * (receipt.exchangeRate ?? 209),
-                ).toLocaleString("en-US")}
-              </div>
-              <div className="text-xs text-muted-foreground mt-1 tabular-nums">
-                US${receipt.amount.toLocaleString("en-US")} ·{" "}
-                {receipt.currency ?? "USD"} @ rate{" "}
-                {(receipt.exchangeRate ?? 209).toLocaleString("en-US")} (snapshot)
+                GY${Math.round(receipt.amount).toLocaleString("en-US")}
               </div>
             </div>
             <div className="space-y-2 text-sm">

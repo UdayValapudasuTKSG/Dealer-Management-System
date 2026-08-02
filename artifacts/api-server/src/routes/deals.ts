@@ -57,7 +57,7 @@ const DEAL_STAGE_ORDER = ["desking", "committed", "delivered"];
 const FLOOR_DISCOUNT_RATIO = 0.05;
 
 const money = (n: number) =>
-  n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  `GY$${Math.round(n).toLocaleString("en-US")}`;
 
 // A deal may only link to a lead in the same dealer. Returns the lead row or
 // null when the id doesn't exist (or belongs to another dealer → treat as 404).

@@ -84,7 +84,7 @@ function addBusinessDays(from: Date, days: number): Date {
 }
 
 const money = (n: number) =>
-  `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
 type Enriched = Delivery & {
   advisorName: string | null;

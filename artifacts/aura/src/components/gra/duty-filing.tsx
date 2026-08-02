@@ -653,12 +653,12 @@ export function DutyFiling({
                   {/* Valuation — CIF and its composition */}
                   <div className="pt-2">
                     <div className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
-                      Valuation (US$)
+                      Valuation (GYD)
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <ScanField
                         index={IDENTITY_FIELDS.length}
-                        label="CIF Value (US$)"
+                        label="CIF Value (GYD)"
                         badge={
                           confFor("cifValue") != null
                             ? `${Math.round((confFor("cifValue") ?? 0) * 100)}%`
@@ -677,21 +677,21 @@ export function DutyFiling({
                       />
                       <ScanField
                         index={IDENTITY_FIELDS.length + 2}
-                        label="FOB (US$)"
+                        label="FOB (GYD)"
                         value={draft.fobValue != null ? String(draft.fobValue) : ""}
                         disabled={!!submittedGateId}
                         onChange={(v) => updateNullableNumber("fobValue", v)}
                       />
                       <ScanField
                         index={IDENTITY_FIELDS.length + 3}
-                        label="Freight (US$)"
+                        label="Freight (GYD)"
                         value={draft.freightValue != null ? String(draft.freightValue) : ""}
                         disabled={!!submittedGateId}
                         onChange={(v) => updateNullableNumber("freightValue", v)}
                       />
                       <ScanField
                         index={IDENTITY_FIELDS.length + 4}
-                        label="Insurance (US$)"
+                        label="Insurance (GYD)"
                         value={
                           draft.insuranceValue != null ? String(draft.insuranceValue) : ""
                         }
@@ -787,7 +787,6 @@ export function DutyFiling({
                       </div>
                       <div className="text-sm text-muted-foreground mt-0.5 tabular-nums">
                         {money.usd(submittedGateId && filing ? filing.totalPayable : total)}{" "}
-                        at GY${submittedGateId && filing ? filing.exchangeRate : money.rate}/US$
                       </div>
                     </div>
                     <ShieldCheck className="w-10 h-10 text-primary/40" />

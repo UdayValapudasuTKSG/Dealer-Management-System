@@ -22,7 +22,7 @@ import { enqueueEmail, enqueueWhatsapp, notifyUsers } from "./email";
 import { financeUsers } from "./notify-matrix";
 
 /**
- * Invoicing + payment ledger helpers (L6). All amounts USD-scale; each
+ * Invoicing + payment ledger helpers (L6). All amounts in GYD; each
  * invoice/receipt snapshots the dealer's exchange rate so historical GYD
  * display stays reproducible after rate changes. Deterministic — no LLM
  * touches money.
@@ -33,7 +33,7 @@ export async function dealerExchangeRate(dealerId: number): Promise<number> {
     .select({ rate: dealersTable.usdExchangeRate })
     .from(dealersTable)
     .where(eq(dealersTable.id, dealerId));
-  return dealer?.rate ?? 209;
+  return dealer?.rate ?? 1;
 }
 
 export type IssueInvoiceArgs = {
@@ -68,7 +68,7 @@ export async function issueInvoice(args: IssueInvoiceArgs): Promise<Invoice> {
         status: "issued",
         dueDate: args.dueDate ?? null,
         taxLines: args.taxLines ?? [],
-        currency: "USD",
+        currency: "GYD",
         exchangeRate,
       })
       .returning();
@@ -119,7 +119,7 @@ async function notifyInvoiceIssued(invoice: Invoice): Promise<void> {
     kind: invoice.kind,
     description: invoice.description ?? "",
     dueDate: invoice.dueDate ?? "",
-    exchangeRate: String(invoice.exchangeRate ?? 209),
+    exchangeRate: String(invoice.exchangeRate ?? 1),
     issuedAt: new Date().toISOString(),
     taxLines: JSON.stringify(invoice.taxLines ?? []),
     vehicle: invoice.description ?? "",
@@ -385,7 +385,7 @@ export async function applyPayment(args: ApplyPaymentArgs) {
         customerName: invoice.customerName,
         amount: row!.amount,
         method: row!.method,
-        currency: "USD",
+        currency: "GYD",
         exchangeRate,
         issuedBy: args.receivedBy ?? null,
       })
@@ -537,7 +537,7 @@ export async function logPaymentEvent(
       domain: "finance",
       kind: "payment_recorded",
       title: `Payment received — ${invoice.invoiceNumber}`,
-      detail: `$${amount.toLocaleString("en-US")} via ${method.replace(/_/g, " ")} (receipt ${receiptNumber})`,
+      detail: `GY$${Math.round(amount).toLocaleString("en-US")} via ${method.replace(/_/g, " ")} (receipt ${receiptNumber})`,
       actor: "AURA",
       isAgent: false,
       refType: "invoice",

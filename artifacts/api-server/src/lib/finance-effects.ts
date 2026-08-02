@@ -18,7 +18,7 @@ import { ensureFinalInvoiceForDeal } from "./invoicing";
 import { logger } from "./logger";
 
 const money = (n: number) =>
-  `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "Pending",

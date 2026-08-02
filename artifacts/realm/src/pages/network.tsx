@@ -135,10 +135,6 @@ export default function Network() {
                           {[dealer.city, dealer.country].filter(Boolean).join(", ")}
                         </div>
                       )}
-                      <div className="flex items-center gap-1.5">
-                        <BadgeDollarSign className="w-3 h-3" />
-                        <span className="font-mono text-[10.5px] tabular-nums lowercase tracking-normal">1 usd = {dealer.usdExchangeRate} gyd</span>
-                      </div>
                     </div>
                   </div>
                 </div>

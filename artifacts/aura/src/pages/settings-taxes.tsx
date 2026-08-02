@@ -143,7 +143,7 @@ export default function SettingsTaxes() {
       icon={Percent}
       title="Tax"
       accent="Configuration"
-      subtitle="Percentage or fixed tax rules, applied in order, with optional price thresholds. Amounts are USD-scale."
+      subtitle="Percentage or fixed tax rules, applied in order, with optional price thresholds. All amounts in GYD."
       action={
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4 mr-1" /> New Tax Rule
@@ -192,11 +192,11 @@ export default function SettingsTaxes() {
                   <td className="px-5 py-3">
                     {t.kind === "percent"
                       ? `${t.rate}%`
-                      : `$${t.rate.toLocaleString()}`}
+                      : `GY$${t.rate.toLocaleString()}`}
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">
                     {t.thresholdAmount != null
-                      ? `> $${t.thresholdAmount.toLocaleString()}`
+                      ? `> GY$${t.thresholdAmount.toLocaleString()}`
                       : "—"}
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">
@@ -244,7 +244,7 @@ export default function SettingsTaxes() {
           <DialogHeader>
             <DialogTitle>{editing ? "Edit tax rule" : "New tax rule"}</DialogTitle>
             <DialogDescription>
-              Percent rules apply a % of the price; fixed rules add a flat USD
+              Percent rules apply a % of the price; fixed rules add a flat GYD
               amount. A threshold limits the rule to prices above it.
             </DialogDescription>
           </DialogHeader>
@@ -275,7 +275,7 @@ export default function SettingsTaxes() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>{form.kind === "percent" ? "Rate (%)" : "Amount (USD)"}</Label>
+              <Label>{form.kind === "percent" ? "Rate (%)" : "Amount (GYD)"}</Label>
               <Input
                 type="number"
                 min="0"
@@ -285,7 +285,7 @@ export default function SettingsTaxes() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Threshold (USD, optional)</Label>
+              <Label>Threshold (GYD, optional)</Label>
               <Input
                 type="number"
                 min="0"

@@ -18,7 +18,7 @@ export type GraPdfContext = {
 };
 
 const usd = (n: number) =>
-  `US$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  `GY$${Math.round(n).toLocaleString("en-US")}`;
 const gydFmt = (n: number) =>
   `GY$${Math.round(n).toLocaleString("en-GY", { maximumFractionDigits: 0 })}`;
 
@@ -38,7 +38,7 @@ export function buildGraDutyPackPdf(
     const right = pageW - 54;
     const contentW = right - left;
     const rate = filing.exchangeRate;
-    const toGyd = (n: number) => n * rate;
+    const toGyd = (n: number) => n; // amounts already GYD
 
     const guyanaDate = (d: Date | null | undefined) =>
       (d ?? new Date()).toLocaleString("en-GY", {
@@ -136,7 +136,7 @@ export function buildGraDutyPackPdf(
         ["Chassis / VIN", filing.vin],
         ["Engine", `${filing.engineCc.toLocaleString()} cc ${filing.fuelType}`],
         ["HS Code", filing.hsCode],
-        ["CIF Value", `${usd(filing.cifValue)}  /  ${gydFmt(toGyd(filing.cifValue))}`],
+        ["CIF Value", gydFmt(filing.cifValue)],
         ...(filing.fobValue != null &&
         filing.freightValue != null &&
         filing.insuranceValue != null
@@ -210,7 +210,7 @@ export function buildGraDutyPackPdf(
       { label: "LINE", x: left + 8, w: 170, align: "left" as const },
       { label: "BASIS", x: left + 182, w: 90, align: "left" as const },
       { label: "RATE", x: left + 276, w: 60, align: "right" as const },
-      { label: "AMOUNT (USD)", x: left + 340, w: 70, align: "right" as const },
+      { label: "AMOUNT (GYD)", x: left + 340, w: 70, align: "right" as const },
       { label: "AMOUNT (GYD)", x: left + 414, w: contentW - 422, align: "right" as const },
     ];
     for (const c of cols) doc.text(c.label, c.x, y + 6, { width: c.w, align: c.align });
@@ -280,7 +280,7 @@ export function buildGraDutyPackPdf(
       doc.text(vGyd, totalsX + 172, y, { width: 78, align: "right" });
       y += bold ? 20 : 15;
     };
-    totalRow("CIF value", usd(filing.cifValue), gydFmt(toGyd(filing.cifValue)));
+    totalRow("CIF value", gydFmt(filing.cifValue), "");
     totalRow(
       "Total duty & levies",
       usd(filing.totalPayable),

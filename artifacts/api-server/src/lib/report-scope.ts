@@ -160,13 +160,12 @@ export function parseGuyanaRange(fromRaw?: string, toRaw?: string) {
   return { from, to };
 }
 
-/** GYD money formatter from stored USD-scale amounts. */
-export function makeGyd(usdExchangeRate: number | null | undefined) {
-  const rate = usdExchangeRate ?? 209;
+/** GYD money formatter — amounts are stored in GYD. */
+export function makeGyd(_usdExchangeRate?: number | null | undefined) {
   return {
-    rate,
-    gyd: (usd: number) =>
-      `GYD ${Math.round(usd * rate).toLocaleString("en-US")}`,
-    gydNumber: (usd: number) => Math.round(usd * rate),
+    /** exchange rates removed — amounts are stored in GYD */
+    rate: 1,
+    gyd: (n: number) => `GYD ${Math.round(n).toLocaleString("en-US")}`,
+    gydNumber: (n: number) => Math.round(n),
   };
 }

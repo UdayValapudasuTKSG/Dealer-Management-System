@@ -19,10 +19,10 @@ import { ensureDealerTaxes } from "./taxes";
  *    `thresholdAmount` (if set; a CIF exactly at the threshold is NOT dutiable).
  *  - Excise (percent): applies on CIF + import duty.
  *  - VAT (percent): applies on CIF + duty + excise (0% rules render as a 0 line).
- *  - Levies/fees: percent rules apply on CIF; fixed rules are flat USD-scale.
+ *  - Levies/fees: percent rules apply on CIF; fixed rules are flat GYD amounts.
  *  - EV exclusion: when the powertrain is electric, every rule flagged
  *    `excludeEv` is skipped and reported in `evSkipped`.
- * All amounts USD-scale; GYD is display-only via the snapshotted exchange rate.
+ * All amounts in GYD (Guyana dollars) — the system's only currency.
  */
 
 export type GraDraftInputs = {
@@ -170,7 +170,7 @@ export async function computeDraftDuty(
   };
 }
 
-/** Dealer's locked GYD-per-USD rate (defaults to 209 like the rest of the app). */
+/** Exchange rates removed — all amounts are GYD; rate is pinned to 1. */
 /**
  * Line-level equality between a stored/approved tax-line set and a fresh
  * recompute. Total-only checks are NOT enough: a tax-rule change can alter
@@ -201,5 +201,5 @@ export async function dealerExchangeRate(dealerId: number): Promise<number> {
     .select({ usdExchangeRate: dealersTable.usdExchangeRate })
     .from(dealersTable)
     .where(eq(dealersTable.id, dealerId));
-  return dealer?.usdExchangeRate ?? 209;
+  return dealer?.usdExchangeRate ?? 1;
 }

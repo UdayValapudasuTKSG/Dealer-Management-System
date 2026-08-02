@@ -142,10 +142,6 @@ export default function DealerDetail() {
                 <Activity className="w-3 h-3" />
                 <span className="font-mono tracking-normal">ID: {dealer.id}</span>
               </span>
-              <span className="flex items-center gap-1.5">
-                <DollarSign className="w-3 h-3" />
-                <span className="font-mono tracking-normal">1 USD = {dealer.usdExchangeRate || 208} GYD</span>
-              </span>
             </div>
           </div>
         </div>
@@ -433,7 +429,6 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
   const [name, setName] = useState(dealer.name);
   const [city, setCity] = useState(dealer.city || "");
   const [country, setCountry] = useState(dealer.country || "");
-  const [rate, setRate] = useState(dealer.usdExchangeRate?.toString() || "");
 
   const update = useUpdateDealer({
     mutation: {
@@ -451,8 +446,7 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
       data: {
         name: name.trim(),
         city: city.trim() || null,
-        country: country.trim() || null,
-        usdExchangeRate: rate ? Number(rate) : undefined
+        country: country.trim() || null
       }
     });
   };
@@ -467,10 +461,6 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
           <div className="space-y-1.5">
             <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Dealership Name</label>
             <Input value={name} onChange={e => setName(e.target.value)} className="bg-white/50 border-black/10 rounded-md focus-visible:ring-1 focus-visible:ring-black/20 h-10 text-[13px]" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">USD Exchange Rate (GYD)</label>
-            <Input type="number" value={rate} onChange={e => setRate(e.target.value)} className="bg-white/50 border-black/10 rounded-md focus-visible:ring-1 focus-visible:ring-black/20 h-10 text-[13px] tabular-nums" />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">City</label>

@@ -959,7 +959,7 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
 
     const refundAmount = Math.abs(result.payment.amount);
     const fmt = (n: number) =>
-      n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+      `GY$${Math.round(n).toLocaleString("en-US")}`;
     await logCancellationEvent({
       dealerId,
       customerId: refundGate.customerId,

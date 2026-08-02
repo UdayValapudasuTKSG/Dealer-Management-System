@@ -46,7 +46,7 @@ export const invoicesTable = pgTable("invoices", {
   /** Deterministic dealer_taxes snapshot computed when the invoice was issued. */
   taxLines: jsonb("tax_lines").$type<InvoiceTaxLine[]>().notNull().default([]),
   /** Amounts are USD-scale; GYD display uses the snapshot exchange rate. */
-  currency: text("currency").notNull().default("USD"),
+  currency: text("currency").notNull().default("GYD"),
   exchangeRate: doublePrecision("exchange_rate"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

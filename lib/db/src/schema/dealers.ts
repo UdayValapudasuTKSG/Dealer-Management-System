@@ -55,7 +55,7 @@ export const dealersTable = pgTable("dealers", {
   // GYD per 1 USD — used to convert USD amounts into Guyana dollars in the UI.
   usdExchangeRate: doublePrecision("usd_exchange_rate")
     .notNull()
-    .default(208.5),
+    .default(1),
   // Meta (Facebook/Instagram) page id that routes Lead Ads webhook events to
   // this dealer. Unmapped page ids are rejected (fail closed, no lead write).
   metaPageId: text("meta_page_id"),

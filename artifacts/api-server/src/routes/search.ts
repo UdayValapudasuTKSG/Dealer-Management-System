@@ -198,7 +198,7 @@ router.get("/search", async (req, res): Promise<void> => {
               items: rows.map((i) => ({
                 id: i.id,
                 title: `${i.invoiceNumber} · ${i.customerName}`,
-                subtitle: `$${Math.round(i.amount).toLocaleString("en-US")}`,
+                subtitle: `GY$${Math.round(i.amount).toLocaleString("en-US")}`,
                 meta: i.status,
                 href: `/finance?invoice=${i.id}`,
               })),

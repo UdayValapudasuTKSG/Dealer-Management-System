@@ -9,16 +9,14 @@ import type {
 
 /**
  * AURA-branded printable documents: payment receipt, vehicle handover form,
- * warranty / AMC certificate and service invoice. All amounts stored in the
- * system are USD-scale; GYD is display-only via the snapshot / dealer rate.
+ * warranty / AMC certificate and service invoice. All amounts are stored and
+ * displayed in GYD (Guyana dollars) — the system's only currency.
  */
 
 const LEFT = 54;
 
-const usd = (n: number) =>
-  `US$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const gyd = (n: number, rate: number) =>
-  `GY$${Math.round(n * rate).toLocaleString("en-US")}`;
+const gyd = (n: number) =>
+  `GY$${Math.round(n).toLocaleString("en-US")}`;
 const fmtDate = (d: Date | string | null | undefined) =>
   d
     ? new Date(d).toLocaleDateString("en-US", {
@@ -133,7 +131,6 @@ function footer(doc: Doc, note: string) {
 
 export function buildReceiptPdf(receipt: Receipt): Promise<Buffer> {
   return collect((doc) => {
-    const rate = receipt.exchangeRate ?? 209;
     let y = header(doc, "PAYMENT RECEIPT", [
       `Receipt ${receipt.receiptNumber}`,
       `Issued ${fmtDate(receipt.createdAt)}`,
@@ -154,20 +151,10 @@ export function buildReceiptPdf(receipt: Receipt): Promise<Buffer> {
       .font("Helvetica-Bold")
       .fontSize(24)
       .fillColor("#111111")
-      .text(gyd(receipt.amount, rate), LEFT, y + 16, {
+      .text(gyd(receipt.amount), LEFT, y + 16, {
         width: contentW,
         align: "center",
       });
-    doc
-      .font("Helvetica")
-      .fontSize(9.5)
-      .fillColor("#777777")
-      .text(
-        `${usd(receipt.amount)} · ${receipt.currency ?? "USD"} @ rate ${rate.toLocaleString("en-US")} (snapshot at issue)`,
-        LEFT,
-        y + 48,
-        { width: contentW, align: "center" },
-      );
     y += 96;
 
     y = sectionLabel(doc, "PAYMENT DETAILS", y);
@@ -187,8 +174,7 @@ export function buildReceiptPdf(receipt: Receipt): Promise<Buffer> {
       .fontSize(9)
       .fillColor("#777777")
       .text(
-        "This receipt confirms funds received against the invoice above. Amounts are recorded in USD with the " +
-          "Guyana-dollar equivalent shown at the exchange rate snapshotted when the receipt was issued.",
+        "This receipt confirms funds received against the invoice above. All amounts are in Guyana dollars (GYD).",
         LEFT,
         y,
         { width: doc.page.width - LEFT * 2, lineGap: 2 },
@@ -210,7 +196,6 @@ export function buildInvoicePdfFromPayload(
   payload: Record<string, string>,
 ): Promise<Buffer> {
   return collect((doc) => {
-    const rate = Number(payload.exchangeRate) || 209;
     const amount = Number(payload.amount) || 0;
     let y = header(doc, "INVOICE", [
       `Invoice ${payload.invoiceNumber ?? ""}`,
@@ -231,20 +216,10 @@ export function buildInvoicePdfFromPayload(
       .font("Helvetica-Bold")
       .fontSize(24)
       .fillColor("#111111")
-      .text(gyd(amount, rate), LEFT, y + 16, {
+      .text(gyd(amount), LEFT, y + 16, {
         width: contentW,
         align: "center",
       });
-    doc
-      .font("Helvetica")
-      .fontSize(9.5)
-      .fillColor("#777777")
-      .text(
-        `${usd(amount)} · USD @ rate ${rate.toLocaleString("en-US")} (snapshot at issue)`,
-        LEFT,
-        y + 48,
-        { width: contentW, align: "center" },
-      );
     y += 96;
 
     y = sectionLabel(doc, "INVOICE DETAILS", y);
@@ -260,7 +235,7 @@ export function buildInvoicePdfFromPayload(
         amount: number;
       }[];
       for (const line of taxLines) {
-        rows.push([line.label, usd(line.amount)]);
+        rows.push([line.label, gyd(line.amount)]);
       }
     } catch {
       // no tax breakdown — skip
@@ -272,8 +247,7 @@ export function buildInvoicePdfFromPayload(
       .fontSize(9)
       .fillColor("#777777")
       .text(
-        "Amounts are recorded in USD with the Guyana-dollar equivalent shown at the exchange rate snapshotted " +
-          "when the invoice was issued. Your advisor is available for any question about this invoice.",
+        "All amounts are in Guyana dollars (GYD). Your advisor is available for any question about this invoice.",
         LEFT,
         y,
         { width: doc.page.width - LEFT * 2, lineGap: 2 },
@@ -574,7 +548,7 @@ export function buildServiceInvoicePdf(
         .fontSize(10)
         .fillColor("#111111")
         .text(label, LEFT + 12, y + 8)
-        .text(gyd(amount, exchangeRate), colAmt, y + 8, {
+        .text(gyd(amount), colAmt, y + 8, {
           width: 110 - 12,
           align: "right",
         });
@@ -597,16 +571,7 @@ export function buildServiceInvoicePdf(
       .font("Helvetica-Bold")
       .fontSize(14)
       .fillColor("#a97142")
-      .text(gyd(invoice.total, exchangeRate), colAmt - 90, y - 2, {
-        width: 200 - 12,
-        align: "right",
-      });
-    y += 24;
-    doc
-      .font("Helvetica")
-      .fontSize(9)
-      .fillColor("#777777")
-      .text(`${usd(invoice.total)} @ rate ${exchangeRate.toLocaleString("en-US")}`, colAmt - 90, y, {
+      .text(gyd(invoice.total), colAmt - 90, y - 2, {
         width: 200 - 12,
         align: "right",
       });

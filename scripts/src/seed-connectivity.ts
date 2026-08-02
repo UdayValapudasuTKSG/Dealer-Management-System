@@ -19,7 +19,7 @@ import {
 
 const DEALER_ID = 2; // CAM Motors
 
-const GYD = 209; // approx GY$ per US$ for dual-currency evidence
+const GYD = 1; // GYD-only system: amounts are stored in GYD directly
 const g = (usd: number) =>
   `G$${Math.round(usd * GYD).toLocaleString("en-US")}`;
 const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
