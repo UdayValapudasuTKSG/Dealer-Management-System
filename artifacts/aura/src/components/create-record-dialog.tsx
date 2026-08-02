@@ -166,7 +166,33 @@ export function CreateRecordDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="glass-panel border-white/10 sm:max-w-[600px] p-5 gap-3">
+      <DialogContent
+        className="glass-panel border-white/10 sm:max-w-[600px] p-5 gap-3"
+        onPointerDownOutside={(e) => {
+          // Radix Select/Popover content is portalled outside the dialog; a
+          // fast double-click on a select option lands "outside" the dialog
+          // and would close it. Ignore outside-pointerdowns that originate
+          // from any portalled popper layer.
+          const target = e.target as HTMLElement | null;
+          if (
+            target?.closest(
+              "[data-radix-popper-content-wrapper], [data-radix-select-viewport], [role='listbox'], [role='option']",
+            )
+          ) {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          const target = e.target as HTMLElement | null;
+          if (
+            target?.closest(
+              "[data-radix-popper-content-wrapper], [data-radix-select-viewport], [role='listbox'], [role='option']",
+            )
+          ) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader className="space-y-0.5">
           <DialogTitle className="text-base tracking-tight">{title}</DialogTitle>
           {description && (

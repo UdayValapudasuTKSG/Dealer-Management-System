@@ -356,8 +356,9 @@ export default function Leads() {
               }
               fields={[
                 { name: "name", label: "Name", type: "text", required: true, span: "full", placeholder: "Kojo Asante", section: "Prospect" },
-                { name: "phone", label: "Phone", type: "phone", required: true, span: "half", placeholder: "+592 …", section: "Prospect" },
+                { name: "phone", label: "Phone", type: "phone", required: true, span: "half", placeholder: "+592", section: "Prospect" },
                 { name: "email", label: "Email", type: "email", required: true, span: "half", placeholder: "kojo@email.com", section: "Prospect" },
+                { name: "address", label: "Address", type: "text", required: true, span: "full", placeholder: "Lot 12 Main Street, Georgetown", section: "Prospect" },
                 {
                   name: "channel",
                   label: "Channel",
