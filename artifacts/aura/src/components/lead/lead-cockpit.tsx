@@ -151,7 +151,7 @@ export function ActionChain({
       owner: "advisor",
     }));
   const items = readinessItems;
-  const unmet = items.filter((c) => !c.met);
+  const unmet = items.filter((c) => !c.met && !c.optional);
   const ready = unmet.length === 0 && items.length > 0;
   const gatesPending = pendingGates.length > 0;
   const sortedGates = [...pendingGates].sort((a, b) => {

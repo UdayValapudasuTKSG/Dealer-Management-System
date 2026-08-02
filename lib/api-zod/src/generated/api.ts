@@ -1952,7 +1952,8 @@ export const GetLeadReviewResponse = zod.object({
   "key": zod.string(),
   "label": zod.string(),
   "met": zod.boolean(),
-  "owner": zod.string()
+  "owner": zod.string(),
+  "optional": zod.boolean().optional().describe('Informational item — not required for the stage to pass')
 }))
 }))
 })

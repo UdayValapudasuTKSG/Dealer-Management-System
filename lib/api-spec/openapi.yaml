@@ -7778,6 +7778,9 @@ components:
         label: { type: string }
         met: { type: boolean }
         owner: { type: string }
+        optional:
+          type: boolean
+          description: Informational item — not required for the stage to pass
     LeadReviewStage:
       type: object
       required: [stage, label, targetPhase, state, items]

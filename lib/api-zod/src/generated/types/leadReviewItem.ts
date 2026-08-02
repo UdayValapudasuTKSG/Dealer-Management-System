@@ -11,4 +11,6 @@ export interface LeadReviewItem {
   label: string;
   met: boolean;
   owner: string;
+  /** Informational item — not required for the stage to pass */
+  optional?: boolean;
 }

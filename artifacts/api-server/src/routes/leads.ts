@@ -1392,9 +1392,10 @@ router.get("/leads/:id/review", async (req, res): Promise<void> => {
     items: [
       {
         key: "gra_duty_filed",
-        label: "GRA duty filing approved",
+        label: "GRA duty filing approved (optional)",
         met: graFiled,
         owner: "GRA / Compliance",
+        optional: true,
       },
       {
         key: "payment_settled",
