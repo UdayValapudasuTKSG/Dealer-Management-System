@@ -48,7 +48,7 @@ export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
 export const deliveryStepStateSchema = z.object({
   key: z.enum(DELIVERY_STEPS),
   label: z.string(),
-  status: z.enum(["pending", "completed"]),
+  status: z.enum(["pending", "completed", "skipped"]),
   note: z.string().nullable().optional(),
   completedAt: z.string().nullable().optional(),
   completedBy: z.string().nullable().optional(),

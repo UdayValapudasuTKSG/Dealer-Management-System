@@ -12,4 +12,5 @@ export type DeliveryStepStateStatus = typeof DeliveryStepStateStatus[keyof typeo
 export const DeliveryStepStateStatus = {
   pending: 'pending',
   completed: 'completed',
+  skipped: 'skipped',
 } as const;

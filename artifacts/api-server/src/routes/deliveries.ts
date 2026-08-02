@@ -533,24 +533,31 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
   if (parsed.data.signatureName) gated.signatureName = parsed.data.signatureName;
   if (parsed.data.signatureData) gated.signatureData = parsed.data.signatureData;
 
+  // Steps are OPTIONAL: `skip: true` bypasses the readiness gates and marks
+  // the step skipped so the workflow can move on without it.
+  const skipping = parsed.data.skip === true;
+
   // L7/L8 readiness gates — a single 422 shape { error, unmet[] }.
-  const unmet = await computeUnmet(gated);
-  if (step === "signature" && !parsed.data.signatureName) {
-    unmet.push("Customer signature name is required");
-  }
-  if (step === "feedback" && !parsed.data.feedbackRating) {
-    unmet.push("A feedback rating (1–5) is required");
-  }
-  if (unmet.length > 0) {
-    res.status(422).json({
-      error: `${DELIVERY_STEP_LABELS[step]} cannot be completed yet`,
-      unmet,
-    });
-    return;
+  if (!skipping) {
+    const unmet = await computeUnmet(gated);
+    if (step === "signature" && !parsed.data.signatureName) {
+      unmet.push("Customer signature name is required");
+    }
+    if (step === "feedback" && !parsed.data.feedbackRating) {
+      unmet.push("A feedback rating (1–5) is required");
+    }
+    if (unmet.length > 0) {
+      res.status(422).json({
+        error: `${DELIVERY_STEP_LABELS[step]} cannot be completed yet`,
+        unmet,
+      });
+      return;
+    }
   }
 
-  // Per-step side data
-  switch (step) {
+  // Per-step side data (side effects only run for genuinely completed steps —
+  // a skipped step must not create invoices or send scheduling emails).
+  switch (skipping ? ("__skipped__" as DeliveryStep) : step) {
     case "insurance":
       if (parsed.data.insurancePolicy)
         extra.insurancePolicy = parsed.data.insurancePolicy;
@@ -670,7 +677,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
     s.key === step
       ? {
           ...s,
-          status: "completed",
+          status: skipping ? "skipped" : "completed",
           note: parsed.data.note ?? s.note ?? null,
           completedAt: now,
           completedBy: actor,

@@ -741,7 +741,7 @@ export const ListDeliveriesResponseItem = zod.object({
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
-  "status": zod.enum(['pending', 'completed']),
+  "status": zod.enum(['pending', 'completed', 'skipped']),
   "note": zod.string().nullish(),
   "completedAt": zod.string().nullish(),
   "completedBy": zod.string().nullish()
@@ -810,7 +810,7 @@ export const CreateDeliveryResponse = zod.object({
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
-  "status": zod.enum(['pending', 'completed']),
+  "status": zod.enum(['pending', 'completed', 'skipped']),
   "note": zod.string().nullish(),
   "completedAt": zod.string().nullish(),
   "completedBy": zod.string().nullish()
@@ -874,7 +874,7 @@ export const GetDeliveryResponse = zod.object({
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
-  "status": zod.enum(['pending', 'completed']),
+  "status": zod.enum(['pending', 'completed', 'skipped']),
   "note": zod.string().nullish(),
   "completedAt": zod.string().nullish(),
   "completedBy": zod.string().nullish()
@@ -952,7 +952,7 @@ export const UpdateDeliveryResponse = zod.object({
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
-  "status": zod.enum(['pending', 'completed']),
+  "status": zod.enum(['pending', 'completed', 'skipped']),
   "note": zod.string().nullish(),
   "completedAt": zod.string().nullish(),
   "completedBy": zod.string().nullish()
@@ -1011,6 +1011,7 @@ export const advanceDeliveryBodyFeedbackRatingMax = 5;
 
 export const AdvanceDeliveryBody = zod.object({
   "step": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
+  "skip": zod.boolean().optional().describe('Skip this step without meeting its requirements — the step is marked skipped and the workflow moves on'),
   "note": zod.string().optional(),
   "appointmentAt": zod.coerce.date().optional(),
   "registrationNumber": zod.string().regex(advanceDeliveryBodyRegistrationNumberRegExp).optional().describe('Guyana plate — 3 uppercase letters followed by 1-4 digits (e.g. PAB 1234)'),
@@ -1038,7 +1039,7 @@ export const AdvanceDeliveryResponse = zod.object({
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
-  "status": zod.enum(['pending', 'completed']),
+  "status": zod.enum(['pending', 'completed', 'skipped']),
   "note": zod.string().nullish(),
   "completedAt": zod.string().nullish(),
   "completedBy": zod.string().nullish()
@@ -1114,7 +1115,7 @@ export const UpdateDeliveryPdiResponse = zod.object({
   "steps": zod.array(zod.object({
   "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'delivery', 'signature', 'feedback']),
   "label": zod.string(),
-  "status": zod.enum(['pending', 'completed']),
+  "status": zod.enum(['pending', 'completed', 'skipped']),
   "note": zod.string().nullish(),
   "completedAt": zod.string().nullish(),
   "completedBy": zod.string().nullish()

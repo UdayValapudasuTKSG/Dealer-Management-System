@@ -9,6 +9,8 @@ import type { DeliveryAdvanceInputStep } from './deliveryAdvanceInputStep';
 
 export interface DeliveryAdvanceInput {
   step: DeliveryAdvanceInputStep;
+  /** Skip this step without meeting its requirements — the step is marked skipped and the workflow moves on */
+  skip?: boolean;
   note?: string;
   appointmentAt?: Date;
   /**

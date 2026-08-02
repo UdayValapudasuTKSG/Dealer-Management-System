@@ -7095,7 +7095,7 @@ components:
       properties:
         key: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, delivery, signature, feedback] }
         label: { type: string }
-        status: { type: string, enum: [pending, completed] }
+        status: { type: string, enum: [pending, completed, skipped] }
         note: { type: ["string", "null"] }
         completedAt: { type: ["string", "null"] }
         completedBy: { type: ["string", "null"] }
@@ -7199,6 +7199,7 @@ components:
       required: [step]
       properties:
         step: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, delivery, signature, feedback] }
+        skip: { type: boolean, description: "Skip this step without meeting its requirements — the step is marked skipped and the workflow moves on" }
         note: { type: string }
         appointmentAt: { type: string, format: date-time }
         registrationNumber: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$", description: "Guyana plate — 3 uppercase letters followed by 1-4 digits (e.g. PAB 1234)" }

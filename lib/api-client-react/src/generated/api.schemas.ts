@@ -1190,6 +1190,7 @@ export type DeliveryStepStateStatus = typeof DeliveryStepStateStatus[keyof typeo
 export const DeliveryStepStateStatus = {
   pending: 'pending',
   completed: 'completed',
+  skipped: 'skipped',
 } as const;
 
 export interface DeliveryStepState {
@@ -1386,6 +1387,8 @@ export const DeliveryAdvanceInputStep = {
 
 export interface DeliveryAdvanceInput {
   step: DeliveryAdvanceInputStep;
+  /** Skip this step without meeting its requirements — the step is marked skipped and the workflow moves on */
+  skip?: boolean;
   note?: string;
   appointmentAt?: string;
   /**

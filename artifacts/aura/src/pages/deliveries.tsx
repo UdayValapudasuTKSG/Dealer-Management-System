@@ -110,7 +110,7 @@ export default function Deliveries() {
       />
       <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
         <div className="flex flex-wrap items-end justify-end gap-4">
-          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-foreground/[0.03] p-1">
+          <div className="flex items-center gap-1 rounded-full border border-border bg-foreground/[0.03] p-1">
             {(
               [
                 ["deliveries", `Deliveries (${active.length})`],
@@ -122,7 +122,7 @@ export default function Deliveries() {
                 onClick={() => setTab(key)}
                 className={`px-5 h-9 rounded-full text-sm font-medium transition-colors ${
                   tab === key
-                    ? "bg-primary text-white shadow-lg shadow-primary/30"
+                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -228,7 +228,7 @@ function DeliveryRow({
   return (
     <button
       onClick={onOpen}
-      className="w-full text-left rounded-2xl border border-white/10 bg-foreground/[0.02] hover:border-primary/40 hover:bg-foreground/[0.04] transition-all p-5 group"
+      className="w-full text-left rounded-2xl border border-border bg-foreground/[0.02] hover:border-primary/40 hover:bg-foreground/[0.04] transition-all p-5 group"
     >
       <div className="flex flex-wrap items-center gap-4">
         <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
@@ -393,6 +393,53 @@ function DeliveryDetail({
     );
   };
 
+  const handleSkip = () => {
+    if (!current) return;
+    if (
+      !window.confirm(
+        `Skip "${current.label}"? Its requirements will not be enforced and the workflow moves to the next step.`,
+      )
+    )
+      return;
+    advance.mutate(
+      {
+        id: delivery.id,
+        data: {
+          step: current.key,
+          skip: true,
+          ...(form.note ? { note: form.note } : {}),
+        },
+      },
+      {
+        onSuccess: (d) => {
+          invalidate();
+          setForm({});
+          toast({
+            title:
+              d.status === "completed" ? "Vehicle delivered" : "Step skipped",
+            description:
+              d.status === "completed"
+                ? "Handover complete — keys are with the customer."
+                : `Next: ${d.steps.find((s) => s.key === d.currentStep)?.label}`,
+          });
+        },
+        onError: (err: unknown) => {
+          const data = (
+            err as {
+              response?: { data?: { error?: string } };
+            }
+          )?.response?.data;
+          toast({
+            title: "Cannot skip",
+            description: data?.error ?? "Something went wrong.",
+            variant: "destructive",
+          });
+          invalidate();
+        },
+      },
+    );
+  };
+
   const setPdi = (idx: number, status: "pass" | "fail" | "waived" | "pending") => {
     let waiveReason: string | null = null;
     if (status === "waived") {
@@ -458,7 +505,7 @@ function DeliveryDetail({
                   )
                 }
               >
-                <SelectTrigger className="bg-foreground/[0.04] border-white/10">
+                <SelectTrigger className="bg-foreground/[0.04] border-border">
                   <SelectValue placeholder="Registration status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -538,13 +585,13 @@ function DeliveryDetail({
         return (
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="rounded-xl border border-white/10 bg-foreground/[0.03] px-3 py-2">
+              <div className="rounded-xl border border-border bg-foreground/[0.03] px-3 py-2">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
                   Expected
                 </p>
                 <p className="mt-0.5">{fmtDate(delivery.appointmentAt)}</p>
               </div>
-              <div className="rounded-xl border border-white/10 bg-foreground/[0.03] px-3 py-2">
+              <div className="rounded-xl border border-border bg-foreground/[0.03] px-3 py-2">
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
                   Actual handover
                 </p>
@@ -554,7 +601,7 @@ function DeliveryDetail({
                   onChange={(e) =>
                     setForm({ ...form, deliveredAt: e.target.value })
                   }
-                  className="mt-1 h-8 bg-background/60 border-white/15"
+                  className="mt-1 h-8 bg-background/60 border-border"
                 />
               </div>
             </div>
@@ -602,11 +649,11 @@ function DeliveryDetail({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl w-[95vw] max-h-[88vh] overflow-y-auto border-white/10 bg-[#0d0d0d] p-0">
+      <DialogContent className="max-w-3xl w-[95vw] max-h-[88vh] overflow-y-auto border-border bg-card p-0">
         <div className="p-7">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            className="absolute top-4 right-4 w-9 h-9 rounded-full bg-foreground/[0.06] hover:bg-foreground/[0.12] flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -639,7 +686,7 @@ function DeliveryDetail({
                   )
                 }
               >
-                <SelectTrigger className="bg-foreground/[0.04] border-white/10">
+                <SelectTrigger className="bg-foreground/[0.04] border-border">
                   <SelectValue placeholder="Assign delivery advisor" />
                 </SelectTrigger>
                 <SelectContent>
@@ -661,7 +708,7 @@ function DeliveryDetail({
                 href={`${import.meta.env.BASE_URL}api/deliveries/${delivery.id}/invoice.pdf`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-white/15 text-sm font-medium hover:bg-white/[0.05] transition-colors"
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-border text-sm font-medium hover:bg-foreground/[0.05] transition-colors"
               >
                 <FileText className="w-4 h-4" /> Invoice PDF
               </a>
@@ -670,7 +717,7 @@ function DeliveryDetail({
               href={`${import.meta.env.BASE_URL}api/deliveries/${delivery.id}/handover.pdf`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-white/15 text-sm font-medium hover:bg-white/[0.05] transition-colors"
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-border text-sm font-medium hover:bg-foreground/[0.05] transition-colors"
             >
               <FileText className="w-4 h-4" /> Handover Form
             </a>
@@ -692,7 +739,7 @@ function DeliveryDetail({
 
           {/* Customs & duty (GRA) — embedded in the delivery process */}
           {delivery.status !== "completed" && (
-            <div className="mt-6 rounded-2xl border border-white/10 bg-foreground/[0.02] overflow-hidden">
+            <div className="mt-6 rounded-2xl border border-border bg-foreground/[0.02] overflow-hidden">
               <button
                 onClick={() => setShowDuty((v) => !v)}
                 className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-foreground/[0.03] transition-colors"
@@ -720,7 +767,7 @@ function DeliveryDetail({
           {/* PDI checklist */}
           {delivery.currentStep === "pdi_checklist" &&
             delivery.status !== "completed" && (
-              <div className="mt-6 rounded-2xl border border-white/10 bg-foreground/[0.02] p-5">
+              <div className="mt-6 rounded-2xl border border-border bg-foreground/[0.02] p-5">
                 <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-3">
                   Pre-delivery inspection
                 </h3>
@@ -777,7 +824,7 @@ function DeliveryDetail({
                                   : value === "fail"
                                     ? "border-red-500/50 bg-red-500/15 text-red-400"
                                     : "border-amber-500/50 bg-amber-500/15 text-amber-400"
-                                : "border-white/10 text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05]"
+                                : "border-border text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05]"
                             }`}
                           >
                             {label}
@@ -854,7 +901,7 @@ function DeliveryDetail({
               <button
                 onClick={handleAdvance}
                 disabled={advance.isPending || pdiPending}
-                className="mt-4 inline-flex items-center gap-2 h-11 px-6 rounded-full bg-primary text-white text-sm font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-colors disabled:opacity-50"
+                className="mt-4 inline-flex items-center gap-2 h-11 px-6 rounded-full bg-primary text-primary-foreground text-sm font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {advance.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -864,6 +911,13 @@ function DeliveryDetail({
                 {pdiPending
                   ? "Complete the PDI checklist first"
                   : `Mark "${current.label}" complete`}
+              </button>
+              <button
+                onClick={handleSkip}
+                disabled={advance.isPending}
+                className="mt-4 ml-2 inline-flex items-center gap-2 h-11 px-5 rounded-full border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05] transition-colors disabled:opacity-50"
+              >
+                Skip this step
               </button>
             </div>
           )}
@@ -945,7 +999,7 @@ function SignaturePad({
   };
 
   return (
-    <div className="rounded-xl border border-white/15 bg-background/60 overflow-hidden">
+    <div className="rounded-xl border border-border bg-background/60 overflow-hidden">
       <canvas
         ref={canvasRef}
         width={620}
@@ -956,7 +1010,7 @@ function SignaturePad({
         onPointerUp={end}
         onPointerLeave={end}
       />
-      <div className="flex items-center justify-between px-3 py-1.5 border-t border-white/10">
+      <div className="flex items-center justify-between px-3 py-1.5 border-t border-border">
         <span className="text-[11px] text-muted-foreground">
           {value ? "Signature captured" : "Customer signs here"}
         </span>
@@ -1047,7 +1101,7 @@ function HandoverVerificationBanner({
         Signed handover sheet — A5 verification
         <Badge
           variant="secondary"
-          className="text-[10px] uppercase tracking-widest border-none bg-white/10 text-muted-foreground"
+          className="text-[10px] uppercase tracking-widest border-none bg-foreground/10 text-muted-foreground"
         >
           {v.status}
         </Badge>
@@ -1081,7 +1135,7 @@ function HandoverVerificationBanner({
           <button
             onClick={() => act("accept")}
             disabled={review.isPending}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {review.isPending ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1093,7 +1147,7 @@ function HandoverVerificationBanner({
           <button
             onClick={() => act("dismiss")}
             disabled={review.isPending}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-white/15 text-sm font-medium hover:bg-white/[0.05] transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-border text-sm font-medium hover:bg-foreground/[0.05] transition-colors disabled:opacity-50"
           >
             <X className="w-3.5 h-3.5" /> Dismiss
           </button>
@@ -1111,6 +1165,7 @@ function StepRow({
   isCurrent: boolean;
 }) {
   const done = step.status === "completed";
+  const skipped = step.status === "skipped";
   return (
     <div
       className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 ${
@@ -1121,6 +1176,8 @@ function StepRow({
     >
       {done ? (
         <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+      ) : skipped ? (
+        <Circle className="w-5 h-5 text-amber-400/70 shrink-0" />
       ) : isCurrent ? (
         <motion.span
           animate={{ scale: [1, 1.15, 1] }}
@@ -1132,16 +1189,21 @@ function StepRow({
       )}
       <span
         className={`text-sm flex-1 ${
-          done
-            ? "text-muted-foreground line-through decoration-white/20"
+          done || skipped
+            ? "text-muted-foreground line-through decoration-foreground/20"
             : isCurrent
               ? "font-semibold"
               : "text-muted-foreground"
         }`}
       >
         {step.label}
+        {skipped && (
+          <span className="ml-2 no-underline inline-block text-[10px] font-semibold uppercase tracking-wider text-amber-500 bg-amber-500/10 rounded-full px-2 py-0.5">
+            Skipped
+          </span>
+        )}
       </span>
-      {done && (
+      {(done || skipped) && (
         <span className="text-xs text-muted-foreground tabular-nums">
           {step.completedBy ? `${step.completedBy} · ` : ""}
           {fmtDate(step.completedAt)}
@@ -1243,7 +1305,7 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
         return (
           <div
             key={b.id}
-            className="rounded-2xl border border-white/10 bg-foreground/[0.02] p-5 flex flex-wrap items-center gap-4"
+            className="rounded-2xl border border-border bg-foreground/[0.02] p-5 flex flex-wrap items-center gap-4"
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -1257,7 +1319,7 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
                       ? "bg-primary/15 text-primary"
                       : b.status === "converted"
                         ? "bg-emerald-500/15 text-emerald-400"
-                        : "bg-white/10 text-muted-foreground"
+                        : "bg-foreground/10 text-muted-foreground"
                   }`}
                 >
                   {b.status}
@@ -1269,7 +1331,7 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
                       ? "bg-emerald-500/15 text-emerald-400"
                       : b.paymentStatus === "partial"
                         ? "bg-amber-500/15 text-amber-400"
-                        : "bg-white/10 text-muted-foreground"
+                        : "bg-foreground/10 text-muted-foreground"
                   }`}
                 >
                   {b.paymentStatus}
@@ -1313,7 +1375,7 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
                           },
                         )
                       }
-                      className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-white/15 text-sm font-medium hover:bg-white/[0.05] transition-colors"
+                      className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-border text-sm font-medium hover:bg-foreground/[0.05] transition-colors"
                     >
                       <BellRing className="w-4 h-4" /> Remind
                     </button>
@@ -1332,7 +1394,7 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
                           },
                         )
                       }
-                      className="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-primary text-white text-sm font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-colors"
+                      className="inline-flex items-center gap-2 h-10 px-4 rounded-full bg-primary text-primary-foreground text-sm font-medium shadow-lg shadow-primary/30 hover:bg-primary/90 transition-colors"
                     >
                       <CheckCircle2 className="w-4 h-4" /> Mark paid
                     </button>
@@ -1340,7 +1402,7 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
                 )}
                 <button
                   onClick={() => setCancelBooking(b)}
-                  className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-white/15 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/[0.05] transition-colors"
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-full border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-foreground/[0.05] transition-colors"
                 >
                   Cancel
                 </button>
@@ -1358,7 +1420,7 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
           }
         }}
       >
-        <DialogContent className="glass-panel border-white/10 sm:max-w-[440px]">
+        <DialogContent className="glass-panel border-border sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle className="text-xl tracking-tight">
               Cancel booking #{cancelBooking?.id}
@@ -1376,7 +1438,7 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
             <select
               value={cancelReason}
               onChange={(e) => setCancelReason(e.target.value)}
-              className="mt-1.5 w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary/60"
+              className="mt-1.5 w-full bg-foreground/[0.04] border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary/60"
             >
               <option value="">Select a reason…</option>
               {BOOKING_CANCEL_REASONS.map((r) => (
