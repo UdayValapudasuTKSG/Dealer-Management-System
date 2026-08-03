@@ -109,6 +109,7 @@ router.get("/admin/users", async (_req, res): Promise<void> => {
       clerkId: usersTable.clerkId,
       email: usersTable.email,
       name: usersTable.name,
+      phone: usersTable.phone,
       imageUrl: usersTable.imageUrl,
       roleId: dealerUsersTable.roleId,
       roleName: rolesTable.name,
@@ -186,6 +187,7 @@ router.post("/admin/users", async (req, res): Promise<void> => {
       clerkId: user.clerkId,
       email: user.email,
       name: user.name,
+      phone: user.phone,
       imageUrl: user.imageUrl,
       roleId: role.id,
       roleName: role.name,
@@ -287,6 +289,9 @@ router.patch("/admin/users/:id", async (req, res): Promise<void> => {
     .update(usersTable)
     .set({
       ...(body.data.status !== undefined ? { status: body.data.status } : {}),
+      ...(body.data.phone !== undefined
+        ? { phone: body.data.phone?.trim() || null }
+        : {}),
       updatedBy: res.locals.user?.clerkId ?? null,
       updatedAt: new Date(),
     })

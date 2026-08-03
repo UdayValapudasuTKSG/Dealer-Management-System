@@ -6621,6 +6621,7 @@ components:
         clerkId: { type: string }
         email: { type: ["string", "null"] }
         name: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
         imageUrl: { type: ["string", "null"] }
         roleId: { type: ["integer", "null"] }
         roleName: { type: ["string", "null"] }
@@ -6634,6 +6635,7 @@ components:
     AdminUserUpdate:
       type: object
       properties:
+        phone: { type: ["string", "null"] }
         roleId: { type: ["integer", "null"] }
         status: { type: string, enum: [provisioning, active, suspended, offboarding, closed] }
         reportingManagerUserId: { type: ["integer", "null"] }
@@ -7201,6 +7203,8 @@ components:
         customerName: { type: ["string", "null"] }
         advisorUserId: { type: ["integer", "null"] }
         advisorName: { type: ["string", "null"] }
+        salesAdvisorUserId: { type: ["integer", "null"] }
+        salesAdvisorName: { type: ["string", "null"] }
         vehicleLabel: { type: ["string", "null"] }
         status: { type: string, enum: [in_progress, completed, cancelled] }
         currentStep: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, delivery, signature, feedback] }

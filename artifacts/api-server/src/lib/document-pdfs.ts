@@ -264,156 +264,338 @@ export function buildInvoicePdfFromPayload(
 // 2) Vehicle handover form
 // ---------------------------------------------------------------------------
 
+export interface HandoverPdfExtras {
+  salesAdvisorName?: string | null;
+  dealerName?: string | null;
+  dealerAddress?: string | null;
+  customerAddress?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  invoiceNumber?: string | null;
+}
+
+// Checklist content mirrors the dealership's printed "New Vehicle Handover
+// Record" sheet — boxes stay empty so the advisor ticks them with the
+// customer during the physical handover.
+const HANDOVER_LEFT_SECTIONS: [string, string[]][] = [
+  [
+    "VEHICLE OPERATION - INTERIOR",
+    [
+      "Seat adjustment/ seatbelt operation",
+      "Mirror adjustment",
+      "Transmission/ handbrake",
+      "Window operation",
+      "Gear selection",
+      "Transfer lever [where fitted]",
+      "Radio/ CD/ iPod & security code",
+      "Air conditioning and ventilation",
+      "Fuse access panel",
+      "Steering column controls",
+      "Headlamp operations",
+      "Other facia switches",
+      "Instruments and warning lights/ inc ABS",
+      "Storage areas/ interior lights",
+      "Sunroof operation [where fitted]",
+      "Bonnet release - interior",
+    ],
+  ],
+  [
+    "VEHICLE OPERATION - EXTERIOR/ REAR TAILGATE",
+    [
+      "Rear door/ tailgate operation",
+      "Rear seat operation",
+      "Child lock operation",
+      "Spare wheel, jack and toolkit location",
+      "Vehicle walkaround to highlight flawless finish",
+    ],
+  ],
+  [
+    "VEHICLE OPERATION - EXTERIOR/ UNDER BONNET",
+    ["Bonnet release and support", "Jacking points and procedure"],
+  ],
+];
+
+const HANDOVER_RIGHT_SECTIONS: [string, string[]][] = [
+  [
+    "VEHICLE OPERATION - EXTERIOR/ UNDER BONNET",
+    [
+      "Fuel filler and types of fuel",
+      "Door locking and alarm [where fitted]",
+      "Owners handbook",
+    ],
+  ],
+  [
+    "VEHICLE SERVICING AND WARRANTY",
+    [
+      "First service - Pre-book date",
+      "Service schedules - service book & owners manual",
+      "Warranty documents explained and signed",
+    ],
+  ],
+  [
+    "INTRODUCE SERVICE REPS & EXPLAIN AFTER SALES CARE/ FACILITIES",
+    [
+      "Dealer/ Service hours of business/ Contact #'s",
+      "Introduction to Service Reception",
+      "Introduction to Parts Department",
+      "Value of customer satisfaction feedback",
+    ],
+  ],
+  [
+    "DRIVING FAMILIARISATIONS/ CONCLUSION",
+    [
+      "Vehicle starting procedure",
+      "Orientation drive",
+      "Check whether there are related customer queries",
+      "I confirm that all the items listed above and any queries that I had have been handled to my full satisfaction",
+    ],
+  ],
+  [
+    "PERIODIC CHECKS",
+    [
+      "Water reservoir for washers",
+      "Engine oil dipstick/ filler/ top-up amount",
+      "Radiator level check/ symbols",
+      "Brake fluid reservoir/ symbols",
+      "Tyre pressures [loaded/ unloaded]",
+    ],
+  ],
+];
+
 export function buildHandoverPdf(
   delivery: Delivery,
   vehicle: Vehicle | undefined,
   advisorName: string | null,
+  extras: HandoverPdfExtras = {},
 ): Promise<Buffer> {
   return collect((doc) => {
-    let y = header(doc, "VEHICLE HANDOVER FORM", [
-      `Delivery #${delivery.id}`,
-      `Date ${fmtDate(delivery.completedAt ?? delivery.appointmentAt ?? new Date())}`,
-    ]);
+    const M = 40;
+    const pageW = doc.page.width;
+    const colGap = 24;
+    const colW = (pageW - M * 2 - colGap) / 2;
+    const rightX = M + colW + colGap;
+    const INK = "#111111";
+    const RULE = "#333333";
 
-    y = sectionLabel(doc, "CUSTOMER", y);
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(13)
-      .fillColor("#111111")
-      .text(delivery.customerName ?? "Customer", LEFT, y);
-    y += 30;
-
-    y = sectionLabel(doc, "VEHICLE", y);
-    y = detailRows(
-      doc,
-      [
-        [
-          "Vehicle",
-          vehicle
-            ? `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ""}`
-            : `Vehicle #${delivery.vehicleId}`,
-        ],
-        ["VIN", vehicle?.vin ?? "—"],
-        ["Engine no.", vehicle?.engineNumber ?? "—"],
-        ["Colour", vehicle?.exteriorColor ?? "—"],
-        ["Registration plate", delivery.registrationNumber ?? "Pending"],
-        [
-          "Insurance",
-          delivery.insurancePolicy
-            ? `${delivery.insurancePolicy}${delivery.insuranceProvider ? ` (${delivery.insuranceProvider})` : ""}`
-            : "Pending",
-        ],
-        [
-          "Accessories",
-          vehicle && vehicle.accessories.length > 0
-            ? vehicle.accessories.join(", ")
-            : "None recorded",
-        ],
-        ["Expected delivery", fmtDate(delivery.appointmentAt ?? null)],
-        ["Actual delivery", fmtDate(delivery.deliveredAt ?? null)],
-        ["Delivery advisor", advisorName ?? "—"],
-      ],
-      y,
-    );
-
-    // PDI summary (tri-state: pass / fail / waived with reason)
-    const items = delivery.pdiItems ?? [];
-    const done = items.filter(
-      (i) => i.status === "pass" || i.status === "waived",
-    ).length;
-    y = sectionLabel(doc, "PRE-DELIVERY INSPECTION", y);
-    doc
-      .font("Helvetica")
-      .fontSize(10)
-      .fillColor("#111111")
-      .text(
-        items.length > 0
-          ? `${done} of ${items.length} checks passed or waived`
-          : "No PDI checklist recorded",
-        LEFT,
-        y,
-      );
-    y += 18;
-    const pdiMark: Record<string, string> = {
-      pass: "[PASS]",
-      fail: "[FAIL]",
-      waived: "[WAIVED]",
-      pending: "[ ]",
-    };
-    for (const item of items) {
-      const suffix =
-        item.status === "waived" && item.waiveReason
-          ? ` — waived: ${item.waiveReason}`
-          : item.note
-            ? ` — ${item.note}`
-            : "";
-      doc
-        .font("Helvetica")
-        .fontSize(9)
-        .fillColor(
-          item.status === "fail"
-            ? "#b30f16"
-            : item.status === "pending"
-              ? "#999999"
-              : "#333333",
-        )
-        .text(
-          `${pdiMark[item.status] ?? "[ ]"}  ${item.label}${suffix}`,
-          LEFT + 12,
-          y,
-        );
-      y += 14;
-    }
-    y += 16;
-
-    // Acknowledgement + signature
-    y = sectionLabel(doc, "ACKNOWLEDGEMENT", y);
-    doc
-      .font("Helvetica")
-      .fontSize(9)
-      .fillColor("#555555")
-      .text(
-        "I confirm that I have received the vehicle described above, together with all keys, documents and " +
-          "accessories, in the condition recorded by the pre-delivery inspection.",
-        LEFT,
-        y,
-        { width: doc.page.width - LEFT * 2, lineGap: 2 },
-      );
-    y += 44;
-
-    const half = (doc.page.width - LEFT * 2 - 30) / 2;
-    if (delivery.signatureData?.startsWith("data:image")) {
-      try {
-        const b64 = delivery.signatureData.split(",")[1] ?? "";
-        doc.image(Buffer.from(b64, "base64"), LEFT, y, {
-          fit: [half, 50],
-        });
-      } catch {
-        /* unreadable signature payload — leave the line blank */
+    const fieldLine = (
+      label: string,
+      value: string | null | undefined,
+      x: number,
+      y: number,
+      width: number,
+      labelW?: number,
+    ): number => {
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(INK).text(label, x, y);
+      const lw = labelW ?? doc.widthOfString(label) + 6;
+      if (value) {
+        doc
+          .font("Helvetica")
+          .fontSize(8.5)
+          .fillColor(INK)
+          .text(value, x + lw, y - 1, { width: width - lw, height: 10, ellipsis: true });
       }
+      doc
+        .moveTo(x + lw, y + 9)
+        .lineTo(x + width, y + 9)
+        .strokeColor(RULE)
+        .lineWidth(0.7)
+        .stroke();
+      return y + 16;
+    };
+
+    const checklist = (title: string, items: string[], x: number, y: number): number => {
+      doc.font("Helvetica-Bold").fontSize(8.5).fillColor(INK).text(title, x, y, { width: colW });
+      y = doc.y + 3;
+      for (const item of items) {
+        doc.font("Helvetica").fontSize(7.8).fillColor(INK).text(item, x, y, { width: colW - 20 });
+        const rowBottom = doc.y;
+        const boxSize = 9;
+        doc
+          .rect(x + colW - boxSize - 1, y - 1, boxSize, boxSize)
+          .strokeColor(RULE)
+          .lineWidth(0.7)
+          .stroke();
+        doc
+          .moveTo(x, rowBottom + 2)
+          .lineTo(x + colW, rowBottom + 2)
+          .strokeColor("#bbbbbb")
+          .lineWidth(0.4)
+          .stroke();
+        y = rowBottom + 5;
+      }
+      return y + 10;
+    };
+
+    const pageHeader = () => {
+      // Title banner (left) + dealership identity (right)
+      doc.rect(M, 36, colW, 20).fill("#1a1a1a");
+      doc
+        .fillColor("#ffffff")
+        .font("Helvetica-Bold")
+        .fontSize(10)
+        .text("YOUR NEW VEHICLE HANDOVER RECORD", M + 8, 42, { width: colW - 16 });
+      doc
+        .fillColor(INK)
+        .font("Helvetica-Bold")
+        .fontSize(15)
+        .text(extras.dealerName ?? "AURA MOTORS", rightX, 38, {
+          width: colW,
+          align: "center",
+        });
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(7.5)
+        .text((extras.dealerAddress ?? "").toUpperCase(), rightX, doc.y + 2, {
+          width: colW,
+          align: "center",
+        });
+      return 74;
+    };
+
+    // ---------------- Page 1 ----------------
+    let y = pageHeader();
+
+    // Customer details (left)
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("CUSTOMER DETAILS", M, y);
+    let ly = y + 14;
+    ly = fieldLine("CUSTOMER NAME:", delivery.customerName ?? "", M, ly, colW, 82);
+    ly = fieldLine("ADDRESS:", extras.customerAddress ?? "", M, ly, colW, 50);
+    ly = fieldLine("", "", M, ly, colW, 0);
+    ly = fieldLine("EMAIL ADDRESS:", extras.customerEmail ?? "", M, ly, colW, 80);
+    ly = fieldLine("TEL NOS.:", extras.customerPhone ?? "", M, ly, colW, 48);
+
+    // Salesperson / date / invoice (right)
+    let ry = y + 14;
+    ry = fieldLine(
+      "SALESPERSON:",
+      extras.salesAdvisorName ?? advisorName ?? "",
+      rightX,
+      ry,
+      colW,
+      74,
+    );
+    ry = fieldLine(
+      "DATE:",
+      fmtDate(delivery.deliveredAt ?? delivery.appointmentAt ?? new Date()),
+      rightX,
+      ry,
+      colW,
+      34,
+    );
+    ry = fieldLine("INVOICE#", extras.invoiceNumber ?? "", rightX, ry, colW, 48);
+
+    y = Math.max(ly, ry) + 6;
+
+    // Vehicle details (left, two mini-columns)
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("VEHICLE DETAILS", M, y);
+    y += 14;
+    const halfCol = (colW - 12) / 2;
+    let vy = fieldLine("MAKE:", vehicle?.make ?? "", M, y, halfCol, 34);
+    fieldLine("MODEL:", vehicle?.model ?? "", M + halfCol + 12, y, halfCol, 40);
+    let vy2 = fieldLine(
+      "REGISTRATION#",
+      delivery.registrationNumber ?? "",
+      M,
+      vy,
+      halfCol,
+      74,
+    );
+    fieldLine("VIN:", vehicle?.vin ?? "", M + halfCol + 12, vy, halfCol, 26);
+    const vy3 = fieldLine("KEY #", "", M, vy2, halfCol, 32);
+    fieldLine("MILEAGE:", "", M + halfCol + 12, vy2, halfCol, 48);
+    y = fieldLine(
+      "STOCK#",
+      vehicle ? `V-${String(vehicle.id).padStart(5, "0")}` : "",
+      M,
+      vy3,
+      halfCol,
+      40,
+    );
+    y += 4;
+
+    doc.font("Helvetica-Bold").fontSize(11).fillColor(INK).text("EXPLAIN AND/OR DEMONSTRATE", M, y);
+    y += 18;
+
+    // Checklists — left column continues from here; right column starts at the
+    // same height as the vehicle details block for visual balance.
+    let leftY = y;
+    for (const [title, items] of HANDOVER_LEFT_SECTIONS) {
+      leftY = checklist(title, items, M, leftY);
     }
-    y += 54;
-    doc
-      .moveTo(LEFT, y)
-      .lineTo(LEFT + half, y)
-      .strokeColor("#999999")
-      .lineWidth(1)
-      .stroke();
-    doc
-      .moveTo(LEFT + half + 30, y)
-      .lineTo(doc.page.width - LEFT, y)
-      .stroke();
+    let rightY = ry + 10;
+    for (const [title, items] of HANDOVER_RIGHT_SECTIONS) {
+      rightY = checklist(title, items, rightX, rightY);
+    }
+
+    // ---------------- Page 2 ----------------
+    doc.addPage();
+    y = pageHeader();
+
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("CUSTOMER DETAILS", M, y);
+    let p2y = y + 14;
+    p2y = fieldLine("CUSTOMER NAME:", delivery.customerName ?? "", M, p2y, colW, 82);
+    p2y = fieldLine("ADDRESS:", extras.customerAddress ?? "", M, p2y, colW, 50);
+    p2y += 14;
+
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("CONDITION OF VEHICLE", M, p2y);
     doc
       .font("Helvetica")
       .fontSize(8.5)
-      .fillColor("#777777")
+      .fillColor(INK)
       .text(
-        `Customer signature${delivery.signatureName ? ` — ${delivery.signatureName}` : ""}`,
-        LEFT,
-        y + 6,
-        { width: half },
-      )
-      .text("Delivery advisor", LEFT + half + 30, y + 6, { width: half });
+        "Please confirm that the vehicle you are receiving is in accordance with your order and correct in " +
+          "both specification and documentation, that the vehicle's condition meets your full expectation " +
+          "and that the handover process increased your excitement and pleased you.",
+        M,
+        p2y + 14,
+        { width: colW, lineGap: 2 },
+      );
+    doc
+      .font("Helvetica")
+      .fontSize(7)
+      .fillColor("#555555")
+      .text("Print in duplicate\n(1) Customer, (2) Operations Manager", M, doc.y + 24);
+
+    // Sign & date (right column)
+    let sy = y;
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("SIGN & DATE", rightX, sy);
+    sy += 18;
+    const signRow = (label: string, right?: string): void => {
+      doc.font("Helvetica").fontSize(8.5).fillColor(INK).text(label, rightX, sy);
+      if (right) {
+        doc.text(right, rightX, sy, { width: colW, align: "right" });
+      }
+      if (label === "Customer" && delivery.signatureData?.startsWith("data:image")) {
+        try {
+          const b64 = delivery.signatureData.split(",")[1] ?? "";
+          doc.image(Buffer.from(b64, "base64"), rightX + 90, sy - 6, { fit: [120, 34] });
+        } catch {
+          /* unreadable signature payload — leave the line blank */
+        }
+      }
+      sy += 34;
+      doc
+        .moveTo(rightX, sy)
+        .lineTo(rightX + colW, sy)
+        .strokeColor(RULE)
+        .lineWidth(0.8)
+        .stroke();
+      sy += 14;
+    };
+    signRow("Customer");
+    signRow("Sales", "Consultant");
+    signRow("Service", "Representative");
+
+    sy += 4;
+    doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("Comments & Commitments", rightX, sy);
+    sy += 14;
+    doc.rect(rightX, sy, colW, 70).strokeColor(RULE).lineWidth(1).stroke();
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(9.5)
+      .fillColor(INK)
+      .text("Spare Key Received", rightX + 10, sy + 12, { continued: true })
+      .text("        ____", { continued: false });
 
     footer(
       doc,

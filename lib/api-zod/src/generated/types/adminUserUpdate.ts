@@ -9,6 +9,8 @@ import type { AdminUserUpdateStatus } from './adminUserUpdateStatus';
 
 export interface AdminUserUpdate {
   /** @nullable */
+  phone?: string | null;
+  /** @nullable */
   roleId?: number | null;
   status?: AdminUserUpdateStatus;
   /** @nullable */

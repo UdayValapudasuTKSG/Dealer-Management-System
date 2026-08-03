@@ -6,8 +6,36 @@ import {
   type Lead,
   type Deal,
   type ServiceOrder,
+  usersTable,
+  dealerUsersTable,
 } from "@workspace/db";
 import { enqueueEmail, type TemplateData } from "./email";
+
+/** Name + phone of the lead's assigned (round-robin) sales advisor. */
+export async function leadAdvisorContact(
+  lead: Lead,
+): Promise<{ name: string | null; phone: string | null } | null> {
+  if (!lead.ownerUserId) return null;
+  // Tenancy: only surface the advisor if they are a member of the lead's
+  // dealership — a stale ownerUserId must never leak another dealer's staff.
+  const [u] = await db
+    .select({
+      name: usersTable.name,
+      email: usersTable.email,
+      phone: usersTable.phone,
+    })
+    .from(usersTable)
+    .innerJoin(
+      dealerUsersTable,
+      and(
+        eq(dealerUsersTable.userId, usersTable.id),
+        eq(dealerUsersTable.dealerId, lead.dealerId),
+      ),
+    )
+    .where(eq(usersTable.id, lead.ownerUserId));
+  if (!u) return null;
+  return { name: u.name ?? u.email ?? null, phone: u.phone ?? null };
+}
 import { ownerCalendarContact, testDriveCalendarFields } from "./calendar";
 import { logger } from "./logger";
 
@@ -204,14 +232,9 @@ export async function sendTestDriveInviteEmail(
       error: "A test drive is already scheduled for this lead.",
     };
   }
-  const link = testDriveBookingUrl(lead.testDriveToken);
-  if (!link) {
-    return {
-      ok: false,
-      status: 503,
-      error: "The public booking link is unavailable in this environment.",
-    };
-  }
+  // Dealership policy: no customer self-scheduling — the invite carries the
+  // assigned sales advisor's phone number for a follow-up call instead.
+  const advisor = await leadAdvisorContact(lead);
   const vehicle = await vehicleName(lead.dealerId, lead.interestedVehicleId);
   await send({
     dealerId: lead.dealerId,
@@ -220,7 +243,8 @@ export async function sendTestDriveInviteEmail(
     customerId: lead.customerId,
     data: {
       name,
-      link,
+      ...(advisor?.name ? { advisorName: advisor.name } : {}),
+      ...(advisor?.phone ? { advisorPhone: advisor.phone } : {}),
       ...(vehicle ? { vehicle } : {}),
     },
   });

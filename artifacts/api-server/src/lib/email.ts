@@ -114,20 +114,28 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
   },
   test_drive_invite: {
     label: "Test Drive Invite",
-    description: "Invites the customer to reserve a test-drive time slot online.",
+    description:
+      "Invites the customer to arrange a test drive by calling their sales advisor.",
     subject: (x) =>
       `Reserve your test drive${x.vehicle ? ` — ${x.vehicle}` : ""}`,
     heading: (x) => `Take the wheel, ${d(x, "name", "there")}`,
     body: (x) =>
-      `The <strong>${d(x, "vehicle", "vehicle of your choice")}</strong> is ready when you are. Pick a time that suits you and we'll have it detailed, charged/fuelled and waiting at the showroom entrance. Reserving your slot takes under a minute — and the time is blocked exclusively for you.`,
+      `The <strong>${d(x, "vehicle", "vehicle of your choice")}</strong> is ready when you are. ` +
+      (x.advisorPhone
+        ? `To arrange a time that suits you, call your sales advisor <strong>${d(x, "advisorName", "our team")}</strong> on <strong>${x.advisorPhone}</strong> — the vehicle will be detailed, charged/fuelled and waiting at the showroom entrance.`
+        : `Your sales advisor${x.advisorName ? ` <strong>${x.advisorName}</strong>` : ""} will call you shortly to arrange a time — the vehicle will be detailed, charged/fuelled and waiting at the showroom entrance.`),
     cta: (x) =>
-      x.link
-        ? { label: "Choose your time slot", href: x.link }
-        : { label: "Choose your time slot" },
+      x.advisorPhone
+        ? {
+            label: `Call ${d(x, "advisorName", "your sales advisor")} — ${x.advisorPhone}`,
+            href: `tel:${x.advisorPhone.replace(/[^+\d]/g, "")}`,
+          }
+        : { label: "Your sales advisor will call you" },
     sample: {
       name: "Alex Mensah",
       vehicle: "2026 BMW i7 xDrive60",
-      link: "https://aura.example.com/book-test-drive/sample-token",
+      advisorName: "Alex Fernandes",
+      advisorPhone: "+592 600 1234",
     },
   },
   test_drive_confirmation: {

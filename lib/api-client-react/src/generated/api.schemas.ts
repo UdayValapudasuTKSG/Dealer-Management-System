@@ -401,6 +401,8 @@ export interface AdminUser {
   /** @nullable */
   name?: string | null;
   /** @nullable */
+  phone?: string | null;
+  /** @nullable */
   imageUrl?: string | null;
   /** @nullable */
   roleId?: number | null;
@@ -432,6 +434,8 @@ export const AdminUserUpdateStatus = {
 } as const;
 
 export interface AdminUserUpdate {
+  /** @nullable */
+  phone?: string | null;
   /** @nullable */
   roleId?: number | null;
   status?: AdminUserUpdateStatus;
@@ -1301,6 +1305,10 @@ export interface Delivery {
   advisorUserId?: number | null;
   /** @nullable */
   advisorName?: string | null;
+  /** @nullable */
+  salesAdvisorUserId?: number | null;
+  /** @nullable */
+  salesAdvisorName?: string | null;
   /** @nullable */
   vehicleLabel?: string | null;
   status: DeliveryStatus;

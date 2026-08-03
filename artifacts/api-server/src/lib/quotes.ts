@@ -10,9 +10,9 @@ import {
   agentsTable,
   type Lead,
   type Quote,
+  type QuoteTaxLine,
   type Vehicle,
 } from "@workspace/db";
-import { computeTaxes, ensureDealerTaxes } from "./taxes";
 import { logger } from "./logger";
 import { recordAgentRun } from "./agent-governance";
 
@@ -69,12 +69,15 @@ export async function generateQuoteForLead(
   const vehicle = await leadVehicle(lead);
   if (!vehicle) return null;
 
-  const taxes = await ensureDealerTaxes(lead.dealerId);
   const now = new Date();
-  const computed = computeTaxes(vehicle.price, taxes, {
-    asOf: now,
-    powertrain: vehicle.powertrain,
-  });
+  // Quotes are tax-free estimates by dealership policy: the printed quote
+  // shows the vehicle price only. Duties/taxes are handled downstream by the
+  // GRA filing flow, never on the customer quote.
+  const computed = {
+    lines: [] as QuoteTaxLine[],
+    totalTax: 0,
+    totalWithTax: vehicle.price,
+  };
 
   const [latest] = await db
     .select()

@@ -27,6 +27,10 @@ export interface Delivery {
   /** @nullable */
   advisorName?: string | null;
   /** @nullable */
+  salesAdvisorUserId?: number | null;
+  /** @nullable */
+  salesAdvisorName?: string | null;
+  /** @nullable */
   vehicleLabel?: string | null;
   status: DeliveryStatus;
   currentStep: DeliveryCurrentStep;

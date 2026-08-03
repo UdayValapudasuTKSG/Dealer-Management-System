@@ -202,8 +202,9 @@ export function buildQuotePdf(data: QuotePdfData): Promise<Buffer> {
         y += 4;
       }
     };
-    totalRow("SUBTOTAL", val(data, "subtotal", val(data, "total")));
-    totalRow("TAX", val(data, "totalTax", "0.00"), { rule: true });
+    totalRow("SUBTOTAL", val(data, "subtotal", val(data, "total")), {
+      rule: true,
+    });
     totalRow("TOTAL", val(data, "total"), { bold: true });
     y += 30;
 

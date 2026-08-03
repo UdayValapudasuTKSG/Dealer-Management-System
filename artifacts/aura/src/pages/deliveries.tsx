@@ -7,6 +7,8 @@ import {
   useUpdateDelivery,
   useUpdateDeliveryPdi,
   useListDeliveryAdvisors,
+  useListLeadAdvisors,
+  useUpdateDeal,
   useListBookings,
   useUpdateBooking,
   useSendBookingPaymentReminder,
@@ -299,6 +301,8 @@ function DeliveryDetail({
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data: advisors } = useListDeliveryAdvisors();
+  const { data: salesAdvisors } = useListLeadAdvisors();
+  const updateDeal = useUpdateDeal();
   const advance = useAdvanceDelivery();
   const updateDelivery = useUpdateDelivery();
   const updatePdi = useUpdateDeliveryPdi();
@@ -698,6 +702,51 @@ function DeliveryDetail({
                   {(advisors ?? []).length === 0 && (
                     <div className="px-3 py-2 text-sm text-muted-foreground">
                       No Delivery Advisors yet
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="min-w-52">
+              <Select
+                value={
+                  delivery.salesAdvisorUserId
+                    ? String(delivery.salesAdvisorUserId)
+                    : ""
+                }
+                onValueChange={(v) => {
+                  const advisor = (salesAdvisors ?? []).find(
+                    (a) => a.id === Number(v),
+                  );
+                  updateDeal.mutate(
+                    {
+                      id: delivery.dealId,
+                      data: {
+                        salesAdvisorUserId: Number(v),
+                        ...(advisor ? { salesAdvisor: advisor.name } : {}),
+                      } as never,
+                    },
+                    {
+                      onSuccess: () => {
+                        invalidate();
+                        toast({ title: "Sales advisor assigned" });
+                      },
+                    },
+                  );
+                }}
+              >
+                <SelectTrigger className="bg-foreground/[0.04] border-border">
+                  <SelectValue placeholder="Assign sales advisor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(salesAdvisors ?? []).map((a) => (
+                    <SelectItem key={a.id} value={String(a.id)}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                  {(salesAdvisors ?? []).length === 0 && (
+                    <div className="px-3 py-2 text-sm text-muted-foreground">
+                      No Sales Advisors yet
                     </div>
                   )}
                 </SelectContent>

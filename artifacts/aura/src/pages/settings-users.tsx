@@ -163,6 +163,7 @@ export default function SettingsUsers() {
             <thead>
               <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
                 <th className="px-5 py-3">Member</th>
+                <th className="px-5 py-3">Phone</th>
                 <th className="px-5 py-3">Role</th>
                 <th className="px-5 py-3">Reports to</th>
                 <th className="px-5 py-3">Division</th>
@@ -195,6 +196,22 @@ export default function SettingsUsers() {
                           <div className="text-xs text-muted-foreground">{u.email ?? "—"}</div>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <Input
+                        defaultValue={u.phone ?? ""}
+                        placeholder="+592 …"
+                        className="w-36 h-8 bg-white/[0.03] border-white/10 text-xs"
+                        onBlur={(e) => {
+                          const next = e.target.value.trim();
+                          if (next !== (u.phone ?? "")) {
+                            update.mutate({
+                              id: u.id,
+                              data: { phone: next || null },
+                            });
+                          }
+                        }}
+                      />
                     </td>
                     <td className="px-5 py-3">
                       <Select

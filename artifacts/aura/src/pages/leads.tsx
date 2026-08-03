@@ -509,47 +509,8 @@ export default function Leads() {
                 { name: "email", label: "Email", type: "email", required: true, span: "half", placeholder: "kojo@email.com", section: "Prospect" },
                 { name: "address", label: "Address", type: "text", required: true, span: "full", placeholder: "Lot 12 Main Street, Georgetown", section: "Prospect" },
                 {
-                  name: "channel",
-                  label: "Channel",
-                  type: "select",
-                  required: true,
-                  span: "half",
-                  section: "Enquiry",
-                  defaultValue: "web",
-                  options: [
-                    { value: "web", label: "Web" },
-                    { value: "social", label: "Social" },
-                    { value: "mobile", label: "Mobile" },
-                    { value: "walkin", label: "Walk-in" },
-                  ],
-                },
-                {
-                  name: "interestedVehicleId",
-                  label: "Interested model",
-                  type: "custom",
-                  required: true,
-                  span: "full",
-                  section: "Enquiry",
-                  render: (_value, set) => (
-                    <VehicleCascade
-                      vehicles={(vehicles ?? []).map((v) => ({
-                        id: v.id,
-                        brand: v.make,
-                        model: v.model,
-                        version: v.trim || v.variant || "Standard specification",
-                        color: v.exteriorColor,
-                        year: v.year,
-                        vin: v.vin ?? null,
-                        price: v.price,
-                      }))}
-                      unitSelection={false}
-                      onResolve={(v) => set(v ? String(v.id) : "")}
-                    />
-                  ),
-                },
-                {
                   name: "source",
-                  label: "Source",
+                  label: "Lead source",
                   type: "select",
                   required: true,
                   span: "half",
@@ -597,6 +558,48 @@ export default function Leads() {
                     ]
                   : []),
                 {
+                  name: "interestedVehicleId",
+                  label: "Interested model",
+                  type: "custom",
+                  required: true,
+                  span: "full",
+                  section: "Enquiry",
+                  render: (_value, set) => (
+                    <VehicleCascade
+                      vehicles={(vehicles ?? []).map((v) => ({
+                        id: v.id,
+                        brand: v.make,
+                        model: v.model,
+                        version: v.trim || v.variant || "Standard specification",
+                        color: v.exteriorColor,
+                        year: v.year,
+                        vin: v.vin ?? null,
+                        price: v.price,
+                      }))}
+                      unitSelection={false}
+                      onResolve={(v) => set(v ? String(v.id) : "")}
+                    />
+                  ),
+                },
+                {
+                  name: "isRetailCustomer",
+                  label: "Retail customer",
+                  type: "custom",
+                  span: "half",
+                  section: "Enquiry",
+                  render: (value, set) => (
+                    <label className="flex items-center gap-2.5 h-10 px-3 rounded-md bg-white/[0.04] border border-white/10 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={value === "true"}
+                        onChange={(e) => set(e.target.checked ? "true" : "")}
+                        className="w-4 h-4 accent-[var(--primary)] rounded"
+                      />
+                      <span className="text-sm">Is a retail customer</span>
+                    </label>
+                  ),
+                },
+                {
                   name: "priority",
                   label: "Priority (optional)",
                   type: "select",
@@ -614,6 +617,14 @@ export default function Leads() {
               ]}
               onSubmit={async (values) => {
                 const payload = { ...values };
+                // The channel is implied by the lead source rather than asked
+                // twice: social sources → social, walk-in → walkin, else web.
+                payload.channel = selectedSourceCfg?.isSocial
+                  ? "social"
+                  : ["walk_in", "walkin"].includes(String(payload.source))
+                    ? "walkin"
+                    : "web";
+                payload.isRetailCustomer = payload.isRetailCustomer === "true";
                 if (payload.interestedVehicleId != null) {
                   payload.interestedVehicleId = Number(
                     payload.interestedVehicleId,

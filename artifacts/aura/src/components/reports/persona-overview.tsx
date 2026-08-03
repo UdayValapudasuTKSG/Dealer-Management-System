@@ -205,7 +205,7 @@ function Leaderboard({ rows }: { rows: AdvisorPerformance[] }) {
   const top = rows.slice(0, 5);
   if (top.length === 0) return <Empty text="No deal activity yet." />;
   return (
-    <div className="h-full flex flex-col justify-center gap-1.5 px-2 pb-1">
+    <div className="h-full flex flex-col justify-start gap-1 px-2 pb-1 overflow-y-auto overscroll-contain min-h-0">
       {top.map((p, i) => (
         <div
           key={p.name}

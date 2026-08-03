@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
 import PDFDocument from "pdfkit";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   deliveriesTable,
   dealsTable,
+  dealersTable,
   vehiclesTable,
   customersTable,
   bookingsTable,
@@ -231,13 +232,29 @@ async function enrich(rows: Delivery[], dealerId: number): Promise<Enriched[]> {
         .from(vehiclesTable)
         .where(eq(vehiclesTable.dealerId, dealerId))
     : [];
+  const dealIds = [...new Set(rows.map((r) => r.dealId))];
+  const deals = dealIds.length
+    ? await db
+        .select({
+          id: dealsTable.id,
+          salesAdvisor: dealsTable.salesAdvisor,
+          salesAdvisorUserId: dealsTable.salesAdvisorUserId,
+        })
+        .from(dealsTable)
+        .where(
+          and(eq(dealsTable.dealerId, dealerId), inArray(dealsTable.id, dealIds)),
+        )
+    : [];
   return Promise.all(
     rows.map(async (r) => {
       const a = advisors.find((x) => x.id === r.advisorUserId);
       const v = vehicles.find((x) => x.id === r.vehicleId);
+      const deal = deals.find((x) => x.id === r.dealId);
       return {
         ...r,
         advisorName: a ? (a.name ?? a.email ?? `User #${a.id}`) : null,
+        salesAdvisorUserId: deal?.salesAdvisorUserId ?? null,
+        salesAdvisorName: deal?.salesAdvisor ?? null,
         vehicleLabel: v
           ? `${v.year} ${v.make} ${v.model}${v.vin ? ` · ${v.vin}` : ""}`
           : null,
@@ -1240,7 +1257,68 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
       .where(eq(usersTable.id, delivery.advisorUserId));
     advisorName = advisor?.name ?? advisor?.email ?? null;
   }
-  const pdf = await buildHandoverPdf(delivery, vehicle, advisorName);
+  const [deal] = await db
+    .select({
+      salesAdvisor: dealsTable.salesAdvisor,
+      leadId: dealsTable.leadId,
+    })
+    .from(dealsTable)
+    .where(
+      and(
+        eq(dealsTable.id, delivery.dealId),
+        eq(dealsTable.dealerId, delivery.dealerId),
+      ),
+    );
+  const [customer] = delivery.customerId
+    ? await db
+        .select({
+          email: customersTable.email,
+          phone: customersTable.phone,
+          location: customersTable.location,
+          city: customersTable.city,
+          country: customersTable.country,
+        })
+        .from(customersTable)
+        .where(
+          and(
+            eq(customersTable.id, delivery.customerId),
+            eq(customersTable.dealerId, delivery.dealerId),
+          ),
+        )
+    : [];
+  const [dealer] = await db
+    .select({
+      name: dealersTable.name,
+      city: dealersTable.city,
+      country: dealersTable.country,
+    })
+    .from(dealersTable)
+    .where(eq(dealersTable.id, delivery.dealerId));
+  let invoiceNumber: string | null = null;
+  if (delivery.invoiceId) {
+    const [inv] = await db
+      .select({ invoiceNumber: invoicesTable.invoiceNumber })
+      .from(invoicesTable)
+      .where(
+        and(
+          eq(invoicesTable.id, delivery.invoiceId),
+          eq(invoicesTable.dealerId, delivery.dealerId),
+        ),
+      );
+    invoiceNumber = inv?.invoiceNumber ?? null;
+  }
+  const pdf = await buildHandoverPdf(delivery, vehicle, advisorName, {
+    salesAdvisorName: deal?.salesAdvisor ?? null,
+    dealerName: dealer?.name ?? null,
+    dealerAddress: [dealer?.city, dealer?.country].filter(Boolean).join(", "),
+    customerAddress:
+      customer?.location ??
+      [customer?.city, customer?.country].filter(Boolean).join(", ") ??
+      null,
+    customerEmail: customer?.email ?? null,
+    customerPhone: customer?.phone ?? null,
+    invoiceNumber,
+  });
   res
     .setHeader("Content-Type", "application/pdf")
     .setHeader(

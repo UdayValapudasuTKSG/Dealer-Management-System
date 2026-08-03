@@ -172,11 +172,16 @@ export function CreateRecordDialog({
           // Radix Select/Popover content is portalled outside the dialog; a
           // fast double-click on a select option lands "outside" the dialog
           // and would close it. Ignore outside-pointerdowns that originate
-          // from any portalled popper layer.
+          // from any portalled popper layer, AND any click made while a
+          // dropdown is open — that click should only dismiss the dropdown,
+          // never the whole dialog (a long form would lose all its input).
           const target = e.target as HTMLElement | null;
           if (
             target?.closest(
               "[data-radix-popper-content-wrapper], [data-radix-select-viewport], [role='listbox'], [role='option']",
+            ) ||
+            document.querySelector(
+              "[data-radix-popper-content-wrapper], [data-radix-select-viewport]",
             )
           ) {
             e.preventDefault();
@@ -187,6 +192,9 @@ export function CreateRecordDialog({
           if (
             target?.closest(
               "[data-radix-popper-content-wrapper], [data-radix-select-viewport], [role='listbox'], [role='option']",
+            ) ||
+            document.querySelector(
+              "[data-radix-popper-content-wrapper], [data-radix-select-viewport]",
             )
           ) {
             e.preventDefault();

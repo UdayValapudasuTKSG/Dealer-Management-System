@@ -544,6 +544,7 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
         clerkId: "test-bypass",
         email: "test@local",
         name: "Test Harness",
+        phone: null,
         imageUrl: null,
         roleId: null,
         status: "active",

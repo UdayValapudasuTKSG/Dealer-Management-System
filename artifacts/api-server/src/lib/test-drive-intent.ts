@@ -17,7 +17,7 @@ import {
   recordAgentRun,
 } from "./agent-governance";
 import { enqueueEmail, enqueueWhatsapp, notifyUser } from "./email";
-import { testDriveBookingUrl } from "./email-triggers";
+import { testDriveBookingUrl, leadAdvisorContact } from "./email-triggers";
 import { ownerCalendarContact, testDriveCalendarFields } from "./calendar";
 import {
   afterTestDriveBooked,
@@ -180,7 +180,11 @@ function channelReport(email: string | null, phone: string | null): string {
   return skipped.length > 0 ? ` Skipped channels: ${skipped.join(", ")}.` : "";
 }
 
-/** Send the self-service time-selection link on every channel the lead has. */
+/**
+ * Invite the customer to arrange the test drive with their assigned sales
+ * advisor (round-robin owner). Dealership policy: no customer self-scheduling
+ * — the invite carries the advisor's name and phone number instead of a link.
+ */
 async function sendSelectionLink(
   lead: Lead,
   call: CallLog,
@@ -188,12 +192,12 @@ async function sendSelectionLink(
   reason: string,
   opts?: { reschedule?: boolean },
 ): Promise<string> {
-  const link = testDriveBookingUrl(lead.testDriveToken);
   const email = await leadEmailAddress(lead);
   const phone = (lead.phone ?? "").replace(/\D/g, "") || null;
   const firstName = lead.name.split(/\s+/)[0];
+  const advisor = await leadAdvisorContact(lead);
 
-  if (email && link) {
+  if (email) {
     await enqueueEmail({
       dealerId: lead.dealerId,
       template: "test_drive_invite",
@@ -202,16 +206,20 @@ async function sendSelectionLink(
       leadId: lead.id,
       data: {
         name: lead.name,
-        link,
+        ...(advisor?.name ? { advisorName: advisor.name } : {}),
+        ...(advisor?.phone ? { advisorPhone: advisor.phone } : {}),
         ...(vehicle ? { vehicle } : {}),
       },
       dedupeKey: `tdintent:${call.id}:link-email`,
     });
   }
-  if (phone && link) {
+  if (phone) {
+    const callLine = advisor?.phone
+      ? `call your sales advisor ${advisor.name ?? ""} on ${advisor.phone}`.replace(/\s+/g, " ")
+      : `your sales advisor${advisor?.name ? ` ${advisor.name}` : ""} will call you shortly`;
     const body = opts?.reschedule
-      ? `Hi ${firstName}! Thanks for your call — you already have a test drive booked with us. If you'd like a different time, pick one here (takes under a minute): ${link}`
-      : `Hi ${firstName}! Thanks for your call — we'd love to get you behind the wheel${vehicle ? ` of the ${vehicle}` : ""}. Pick a time that suits you here (takes under a minute): ${link}`;
+      ? `Hi ${firstName}! Thanks for your call — you already have a test drive booked with us. If you'd like a different time, ${callLine}.`
+      : `Hi ${firstName}! Thanks for your call — we'd love to get you behind the wheel${vehicle ? ` of the ${vehicle}` : ""}. To arrange a time, ${callLine}.`;
     await enqueueWhatsapp({
       kind: "whatsapp_message",
       to: phone,

@@ -14,6 +14,7 @@ export const usersTable = pgTable("users", {
   clerkId: text("clerk_id").notNull().unique(),
   email: text("email"),
   name: text("name"),
+  phone: text("phone"),
   imageUrl: text("image_url"),
   roleId: integer("role_id").references(() => rolesTable.id, {
     onDelete: "set null",
