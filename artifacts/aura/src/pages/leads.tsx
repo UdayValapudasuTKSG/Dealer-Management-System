@@ -165,6 +165,21 @@ export default function Leads() {
   const compact = density === "compact";
   const myId = me?.id ?? null;
   const myName = me?.name?.trim().toLowerCase() ?? null;
+  const isLeadership =
+    !!me && (me.isSuperAdmin || me.roleName === "General Manager");
+
+  // Advisor filter (leadership only) + table sorting (everyone).
+  const [advisorFilter, setAdvisorFilter] = useState<string>("all");
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const toggleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
 
   // Derive the rail stage for a lead: pre-sale stages map 1:1 from the lead
   // phase; won leads split into Vehicle Allocated / Payment / Pre-Delivery /
@@ -274,8 +289,22 @@ export default function Leads() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, myId, myName]);
 
+  const advisorOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (leads ?? [])
+            .map((l) => l.assignedTo)
+            .filter((a): a is string => !!a && a.trim().length > 0),
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
+    [leads],
+  );
+
   const visible = useMemo(() => {
     return rows.filter((r) => {
+      if (advisorFilter !== "all" && r.lead.assignedTo !== advisorFilter)
+        return false;
       switch (tab) {
         case "all":
           return true;
@@ -294,12 +323,40 @@ export default function Leads() {
   const [page, setPage] = useState(1);
   useEffect(() => {
     setPage(1);
-  }, [tab, search, layout, density]);
-  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  }, [tab, search, layout, density, advisorFilter]);
+  const sortedVisible = useMemo(() => {
+    if (!sortKey) return visible;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const stageOrder: readonly string[] = STAGES;
+    const val = (r: (typeof visible)[number]): string | number => {
+      switch (sortKey) {
+        case "client": return r.lead.name.toLowerCase();
+        case "model": return (r.model ?? "").toLowerCase();
+        case "phase": {
+          if (!r.stage) return stageOrder.length; // Lost sorts last
+          const idx = stageOrder.indexOf(r.stage);
+          return idx === -1 ? stageOrder.length : idx;
+        }
+        case "advisor": return (r.lead.assignedTo ?? "").toLowerCase();
+        case "sla":
+          // Contacted (no SLA) sorts last; overdue first when ascending.
+          return r.sla ? r.sla.left : Number.MAX_SAFE_INTEGER;
+        default: return 0;
+      }
+    };
+    return [...visible].sort((a, b) => {
+      const av = val(a);
+      const bv = val(b);
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+  }, [visible, sortKey, sortDir]);
+  const pageCount = Math.max(1, Math.ceil(sortedVisible.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
   const paged = useMemo(
-    () => visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [visible, safePage, PAGE_SIZE],
+    () => sortedVisible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [sortedVisible, safePage, PAGE_SIZE],
   );
 
   const TABS: { key: TabKey; label: string }[] = [
@@ -525,6 +582,21 @@ export default function Leads() {
               className="w-full h-9 rounded-full bg-foreground/[0.04] border border-white/10 pl-9 pr-4 text-sm focus:outline-none focus:border-primary/50"
             />
           </div>
+          {isLeadership && advisorOptions.length > 0 && (
+            <select
+              value={advisorFilter}
+              onChange={(e) => setAdvisorFilter(e.target.value)}
+              className="h-9 rounded-full bg-foreground/[0.04] border border-white/10 text-sm px-3 pr-8 text-foreground/90 focus:outline-none focus:border-primary/50"
+              aria-label="Filter by sales advisor"
+            >
+              <option value="all">All advisors</option>
+              {advisorOptions.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          )}
           <div className="flex flex-wrap items-center gap-1.5">
           {TABS.map((t) => (
             <button
@@ -565,11 +637,27 @@ export default function Leads() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-3 font-semibold">Client</th>
-                  <th className="px-4 py-3 font-semibold">Model</th>
-                  <th className="px-4 py-3 font-semibold">Phase</th>
-                  <th className="px-4 py-3 font-semibold">Advisor</th>
-                  <th className="px-4 py-3 font-semibold">Contact SLA</th>
+                  {(
+                    [
+                      ["Client", "client"],
+                      ["Model", "model"],
+                      ["Phase", "phase"],
+                      ["Advisor", "advisor"],
+                      ["Contact SLA", "sla"],
+                    ] as const
+                  ).map(([label, k]) => (
+                    <th key={k} className="px-4 py-3 font-semibold">
+                      <button
+                        onClick={() => toggleSort(k)}
+                        className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-foreground transition-colors"
+                      >
+                        {label}
+                        <span className="text-[9px] leading-none">
+                          {sortKey === k ? (sortDir === "asc" ? "▲" : "▼") : ""}
+                        </span>
+                      </button>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
