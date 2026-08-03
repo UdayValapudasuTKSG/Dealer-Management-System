@@ -82,6 +82,22 @@ export function AgentBriefPanel({
         }),
     },
   });
+  const sendEmail = useSendLeadOutreach({
+    mutation: {
+      onSuccess: () =>
+        toast({
+          title: "Email queued",
+          description:
+            "The follow-up email is in the outbox and will be delivered automatically.",
+        }),
+      onError: (e) =>
+        toast({
+          title: "Could not send the email",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
   const notifyOwner = useNotifyLeadOwner({
     mutation: {
       onSuccess: () =>
@@ -282,13 +298,27 @@ export function AgentBriefPanel({
                 </a>
               ) : null}
               {leadEmail && (
-                <a
-                  href={`mailto:${leadEmail}?subject=${encodeURIComponent("Following up on your enquiry")}&body=${encodeURIComponent(draft)}`}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-foreground/[0.06] text-foreground/80 ring-1 ring-white/10 hover:bg-foreground/[0.1] transition-colors"
+                <button
+                  onClick={() =>
+                    sendEmail.mutate({
+                      id: leadId,
+                      data: {
+                        message: draft,
+                        channel: "email",
+                        subject: "Following up on your enquiry",
+                      },
+                    })
+                  }
+                  disabled={sendEmail.isPending || !draft}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-full bg-foreground/[0.06] text-foreground/80 ring-1 ring-white/10 hover:bg-foreground/[0.1] transition-colors disabled:opacity-50"
                 >
-                  <Mail className="w-3 h-3" />
+                  {sendEmail.isPending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Mail className="w-3 h-3" />
+                  )}
                   Send email
-                </a>
+                </button>
               )}
               {hasOwner && (
                 <button

@@ -125,9 +125,24 @@ export default function Deals() {
         const o = (outstandingBalances ?? []).find((x) => x.invoiceId === inv.id);
         return sum + (o?.paidAmount ?? 0);
       }, 0);
-  const { can } = useAuthz();
+  const { me, can } = useAuthz();
   const canEditDeals = can("deals", "edit");
   const canCreateDeals = can("deals", "create");
+  const isLeadership =
+    !!me && (me.isSuperAdmin || me.roleName === "General Manager");
+
+  // Advisor filter (leadership only) + table sorting (everyone).
+  const [advisorFilter, setAdvisorFilter] = useState<string>("all");
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const toggleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
 
   const [attachDeal, setAttachDeal] = useState<Deal | null>(null);
   const [attachLeadId, setAttachLeadId] = useState<string>("");
@@ -449,8 +464,86 @@ export default function Deals() {
 
   const stages = ["desking", "committed", "delivered", "cancelled"];
 
+  const advisorOptions = Array.from(
+    new Set(
+      (deals ?? [])
+        .map((d) => d.salesAdvisor)
+        .filter((a): a is string => !!a && a.trim().length > 0),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+
+  const visibleDeals = (deals ?? []).filter(
+    (d) => advisorFilter === "all" || d.salesAdvisor === advisorFilter,
+  );
+
+  const sortedDeals = (() => {
+    if (!sortKey) return visibleDeals;
+    const dir = sortDir === "asc" ? 1 : -1;
+    const val = (d: Deal): string | number => {
+      switch (sortKey) {
+        case "customer": return (d.customerName ?? "").toLowerCase();
+        case "stage": {
+          const order = ["desking", "negotiation", "finance", "committed", "delivered", "cancelled", "lost"];
+          const idx = order.indexOf(d.stage);
+          return idx === -1 ? order.length : idx;
+        }
+        case "division": return (divisions?.find((x) => x.id === d.divisionId)?.name ?? "").toLowerCase();
+        case "otd": return d.otdPrice ?? 0;
+        case "discount": return d.discount ?? 0;
+        case "deposit": return d.depositPaid ? 1 : 0;
+        case "method": return d.finalPaymentMethod ?? "";
+        case "advisor": return (d.salesAdvisor ?? "").toLowerCase();
+        default: return 0;
+      }
+    };
+    return [...visibleDeals].sort((a, b) => {
+      const av = val(a);
+      const bv = val(b);
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+  })();
+
+  const SortableTh = ({
+    label,
+    k,
+    className,
+  }: {
+    label: string;
+    k: string;
+    className?: string;
+  }) => (
+    <th className={cn("px-4 py-3 font-semibold", className)}>
+      <button
+        onClick={() => toggleSort(k)}
+        className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-foreground transition-colors"
+      >
+        {label}
+        <span className="text-[9px] leading-none">
+          {sortKey === k ? (sortDir === "asc" ? "▲" : "▼") : ""}
+        </span>
+      </button>
+    </th>
+  );
+
   const heroActions = (
     <div className="flex items-center gap-3">
+          {isLeadership && advisorOptions.length > 0 && (
+            <select
+              value={advisorFilter}
+              onChange={(e) => setAdvisorFilter(e.target.value)}
+              className="h-9 rounded-full bg-foreground/[0.05] border border-white/10 text-sm px-3 pr-8 text-foreground/90 focus:outline-none focus:ring-1 focus:ring-primary/50"
+              aria-label="Filter by sales advisor"
+            >
+              <option value="all">All advisors</option>
+              {advisorOptions.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          )}
           <ViewControls
             layout={layout}
             onLayoutChange={setLayout}
@@ -588,20 +681,20 @@ export default function Deals() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                <th className="px-4 py-3 font-semibold">Customer</th>
-                <th className="px-4 py-3 font-semibold">Stage</th>
-                <th className="px-4 py-3 font-semibold hidden lg:table-cell">Division</th>
-                <th className="px-4 py-3 font-semibold text-right">OTD</th>
-                <th className="px-4 py-3 font-semibold text-right hidden md:table-cell">Discount</th>
-                <th className="px-4 py-3 font-semibold text-center hidden md:table-cell">Deposit</th>
-                <th className="px-4 py-3 font-semibold hidden lg:table-cell">Method</th>
-                <th className="px-4 py-3 font-semibold hidden lg:table-cell">Advisor</th>
+                <SortableTh label="Customer" k="customer" />
+                <SortableTh label="Stage" k="stage" />
+                <SortableTh label="Division" k="division" className="hidden lg:table-cell" />
+                <SortableTh label="OTD" k="otd" className="text-right" />
+                <SortableTh label="Discount" k="discount" className="text-right hidden md:table-cell" />
+                <SortableTh label="Deposit" k="deposit" className="text-center hidden md:table-cell" />
+                <SortableTh label="Method" k="method" className="hidden lg:table-cell" />
+                <SortableTh label="Advisor" k="advisor" className="hidden lg:table-cell" />
                 <th className="px-4 py-3 font-semibold">Lead</th>
                 <th className="px-4 py-3 font-semibold text-right">Next Action</th>
               </tr>
             </thead>
             <tbody>
-              {(deals ?? []).map((deal) => {
+              {sortedDeals.map((deal) => {
                 const dealGates = gatesForDeal(deal.id);
                 const hasPendingGates = dealGates.length > 0;
                 return (
@@ -720,10 +813,12 @@ export default function Deals() {
                   </tr>
                 );
               })}
-              {(deals ?? []).length === 0 && !isLoading && (
+              {sortedDeals.length === 0 && !isLoading && (
                 <tr>
                   <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground text-sm">
-                    No deals yet.
+                    {(deals ?? []).length > 0
+                      ? "No deals match this advisor filter."
+                      : "No deals yet."}
                   </td>
                 </tr>
               )}
@@ -733,7 +828,7 @@ export default function Deals() {
       ) : (
       <div className="flex gap-4 items-start overflow-x-auto pb-4 hide-scrollbar -mx-1 px-1">
         {stages.map((stage, stageIndex) => {
-          const stageDeals = deals?.filter((d) => d.stage === stage) ?? [];
+          const stageDeals = visibleDeals.filter((d) => d.stage === stage);
           return (
             <div
               key={stage}
