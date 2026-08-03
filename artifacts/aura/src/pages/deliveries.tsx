@@ -731,6 +731,17 @@ function DeliveryDetail({
                         invalidate();
                         toast({ title: "Sales advisor assigned" });
                       },
+                      onError: (err: unknown) => {
+                        const status = (err as { status?: number })?.status;
+                        toast({
+                          variant: "destructive",
+                          title: "Couldn't assign sales advisor",
+                          description:
+                            status === 404
+                              ? "The deal linked to this delivery no longer exists, so it can't be updated."
+                              : "Something went wrong saving the assignment. Please try again.",
+                        });
+                      },
                     },
                   );
                 }}
