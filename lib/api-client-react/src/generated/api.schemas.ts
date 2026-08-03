@@ -5480,6 +5480,10 @@ export interface EmailLog {
   createdAt: string;
 }
 
+export interface LinkLeadAccountInput {
+  customerId: number;
+}
+
 /**
  * Omit to auto-pick — WhatsApp-first, email fallback
  */

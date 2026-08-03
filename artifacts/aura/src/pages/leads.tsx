@@ -7,6 +7,11 @@ import {
   useCreateLead,
   useListLeadSources,
   getListLeadsQueryKey,
+  useListCustomers,
+  useCreateCustomer,
+  useLinkLeadAccount,
+  getListCustomersQueryKey,
+  type Lead,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -19,7 +24,18 @@ import {
   Clock,
   UserCheck,
   Search,
+  Link2,
+  UserPlus,
+  Loader2,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
 import { Page } from "@/components/layout/page";
 import { PageHero } from "@/components/layout/page-hero";
@@ -367,6 +383,73 @@ export default function Leads() {
     () => sortedVisible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
     [sortedVisible, safePage, PAGE_SIZE],
   );
+
+  // Link-account dialog: pick an existing account or create one from the lead.
+  const [linkTarget, setLinkTarget] = useState<Lead | null>(null);
+  const [accountSearch, setAccountSearch] = useState("");
+  const { data: accounts } = useListCustomers();
+  const linkAccount = useLinkLeadAccount();
+  const createCustomer = useCreateCustomer();
+  const linkBusy = linkAccount.isPending || createCustomer.isPending;
+
+  const matchedAccounts = useMemo(() => {
+    const list = accounts ?? [];
+    const q = accountSearch.trim().toLowerCase();
+    const filtered = q
+      ? list.filter(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            (c.email ?? "").toLowerCase().includes(q) ||
+            (c.phone ?? "").replace(/\D/g, "").includes(q.replace(/\D/g, "") || "\u0000"),
+        )
+      : list;
+    return filtered.slice(0, 8);
+  }, [accounts, accountSearch]);
+
+  const finishLink = async (leadId: number, customerId: number, name: string) => {
+    try {
+      await linkAccount.mutateAsync({ id: leadId, data: { customerId } });
+      await queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+      toast({ title: "Account linked", description: `Lead linked to ${name}.` });
+      setLinkTarget(null);
+      setAccountSearch("");
+    } catch (e) {
+      toast({
+        title: "Could not link account",
+        description: e instanceof Error ? e.message : "Unexpected error",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const createAndLink = async (lead: Lead) => {
+    try {
+      const customer = await createCustomer.mutateAsync({
+        data: {
+          name: lead.name,
+          email: lead.email || undefined,
+          phone: lead.phone || undefined,
+          accountType: "person",
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
+      await finishLink(lead.id, customer.id, customer.name);
+    } catch (e: unknown) {
+      // Duplicate email/phone → the API returns the existing account id in
+      // the ApiError payload (error.data.existingId); link that account.
+      const existingId = (e as { data?: { existingId?: number } | null })?.data
+        ?.existingId;
+      if (existingId) {
+        await finishLink(lead.id, existingId, "the existing matching account");
+        return;
+      }
+      toast({
+        title: "Could not create account",
+        description: e instanceof Error ? e.message : "Unexpected error",
+        variant: "destructive",
+      });
+    }
+  };
 
   const TABS: { key: TabKey; label: string }[] = [
     { key: "all", label: "All" },
@@ -720,7 +803,22 @@ export default function Leads() {
                       )}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap">
-                      <SlaChip sla={r.sla} />
+                      <div className="flex items-center gap-2">
+                        <SlaChip sla={r.sla} />
+                        {!r.lead.customerId && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLinkTarget(r.lead);
+                            }}
+                            className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-primary inline-flex items-center gap-0.5 transition-colors"
+                            title="Link or create a customer account"
+                          >
+                            <Link2 className="w-3 h-3" />
+                            Link
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -761,7 +859,7 @@ export default function Leads() {
                         r.lead.source}
                     </div>
                   </div>
-                  {r.lead.customerId && (
+                  {r.lead.customerId ? (
                     <Link
                       href={`/customers/${r.lead.customerId}`}
                       onClick={(e) => e.stopPropagation()}
@@ -770,6 +868,18 @@ export default function Leads() {
                       Account
                       <ArrowUpRight className="w-3 h-3" />
                     </Link>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLinkTarget(r.lead);
+                      }}
+                      className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-primary inline-flex items-center gap-0.5 shrink-0 transition-colors"
+                      title="Link or create a customer account"
+                    >
+                      <Link2 className="w-3 h-3" />
+                      Link account
+                    </button>
                   )}
                 </div>
 
@@ -839,6 +949,76 @@ export default function Leads() {
             />
           </>
         )}
+        <Dialog
+          open={linkTarget != null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setLinkTarget(null);
+              setAccountSearch("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Link customer account</DialogTitle>
+              <DialogDescription>
+                {linkTarget
+                  ? `Attach ${linkTarget.name} to an existing account, or open a new one from their details.`
+                  : ""}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  value={accountSearch}
+                  onChange={(e) => setAccountSearch(e.target.value)}
+                  placeholder="Search accounts by name, email or phone"
+                  className="pl-9"
+                />
+              </div>
+              <div className="max-h-64 overflow-y-auto space-y-1">
+                {matchedAccounts.length === 0 ? (
+                  <p className="text-sm text-muted-foreground px-1 py-3">
+                    No matching accounts.
+                  </p>
+                ) : (
+                  matchedAccounts.map((c) => (
+                    <button
+                      key={c.id}
+                      disabled={linkBusy}
+                      onClick={() =>
+                        linkTarget && finishLink(linkTarget.id, c.id, c.name)
+                      }
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-foreground/[0.06] transition-colors disabled:opacity-50"
+                    >
+                      <div className="font-medium text-sm">{c.name}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {[c.email, c.phone].filter(Boolean).join(" · ") ||
+                          "No contact details"}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+              <div className="pt-2 border-t border-white/10">
+                <Button
+                  variant="outline"
+                  disabled={linkBusy || !linkTarget}
+                  onClick={() => linkTarget && createAndLink(linkTarget)}
+                  className="w-full gap-2"
+                >
+                  {linkBusy ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <UserPlus className="w-4 h-4" />
+                  )}
+                  Create a new account from this lead
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </Page>
     </>
   );

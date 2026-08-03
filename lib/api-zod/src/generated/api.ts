@@ -2304,6 +2304,73 @@ export const SendLeadOutreachResponse = zod.object({
 
 
 /**
+ * @summary Link this lead to a customer account (backfills the primary contact)
+ */
+export const LinkLeadAccountParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const LinkLeadAccountBody = zod.object({
+  "customerId": zod.number()
+})
+
+
+
+
+
+export const LinkLeadAccountResponse = zod.object({
+  "id": zod.number(),
+  "divisionId": zod.number().nullish(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "channel": zod.enum(['web', 'social', 'mobile', 'walkin', 'email']),
+  "source": zod.string(),
+  "sourceDetail": zod.string().nullish(),
+  "priority": zod.enum(['high', 'medium', 'low']),
+  "phase": zod.enum(['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost']),
+  "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']),
+  "customerId": zod.number().nullish(),
+  "interestedVehicleId": zod.number().nullish(),
+  "selectedModel": zod.string().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "preferredBranch": zod.string().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "ownerUserId": zod.number().nullish(),
+  "testDriveAt": zod.coerce.date().nullish(),
+  "testDriveBranch": zod.string().nullish(),
+  "availability": zod.union([zod.literal('available'),zod.literal('back_order'),zod.literal(null)]).nullish(),
+  "purchaseType": zod.union([zod.literal('cash'),zod.literal('finance'),zod.literal(null)]).nullish(),
+  "attachments": zod.array(zod.object({
+  "name": zod.string().min(1),
+  "url": zod.string().min(1)
+})),
+  "aiScore": zod.number(),
+  "notes": zod.string().nullish(),
+  "company": zod.string().nullish(),
+  "title": zod.string().nullish(),
+  "isRetailCustomer": zod.boolean(),
+  "quotationSent": zod.boolean(),
+  "reservationFeePaid": zod.boolean(),
+  "reservationComments": zod.string().nullish(),
+  "financingQualified": zod.boolean(),
+  "contactedDate": zod.coerce.date().nullish(),
+  "revisitIn3Months": zod.boolean(),
+  "closureReason": zod.string().nullish(),
+  "purchaseIntent": zod.string().nullish(),
+  "keyInterestDriver": zod.string().nullish(),
+  "budgetFinancing": zod.string().nullish(),
+  "description": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "stageEnteredAt": zod.coerce.date().nullish(),
+  "testDriveLicence": zod.string().nullish(),
+  "testDriveWaiver": zod.boolean().optional(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Quotation metadata for this lead (derived from inventory + email log)
  */
 export const GetLeadQuoteParams = zod.object({
@@ -2797,6 +2864,16 @@ export const UpdateCustomerResponse = zod.object({
   "erasedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Soft-delete an account (blocked while deals, invoices or bookings reference it)
+ */
+export const DeleteCustomerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteCustomerResponse = zod.void()
 
 
 export const ListDealsQueryParams = zod.object({

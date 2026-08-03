@@ -12,6 +12,7 @@ import {
   whatsappMessagesTable,
   dealsTable,
   dealersTable,
+  customersTable,
   bookingsTable,
   callLogsTable,
   agentsTable,
@@ -41,6 +42,8 @@ import {
   AdvanceLeadStageBody,
   GetLeadReviewParams,
   GetLeadReviewResponse,
+  LinkLeadAccountParams,
+  LinkLeadAccountBody,
   CheckLeadAvailabilityParams,
   GetLeadTestDriveAvailabilityParams,
   GetLeadTestDriveAvailabilityResponse,
@@ -2150,6 +2153,84 @@ router.post("/leads/:id/decision", async (req, res): Promise<void> => {
   );
 
   res.json(GetLeadResponse.parse(lead));
+});
+
+// Link a lead to a customer account (manual counterpart of the automatic
+// promotion). Backfills the account's primary contact from the lead so the
+// Pre-Book "Account linked with a primary contact" check passes.
+router.post("/leads/:id/link-account", async (req, res): Promise<void> => {
+  const params = LinkLeadAccountParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = LinkLeadAccountBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+
+  const [lead] = await db
+    .select()
+    .from(leadsTable)
+    .where(
+      and(
+        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.dealerId, dealerId),
+        isNull(leadsTable.deletedAt),
+      ),
+    );
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+  if (lead.customerId && lead.customerId !== parsed.data.customerId) {
+    res.status(409).json({
+      error: `This lead is already linked to account #${lead.customerId} — unlinking is not supported, merge the accounts instead`,
+    });
+    return;
+  }
+
+  const [customer] = await db
+    .select()
+    .from(customersTable)
+    .where(
+      and(
+        eq(customersTable.id, parsed.data.customerId),
+        eq(customersTable.dealerId, dealerId),
+        isNull(customersTable.deletedAt),
+      ),
+    );
+  if (!customer) {
+    res.status(404).json({ error: "Customer account not found" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(leadsTable)
+    .set({ customerId: customer.id })
+    .where(and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, dealerId)))
+    .returning();
+
+  await ensurePrimaryContact(dealerId, customer.id, {
+    name: lead.name,
+    email: lead.email,
+    phone: lead.phone,
+    title: lead.title ?? null,
+  });
+
+  if (!lead.customerId) {
+    await logLeadEvent(
+      updated!,
+      "account_linked",
+      `Linked to account "${customer.name}"`,
+      `${actorName(res)} linked this lead to customer account #${customer.id}.`,
+      actorName(res),
+    );
+  }
+
+  res.json(GetLeadResponse.parse(updated));
 });
 
 router.patch("/leads/:id", async (req, res): Promise<void> => {

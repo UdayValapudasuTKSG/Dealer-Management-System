@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, or, ilike, sql, isNotNull } from "drizzle-orm";
+import { eq, desc, and, or, ilike, sql, isNotNull, isNull } from "drizzle-orm";
 import multer from "multer";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import {
@@ -12,6 +12,8 @@ import {
   customerNotesTable,
   customerDocumentsTable,
   dealsTable,
+  bookingsTable,
+  invoicesTable,
   appraisalsTable,
   financeApplicationsTable,
   serviceOrdersTable,
@@ -30,6 +32,7 @@ import {
   CreateCustomerBody,
   UpdateCustomerBody,
   GetCustomerParams,
+  DeleteCustomerParams,
   UpdateCustomerParams,
   ListCustomersQueryParams,
   UpdateAccountRelationsParams,
@@ -242,7 +245,10 @@ router.get("/customers", async (req, res): Promise<void> => {
     return;
   }
   const dealerId = activeDealerId(res);
-  const filters = [eq(customersTable.dealerId, dealerId)];
+  const filters = [
+    eq(customersTable.dealerId, dealerId),
+    isNull(customersTable.deletedAt),
+  ];
   if (query.data.accountType) {
     filters.push(eq(customersTable.accountType, query.data.accountType));
   }
@@ -303,7 +309,13 @@ router.post("/customers", async (req, res): Promise<void> => {
     const [dup] = await db
       .select({ id: customersTable.id, name: customersTable.name })
       .from(customersTable)
-      .where(and(eq(customersTable.dealerId, dealerId), or(...dupMatchers)!))
+      .where(
+        and(
+          eq(customersTable.dealerId, dealerId),
+          isNull(customersTable.deletedAt),
+          or(...dupMatchers)!,
+        ),
+      )
       .limit(1);
     if (dup) {
       res.status(409).json({
@@ -332,6 +344,70 @@ router.post("/customers", async (req, res): Promise<void> => {
   res.status(201).json(GetCustomerResponse.parse(customer));
 });
 
+// Soft-delete an account. Blocked while money or bookings reference it —
+// deals, invoices or bookings on file mean the record must be kept (use the
+// DSAR erasure flow for GDPR removal instead).
+router.delete("/customers/:id", async (req, res): Promise<void> => {
+  const params = DeleteCustomerParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+
+  const [customer] = await db
+    .select({ id: customersTable.id })
+    .from(customersTable)
+    .where(
+      and(
+        eq(customersTable.id, params.data.id),
+        eq(customersTable.dealerId, dealerId),
+        isNull(customersTable.deletedAt),
+      ),
+    );
+  if (!customer) {
+    res.status(404).json({ error: "Customer not found" });
+    return;
+  }
+
+  const [[deals], [invoices], [bookings]] = await Promise.all([
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(dealsTable)
+      .where(and(eq(dealsTable.customerId, customer.id), eq(dealsTable.dealerId, dealerId))),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(invoicesTable)
+      .where(and(eq(invoicesTable.customerId, customer.id), eq(invoicesTable.dealerId, dealerId))),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(bookingsTable)
+      .where(and(eq(bookingsTable.customerId, customer.id), eq(bookingsTable.dealerId, dealerId))),
+  ]);
+  const blockers: string[] = [];
+  if ((deals?.n ?? 0) > 0) blockers.push(`${deals!.n} deal(s)`);
+  if ((invoices?.n ?? 0) > 0) blockers.push(`${invoices!.n} invoice(s)`);
+  if ((bookings?.n ?? 0) > 0) blockers.push(`${bookings!.n} booking(s)`);
+  if (blockers.length > 0) {
+    res.status(409).json({
+      error: `This account cannot be deleted — it still has ${blockers.join(", ")} on file. Use the privacy erasure flow if the customer requested data removal.`,
+    });
+    return;
+  }
+
+  await db
+    .update(customersTable)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(customersTable.id, customer.id), eq(customersTable.dealerId, dealerId)));
+  // Unlink open leads so they can be re-promoted to a fresh account.
+  await db
+    .update(leadsTable)
+    .set({ customerId: null })
+    .where(and(eq(leadsTable.customerId, customer.id), eq(leadsTable.dealerId, dealerId)));
+
+  res.status(204).end();
+});
+
 router.get("/customers/:id", async (req, res): Promise<void> => {
   const params = GetCustomerParams.safeParse(req.params);
   if (!params.success) {
@@ -346,6 +422,7 @@ router.get("/customers/:id", async (req, res): Promise<void> => {
       and(
         eq(customersTable.id, params.data.id),
         eq(customersTable.dealerId, activeDealerId(res)),
+        isNull(customersTable.deletedAt),
       ),
     );
 
@@ -432,7 +509,11 @@ async function accountOr404(
     .select()
     .from(customersTable)
     .where(
-      and(eq(customersTable.id, id), eq(customersTable.dealerId, dealerId)),
+      and(
+        eq(customersTable.id, id),
+        eq(customersTable.dealerId, dealerId),
+        isNull(customersTable.deletedAt),
+      ),
     );
   return account ?? null;
 }

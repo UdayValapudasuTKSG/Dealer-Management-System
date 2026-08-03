@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, ilike, isNull, or, sql, type SQL } from "drizzle-orm";
 import {
   db,
   customersTable,
@@ -49,6 +49,7 @@ router.get("/search", async (req, res): Promise<void> => {
         .where(
           and(
             eq(customersTable.dealerId, dealerId),
+            isNull(customersTable.deletedAt),
             or(
               ilike(customersTable.name, like),
               ilike(customersTable.email, like),

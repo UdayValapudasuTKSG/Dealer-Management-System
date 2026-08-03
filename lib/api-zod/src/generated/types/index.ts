@@ -345,6 +345,7 @@ export * from './leadUpdateStatus';
 export * from './lifecycleBlockersResponse';
 export * from './lifecycleBlockersResponseBlockersItem';
 export * from './lifecycleReasonRequest';
+export * from './linkLeadAccountInput';
 export * from './listActivityParams';
 export * from './listAgentRunsParams';
 export * from './listAuditLogsParams';

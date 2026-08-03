@@ -167,6 +167,7 @@ import type {
   LeadUpdate,
   LifecycleBlockersResponse,
   LifecycleReasonRequest,
+  LinkLeadAccountInput,
   ListActivityParams,
   ListAgentRunsParams,
   ListAuditLogsParams,
@@ -4559,6 +4560,78 @@ export const useSendLeadOutreach = <TError = ErrorType<Error>,
       return useMutation(getSendLeadOutreachMutationOptions(options));
     }
 
+export const getLinkLeadAccountUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/link-account`
+}
+
+/**
+ * @summary Link this lead to a customer account (backfills the primary contact)
+ */
+export const linkLeadAccount = async (id: number,
+    linkLeadAccountInput: LinkLeadAccountInput, options?: RequestInit): Promise<Lead> => {
+
+  return customFetch<Lead>(getLinkLeadAccountUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(linkLeadAccountInput)
+  }
+);}
+
+
+
+
+
+export const getLinkLeadAccountMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkLeadAccount>>, TError,{id: number;data: BodyType<LinkLeadAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkLeadAccount>>, TError,{id: number;data: BodyType<LinkLeadAccountInput>}, TContext> => {
+
+const mutationKey = ['linkLeadAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkLeadAccount>>, {id: number;data: BodyType<LinkLeadAccountInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  linkLeadAccount(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkLeadAccountMutationResult = NonNullable<Awaited<ReturnType<typeof linkLeadAccount>>>
+    export type LinkLeadAccountMutationBody = BodyType<LinkLeadAccountInput>
+    export type LinkLeadAccountMutationError = ErrorType<Error>
+
+    /**
+ * @summary Link this lead to a customer account (backfills the primary contact)
+ */
+export const useLinkLeadAccount = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkLeadAccount>>, TError,{id: number;data: BodyType<LinkLeadAccountInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkLeadAccount>>,
+        TError,
+        {id: number;data: BodyType<LinkLeadAccountInput>},
+        TContext
+      > => {
+      return useMutation(getLinkLeadAccountMutationOptions(options));
+    }
+
 export const getGetLeadQuoteUrl = (id: number,) => {
 
 
@@ -5826,6 +5899,77 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateCustomerMutationOptions(options));
+    }
+
+export const getDeleteCustomerUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}`
+}
+
+/**
+ * @summary Soft-delete an account (blocked while deals, invoices or bookings reference it)
+ */
+export const deleteCustomer = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteCustomerUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteCustomerMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCustomer>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCustomer>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteCustomer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCustomer>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteCustomer(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCustomerMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCustomer>>>
+
+    export type DeleteCustomerMutationError = ErrorType<Error>
+
+    /**
+ * @summary Soft-delete an account (blocked while deals, invoices or bookings reference it)
+ */
+export const useDeleteCustomer = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCustomer>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCustomer>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteCustomerMutationOptions(options));
     }
 
 export const getListDealsUrl = (params?: ListDealsParams,) => {

@@ -1501,6 +1501,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /leads/{id}/link-account:
+    post:
+      operationId: linkLeadAccount
+      tags: [leads]
+      summary: Link this lead to a customer account (backfills the primary contact)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkLeadAccountInput"
+      responses:
+        "200":
+          description: Lead linked to the account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+        "404":
+          description: Lead or customer not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Lead already linked to a different account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /leads/{id}/quote:
     get:
       operationId: getLeadQuote
@@ -1957,6 +1993,30 @@ paths:
                 $ref: "#/components/schemas/Customer"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteCustomer
+      tags: [customers]
+      summary: Soft-delete an account (blocked while deals, invoices or bookings reference it)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Account deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Account still referenced by deals, invoices or bookings
           content:
             application/json:
               schema:
@@ -9752,6 +9812,12 @@ components:
         nextAttemptAt: { type: ["string", "null"], format: date-time }
         sentAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+
+    LinkLeadAccountInput:
+      type: object
+      required: [customerId]
+      properties:
+        customerId: { type: integer }
 
     OutreachInput:
       type: object

@@ -3,12 +3,24 @@ import { Link, useLocation } from "wouter";
 import {
   useListCustomers,
   useCreateCustomer,
+  useDeleteCustomer,
   getListCustomersQueryKey,
+  type Customer,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, User, MapPin, Car, Mail, Phone, Crown, Building2 } from "lucide-react";
+import { Plus, User, MapPin, Car, Mail, Phone, Crown, Building2, Trash2, Loader2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { motion } from "framer-motion";
 import { Page } from "@/components/layout/page";
 import { PageHero } from "@/components/layout/page-hero";
@@ -44,6 +56,42 @@ export default function Customers() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createCustomer = useCreateCustomer();
+  const deleteCustomer = useDeleteCustomer();
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteCustomer.mutateAsync({ id: deleteTarget.id });
+      await queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
+      toast({
+        title: "Account deleted",
+        description: `${deleteTarget.name} was removed from the portfolio.`,
+      });
+      setDeleteTarget(null);
+    } catch (e) {
+      toast({
+        title: "Could not delete account",
+        description: e instanceof Error ? e.message : "Unexpected error",
+        variant: "destructive",
+      });
+      setDeleteTarget(null);
+    }
+  };
+
+  const DeleteButton = ({ customer }: { customer: Customer }) => (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDeleteTarget(customer);
+      }}
+      className="p-1.5 rounded-lg text-muted-foreground/50 hover:text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
+      title="Delete account"
+    >
+      <Trash2 className="w-3.5 h-3.5" />
+    </button>
+  );
   const { density, setDensity, layout, setLayout } = useViewMode("customers");
   const [, navigate] = useLocation();
 
@@ -221,6 +269,9 @@ export default function Customers() {
                           {customer.phone}
                         </span>
                       )}
+                      <span className="ml-auto">
+                        <DeleteButton customer={customer} />
+                      </span>
                     </div>
                   </td>
                 </tr>
@@ -241,9 +292,12 @@ export default function Customers() {
                 <Card className="glass-panel border-none shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer rounded-3xl group overflow-hidden h-full flex flex-col">
                   <CardContent className="p-0 flex flex-col h-full">
                     <div className="p-6 bg-gradient-to-b from-black/5 to-transparent relative border-b border-border/40">
-                      <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest backdrop-blur-md bg-white/[0.05]">
-                        <Crown className={`w-3.5 h-3.5 ${tierColor(customer.loyaltyTier).split(" ")[0]}`} />
-                        <span className={tierColor(customer.loyaltyTier).split(" ")[0]}>{customer.loyaltyTier}</span>
+                      <div className="absolute top-4 right-4 flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest backdrop-blur-md bg-white/[0.05]">
+                          <Crown className={`w-3.5 h-3.5 ${tierColor(customer.loyaltyTier).split(" ")[0]}`} />
+                          <span className={tierColor(customer.loyaltyTier).split(" ")[0]}>{customer.loyaltyTier}</span>
+                        </div>
+                        <DeleteButton customer={customer} />
                       </div>
                       <div className="w-20 h-20 rounded-full bg-white/[0.06] shadow-md flex items-center justify-center overflow-hidden mb-4 border-2 border-white/10 group-hover:border-primary transition-colors duration-300">
                         {customer.avatarUrl ? (
@@ -340,6 +394,7 @@ export default function Customers() {
                         <Crown className="w-3 h-3" />
                         {customer.loyaltyTier}
                       </span>
+                      <DeleteButton customer={customer} />
                     </div>
                     <div className="space-y-1 text-xs text-muted-foreground min-h-[2rem]">
                       {customer.email && (
@@ -390,6 +445,41 @@ export default function Customers() {
           }}
         />
       )}
+      <AlertDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `${deleteTarget.name} will be removed from the portfolio and unlinked from any open leads. Accounts with deals, invoices or bookings on file cannot be deleted.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteCustomer.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDelete();
+              }}
+              disabled={deleteCustomer.isPending}
+              className="bg-red-600 hover:bg-red-600/90 text-white"
+            >
+              {deleteCustomer.isPending && (
+                <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+              )}
+              Delete account
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Page>
     </>
   );
