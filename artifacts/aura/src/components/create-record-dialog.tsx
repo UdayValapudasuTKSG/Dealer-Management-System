@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -163,41 +163,57 @@ export function CreateRecordDialog({
     (f) => f.required && !values[f.name],
   );
 
+  // A click made while a dropdown (Radix Select/Popover) is open must only
+  // dismiss the dropdown, never the whole dialog — a long form would lose all
+  // its input. The dropdown closes (and unmounts its popper) on pointerdown
+  // BEFORE the dialog's outside-interaction handlers run, so a live DOM query
+  // inside those handlers comes back empty. Snapshot popper presence at
+  // capture phase instead, before any Radix handler has reacted.
+  const popperWasOpenRef = useRef(false);
+  useEffect(() => {
+    if (!open) return;
+    const snapshot = () => {
+      popperWasOpenRef.current = !!document.querySelector(
+        "[data-radix-popper-content-wrapper], [data-radix-select-viewport]",
+      );
+    };
+    document.addEventListener("pointerdown", snapshot, true);
+    document.addEventListener("touchstart", snapshot, true);
+    return () => {
+      document.removeEventListener("pointerdown", snapshot, true);
+      document.removeEventListener("touchstart", snapshot, true);
+    };
+  }, [open]);
+
+  const guardOutside = (e: { target: EventTarget | null; preventDefault: () => void }) => {
+    const target = e.target as HTMLElement | null;
+    if (
+      popperWasOpenRef.current ||
+      target?.closest(
+        "[data-radix-popper-content-wrapper], [data-radix-select-viewport], [role='listbox'], [role='option']",
+      ) ||
+      document.querySelector(
+        "[data-radix-popper-content-wrapper], [data-radix-select-viewport]",
+      )
+    ) {
+      e.preventDefault();
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
         className="glass-panel border-white/10 sm:max-w-[600px] p-5 gap-3"
-        onPointerDownOutside={(e) => {
-          // Radix Select/Popover content is portalled outside the dialog; a
-          // fast double-click on a select option lands "outside" the dialog
-          // and would close it. Ignore outside-pointerdowns that originate
-          // from any portalled popper layer, AND any click made while a
-          // dropdown is open — that click should only dismiss the dropdown,
-          // never the whole dialog (a long form would lose all its input).
-          const target = e.target as HTMLElement | null;
-          if (
-            target?.closest(
-              "[data-radix-popper-content-wrapper], [data-radix-select-viewport], [role='listbox'], [role='option']",
-            ) ||
-            document.querySelector(
-              "[data-radix-popper-content-wrapper], [data-radix-select-viewport]",
-            )
-          ) {
+        onPointerDownOutside={guardOutside}
+        onInteractOutside={guardOutside}
+        onEscapeKeyDown={(e) => {
+          // First Escape closes the open dropdown only; dialog stays.
+          if (popperWasOpenRef.current || document.querySelector(
+            "[data-radix-popper-content-wrapper], [data-radix-select-viewport]",
+          )) {
             e.preventDefault();
-          }
-        }}
-        onInteractOutside={(e) => {
-          const target = e.target as HTMLElement | null;
-          if (
-            target?.closest(
-              "[data-radix-popper-content-wrapper], [data-radix-select-viewport], [role='listbox'], [role='option']",
-            ) ||
-            document.querySelector(
-              "[data-radix-popper-content-wrapper], [data-radix-select-viewport]",
-            )
-          ) {
-            e.preventDefault();
+            popperWasOpenRef.current = false;
           }
         }}
       >
