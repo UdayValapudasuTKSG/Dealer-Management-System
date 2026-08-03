@@ -326,7 +326,7 @@ export default function Leads() {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, tab, myId, myName]);
+  }, [rows, tab, myId, myName, advisorFilter]);
 
   const PAGE_SIZE = layout === "list" ? 25 : compact ? 30 : 24;
   const [page, setPage] = useState(1);
