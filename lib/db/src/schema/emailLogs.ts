@@ -23,6 +23,7 @@ export const EMAIL_TEMPLATES = [
   "refund_confirmation",
   "vehicle_ready",
   "delivery_schedule",
+  "delivery_advisor_assigned",
   "delivery_confirmation",
   "service_reminder",
   "warranty_reminder",

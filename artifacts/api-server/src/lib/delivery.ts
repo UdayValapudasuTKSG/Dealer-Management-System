@@ -8,13 +8,56 @@ import {
   timelineEventsTable,
   usersTable,
   dealerUsersTable,
+  rolesTable,
   rolePermissionsTable,
+  customersTable,
   defaultDeliverySteps,
   DEFAULT_PDI_ITEMS,
   type Delivery,
 } from "@workspace/db";
-import { notifyUsers } from "./email";
+import { notifyUsers, notifyUser, enqueueEmail } from "./email";
 import { logger } from "./logger";
+
+/**
+ * Timestamp-based round robin over the dealer's active Delivery Advisors:
+ * whoever was assigned least recently (or never) is next. Reuses the
+ * dealer_users.lastLeadAssignedAt rotation clock (same pattern as the
+ * post-delivery Service Advisor rotation). Returns null when the dealer has
+ * no active Delivery Advisors.
+ */
+async function pickDeliveryAdvisor(
+  dealerId: number,
+): Promise<{ id: number; name: string; neverAssigned: boolean } | null> {
+  const rows = await db
+    .select({
+      id: usersTable.id,
+      name: usersTable.name,
+      email: usersTable.email,
+      lastAssignedAt: dealerUsersTable.lastLeadAssignedAt,
+    })
+    .from(dealerUsersTable)
+    .innerJoin(usersTable, eq(dealerUsersTable.userId, usersTable.id))
+    .innerJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
+    .where(
+      and(
+        eq(dealerUsersTable.dealerId, dealerId),
+        eq(usersTable.status, "active"),
+        eq(rolesTable.name, "Delivery Advisor"),
+      ),
+    );
+  if (rows.length === 0) return null;
+  const ranked = [...rows].sort((a, b) => {
+    const at = a.lastAssignedAt?.getTime() ?? 0;
+    const bt = b.lastAssignedAt?.getTime() ?? 0;
+    return at !== bt ? at - bt : a.id - b.id;
+  });
+  const advisor = ranked[0]!;
+  return {
+    id: advisor.id,
+    name: advisor.name ?? advisor.email ?? `User #${advisor.id}`,
+    neverAssigned: advisor.lastAssignedAt == null,
+  };
+}
 
 async function deliveryUserIds(dealerId: number): Promise<number[]> {
   const rows = await db
@@ -65,6 +108,17 @@ export async function ensureDeliveryForDeal(
       and(eq(bookingsTable.dealId, dealId), eq(bookingsTable.status, "active")),
     );
 
+  // Round-robin a Delivery Advisor when the caller didn't name one.
+  let autoAdvisor: { id: number; name: string; neverAssigned: boolean } | null =
+    null;
+  if (opts.advisorUserId == null) {
+    try {
+      autoAdvisor = await pickDeliveryAdvisor(deal.dealerId);
+    } catch (err) {
+      logger.error({ err, dealId }, "delivery advisor round-robin failed");
+    }
+  }
+
   const [delivery] = await db
     .insert(deliveriesTable)
     .values({
@@ -74,7 +128,7 @@ export async function ensureDeliveryForDeal(
       vehicleId: deal.vehicleId,
       customerId: deal.customerId ?? null,
       customerName: deal.customerName,
-      advisorUserId: opts.advisorUserId ?? null,
+      advisorUserId: opts.advisorUserId ?? autoAdvisor?.id ?? null,
       status: "in_progress",
       currentStep: "sales_order",
       steps: defaultDeliverySteps(),
@@ -99,6 +153,94 @@ export async function ensureDeliveryForDeal(
     });
   } catch (err) {
     logger.error({ err, dealId }, "delivery timeline receipt failed");
+  }
+
+  // Advisor-assignment side effects: rotation stamp, timeline receipt,
+  // advisor notification, and a customer introduction email.
+  if (autoAdvisor) {
+    try {
+      await db
+        .update(dealerUsersTable)
+        .set({ lastLeadAssignedAt: new Date() })
+        .where(
+          and(
+            eq(dealerUsersTable.dealerId, deal.dealerId),
+            eq(dealerUsersTable.userId, autoAdvisor.id),
+          ),
+        );
+
+      const reasoning = autoAdvisor.neverAssigned
+        ? `Routed by round robin — ${autoAdvisor.name} had not been assigned yet.`
+        : `Routed by round robin — ${autoAdvisor.name} had the longest wait on the delivery team.`;
+      await db.insert(timelineEventsTable).values({
+        dealerId: deal.dealerId,
+        customerId: deal.customerId ?? null,
+        domain: "delivery",
+        kind: "advisor_assigned",
+        title: `Delivery advisor: ${autoAdvisor.name}`,
+        detail: reasoning,
+        actor: "AURA System",
+        isAgent: false,
+        refType: "delivery",
+        refId: delivery.id,
+      });
+
+      await notifyUser({
+        userId: autoAdvisor.id,
+        dealerId: deal.dealerId,
+        type: "assignment",
+        title: `Delivery assigned: ${deal.customerName}`,
+        body: "AURA routed this delivery to you — coordinate preparation and the handover appointment.",
+        link: "/deliveries",
+      });
+    } catch (err) {
+      logger.error(
+        { err, dealId, deliveryId: delivery.id },
+        "delivery advisor assignment side effects failed",
+      );
+    }
+
+    try {
+      const customerEmail = deal.customerId
+        ? (
+            await db
+              .select({ email: customersTable.email })
+              .from(customersTable)
+              .where(eq(customersTable.id, deal.customerId))
+          )[0]?.email
+        : null;
+      if (customerEmail) {
+        const vehicleLabel = deal.vehicleId
+          ? await (async () => {
+              const [v] = await db
+                .select({
+                  year: vehiclesTable.year,
+                  make: vehiclesTable.make,
+                  model: vehiclesTable.model,
+                })
+                .from(vehiclesTable)
+                .where(eq(vehiclesTable.id, deal.vehicleId!));
+              return v ? `${v.year} ${v.make} ${v.model}` : "";
+            })()
+          : "";
+        await enqueueEmail({
+          template: "delivery_advisor_assigned",
+          to: customerEmail,
+          dealerId: deal.dealerId,
+          customerId: deal.customerId,
+          data: {
+            name: deal.customerName ?? "",
+            advisor: autoAdvisor.name,
+            ...(vehicleLabel ? { vehicle: vehicleLabel } : {}),
+          },
+        });
+      }
+    } catch (err) {
+      logger.error(
+        { err, dealId, deliveryId: delivery.id },
+        "delivery advisor customer email failed",
+      );
+    }
   }
 
   try {

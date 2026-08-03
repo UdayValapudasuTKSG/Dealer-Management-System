@@ -247,6 +247,16 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     cta: () => ({ label: "The countdown begins" }),
     sample: { vehicle: "2026 Range Rover Autobiography", date: "Saturday, July 26" },
   },
+  delivery_advisor_assigned: {
+    label: "Delivery Advisor Assigned",
+    description: "Introduces the customer's dedicated delivery advisor.",
+    subject: (x) => `Your delivery advisor — ${d(x, "advisor", "your dedicated advisor")}`,
+    heading: (x) => `Meet ${d(x, "advisor", "your delivery advisor")}`,
+    body: (x) =>
+      `Great news${x.name ? `, <strong>${x.name}</strong>` : ""} — <strong>${d(x, "advisor", "your delivery advisor")}</strong> will personally guide the handover of your <strong>${d(x, "vehicle", "new vehicle")}</strong>. They will coordinate preparation, registration and your delivery appointment, and will be in touch shortly to arrange the details.`,
+    cta: () => ({ label: "We'll be in touch soon" }),
+    sample: { name: "Alex", advisor: "Jordan Persaud", vehicle: "2026 Foton Tunland G7" },
+  },
   delivery_confirmation: {
     label: "Delivery Confirmation",
     description: "Celebrates the completed handover.",
