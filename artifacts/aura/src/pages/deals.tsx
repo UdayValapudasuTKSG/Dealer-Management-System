@@ -135,9 +135,15 @@ export default function Deals() {
   const [advisorFilter, setAdvisorFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // Three-state sort cycle: ascending → descending → off (original order).
   const toggleSort = (key: string) => {
     if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      if (sortDir === "asc") {
+        setSortDir("desc");
+      } else {
+        setSortKey(null);
+        setSortDir("asc");
+      }
     } else {
       setSortKey(key);
       setSortDir("asc");
@@ -467,13 +473,15 @@ export default function Deals() {
   const advisorOptions = Array.from(
     new Set(
       (deals ?? [])
-        .map((d) => d.salesAdvisor)
-        .filter((a): a is string => !!a && a.trim().length > 0),
+        .map((d) => (d.salesAdvisor ?? "").trim())
+        .filter((a) => a.length > 0),
     ),
   ).sort((a, b) => a.localeCompare(b));
 
   const visibleDeals = (deals ?? []).filter(
-    (d) => advisorFilter === "all" || d.salesAdvisor === advisorFilter,
+    (d) =>
+      advisorFilter === "all" ||
+      (d.salesAdvisor ?? "").trim() === advisorFilter,
   );
 
   const sortedDeals = (() => {

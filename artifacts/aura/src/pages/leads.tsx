@@ -172,9 +172,15 @@ export default function Leads() {
   const [advisorFilter, setAdvisorFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // Three-state sort cycle: ascending → descending → off (original order).
   const toggleSort = (key: string) => {
     if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      if (sortDir === "asc") {
+        setSortDir("desc");
+      } else {
+        setSortKey(null);
+        setSortDir("asc");
+      }
     } else {
       setSortKey(key);
       setSortDir("asc");
@@ -294,8 +300,8 @@ export default function Leads() {
       Array.from(
         new Set(
           (leads ?? [])
-            .map((l) => l.assignedTo)
-            .filter((a): a is string => !!a && a.trim().length > 0),
+            .map((l) => (l.assignedTo ?? "").trim())
+            .filter((a) => a.length > 0),
         ),
       ).sort((a, b) => a.localeCompare(b)),
     [leads],
@@ -303,7 +309,10 @@ export default function Leads() {
 
   const visible = useMemo(() => {
     return rows.filter((r) => {
-      if (advisorFilter !== "all" && r.lead.assignedTo !== advisorFilter)
+      if (
+        advisorFilter !== "all" &&
+        (r.lead.assignedTo ?? "").trim() !== advisorFilter
+      )
         return false;
       switch (tab) {
         case "all":
