@@ -84,6 +84,7 @@ import {
   erasureHolds,
 } from "../lib/privacy";
 import { notifyManagerNote } from "../lib/notify-triggers";
+import { ensurePrimaryContact } from "../lib/accounts";
 import {
   guardUntrusted,
   isAgentEnabled,
@@ -317,6 +318,16 @@ router.post("/customers", async (req, res): Promise<void> => {
     .insert(customersTable)
     .values({ ...parsed.data, dealerId })
     .returning();
+
+  // Every account carries a primary contact (the Pre-Book checklist depends
+  // on it) — mirror the account's own details as the first contact.
+  if (customer) {
+    await ensurePrimaryContact(dealerId, customer.id, {
+      name: customer.name,
+      email: customer.email,
+      phone: customer.phone,
+    });
+  }
 
   res.status(201).json(GetCustomerResponse.parse(customer));
 });

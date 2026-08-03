@@ -6,6 +6,7 @@ import {
   contactsTable,
   type Lead,
 } from "@workspace/db";
+import { ensureAccountForLead, ensurePrimaryContact } from "./accounts";
 
 // ---------------------------------------------------------------------------
 // Stage-advance review model — shared by the gated advance endpoint, the Run
@@ -86,6 +87,10 @@ export function buildStageChecks(
   lead: Lead,
   dealerId: number,
   leadDeals: { depositPaid: boolean | null }[],
+  // selfHeal: only the gated stage-advance WRITE path may let checks repair
+  // data (auto-link account / backfill primary contact). Read paths (review
+  // stepper, agent briefs, proposals) must stay side-effect free.
+  opts: { selfHeal?: boolean } = {},
 ): Record<string, () => Promise<boolean> | boolean> {
   const deal = leadDeals[0];
   return {
@@ -136,6 +141,25 @@ export function buildStageChecks(
     selected_model: () => Boolean(lead.selectedModel),
     reservation_fee: () => Boolean(lead.reservationFeePaid),
     primary_contact: async () => {
+      // Self-healing (write path only): linking an account with a primary
+      // contact is AURA's job, not a manual step. If the lead has no account
+      // yet, promote it now; if the linked account lacks a primary contact,
+      // backfill one from the lead's details (both helpers never throw).
+      if (opts.selfHeal) {
+        if (!lead.customerId) {
+          lead.customerId = await ensureAccountForLead(lead, "reservation");
+        }
+        if (lead.customerId) {
+          // ensureAccountForLead guarantees a primary contact on creation,
+          // but a matched pre-existing account may still lack one.
+          await ensurePrimaryContact(dealerId, lead.customerId, {
+            name: lead.name,
+            email: lead.email,
+            phone: lead.phone,
+            title: lead.title ?? null,
+          });
+        }
+      }
       if (!lead.customerId) return false;
       const [row] = await db
         .select({ n: sql<number>`count(*)::int` })

@@ -10,6 +10,69 @@ import {
 import { logger } from "./logger";
 
 /**
+ * Guarantee an account carries a primary contact.
+ *
+ * Every account is supposed to hold at least one primary contact (the Pre-Book
+ * checklist depends on it). Backfills one from the supplied fallback details
+ * when the account has no contacts at all, or promotes the oldest existing
+ * contact when contacts exist but none is primary. Never throws.
+ */
+export async function ensurePrimaryContact(
+  dealerId: number,
+  accountId: number,
+  fallback: {
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    title?: string | null;
+  },
+): Promise<void> {
+  try {
+    // Advisory xact lock serialises concurrent backfills for the same
+    // account, so two racing callers can't both insert a primary contact.
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${"primary_contact:" + accountId}))`,
+      );
+
+      const contacts = await tx
+        .select({ id: contactsTable.id, isPrimary: contactsTable.isPrimary })
+        .from(contactsTable)
+        .where(
+          and(
+            eq(contactsTable.accountId, accountId),
+            eq(contactsTable.dealerId, dealerId),
+          ),
+        )
+        .orderBy(contactsTable.id);
+
+      if (contacts.some((c) => c.isPrimary)) return;
+
+      if (contacts.length > 0) {
+        // Contacts exist but none is primary — promote the oldest.
+        await tx
+          .update(contactsTable)
+          .set({ isPrimary: true })
+          .where(eq(contactsTable.id, contacts[0]!.id));
+        return;
+      }
+
+      await tx.insert(contactsTable).values({
+        dealerId,
+        accountId,
+        name: fallback.name,
+        title: fallback.title ?? null,
+        email: fallback.email ?? null,
+        phone: fallback.phone ?? null,
+        isPrimary: true,
+      });
+    });
+  } catch (err) {
+    logger.error({ err, accountId }, "ensurePrimaryContact failed");
+  }
+}
+
+/**
  * Promote a lead to an account (customer).
  *
  * Finds an existing account (customer) by email (case-insensitive) or phone

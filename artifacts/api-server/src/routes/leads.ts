@@ -107,7 +107,10 @@ import {
   notifyLeadAssigned,
   notifyManagerNote,
 } from "../lib/notify-triggers";
-import { ensureAccountForLead } from "../lib/accounts";
+import {
+  ensureAccountForLead,
+  ensurePrimaryContact,
+} from "../lib/accounts";
 import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 import { activeDealerId, hasPermission } from "../middlewares/rbac";
 import {
@@ -1608,7 +1611,9 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
   // Settings → Stage Gates). Each item key maps to a built-in check; admins
   // can toggle items on/off and relabel them without a deploy.
   const checklist = await getActiveChecklist(dealerId, toStage as ChecklistStage);
-  const checks = buildStageChecks(lead, dealerId, leadDeals);
+  // selfHeal: the gated advance is a write path, so checks may auto-link the
+  // account and backfill the primary contact instead of failing the gate.
+  const checks = buildStageChecks(lead, dealerId, leadDeals, { selfHeal: true });
   for (const item of checklist.items) {
     if (!item.enabled) continue;
     const check = checks[item.key];
