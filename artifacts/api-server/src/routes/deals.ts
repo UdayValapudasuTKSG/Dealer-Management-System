@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, inArray, or, gt } from "drizzle-orm";
+import { eq, desc, and, inArray, or, gt, sql } from "drizzle-orm";
 import {
   db,
   dealsTable,
@@ -8,6 +8,7 @@ import {
   gatesTable,
   leadsTable,
   invoicesTable,
+  paymentsTable,
   timelineEventsTable,
   VIN_LENGTH,
   REGISTRATION_PATTERN,
@@ -849,6 +850,36 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
           unmet.push("financing_not_approved");
           messages.financing_not_approved =
             "A finance application linked to this deal must be approved or disbursed before a bank-financed deal can commit";
+        }
+      }
+
+      // 5. Full settlement (dealer policy): a deal may only commit once the
+      // customer's balance is fully paid. The settlement invoice is created
+      // here (if it doesn't exist yet) so Finance can collect against it —
+      // its amount already nets the reservation credit, trade-in value and
+      // any approved financed facility.
+      const settlementInvoice = await ensureFinalInvoiceForDeal({
+        ...before,
+        finalPaymentMethod: method,
+      });
+      if (settlementInvoice && settlementInvoice.status !== "void") {
+        const [{ paid: settledPaid }] = await db
+          .select({
+            paid: sql<number>`coalesce(sum(${paymentsTable.amount}), 0)::float`,
+          })
+          .from(paymentsTable)
+          .where(
+            and(
+              eq(paymentsTable.invoiceId, settlementInvoice.id),
+              eq(paymentsTable.dealerId, dealerId),
+            ),
+          );
+        const outstanding =
+          Math.round((settlementInvoice.amount - (settledPaid ?? 0)) * 100) /
+          100;
+        if (outstanding > 0.005) {
+          unmet.push("full_payment_required");
+          messages.full_payment_required = `GY$${outstanding.toLocaleString("en-US", { maximumFractionDigits: 0 })} is still outstanding on settlement invoice ${settlementInvoice.invoiceNumber} — the full amount must be received before the deal can commit`;
         }
       }
 

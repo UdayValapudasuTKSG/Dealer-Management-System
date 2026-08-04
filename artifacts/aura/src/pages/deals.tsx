@@ -88,6 +88,7 @@ const UNMET_LABEL: Record<string, string> = {
   below_floor_price: "Discount needs manager approval",
   capital_order: "Capital stock order needs manager approval",
   financing_not_approved: "Bank financing not yet approved",
+  full_payment_required: "Full payment required before commit",
 };
 
 /** Friendly copy for non-checklist commit failures (allocation, terminal
