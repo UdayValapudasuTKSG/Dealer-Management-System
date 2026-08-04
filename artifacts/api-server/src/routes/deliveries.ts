@@ -6,6 +6,7 @@ import {
   db,
   deliveriesTable,
   dealsTable,
+  leadsTable,
   dealersTable,
   vehiclesTable,
   customersTable,
@@ -56,7 +57,12 @@ import {
 } from "../lib/handover-verify";
 import { buildHandoverPdf } from "../lib/document-pdfs";
 import { enqueueEmail, notifyUser } from "../lib/email";
-import { onDealStageChanged } from "../lib/email-triggers";
+import {
+  onDealStageChanged,
+  onDeliveryAdvisorAssigned,
+  onDeliveryCompleted,
+} from "../lib/email-triggers";
+import { ensureAccountForLead } from "../lib/accounts";
 import { logger } from "../lib/logger";
 import { activeDealerId } from "../middlewares/rbac";
 import {
@@ -458,6 +464,33 @@ router.patch("/deliveries/:id", async (req, res): Promise<void> => {
     }).catch((err) =>
       logger.error({ err, deliveryId: row.id }, "advisor notification failed"),
     );
+    // Introduce the advisor to the customer (deduped per delivery+advisor,
+    // so re-saving the same advisor never re-sends).
+    if (parsed.data.advisorUserId !== current.advisorUserId) {
+      // Fall back to the deal's customer when the delivery row hasn't been
+      // linked yet (that linkage is otherwise only reconciled at completion).
+      let recipientCustomerId = row.customerId;
+      if (!recipientCustomerId) {
+        const [deal] = await db
+          .select({ customerId: dealsTable.customerId })
+          .from(dealsTable)
+          .where(
+            and(
+              eq(dealsTable.id, row.dealId),
+              eq(dealsTable.dealerId, row.dealerId),
+            ),
+          );
+        recipientCustomerId = deal?.customerId ?? null;
+      }
+      onDeliveryAdvisorAssigned({
+        dealerId: row.dealerId,
+        deliveryId: row.id,
+        customerId: recipientCustomerId,
+        customerName: row.customerName,
+        advisorUserId: parsed.data.advisorUserId,
+        vehicleLabel: await vehicleLabelFor(row.vehicleId, row.dealerId),
+      });
+    }
   }
   res.json(UpdateDeliveryResponse.parse((await enrich([row], activeDealerId(res)))[0]));
 });
@@ -814,6 +847,56 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
           eq(dealsTable.dealerId, delivery.dealerId),
         ),
       );
+    // The garage asset and the completion email both need a customer account.
+    // Some deliveries reach completion without one (deal was created before
+    // the lead was promoted) — resolve it now: deal's customer, else promote
+    // the lead into an account, and backfill delivery + deal so downstream
+    // reads (assets, emails, portal) all agree.
+    if (!delivery.customerId) {
+      try {
+        let resolvedCustomerId: number | null = before?.customerId ?? null;
+        if (!resolvedCustomerId && before?.leadId) {
+          const [lead] = await db
+            .select()
+            .from(leadsTable)
+            .where(
+              and(
+                eq(leadsTable.id, before.leadId),
+                eq(leadsTable.dealerId, delivery.dealerId),
+              ),
+            );
+          if (lead) resolvedCustomerId = await ensureAccountForLead(lead, "reservation");
+        }
+        if (resolvedCustomerId) {
+          delivery.customerId = resolvedCustomerId;
+          await db
+            .update(deliveriesTable)
+            .set({ customerId: resolvedCustomerId })
+            .where(
+              and(
+                eq(deliveriesTable.id, delivery.id),
+                eq(deliveriesTable.dealerId, delivery.dealerId),
+              ),
+            );
+          if (before && !before.customerId) {
+            await db
+              .update(dealsTable)
+              .set({ customerId: resolvedCustomerId })
+              .where(
+                and(
+                  eq(dealsTable.id, delivery.dealId),
+                  eq(dealsTable.dealerId, delivery.dealerId),
+                ),
+              );
+          }
+        }
+      } catch (err) {
+        logger.error(
+          { err, deliveryId: delivery.id },
+          "customer resolution at delivery completion failed",
+        );
+      }
+    }
     if (before && before.stage !== "delivered") {
       const [after] = await db
         .update(dealsTable)
@@ -827,6 +910,14 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
         .returning();
       if (after) onDealStageChanged(before, after);
     }
+    // Handover celebration email (deduped per delivery).
+    onDeliveryCompleted({
+      dealerId: delivery.dealerId,
+      deliveryId: delivery.id,
+      customerId: delivery.customerId,
+      customerName: delivery.customerName,
+      vehicleLabel: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
+    });
     // Lifetime Asset: the delivered vehicle joins the account's garage and is
     // handed off to a Service Advisor for the ownership phase.
     if (delivery.customerId) {

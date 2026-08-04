@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import {
   db,
   customersTable,
+  deliveriesTable,
   vehiclesTable,
   type Lead,
   type Deal,
@@ -349,15 +350,33 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
           data: base,
         });
         break;
-      case "delivered":
-        await send({
+      case "delivered": {
+        // Normally onDeliveryCompleted sends this (delivery workflow final
+        // step); this covers any direct deal-stage hop. Dedupe key parity —
+        // keyed on the deal's delivery when one exists — guarantees the
+        // customer receives exactly one confirmation either way.
+        const [deliveryRow] = await db
+          .select({ id: deliveriesTable.id })
+          .from(deliveriesTable)
+          .where(
+            and(
+              eq(deliveriesTable.dealId, after.id),
+              eq(deliveriesTable.dealerId, after.dealerId),
+            ),
+          )
+          .limit(1);
+        await enqueueEmail({
           dealerId: after.dealerId,
           template: "delivery_confirmation",
           to,
           customerId: after.customerId,
+          dedupeKey: deliveryRow
+            ? `delivery_confirmation:${deliveryRow.id}`
+            : `delivery_confirmation:deal-${after.id}`,
           data: base,
         });
         break;
+      }
     }
   });
 }
@@ -400,6 +419,79 @@ export function onFinanceStatusChanged(
         data: base,
       });
     }
+  });
+}
+
+/**
+ * Delivery advisor assigned → introduce the advisor to the customer.
+ * Deduped per delivery+advisor so re-saving the same advisor never re-sends.
+ */
+export function onDeliveryAdvisorAssigned(opts: {
+  dealerId: number;
+  deliveryId: number;
+  customerId: number | null;
+  customerName: string | null;
+  advisorUserId: number;
+  vehicleLabel: string;
+}): void {
+  fire("delivery_advisor_assigned", async () => {
+    const c = await customerEmail(opts.dealerId, opts.customerId);
+    const to = c.email;
+    if (!to) return;
+    // Tenancy: only surface the advisor if they are a member of this dealership.
+    const [advisor] = await db
+      .select({ name: usersTable.name, email: usersTable.email })
+      .from(usersTable)
+      .innerJoin(
+        dealerUsersTable,
+        and(
+          eq(dealerUsersTable.userId, usersTable.id),
+          eq(dealerUsersTable.dealerId, opts.dealerId),
+        ),
+      )
+      .where(eq(usersTable.id, opts.advisorUserId));
+    if (!advisor) return;
+    await enqueueEmail({
+      dealerId: opts.dealerId,
+      template: "delivery_advisor_assigned",
+      to,
+      customerId: opts.customerId,
+      dedupeKey: `delivery_advisor_assigned:${opts.deliveryId}:${opts.advisorUserId}`,
+      data: {
+        name: c.name ?? opts.customerName ?? "",
+        advisor: advisor.name ?? advisor.email ?? "your delivery advisor",
+        vehicle: opts.vehicleLabel,
+      },
+    });
+  });
+}
+
+/**
+ * Delivery workflow completed (vehicle handed over) → celebration email.
+ * Deduped per delivery; the deal-stage `delivered` hop no longer sends this
+ * (delivery completion is the only path that sets that stage).
+ */
+export function onDeliveryCompleted(opts: {
+  dealerId: number;
+  deliveryId: number;
+  customerId: number | null;
+  customerName: string | null;
+  vehicleLabel: string;
+}): void {
+  fire("delivery_completed", async () => {
+    const c = await customerEmail(opts.dealerId, opts.customerId);
+    if (!c.email) return;
+    await enqueueEmail({
+      dealerId: opts.dealerId,
+      template: "delivery_confirmation",
+      to: c.email,
+      customerId: opts.customerId,
+      dedupeKey: `delivery_confirmation:${opts.deliveryId}`,
+      data: {
+        name: c.name ?? opts.customerName ?? "",
+        vehicle: opts.vehicleLabel,
+      },
+    });
   });
 }
 
