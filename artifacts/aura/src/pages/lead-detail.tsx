@@ -492,6 +492,53 @@ function formatCallDuration(seconds: number): string {
   return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
 }
 
+// Product interest is a MODEL of interest, not a physical unit — collapse
+// the per-VIN inventory rows into one option per make/model/year/trim/color,
+// keyed on a representative unit id (the lead's current one when it belongs
+// to the group, else the best-status unit). The real VIN binds at allocation.
+const MODEL_STATUS_RANK: Record<string, number> = {
+  available: 0,
+  in_transit: 1,
+  reserved: 2,
+  booked: 3,
+  service: 4,
+  sold: 5,
+  delivered: 6,
+};
+
+function modelInterestOptions(
+  vehicles: Vehicle[],
+  currentId?: number | null,
+): { value: string; label: string }[] {
+  const map = new Map<string, Vehicle[]>();
+  for (const v of vehicles) {
+    const key = `${v.make}|${v.model}|${v.year}|${v.trim ?? v.variant ?? ""}|${v.exteriorColor ?? ""}`.toLowerCase();
+    const arr = map.get(key);
+    if (arr) arr.push(v);
+    else map.set(key, [v]);
+  }
+  return Array.from(map.values())
+    .map((units) => {
+      const rep =
+        (currentId != null && units.find((u) => u.id === currentId)) ||
+        [...units].sort(
+          (a, b) =>
+            (MODEL_STATUS_RANK[a.status] ?? 9) -
+            (MODEL_STATUS_RANK[b.status] ?? 9),
+        )[0];
+      const label = [
+        `${rep.year} ${rep.make} ${rep.model}`,
+        rep.trim || rep.variant || "",
+        `— ${rep.exteriorColor}`,
+        units.length > 1 ? `· ${units.length} in stock` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return { value: String(rep.id), label };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
   return [
     {
@@ -528,16 +575,13 @@ function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
     },
     {
       name: "interestedVehicleId",
-      label: "Interested vehicle",
+      label: "Interested model",
       type: "select",
       span: "full",
       defaultValue: lead.interestedVehicleId
         ? String(lead.interestedVehicleId)
         : undefined,
-      options: vehicles.map((v) => ({
-        value: String(v.id),
-        label: `${v.year} ${v.make} ${v.model} ${v.trim || v.variant || ""} — ${v.exteriorColor} · Unit #${v.id}`,
-      })),
+      options: modelInterestOptions(vehicles, lead.interestedVehicleId),
     },
     {
       name: "priority",
@@ -1078,10 +1122,10 @@ export default function LeadDetail() {
     </Link>
   ) : null;
 
-  const vehicleOptions = (vehicles ?? []).map((v) => ({
-    value: String(v.id),
-    label: `${v.year} ${v.make} ${v.model} ${v.trim || v.variant || ""} — ${v.exteriorColor} · Unit #${v.id}`,
-  }));
+  const vehicleOptions = modelInterestOptions(
+    vehicles ?? [],
+    lead?.interestedVehicleId,
+  );
 
   const saveVehicle = async (v: string | boolean) => {
     const vehicleId = Number(v);

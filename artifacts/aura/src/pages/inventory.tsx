@@ -315,6 +315,41 @@ export default function Inventory() {
     units: Vehicle[];
   } | null>(null);
 
+  // "Add stock": adding another unit of a model that already exists in the
+  // inventory — the create dialog opens prefilled with the model's specs,
+  // with the per-unit identity (VIN / engine / registration) left blank.
+  const [stockSeed, setStockSeed] = useState<Vehicle | null>(null);
+
+  const submitVehicle = async (values: Record<string, unknown>) => {
+    const idError = vehicleIdentifierError(values as Record<string, string>);
+    if (idError) {
+      toast({
+        title: "Check vehicle identifiers",
+        description: idError,
+        variant: "destructive",
+      });
+      throw new Error(idError);
+    }
+    if (values.divisionId != null) values.divisionId = Number(values.divisionId);
+    try {
+      const created = await createVehicle.mutateAsync({ data: values as never });
+      qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
+      toast({
+        title: "Vehicle added",
+        description: `${created.year} ${created.make} ${created.model} is now in the showroom.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Could not add vehicle",
+        description:
+          (err as { response?: { data?: { error?: string } } })?.response?.data
+            ?.error ?? "Something went wrong.",
+        variant: "destructive",
+      });
+      throw err;
+    }
+  };
+
   const openGroup = (g: { rep: Vehicle; units: Vehicle[] }) => {
     if (g.units.length === 1) setSelected(g.units[0]);
     else setUnitGroup(g);
@@ -462,38 +497,7 @@ export default function Inventory() {
                 </Button>
               }
               fields={vehicleFields(undefined, divisions)}
-              onSubmit={async (values) => {
-                const idError = vehicleIdentifierError(values);
-                if (idError) {
-                  toast({
-                    title: "Check vehicle identifiers",
-                    description: idError,
-                    variant: "destructive",
-                  });
-                  throw new Error(idError);
-                }
-                if (values.divisionId != null)
-                  values.divisionId = Number(values.divisionId);
-                try {
-                  const created = await createVehicle.mutateAsync({
-                    data: values as never,
-                  });
-                  qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
-                  toast({
-                    title: "Vehicle added",
-                    description: `${created.year} ${created.make} ${created.model} is now in the showroom.`,
-                  });
-                } catch (err) {
-                  toast({
-                    title: "Could not add vehicle",
-                    description:
-                      (err as { response?: { data?: { error?: string } } })
-                        ?.response?.data?.error ?? "Something went wrong.",
-                    variant: "destructive",
-                  });
-                  throw err;
-                }
-              }}
+              onSubmit={submitVehicle}
             />
             </div>
           )}
@@ -641,6 +645,20 @@ export default function Inventory() {
                   {unitGroup.units.length} units
                 </span>
               </DialogTitle>
+              {can("inventory", "create") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="self-start rounded-full gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
+                  onClick={() => {
+                    setStockSeed(unitGroup.rep);
+                    setUnitGroup(null);
+                  }}
+                >
+                  <Plus className="w-4 h-4" />
+                  Add stock of this model
+                </Button>
+              )}
               <div className="divide-y divide-white/5 -mx-2">
                 {unitGroup.units.map((u) => (
                   <button
@@ -682,6 +700,35 @@ export default function Inventory() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Add stock: create another unit of an existing model, specs prefilled,
+          per-unit identity (VIN / engine / registration) left blank. */}
+      {stockSeed && (
+        <CreateRecordDialog
+          title={`Add stock — ${stockSeed.year} ${stockSeed.make} ${stockSeed.model}`}
+          description="Adds another unit of this model. Enter the new unit's VIN, engine number and registration."
+          pending={createVehicle.isPending}
+          submitLabel="Add unit to stock"
+          trigger={<span className="hidden" />}
+          open={stockSeed !== null}
+          onOpenChange={(o) => !o && setStockSeed(null)}
+          fields={vehicleFields(
+            {
+              ...stockSeed,
+              vin: null,
+              engineNumber: null,
+              engine: null,
+              registration: null,
+              status: "available",
+            } as Vehicle,
+            divisions,
+          )}
+          onSubmit={async (values) => {
+            await submitVehicle(values);
+            setStockSeed(null);
+          }}
+        />
+      )}
 
       <VehicleDetail
         vehicle={selected}

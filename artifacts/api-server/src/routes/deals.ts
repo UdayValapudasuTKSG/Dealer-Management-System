@@ -140,24 +140,104 @@ async function allocateVehicleOnCommit(
 
   // Identity validation before lock: VIN + engine number exactly 17 chars,
   // registration (when present) must match the Guyana plate format.
-  const unmet: string[] = [];
-  if (!vehicle.vin || vehicle.vin.length !== VIN_LENGTH)
-    unmet.push(`VIN must be exactly ${VIN_LENGTH} characters before allocation`);
-  if (!vehicle.engineNumber || vehicle.engineNumber.length !== VIN_LENGTH)
-    unmet.push(`Engine number must be exactly ${VIN_LENGTH} characters before allocation`);
-  if (vehicle.registration && !REGISTRATION_PATTERN.test(vehicle.registration))
-    unmet.push("Registration must be 3 uppercase letters followed by 1-4 digits");
-  if (unmet.length) {
-    return {
-      ok: false,
-      status: 422,
-      body: { error: "vehicle_identity_invalid", unmet },
-    };
+  const identityUnmet = (v: typeof vehicle): string[] => {
+    const problems: string[] = [];
+    if (!v.vin || v.vin.length !== VIN_LENGTH)
+      problems.push(`VIN must be exactly ${VIN_LENGTH} characters before allocation`);
+    if (!v.engineNumber || v.engineNumber.length !== VIN_LENGTH)
+      problems.push(`Engine number must be exactly ${VIN_LENGTH} characters before allocation`);
+    if (v.registration && !REGISTRATION_PATTERN.test(v.registration))
+      problems.push("Registration must be 3 uppercase letters followed by 1-4 digits");
+    return problems;
+  };
+
+  // Own-booking short circuit: a paid pre-book already locked this exact
+  // unit for this deal (booking → deal auto-desk path). It only bypasses the
+  // lock — identity and recall/damage gates still apply, so an invalid or
+  // flagged unit falls through to the normal error reporting below.
+  if (
+    vehicle.status === "booked" &&
+    identityUnmet(vehicle).length === 0 &&
+    !vehicle.recallFlag &&
+    !vehicle.damageFlag
+  ) {
+    const [own] = await db
+      .select({ id: bookingsTable.id })
+      .from(bookingsTable)
+      .where(
+        and(
+          eq(bookingsTable.dealerId, dealerId),
+          eq(bookingsTable.vehicleId, vehicle.id),
+          eq(bookingsTable.dealId, deal.id),
+        ),
+      );
+    if (own) return { ok: true };
   }
 
-  // Recall/damage monitor: flagged units block commit behind an advisory
-  // gate until inventory clears the flag.
-  if (vehicle.recallFlag || vehicle.damageFlag) {
+  // Auto-assign: leads/deals carry a MODEL of interest — the referenced row
+  // is just a representative unit. At commit, allocate the deal's own unit
+  // when it is eligible, otherwise fall back to any sibling unit of the
+  // same model (same dealer/make/model/year/trim) with a valid identity,
+  // no recall/damage flag, and an allocatable status.
+  const siblings = (
+    await db
+      .select()
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.dealerId, dealerId),
+          eq(vehiclesTable.make, vehicle.make),
+          eq(vehiclesTable.model, vehicle.model),
+          eq(vehiclesTable.year, vehicle.year),
+        ),
+      )
+  ).filter(
+    (u) =>
+      u.id !== vehicle.id &&
+      (u.trim ?? "").toLowerCase() === (vehicle.trim ?? "").toLowerCase(),
+  );
+  const statusRank: Record<string, number> = { available: 0, reserved: 1 };
+  siblings.sort(
+    (a, b) => (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9) || a.id - b.id,
+  );
+
+  const holdUntil = new Date(Date.now() + VIN_LOCK_HOLD_HOURS * 3600 * 1000);
+  let chosen: typeof vehicle | null = null;
+  for (const cand of [vehicle, ...siblings]) {
+    if (identityUnmet(cand).length) continue;
+    if (cand.recallFlag || cand.damageFlag) continue;
+    if (!["available", "reserved"].includes(cand.status)) continue;
+    // Race-safe hard lock: the conditional UPDATE is the allocation — first
+    // writer wins, a concurrent commit on the same VIN matches zero rows.
+    const locked = await db
+      .update(vehiclesTable)
+      .set({ status: "booked", holdUntil, holdReason: "vin_lock" })
+      .where(
+        and(
+          eq(vehiclesTable.id, cand.id),
+          eq(vehiclesTable.dealerId, dealerId),
+          inArray(vehiclesTable.status, ["available", "reserved"]),
+        ),
+      )
+      .returning({ id: vehiclesTable.id });
+    if (locked.length) {
+      chosen = cand;
+      break;
+    }
+  }
+
+  if (!chosen) {
+    // No unit of this model could be allocated — report against the deal's
+    // own referenced unit, preserving the original single-unit semantics.
+    const unmet = identityUnmet(vehicle);
+    if (unmet.length) {
+      return {
+        ok: false,
+        status: 422,
+        body: { error: "vehicle_identity_invalid", unmet },
+      };
+    }
+    if (vehicle.recallFlag || vehicle.damageFlag) {
     const flag = vehicle.recallFlag ? "recall" : "damage";
     const [existing] = await db
       .select({ id: gatesTable.id })
@@ -198,47 +278,26 @@ async function allocateVehicleOnCommit(
         ],
       },
     };
-  }
-
-  // Race-safe hard lock: the conditional UPDATE is the allocation — first
-  // writer wins, a concurrent commit on the same VIN matches zero rows.
-  const holdUntil = new Date(Date.now() + VIN_LOCK_HOLD_HOURS * 3600 * 1000);
-  const locked = await db
-    .update(vehiclesTable)
-    .set({ status: "booked", holdUntil, holdReason: "vin_lock" })
-    .where(
-      and(
-        eq(vehiclesTable.id, vehicle.id),
-        eq(vehiclesTable.dealerId, dealerId),
-        inArray(vehiclesTable.status, ["available", "reserved"]),
-      ),
-    )
-    .returning({ id: vehiclesTable.id });
-
-  if (!locked.length) {
-    // Already booked is fine only when this deal's own paid pre-book locked
-    // it (booking → deal auto-desk path); anything else is a real conflict.
-    if (vehicle.status === "booked") {
-      const [own] = await db
-        .select({ id: bookingsTable.id })
-        .from(bookingsTable)
-        .where(
-          and(
-            eq(bookingsTable.dealerId, dealerId),
-            eq(bookingsTable.vehicleId, vehicle.id),
-            eq(bookingsTable.dealId, deal.id),
-          ),
-        );
-      if (own) return { ok: true };
     }
     return {
       ok: false,
       status: 409,
       body: {
         error: "vehicle_unavailable",
-        detail: `This unit is ${vehicle.status} and cannot be allocated to deal #${deal.id} — pick another VIN`,
+        detail: `No ${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.trim ? ` ${vehicle.trim}` : ""} unit can be allocated to deal #${deal.id} — every unit is unavailable, flagged, or missing VIN/engine identity`,
       },
     };
+  }
+
+  // Auto-assigned a sibling unit: repoint the deal at the unit that was
+  // actually locked so downstream (invoices, delivery, handover) all key
+  // off the real VIN.
+  const autoAssigned = chosen.id !== vehicle.id;
+  if (autoAssigned) {
+    await db
+      .update(dealsTable)
+      .set({ vehicleId: chosen.id })
+      .where(and(eq(dealsTable.id, deal.id), eq(dealsTable.dealerId, dealerId)));
   }
 
   // Audit: deterministic A11 system action — plain transactional code, not
@@ -250,14 +309,14 @@ async function allocateVehicleOnCommit(
       runType: "vin_allocation",
       autonomy: "system",
       inputSource: "deal_commit",
-      inputSummary: `Deal #${deal.id} committed — allocating VIN ${vehicle.vin}`,
-      outputSummary: `VIN ${vehicle.vin} hard-locked (${vehicle.status} → booked, hold ${VIN_LOCK_HOLD_HOURS}h)`,
+      inputSummary: `Deal #${deal.id} committed — allocating VIN ${chosen.vin}${autoAssigned ? " (auto-assigned from model stock)" : ""}`,
+      outputSummary: `VIN ${chosen.vin} hard-locked (${chosen.status} → booked, hold ${VIN_LOCK_HOLD_HOURS}h)`,
       confidence: 100,
       mutation: true,
       refType: "vehicle",
-      refId: vehicle.id,
+      refId: chosen.id,
       latencyMs: Date.now() - started,
-      changeSummary: `vehicle.status ${vehicle.status} → booked`,
+      changeSummary: `vehicle.status ${chosen.status} → booked${autoAssigned ? `; deal.vehicleId ${vehicle.id} → ${chosen.id}` : ""}`,
     });
   }
 
@@ -270,7 +329,7 @@ async function allocateVehicleOnCommit(
         domain: "leads",
         kind: "vin_allocated",
         title: "VIN allocated",
-        detail: `Deal #${deal.id} commit locked VIN ${vehicle.vin} (${vehicle.year} ${vehicle.make} ${vehicle.model}) — status ${vehicle.status} → booked.`,
+        detail: `Deal #${deal.id} commit locked VIN ${chosen.vin} (${chosen.year} ${chosen.make} ${chosen.model})${autoAssigned ? " — unit auto-assigned from model stock" : ""} — status ${chosen.status} → booked.`,
         actor,
         isAgent: true,
         refType: "lead",
