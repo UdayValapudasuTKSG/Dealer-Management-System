@@ -1,3 +1,4 @@
+import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { eq, desc, and, sql, inArray } from "drizzle-orm";
@@ -1072,7 +1073,10 @@ router.get("/receipts/:id/pdf", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Receipt not found" });
     return;
   }
-  const pdf = await buildReceiptPdf(receipt);
+  const pdf = await buildReceiptPdf(
+    receipt,
+    await getDealerPdfBranding(receipt.dealerId),
+  );
   res
     .setHeader("Content-Type", "application/pdf")
     .setHeader(

@@ -264,6 +264,7 @@ export async function quotePdfPayload(
   const [dealer] = await db
     .select({
       name: dealersTable.name,
+      brandName: dealersTable.brandName,
       city: dealersTable.city,
       country: dealersTable.country,
     })
@@ -274,7 +275,7 @@ export async function quotePdfPayload(
     `GYD ${Math.round(n).toLocaleString("en-US")}`;
   return {
     totalGyd: gyd(quote.total),
-    dealerName: dealer?.name ?? "",
+    dealerName: dealer?.brandName ?? dealer?.name ?? "",
     dealerAddress: [dealer?.city, dealer?.country].filter(Boolean).join(", "),
     exchangeRateNote: "All figures in GYD",
     name: quote.customerName,

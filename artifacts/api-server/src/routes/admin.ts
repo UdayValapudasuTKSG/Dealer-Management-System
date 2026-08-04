@@ -3,6 +3,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   db,
+  dealersTable,
   usersTable,
   rolesTable,
   rolePermissionsTable,
@@ -41,6 +42,9 @@ import {
   SetRoleFieldPermissionsBody,
   SetRoleFieldPermissionsResponse,
   GetPermissionMetaResponse,
+  GetDealerBrandingResponse,
+  UpdateDealerBrandingBody,
+  UpdateDealerBrandingResponse,
   ListAdminLeadSourcesResponse,
   CreateAdminLeadSourceBody,
   CreateAdminLeadSourceResponse,
@@ -830,6 +834,93 @@ router.delete("/admin/taxes/:id", async (req, res): Promise<void> => {
     return;
   }
   res.status(204).end();
+});
+
+// ---------------------------------------------------------------------------
+// White-label branding (GM only)
+// ---------------------------------------------------------------------------
+
+/** Only a general manager of the ACTIVE dealership may read/change branding. */
+function requireGeneralManager(res: Parameters<typeof activeDealerId>[0]): boolean {
+  const user = res.locals.user;
+  const dealerId = activeDealerId(res);
+  return (
+    user?.isSuperAdmin === true ||
+    (user?.dealers.find((d) => d.dealerId === dealerId)?.isGeneralManager ??
+      false)
+  );
+}
+
+router.get("/admin/branding", async (_req, res): Promise<void> => {
+  if (!requireGeneralManager(res)) {
+    res.status(403).json({ error: "Only the general manager can manage branding" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [dealer] = await db
+    .select({
+      dealerId: dealersTable.id,
+      dealerName: dealersTable.name,
+      brandName: dealersTable.brandName,
+      logoUrl: dealersTable.logoUrl,
+    })
+    .from(dealersTable)
+    .where(eq(dealersTable.id, dealerId));
+  if (!dealer) {
+    res.status(404).json({ error: "Dealership not found" });
+    return;
+  }
+  res.json(GetDealerBrandingResponse.parse(dealer));
+});
+
+router.patch("/admin/branding", async (req, res): Promise<void> => {
+  if (!requireGeneralManager(res)) {
+    res.status(403).json({ error: "Only the general manager can manage branding" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const body = UpdateDealerBrandingBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const updates: { brandName?: string | null; logoUrl?: string | null } = {};
+  if ("brandName" in (req.body ?? {})) {
+    const trimmed = body.data.brandName?.trim();
+    updates.brandName = trimmed ? trimmed : null;
+  }
+  if ("logoUrl" in (req.body ?? {})) {
+    const logoUrl = body.data.logoUrl ?? null;
+    // The logo must be an object THIS dealer uploaded — the serve route only
+    // streams `uploads/dealer-{id}/` keys to members of that dealership.
+    if (
+      logoUrl !== null &&
+      !logoUrl.startsWith(`/objects/uploads/dealer-${dealerId}/`)
+    ) {
+      res.status(422).json({ error: "Logo must be uploaded through the branding upload flow" });
+      return;
+    }
+    updates.logoUrl = logoUrl;
+  }
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "Nothing to update" });
+    return;
+  }
+  const [updated] = await db
+    .update(dealersTable)
+    .set(updates)
+    .where(eq(dealersTable.id, dealerId))
+    .returning({
+      dealerId: dealersTable.id,
+      dealerName: dealersTable.name,
+      brandName: dealersTable.brandName,
+      logoUrl: dealersTable.logoUrl,
+    });
+  if (!updated) {
+    res.status(404).json({ error: "Dealership not found" });
+    return;
+  }
+  res.json(UpdateDealerBrandingResponse.parse(updated));
 });
 
 export default router;

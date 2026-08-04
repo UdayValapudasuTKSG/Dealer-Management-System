@@ -356,6 +356,10 @@ function NavContent({
 }) {
   const [location] = useLocation();
   const clusters = useNavClusters();
+  const { activeDealer } = useAuthz();
+  // GM-configured white-label branding — falls back to the AURA identity.
+  const brandName = activeDealer?.brandName ?? null;
+  const brandLogoUrl = activeDealer?.logoUrl ?? null;
 
   return (
     <>
@@ -368,14 +372,28 @@ function NavContent({
           collapsed ? "justify-center px-0" : "px-5",
         )}
       >
-        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/20 ring-1 ring-primary/30 transition-transform group-hover:scale-105">
-          <Sparkles className="h-5 w-5 text-gold" />
-        </span>
+        {brandLogoUrl ? (
+          <img
+            src={`/api/storage${brandLogoUrl}`}
+            alt={brandName ?? "Dealership logo"}
+            className="h-9 w-9 shrink-0 rounded-xl object-contain bg-white/5 ring-1 ring-white/10 transition-transform group-hover:scale-105"
+          />
+        ) : (
+          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/20 ring-1 ring-primary/30 transition-transform group-hover:scale-105">
+            <Sparkles className="h-5 w-5 text-gold" />
+          </span>
+        )}
         {!collapsed && (
           <div className="flex flex-col leading-none whitespace-nowrap overflow-hidden">
-            <span className="text-lg font-bold tracking-tight text-white">
-              AURA<span className="text-gold">.OS</span>
-            </span>
+            {brandName ? (
+              <span className="text-lg font-bold tracking-tight text-white truncate max-w-[170px]">
+                {brandName}
+              </span>
+            ) : (
+              <span className="text-lg font-bold tracking-tight text-white">
+                AURA<span className="text-gold">.OS</span>
+              </span>
+            )}
             <span className="mt-1 text-[9px] font-medium uppercase tracking-[0.22em] text-white/40">
               Dealership OS
             </span>

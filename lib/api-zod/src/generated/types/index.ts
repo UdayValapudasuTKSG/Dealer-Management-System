@@ -148,6 +148,8 @@ export * from './dealCancellationReason';
 export * from './dealer';
 export * from './dealerAgentOverview';
 export * from './dealerAgentOverviewHealth';
+export * from './dealerBranding';
+export * from './dealerBrandingUpdate';
 export * from './dealerInput';
 export * from './dealerMember';
 export * from './dealerMemberInput';

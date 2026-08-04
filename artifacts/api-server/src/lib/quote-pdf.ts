@@ -16,7 +16,10 @@ const TEXT = "#222222";
  * subtotal/tax/total, acceptance lines and disclaimer) and return a Buffer.
  * All inputs arrive as strings (email queue payloads are Record<string,string>).
  */
-export function buildQuotePdf(data: QuotePdfData): Promise<Buffer> {
+export function buildQuotePdf(
+  data: QuotePdfData,
+  logo?: Buffer | null,
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0 });
     const chunks: Buffer[] = [];
@@ -31,12 +34,21 @@ export function buildQuotePdf(data: QuotePdfData): Promise<Buffer> {
     const dealerName = val(data, "dealerName", "AURA Dealership");
 
     // ---- Letterhead --------------------------------------------------------
+    let nameY = 44;
+    if (logo) {
+      try {
+        doc.image(logo, left, 36, { fit: [110, 42] });
+        nameY = 84;
+      } catch {
+        // Unreadable logo bytes — keep the text-only letterhead.
+      }
+    }
     doc
       .font("Helvetica-Bold")
       .fontSize(13)
       .fillColor(TEXT)
-      .text(dealerName, left, 44);
-    let hy = 62;
+      .text(dealerName, left, nameY);
+    let hy = nameY + 18;
     for (const key of ["dealerAddress", "dealerPhone", "dealerEmail"]) {
       if (data[key] && data[key].trim()) {
         doc
@@ -58,7 +70,7 @@ export function buildQuotePdf(data: QuotePdfData): Promise<Buffer> {
       });
 
     // ---- Title -------------------------------------------------------------
-    let y = 130;
+    let y = Math.max(130, hy + 14);
     doc
       .font("Helvetica")
       .fontSize(18)

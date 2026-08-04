@@ -31,6 +31,7 @@ import VehicleDetailPage from "@/pages/vehicle-detail";
 import TeamProfile from "@/pages/team-profile";
 import SettingsUsers from "@/pages/settings-users";
 import SettingsEmail from "@/pages/settings-email";
+import SettingsBranding from "@/pages/settings-branding";
 import SettingsRoles from "@/pages/settings-roles";
 import SettingsSources from "@/pages/settings-sources";
 import SettingsStages from "@/pages/settings-stages";
@@ -311,6 +312,11 @@ function AppRoutes() {
                 <Route path="/settings/audit">
                   <RequireSettings>
                     <SettingsAudit />
+                  </RequireSettings>
+                </Route>
+                <Route path="/settings/branding">
+                  <RequireSettings>
+                    <SettingsBranding />
                   </RequireSettings>
                 </Route>
                 <Route path="/settings/email">

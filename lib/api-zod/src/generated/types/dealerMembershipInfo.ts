@@ -16,4 +16,14 @@ export interface DealerMembershipInfo {
   isGeneralManager?: boolean;
   /** GYD per 1 USD for this dealership */
   usdExchangeRate?: number;
+  /**
+     * White-label display name (falls back to AURA branding when null)
+     * @nullable
+     */
+  brandName?: string | null;
+  /**
+     * White-label logo object path (served via /api/storage/objects)
+     * @nullable
+     */
+  logoUrl?: string | null;
 }

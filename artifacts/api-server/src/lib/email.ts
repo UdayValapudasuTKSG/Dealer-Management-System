@@ -17,6 +17,7 @@ import { sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { buildQuotePdf } from "./quote-pdf";
 import { buildInvoicePdfFromPayload } from "./document-pdfs";
+import { getDealerPdfBranding } from "./dealer-branding";
 import { testDriveIcsFromPayload } from "./calendar";
 import {
   whatsappConfig,
@@ -974,7 +975,10 @@ export async function processQueue(): Promise<void> {
           | { filename: string; content: Buffer; contentType: string }[]
           | undefined;
         if (item.template === "invoice.generated") {
-          const pdf = await buildInvoicePdfFromPayload(item.payload ?? {});
+          const pdf = await buildInvoicePdfFromPayload(
+            item.payload ?? {},
+            await getDealerPdfBranding(item.dealerId),
+          );
           const ref = (item.payload?.invoiceNumber ?? `INV-${item.id}`).replace(
             /[^A-Za-z0-9-]/g,
             "",
@@ -988,7 +992,10 @@ export async function processQueue(): Promise<void> {
           ];
         }
         if (item.template === "vehicle_quote") {
-          const pdf = await buildQuotePdf(item.payload ?? {});
+          const pdf = await buildQuotePdf(
+            item.payload ?? {},
+            (await getDealerPdfBranding(item.dealerId)).logo,
+          );
           const ref = (item.payload?.quoteRef ?? `Q-${item.id}`).replace(
             /[^A-Za-z0-9-]/g,
             "",

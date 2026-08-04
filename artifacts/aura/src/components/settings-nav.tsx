@@ -7,6 +7,7 @@ import {
   Percent,
   ScrollText,
   Mail,
+  Paintbrush,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,8 @@ export type SettingsSection = {
   description: string;
   /** RBAC module gating this section (mirrors the old sidebar gating). */
   module: string;
+  /** Restricted to the active dealership's general manager. */
+  gmOnly?: boolean;
 };
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
@@ -65,6 +68,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     module: "settings",
   },
   {
+    name: "Branding",
+    href: "/settings/branding",
+    icon: Paintbrush,
+    description: "White-label the app and printed documents with your logo and name.",
+    module: "settings",
+    gmOnly: true,
+  },
+  {
     name: "Email Engine",
     href: "/settings/email",
     icon: Mail,
@@ -75,8 +86,11 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 
 /** Sections the current user's role can see (mirrors sidebar gating). */
 export function useSettingsSections(): SettingsSection[] {
-  const { can } = useAuthz();
-  return SETTINGS_SECTIONS.filter((s) => !s.module || can(s.module, "view"));
+  const { can, activeDealer, me } = useAuthz();
+  const isGm = !!activeDealer?.isGeneralManager || !!me?.isSuperAdmin;
+  return SETTINGS_SECTIONS.filter(
+    (s) => (!s.module || can(s.module, "view")) && (!s.gmOnly || isGm),
+  );
 }
 
 /**

@@ -89,6 +89,8 @@ import type {
   DealUpdate,
   Dealer,
   DealerAgentOverview,
+  DealerBranding,
+  DealerBrandingUpdate,
   DealerInput,
   DealerMember,
   DealerMemberInput,
@@ -17351,6 +17353,154 @@ export const useSetStageChecklist = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSetStageChecklistMutationOptions(options));
+    }
+
+export const getGetDealerBrandingUrl = () => {
+
+
+
+
+  return `/api/admin/branding`
+}
+
+/**
+ * @summary Get the active dealership's white-label branding (GM only)
+ */
+export const getDealerBranding = async ( options?: RequestInit): Promise<DealerBranding> => {
+
+  return customFetch<DealerBranding>(getGetDealerBrandingUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDealerBrandingQueryKey = () => {
+    return [
+    `/api/admin/branding`
+    ] as const;
+    }
+
+
+export const getGetDealerBrandingQueryOptions = <TData = Awaited<ReturnType<typeof getDealerBranding>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDealerBranding>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDealerBrandingQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDealerBranding>>> = ({ signal }) => getDealerBranding({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDealerBranding>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDealerBrandingQueryResult = NonNullable<Awaited<ReturnType<typeof getDealerBranding>>>
+export type GetDealerBrandingQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Get the active dealership's white-label branding (GM only)
+ */
+
+export function useGetDealerBranding<TData = Awaited<ReturnType<typeof getDealerBranding>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDealerBranding>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDealerBrandingQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateDealerBrandingUrl = () => {
+
+
+
+
+  return `/api/admin/branding`
+}
+
+/**
+ * @summary Update white-label branding (GM only)
+ */
+export const updateDealerBranding = async (dealerBrandingUpdate: DealerBrandingUpdate, options?: RequestInit): Promise<DealerBranding> => {
+
+  return customFetch<DealerBranding>(getUpdateDealerBrandingUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dealerBrandingUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateDealerBrandingMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerBranding>>, TError,{data: BodyType<DealerBrandingUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateDealerBranding>>, TError,{data: BodyType<DealerBrandingUpdate>}, TContext> => {
+
+const mutationKey = ['updateDealerBranding'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateDealerBranding>>, {data: BodyType<DealerBrandingUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateDealerBranding(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateDealerBrandingMutationResult = NonNullable<Awaited<ReturnType<typeof updateDealerBranding>>>
+    export type UpdateDealerBrandingMutationBody = BodyType<DealerBrandingUpdate>
+    export type UpdateDealerBrandingMutationError = ErrorType<Error>
+
+    /**
+ * @summary Update white-label branding (GM only)
+ */
+export const useUpdateDealerBranding = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerBranding>>, TError,{data: BodyType<DealerBrandingUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateDealerBranding>>,
+        TError,
+        {data: BodyType<DealerBrandingUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateDealerBrandingMutationOptions(options));
     }
 
 export const getListDealerTaxesUrl = () => {

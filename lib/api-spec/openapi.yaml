@@ -5573,6 +5573,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/StageChecklistConfig"
+  /admin/branding:
+    get:
+      operationId: getDealerBranding
+      tags: [admin]
+      summary: Get the active dealership's white-label branding (GM only)
+      responses:
+        "200":
+          description: Branding
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealerBranding"
+        "403":
+          description: Not a general manager of the active dealership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateDealerBranding
+      tags: [admin]
+      summary: Update white-label branding (GM only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealerBrandingUpdate"
+      responses:
+        "200":
+          description: Updated branding
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealerBranding"
+        "403":
+          description: Not a general manager of the active dealership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid logo path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/taxes:
     get:
       operationId: listDealerTaxes
@@ -6400,6 +6447,21 @@ components:
         roleName: { type: ["string", "null"] }
         isGeneralManager: { type: boolean }
         usdExchangeRate: { type: number, description: "GYD per 1 USD for this dealership" }
+        brandName: { type: ["string", "null"], description: "White-label display name (falls back to AURA branding when null)" }
+        logoUrl: { type: ["string", "null"], description: "White-label logo object path (served via /api/storage/objects)" }
+    DealerBranding:
+      type: object
+      required: [dealerId, dealerName]
+      properties:
+        dealerId: { type: integer }
+        dealerName: { type: string, description: "Legal/registered dealership name" }
+        brandName: { type: ["string", "null"] }
+        logoUrl: { type: ["string", "null"] }
+    DealerBrandingUpdate:
+      type: object
+      properties:
+        brandName: { type: ["string", "null"], maxLength: 80 }
+        logoUrl: { type: ["string", "null"], description: "Object path returned by the upload flow (/objects/uploads/dealer-{id}/...)" }
     Entitlements:
       type: object
       description: "Per-dealer feature flags; a missing key means enabled"

@@ -69,6 +69,16 @@ export interface DealerMembershipInfo {
   isGeneralManager?: boolean;
   /** GYD per 1 USD for this dealership */
   usdExchangeRate?: number;
+  /**
+     * White-label display name (falls back to AURA branding when null)
+     * @nullable
+     */
+  brandName?: string | null;
+  /**
+     * White-label logo object path (served via /api/storage/objects)
+     * @nullable
+     */
+  logoUrl?: string | null;
 }
 
 export interface CurrentUser {
@@ -91,6 +101,29 @@ export interface CurrentUser {
   entitlements?: Entitlements;
   dealers: DealerMembershipInfo[];
   permissions: PermissionGrant[];
+}
+
+export interface DealerBranding {
+  dealerId: number;
+  /** Legal/registered dealership name */
+  dealerName: string;
+  /** @nullable */
+  brandName?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+}
+
+export interface DealerBrandingUpdate {
+  /**
+     * @maxLength 80
+     * @nullable
+     */
+  brandName?: string | null;
+  /**
+     * Object path returned by the upload flow (/objects/uploads/dealer-{id}/...)
+     * @nullable
+     */
+  logoUrl?: string | null;
 }
 
 export type DealerStatus = typeof DealerStatus[keyof typeof DealerStatus];

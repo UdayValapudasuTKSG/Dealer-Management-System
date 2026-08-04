@@ -1,3 +1,4 @@
+import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { Router, type IRouter } from "express";
 import PDFDocument from "pdfkit";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
@@ -1150,13 +1151,32 @@ router.get("/deliveries/:id/invoice.pdf", async (req, res): Promise<void> => {
   const doc = new PDFDocument({ size: "A4", margin: 54 });
   doc.pipe(res);
 
-  doc
-    .fillColor("#b30f16")
-    .fontSize(26)
-    .font("Helvetica-Bold")
-    .text("AURA", { continued: true })
-    .fillColor("#111111")
-    .text(" Dealership OS");
+  // White-label header: GM-configured logo + brand name, AURA fallback.
+  const branding = await getDealerPdfBranding(delivery.dealerId);
+  if (branding.displayName) {
+    if (branding.logo) {
+      try {
+        doc.image(branding.logo, 54, doc.y, { fit: [140, 48] });
+        doc.moveDown(0.4);
+        doc.y = Math.max(doc.y, 54 + 52);
+      } catch {
+        /* unreadable logo bytes — name-only header */
+      }
+    }
+    doc
+      .fillColor("#111111")
+      .fontSize(22)
+      .font("Helvetica-Bold")
+      .text(branding.displayName);
+  } else {
+    doc
+      .fillColor("#b30f16")
+      .fontSize(26)
+      .font("Helvetica-Bold")
+      .text("AURA", { continued: true })
+      .fillColor("#111111")
+      .text(" Dealership OS");
+  }
   doc
     .fontSize(10)
     .fillColor("#555555")
@@ -1307,9 +1327,11 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
       );
     invoiceNumber = inv?.invoiceNumber ?? null;
   }
+  const handoverBranding = await getDealerPdfBranding(delivery.dealerId);
   const pdf = await buildHandoverPdf(delivery, vehicle, advisorName, {
     salesAdvisorName: deal?.salesAdvisor ?? null,
-    dealerName: dealer?.name ?? null,
+    dealerName: handoverBranding.displayName ?? dealer?.name ?? null,
+    logo: handoverBranding.logo,
     dealerAddress: [dealer?.city, dealer?.country].filter(Boolean).join(", "),
     customerAddress:
       customer?.location ??

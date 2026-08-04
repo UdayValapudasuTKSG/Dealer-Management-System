@@ -1,3 +1,4 @@
+import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { Router, type IRouter } from "express";
 import { eq, desc, and, or, isNull, isNotNull, ne, ilike, gte, lte, sql, inArray, notInArray, type SQL } from "drizzle-orm";
 import {
@@ -984,18 +985,21 @@ router.get("/leads/:id/quote.pdf", async (req, res): Promise<void> => {
 
   if (!payload.dealerName) {
     const [dealer] = await db
-      .select({ name: dealersTable.name, city: dealersTable.city, country: dealersTable.country })
+      .select({ name: dealersTable.name, brandName: dealersTable.brandName, city: dealersTable.city, country: dealersTable.country })
       .from(dealersTable)
       .where(eq(dealersTable.id, ctx.lead.dealerId))
       .limit(1);
     if (dealer) {
-      payload.dealerName = dealer.name;
+      payload.dealerName = dealer.brandName ?? dealer.name;
       payload.dealerAddress = [dealer.city, dealer.country]
         .filter(Boolean)
         .join(", ");
     }
   }
-  const pdf = await buildQuotePdf(payload);
+  const pdf = await buildQuotePdf(
+    payload,
+    (await getDealerPdfBranding(ctx.lead.dealerId)).logo,
+  );
   const safeName = `${ctx.lead.name} - ${ctx.quoteRef}.pdf`.replace(
     /[^\w .-]+/g,
     "",
@@ -1077,7 +1081,10 @@ router.get(
       res.status(404).json({ error: "Quote not found" });
       return;
     }
-    const pdf = await buildQuotePdf(await quotePdfPayload(quote));
+    const pdf = await buildQuotePdf(
+      await quotePdfPayload(quote),
+      (await getDealerPdfBranding(lead.dealerId)).logo,
+    );
     const safeName =
       `${quote.customerName} - ${quote.quoteNumber}-R${quote.version}.pdf`.replace(
         /[^\w .-]+/g,

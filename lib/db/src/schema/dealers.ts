@@ -51,6 +51,11 @@ export const dealersTable = pgTable("dealers", {
   country: text("country"),
   /** Dealer's GRA Taxpayer Identification Number — printed on duty packs, never AI-generated. */
   tin: text("tin"),
+  // White-label branding (GM-managed): display name + uploaded logo shown
+  // across the app shell and printed on invoices/quotes/receipts. Null =
+  // fall back to the default AURA branding.
+  brandName: text("brand_name"),
+  logoUrl: text("logo_url"),
   status: text("status").notNull().default("active"),
   // GYD per 1 USD — used to convert USD amounts into Guyana dollars in the UI.
   usdExchangeRate: doublePrecision("usd_exchange_rate")

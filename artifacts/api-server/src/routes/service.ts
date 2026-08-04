@@ -1,3 +1,4 @@
+import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { Router, type IRouter } from "express";
 import {
   buildCoverageCertificatePdf,
@@ -958,7 +959,11 @@ router.get("/service-invoices/:id/pdf", async (req, res): Promise<void> => {
     return;
   }
   const rate = await dealerExchangeRate(invoice.dealerId);
-  const pdf = await buildServiceInvoicePdf(invoice, rate);
+  const pdf = await buildServiceInvoicePdf(
+    invoice,
+    rate,
+    await getDealerPdfBranding(invoice.dealerId),
+  );
   res
     .setHeader("Content-Type", "application/pdf")
     .setHeader(
@@ -1030,7 +1035,10 @@ router.get("/coverage/:id/pdf", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Coverage plan not found" });
     return;
   }
-  const pdf = await buildCoverageCertificatePdf(plan);
+  const pdf = await buildCoverageCertificatePdf(
+    plan,
+    await getDealerPdfBranding(plan.dealerId),
+  );
   res
     .setHeader("Content-Type", "application/pdf")
     .setHeader(

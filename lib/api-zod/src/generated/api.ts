@@ -6595,7 +6595,9 @@ export const GetCurrentUserResponse = zod.object({
   "dealerStatus": zod.enum(['provisioning', 'active', 'suspended', 'offboarding', 'closed']).optional(),
   "roleName": zod.string().nullish(),
   "isGeneralManager": zod.boolean().optional(),
-  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD for this dealership')
+  "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD for this dealership'),
+  "brandName": zod.string().nullish().describe('White-label display name (falls back to AURA branding when null)'),
+  "logoUrl": zod.string().nullish().describe('White-label logo object path (served via \/api\/storage\/objects)')
 })),
   "permissions": zod.array(zod.object({
   "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
@@ -7667,6 +7669,37 @@ export const SetStageChecklistResponse = zod.object({
 })),
   "updatedBy": zod.string().nullish(),
   "updatedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Get the active dealership's white-label branding (GM only)
+ */
+export const GetDealerBrandingResponse = zod.object({
+  "dealerId": zod.number(),
+  "dealerName": zod.string().describe('Legal\/registered dealership name'),
+  "brandName": zod.string().nullish(),
+  "logoUrl": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update white-label branding (GM only)
+ */
+export const updateDealerBrandingBodyBrandNameMax = 80;
+
+
+
+export const UpdateDealerBrandingBody = zod.object({
+  "brandName": zod.string().max(updateDealerBrandingBodyBrandNameMax).nullish(),
+  "logoUrl": zod.string().nullish().describe('Object path returned by the upload flow (\/objects\/uploads\/dealer-{id}\/...)')
+})
+
+export const UpdateDealerBrandingResponse = zod.object({
+  "dealerId": zod.number(),
+  "dealerName": zod.string().describe('Legal\/registered dealership name'),
+  "brandName": zod.string().nullish(),
+  "logoUrl": zod.string().nullish()
 })
 
 

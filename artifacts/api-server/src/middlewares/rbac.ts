@@ -31,6 +31,8 @@ export type DealerMembership = {
   roleName: string | null;
   isGeneralManager: boolean;
   usdExchangeRate: number;
+  brandName: string | null;
+  logoUrl: string | null;
 };
 
 export type AuthedUser = User & {
@@ -248,6 +250,8 @@ async function loadMemberships(userId: number): Promise<DealerMembership[]> {
       roleName: rolesTable.name,
       isGeneralManager: dealerUsersTable.isGeneralManager,
       usdExchangeRate: dealersTable.usdExchangeRate,
+      brandName: dealersTable.brandName,
+      logoUrl: dealersTable.logoUrl,
     })
     .from(dealerUsersTable)
     .innerJoin(dealersTable, eq(dealerUsersTable.dealerId, dealersTable.id))
@@ -265,6 +269,8 @@ async function listAllDealers(): Promise<DealerMembership[]> {
       status: dealersTable.status,
       entitlements: dealersTable.entitlements,
       usdExchangeRate: dealersTable.usdExchangeRate,
+      brandName: dealersTable.brandName,
+      logoUrl: dealersTable.logoUrl,
     })
     .from(dealersTable)
     .orderBy(dealersTable.id);
@@ -277,6 +283,8 @@ async function listAllDealers(): Promise<DealerMembership[]> {
     roleName: "Super Admin",
     isGeneralManager: false,
     usdExchangeRate: d.usdExchangeRate,
+    brandName: d.brandName,
+    logoUrl: d.logoUrl,
   }));
 }
 
