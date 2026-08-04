@@ -233,3 +233,10 @@ id = "8EuhbEvLmA6oSv6bQFqo6"
 uri = "file://docs/aura-styling-components.zip"
 type = "unspecified"
 title = "AURA & Realm — styling + app components (zip)"
+
+[[outputs]]
+id = "0k4dxeYX2sRsup1BGyRKq"
+uri = "file://backups/aura-dev-backup.sql.gz"
+type = "unspecified"
+title = "PostgreSQL backup (aura-dev-backup.sql.gz)"
+description = "Full pg_dump of the development database (schema + data), gzip-compressed, ready to restore into your production Postgres."
