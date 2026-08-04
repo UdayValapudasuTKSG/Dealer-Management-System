@@ -11,6 +11,8 @@ import {
   ChevronsUpDown,
   Menu,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
   LayoutDashboard,
   BarChart3,
   Waypoints,
@@ -481,13 +483,32 @@ function NavContent({
  * NL-Corp-style dark left sidebar — stays dark in BOTH themes.
  * Auto-collapses to an icon rail; expands on hover.
  */
+const SIDENAV_PIN_KEY = "aura-sidenav-pinned";
+
 export function SideNav() {
   const [hovered, setHovered] = useState(false);
   const [touchPinned, setTouchPinned] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(hover: none)").matches;
   });
-  const collapsed = !hovered && !touchPinned;
+  // Explicit on/off toggle: when pinned open the rail stays expanded; when
+  // toggled off it collapses to icons (still peeking open on hover).
+  const [pinnedOpen, setPinnedOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem(SIDENAV_PIN_KEY) !== "0";
+  });
+  const togglePinned = () => {
+    setPinnedOpen((v) => {
+      const next = !v;
+      try {
+        window.localStorage.setItem(SIDENAV_PIN_KEY, next ? "1" : "0");
+      } catch {
+        /* private mode — non-fatal */
+      }
+      return next;
+    });
+  };
+  const collapsed = !pinnedOpen && !hovered && !touchPinned;
 
   return (
     <motion.aside
@@ -499,12 +520,28 @@ export function SideNav() {
           setHovered(false);
         }
       }}
-      onTouchStart={() => setTouchPinned(true)}
+      onTouchStart={() => {
+        if (!pinnedOpen) setTouchPinned(true);
+      }}
       animate={{ width: collapsed ? 68 : 240 }}
       transition={{ type: "spring", stiffness: 320, damping: 34 }}
       className="relative z-30 hidden md:flex h-full shrink-0 flex-col bg-[hsl(216,22%,6%)] text-white border-r border-white/[0.06] overflow-hidden"
     >
       <NavContent layoutId="sidenav-active" collapsed={collapsed} />
+      {!collapsed && (
+        <button
+          onClick={togglePinned}
+          title={pinnedOpen ? "Collapse sidebar" : "Keep sidebar open"}
+          aria-label={pinnedOpen ? "Collapse sidebar" : "Keep sidebar open"}
+          className="absolute top-7 right-2.5 flex h-7 w-7 items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/[0.08] transition-colors"
+        >
+          {pinnedOpen ? (
+            <PanelLeftClose className="h-4 w-4" />
+          ) : (
+            <PanelLeftOpen className="h-4 w-4" />
+          )}
+        </button>
+      )}
     </motion.aside>
   );
 }
