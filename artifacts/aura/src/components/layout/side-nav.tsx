@@ -505,6 +505,13 @@ export function SideNav() {
       } catch {
         /* private mode — non-fatal */
       }
+      // Collapse immediately even though the cursor is still inside the
+      // rail — otherwise the hover state keeps it expanded and the click
+      // appears to do nothing until the mouse leaves.
+      if (!next) {
+        setHovered(false);
+        setTouchPinned(false);
+      }
       return next;
     });
   };
