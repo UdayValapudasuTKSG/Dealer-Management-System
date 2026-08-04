@@ -1009,6 +1009,33 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
             })
             .returning();
 
+          // Lifetime value: the delivered vehicle's price joins the owner's
+          // running total (same basis as the batch recompute: sum of asset
+          // vehicle prices). Guarded by the existingAsset check above, so a
+          // retried completion never double-counts.
+          const [pricedVehicle] = await db
+            .select({ price: vehiclesTable.price })
+            .from(vehiclesTable)
+            .where(
+              and(
+                eq(vehiclesTable.id, delivery.vehicleId),
+                eq(vehiclesTable.dealerId, delivery.dealerId),
+              ),
+            );
+          if (pricedVehicle?.price) {
+            await db
+              .update(customersTable)
+              .set({
+                lifetimeValue: sql`${customersTable.lifetimeValue} + ${pricedVehicle.price}`,
+              })
+              .where(
+                and(
+                  eq(customersTable.id, delivery.customerId),
+                  eq(customersTable.dealerId, delivery.dealerId),
+                ),
+              );
+          }
+
           const label = await vehicleLabelFor(delivery.vehicleId, delivery.dealerId);
           await db.insert(timelineEventsTable).values({
             dealerId: delivery.dealerId,
