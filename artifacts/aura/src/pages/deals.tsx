@@ -89,6 +89,37 @@ const UNMET_LABEL: Record<string, string> = {
   financing_not_approved: "Bank financing not yet approved",
 };
 
+/** Friendly copy for non-checklist commit failures (allocation, terminal
+ * stages, network) — never show a raw machine code to the advisor. */
+const COMMIT_ERROR_LABEL: Record<string, string> = {
+  vehicle_not_found:
+    "The vehicle on this deal is no longer in stock. Pick another unit before committing.",
+  vehicle_unavailable:
+    "This vehicle was just taken by another deal. Choose a different unit of the same model.",
+  vehicle_identity_invalid:
+    "The vehicle's VIN, engine number or registration is incomplete — Inventory must correct it first.",
+  recall_damage_open:
+    "This unit is flagged for recall or damage and needs a manager's clearance before sale.",
+  refund_window_closed: "The refund window for this deal has closed.",
+  trade_in_exceeds_price:
+    "The trade-in value can't exceed the vehicle price.",
+  cancellation_reason_required:
+    "A cancellation reason is required before cancelling this deal.",
+  commit_blocked: "This deal has unmet commit requirements.",
+};
+
+function humanizeCommitError(raw: string | undefined): string {
+  if (!raw)
+    return "Something went wrong while committing. Please try again — if it keeps happening, contact your manager.";
+  const mapped = COMMIT_ERROR_LABEL[raw];
+  if (mapped) return mapped;
+  // Server already sent a human sentence — pass it through; otherwise turn
+  // snake_case codes into readable text.
+  if (/^[a-z0-9_]+$/.test(raw))
+    return raw.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  return raw;
+}
+
 const CANCEL_REASONS: { value: string; label: string }[] = [
   { value: "customer_changed_mind", label: "Customer changed mind" },
   { value: "financing_declined", label: "Financing declined" },
@@ -216,10 +247,11 @@ export default function Deals() {
       } else {
         toast({
           title: "Deal can't be committed yet",
-          description:
+          description: humanizeCommitError(
             detail?.message ??
-            detail?.error ??
-            (err instanceof Error ? err.message : undefined),
+              detail?.error ??
+              (err instanceof Error ? err.message : undefined),
+          ),
           variant: "destructive",
         });
       }

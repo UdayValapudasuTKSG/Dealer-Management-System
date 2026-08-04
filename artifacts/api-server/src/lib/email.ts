@@ -4,6 +4,7 @@ import {
   db,
   emailLogsTable,
   notificationsTable,
+  receiptsTable,
   tasksTable,
   timelineEventsTable,
   whatsappConversationsTable,
@@ -16,7 +17,7 @@ import {
 import { sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { buildQuotePdf } from "./quote-pdf";
-import { buildInvoicePdfFromPayload } from "./document-pdfs";
+import { buildInvoicePdfFromPayload, buildReceiptPdf } from "./document-pdfs";
 import { getDealerPdfBranding } from "./dealer-branding";
 import { testDriveIcsFromPayload } from "./calendar";
 import {
@@ -221,6 +222,26 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     body: (x) =>
       `This is a courtesy reminder that a payment of <strong>${d(x, "amount", "your scheduled amount")}</strong> is due on <strong>${d(x, "dueDate", "the scheduled date")}</strong>. If it's already on its way, please disregard this note.`,
     sample: { amount: "$2,150", dueDate: "July 25, 2026" },
+  },
+  payment_received: {
+    label: "Payment Received",
+    description: "Thanks the customer and confirms a recorded payment, with the receipt attached.",
+    subject: (x) => `Payment received — ${d(x, "amount", "thank you")}`,
+    heading: (x) => `Thank you, ${d(x, "name", "we've received your payment")}`,
+    body: (x) =>
+      `We've received your payment of <strong>${d(x, "amount", "the recorded amount")}</strong>${x.method ? ` via <strong>${x.method}</strong>` : ""} against invoice <strong>${d(x, "invoiceNumber", "your invoice")}</strong>. ${
+        x.balance && x.balance !== "GY$0"
+          ? `Your remaining balance is <strong>${x.balance}</strong>.`
+          : "This invoice is now fully settled — nothing further is due."
+      } Your official receipt is attached as a PDF.`,
+    cta: () => ({ label: "Receipt attached" }),
+    sample: {
+      name: "Alex Mensah",
+      amount: "GY$1,500,000",
+      method: "bank transfer",
+      invoiceNumber: "INV-2026-0141",
+      balance: "GY$56,517,800",
+    },
   },
   refund_confirmation: {
     label: "Refund Confirmation",
@@ -990,6 +1011,30 @@ export async function processQueue(): Promise<void> {
               contentType: "application/pdf",
             },
           ];
+        }
+        if (item.template === "payment_received" && item.payload?.receiptId) {
+          const [receipt] = await db
+            .select()
+            .from(receiptsTable)
+            .where(
+              and(
+                eq(receiptsTable.id, Number(item.payload.receiptId)),
+                eq(receiptsTable.dealerId, item.dealerId),
+              ),
+            );
+          if (receipt) {
+            const pdf = await buildReceiptPdf(
+              receipt,
+              await getDealerPdfBranding(item.dealerId),
+            );
+            attachments = [
+              {
+                filename: `AURA-Receipt-${receipt.receiptNumber.replace(/[^A-Za-z0-9-]/g, "")}.pdf`,
+                content: pdf,
+                contentType: "application/pdf",
+              },
+            ];
+          }
         }
         if (item.template === "vehicle_quote") {
           const pdf = await buildQuotePdf(

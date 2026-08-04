@@ -63,6 +63,7 @@ import {
   onDeliveryCompleted,
 } from "../lib/email-triggers";
 import { ensureAccountForLead } from "../lib/accounts";
+import { ensureFinalInvoiceForDeal } from "../lib/invoicing";
 import { logger } from "../lib/logger";
 import { activeDealerId } from "../middlewares/rbac";
 import {
@@ -653,31 +654,11 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
               eq(dealsTable.dealerId, delivery.dealerId),
             ),
           );
-        const amount = deal ? deal.otdPrice || deal.vehiclePrice : 0;
-        const invoice = await db.transaction(async (tx) => {
-          const [row] = await tx
-            .insert(invoicesTable)
-            .values({
-              dealerId: delivery.dealerId,
-              invoiceNumber: "PENDING",
-              customerId: delivery.customerId ?? null,
-              customerName: delivery.customerName ?? "Customer",
-              dealId: delivery.dealId,
-              description: `Vehicle delivery invoice — deal #${delivery.dealId}`,
-              amount,
-              status: "issued",
-            })
-            .returning();
-          const [numbered] = await tx
-            .update(invoicesTable)
-            .set({
-              invoiceNumber: `INV-${new Date().getFullYear()}-${String(row!.id).padStart(4, "0")}`,
-            })
-            .where(eq(invoicesTable.id, row!.id))
-            .returning();
-          return numbered!;
-        });
-        extra.invoiceId = invoice.id;
+        // Reuse the settlement invoice generated at commit (or create it via
+        // the shared path) instead of minting a duplicate here — this also
+        // sends the customer their "invoice generated" email with the PDF.
+        const invoice = deal ? await ensureFinalInvoiceForDeal(deal) : null;
+        if (invoice) extra.invoiceId = invoice.id;
       }
       break;
     }

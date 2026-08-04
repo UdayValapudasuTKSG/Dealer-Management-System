@@ -441,6 +441,50 @@ export async function applyPayment(args: ApplyPaymentArgs) {
     }
   }
 
+  // Payment-received email with the receipt attached — fire-and-forget so a
+  // notification hiccup never affects the recorded payment. Reversals and
+  // gate-authorised refunds are excluded (refunds have their own email).
+  if (args.amount > 0 && args.gateId == null) {
+    void (async () => {
+      const [customer] = invoice.customerId
+        ? await db
+            .select({ email: customersTable.email, name: customersTable.name })
+            .from(customersTable)
+            .where(
+              and(
+                eq(customersTable.id, invoice.customerId),
+                eq(customersTable.dealerId, invoice.dealerId),
+              ),
+            )
+        : [];
+      if (!customer?.email) return;
+      const gyd = (n: number) =>
+        `GY$${Math.max(0, Math.round(n)).toLocaleString("en-US")}`;
+      const balance = Math.max(0, invoice.amount - result.paid);
+      await enqueueEmail({
+        dealerId: invoice.dealerId,
+        template: "payment_received",
+        to: customer.email,
+        customerId: invoice.customerId,
+        dedupeKey: `payment:received:${result.payment.id}`,
+        data: {
+          name: customer.name ?? invoice.customerName,
+          amount: gyd(args.amount),
+          method: args.method.replace(/_/g, " "),
+          invoiceNumber: invoice.invoiceNumber,
+          balance: gyd(balance),
+          // Receipt payload for the PDF attachment built at send time.
+          receiptId: String(result.receipt.id),
+        },
+      });
+    })().catch((err) =>
+      logger.error(
+        { err, invoiceId: invoice.id },
+        "payment-received email failed",
+      ),
+    );
+  }
+
   return result;
 }
 
