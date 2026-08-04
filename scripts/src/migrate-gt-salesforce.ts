@@ -494,6 +494,7 @@ async function main() {
       }
     }
 
+    const pendingLeads: (typeof leadsTable.$inferInsert)[] = [];
     for (const r of sheetRows(wb, "Lead")) {
       const name = (r.Name || `${r.FirstName} ${r.LastName}`).trim();
       const ref = `${name} <${r.Email}> (${r.Id})`;
@@ -529,7 +530,7 @@ async function main() {
         .join(" ");
 
       if (execute) {
-        await dbc.insert(leadsTable).values({
+        pendingLeads.push({
           dealerId: DEALER_ID,
           divisionId: defaultDivisionId,
           name,
@@ -583,6 +584,12 @@ async function main() {
         });
       }
       reports.leads.imported++;
+    }
+
+    // Batched insert — one round trip per 500 leads instead of one per lead
+    // (essential when running against a remote/production database).
+    for (let i = 0; i < pendingLeads.length; i += 500) {
+      await dbc.insert(leadsTable).values(pendingLeads.slice(i, i + 500));
     }
 
     // -------------------------------------------- Stage 3.5: interested model
