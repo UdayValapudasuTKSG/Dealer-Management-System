@@ -56,7 +56,10 @@ export default function SettingsBranding() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { activeDealer, me } = useAuthz();
-  const isGm = !!activeDealer?.isGeneralManager || !!me?.isSuperAdmin;
+  const isGm =
+    !!activeDealer?.isGeneralManager ||
+    activeDealer?.roleName === "General Manager" ||
+    !!me?.isSuperAdmin;
 
   const { data: branding, isLoading } = useGetDealerBranding({
     query: { enabled: isGm },

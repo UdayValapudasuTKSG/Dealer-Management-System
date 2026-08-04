@@ -844,10 +844,11 @@ router.delete("/admin/taxes/:id", async (req, res): Promise<void> => {
 function requireGeneralManager(res: Parameters<typeof activeDealerId>[0]): boolean {
   const user = res.locals.user;
   const dealerId = activeDealerId(res);
+  const membership = user?.dealers.find((d) => d.dealerId === dealerId);
   return (
     user?.isSuperAdmin === true ||
-    (user?.dealers.find((d) => d.dealerId === dealerId)?.isGeneralManager ??
-      false)
+    membership?.isGeneralManager === true ||
+    membership?.roleName === "General Manager"
   );
 }
 

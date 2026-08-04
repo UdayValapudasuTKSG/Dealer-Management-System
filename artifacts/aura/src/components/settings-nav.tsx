@@ -87,7 +87,10 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 /** Sections the current user's role can see (mirrors sidebar gating). */
 export function useSettingsSections(): SettingsSection[] {
   const { can, activeDealer, me } = useAuthz();
-  const isGm = !!activeDealer?.isGeneralManager || !!me?.isSuperAdmin;
+  const isGm =
+    !!activeDealer?.isGeneralManager ||
+    activeDealer?.roleName === "General Manager" ||
+    !!me?.isSuperAdmin;
   return SETTINGS_SECTIONS.filter(
     (s) => (!s.module || can(s.module, "view")) && (!s.gmOnly || isGm),
   );
