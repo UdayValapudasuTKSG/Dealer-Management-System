@@ -149,10 +149,37 @@ async function computeUnmet(d: Delivery): Promise<string[]> {
       if (!d.insuranceDocId)
         unmet.push("Insurance cover note document not attached");
       break;
-    case "delivery":
+    case "delivery": {
       if (!d.deliveredAt)
         unmet.push("Actual handover date/time must be recorded");
+      // Settlement guard: the vehicle never leaves with money outstanding.
+      // The final invoice already nets reservation credit, trade-in and
+      // financed amounts, so "paid" here means the customer balance is zero.
+      // Void invoices are excluded (finance can void and reissue), and the
+      // outstanding figure is the true remainder after applied payments.
+      const [outstanding] = await db
+        .select({
+          due: sql<number>`coalesce(sum(${invoicesTable.amount} - coalesce(p.paid, 0)), 0)`,
+        })
+        .from(invoicesTable)
+        .leftJoin(
+          sql`lateral (select sum(amount) as paid from payments where payments.invoice_id = ${invoicesTable.id} and payments.dealer_id = ${invoicesTable.dealerId}) p`,
+          sql`true`,
+        )
+        .where(
+          and(
+            eq(invoicesTable.dealId, d.dealId),
+            eq(invoicesTable.dealerId, d.dealerId),
+            eq(invoicesTable.kind, "final"),
+            sql`${invoicesTable.status} not in ('paid', 'void')`,
+          ),
+        );
+      if ((outstanding?.due ?? 0) > 0.005)
+        unmet.push(
+          `Settlement invoice not fully paid — GY$${(outstanding!.due).toLocaleString("en-US", { maximumFractionDigits: 0 })} outstanding must be received before handover`,
+        );
       break;
+    }
     case "signature": {
       if (d.handoverSheetDocId) {
         const [doc] = await db
