@@ -31,4 +31,5 @@
 - [Delivery advance gates](delivery-advance-gates.md) — body-supplied gated fields (signature, plate, deliveredAt) must merge into the gate-eval copy before computeUnmet, or valid advances 422.
 - [Refund gate execution](refund-gate-execution.md) — gate-authorized refunds need in-tx unique gateId stamp, invoice-to-gate linkage check, and approved-amount cap; prechecks alone race.
 - [Field-permission redaction testing](field-permission-redaction.md) — grants key off dealer_users.role_id (not role name), ~30s cache; redact money from ALL payload series incl. secondary charts.
+- [Quote-PDF seed/relink tool](quote-documents-seed.md) — export/apply seed for lead quote docs; match by name first (shared dummy emails), dedupe by fileName dealer-wide.
 - [Regression suite fixture users](regression-suite-fixture-users.md) — isolation suites must seed ephemeral single-dealer test users; shared demo account memberships drift and break "non-member → 403" checks.
