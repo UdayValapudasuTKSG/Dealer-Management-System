@@ -19,6 +19,35 @@ import { Loader2, Paintbrush, Sparkles, Trash2, Upload } from "lucide-react";
 const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2MB is plenty for a logo
 
 /**
+ * The PDF engine can only embed PNG/JPEG, so WEBP (and other image formats)
+ * are converted to PNG in the browser before upload — otherwise the logo
+ * would show in the app but silently disappear from printed documents.
+ */
+async function toPdfCompatible(file: File): Promise<File> {
+  if (file.type === "image/png" || file.type === "image/jpeg") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("conversion failed"))),
+        "image/png",
+      ),
+    );
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".png", {
+      type: "image/png",
+    });
+  } catch {
+    // Conversion unsupported for this format/browser — upload the original;
+    // the app still renders it and PDFs fall back to the name-only header.
+    return file;
+  }
+}
+
+/**
  * GM-only white-label settings: dealership display name + logo shown across
  * the app shell and printed on invoices, quotations, receipts and handover
  * documents. Clearing both falls back to the default AURA branding.
@@ -78,7 +107,7 @@ export default function SettingsBranding() {
       toast({ title: "Logo is too large (max 2MB)", variant: "destructive" });
       return;
     }
-    const res = await uploadFile(file);
+    const res = await uploadFile(await toPdfCompatible(file));
     if (res?.objectPath) setLogoUrl(res.objectPath);
   };
 
@@ -127,12 +156,14 @@ export default function SettingsBranding() {
           <div>
             <div className="text-sm font-semibold">Logo</div>
             <p className="text-xs text-muted-foreground mt-1">
-              PNG or SVG with a transparent background works best (max 2MB).
+              PNG, WEBP or JPG (max 2MB) — transparent backgrounds work best.
+              Other formats are converted automatically so the logo also
+              prints on documents.
             </p>
             <input
               ref={fileInput}
               type="file"
-              accept="image/*"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,image/avif"
               className="hidden"
               onChange={(e) => void onPickLogo(e.target.files?.[0])}
             />
