@@ -45,6 +45,7 @@ import {
   Truck,
   PenTool,
   Ban,
+  Lock,
   Clock,
 } from "lucide-react";
 import { useAuthz } from "@/lib/auth";
@@ -1052,6 +1053,17 @@ export default function Deals() {
                                         )}
                                       </span>
                                     </div>
+                                    {deal.stage === "committed" &&
+                                      deal.otdPrice - paidForDeal(deal.id) >
+                                        0.005 && (
+                                        <div className="flex items-center gap-1.5 pt-1.5 text-[10px] text-amber-600 dark:text-amber-400">
+                                          <Lock className="w-3 h-3 shrink-0" />
+                                          <span>
+                                            Handover locked until the balance is
+                                            settled
+                                          </span>
+                                        </div>
+                                      )}
                                   </>
                                 )}
                               {deal.monthlyPayment && (
