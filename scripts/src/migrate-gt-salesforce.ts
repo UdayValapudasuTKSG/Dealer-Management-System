@@ -585,6 +585,42 @@ async function main() {
       reports.leads.imported++;
     }
 
+    // -------------------------------------------- Stage 3.5: interested model
+    // The UI's "Interested model" reads leads.interested_vehicle_id (FK to a
+    // vehicle), not the free-text variant. Backfill it by mapping the
+    // Salesforce model text to an imported vehicle (color match preferred).
+    if (execute) {
+      await dbc.execute(sql`
+        WITH mapped AS (
+          SELECT l.id AS lead_id, l.color,
+            CASE
+              WHEN l.variant ILIKE '%sealion%' THEN 'SEALION EV'
+              WHEN l.variant ILIKE '%yuan pro%' THEN 'YUAN PRO'
+              WHEN l.variant ILIKE '%yuan plus%' THEN 'YUAN PLUS EV'
+              WHEN l.variant ILIKE '%shark%' THEN 'SHARK'
+              WHEN l.variant ILIKE '%dolphin%' THEN 'Dolphin Mini'
+              WHEN l.variant ILIKE '%song%' THEN 'SONG PLUS DM'
+              WHEN l.variant ILIKE '%seal%' THEN 'SEAL EV'
+              ELSE NULL END AS model
+          FROM leads l
+          WHERE l.dealer_id = ${DEALER_ID}
+            AND l.interested_vehicle_id IS NULL
+            AND COALESCE(l.variant, '') <> ''
+        ),
+        pick AS (
+          SELECT m.lead_id, (
+            SELECT v.id FROM vehicles v
+            WHERE v.dealer_id = ${DEALER_ID} AND upper(v.model) = upper(m.model)
+            ORDER BY (COALESCE(m.color,'') <> '' AND v.exterior_color ILIKE '%' || m.color || '%') DESC,
+                     (v.status = 'available') DESC, v.id
+            LIMIT 1) AS vehicle_id
+          FROM mapped m WHERE m.model IS NOT NULL
+        )
+        UPDATE leads SET interested_vehicle_id = pick.vehicle_id
+        FROM pick WHERE leads.id = pick.lead_id AND pick.vehicle_id IS NOT NULL
+      `);
+    }
+
     // -------------------------------------------- Stage 4: assets (ownership)
     // Salesforce Asset rows link Accounts to the vehicles they own. Import
     // them into AURA's assets table (lifetime ownership records) and backfill
