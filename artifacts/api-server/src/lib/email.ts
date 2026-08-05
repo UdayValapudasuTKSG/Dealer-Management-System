@@ -54,6 +54,16 @@ function makeTransport() {
     host: "smtp.gmail.com",
     port: 465,
     secure: true,
+    // Pooled connections: reuse one authenticated session for many messages
+    // instead of a fresh SMTP login per email. A mass enqueue once tripped
+    // Gmail's "454 too many login attempts" throttle because every send
+    // opened its own connection — pooling keeps logins rare and throttles
+    // the send rate to stay inside Gmail's limits.
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 50,
+    rateDelta: 1000,
+    rateLimit: 1,
     auth: {
       user: process.env.GMAIL_USER,
       pass: process.env.GMAIL_APP_PASSWORD,
