@@ -23,7 +23,9 @@ import {
   isKnownTemplate,
   processQueue,
   TEMPLATE_DEFS,
+  sniffImageMime,
 } from "../lib/email";
+import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { activeDealerId } from "../middlewares/rbac";
 
 const router: IRouter = Router();
@@ -80,7 +82,7 @@ router.get("/emails/templates", (_req, res): void => {
   res.json(ListEmailTemplatesResponse.parse(list));
 });
 
-router.get("/emails/templates/:key/preview", (req, res): void => {
+router.get("/emails/templates/:key/preview", async (req, res): Promise<void> => {
   const params = PreviewEmailTemplateParams.safeParse(req.params);
   if (!params.success || !isKnownTemplate(params.data.key)) {
     res.status(404).json({ error: "Unknown template" });
@@ -91,7 +93,16 @@ router.get("/emails/templates/:key/preview", (req, res): void => {
     res.status(404).json({ error: "Unknown template" });
     return;
   }
-  const { subject, html } = renderEmail(key, TEMPLATE_DEFS[key].sample);
+  // Preview with the active dealer's white-label branding (logo inlined as
+  // a data URI since a browser preview cannot resolve email CID references).
+  const branding = await getDealerPdfBranding(activeDealerId(res));
+  const logoSrc = branding.logo
+    ? `data:${sniffImageMime(branding.logo).mime};base64,${branding.logo.toString("base64")}`
+    : null;
+  const { subject, html } = renderEmail(key, TEMPLATE_DEFS[key].sample, {
+    name: branding.displayName,
+    logoSrc,
+  });
   res.json(PreviewEmailTemplateResponse.parse({ key, subject, html }));
 });
 

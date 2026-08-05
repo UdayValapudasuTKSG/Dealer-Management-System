@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { and, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
 import {
   db,
+  dealersTable,
   emailLogsTable,
   notificationsTable,
   receiptsTable,
@@ -95,7 +96,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     label: "Lead Received",
     description: "Warm welcome the moment an enquiry lands.",
     subject: (x) => `We received your enquiry, ${d(x, "name", "there")}`,
-    heading: (x) => `Welcome to AURA, ${d(x, "name", "there")}`,
+    heading: (x) => `Welcome to ${d(x, "__brand", "AURA")}, ${d(x, "name", "there")}`,
     body: (x) =>
       `Thank you for your interest in the <strong>${d(x, "vehicle", "vehicle of your choice")}</strong>. Your personal sales advisor has been assigned and will reach out shortly with availability, pricing and a tailored walk-through.`,
     cta: () => ({ label: "Your sales advisor is on it" }),
@@ -190,7 +191,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
   lead_assignment: {
     label: "Lead Assignment",
     description: "Introduces the assigned advisor to the customer.",
-    subject: (x) => `${d(x, "advisor", "Your advisor")} is your personal AURA advisor`,
+    subject: (x) => `${d(x, "advisor", "Your advisor")} is your personal ${d(x, "__brand", "AURA")} advisor`,
     heading: (x) => `Meet ${d(x, "advisor", "your advisor")}`,
     body: (x) =>
       `<strong>${d(x, "advisor", "Your advisor")}</strong> now leads your journey with us and is across every detail of your enquiry${x.vehicle ? ` for the <strong>${x.vehicle}</strong>` : ""}. Expect a personal introduction shortly.`,
@@ -227,7 +228,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
   payment_reminder: {
     label: "Payment Reminder",
     description: "Gentle reminder of an upcoming payment.",
-    subject: () => "A gentle reminder from AURA",
+    subject: (x) => `A gentle reminder from ${d(x, "__brand", "AURA")}`,
     heading: () => "Upcoming payment",
     body: (x) =>
       `This is a courtesy reminder that a payment of <strong>${d(x, "amount", "your scheduled amount")}</strong> is due on <strong>${d(x, "dueDate", "the scheduled date")}</strong>. If it's already on its way, please disregard this note.`,
@@ -303,7 +304,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     subject: () => "Welcome to the family — delivery complete",
     heading: (x) => `The keys are yours, ${d(x, "name", "and it suits you")}`,
     body: (x) =>
-      `Your <strong>${d(x, "vehicle", "new vehicle")}</strong> has been delivered. Every AURA vehicle includes our sales advisor aftercare — service bookings, warranty and support are one message away.`,
+      `Your <strong>${d(x, "vehicle", "new vehicle")}</strong> has been delivered. Every ${d(x, "__brand", "AURA")} vehicle includes our sales advisor aftercare — service bookings, warranty and support are one message away.`,
     sample: { name: "Alex", vehicle: "2026 Bentley Continental GT" },
   },
   service_reminder: {
@@ -328,7 +329,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     label: "Feedback Request",
     description: "Invites the customer to rate their experience.",
     subject: () => "How did we do?",
-    heading: () => "Your opinion shapes AURA",
+    heading: (x) => `Your opinion shapes ${d(x, "__brand", "AURA")}`,
     body: (x) =>
       `Thank you for choosing us${x.context ? ` for ${x.context}` : ""}. If you have two minutes, we'd love to hear how the experience felt — every note reaches the general manager directly.`,
     sample: { context: "your recent delivery" },
@@ -336,20 +337,20 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
   thank_you: {
     label: "Thank You",
     description: "A simple, elegant thank-you note.",
-    subject: (x) => `Thank you, ${d(x, "name", "from all of us at AURA")}`,
+    subject: (x) => `Thank you, ${d(x, "name", `from all of us at ${d(x, "__brand", "AURA")}`)}`,
     heading: () => "Thank you",
     body: (x) =>
-      `${d(x, "message", "It has been a privilege to look after you. From everyone at AURA, thank you for your trust — we're here whenever you need us.")}`,
+      `${d(x, "message", `It has been a privilege to look after you. From everyone at ${d(x, "__brand", "AURA")}, thank you for your trust — we're here whenever you need us.`)}`,
     sample: { name: "Alex", message: "It has been a privilege to look after you this month. From everyone at AURA — thank you." },
   },
   outreach: {
     label: "Personal Outreach",
     description: "A personal note from the advisor, drafted with AI and approved before sending.",
-    subject: (x) => d(x, "subject", `A note from ${d(x, "advisor", "your AURA advisor")}`),
+    subject: (x) => d(x, "subject", `A note from ${d(x, "advisor", `your ${d(x, "__brand", "AURA")} advisor`)}`),
     heading: (x) => `Hello ${d(x, "name", "there")}`,
     body: (x) =>
       `${d(x, "message", "Your advisor has an update for you.").replace(/\n/g, "<br/>")}`,
-    cta: (x) => ({ label: d(x, "advisor", "Your AURA advisor") }),
+    cta: (x) => ({ label: d(x, "advisor", `Your ${d(x, "__brand", "AURA")} advisor`) }),
     sample: {
       name: "Alex Mensah",
       advisor: "Nana Adjei",
@@ -437,7 +438,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
   "invoice.generated": {
     label: "Invoice Generated",
     description: "Sends the customer their invoice (PDF attached).",
-    subject: (x) => `Your AURA invoice ${d(x, "invoiceNumber", "")}`.trim(),
+    subject: (x) => `Your ${d(x, "__brand", "AURA")} invoice ${d(x, "invoiceNumber", "")}`.trim(),
     heading: () => "Your invoice is ready",
     body: (x) =>
       `Invoice <strong>${d(x, "invoiceNumber", "")}</strong> for the <strong>${d(x, "vehicle", "vehicle")}</strong> has been issued — total <strong>${d(x, "total", "")}</strong>${x.dueDate ? `, due <strong>${x.dueDate}</strong>` : ""}. The PDF is attached; your advisor is on hand for any question.`,
@@ -527,7 +528,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
   "feedback.survey": {
     label: "Feedback Survey",
     description: "Post-milestone CSAT survey invitation.",
-    subject: () => "Two minutes to shape your AURA experience",
+    subject: (x) => `Two minutes to shape your ${d(x, "__brand", "AURA")} experience`,
     heading: (x) => `How did we do, ${d(x, "name", "")}?`.trim(),
     body: (x) =>
       `Thank you${x.context ? ` for ${x.context}` : ""}. We'd love two minutes of your time — your feedback goes straight to the general manager and shapes how we look after you next.`,
@@ -544,15 +545,63 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
   },
 };
 
+/**
+ * White-label branding injected into every rendered email. `name` replaces
+ * the AURA wordmark and all "AURA" mentions inside template copy (via the
+ * `__brand` data key); `logoSrc` (a `cid:` reference or data URI) renders the
+ * dealership logo in the header. Both fall back to the default AURA branding.
+ */
+export type EmailBranding = {
+  name?: string | null;
+  logoSrc?: string | null;
+};
+
+const escapeHtml = (s: string) =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/** Detect the mime/extension of an uploaded logo from its magic bytes. */
+export function sniffImageMime(buf: Buffer): { mime: string; ext: string } {
+  if (buf.length > 2 && buf[0] === 0x89 && buf[1] === 0x50)
+    return { mime: "image/png", ext: "png" };
+  if (buf.length > 2 && buf[0] === 0xff && buf[1] === 0xd8)
+    return { mime: "image/jpeg", ext: "jpg" };
+  const head = buf.subarray(0, 5).toString("utf8");
+  if (head.startsWith("RIFF")) return { mime: "image/webp", ext: "webp" };
+  if (head.startsWith("<?xml") || head.startsWith("<svg"))
+    return { mime: "image/svg+xml", ext: "svg" };
+  if (head.startsWith("GIF8")) return { mime: "image/gif", ext: "gif" };
+  return { mime: "image/png", ext: "png" };
+}
+
 export function renderEmail(
   template: EmailTemplate,
   data: TemplateData,
+  branding?: EmailBranding,
 ): { subject: string; html: string } {
   const def = TEMPLATE_DEFS[template];
-  const subject = def.subject(data);
-  const heading = def.heading(data);
-  const body = def.body(data);
-  const cta = def.cta?.(data);
+  // Strip markup characters — `__brand` flows into raw HTML template copy
+  // (and plain-text subjects, so entity-escaping would render literally).
+  const brandName = (branding?.name?.trim() || "").replace(/[<>]/g, "");
+  // Templates reference the dealership via the `__brand` key; default AURA.
+  const x: TemplateData = { ...data, __brand: brandName || "AURA" };
+  const subject = def.subject(x);
+  const heading = def.heading(x);
+  const body = def.body(x);
+  const cta = def.cta?.(x);
+  const safeName = escapeHtml(brandName || "AURA Dealership");
+  const headerHtml = branding?.logoSrc
+    ? `<img src="${branding.logoSrc}" alt="${safeName}" height="44" style="display:block;height:44px;max-width:240px;width:auto;border:0;" />
+            <div style="font-size:12px;letter-spacing:2px;color:#c9c9c9;text-transform:uppercase;margin-top:10px;font-weight:600;">${safeName}</div>`
+    : brandName
+      ? `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#ffffff;">${escapeHtml(brandName)}</div>
+            <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Automotive Dealership</div>`
+      : `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#ffffff;">AURA<span style="color:#e01313;">.OS</span></div>
+            <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Dealership Operating System</div>`;
+  const footerName = escapeHtml(brandName || "AURA Dealership");
   const html = `<!DOCTYPE html>
 <html>
 <body style="margin:0;padding:0;background-color:#0a0a0a;font-family:Helvetica,Arial,sans-serif;">
@@ -564,8 +613,7 @@ export function renderEmail(
         </tr>
         <tr>
           <td style="padding:36px 44px 8px;">
-            <div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#ffffff;">AURA<span style="color:#e01313;">.OS</span></div>
-            <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Dealership Operating System</div>
+            ${headerHtml}
           </td>
         </tr>
         <tr>
@@ -592,7 +640,7 @@ export function renderEmail(
         <tr>
           <td style="padding:36px 44px 32px;">
             <div style="border-top:1px solid #262626;padding-top:20px;font-size:11px;color:#6f6f6f;line-height:1.6;">
-              AURA Dealership — Premium Automotive Sales Advisory<br/>
+              ${footerName} — Premium Automotive Sales Advisory<br/>
               You are receiving this because of your relationship with our showroom.
             </div>
           </td>
@@ -640,8 +688,30 @@ export type EnqueueOptions = {
  * Typed event API for other modules: enqueue a templated email.
  * The queue worker delivers it, retries with backoff, and logs everything.
  */
+/** Lightweight branding lookup (no logo download) for subject rendering. */
+async function getDealerBrandName(
+  dealerId: number | null | undefined,
+): Promise<string | null> {
+  if (!dealerId) return null;
+  try {
+    const [row] = await db
+      .select({
+        name: dealersTable.name,
+        brandName: dealersTable.brandName,
+      })
+      .from(dealersTable)
+      .where(eq(dealersTable.id, dealerId))
+      .limit(1);
+    return row ? (row.brandName ?? row.name) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
-  const { subject } = renderEmail(opts.template, opts.data ?? {});
+  const { subject } = renderEmail(opts.template, opts.data ?? {}, {
+    name: await getDealerBrandName(opts.dealerId),
+  });
   const [row] = await db
     .insert(emailLogsTable)
     .values({
@@ -992,23 +1062,44 @@ export async function processQueue(): Promise<void> {
     if (pending.length === 0) return;
 
     const transport = makeTransport();
+    // Branding (incl. logo bytes from object storage) cached per pass so a
+    // burst of emails for the same dealer doesn't re-download the logo.
+    const brandCache = new Map<
+      number,
+      Awaited<ReturnType<typeof getDealerPdfBranding>>
+    >();
+    const brandingFor = async (dealerId: number) => {
+      const hit = brandCache.get(dealerId);
+      if (hit) return hit;
+      const b = await getDealerPdfBranding(dealerId);
+      brandCache.set(dealerId, b);
+      return b;
+    };
     for (const item of pending) {
       await db
         .update(emailLogsTable)
         .set({ status: "sending", attempts: item.attempts + 1 })
         .where(eq(emailLogsTable.id, item.id));
       try {
+        // Per-dealer white-label branding: header logo (inline CID), display
+        // name in copy/from-line. Falls back to AURA when unconfigured.
+        const branding = await brandingFor(item.dealerId);
+        const logo = branding.logo;
+        // White-label attachment filename prefix (e.g. "GTAutomotive-Invoice-…").
+        const filePrefix =
+          (branding.displayName ?? "").replace(/[^A-Za-z0-9]/g, "") || "AURA";
         const { subject, html } = renderEmail(
           item.template as EmailTemplate,
           item.payload ?? {},
+          { name: branding.displayName, logoSrc: logo ? "cid:dealer-logo" : null },
         );
         let attachments:
-          | { filename: string; content: Buffer; contentType: string }[]
+          | { filename: string; content: Buffer; contentType: string; cid?: string }[]
           | undefined;
         if (item.template === "invoice.generated") {
           const pdf = await buildInvoicePdfFromPayload(
             item.payload ?? {},
-            await getDealerPdfBranding(item.dealerId),
+            branding,
           );
           const ref = (item.payload?.invoiceNumber ?? `INV-${item.id}`).replace(
             /[^A-Za-z0-9-]/g,
@@ -1016,7 +1107,7 @@ export async function processQueue(): Promise<void> {
           );
           attachments = [
             {
-              filename: `AURA-Invoice-${ref}.pdf`,
+              filename: `${filePrefix}-Invoice-${ref}.pdf`,
               content: pdf,
               contentType: "application/pdf",
             },
@@ -1033,13 +1124,10 @@ export async function processQueue(): Promise<void> {
               ),
             );
           if (receipt) {
-            const pdf = await buildReceiptPdf(
-              receipt,
-              await getDealerPdfBranding(item.dealerId),
-            );
+            const pdf = await buildReceiptPdf(receipt, branding);
             attachments = [
               {
-                filename: `AURA-Receipt-${receipt.receiptNumber.replace(/[^A-Za-z0-9-]/g, "")}.pdf`,
+                filename: `${filePrefix}-Receipt-${receipt.receiptNumber.replace(/[^A-Za-z0-9-]/g, "")}.pdf`,
                 content: pdf,
                 contentType: "application/pdf",
               },
@@ -1047,17 +1135,14 @@ export async function processQueue(): Promise<void> {
           }
         }
         if (item.template === "vehicle_quote") {
-          const pdf = await buildQuotePdf(
-            item.payload ?? {},
-            (await getDealerPdfBranding(item.dealerId)).logo,
-          );
+          const pdf = await buildQuotePdf(item.payload ?? {}, branding.logo);
           const ref = (item.payload?.quoteRef ?? `Q-${item.id}`).replace(
             /[^A-Za-z0-9-]/g,
             "",
           );
           attachments = [
             {
-              filename: `AURA-Quote-${ref}.pdf`,
+              filename: `${filePrefix}-Quote-${ref}.pdf`,
               content: pdf,
               contentType: "application/pdf",
             },
@@ -1088,8 +1173,24 @@ export async function processQueue(): Promise<void> {
             );
           }
         }
+        if (logo) {
+          const { mime, ext } = sniffImageMime(logo);
+          attachments = [
+            ...(attachments ?? []),
+            {
+              filename: `logo.${ext}`,
+              content: logo,
+              contentType: mime,
+              cid: "dealer-logo",
+            },
+          ];
+        }
+        const fromName = (branding.displayName ?? "AURA Dealership").replace(
+          /"/g,
+          "",
+        );
         await transport.sendMail({
-          from: `"AURA Dealership" <${process.env.GMAIL_USER}>`,
+          from: `"${fromName}" <${process.env.GMAIL_USER}>`,
           to: item.recipient,
           subject,
           html,
