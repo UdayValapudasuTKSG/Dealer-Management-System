@@ -33,4 +33,5 @@
 - [Field-permission redaction testing](field-permission-redaction.md) — grants key off dealer_users.role_id (not role name), ~30s cache; redact money from ALL payload series incl. secondary charts.
 - [Quote-PDF seed/relink tool](quote-documents-seed.md) — export/apply seed for lead quote docs; match by name first (shared dummy emails), dedupe by fileName dealer-wide.
 - [Remote prod data copy](remote-prod-data-copy.md) — per-row inserts to the remote prod DB time out and background runs die; use dev→prod bulk \copy with ID-collision check + setval.
+- [SLA sweep email storm](sla-sweep-email-storm.md) — imported owned leads all breach the 24h SLA at once; cancelling the queue won't help — pre-seed cancelled dedupe-key rows to suppress.
 - [Regression suite fixture users](regression-suite-fixture-users.md) — isolation suites must seed ephemeral single-dealer test users; shared demo account memberships drift and break "non-member → 403" checks.
