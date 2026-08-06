@@ -4,6 +4,7 @@ import { and, eq, notInArray, isNotNull, isNull } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import {
   db,
+  dealersTable,
   leadsTable,
   timelineEventsTable,
   webhookEventsTable,
@@ -39,15 +40,79 @@ import {
 
 const CHANNEL = "gmail_email";
 const MARKER_CHANNEL = "gmail_intake";
-const MARKER_ID = "enabled_at";
 const PROCESSED_MAILBOX = "AURA/Processed";
 const POLL_MS = 2 * 60 * 1000;
 
-function gmailConfig(): { user: string; pass: string } | null {
+/**
+ * One watched inbox. The agent can monitor several Gmail accounts, each with
+ * its own credentials, target dealer and (optionally) a subject filter that
+ * restricts which mail is even considered (non-matching mail is left
+ * completely untouched — unread, unlabelled — for humans working the inbox).
+ */
+type MailboxConfig = {
+  /** Stable key used in logs and the per-mailbox polling mutex. */
+  key: string;
+  user: string;
+  pass: string;
+  /** Resolves the dealer that owns leads created from this inbox. */
+  dealerId: () => Promise<number | null>;
+  /** When set, only emails whose subject matches are processed. */
+  subjectFilter?: RegExp;
+  /**
+   * Prefix for webhook_events external ids. Empty for the original mailbox
+   * (keeps its historical ledger rows valid); non-empty for later mailboxes
+   * so the same Message-ID delivered to two inboxes never collides.
+   */
+  ledgerPrefix: string;
+  /** webhook_events marker id holding this mailbox's enable-time watermark. */
+  markerId: string;
+};
+
+/** GT Automotive dealer id for the salesadmin@ inbox (name lookup, cached). */
+let gtDealerIdCache: number | null = null;
+async function gtSalesDealerId(): Promise<number | null> {
+  const fromEnv = Number(process.env["SALESADMIN_GMAIL_DEALER_ID"]);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return fromEnv;
+  if (gtDealerIdCache) return gtDealerIdCache;
+  const [row] = await db
+    .select({ id: dealersTable.id })
+    .from(dealersTable)
+    .where(eq(dealersTable.name, "GT Automotive"))
+    .limit(1);
+  gtDealerIdCache = row?.id ?? null;
+  return gtDealerIdCache;
+}
+
+function gmailConfigs(): MailboxConfig[] {
+  const configs: MailboxConfig[] = [];
   const user = process.env["GMAIL_USER"];
   const pass = process.env["GMAIL_APP_PASSWORD"];
-  if (!user || !pass) return null;
-  return { user, pass };
+  if (user && pass) {
+    configs.push({
+      key: "default",
+      user,
+      pass,
+      dealerId: defaultDealerId,
+      ledgerPrefix: "",
+      markerId: "enabled_at",
+    });
+  }
+  // GT Automotive sales inbox: only "Quote request" subjects become leads;
+  // everything else in that inbox is left alone.
+  const gtUser = process.env["SALESADMIN_GMAIL_USER"];
+  const gtPass = process.env["SALESADMIN_GMAIL_APP_PASSWORD"];
+  if (gtUser && gtPass) {
+    configs.push({
+      key: "gt-sales",
+      user: gtUser,
+      pass: gtPass,
+      dealerId: gtSalesDealerId,
+      subjectFilter: /quote\s*request/i,
+      ledgerPrefix: `${gtUser}:`,
+      markerId: `enabled_at:${gtUser}`,
+    });
+  }
+  return configs;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,30 +121,32 @@ function gmailConfig(): { user: string; pass: string } | null {
 // survives restarts.
 // ---------------------------------------------------------------------------
 
-let enabledAtCache: Date | null = null;
+const enabledAtCache = new Map<string, Date>();
 
-async function enabledAt(): Promise<Date> {
-  if (enabledAtCache) return enabledAtCache;
+async function enabledAt(markerId: string): Promise<Date> {
+  const cached = enabledAtCache.get(markerId);
+  if (cached) return cached;
   const [row] = await db
     .select()
     .from(webhookEventsTable)
     .where(
       and(
         eq(webhookEventsTable.channel, MARKER_CHANNEL),
-        eq(webhookEventsTable.externalId, MARKER_ID),
+        eq(webhookEventsTable.externalId, markerId),
       ),
     );
   if (row) {
-    enabledAtCache = row.createdAt;
+    enabledAtCache.set(markerId, row.createdAt);
     return row.createdAt;
   }
   const [inserted] = await db
     .insert(webhookEventsTable)
-    .values({ channel: MARKER_CHANNEL, externalId: MARKER_ID })
+    .values({ channel: MARKER_CHANNEL, externalId: markerId })
     .onConflictDoNothing()
     .returning();
-  enabledAtCache = inserted?.createdAt ?? new Date();
-  return enabledAtCache;
+  const at = inserted?.createdAt ?? new Date();
+  enabledAtCache.set(markerId, at);
+  return at;
 }
 
 async function alreadyProcessed(messageId: string): Promise<boolean> {
@@ -201,13 +268,14 @@ async function findOpenLeadByEmail(dealerId: number, email: string) {
 }
 
 async function handleEnquiry(opts: {
+  dealerId: number;
   fromName: string;
   fromEmail: string;
   subject: string;
   body: string;
   extraction: Extraction;
 }): Promise<number | null> {
-  const dealerId = await defaultDealerId();
+  const dealerId = opts.dealerId;
   // Prefer the customer's email extracted from the body (website-form
   // notifications relay the enquiry — the SMTP sender is just the relay).
   const contactEmail = opts.extraction.email || opts.fromEmail;
@@ -301,24 +369,39 @@ async function markHandled(
   }
 }
 
-let polling = false;
+const pollingKeys = new Set<string>();
 let credWarned = false;
 
 export async function pollGmailInbox(): Promise<void> {
-  if (polling) return;
-  const cfg = gmailConfig();
-  if (!cfg) {
+  const configs = gmailConfigs();
+  if (configs.length === 0) {
     if (!credWarned) {
       logger.warn(
-        "Gmail intake: GMAIL_USER / GMAIL_APP_PASSWORD not set — email-to-lead agent is idle",
+        "Gmail intake: no mailbox credentials set — email-to-lead agent is idle",
       );
       credWarned = true;
     }
     return;
   }
+  // Sequential: one IMAP connection at a time keeps the worker gentle.
+  for (const cfg of configs) {
+    await pollMailbox(cfg);
+  }
+}
+
+async function pollMailbox(cfg: MailboxConfig): Promise<void> {
+  if (pollingKeys.has(cfg.key)) return;
+  const dealerId = await cfg.dealerId();
+  if (!dealerId) {
+    logger.warn(
+      { mailbox: cfg.key },
+      "Gmail intake: could not resolve dealer for mailbox — skipping",
+    );
+    return;
+  }
   // Kill switch: dealer paused the email intake agent — skip polling entirely.
-  if (!(await isAgentEnabled(await defaultDealerId(), "intake_dedup"))) return;
-  polling = true;
+  if (!(await isAgentEnabled(dealerId, "intake_dedup"))) return;
+  pollingKeys.add(cfg.key);
   const client = new ImapFlow({
     host: "imap.gmail.com",
     port: 993,
@@ -328,7 +411,7 @@ export async function pollGmailInbox(): Promise<void> {
   });
 
   try {
-    const since = await enabledAt();
+    const since = await enabledAt(cfg.markerId);
     await client.connect();
     const hasProcessedBox = await ensureProcessedMailbox(client);
     const lock = await client.getMailboxLock("INBOX");
@@ -360,11 +443,22 @@ export async function pollGmailInbox(): Promise<void> {
           const fromName = parsed.from?.value?.[0]?.name?.trim() ?? "";
           const messageId =
             parsed.messageId?.trim() || `gmail-uid-${uid}-${cfg.user}`;
+          const externalId = `${cfg.ledgerPrefix}${messageId}`;
           const subject = parsed.subject?.trim() ?? "";
           const body = (parsed.text ?? "").trim();
 
-          if (await alreadyProcessed(messageId)) {
-            await markHandled(client, uid, hasProcessedBox);
+          // Subject-filtered mailboxes (e.g. GT sales): mail that doesn't
+          // match is NOT ours to touch — leave it unread and unlabelled for
+          // the humans working that inbox. Ledger it so we skip it cheaply.
+          const subjectMatches =
+            !cfg.subjectFilter || cfg.subjectFilter.test(subject);
+
+          if (await alreadyProcessed(externalId)) {
+            if (subjectMatches) await markHandled(client, uid, hasProcessedBox);
+            continue;
+          }
+          if (!subjectMatches) {
+            await recordProcessed(externalId, null);
             continue;
           }
 
@@ -379,7 +473,7 @@ export async function pollGmailInbox(): Promise<void> {
           const isBounceSender =
             /^(mailer-daemon|postmaster|no-?reply)@/i.test(fromAddr);
           if (!fromAddr || isSystemMail || isBounceSender) {
-            await recordProcessed(messageId, null);
+            await recordProcessed(externalId, null);
             await markHandled(client, uid, hasProcessedBox);
             continue;
           }
@@ -401,7 +495,6 @@ export async function pollGmailInbox(): Promise<void> {
               })
             : null;
           if (extraction.isEnquiry && gateReason) {
-            const dealerId = await defaultDealerId();
             logger.warn(
               { uid, from: fromAddr, confidence: extraction.confidence },
               "Gmail intake: enquiry below confidence floor — held for review",
@@ -432,6 +525,7 @@ export async function pollGmailInbox(): Promise<void> {
             });
           } else if (extraction.isEnquiry) {
             leadId = await handleEnquiry({
+              dealerId,
               fromName,
               fromEmail: fromAddr,
               subject,
@@ -450,7 +544,7 @@ export async function pollGmailInbox(): Promise<void> {
           }
           if (!(extraction.isEnquiry && gateReason)) {
             await recordAgentRun({
-              dealerId: await defaultDealerId(),
+              dealerId,
               agentKey: "intake_dedup",
               runType: "email_intake",
               inputSource: "gmail",
@@ -470,7 +564,7 @@ export async function pollGmailInbox(): Promise<void> {
             });
           }
 
-          await recordProcessed(messageId, leadId);
+          await recordProcessed(externalId, leadId);
           await markHandled(client, uid, hasProcessedBox);
         } catch (err) {
           // Leave the message unseen/unrecorded so the next poll retries it
@@ -482,9 +576,9 @@ export async function pollGmailInbox(): Promise<void> {
       lock.release();
     }
   } catch (err) {
-    logger.error({ err }, "Gmail intake: IMAP poll failed");
+    logger.error({ err, mailbox: cfg.key }, "Gmail intake: IMAP poll failed");
   } finally {
-    polling = false;
+    pollingKeys.delete(cfg.key);
     try {
       await client.logout();
     } catch {

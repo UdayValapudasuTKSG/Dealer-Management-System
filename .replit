@@ -108,6 +108,7 @@ channel = "stable-25_05"
 WHATSAPP_PROVIDER = "twilio"
 SUPER_ADMIN_EMAIL = "akhelaaditya99@gmail.com,uday.valapudasu@theksquaregroup.com"
 TWILIO_WHATSAPP_FROM = "+14155238886"
+SALESADMIN_GMAIL_USER = "salesadmin@gtautomotive.gy"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-f344ae42-7e40-44eb-8f65-d4aa608cb80d"
