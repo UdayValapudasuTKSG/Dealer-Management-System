@@ -205,6 +205,34 @@ async function main() {
   const nextAssignee = () =>
     salesPool.length ? salesPool[rr++ % salesPool.length] : null;
 
+  // Salesforce advisor mapping: Advisor__c/OwnerId → Advisor_Name (learned
+  // from rows where both are present), then Advisor_Name → AURA user (by
+  // exact name, exact email, or first-name email prefix e.g. "Eion Narine"
+  // → eion@…). Round-robin is only the fallback when no advisor resolves.
+  const sfAdvisorName = new Map<string, string>();
+  for (const sheet of ["Lead", "Opportunity"]) {
+    for (const r of sheetRows(wb, sheet)) {
+      if (r.Advisor__c && r.Advisor_Name)
+        sfAdvisorName.set(r.Advisor__c, r.Advisor_Name);
+    }
+  }
+  const norm = (s: string) => s.trim().toLowerCase();
+  const advisorUser = (advName: string) =>
+    salesPool.find(
+      (u) =>
+        norm(u.name ?? "") === norm(advName) ||
+        norm(u.email ?? "") === norm(advName) ||
+        (u.email ?? "").toLowerCase().startsWith(norm(advName.split(" ")[0]) + "@"),
+    ) ?? null;
+  /** Resolve a Lead row's Salesforce advisor to an AURA user, or null. */
+  const sfAssignee = (r: Row) => {
+    const advName =
+      r.Advisor_Name ||
+      sfAdvisorName.get(r.Advisor__c ?? "") ||
+      sfAdvisorName.get(r.OwnerId ?? "");
+    return advName ? advisorUser(advName) : null;
+  };
+
   // ------------------------------------------------ pre-load existing rows
   const existingVehicles = await db
     .select({ id: vehiclesTable.id, vin: vehiclesTable.vin })
@@ -517,7 +545,7 @@ async function main() {
         r.LeadSource || "",
         r.Social_Media_Platform__c || "",
       );
-      const assignee = nextAssignee();
+      const assignee = sfAssignee(r) ?? nextAssignee();
       // Link to the customer created/found in Stage 2 (converted leads),
       // matched by email first, then phone.
       const customerId =
