@@ -102,7 +102,11 @@ import {
   sendTestDriveInviteEmail,
 } from "../lib/email-triggers";
 import { fetchRecordingAudio } from "../lib/call-transcription";
-import { autoAssignLead, stampLeadAssignment } from "../lib/lead-assignment";
+import {
+  autoAssignLead,
+  assignLeadToCreator,
+  stampLeadAssignment,
+} from "../lib/lead-assignment";
 import { findOpenDuplicate, mergeIntoExistingLead } from "../lib/lead-dedup";
 import { telephonyAdapter } from "../lib/telephony";
 import { enqueueEmail, enqueueWhatsapp, notifyUser } from "../lib/email";
@@ -354,8 +358,16 @@ router.post("/leads", async (req, res): Promise<void> => {
     actorName(res),
   );
 
-  // Sales agent routes unowned leads by timestamp-based round robin.
-  const assigned = await autoAssignLead(lead!);
+  // Manual in-app creation: the lead stays with the logged-in staff member
+  // who created it. Intake channels (email/social/web) don't pass through
+  // this route and keep round-robin. Falls back to round-robin when the
+  // creator isn't a dealer member (e.g. platform super admin).
+  const creator = res.locals.user as
+    | { id: number; name: string | null; email: string | null }
+    | undefined;
+  const assigned =
+    (creator ? await assignLeadToCreator(lead!, creator) : null) ??
+    (await autoAssignLead(lead!));
 
   // Intake agent: nearest showroom + WhatsApp quote share (fire-and-forget).
   runIntakeOrchestration(assigned ?? lead!);

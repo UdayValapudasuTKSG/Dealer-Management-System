@@ -95,6 +95,91 @@ async function vehicleLabelFor(lead: Lead): Promise<string> {
 }
 
 /**
+ * Assign a freshly created lead to the staff member who created it (manual
+ * in-app creation keeps the lead with its creator; intake channels use
+ * round-robin instead). Returns the updated lead, or null when the creator
+ * is not a member of the lead's dealership (caller should fall back to
+ * autoAssignLead). Never throws.
+ */
+export async function assignLeadToCreator(
+  lead: Lead,
+  creator: { id: number; name: string | null; email: string | null },
+): Promise<Lead | null> {
+  if (lead.ownerUserId != null) return null;
+  try {
+    // Only dealer members can own leads (super admins browsing a dealer
+    // without membership fall back to round-robin).
+    const [membership] = await db
+      .select({ userId: dealerUsersTable.userId })
+      .from(dealerUsersTable)
+      .where(
+        and(
+          eq(dealerUsersTable.dealerId, lead.dealerId),
+          eq(dealerUsersTable.userId, creator.id),
+        ),
+      );
+    if (!membership) return null;
+
+    const advisorName = creator.name ?? creator.email ?? `User #${creator.id}`;
+    const [updated] = await db
+      .update(leadsTable)
+      .set({
+        ownerUserId: creator.id,
+        assignedTo: advisorName,
+        status:
+          lead.status === "new" || lead.status === "assigned"
+            ? "assigned"
+            : lead.status,
+        phase: lead.phase === "new" ? "contacted" : lead.phase,
+        ...(lead.phase === "new" ? { stageEnteredAt: new Date() } : {}),
+      })
+      .where(and(eq(leadsTable.id, lead.id), sql`owner_user_id is null`))
+      .returning();
+    if (!updated) return null; // raced with another assignment
+
+    // Keep the round-robin clock fair: creating your own lead counts as
+    // receiving one.
+    await stampLeadAssignment(updated.dealerId, creator.id);
+
+    await db.insert(timelineEventsTable).values({
+      dealerId: updated.dealerId,
+      customerId: updated.customerId,
+      domain: "leads",
+      kind: "advisor_assigned",
+      title: `Assigned to ${advisorName}`,
+      detail: `Lead created by ${advisorName} — kept with its creator.`,
+      actor: advisorName,
+      isAgent: false,
+      refType: "lead",
+      refId: updated.id,
+    });
+
+    // Customer-facing intro email (same as round-robin assignment). No
+    // in-app "lead assigned to you" notification — they created it.
+    if (updated.email) {
+      await enqueueEmail({
+        template: "lead_assignment",
+        to: updated.email,
+        dealerId: updated.dealerId,
+        customerId: updated.customerId,
+        data: {
+          advisor: advisorName,
+          vehicle: await vehicleLabelFor(updated),
+        },
+      });
+    }
+
+    return updated;
+  } catch (err) {
+    logger.error(
+      { err, leadId: lead.id, userId: creator.id },
+      "Assign-to-creator failed",
+    );
+    return null;
+  }
+}
+
+/**
  * Auto-assign an unowned lead to the least-loaded advisor. Returns the
  * updated lead, or null when no assignment happened (already owned, no
  * eligible advisors, or an internal failure).
