@@ -56,6 +56,11 @@ export const dealersTable = pgTable("dealers", {
   // fall back to the default AURA branding.
   brandName: text("brand_name"),
   logoUrl: text("logo_url"),
+  // Contact details printed on customer-facing documents (e.g. the warranty
+  // certificate): street address, service line(s), 24h emergency line.
+  address: text("address"),
+  servicePhone: text("service_phone"),
+  emergencyPhone: text("emergency_phone"),
   status: text("status").notNull().default("active"),
   // GYD per 1 USD — used to convert USD amounts into Guyana dollars in the UI.
   usdExchangeRate: doublePrecision("usd_exchange_rate")

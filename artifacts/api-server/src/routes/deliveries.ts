@@ -1552,7 +1552,22 @@ router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
         eq(vehiclesTable.dealerId, delivery.dealerId),
       ),
     );
-  const [customer] = delivery.customerId
+  // Owner details: prefer the delivery's linked customer, falling back to
+  // the deal's customer so older deliveries without customerId still fill.
+  let warrantyCustomerId = delivery.customerId;
+  if (!warrantyCustomerId) {
+    const [deal] = await db
+      .select({ customerId: dealsTable.customerId })
+      .from(dealsTable)
+      .where(
+        and(
+          eq(dealsTable.id, delivery.dealId),
+          eq(dealsTable.dealerId, delivery.dealerId),
+        ),
+      );
+    warrantyCustomerId = deal?.customerId ?? null;
+  }
+  const [customer] = warrantyCustomerId
     ? await db
         .select({
           name: customersTable.name,
@@ -1565,7 +1580,7 @@ router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
         .from(customersTable)
         .where(
           and(
-            eq(customersTable.id, delivery.customerId),
+            eq(customersTable.id, warrantyCustomerId),
             eq(customersTable.dealerId, delivery.dealerId),
           ),
         )
@@ -1575,6 +1590,9 @@ router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
       name: dealersTable.name,
       city: dealersTable.city,
       country: dealersTable.country,
+      address: dealersTable.address,
+      servicePhone: dealersTable.servicePhone,
+      emergencyPhone: dealersTable.emergencyPhone,
     })
     .from(dealersTable)
     .where(eq(dealersTable.id, delivery.dealerId));
@@ -1616,17 +1634,19 @@ router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
       [address, customer?.phone].filter(Boolean).join(" · ") || null,
     vehicleModel: vehicle ? `${vehicle.make} ${vehicle.model}` : null,
     color: vehicle?.exteriorColor,
-    odometer:
-      vehicle?.mileageKm != null
-        ? `${vehicle.mileageKm.toLocaleString("en-US")} km`
-        : null,
+    // Odometer reading at delivery is recorded by hand during handover.
+    odometer: null,
     manufactureYear: vehicle?.year ? String(vehicle.year) : null,
     vin: vehicle?.vin,
     motorNumber: vehicle?.engineNumber,
     dealerName: branding.displayName ?? dealer?.name ?? null,
+    servicePhone: dealer?.servicePhone,
+    emergencyContact: dealer?.emergencyPhone,
     dealerAddress:
-      [dealer?.city, dealer?.country].filter(Boolean).join(", ") || null,
-    dateOfSale: fmt(invoiceDate),
+      dealer?.address ??
+      ([dealer?.city, dealer?.country].filter(Boolean).join(", ") || null),
+    // Date of sale is filled in by hand when the certificate is issued.
+    dateOfSale: null,
     invoiceNumber,
     dateOfDelivery: fmt(delivery.deliveredAt ?? delivery.appointmentAt),
     signatureDataUrl: delivery.warrantySignatureData,
