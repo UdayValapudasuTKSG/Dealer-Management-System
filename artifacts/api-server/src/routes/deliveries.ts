@@ -12,6 +12,7 @@ import {
   customersTable,
   bookingsTable,
   invoicesTable,
+  paymentsTable,
   usersTable,
   rolesTable,
   dealerUsersTable,
@@ -1552,12 +1553,16 @@ router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
         eq(vehiclesTable.dealerId, delivery.dealerId),
       ),
     );
-  // Owner details: prefer the delivery's linked customer, falling back to
-  // the deal's customer so older deliveries without customerId still fill.
+  // Owner details: prefer the delivery's linked customer, then the deal's
+  // customer, then the deal's lead — many deals only carry a lead record.
   let warrantyCustomerId = delivery.customerId;
-  if (!warrantyCustomerId) {
+  let warrantyLeadId: number | null = null;
+  {
     const [deal] = await db
-      .select({ customerId: dealsTable.customerId })
+      .select({
+        customerId: dealsTable.customerId,
+        leadId: dealsTable.leadId,
+      })
       .from(dealsTable)
       .where(
         and(
@@ -1565,7 +1570,8 @@ router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
           eq(dealsTable.dealerId, delivery.dealerId),
         ),
       );
-    warrantyCustomerId = deal?.customerId ?? null;
+    warrantyCustomerId = warrantyCustomerId ?? deal?.customerId ?? null;
+    warrantyLeadId = deal?.leadId ?? null;
   }
   const [customer] = warrantyCustomerId
     ? await db
@@ -1596,13 +1602,32 @@ router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
     })
     .from(dealersTable)
     .where(eq(dealersTable.id, delivery.dealerId));
+  // Lead fallback for owner contact details — many deals carry only a lead.
+  const [lead] =
+    !customer && warrantyLeadId
+      ? await db
+          .select({
+            name: leadsTable.name,
+            email: leadsTable.email,
+            phone: leadsTable.phone,
+            address: leadsTable.address,
+          })
+          .from(leadsTable)
+          .where(
+            and(
+              eq(leadsTable.id, warrantyLeadId),
+              eq(leadsTable.dealerId, delivery.dealerId),
+            ),
+          )
+      : [];
   let invoiceNumber: string | null = null;
-  let invoiceDate: Date | null = null;
+  // Date of sale = the day the final payment settled the invoice.
+  let dateOfSale: Date | null = null;
   if (delivery.invoiceId) {
     const [inv] = await db
       .select({
         invoiceNumber: invoicesTable.invoiceNumber,
-        createdAt: invoicesTable.createdAt,
+        status: invoicesTable.status,
       })
       .from(invoicesTable)
       .where(
@@ -1612,7 +1637,20 @@ router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
         ),
       );
     invoiceNumber = inv?.invoiceNumber ?? null;
-    invoiceDate = inv?.createdAt ?? null;
+    if (inv?.status === "paid") {
+      const [lastPayment] = await db
+        .select({ createdAt: paymentsTable.createdAt })
+        .from(paymentsTable)
+        .where(
+          and(
+            eq(paymentsTable.invoiceId, delivery.invoiceId),
+            eq(paymentsTable.dealerId, delivery.dealerId),
+          ),
+        )
+        .orderBy(desc(paymentsTable.createdAt))
+        .limit(1);
+      dateOfSale = lastPayment?.createdAt ?? null;
+    }
   }
   const branding = await getDealerPdfBranding(delivery.dealerId);
   const fmt = (d: Date | null | undefined) =>
@@ -1626,12 +1664,15 @@ router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
       : null;
   const address =
     customer?.location ??
-    ([customer?.city, customer?.country].filter(Boolean).join(", ") || null);
+    ([customer?.city, customer?.country].filter(Boolean).join(", ") || null) ??
+    lead?.address ??
+    null;
+  const ownerPhone = customer?.phone ?? lead?.phone ?? null;
   const pdf = await buildWarrantyPdf(variant, {
-    ownerName: customer?.name ?? delivery.customerName,
-    ownerEmail: customer?.email,
+    ownerName: customer?.name ?? delivery.customerName ?? lead?.name,
+    ownerEmail: customer?.email ?? lead?.email,
     ownerAddressContact:
-      [address, customer?.phone].filter(Boolean).join(" · ") || null,
+      [address, ownerPhone].filter(Boolean).join(" · ") || null,
     vehicleModel: vehicle ? `${vehicle.make} ${vehicle.model}` : null,
     color: vehicle?.exteriorColor,
     // Odometer reading at delivery is recorded by hand during handover.
@@ -1645,8 +1686,7 @@ router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
     dealerAddress:
       dealer?.address ??
       ([dealer?.city, dealer?.country].filter(Boolean).join(", ") || null),
-    // Date of sale is filled in by hand when the certificate is issued.
-    dateOfSale: null,
+    dateOfSale: fmt(dateOfSale),
     invoiceNumber,
     dateOfDelivery: fmt(delivery.deliveredAt ?? delivery.appointmentAt),
     signatureDataUrl: delivery.warrantySignatureData,
