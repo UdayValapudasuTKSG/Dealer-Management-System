@@ -1,4 +1,4 @@
-import { and, eq, gte, isNotNull, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
 import {
   db,
   assetsTable,
@@ -13,6 +13,7 @@ import {
   type TemplateData,
 } from "./email";
 import { divisionSalesManagers } from "./notify-matrix";
+import { autoAssignLead } from "./lead-assignment";
 import { logger } from "./logger";
 
 /**
@@ -366,12 +367,44 @@ async function sweepServiceCadence(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Assignment catch-up: a lead normally gets an owner synchronously at
+// creation (creator or round robin), but a crash/restart mid-intake can
+// strand it unowned. Re-route any unowned lead older than 5 minutes so no
+// lead ever sits without an advisor. autoAssignLead is a no-op when the
+// lead gained an owner in the meantime (guarded update) and never throws.
+// ---------------------------------------------------------------------------
+async function sweepUnassignedLeads(): Promise<void> {
+  const cutoff = new Date(Date.now() - 5 * 60 * 1000);
+  const strays = await db
+    .select()
+    .from(leadsTable)
+    .where(
+      and(
+        isNull(leadsTable.ownerUserId),
+        isNull(leadsTable.deletedAt),
+        lte(leadsTable.createdAt, cutoff),
+        inArray(leadsTable.phase, ["new", "contacted"]),
+      ),
+    )
+    .limit(50);
+  for (const lead of strays) {
+    const assigned = await autoAssignLead(lead);
+    if (assigned)
+      logger.info(
+        { leadId: lead.id, ownerUserId: assigned.ownerUserId },
+        "assignment catch-up: routed stranded lead",
+      );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Worker
 // ---------------------------------------------------------------------------
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 let sweepTimer: ReturnType<typeof setInterval> | null = null;
 
 export async function runNotificationSweeps(): Promise<void> {
+  await sweepUnassignedLeads();
   await sweepLeadSla();
   await sweepTestDriveReminders();
   await sweepServiceCadence();
