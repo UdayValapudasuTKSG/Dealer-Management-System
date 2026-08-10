@@ -82,7 +82,7 @@ async function vehicleName(
         eq(vehiclesTable.dealerId, dealerId),
       ),
     );
-  return v ? `${v.year} ${v.make} ${v.model}` : null;
+  return v ? `${v.make} ${v.model}` : null;
 }
 
 function fire(
@@ -170,7 +170,7 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
         },
       });
     } else {
-      const label = `${v.year} ${v.make} ${v.model}`;
+      const label = `${v.make} ${v.model}`;
       const version =
         v.trim || v.variant || lead.variant || "Standard specification";
       const color = v.exteriorColor || lead.color || "";

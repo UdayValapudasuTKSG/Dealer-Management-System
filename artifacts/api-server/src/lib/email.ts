@@ -119,7 +119,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
         : { label: "Your quotation is attached" },
     sample: {
       name: "Alex Mensah",
-      vehicle: "2026 BMW i7 xDrive60",
+      vehicle: "BMW i7 xDrive60",
       color: "Obsidian Black",
       total: "$125,000",
       validUntil: "July 29, 2026",
@@ -146,7 +146,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
         : { label: "Your sales advisor will call you" },
     sample: {
       name: "Alex Mensah",
-      vehicle: "2026 BMW i7 xDrive60",
+      vehicle: "BMW i7 xDrive60",
       advisorName: "Alex Fernandes",
       advisorPhone: "+592 600 1234",
     },
@@ -182,7 +182,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     cta: () => ({ label: "Calendar invite attached" }),
     sample: {
       leadName: "Alex Mensah",
-      vehicle: "2026 BMW i7 xDrive60",
+      vehicle: "BMW i7 xDrive60",
       date: "Friday, July 18",
       time: "10:30 AM",
       branch: "Main Showroom",

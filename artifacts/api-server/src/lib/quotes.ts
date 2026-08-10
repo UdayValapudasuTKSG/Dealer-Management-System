@@ -280,7 +280,7 @@ export async function quotePdfPayload(
     exchangeRateNote: "All figures in GYD",
     name: quote.customerName,
     address: quote.customerAddress ?? "",
-    vehicle: `${quote.modelYear} ${quote.vehicleLine}`,
+    vehicle: quote.vehicleLine,
     model: quote.vehicleLine,
     modelYear: String(quote.modelYear),
     manufacturer: quote.manufacturer,

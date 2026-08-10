@@ -220,7 +220,7 @@ export async function ensureDeliveryForDeal(
                 })
                 .from(vehiclesTable)
                 .where(eq(vehiclesTable.id, deal.vehicleId!));
-              return v ? `${v.year} ${v.make} ${v.model}` : "";
+              return v ? `${v.make} ${v.model}` : "";
             })()
           : "";
         await enqueueEmail({

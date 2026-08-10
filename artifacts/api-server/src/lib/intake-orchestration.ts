@@ -92,7 +92,7 @@ async function latestQuoteSummary(lead: Lead): Promise<string | null> {
       .limit(1);
     if (q) {
       return (
-        `${q.modelYear} ${q.vehicleLine}${q.color ? ` (${q.color})` : ""} — ` +
+        `${q.vehicleLine}${q.color ? ` (${q.color})` : ""} — ` +
         `estimate ${q.quoteNumber}: total GYD ${q.total.toLocaleString("en-US")} ` +
         `incl. taxes, valid until ${q.validUntil}.`
       );
