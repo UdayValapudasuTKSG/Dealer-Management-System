@@ -45,6 +45,10 @@ export interface Delivery {
   /** @nullable */
   signatureData?: string | null;
   /** @nullable */
+  warrantySignatureName?: string | null;
+  /** @nullable */
+  warrantySignatureData?: string | null;
+  /** @nullable */
   feedbackRating?: number | null;
   /** @nullable */
   feedbackComment?: string | null;

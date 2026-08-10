@@ -16,6 +16,7 @@ export const DeliveryCurrentStep = {
   insurance: 'insurance',
   invoice: 'invoice',
   appointment: 'appointment',
+  warranty: 'warranty',
   delivery: 'delivery',
   signature: 'signature',
   feedback: 'feedback',

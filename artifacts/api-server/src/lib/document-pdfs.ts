@@ -563,7 +563,16 @@ export function buildHandoverPdf(
     );
     fieldLine("VIN:", vehicle?.vin ?? "", M + halfCol + 12, vy, halfCol, 26);
     const vy3 = fieldLine("KEY #", "", M, vy2, halfCol, 32);
-    fieldLine("MILEAGE:", "", M + halfCol + 12, vy2, halfCol, 48);
+    fieldLine(
+      "MILEAGE:",
+      vehicle?.mileageKm != null
+        ? `${vehicle.mileageKm.toLocaleString("en-US")} km`
+        : "",
+      M + halfCol + 12,
+      vy2,
+      halfCol,
+      48,
+    );
     y = fieldLine(
       "STOCK#",
       vehicle ? `V-${String(vehicle.id).padStart(5, "0")}` : "",

@@ -28,6 +28,7 @@ import {
   type DeliveryStepState,
   type PdiItem,
   normalizePdiItems,
+  normalizeDeliverySteps,
 } from "@workspace/db";
 import {
   ListDeliveriesQueryParams,
@@ -56,6 +57,7 @@ import {
   type HandoverVerification,
 } from "../lib/handover-verify";
 import { buildHandoverPdf } from "../lib/document-pdfs";
+import { buildWarrantyPdf } from "../lib/warranty-pdf";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import {
   onDealStageChanged,
@@ -149,6 +151,12 @@ async function computeUnmet(d: Delivery): Promise<string[]> {
     case "insurance":
       if (!d.insuranceDocId)
         unmet.push("Insurance cover note document not attached");
+      break;
+    case "warranty":
+      if (!d.warrantySignatureData)
+        unmet.push(
+          "Customer signature on the warranty certificate is required — capture it on the signature pad",
+        );
       break;
     case "delivery": {
       if (!d.deliveredAt)
@@ -309,7 +317,34 @@ async function loadDelivery(
     .select()
     .from(deliveriesTable)
     .where(and(eq(deliveriesTable.id, id), eq(deliveriesTable.dealerId, dealerId)));
-  return row ? { ...row, pdiItems: normalizePdiItems(row.pdiItems) } : row;
+  return row
+    ? {
+        ...row,
+        pdiItems: normalizePdiItems(row.pdiItems),
+        steps: normalizeRowSteps(row),
+      }
+    : row;
+}
+
+/**
+ * Splice steps added after a delivery row was created (e.g. warranty) into
+ * its persisted steps array. Steps the workflow has already moved past are
+ * marked skipped so old deliveries don't show a forever-pending step.
+ */
+function normalizeRowSteps(row: Delivery): DeliveryStepState[] {
+  const currentIdx = DELIVERY_STEPS.indexOf(row.currentStep as DeliveryStep);
+  const had = new Set(row.steps.map((s) => s.key));
+  return normalizeDeliverySteps(row.steps).map((s) =>
+    !had.has(s.key) &&
+    s.status === "pending" &&
+    (row.status === "completed" || DELIVERY_STEPS.indexOf(s.key) < currentIdx)
+      ? {
+          ...s,
+          status: "skipped" as const,
+          note: "Step introduced after this delivery had passed this stage",
+        }
+      : s,
+  );
 }
 
 router.get("/deliveries", async (req, res): Promise<void> => {
@@ -330,7 +365,11 @@ router.get("/deliveries", async (req, res): Promise<void> => {
       .from(deliveriesTable)
       .where(and(...filters))
       .orderBy(desc(deliveriesTable.createdAt))
-  ).map((r) => ({ ...r, pdiItems: normalizePdiItems(r.pdiItems) }));
+  ).map((r) => ({
+    ...r,
+    pdiItems: normalizePdiItems(r.pdiItems),
+    steps: normalizeRowSteps(r),
+  }));
 
   res.json(ListDeliveriesResponse.parse(await enrich(rows, activeDealerId(res))));
 });
@@ -611,6 +650,14 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
   }
   if (parsed.data.signatureName) gated.signatureName = parsed.data.signatureName;
   if (parsed.data.signatureData) gated.signatureData = parsed.data.signatureData;
+  // The warranty step reuses the shared signature body fields but persists
+  // to its own columns — the later Customer Signature step stays separate.
+  if (step === "warranty") {
+    if (parsed.data.signatureName)
+      gated.warrantySignatureName = parsed.data.signatureName;
+    if (parsed.data.signatureData)
+      gated.warrantySignatureData = parsed.data.signatureData;
+  }
 
   // Steps are OPTIONAL: `skip: true` bypasses the readiness gates and marks
   // the step skipped so the workflow can move on without it.
@@ -715,6 +762,12 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       })().catch((err) => logger.error({ err }, "delivery-ready notify failed"));
       break;
     }
+    case "warranty":
+      if (parsed.data.signatureName)
+        extra.warrantySignatureName = parsed.data.signatureName;
+      if (parsed.data.signatureData)
+        extra.warrantySignatureData = parsed.data.signatureData;
+      break;
     case "signature":
       if (parsed.data.signatureName)
         extra.signatureName = parsed.data.signatureName;
@@ -1472,6 +1525,117 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
     .setHeader(
       "Content-Disposition",
       `inline; filename="handover-delivery-${delivery.id}.pdf"`,
+    )
+    .send(pdf);
+});
+
+// Autofilled BYD warranty documents (warranty step downloads). `doc` selects
+// the standalone certificate or the full booklet (certificate = its page 5).
+router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
+  const params = GetDeliveryHandoverPdfParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const variant = req.query.doc === "booklet" ? "booklet" : "certificate";
+  const delivery = await loadDelivery(params.data.id, activeDealerId(res));
+  if (!delivery) {
+    res.status(404).json({ error: "Delivery not found" });
+    return;
+  }
+  const [vehicle] = await db
+    .select()
+    .from(vehiclesTable)
+    .where(
+      and(
+        eq(vehiclesTable.id, delivery.vehicleId),
+        eq(vehiclesTable.dealerId, delivery.dealerId),
+      ),
+    );
+  const [customer] = delivery.customerId
+    ? await db
+        .select({
+          name: customersTable.name,
+          email: customersTable.email,
+          phone: customersTable.phone,
+          location: customersTable.location,
+          city: customersTable.city,
+          country: customersTable.country,
+        })
+        .from(customersTable)
+        .where(
+          and(
+            eq(customersTable.id, delivery.customerId),
+            eq(customersTable.dealerId, delivery.dealerId),
+          ),
+        )
+    : [];
+  const [dealer] = await db
+    .select({
+      name: dealersTable.name,
+      city: dealersTable.city,
+      country: dealersTable.country,
+    })
+    .from(dealersTable)
+    .where(eq(dealersTable.id, delivery.dealerId));
+  let invoiceNumber: string | null = null;
+  let invoiceDate: Date | null = null;
+  if (delivery.invoiceId) {
+    const [inv] = await db
+      .select({
+        invoiceNumber: invoicesTable.invoiceNumber,
+        createdAt: invoicesTable.createdAt,
+      })
+      .from(invoicesTable)
+      .where(
+        and(
+          eq(invoicesTable.id, delivery.invoiceId),
+          eq(invoicesTable.dealerId, delivery.dealerId),
+        ),
+      );
+    invoiceNumber = inv?.invoiceNumber ?? null;
+    invoiceDate = inv?.createdAt ?? null;
+  }
+  const branding = await getDealerPdfBranding(delivery.dealerId);
+  const fmt = (d: Date | null | undefined) =>
+    d
+      ? d.toLocaleDateString("en-US", {
+          timeZone: "America/Guyana",
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })
+      : null;
+  const address =
+    customer?.location ??
+    ([customer?.city, customer?.country].filter(Boolean).join(", ") || null);
+  const pdf = await buildWarrantyPdf(variant, {
+    ownerName: customer?.name ?? delivery.customerName,
+    ownerEmail: customer?.email,
+    ownerAddressContact:
+      [address, customer?.phone].filter(Boolean).join(" · ") || null,
+    vehicleModel: vehicle ? `${vehicle.make} ${vehicle.model}` : null,
+    color: vehicle?.exteriorColor,
+    odometer:
+      vehicle?.mileageKm != null
+        ? `${vehicle.mileageKm.toLocaleString("en-US")} km`
+        : null,
+    manufactureYear: vehicle?.year ? String(vehicle.year) : null,
+    vin: vehicle?.vin,
+    motorNumber: vehicle?.engineNumber,
+    dealerName: branding.displayName ?? dealer?.name ?? null,
+    dealerAddress:
+      [dealer?.city, dealer?.country].filter(Boolean).join(", ") || null,
+    dateOfSale: fmt(invoiceDate),
+    invoiceNumber,
+    dateOfDelivery: fmt(delivery.deliveredAt ?? delivery.appointmentAt),
+    signatureDataUrl: delivery.warrantySignatureData,
+  });
+  res
+    .setHeader("Content-Type", "application/pdf")
+    .setHeader(
+      "Content-Disposition",
+      `inline; filename="warranty-${variant}-delivery-${delivery.id}.pdf"`,
     )
     .send(pdf);
 });

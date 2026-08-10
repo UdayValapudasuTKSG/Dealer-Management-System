@@ -131,6 +131,14 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   const distDataDir = path.resolve(distDir, "data");
   await rm(distDataDir, { recursive: true, force: true });
   await cp(pdfkitDataDir, distDataDir, { recursive: true });
+
+  // Warranty PDF templates are read from disk at runtime; ship them next to
+  // the bundle so the deployed artifact is self-contained.
+  const distAssetsDir = path.resolve(distDir, "assets");
+  await rm(distAssetsDir, { recursive: true, force: true });
+  await cp(path.resolve(artifactDir, "assets"), distAssetsDir, {
+    recursive: true,
+  });
 }
 
 buildAll().catch((err) => {

@@ -1216,6 +1216,7 @@ export const DeliveryStepStateKey = {
   insurance: 'insurance',
   invoice: 'invoice',
   appointment: 'appointment',
+  warranty: 'warranty',
   delivery: 'delivery',
   signature: 'signature',
   feedback: 'feedback',
@@ -1310,6 +1311,7 @@ export const DeliveryCurrentStep = {
   insurance: 'insurance',
   invoice: 'invoice',
   appointment: 'appointment',
+  warranty: 'warranty',
   delivery: 'delivery',
   signature: 'signature',
   feedback: 'feedback',
@@ -1356,6 +1358,10 @@ export interface Delivery {
   signatureName?: string | null;
   /** @nullable */
   signatureData?: string | null;
+  /** @nullable */
+  warrantySignatureName?: string | null;
+  /** @nullable */
+  warrantySignatureData?: string | null;
   /** @nullable */
   feedbackRating?: number | null;
   /** @nullable */
@@ -1421,6 +1427,7 @@ export const DeliveryAdvanceInputStep = {
   insurance: 'insurance',
   invoice: 'invoice',
   appointment: 'appointment',
+  warranty: 'warranty',
   delivery: 'delivery',
   signature: 'signature',
   feedback: 'feedback',

@@ -7217,7 +7217,7 @@ components:
       type: object
       required: [key, label, status]
       properties:
-        key: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, delivery, signature, feedback] }
+        key: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, warranty, delivery, signature, feedback] }
         label: { type: string }
         status: { type: string, enum: [pending, completed, skipped] }
         note: { type: ["string", "null"] }
@@ -7269,7 +7269,7 @@ components:
         salesAdvisorName: { type: ["string", "null"] }
         vehicleLabel: { type: ["string", "null"] }
         status: { type: string, enum: [in_progress, completed, cancelled] }
-        currentStep: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, delivery, signature, feedback] }
+        currentStep: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, warranty, delivery, signature, feedback] }
         steps:
           type: array
           items:
@@ -7282,6 +7282,8 @@ components:
         invoiceId: { type: ["integer", "null"] }
         signatureName: { type: ["string", "null"] }
         signatureData: { type: ["string", "null"] }
+        warrantySignatureName: { type: ["string", "null"] }
+        warrantySignatureData: { type: ["string", "null"] }
         feedbackRating: { type: ["integer", "null"] }
         feedbackComment: { type: ["string", "null"] }
         registrationNumber: { type: ["string", "null"] }
@@ -7324,7 +7326,7 @@ components:
       type: object
       required: [step]
       properties:
-        step: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, delivery, signature, feedback] }
+        step: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, warranty, delivery, signature, feedback] }
         skip: { type: boolean, description: "Skip this step without meeting its requirements — the step is marked skipped and the workflow moves on" }
         note: { type: string }
         appointmentAt: { type: string, format: date-time }

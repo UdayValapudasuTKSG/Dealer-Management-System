@@ -16,6 +16,7 @@ export const DeliveryAdvanceInputStep = {
   insurance: 'insurance',
   invoice: 'invoice',
   appointment: 'appointment',
+  warranty: 'warranty',
   delivery: 'delivery',
   signature: 'signature',
   feedback: 'feedback',

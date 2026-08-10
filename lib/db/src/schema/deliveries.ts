@@ -20,6 +20,7 @@ export const DELIVERY_STEPS = [
   "insurance",
   "invoice",
   "appointment",
+  "warranty",
   "delivery",
   "signature",
   "feedback",
@@ -33,6 +34,7 @@ export const DELIVERY_STEP_LABELS: Record<DeliveryStep, string> = {
   insurance: "Insurance",
   invoice: "Invoice",
   appointment: "Delivery Appointment",
+  warranty: "Warranty Documents",
   delivery: "Vehicle Delivery",
   signature: "Customer Signature",
   feedback: "Feedback",
@@ -119,6 +121,35 @@ export function defaultDeliverySteps(): DeliveryStepState[] {
   }));
 }
 
+/**
+ * Legacy compatibility: deliveries created before a step existed (e.g. the
+ * warranty step added between appointment and delivery) persisted a steps
+ * array without it. Splice any missing canonical step into its canonical
+ * position as pending so old workflows pick the new step up seamlessly.
+ */
+export function normalizeDeliverySteps(
+  steps: DeliveryStepState[],
+): DeliveryStepState[] {
+  const present = new Set(steps.map((s) => s.key));
+  const missing = DELIVERY_STEPS.filter((k) => !present.has(k));
+  if (missing.length === 0) return steps;
+  const out = [...steps];
+  for (const key of missing) {
+    const idx = DELIVERY_STEPS.indexOf(key);
+    // Insert after the last present step that canonically precedes it.
+    let insertAt = 0;
+    for (let i = 0; i < out.length; i++) {
+      if (DELIVERY_STEPS.indexOf(out[i]!.key) < idx) insertAt = i + 1;
+    }
+    out.splice(insertAt, 0, {
+      key,
+      label: DELIVERY_STEP_LABELS[key],
+      status: "pending",
+    });
+  }
+  return out;
+}
+
 export const deliveriesTable = pgTable("deliveries", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
@@ -139,6 +170,8 @@ export const deliveriesTable = pgTable("deliveries", {
   invoiceId: integer("invoice_id"),
   signatureName: text("signature_name"),
   signatureData: text("signature_data"),
+  warrantySignatureName: text("warranty_signature_name"),
+  warrantySignatureData: text("warranty_signature_data"),
   feedbackRating: integer("feedback_rating"),
   feedbackComment: text("feedback_comment"),
   registrationNumber: text("registration_number"),

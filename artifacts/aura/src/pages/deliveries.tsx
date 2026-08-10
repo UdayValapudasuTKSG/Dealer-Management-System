@@ -73,6 +73,7 @@ const STEP_ICONS: Record<string, React.ReactNode> = {
   invoice: <FileText className="w-4 h-4" />,
   delivery: <Truck className="w-4 h-4" />,
   appointment: <CalendarClock className="w-4 h-4" />,
+  warranty: <ShieldCheck className="w-4 h-4" />,
   signature: <PenLine className="w-4 h-4" />,
   feedback: <Star className="w-4 h-4" />,
 };
@@ -561,6 +562,57 @@ function DeliveryDetail({
             value={form.appointmentAt ?? ""}
             onChange={(e) => setForm({ ...form, appointmentAt: e.target.value })}
           />
+        );
+      case "warranty":
+        return (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" asChild>
+                <a
+                  href={`${import.meta.env.BASE_URL}api/deliveries/${delivery.id}/warranty.pdf?doc=certificate`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Warranty certificate (1 page)
+                </a>
+              </Button>
+              <Button variant="outline" asChild>
+                <a
+                  href={`${import.meta.env.BASE_URL}api/deliveries/${delivery.id}/warranty.pdf?doc=booklet`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Full warranty booklet
+                </a>
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Both documents are pre-filled with the customer, vehicle and
+              dealer details. Capture the customer's signature below — it is
+              placed in the certificate's "Customer signature" box.
+            </p>
+            <Input
+              placeholder="Customer's full name (warranty signature)"
+              value={form.signatureName ?? ""}
+              onChange={(e) =>
+                setForm({ ...form, signatureName: e.target.value })
+              }
+            />
+            <SignaturePad
+              value={form.signatureData ?? ""}
+              onChange={(dataUrl) =>
+                setForm({ ...form, signatureData: dataUrl })
+              }
+            />
+            {delivery.warrantySignatureData ? (
+              <p className="text-xs text-emerald-500">
+                Warranty signature already captured — re-sign above to replace
+                it, then re-download the documents.
+              </p>
+            ) : null}
+          </div>
         );
       case "signature":
         return (
