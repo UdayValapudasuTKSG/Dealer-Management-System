@@ -5,6 +5,8 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { InvoiceAdjustmentEntry } from './invoiceAdjustmentEntry';
+import type { ServiceInvoiceDiscountStatus } from './serviceInvoiceDiscountStatus';
 import type { ServiceInvoiceStatus } from './serviceInvoiceStatus';
 
 export interface ServiceInvoice {
@@ -18,8 +20,30 @@ export interface ServiceInvoice {
   vehicleInfo: string;
   partsTotal: number;
   laborTotal: number;
+  surchargeTotal: number;
+  discountTotal: number;
+  discountStatus: ServiceInvoiceDiscountStatus;
+  /** @nullable */
+  discountRequestedAmount?: number | null;
+  /** @nullable */
+  discountReason?: string | null;
+  /** @nullable */
+  discountRequestedBy?: string | null;
+  /** @nullable */
+  discountRequestedAt?: Date | null;
+  /** @nullable */
+  discountDecidedBy?: string | null;
+  /** @nullable */
+  discountDecidedAt?: Date | null;
   tax: number;
   total: number;
   status: ServiceInvoiceStatus;
+  /** @nullable */
+  lockedAt?: Date | null;
+  adjustments: InvoiceAdjustmentEntry[];
+  /** @nullable */
+  signedCopyFiledBy?: string | null;
+  /** @nullable */
+  signedCopyFiledAt?: Date | null;
   createdAt: Date;
 }

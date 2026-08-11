@@ -2898,6 +2898,117 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /job-cards/{id}/rollover:
+    post:
+      operationId: rolloverJobCard
+      tags: [service]
+      summary: Request carrying an incomplete job card to another day (dual approval)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCardRolloverRequest"
+      responses:
+        "200":
+          description: Rollover requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCard"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /job-cards/{id}/rollover/approve:
+    post:
+      operationId: approveJobCardRollover
+      tags: [service]
+      summary: Sign off a pending rollover as Service Manager or assigned Technician
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCardRolloverApproval"
+      responses:
+        "200":
+          description: Approval recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCard"
+        "403":
+          description: Not allowed to sign off in this capacity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /job-cards/{id}/surcharge:
+    post:
+      operationId: decideJobCardSurcharge
+      tags: [service]
+      summary: Apply or waive the late-service surcharge on a job card
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCardSurchargeDecision"
+      responses:
+        "200":
+          description: Surcharge decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCard"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /job-cards/{id}/parts:
     get:
       operationId: listJobCardParts
@@ -3020,6 +3131,138 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceInvoice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /service-invoices/{id}/discount:
+    post:
+      operationId: requestServiceInvoiceDiscount
+      tags: [service]
+      summary: Request a discount on a service invoice (needs manager approval)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceDiscountRequest"
+      responses:
+        "200":
+          description: Discount requested
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceInvoice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /service-invoices/{id}/discount/decision:
+    post:
+      operationId: decideServiceInvoiceDiscount
+      tags: [service]
+      summary: Approve or reject a pending discount (Service Manager / Management)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceDiscountDecision"
+      responses:
+        "200":
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceInvoice"
+        "403":
+          description: Not allowed to decide discounts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /service-invoices/{id}/adjust:
+    post:
+      operationId: adjustServiceInvoice
+      tags: [service]
+      summary: Post-issue adjustment — the only way a locked invoice total changes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceInvoiceAdjustmentInput"
+      responses:
+        "200":
+          description: Adjustment recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceInvoice"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /service-invoices/{id}/receipt-pdf:
+    get:
+      operationId: getServiceReceiptPdf
+      tags: [service]
+      summary: Printable checkout receipt PDF referencing the job card
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Service receipt PDF
+          content:
+            application/pdf: {}
         "404":
           description: Not found
           content:
@@ -5620,6 +5863,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /admin/service-settings:
+    get:
+      operationId: getServiceSettings
+      tags: [admin]
+      summary: Dealer service settings (interval km + late surcharge fee)
+      responses:
+        "200":
+          description: Service settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceSettings"
+    patch:
+      operationId: updateServiceSettings
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceSettingsUpdate"
+      responses:
+        "200":
+          description: Updated service settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceSettings"
   /admin/taxes:
     get:
       operationId: listDealerTaxes
@@ -8762,9 +9033,40 @@ components:
         laborHours: { type: number }
         laborRate: { type: number }
         notes: { type: ["string", "null"] }
+        rolloverStatus: { type: string, enum: [none, pending, approved] }
+        rolloverToDate: { type: ["string", "null"], format: date }
+        rolloverReason: { type: ["string", "null"] }
+        rolloverRequestedBy: { type: ["string", "null"] }
+        rolloverRequestedAt: { type: ["string", "null"], format: date-time }
+        rolloverManagerApprovedBy: { type: ["string", "null"] }
+        rolloverManagerApprovedAt: { type: ["string", "null"], format: date-time }
+        rolloverTechApprovedBy: { type: ["string", "null"] }
+        rolloverTechApprovedAt: { type: ["string", "null"], format: date-time }
+        surchargeStatus: { type: string, enum: [none, suggested, applied, waived] }
+        surchargeAmount: { type: number }
+        surchargeOverKm: { type: ["integer", "null"] }
+        surchargeDecidedBy: { type: ["string", "null"] }
+        surchargeDecidedAt: { type: ["string", "null"], format: date-time }
         startedAt: { type: ["string", "null"], format: date-time }
         completedAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+    JobCardRolloverRequest:
+      type: object
+      required: [toDate]
+      properties:
+        toDate: { type: string, format: date }
+        reason: { type: string }
+    JobCardRolloverApproval:
+      type: object
+      required: [as]
+      properties:
+        as: { type: string, enum: [manager, technician] }
+    JobCardSurchargeDecision:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [apply, waive] }
+        amount: { type: number, minimum: 0 }
     JobCardInput:
       type: object
       required: [serviceOrderId, title]
@@ -8829,7 +9131,7 @@ components:
 
     ServiceInvoice:
       type: object
-      required: [id, serviceOrderId, jobCardId, vehicleInfo, partsTotal, laborTotal, tax, total, status, createdAt]
+      required: [id, serviceOrderId, jobCardId, vehicleInfo, partsTotal, laborTotal, surchargeTotal, discountTotal, discountStatus, tax, total, status, adjustments, createdAt]
       properties:
         id: { type: integer }
         serviceOrderId: { type: integer }
@@ -8839,14 +9141,66 @@ components:
         vehicleInfo: { type: string }
         partsTotal: { type: number }
         laborTotal: { type: number }
+        surchargeTotal: { type: number }
+        discountTotal: { type: number }
+        discountStatus: { type: string, enum: [none, pending, approved, rejected] }
+        discountRequestedAmount: { type: ["number", "null"] }
+        discountReason: { type: ["string", "null"] }
+        discountRequestedBy: { type: ["string", "null"] }
+        discountRequestedAt: { type: ["string", "null"], format: date-time }
+        discountDecidedBy: { type: ["string", "null"] }
+        discountDecidedAt: { type: ["string", "null"], format: date-time }
         tax: { type: number }
         total: { type: number }
         status: { type: string, enum: [issued, paid, void] }
+        lockedAt: { type: ["string", "null"], format: date-time }
+        adjustments:
+          type: array
+          items: { $ref: "#/components/schemas/InvoiceAdjustmentEntry" }
+        signedCopyFiledBy: { type: ["string", "null"] }
+        signedCopyFiledAt: { type: ["string", "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+    InvoiceAdjustmentEntry:
+      type: object
+      required: [amount, reason, by, at]
+      properties:
+        amount: { type: number }
+        reason: { type: string }
+        by: { type: string }
+        at: { type: string }
     ServiceInvoiceUpdate:
       type: object
       properties:
         status: { type: string, enum: [issued, paid, void] }
+        signedCopyFiled: { type: boolean }
+    ServiceDiscountRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: number, minimum: 0.01 }
+        reason: { type: string }
+    ServiceDiscountDecision:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [approve, reject] }
+    ServiceInvoiceAdjustmentInput:
+      type: object
+      required: [amount, reason]
+      properties:
+        amount: { type: number }
+        reason: { type: string, minLength: 3 }
+    ServiceSettings:
+      type: object
+      required: [serviceIntervalKm, lateSurchargeFee]
+      properties:
+        serviceIntervalKm: { type: integer }
+        lateSurchargeFee: { type: number }
+    ServiceSettingsUpdate:
+      type: object
+      properties:
+        serviceIntervalKm: { type: integer, minimum: 100 }
+        lateSurchargeFee: { type: number, minimum: 0 }
 
     CoveragePlan:
       type: object

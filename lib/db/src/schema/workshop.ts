@@ -135,6 +135,19 @@ export type ConditionRecord = {
   recordedAt?: string;
 };
 
+/** Multi-day rollover approval state (FR-SR-06): dual sign-off required. */
+export const ROLLOVER_STATUSES = ["none", "pending", "approved"] as const;
+export type RolloverStatus = (typeof ROLLOVER_STATUSES)[number];
+
+/** Late-service surcharge decision state (FR-SR-07). */
+export const SURCHARGE_STATUSES = [
+  "none",
+  "suggested",
+  "applied",
+  "waived",
+] as const;
+export type SurchargeStatus = (typeof SURCHARGE_STATUSES)[number];
+
 export const jobCardsTable = pgTable(
   "job_cards",
   {
@@ -161,6 +174,35 @@ export const jobCardsTable = pgTable(
     laborHours: doublePrecision("labor_hours").notNull().default(0),
     laborRate: doublePrecision("labor_rate").notNull().default(120),
     notes: text("notes"),
+    // Multi-day rollover (FR-SR-06): carrying an incomplete job to another
+    // day needs BOTH the Service Manager and the assigned Technician to sign
+    // off. Approvals record who/when; on the second approval the card's
+    // scheduled date moves to rolloverToDate.
+    rolloverStatus: text("rollover_status").notNull().default("none"),
+    rolloverToDate: date("rollover_to_date", { mode: "string" }),
+    rolloverReason: text("rollover_reason"),
+    rolloverRequestedBy: text("rollover_requested_by"),
+    rolloverRequestedAt: timestamp("rollover_requested_at", {
+      withTimezone: true,
+    }),
+    rolloverManagerApprovedBy: text("rollover_manager_approved_by"),
+    rolloverManagerApprovedAt: timestamp("rollover_manager_approved_at", {
+      withTimezone: true,
+    }),
+    rolloverTechApprovedBy: text("rollover_tech_approved_by"),
+    rolloverTechApprovedAt: timestamp("rollover_tech_approved_at", {
+      withTimezone: true,
+    }),
+    // Late-service surcharge (FR-SR-07): intake odometer past the dealer's
+    // service interval flags a configurable flat surcharge; staff apply or
+    // waive it, and an applied surcharge flows into the invoice total.
+    surchargeStatus: text("surcharge_status").notNull().default("none"),
+    surchargeAmount: doublePrecision("surcharge_amount").notNull().default(0),
+    surchargeOverKm: integer("surcharge_over_km"),
+    surchargeDecidedBy: text("surcharge_decided_by"),
+    surchargeDecidedAt: timestamp("surcharge_decided_at", {
+      withTimezone: true,
+    }),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -180,7 +222,27 @@ export const insertJobCardSchema = createInsertSchema(jobCardsTable, {
   status: z.enum(JOB_CARD_STATUSES),
   payType: z.enum(["customer", "warranty", "goodwill", "rectify"]),
   checklist: z.array(z.object({ label: z.string(), done: z.boolean() })),
-}).omit({ dealerId: true, id: true, createdAt: true, startedAt: true, completedAt: true });
+}).omit({
+  dealerId: true,
+  id: true,
+  createdAt: true,
+  startedAt: true,
+  completedAt: true,
+  rolloverStatus: true,
+  rolloverToDate: true,
+  rolloverReason: true,
+  rolloverRequestedBy: true,
+  rolloverRequestedAt: true,
+  rolloverManagerApprovedBy: true,
+  rolloverManagerApprovedAt: true,
+  rolloverTechApprovedBy: true,
+  rolloverTechApprovedAt: true,
+  surchargeStatus: true,
+  surchargeAmount: true,
+  surchargeOverKm: true,
+  surchargeDecidedBy: true,
+  surchargeDecidedAt: true,
+});
 export type InsertJobCard = z.infer<typeof insertJobCardSchema>;
 export type JobCard = typeof jobCardsTable.$inferSelect;
 
@@ -244,6 +306,23 @@ export type CoveragePlan = typeof coveragePlansTable.$inferSelect;
 // Service invoices (roll-up of a job card's parts + labour)
 // ---------------------------------------------------------------------------
 
+/** Discount approval state on a service invoice (FR-SR-08). */
+export const DISCOUNT_STATUSES = [
+  "none",
+  "pending",
+  "approved",
+  "rejected",
+] as const;
+export type DiscountStatus = (typeof DISCOUNT_STATUSES)[number];
+
+/** Post-issue adjustment entry — the only sanctioned way totals change. */
+export type InvoiceAdjustment = {
+  amount: number;
+  reason: string;
+  by: string;
+  at: string;
+};
+
 export const serviceInvoicesTable = pgTable("service_invoices", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
@@ -254,9 +333,31 @@ export const serviceInvoicesTable = pgTable("service_invoices", {
   vehicleInfo: text("vehicle_info").notNull(),
   partsTotal: doublePrecision("parts_total").notNull().default(0),
   laborTotal: doublePrecision("labor_total").notNull().default(0),
+  surchargeTotal: doublePrecision("surcharge_total").notNull().default(0),
   tax: doublePrecision("tax").notNull().default(0),
+  // Discount workflow (FR-SR-08): any discount needs Service Manager /
+  // Management approval before the discounted total is final.
+  discountTotal: doublePrecision("discount_total").notNull().default(0),
+  discountStatus: text("discount_status").notNull().default("none"),
+  discountRequestedAmount: doublePrecision("discount_requested_amount"),
+  discountReason: text("discount_reason"),
+  discountRequestedBy: text("discount_requested_by"),
+  discountRequestedAt: timestamp("discount_requested_at", {
+    withTimezone: true,
+  }),
+  discountDecidedBy: text("discount_decided_by"),
+  discountDecidedAt: timestamp("discount_decided_at", { withTimezone: true }),
   total: doublePrecision("total").notNull().default(0),
   status: text("status").notNull().default("issued"),
+  // Totals lock at issue (FR-SR-09); later changes append adjustments.
+  lockedAt: timestamp("locked_at", { withTimezone: true }),
+  adjustments: jsonb("adjustments")
+    .$type<InvoiceAdjustment[]>()
+    .notNull()
+    .default([]),
+  // Signed receipt copy collected & filed acknowledgement (FR-SR-10).
+  signedCopyFiledBy: text("signed_copy_filed_by"),
+  signedCopyFiledAt: timestamp("signed_copy_filed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -267,3 +368,32 @@ export const insertServiceInvoiceSchema = createInsertSchema(
 ).omit({ dealerId: true, id: true, createdAt: true });
 export type InsertServiceInvoice = z.infer<typeof insertServiceInvoiceSchema>;
 export type ServiceInvoice = typeof serviceInvoicesTable.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Per-dealer service settings (interval + late-service surcharge fee)
+// ---------------------------------------------------------------------------
+
+/** Defaults: 5,000 km service interval; GYD 10,000 flat late surcharge. */
+export const DEFAULT_SERVICE_INTERVAL_KM = 5000;
+export const DEFAULT_LATE_SURCHARGE_FEE = 10000;
+
+export const dealerServiceSettingsTable = pgTable(
+  "dealer_service_settings",
+  {
+    id: serial("id").primaryKey(),
+    dealerId: integer("dealer_id").notNull(),
+    serviceIntervalKm: integer("service_interval_km")
+      .notNull()
+      .default(DEFAULT_SERVICE_INTERVAL_KM),
+    lateSurchargeFee: doublePrecision("late_surcharge_fee")
+      .notNull()
+      .default(DEFAULT_LATE_SURCHARGE_FEE),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("dealer_service_settings_dealer_unique").on(t.dealerId)],
+);
+
+export type DealerServiceSettings =
+  typeof dealerServiceSettingsTable.$inferSelect;

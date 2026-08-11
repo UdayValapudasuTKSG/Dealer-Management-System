@@ -8,6 +8,9 @@ import {
   useUpdateDealerTax,
   useDeleteDealerTax,
   getListDealerTaxesQueryKey,
+  useGetServiceSettings,
+  useUpdateServiceSettings,
+  getGetServiceSettingsQueryKey,
   type DealerTaxRule,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -30,7 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Percent, Plus, Trash2 } from "lucide-react";
+import { Loader2, Percent, Plus, Trash2, Wrench } from "lucide-react";
 
 type TaxForm = {
   name: string;
@@ -239,6 +242,8 @@ export default function SettingsTaxes() {
         </div>
       )}
 
+      <ServiceSettingsCard />
+
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -328,5 +333,95 @@ export default function SettingsTaxes() {
       </Dialog>
     </div>
     </>
+  );
+}
+
+/* Service interval & late-service surcharge (dealer-configurable, GYD). */
+function ServiceSettingsCard() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data: settings, isLoading } = useGetServiceSettings();
+  const [intervalKm, setIntervalKm] = useState<string | null>(null);
+  const [fee, setFee] = useState<string | null>(null);
+
+  const update = useUpdateServiceSettings({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getGetServiceSettingsQueryKey() });
+        setIntervalKm(null);
+        setFee(null);
+        toast({ title: "Service settings saved" });
+      },
+      onError: (err: unknown) =>
+        toast({
+          title: "Request failed",
+          description: err instanceof Error ? err.message : String(err),
+          variant: "destructive",
+        }),
+    },
+  });
+
+  const shownInterval = intervalKm ?? (settings ? String(settings.serviceIntervalKm) : "");
+  const shownFee = fee ?? (settings ? String(settings.lateSurchargeFee) : "");
+  const dirty = intervalKm != null || fee != null;
+  const valid =
+    shownInterval.trim() !== "" &&
+    Number(shownInterval) > 0 &&
+    shownFee.trim() !== "" &&
+    Number(shownFee) >= 0;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <Wrench className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold">Service interval & late surcharge</h2>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Vehicles arriving more than the interval past their last recorded service get flagged
+        with a late-service surcharge suggestion on the job card. Staff can apply or waive it.
+      </p>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+          <div className="space-y-2">
+            <Label>Service interval (km)</Label>
+            <Input
+              type="number"
+              min="1"
+              value={shownInterval}
+              onChange={(e) => setIntervalKm(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Late-service surcharge (GYD, flat)</Label>
+            <Input
+              type="number"
+              min="0"
+              value={shownFee}
+              onChange={(e) => setFee(e.target.value)}
+            />
+          </div>
+          <div>
+            <Button
+              disabled={!dirty || !valid || update.isPending}
+              onClick={() =>
+                update.mutate({
+                  data: {
+                    serviceIntervalKm: Number(shownInterval),
+                    lateSurchargeFee: Number(shownFee),
+                  },
+                })
+              }
+            >
+              {update.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

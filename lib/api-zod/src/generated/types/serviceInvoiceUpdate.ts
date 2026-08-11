@@ -9,4 +9,5 @@ import type { ServiceInvoiceUpdateStatus } from './serviceInvoiceUpdateStatus';
 
 export interface ServiceInvoiceUpdate {
   status?: ServiceInvoiceUpdateStatus;
+  signedCopyFiled?: boolean;
 }

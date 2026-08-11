@@ -707,7 +707,18 @@ const PATH_MODULES: Record<string, RouteRule> = {
   "outstanding-balances": { module: "finance" },
   "service-orders": { module: "service" },
   "service-technicians": { module: "service" },
-  "job-cards": { module: "service" },
+  "job-cards": {
+    module: "service",
+    category: (req) => {
+      // Rollover sign-off must be reachable by the assigned Technician, whose
+      // role has service:edit but not service:create; the route itself
+      // enforces manager-or-assigned-technician identity.
+      if (/^\/job-cards\/\d+\/rollover\/approve\/?$/.test(req.path)) {
+        return "edit";
+      }
+      return METHOD_CATEGORY[req.method] ?? "view";
+    },
+  },
   "service-invoices": { module: "service" },
   coverage: { module: "service" },
   parts: { module: "parts" },

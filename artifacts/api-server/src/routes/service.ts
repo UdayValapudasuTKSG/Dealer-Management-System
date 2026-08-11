@@ -3,9 +3,11 @@ import { Router, type IRouter } from "express";
 import {
   buildCoverageCertificatePdf,
   buildServiceInvoicePdf,
+  buildServiceReceiptPdf,
 } from "../lib/document-pdfs";
+import { getServiceSettings } from "../lib/service-settings";
 import { dealerExchangeRate } from "../lib/invoicing";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
   db,
   serviceOrdersTable,
@@ -64,6 +66,24 @@ import {
   AdvanceServiceOrderParams,
   AdvanceServiceOrderBody,
   AdvanceServiceOrderResponse,
+  RolloverJobCardParams,
+  RolloverJobCardBody,
+  RolloverJobCardResponse,
+  ApproveJobCardRolloverParams,
+  ApproveJobCardRolloverBody,
+  ApproveJobCardRolloverResponse,
+  DecideJobCardSurchargeParams,
+  DecideJobCardSurchargeBody,
+  DecideJobCardSurchargeResponse,
+  RequestServiceInvoiceDiscountParams,
+  RequestServiceInvoiceDiscountBody,
+  RequestServiceInvoiceDiscountResponse,
+  DecideServiceInvoiceDiscountParams,
+  DecideServiceInvoiceDiscountBody,
+  DecideServiceInvoiceDiscountResponse,
+  AdjustServiceInvoiceParams,
+  AdjustServiceInvoiceBody,
+  AdjustServiceInvoiceResponse,
 } from "@workspace/api-zod";
 import { onServiceOrderCompleted } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
@@ -72,6 +92,23 @@ import { resolveDealerUserIdByName } from "../lib/user-lookup";
 import { computeServiceTax, ensureDealerTaxes } from "../lib/taxes";
 
 const router: IRouter = Router();
+
+/**
+ * Service Manager / Management sign-off check for rollover approvals and
+ * discount decisions. Permission-based checks stay in the authorize
+ * middleware; this narrows WHO within the service module may sign off.
+ */
+function isServiceApprover(user: {
+  roleName?: string | null;
+  isSuperAdmin?: boolean;
+} | null | undefined): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin) return true;
+  const role = user.roleName ?? "";
+  return /service manager|general manager|leadership|management|owner.?admin|admin/i.test(
+    role,
+  );
+}
 
 function toDateString(value: unknown): string | undefined {
   if (value == null) return undefined;
@@ -541,6 +578,55 @@ router.post("/job-cards", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Service order not found" });
     return;
   }
+  // Late-service surcharge detection (FR-SR-07): the case's intake odometer
+  // is compared against the vehicle's last serviced odometer plus the
+  // dealer-configured interval. Over-interval arrivals get a surcharge
+  // suggestion staff must apply or waive.
+  let surcharge: {
+    surchargeStatus?: string;
+    surchargeAmount?: number;
+    surchargeOverKm?: number;
+  } = {};
+  if (order.odometer != null) {
+    const settings = await getServiceSettings(order.dealerId);
+    const priorFilter = order.vehicleId != null
+      ? eq(serviceOrdersTable.vehicleId, order.vehicleId)
+      : order.customerId != null
+        ? and(
+            eq(serviceOrdersTable.customerId, order.customerId),
+            eq(serviceOrdersTable.vehicleInfo, order.vehicleInfo),
+          )
+        : undefined;
+    if (priorFilter) {
+      const [prior] = await db
+        .select({
+          lastOdo: sql<number | null>`max(${serviceOrdersTable.odometer})`,
+        })
+        .from(serviceOrdersTable)
+        .where(
+          and(
+            eq(serviceOrdersTable.dealerId, order.dealerId),
+            priorFilter,
+            sql`${serviceOrdersTable.id} <> ${order.id}`,
+            sql`${serviceOrdersTable.status} in ('resolved', 'closed')`,
+            sql`${serviceOrdersTable.odometer} is not null`,
+          ),
+        );
+      const lastOdo = prior?.lastOdo;
+      if (lastOdo != null) {
+        const overKm =
+          order.odometer - Number(lastOdo) - settings.serviceIntervalKm;
+        if (overKm > 0) {
+          surcharge = {
+            surchargeStatus: "suggested",
+            surchargeAmount: settings.lateSurchargeFee,
+            surchargeOverKm: overKm,
+          };
+        }
+      }
+    }
+  }
+
   let card: typeof jobCardsTable.$inferSelect | undefined;
   try {
     // Asset + pay type flow down from the case unless explicitly overridden.
@@ -548,6 +634,7 @@ router.post("/job-cards", async (req, res): Promise<void> => {
       .insert(jobCardsTable)
       .values({
         ...parsed.data,
+        ...surcharge,
         assetId: order.assetId ?? null,
         payType: parsed.data.payType ?? order.payType,
         scheduledAt: parsed.data.scheduledAt
@@ -654,6 +741,280 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   }
 
   res.json(UpdateJobCardResponse.parse(card));
+});
+
+// ---------------------------------------------------------------------------
+// Multi-day rollover (FR-SR-06): dual sign-off before a card carries over
+// ---------------------------------------------------------------------------
+
+const ACTIVE_CARD_STATUSES = new Set(["open", "in_progress", "on_hold"]);
+
+router.post("/job-cards/:id/rollover", async (req, res): Promise<void> => {
+  const params = RolloverJobCardParams.safeParse(req.params);
+  const parsed = RolloverJobCardBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({
+      error: (params.success ? parsed : params).error?.message ?? "Invalid",
+    });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [card] = await db
+    .select()
+    .from(jobCardsTable)
+    .where(
+      and(eq(jobCardsTable.id, params.data.id), eq(jobCardsTable.dealerId, dealerId)),
+    );
+  if (!card) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  if (!ACTIVE_CARD_STATUSES.has(card.status)) {
+    res.status(422).json({
+      error: `Only an active job card can be rolled over (this one is ${card.status})`,
+    });
+    return;
+  }
+  const toDate = toDateString(parsed.data.toDate);
+  const today = new Date().toISOString().slice(0, 10);
+  if (!toDate || toDate <= today) {
+    res.status(422).json({ error: "Rollover date must be a future day" });
+    return;
+  }
+  // Sign-offs are immutable: a pending rollover (including one with partial
+  // signatures) can never be replaced or have its signatures cleared by a new
+  // request. Only "none" (never requested) or "approved" (fully signed and
+  // executed) cards accept a new request — and an approved record is archived
+  // into the card's notes as an append-only audit line first.
+  if (card.rolloverStatus === "pending") {
+    res.status(422).json({
+      error:
+        "A rollover is already awaiting sign-off — it must be fully approved before another can be requested",
+    });
+    return;
+  }
+  const auditLine =
+    card.rolloverStatus === "approved"
+      ? `[Rollover audit] carried to ${card.rolloverToDate ?? "?"} — manager: ${card.rolloverManagerApprovedBy ?? "?"} @ ${card.rolloverManagerApprovedAt?.toISOString() ?? "?"}; technician: ${card.rolloverTechApprovedBy ?? "?"} @ ${card.rolloverTechApprovedAt?.toISOString() ?? "?"}`
+      : null;
+  // CAS on the observed rollover status so a concurrent request or sign-off
+  // can't be raced past the guard above.
+  const [updated] = await db
+    .update(jobCardsTable)
+    .set({
+      rolloverStatus: "pending",
+      rolloverToDate: toDate,
+      rolloverReason: parsed.data.reason ?? null,
+      rolloverRequestedBy: res.locals.user?.name ?? res.locals.user?.email ?? "Staff",
+      rolloverRequestedAt: new Date(),
+      rolloverManagerApprovedBy: null,
+      rolloverManagerApprovedAt: null,
+      rolloverTechApprovedBy: null,
+      rolloverTechApprovedAt: null,
+      ...(auditLine
+        ? { notes: card.notes ? `${card.notes}\n${auditLine}` : auditLine }
+        : {}),
+    })
+    .where(
+      and(
+        eq(jobCardsTable.id, card.id),
+        eq(jobCardsTable.dealerId, dealerId),
+        eq(jobCardsTable.rolloverStatus, card.rolloverStatus),
+      ),
+    )
+    .returning();
+  if (!updated) {
+    res.status(409).json({ error: "Job card changed — reload and retry" });
+    return;
+  }
+  res.json(RolloverJobCardResponse.parse(updated));
+});
+
+router.post(
+  "/job-cards/:id/rollover/approve",
+  async (req, res): Promise<void> => {
+    const params = ApproveJobCardRolloverParams.safeParse(req.params);
+    const parsed = ApproveJobCardRolloverBody.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      res.status(400).json({
+        error: (params.success ? parsed : params).error?.message ?? "Invalid",
+      });
+      return;
+    }
+    const dealerId = activeDealerId(res);
+    const user = res.locals.user;
+    const [card] = await db
+      .select()
+      .from(jobCardsTable)
+      .where(
+        and(
+          eq(jobCardsTable.id, params.data.id),
+          eq(jobCardsTable.dealerId, dealerId),
+        ),
+      );
+    if (!card) {
+      res.status(404).json({ error: "Job card not found" });
+      return;
+    }
+    if (card.rolloverStatus !== "pending") {
+      res.status(422).json({ error: "No pending rollover on this job card" });
+      return;
+    }
+    const signer = user?.name ?? user?.email ?? "Staff";
+    if (parsed.data.as === "manager") {
+      if (!isServiceApprover(user)) {
+        res.status(403).json({
+          error: "Only the Service Manager or Management can sign off as manager",
+        });
+        return;
+      }
+    } else if (
+      card.technicianUserId == null ||
+      user?.id !== card.technicianUserId
+    ) {
+      // Technician sign-off must come from the assigned technician.
+      res.status(403).json({
+        error: "Only the assigned technician can sign off as technician",
+      });
+      return;
+    }
+
+    // Sign-offs are immutable: the UPDATE only lands when the rollover is
+    // still pending AND this capacity's slot is empty, so a concurrent
+    // duplicate cannot overwrite who signed or when.
+    const updated = await db.transaction(async (tx) => {
+      const slotPredicate =
+        parsed.data.as === "manager"
+          ? isNull(jobCardsTable.rolloverManagerApprovedAt)
+          : isNull(jobCardsTable.rolloverTechApprovedAt);
+      const signPatch: Partial<typeof jobCardsTable.$inferInsert> =
+        parsed.data.as === "manager"
+          ? {
+              rolloverManagerApprovedBy: signer,
+              rolloverManagerApprovedAt: new Date(),
+            }
+          : {
+              rolloverTechApprovedBy: signer,
+              rolloverTechApprovedAt: new Date(),
+            };
+      const [signed] = await tx
+        .update(jobCardsTable)
+        .set(signPatch)
+        .where(
+          and(
+            eq(jobCardsTable.id, card.id),
+            eq(jobCardsTable.dealerId, dealerId),
+            eq(jobCardsTable.rolloverStatus, "pending"),
+            slotPredicate,
+          ),
+        )
+        .returning();
+      if (!signed) return null;
+
+      // Second signature completes the rollover: the card's scheduled date
+      // moves to the approved carry-over day.
+      if (
+        signed.rolloverManagerApprovedAt != null &&
+        signed.rolloverTechApprovedAt != null
+      ) {
+        const finalPatch: Partial<typeof jobCardsTable.$inferInsert> = {
+          rolloverStatus: "approved",
+        };
+        if (signed.rolloverToDate) {
+          const prev = signed.scheduledAt ?? new Date();
+          const next = new Date(`${signed.rolloverToDate}T00:00:00`);
+          next.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
+          finalPatch.scheduledAt = next;
+        }
+        const [finalized] = await tx
+          .update(jobCardsTable)
+          .set(finalPatch)
+          .where(
+            and(
+              eq(jobCardsTable.id, card.id),
+              eq(jobCardsTable.dealerId, dealerId),
+              eq(jobCardsTable.rolloverStatus, "pending"),
+            ),
+          )
+          .returning();
+        return finalized ?? signed;
+      }
+      return signed;
+    });
+    if (!updated) {
+      res.status(409).json({
+        error:
+          parsed.data.as === "manager"
+            ? "Manager sign-off already recorded (or rollover no longer pending)"
+            : "Technician sign-off already recorded (or rollover no longer pending)",
+      });
+      return;
+    }
+    res.json(ApproveJobCardRolloverResponse.parse(updated));
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Late-service surcharge decision (FR-SR-07): apply or waive
+// ---------------------------------------------------------------------------
+
+router.post("/job-cards/:id/surcharge", async (req, res): Promise<void> => {
+  const params = DecideJobCardSurchargeParams.safeParse(req.params);
+  const parsed = DecideJobCardSurchargeBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({
+      error: (params.success ? parsed : params).error?.message ?? "Invalid",
+    });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [card] = await db
+    .select()
+    .from(jobCardsTable)
+    .where(
+      and(eq(jobCardsTable.id, params.data.id), eq(jobCardsTable.dealerId, dealerId)),
+    );
+  if (!card) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  // Invoiced cards are settled — the surcharge decision must precede billing.
+  const [invoiced] = await db
+    .select({ id: serviceInvoicesTable.id })
+    .from(serviceInvoicesTable)
+    .where(
+      and(
+        eq(serviceInvoicesTable.jobCardId, card.id),
+        eq(serviceInvoicesTable.dealerId, dealerId),
+      ),
+    )
+    .limit(1);
+  if (invoiced) {
+    res.status(422).json({
+      error: `Invoice #${invoiced.id} already issued — adjust the invoice instead`,
+    });
+    return;
+  }
+  const settings = await getServiceSettings(dealerId);
+  const decidedBy = res.locals.user?.name ?? res.locals.user?.email ?? "Staff";
+  const apply = parsed.data.action === "apply";
+  const amount = apply
+    ? parsed.data.amount ??
+      (card.surchargeAmount > 0 ? card.surchargeAmount : settings.lateSurchargeFee)
+    : card.surchargeAmount;
+  const [updated] = await db
+    .update(jobCardsTable)
+    .set({
+      surchargeStatus: apply ? "applied" : "waived",
+      surchargeAmount: amount,
+      surchargeDecidedBy: decidedBy,
+      surchargeDecidedAt: new Date(),
+    })
+    .where(
+      and(eq(jobCardsTable.id, card.id), eq(jobCardsTable.dealerId, dealerId)),
+    )
+    .returning();
+  res.json(DecideJobCardSurchargeResponse.parse(updated));
 });
 
 // ---------------------------------------------------------------------------
@@ -864,11 +1225,22 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
     0,
   );
   const laborTotal = card.laborHours * card.laborRate;
+  // A suggested-but-undecided surcharge blocks invoicing: staff must apply
+  // or waive it so the decision is on record before totals lock.
+  if (card.surchargeStatus === "suggested") {
+    res.status(422).json({
+      error:
+        "Late-service surcharge is still undecided — apply or waive it before invoicing",
+    });
+    return;
+  }
+  const surchargeTotal =
+    card.surchargeStatus === "applied" ? card.surchargeAmount : 0;
   // Deterministic tax engine: same per-dealer configured rules as sales
   // quotes (dealer_taxes VAT rule) — no hardcoded rate.
   const taxRules = await ensureDealerTaxes(card.dealerId);
   const { tax, total } = computeServiceTax(
-    Math.round((partsTotal + laborTotal) * 100) / 100,
+    Math.round((partsTotal + laborTotal + surchargeTotal) * 100) / 100,
     taxRules,
   );
 
@@ -883,9 +1255,13 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
       vehicleInfo: order.vehicleInfo,
       partsTotal: Math.round(partsTotal * 100) / 100,
       laborTotal: Math.round(laborTotal * 100) / 100,
+      surchargeTotal: Math.round(surchargeTotal * 100) / 100,
       tax,
       total,
       status: "issued",
+      // Totals lock at issue (FR-SR-09); discount approval and the
+      // adjustment endpoint are the only sanctioned paths that change them.
+      lockedAt: new Date(),
     })
     .returning();
 
@@ -922,22 +1298,339 @@ router.patch("/service-invoices/:id", async (req, res): Promise<void> => {
     });
     return;
   }
-  const [invoice] = await db
-    .update(serviceInvoicesTable)
-    .set(parsed.data)
+  // Locked totals (FR-SR-09): PATCH only ever touches lifecycle status and
+  // the signed-copy acknowledgement — monetary fields are not accepted here.
+  const dealerId = activeDealerId(res);
+  const [current] = await db
+    .select()
+    .from(serviceInvoicesTable)
     .where(
       and(
         eq(serviceInvoicesTable.id, params.data.id),
-        eq(serviceInvoicesTable.dealerId, activeDealerId(res)),
+        eq(serviceInvoicesTable.dealerId, dealerId),
+      ),
+    );
+  if (!current) {
+    res.status(404).json({ error: "Invoice not found" });
+    return;
+  }
+  const { signedCopyFiled, status } = parsed.data;
+  // Irreversible lifecycle: issued → paid | void only. Paid and void are
+  // terminal — a paid invoice can never be reopened into an adjustable state.
+  if (status !== undefined && status !== current.status) {
+    const allowed =
+      current.status === "issued" && (status === "paid" || status === "void");
+    if (!allowed) {
+      res.status(422).json({
+        error: `Invalid status transition ${current.status} → ${status}; paid and void invoices are final`,
+      });
+      return;
+    }
+  }
+  if (signedCopyFiled !== undefined && current.status === "void") {
+    res.status(422).json({ error: "Cannot record acknowledgements on a void invoice" });
+    return;
+  }
+  const patch: Partial<typeof serviceInvoicesTable.$inferInsert> = {};
+  if (status !== undefined) patch.status = status;
+  if (signedCopyFiled) {
+    patch.signedCopyFiledBy =
+      res.locals.user?.name ?? res.locals.user?.email ?? "Staff";
+    patch.signedCopyFiledAt = new Date();
+  } else if (signedCopyFiled === false) {
+    patch.signedCopyFiledBy = null;
+    patch.signedCopyFiledAt = null;
+  }
+  if (Object.keys(patch).length === 0) {
+    res.json(UpdateServiceInvoiceResponse.parse(current));
+    return;
+  }
+  // CAS on the observed status so a concurrent transition can't be raced past
+  // the lifecycle guard above.
+  const [invoice] = await db
+    .update(serviceInvoicesTable)
+    .set(patch)
+    .where(
+      and(
+        eq(serviceInvoicesTable.id, current.id),
+        eq(serviceInvoicesTable.dealerId, dealerId),
+        eq(serviceInvoicesTable.status, current.status),
       ),
     )
     .returning();
   if (!invoice) {
-    res.status(404).json({ error: "Invoice not found" });
+    res.status(409).json({ error: "Invoice changed — reload and retry" });
     return;
   }
   res.json(UpdateServiceInvoiceResponse.parse(invoice));
 });
+
+// ---------------------------------------------------------------------------
+// Discount approval workflow (FR-SR-08)
+// ---------------------------------------------------------------------------
+
+router.post(
+  "/service-invoices/:id/discount",
+  async (req, res): Promise<void> => {
+    const params = RequestServiceInvoiceDiscountParams.safeParse(req.params);
+    const parsed = RequestServiceInvoiceDiscountBody.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      res.status(400).json({
+        error: (params.success ? parsed : params).error?.message ?? "Invalid",
+      });
+      return;
+    }
+    const dealerId = activeDealerId(res);
+    const [invoice] = await db
+      .select()
+      .from(serviceInvoicesTable)
+      .where(
+        and(
+          eq(serviceInvoicesTable.id, params.data.id),
+          eq(serviceInvoicesTable.dealerId, dealerId),
+        ),
+      );
+    if (!invoice) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+    if (invoice.status !== "issued") {
+      res.status(422).json({
+        error: `Discounts can only be requested on issued invoices (this one is ${invoice.status})`,
+      });
+      return;
+    }
+    if (invoice.discountStatus === "pending") {
+      res.status(422).json({ error: "A discount request is already pending" });
+      return;
+    }
+    if (invoice.discountStatus === "approved") {
+      res.status(422).json({ error: "A discount has already been approved" });
+      return;
+    }
+    const preDiscount =
+      invoice.partsTotal + invoice.laborTotal + invoice.surchargeTotal + invoice.tax;
+    if (parsed.data.amount > preDiscount) {
+      res.status(422).json({
+        error: "Discount cannot exceed the invoice total",
+      });
+      return;
+    }
+    const [updated] = await db
+      .update(serviceInvoicesTable)
+      .set({
+        discountStatus: "pending",
+        discountRequestedAmount: parsed.data.amount,
+        discountReason: parsed.data.reason ?? null,
+        discountRequestedBy:
+          res.locals.user?.name ?? res.locals.user?.email ?? "Staff",
+        discountRequestedAt: new Date(),
+        discountDecidedBy: null,
+        discountDecidedAt: null,
+      })
+      .where(
+        and(
+          eq(serviceInvoicesTable.id, invoice.id),
+          eq(serviceInvoicesTable.dealerId, dealerId),
+        ),
+      )
+      .returning();
+    res.json(RequestServiceInvoiceDiscountResponse.parse(updated));
+  },
+);
+
+router.post(
+  "/service-invoices/:id/discount/decision",
+  async (req, res): Promise<void> => {
+    const params = DecideServiceInvoiceDiscountParams.safeParse(req.params);
+    const parsed = DecideServiceInvoiceDiscountBody.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      res.status(400).json({
+        error: (params.success ? parsed : params).error?.message ?? "Invalid",
+      });
+      return;
+    }
+    const user = res.locals.user;
+    if (!isServiceApprover(user)) {
+      res.status(403).json({
+        error: "Only the Service Manager or Management can decide discounts",
+      });
+      return;
+    }
+    const dealerId = activeDealerId(res);
+    const [invoice] = await db
+      .select()
+      .from(serviceInvoicesTable)
+      .where(
+        and(
+          eq(serviceInvoicesTable.id, params.data.id),
+          eq(serviceInvoicesTable.dealerId, dealerId),
+        ),
+      );
+    if (!invoice) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+    if (invoice.discountStatus !== "pending") {
+      res.status(422).json({ error: "No pending discount on this invoice" });
+      return;
+    }
+    const approve = parsed.data.action === "approve";
+    const requested = invoice.discountRequestedAmount ?? 0;
+    const preDiscount =
+      Math.round(
+        (invoice.partsTotal +
+          invoice.laborTotal +
+          invoice.surchargeTotal +
+          invoice.tax) *
+          100,
+      ) / 100;
+    const discount = approve ? Math.min(requested, preDiscount) : 0;
+    const adjustmentSum = (invoice.adjustments ?? []).reduce(
+      (s, a) => s + a.amount,
+      0,
+    );
+    const [updated] = await db
+      .update(serviceInvoicesTable)
+      .set({
+        discountStatus: approve ? "approved" : "rejected",
+        discountTotal: discount,
+        discountDecidedBy: user?.name ?? user?.email ?? "Manager",
+        discountDecidedAt: new Date(),
+        ...(approve
+          ? {
+              total:
+                Math.round((preDiscount - discount + adjustmentSum) * 100) /
+                100,
+            }
+          : {}),
+      })
+      .where(
+        and(
+          eq(serviceInvoicesTable.id, invoice.id),
+          eq(serviceInvoicesTable.dealerId, dealerId),
+        ),
+      )
+      .returning();
+    res.json(DecideServiceInvoiceDiscountResponse.parse(updated));
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Post-issue adjustments (FR-SR-09): the only way locked totals change
+// ---------------------------------------------------------------------------
+
+router.post("/service-invoices/:id/adjust", async (req, res): Promise<void> => {
+  const params = AdjustServiceInvoiceParams.safeParse(req.params);
+  const parsed = AdjustServiceInvoiceBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({
+      error: (params.success ? parsed : params).error?.message ?? "Invalid",
+    });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [invoice] = await db
+    .select()
+    .from(serviceInvoicesTable)
+    .where(
+      and(
+        eq(serviceInvoicesTable.id, params.data.id),
+        eq(serviceInvoicesTable.dealerId, dealerId),
+      ),
+    );
+  if (!invoice) {
+    res.status(404).json({ error: "Invoice not found" });
+    return;
+  }
+  // Adjustments change a locked financial record, so they are restricted to
+  // Service Manager / Management — not the standard service:create grant.
+  if (!isServiceApprover(res.locals.user)) {
+    res.status(403).json({
+      error: "Only the Service Manager or Management can record adjustments",
+    });
+    return;
+  }
+  if (invoice.status !== "issued") {
+    res.status(422).json({
+      error:
+        invoice.status === "paid"
+          ? "Invoice is already paid — settle differences through a credit note, not an adjustment"
+          : "Cannot adjust a void invoice",
+    });
+    return;
+  }
+  const entry = {
+    amount: Math.round(parsed.data.amount * 100) / 100,
+    reason: parsed.data.reason,
+    by: res.locals.user?.name ?? res.locals.user?.email ?? "Staff",
+    at: new Date().toISOString(),
+  };
+  const nextTotal = Math.round((invoice.total + entry.amount) * 100) / 100;
+  if (nextTotal < 0) {
+    res.status(422).json({ error: "Adjustment would make the total negative" });
+    return;
+  }
+  // Conditional on status + unchanged total so a concurrent adjustment or
+  // payment can't be silently overwritten; the loser gets a 409 to retry.
+  const [updated] = await db
+    .update(serviceInvoicesTable)
+    .set({
+      adjustments: [...(invoice.adjustments ?? []), entry],
+      total: nextTotal,
+    })
+    .where(
+      and(
+        eq(serviceInvoicesTable.id, invoice.id),
+        eq(serviceInvoicesTable.dealerId, dealerId),
+        eq(serviceInvoicesTable.status, "issued"),
+        eq(serviceInvoicesTable.total, invoice.total),
+      ),
+    )
+    .returning();
+  if (!updated) {
+    res.status(409).json({
+      error: "Invoice changed while recording the adjustment — reload and retry",
+    });
+    return;
+  }
+  res.json(AdjustServiceInvoiceResponse.parse(updated));
+});
+
+router.get(
+  "/service-invoices/:id/receipt-pdf",
+  async (req, res): Promise<void> => {
+    const params = UpdateServiceInvoiceParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const [invoice] = await db
+      .select()
+      .from(serviceInvoicesTable)
+      .where(
+        and(
+          eq(serviceInvoicesTable.id, params.data.id),
+          eq(serviceInvoicesTable.dealerId, activeDealerId(res)),
+        ),
+      );
+    if (!invoice) {
+      res.status(404).json({ error: "Service invoice not found" });
+      return;
+    }
+    const pdf = await buildServiceReceiptPdf(
+      invoice,
+      await getDealerPdfBranding(invoice.dealerId),
+    );
+    res
+      .setHeader("Content-Type", "application/pdf")
+      .setHeader(
+        "Content-Disposition",
+        `inline; filename="SR-${String(invoice.id).padStart(5, "0")}-receipt.pdf"`,
+      )
+      .send(pdf);
+  },
+);
 
 router.get("/service-invoices/:id/pdf", async (req, res): Promise<void> => {
   const params = UpdateServiceInvoiceParams.safeParse(req.params);

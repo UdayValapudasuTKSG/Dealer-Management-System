@@ -3997,6 +3997,20 @@ export const ListJobCardsResponseItem = zod.object({
   "laborHours": zod.number(),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
   "startedAt": zod.coerce.date().nullish(),
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
@@ -4062,6 +4076,20 @@ export const CreateJobCardResponse = zod.object({
   "laborHours": zod.number(),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
   "startedAt": zod.coerce.date().nullish(),
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
@@ -4145,6 +4173,230 @@ export const UpdateJobCardResponse = zod.object({
   "laborHours": zod.number(),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Request carrying an incomplete job card to another day (dual approval)
+ */
+export const RolloverJobCardParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RolloverJobCardBody = zod.object({
+  "toDate": zod.coerce.date(),
+  "reason": zod.string().optional()
+})
+
+export const RolloverJobCardResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "assetId": zod.number().nullish(),
+  "title": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
+  "technicianUserId": zod.number().nullish(),
+  "technicianName": zod.string().nullish(),
+  "bay": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "durationMins": zod.number().nullish(),
+  "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']),
+  "quoteTotal": zod.number(),
+  "quoteApprovedAt": zod.coerce.date().nullish(),
+  "intake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "outtake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "checklist": zod.array(zod.object({
+  "label": zod.string(),
+  "done": zod.boolean()
+})),
+  "laborHours": zod.number(),
+  "laborRate": zod.number(),
+  "notes": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Sign off a pending rollover as Service Manager or assigned Technician
+ */
+export const ApproveJobCardRolloverParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ApproveJobCardRolloverBody = zod.object({
+  "as": zod.enum(['manager', 'technician'])
+})
+
+export const ApproveJobCardRolloverResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "assetId": zod.number().nullish(),
+  "title": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
+  "technicianUserId": zod.number().nullish(),
+  "technicianName": zod.string().nullish(),
+  "bay": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "durationMins": zod.number().nullish(),
+  "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']),
+  "quoteTotal": zod.number(),
+  "quoteApprovedAt": zod.coerce.date().nullish(),
+  "intake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "outtake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "checklist": zod.array(zod.object({
+  "label": zod.string(),
+  "done": zod.boolean()
+})),
+  "laborHours": zod.number(),
+  "laborRate": zod.number(),
+  "notes": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Apply or waive the late-service surcharge on a job card
+ */
+export const DecideJobCardSurchargeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const decideJobCardSurchargeBodyAmountMin = 0;
+
+
+
+export const DecideJobCardSurchargeBody = zod.object({
+  "action": zod.enum(['apply', 'waive']),
+  "amount": zod.number().min(decideJobCardSurchargeBodyAmountMin).optional()
+})
+
+export const DecideJobCardSurchargeResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "assetId": zod.number().nullish(),
+  "title": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
+  "technicianUserId": zod.number().nullish(),
+  "technicianName": zod.string().nullish(),
+  "bay": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "durationMins": zod.number().nullish(),
+  "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']),
+  "quoteTotal": zod.number(),
+  "quoteApprovedAt": zod.coerce.date().nullish(),
+  "intake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "outtake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "checklist": zod.array(zod.object({
+  "label": zod.string(),
+  "done": zod.boolean()
+})),
+  "laborHours": zod.number(),
+  "laborRate": zod.number(),
+  "notes": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
   "startedAt": zod.coerce.date().nullish(),
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
@@ -4216,9 +4468,27 @@ export const CreateJobCardInvoiceResponse = zod.object({
   "vehicleInfo": zod.string(),
   "partsTotal": zod.number(),
   "laborTotal": zod.number(),
+  "surchargeTotal": zod.number(),
+  "discountTotal": zod.number(),
+  "discountStatus": zod.enum(['none', 'pending', 'approved', 'rejected']),
+  "discountRequestedAmount": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "discountRequestedBy": zod.string().nullish(),
+  "discountRequestedAt": zod.coerce.date().nullish(),
+  "discountDecidedBy": zod.string().nullish(),
+  "discountDecidedAt": zod.coerce.date().nullish(),
   "tax": zod.number(),
   "total": zod.number(),
   "status": zod.enum(['issued', 'paid', 'void']),
+  "lockedAt": zod.coerce.date().nullish(),
+  "adjustments": zod.array(zod.object({
+  "amount": zod.number(),
+  "reason": zod.string(),
+  "by": zod.string(),
+  "at": zod.string()
+})),
+  "signedCopyFiledBy": zod.string().nullish(),
+  "signedCopyFiledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -4236,9 +4506,27 @@ export const ListServiceInvoicesResponseItem = zod.object({
   "vehicleInfo": zod.string(),
   "partsTotal": zod.number(),
   "laborTotal": zod.number(),
+  "surchargeTotal": zod.number(),
+  "discountTotal": zod.number(),
+  "discountStatus": zod.enum(['none', 'pending', 'approved', 'rejected']),
+  "discountRequestedAmount": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "discountRequestedBy": zod.string().nullish(),
+  "discountRequestedAt": zod.coerce.date().nullish(),
+  "discountDecidedBy": zod.string().nullish(),
+  "discountDecidedAt": zod.coerce.date().nullish(),
   "tax": zod.number(),
   "total": zod.number(),
   "status": zod.enum(['issued', 'paid', 'void']),
+  "lockedAt": zod.coerce.date().nullish(),
+  "adjustments": zod.array(zod.object({
+  "amount": zod.number(),
+  "reason": zod.string(),
+  "by": zod.string(),
+  "at": zod.string()
+})),
+  "signedCopyFiledBy": zod.string().nullish(),
+  "signedCopyFiledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
 export const ListServiceInvoicesResponse = zod.array(ListServiceInvoicesResponseItem)
@@ -4249,7 +4537,8 @@ export const UpdateServiceInvoiceParams = zod.object({
 })
 
 export const UpdateServiceInvoiceBody = zod.object({
-  "status": zod.enum(['issued', 'paid', 'void']).optional()
+  "status": zod.enum(['issued', 'paid', 'void']).optional(),
+  "signedCopyFiled": zod.boolean().optional()
 })
 
 export const UpdateServiceInvoiceResponse = zod.object({
@@ -4261,11 +4550,184 @@ export const UpdateServiceInvoiceResponse = zod.object({
   "vehicleInfo": zod.string(),
   "partsTotal": zod.number(),
   "laborTotal": zod.number(),
+  "surchargeTotal": zod.number(),
+  "discountTotal": zod.number(),
+  "discountStatus": zod.enum(['none', 'pending', 'approved', 'rejected']),
+  "discountRequestedAmount": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "discountRequestedBy": zod.string().nullish(),
+  "discountRequestedAt": zod.coerce.date().nullish(),
+  "discountDecidedBy": zod.string().nullish(),
+  "discountDecidedAt": zod.coerce.date().nullish(),
   "tax": zod.number(),
   "total": zod.number(),
   "status": zod.enum(['issued', 'paid', 'void']),
+  "lockedAt": zod.coerce.date().nullish(),
+  "adjustments": zod.array(zod.object({
+  "amount": zod.number(),
+  "reason": zod.string(),
+  "by": zod.string(),
+  "at": zod.string()
+})),
+  "signedCopyFiledBy": zod.string().nullish(),
+  "signedCopyFiledAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Request a discount on a service invoice (needs manager approval)
+ */
+export const RequestServiceInvoiceDiscountParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const requestServiceInvoiceDiscountBodyAmountMin = 0.01;
+
+
+
+export const RequestServiceInvoiceDiscountBody = zod.object({
+  "amount": zod.number().min(requestServiceInvoiceDiscountBodyAmountMin),
+  "reason": zod.string().optional()
+})
+
+export const RequestServiceInvoiceDiscountResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "jobCardId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "partsTotal": zod.number(),
+  "laborTotal": zod.number(),
+  "surchargeTotal": zod.number(),
+  "discountTotal": zod.number(),
+  "discountStatus": zod.enum(['none', 'pending', 'approved', 'rejected']),
+  "discountRequestedAmount": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "discountRequestedBy": zod.string().nullish(),
+  "discountRequestedAt": zod.coerce.date().nullish(),
+  "discountDecidedBy": zod.string().nullish(),
+  "discountDecidedAt": zod.coerce.date().nullish(),
+  "tax": zod.number(),
+  "total": zod.number(),
+  "status": zod.enum(['issued', 'paid', 'void']),
+  "lockedAt": zod.coerce.date().nullish(),
+  "adjustments": zod.array(zod.object({
+  "amount": zod.number(),
+  "reason": zod.string(),
+  "by": zod.string(),
+  "at": zod.string()
+})),
+  "signedCopyFiledBy": zod.string().nullish(),
+  "signedCopyFiledAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Approve or reject a pending discount (Service Manager / Management)
+ */
+export const DecideServiceInvoiceDiscountParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DecideServiceInvoiceDiscountBody = zod.object({
+  "action": zod.enum(['approve', 'reject'])
+})
+
+export const DecideServiceInvoiceDiscountResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "jobCardId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "partsTotal": zod.number(),
+  "laborTotal": zod.number(),
+  "surchargeTotal": zod.number(),
+  "discountTotal": zod.number(),
+  "discountStatus": zod.enum(['none', 'pending', 'approved', 'rejected']),
+  "discountRequestedAmount": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "discountRequestedBy": zod.string().nullish(),
+  "discountRequestedAt": zod.coerce.date().nullish(),
+  "discountDecidedBy": zod.string().nullish(),
+  "discountDecidedAt": zod.coerce.date().nullish(),
+  "tax": zod.number(),
+  "total": zod.number(),
+  "status": zod.enum(['issued', 'paid', 'void']),
+  "lockedAt": zod.coerce.date().nullish(),
+  "adjustments": zod.array(zod.object({
+  "amount": zod.number(),
+  "reason": zod.string(),
+  "by": zod.string(),
+  "at": zod.string()
+})),
+  "signedCopyFiledBy": zod.string().nullish(),
+  "signedCopyFiledAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Post-issue adjustment — the only way a locked invoice total changes
+ */
+export const AdjustServiceInvoiceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const adjustServiceInvoiceBodyReasonMin = 3;
+
+
+
+export const AdjustServiceInvoiceBody = zod.object({
+  "amount": zod.number(),
+  "reason": zod.string().min(adjustServiceInvoiceBodyReasonMin)
+})
+
+export const AdjustServiceInvoiceResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "jobCardId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "partsTotal": zod.number(),
+  "laborTotal": zod.number(),
+  "surchargeTotal": zod.number(),
+  "discountTotal": zod.number(),
+  "discountStatus": zod.enum(['none', 'pending', 'approved', 'rejected']),
+  "discountRequestedAmount": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "discountRequestedBy": zod.string().nullish(),
+  "discountRequestedAt": zod.coerce.date().nullish(),
+  "discountDecidedBy": zod.string().nullish(),
+  "discountDecidedAt": zod.coerce.date().nullish(),
+  "tax": zod.number(),
+  "total": zod.number(),
+  "status": zod.enum(['issued', 'paid', 'void']),
+  "lockedAt": zod.coerce.date().nullish(),
+  "adjustments": zod.array(zod.object({
+  "amount": zod.number(),
+  "reason": zod.string(),
+  "by": zod.string(),
+  "at": zod.string()
+})),
+  "signedCopyFiledBy": zod.string().nullish(),
+  "signedCopyFiledAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Printable checkout receipt PDF referencing the job card
+ */
+export const GetServiceReceiptPdfParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetServiceReceiptPdfResponse = zod.unknown()
 
 
 /**
@@ -7726,6 +8188,32 @@ export const UpdateDealerBrandingResponse = zod.object({
   "dealerName": zod.string().describe('Legal\/registered dealership name'),
   "brandName": zod.string().nullish(),
   "logoUrl": zod.string().nullish()
+})
+
+
+/**
+ * @summary Dealer service settings (interval km + late surcharge fee)
+ */
+export const GetServiceSettingsResponse = zod.object({
+  "serviceIntervalKm": zod.number(),
+  "lateSurchargeFee": zod.number()
+})
+
+
+export const updateServiceSettingsBodyServiceIntervalKmMin = 100;
+
+export const updateServiceSettingsBodyLateSurchargeFeeMin = 0;
+
+
+
+export const UpdateServiceSettingsBody = zod.object({
+  "serviceIntervalKm": zod.number().min(updateServiceSettingsBodyServiceIntervalKmMin).optional(),
+  "lateSurchargeFee": zod.number().min(updateServiceSettingsBodyLateSurchargeFeeMin).optional()
+})
+
+export const UpdateServiceSettingsResponse = zod.object({
+  "serviceIntervalKm": zod.number(),
+  "lateSurchargeFee": zod.number()
 })
 
 

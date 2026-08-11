@@ -22,6 +22,13 @@ import {
 } from "@workspace/db";
 import { ensureDealerTaxes } from "../lib/taxes";
 import {
+  getServiceSettings,
+  updateServiceSettings,
+} from "../lib/service-settings";
+import {
+  GetServiceSettingsResponse,
+  UpdateServiceSettingsBody,
+  UpdateServiceSettingsResponse,
   ListAdminUsersResponse,
   AddAdminUserBody,
   AddAdminUserResponse,
@@ -715,6 +722,23 @@ router.put("/admin/stage-checklists/:stage", async (req, res): Promise<void> => 
       updatedAt: saved!.createdAt,
     }),
   );
+});
+
+// ————— Dealer service settings (interval + late-service surcharge) —————
+
+router.get("/admin/service-settings", async (_req, res): Promise<void> => {
+  const settings = await getServiceSettings(activeDealerId(res));
+  res.json(GetServiceSettingsResponse.parse(settings));
+});
+
+router.patch("/admin/service-settings", async (req, res): Promise<void> => {
+  const body = UpdateServiceSettingsBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const settings = await updateServiceSettings(activeDealerId(res), body.data);
+  res.json(UpdateServiceSettingsResponse.parse(settings));
 });
 
 // ————— Dealer taxes (deterministic config) —————

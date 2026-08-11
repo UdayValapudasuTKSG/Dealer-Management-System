@@ -27,8 +27,18 @@ import {
   getListPartsQueryKey,
   useCreateCase,
   getListCasesQueryKey,
+  useRolloverJobCard,
+  useApproveJobCardRollover,
+  useDecideJobCardSurcharge,
+  useRequestServiceInvoiceDiscount,
+  useDecideServiceInvoiceDiscount,
+  useAdjustServiceInvoice,
+  useListReviews,
+  useCreateReview,
+  getListReviewsQueryKey,
   type JobCard,
   type ServiceOrder,
+  type ServiceInvoice,
   type ServiceOrderAdvanceBodyTargetStatus,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -51,6 +61,13 @@ import {
   User,
   MessageSquareWarning,
   Loader2,
+  CalendarClock,
+  AlertTriangle,
+  BadgePercent,
+  Lock,
+  Star,
+  Printer,
+  Archive,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -323,8 +340,15 @@ function CreateBookingDialog() {
   );
 }
 
-/* One-step advance CTA — server validates gates and returns 422 {unmet}. */
-function AdvanceOrderButton({ order }: { order: ServiceOrder }) {
+/* One-step advance CTA — server validates gates and returns 422 {unmet}.
+   Closing the case prompts for customer feedback (FR-SR-12). */
+function AdvanceOrderButton({
+  order,
+  onClosed,
+}: {
+  order: ServiceOrder;
+  onClosed?: () => void;
+}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const advance = useAdvanceServiceOrder();
@@ -343,6 +367,7 @@ function AdvanceOrderButton({ order }: { order: ServiceOrder }) {
             title: "Case advanced",
             description: `RO #${order.id} → ${target.replace(/_/g, " ")}.`,
           });
+          if (target === "closed") onClosed?.();
         } catch (e: unknown) {
           const data = (e as { response?: { data?: { unmet?: string[]; error?: string } } })
             ?.response?.data;
@@ -361,11 +386,152 @@ function AdvanceOrderButton({ order }: { order: ServiceOrder }) {
   );
 }
 
+/* Advance CTA + feedback prompt share state so closing auto-opens the dialog. */
+function AdvanceAndFeedback({
+  order,
+  review,
+}: {
+  order: ServiceOrder;
+  review: { rating: number; comment?: string | null } | undefined;
+}) {
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  return (
+    <>
+      <AdvanceOrderButton order={order} onClosed={() => setFeedbackOpen(true)} />
+      <ServiceFeedback order={order} review={review} open={feedbackOpen} setOpen={setFeedbackOpen} />
+    </>
+  );
+}
+
+/* Post-service feedback (FR-SR-12): capture a service_csat review linked to
+   the repair order. Auto-prompts when the case closes; the closed card keeps
+   a Feedback button until one is recorded. */
+function ServiceFeedback({
+  order,
+  review,
+  open,
+  setOpen,
+}: {
+  order: ServiceOrder;
+  review: { rating: number; comment?: string | null } | undefined;
+  open: boolean;
+  setOpen: (v: boolean) => void;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const createReview = useCreateReview();
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+
+  if (review) {
+    return (
+      <div className="flex items-center justify-start md:justify-end gap-0.5 text-primary">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Star
+            key={n}
+            className={cn(
+              "w-3.5 h-3.5",
+              n <= review.rating ? "fill-primary" : "text-muted-foreground",
+            )}
+          />
+        ))}
+        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">
+          CSAT
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {order.status === "closed" && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="rounded-full border-white/15 gap-1.5 text-xs"
+          onClick={() => setOpen(true)}
+        >
+          <Star className="w-3.5 h-3.5" /> Feedback
+        </Button>
+      )}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>How was the service?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              RO #{order.id.toString().padStart(5, "0")} — {order.vehicleInfo}. Record the
+              customer's rating; it is saved as a service CSAT review on their profile.
+            </p>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button key={n} onClick={() => setRating(n)} className="p-1">
+                  <Star
+                    className={cn(
+                      "w-7 h-7 transition-colors",
+                      n <= rating ? "text-primary fill-primary" : "text-muted-foreground",
+                    )}
+                  />
+                </button>
+              ))}
+            </div>
+            <Textarea
+              placeholder="Customer comments (optional)"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)} className="rounded-full">
+              Skip for now
+            </Button>
+            <Button
+              disabled={rating < 1 || createReview.isPending}
+              onClick={async () => {
+                try {
+                  await createReview.mutateAsync({
+                    data: {
+                      source: "service_csat",
+                      rating,
+                      ...(comment.trim() ? { comment: comment.trim() } : {}),
+                      ...(order.customerId != null ? { customerId: order.customerId } : {}),
+                      ...(order.customerName ? { customerName: order.customerName } : {}),
+                      refType: "service_order",
+                      refId: order.id,
+                      vehicleLabel: order.vehicleInfo,
+                    },
+                  });
+                  queryClient.invalidateQueries({ queryKey: getListReviewsQueryKey() });
+                  setOpen(false);
+                  toast({ title: "Feedback recorded", description: "Saved as a service CSAT review." });
+                } catch (e: unknown) {
+                  const msg =
+                    (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+                    "Could not save feedback.";
+                  toast({ title: "Feedback failed", description: msg, variant: "destructive" });
+                }
+              }}
+            >
+              {createReview.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+              Save feedback
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function BookingsTab() {
   const { data: orders, isLoading } = useListServiceOrders();
   const { toast } = useToast();
   const money = useMoney();
   const remind = useSendServiceReminder();
+  const { data: csatReviews } = useListReviews({ source: "service_csat" });
+  const reviewFor = (orderId: number) =>
+    csatReviews?.find((r) => r.refType === "service_order" && r.refId === orderId);
   const { density, setDensity, layout, setLayout } = useViewMode("service");
   /* Triage deep link: /service?order=<id> scrolls to and highlights the RO. */
   const focusOrderId = useFocusParam("order");
@@ -570,7 +736,7 @@ function BookingsTab() {
                     >
                       <Mail className="w-3.5 h-3.5" /> Remind
                     </Button>
-                    <AdvanceOrderButton order={order} />
+                    <AdvanceAndFeedback order={order} review={reviewFor(order.id)} />
                     <OpenCaseButton
                       customerId={order.customerId ?? null}
                       customerName={order.customerName ?? null}
@@ -687,6 +853,13 @@ function JobCardsTab() {
       ))}
     </div>
   );
+}
+
+/* Client-side mirror of the server's Service Manager / Management check. */
+function useIsServiceApprover() {
+  const { me } = useAuthz();
+  const role = me?.roleName ?? "";
+  return /service manager|general manager|leadership|management|owner.?admin|admin/i.test(role);
 }
 
 export function JobCardPanel({ card, technicianView = false }: { card: JobCard; technicianView?: boolean }) {
@@ -910,6 +1083,12 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
           </div>
         )}
 
+        {card.surchargeStatus !== "none" && (
+          <SurchargeSection card={card} onChanged={invalidate} />
+        )}
+
+        <RolloverSection card={card} onChanged={invalidate} technicianView={technicianView} />
+
         <div className="flex items-center gap-2 flex-wrap">
           {next && (
             <Button
@@ -953,100 +1132,688 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
   );
 }
 
+/* Late-service surcharge (FR-SR-07): suggested at intake; apply or waive. */
+function SurchargeSection({ card, onChanged }: { card: JobCard; onChanged: () => void }) {
+  const { toast } = useToast();
+  const money = useMoney();
+  const decide = useDecideJobCardSurcharge();
+
+  const act = async (action: "apply" | "waive") => {
+    try {
+      await decide.mutateAsync({ id: card.id, data: { action } });
+      onChanged();
+      toast({
+        title: action === "apply" ? "Surcharge applied" : "Surcharge waived",
+        description:
+          action === "apply"
+            ? "It will be included in the invoice total."
+            : "Recorded as waived — it will not be billed.",
+      });
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        "Could not record the decision.";
+      toast({ title: "Failed", description: msg, variant: "destructive" });
+    }
+  };
+
+  return (
+    <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1.5 mb-0.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-primary" /> Late-service surcharge
+          </div>
+          <div className="text-sm text-muted-foreground">
+            {card.surchargeOverKm != null && card.surchargeOverKm > 0 && (
+              <>Arrived {card.surchargeOverKm.toLocaleString()} km past the service interval · </>
+            )}
+            {money.gyd(card.surchargeAmount ?? 0)}
+            {card.surchargeDecidedBy && card.surchargeDecidedAt && (
+              <>
+                {" "}· {card.surchargeStatus === "applied" ? "Applied" : "Waived"} by{" "}
+                {card.surchargeDecidedBy} on {format(new Date(card.surchargeDecidedAt), "MMM d")}
+              </>
+            )}
+          </div>
+        </div>
+        {card.surchargeStatus === "suggested" ? (
+          <div className="flex gap-2 shrink-0">
+            <Button
+              size="sm"
+              disabled={decide.isPending}
+              onClick={() => act("apply")}
+              className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs"
+            >
+              Apply
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={decide.isPending}
+              onClick={() => act("waive")}
+              className="rounded-full border-white/15 text-xs"
+            >
+              Waive
+            </Button>
+          </div>
+        ) : (
+          <Badge
+            className={cn(
+              "border-none rounded-full text-[10px] font-bold uppercase tracking-widest shrink-0",
+              card.surchargeStatus === "applied"
+                ? "bg-primary/15 text-primary"
+                : "bg-white/[0.06] text-muted-foreground",
+            )}
+          >
+            {card.surchargeStatus}
+          </Badge>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Multi-day rollover (FR-SR-06): dual Service Manager + Technician sign-off. */
+function RolloverSection({
+  card,
+  onChanged,
+  technicianView,
+}: {
+  card: JobCard;
+  onChanged: () => void;
+  technicianView: boolean;
+}) {
+  const { toast } = useToast();
+  const { me } = useAuthz();
+  const isApprover = useIsServiceApprover();
+  const rollover = useRolloverJobCard();
+  const approve = useApproveJobCardRollover();
+  const [open, setOpen] = useState(false);
+  const [toDate, setToDate] = useState("");
+  const [reason, setReason] = useState("");
+
+  const isAssignedTech = me != null && card.technicianUserId === me.id;
+  const active = ["open", "in_progress", "on_hold"].includes(card.status);
+
+  const fail = (e: unknown) => {
+    const msg =
+      (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+      "Request failed.";
+    toast({ title: "Rollover", description: msg, variant: "destructive" });
+  };
+
+  const signOff = async (as: "manager" | "technician") => {
+    try {
+      const updated = await approve.mutateAsync({ id: card.id, data: { as } });
+      onChanged();
+      toast({
+        title: updated.rolloverStatus === "approved" ? "Rollover approved" : "Sign-off recorded",
+        description:
+          updated.rolloverStatus === "approved"
+            ? `Job carries over to ${updated.rolloverToDate ? format(new Date(`${updated.rolloverToDate}T00:00:00`), "MMM d") : "the new date"}.`
+            : "Waiting on the second signature.",
+      });
+    } catch (e) {
+      fail(e);
+    }
+  };
+
+  if (card.rolloverStatus === "none" && !active) return null;
+
+  return (
+    <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1.5">
+          <CalendarClock className="w-3.5 h-3.5" /> Multi-day rollover
+        </div>
+        {card.rolloverStatus === "pending" && (
+          <Badge className="bg-primary/15 text-primary border-none rounded-full text-[10px] font-bold uppercase tracking-widest">
+            Awaiting sign-off
+          </Badge>
+        )}
+        {card.rolloverStatus === "approved" && (
+          <Badge className="bg-primary/15 text-primary border-none rounded-full text-[10px] font-bold uppercase tracking-widest gap-1">
+            <CheckCircle2 className="w-3 h-3" /> Approved
+          </Badge>
+        )}
+      </div>
+
+      {card.rolloverStatus !== "none" && (
+        <div className="text-sm text-muted-foreground space-y-1">
+          <div>
+            Carry over to{" "}
+            <span className="text-foreground font-medium">
+              {card.rolloverToDate
+                ? format(new Date(`${card.rolloverToDate}T00:00:00`), "MMM d, yyyy")
+                : "—"}
+            </span>
+            {card.rolloverReason && <> — “{card.rolloverReason}”</>}
+            {card.rolloverRequestedBy && card.rolloverRequestedAt && (
+              <>
+                {" "}· requested by {card.rolloverRequestedBy} on{" "}
+                {format(new Date(card.rolloverRequestedAt), "MMM d")}
+              </>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            <span className={cn(card.rolloverManagerApprovedAt ? "text-foreground" : "")}>
+              {card.rolloverManagerApprovedAt ? (
+                <>
+                  ✓ Manager: {card.rolloverManagerApprovedBy} ·{" "}
+                  {format(new Date(card.rolloverManagerApprovedAt), "MMM d, HH:mm")}
+                </>
+              ) : (
+                "○ Service Manager sign-off pending"
+              )}
+            </span>
+            <span className={cn(card.rolloverTechApprovedAt ? "text-foreground" : "")}>
+              {card.rolloverTechApprovedAt ? (
+                <>
+                  ✓ Technician: {card.rolloverTechApprovedBy} ·{" "}
+                  {format(new Date(card.rolloverTechApprovedAt), "MMM d, HH:mm")}
+                </>
+              ) : (
+                "○ Assigned technician sign-off pending"
+              )}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 flex-wrap">
+        {card.rolloverStatus === "pending" && isApprover && !card.rolloverManagerApprovedAt && (
+          <Button
+            size="sm"
+            disabled={approve.isPending}
+            onClick={() => signOff("manager")}
+            className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs"
+          >
+            Sign off as Manager
+          </Button>
+        )}
+        {card.rolloverStatus === "pending" && isAssignedTech && !card.rolloverTechApprovedAt && (
+          <Button
+            size="sm"
+            disabled={approve.isPending}
+            onClick={() => signOff("technician")}
+            className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs"
+          >
+            Sign off as Technician
+          </Button>
+        )}
+        {active && !technicianView && card.rolloverStatus !== "pending" && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setOpen(true)}
+            className="rounded-full border-white/15 text-xs gap-1.5"
+          >
+            <CalendarClock className="w-3.5 h-3.5" /> Request rollover
+          </Button>
+        )}
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Carry job to another day</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Requires sign-off from both the Service Manager and the assigned technician
+              before the job card moves to the new date.
+            </p>
+            <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+            <Textarea
+              placeholder="Why is the job carrying over? (optional)"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={!toDate || rollover.isPending}
+              onClick={async () => {
+                try {
+                  await rollover.mutateAsync({
+                    id: card.id,
+                    data: { toDate, ...(reason.trim() ? { reason: reason.trim() } : {}) },
+                  });
+                  onChanged();
+                  setOpen(false);
+                  setToDate("");
+                  setReason("");
+                  toast({
+                    title: "Rollover requested",
+                    description: "Both sign-offs are needed before the job carries over.",
+                  });
+                } catch (e) {
+                  fail(e);
+                }
+              }}
+            >
+              {rollover.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+              Request rollover
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Invoices                                                            */
 /* ------------------------------------------------------------------ */
 
 function InvoicesTab() {
   const { data: invoices, isLoading } = useListServiceInvoices();
-  const update = useUpdateServiceInvoice();
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const money = useMoney();
 
   if (isLoading)
     return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
   if (!invoices?.length)
     return <EmptyState icon={Receipt} text="No invoices yet. Complete a job card and generate one." />;
 
-  const setStatus = async (id: number, status: "issued" | "paid" | "void") => {
-    await update.mutateAsync({ id, data: { status } });
+  return (
+    <div className="grid grid-cols-1 gap-4">
+      {invoices.map((inv) => (
+        <InvoiceCard key={inv.id} inv={inv} />
+      ))}
+    </div>
+  );
+}
+
+function InvoiceCard({ inv }: { inv: ServiceInvoice }) {
+  const update = useUpdateServiceInvoice();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const money = useMoney();
+  const isApprover = useIsServiceApprover();
+
+  const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: getListServiceInvoicesQueryKey() });
+
+  const setStatus = async (status: "issued" | "paid" | "void") => {
+    await update.mutateAsync({ id: inv.id, data: { status } });
+    invalidate();
     toast({ title: "Invoice updated", description: `Marked ${status}.` });
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4">
-      {invoices.map((inv) => (
-        <Card key={inv.id} className="glass-panel border-none rounded-3xl">
-          <CardContent className="p-6 flex flex-col md:flex-row md:items-center gap-4 justify-between">
-            <div>
-              <div className="text-xs font-semibold tracking-widest text-primary uppercase mb-1">
-                Invoice #{inv.id} · RO #{inv.serviceOrderId} · JC #{inv.jobCardId}
-              </div>
-              <h3 className="font-bold text-lg">{inv.vehicleInfo}</h3>
-              <div className="text-sm text-muted-foreground">
-                {inv.customerName ?? "Walk-in"} · {format(new Date(inv.createdAt), "MMM d, yyyy")}
-              </div>
+    <Card className="glass-panel border-none rounded-3xl">
+      <CardContent className="p-6 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
+          <div>
+            <div className="text-xs font-semibold tracking-widest text-primary uppercase mb-1 flex items-center gap-2">
+              Invoice #{inv.id} · RO #{inv.serviceOrderId} · JC #{inv.jobCardId}
+              {inv.lockedAt && (
+                <span className="inline-flex items-center gap-1 text-muted-foreground normal-case tracking-normal font-medium">
+                  <Lock className="w-3 h-3" /> Totals locked
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-6">
-              <div className="text-sm text-muted-foreground text-right">
-                <div>Parts {money.gyd(inv.partsTotal)}</div>
-                <div>Labour {money.gyd(inv.laborTotal)}</div>
-                <div>Tax {money.gyd(inv.tax)}</div>
-              </div>
-              <div className="text-right">
-                <div className="font-light text-3xl tracking-tight">
-                  {money.gyd(inv.total)}
-                </div>
-                <Badge
-                  variant="secondary"
-                  className={cn(
-                    "mt-1 px-3 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest border-none",
-                    inv.status === "paid"
-                      ? "bg-primary/15 text-primary"
-                      : inv.status === "void"
-                        ? "bg-white/[0.05] text-muted-foreground line-through"
-                        : "bg-white/[0.08] text-foreground",
-                  )}
-                >
-                  {inv.status}
-                </Badge>
-              </div>
-              <a
-                href={`${import.meta.env.BASE_URL}api/service-invoices/${inv.id}/pdf`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-white/15 text-xs font-medium hover:bg-white/[0.05] transition-colors shrink-0"
-              >
-                <FileText className="w-3.5 h-3.5" /> PDF
-              </a>
-              {inv.status === "issued" && (
-                <div className="flex flex-col gap-2">
-                  <Button
-                    size="sm"
-                    disabled={update.isPending}
-                    onClick={() => setStatus(inv.id, "paid")}
-                    className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs"
-                  >
-                    Mark Paid
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={update.isPending}
-                    onClick={() => setStatus(inv.id, "void")}
-                    className="rounded-full border-white/15 text-xs"
-                  >
-                    Void
-                  </Button>
+            <h3 className="font-bold text-lg">{inv.vehicleInfo}</h3>
+            <div className="text-sm text-muted-foreground">
+              {inv.customerName ?? "Walk-in"} · {format(new Date(inv.createdAt), "MMM d, yyyy")}
+            </div>
+          </div>
+          <div className="flex items-center gap-6">
+            <div className="text-sm text-muted-foreground text-right">
+              <div>Parts {money.gyd(inv.partsTotal)}</div>
+              <div>Labour {money.gyd(inv.laborTotal)}</div>
+              {inv.surchargeTotal > 0 && <div>Surcharge {money.gyd(inv.surchargeTotal)}</div>}
+              <div>Tax {money.gyd(inv.tax)}</div>
+              {inv.discountStatus === "approved" && inv.discountTotal > 0 && (
+                <div className="text-primary">Discount −{money.gyd(inv.discountTotal)}</div>
+              )}
+              {(inv.adjustments ?? []).length > 0 && (
+                <div>
+                  Adjustments{" "}
+                  {money.gyd((inv.adjustments ?? []).reduce((s, a) => s + a.amount, 0))}
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
-      ))}
+            <div className="text-right">
+              <div className="font-light text-3xl tracking-tight">{money.gyd(inv.total)}</div>
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "mt-1 px-3 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest border-none",
+                  inv.status === "paid"
+                    ? "bg-primary/15 text-primary"
+                    : inv.status === "void"
+                      ? "bg-white/[0.05] text-muted-foreground line-through"
+                      : "bg-white/[0.08] text-foreground",
+                )}
+              >
+                {inv.status}
+              </Badge>
+            </div>
+            {inv.status === "issued" && (
+              <div className="flex flex-col gap-2">
+                <Button
+                  size="sm"
+                  disabled={update.isPending}
+                  onClick={() => setStatus("paid")}
+                  className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs"
+                >
+                  Mark Paid
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={update.isPending}
+                  onClick={() => setStatus("void")}
+                  className="rounded-full border-white/15 text-xs"
+                >
+                  Void
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DiscountRow inv={inv} onChanged={invalidate} />
+
+        <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-white/5">
+          <a
+            href={`${import.meta.env.BASE_URL}api/service-invoices/${inv.id}/pdf`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-white/15 text-xs font-medium hover:bg-white/[0.05] transition-colors"
+          >
+            <FileText className="w-3.5 h-3.5" /> Invoice PDF
+          </a>
+          <a
+            href={`${import.meta.env.BASE_URL}api/service-invoices/${inv.id}/receipt-pdf`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-white/15 text-xs font-medium hover:bg-white/[0.05] transition-colors"
+          >
+            <Printer className="w-3.5 h-3.5" /> Receipt PDF
+          </a>
+          {inv.signedCopyFiledAt ? (
+            <Badge className="bg-primary/15 text-primary border-none rounded-full text-[10px] font-bold uppercase tracking-widest gap-1">
+              <Archive className="w-3 h-3" />
+              Signed copy filed by {inv.signedCopyFiledBy} ·{" "}
+              {format(new Date(inv.signedCopyFiledAt), "MMM d")}
+            </Badge>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={update.isPending}
+              className="rounded-full border-white/15 text-xs gap-1.5"
+              onClick={async () => {
+                await update.mutateAsync({ id: inv.id, data: { signedCopyFiled: true } });
+                invalidate();
+                toast({
+                  title: "Signed copy filed",
+                  description: "Recorded that the customer's signed receipt was collected.",
+                });
+              }}
+            >
+              <Archive className="w-3.5 h-3.5" /> Mark signed copy filed
+            </Button>
+          )}
+          {inv.status === "issued" && isApprover && (
+            <AdjustInvoiceButton inv={inv} onChanged={invalidate} />
+          )}
+        </div>
+
+        {(inv.adjustments ?? []).length > 0 && (
+          <div className="text-xs text-muted-foreground space-y-0.5">
+            {(inv.adjustments ?? []).map((a, i) => (
+              <div key={i}>
+                Adjustment {a.amount >= 0 ? "+" : ""}
+                {money.gyd(a.amount)} — {a.reason} · {a.by} ·{" "}
+                {format(new Date(a.at), "MMM d, HH:mm")}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* Discount approval workflow (FR-SR-08). */
+function DiscountRow({ inv, onChanged }: { inv: ServiceInvoice; onChanged: () => void }) {
+  const { toast } = useToast();
+  const money = useMoney();
+  const isApprover = useIsServiceApprover();
+  const request = useRequestServiceInvoiceDiscount();
+  const decide = useDecideServiceInvoiceDiscount();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+
+  const fail = (e: unknown) => {
+    const msg =
+      (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+      "Request failed.";
+    toast({ title: "Discount", description: msg, variant: "destructive" });
+  };
+
+  if (inv.discountStatus === "none" && inv.status !== "issued") return null;
+
+  return (
+    <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="text-sm">
+        <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1.5 mb-0.5">
+          <BadgePercent className="w-3.5 h-3.5" /> Discount
+        </div>
+        {inv.discountStatus === "none" && (
+          <span className="text-muted-foreground">
+            No discount. Any discount needs Service Manager / Management approval.
+          </span>
+        )}
+        {inv.discountStatus === "pending" && (
+          <span className="text-muted-foreground">
+            {money.gyd(inv.discountRequestedAmount ?? 0)} requested by {inv.discountRequestedBy}
+            {inv.discountRequestedAt && (
+              <> on {format(new Date(inv.discountRequestedAt), "MMM d")}</>
+            )}
+            {inv.discountReason && <> — “{inv.discountReason}”</>} · awaiting approval
+          </span>
+        )}
+        {inv.discountStatus === "approved" && (
+          <span className="text-muted-foreground">
+            {money.gyd(inv.discountTotal)} approved by {inv.discountDecidedBy}
+            {inv.discountDecidedAt && <> on {format(new Date(inv.discountDecidedAt), "MMM d")}</>}
+            {" "}(requested by {inv.discountRequestedBy})
+          </span>
+        )}
+        {inv.discountStatus === "rejected" && (
+          <span className="text-muted-foreground">
+            {money.gyd(inv.discountRequestedAmount ?? 0)} rejected by {inv.discountDecidedBy}
+            {inv.discountDecidedAt && <> on {format(new Date(inv.discountDecidedAt), "MMM d")}</>}
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2">
+        {inv.discountStatus === "pending" && isApprover && (
+          <>
+            <Button
+              size="sm"
+              disabled={decide.isPending}
+              className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs"
+              onClick={async () => {
+                try {
+                  await decide.mutateAsync({ id: inv.id, data: { action: "approve" } });
+                  onChanged();
+                  toast({ title: "Discount approved", description: "Total updated." });
+                } catch (e) {
+                  fail(e);
+                }
+              }}
+            >
+              Approve
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={decide.isPending}
+              className="rounded-full border-white/15 text-xs"
+              onClick={async () => {
+                try {
+                  await decide.mutateAsync({ id: inv.id, data: { action: "reject" } });
+                  onChanged();
+                  toast({ title: "Discount rejected" });
+                } catch (e) {
+                  fail(e);
+                }
+              }}
+            >
+              Reject
+            </Button>
+          </>
+        )}
+        {(inv.discountStatus === "none" || inv.discountStatus === "rejected") &&
+          inv.status === "issued" && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full border-white/15 text-xs gap-1.5"
+              onClick={() => setOpen(true)}
+            >
+              <BadgePercent className="w-3.5 h-3.5" /> Request discount
+            </Button>
+          )}
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request a discount</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              A Service Manager or Management must approve before the discounted total is final.
+            </p>
+            <Input
+              type="number"
+              min={0}
+              placeholder="Discount amount (GYD)"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <Textarea
+              placeholder="Reason (optional)"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={!amount || Number(amount) <= 0 || request.isPending}
+              onClick={async () => {
+                try {
+                  await request.mutateAsync({
+                    id: inv.id,
+                    data: {
+                      amount: Number(amount),
+                      ...(reason.trim() ? { reason: reason.trim() } : {}),
+                    },
+                  });
+                  onChanged();
+                  setOpen(false);
+                  setAmount("");
+                  setReason("");
+                  toast({
+                    title: "Discount requested",
+                    description: "Sent for manager approval.",
+                  });
+                } catch (e) {
+                  fail(e);
+                }
+              }}
+            >
+              {request.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+              Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+/* Post-issue adjustment (FR-SR-09): the documented follow-up path. */
+function AdjustInvoiceButton({ inv, onChanged }: { inv: ServiceInvoice; onChanged: () => void }) {
+  const { toast } = useToast();
+  const adjust = useAdjustServiceInvoice();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        className="rounded-full border-white/15 text-xs gap-1.5"
+        onClick={() => setOpen(true)}
+      >
+        <Plus className="w-3.5 h-3.5" /> Adjustment
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Post-issue adjustment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Issued totals are locked. Adjustments are the only sanctioned change and stay on
+              record — use a negative amount for credits.
+            </p>
+            <Input
+              type="number"
+              placeholder="Amount (GYD, negative for credit)"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <Textarea
+              placeholder="Reason (required)"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={
+                !amount || Number(amount) === 0 || reason.trim().length < 3 || adjust.isPending
+              }
+              onClick={async () => {
+                try {
+                  await adjust.mutateAsync({
+                    id: inv.id,
+                    data: { amount: Number(amount), reason: reason.trim() },
+                  });
+                  onChanged();
+                  setOpen(false);
+                  setAmount("");
+                  setReason("");
+                  toast({ title: "Adjustment recorded", description: "Total updated." });
+                } catch (e: unknown) {
+                  const msg =
+                    (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+                    "Could not record adjustment.";
+                  toast({ title: "Adjustment failed", description: msg, variant: "destructive" });
+                }
+              }}
+            >
+              {adjust.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1.5" />}
+              Record adjustment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

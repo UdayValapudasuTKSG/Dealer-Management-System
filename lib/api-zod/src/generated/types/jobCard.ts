@@ -8,7 +8,9 @@
 import type { ChecklistItem } from './checklistItem';
 import type { ConditionRecord } from './conditionRecord';
 import type { JobCardPayType } from './jobCardPayType';
+import type { JobCardRolloverStatus } from './jobCardRolloverStatus';
 import type { JobCardStatus } from './jobCardStatus';
+import type { JobCardSurchargeStatus } from './jobCardSurchargeStatus';
 
 export interface JobCard {
   id: number;
@@ -38,6 +40,31 @@ export interface JobCard {
   laborRate: number;
   /** @nullable */
   notes?: string | null;
+  rolloverStatus?: JobCardRolloverStatus;
+  /** @nullable */
+  rolloverToDate?: Date | null;
+  /** @nullable */
+  rolloverReason?: string | null;
+  /** @nullable */
+  rolloverRequestedBy?: string | null;
+  /** @nullable */
+  rolloverRequestedAt?: Date | null;
+  /** @nullable */
+  rolloverManagerApprovedBy?: string | null;
+  /** @nullable */
+  rolloverManagerApprovedAt?: Date | null;
+  /** @nullable */
+  rolloverTechApprovedBy?: string | null;
+  /** @nullable */
+  rolloverTechApprovedAt?: Date | null;
+  surchargeStatus?: JobCardSurchargeStatus;
+  surchargeAmount?: number;
+  /** @nullable */
+  surchargeOverKm?: number | null;
+  /** @nullable */
+  surchargeDecidedBy?: string | null;
+  /** @nullable */
+  surchargeDecidedAt?: Date | null;
   /** @nullable */
   startedAt?: Date | null;
   /** @nullable */

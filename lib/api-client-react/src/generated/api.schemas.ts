@@ -3888,6 +3888,25 @@ export const JobCardPayType = {
   rectify: 'rectify',
 } as const;
 
+export type JobCardRolloverStatus = typeof JobCardRolloverStatus[keyof typeof JobCardRolloverStatus];
+
+
+export const JobCardRolloverStatus = {
+  none: 'none',
+  pending: 'pending',
+  approved: 'approved',
+} as const;
+
+export type JobCardSurchargeStatus = typeof JobCardSurchargeStatus[keyof typeof JobCardSurchargeStatus];
+
+
+export const JobCardSurchargeStatus = {
+  none: 'none',
+  suggested: 'suggested',
+  applied: 'applied',
+  waived: 'waived',
+} as const;
+
 export interface JobCard {
   id: number;
   serviceOrderId: number;
@@ -3916,11 +3935,67 @@ export interface JobCard {
   laborRate: number;
   /** @nullable */
   notes?: string | null;
+  rolloverStatus?: JobCardRolloverStatus;
+  /** @nullable */
+  rolloverToDate?: string | null;
+  /** @nullable */
+  rolloverReason?: string | null;
+  /** @nullable */
+  rolloverRequestedBy?: string | null;
+  /** @nullable */
+  rolloverRequestedAt?: string | null;
+  /** @nullable */
+  rolloverManagerApprovedBy?: string | null;
+  /** @nullable */
+  rolloverManagerApprovedAt?: string | null;
+  /** @nullable */
+  rolloverTechApprovedBy?: string | null;
+  /** @nullable */
+  rolloverTechApprovedAt?: string | null;
+  surchargeStatus?: JobCardSurchargeStatus;
+  surchargeAmount?: number;
+  /** @nullable */
+  surchargeOverKm?: number | null;
+  /** @nullable */
+  surchargeDecidedBy?: string | null;
+  /** @nullable */
+  surchargeDecidedAt?: string | null;
   /** @nullable */
   startedAt?: string | null;
   /** @nullable */
   completedAt?: string | null;
   createdAt: string;
+}
+
+export interface JobCardRolloverRequest {
+  toDate: string;
+  reason?: string;
+}
+
+export type JobCardRolloverApprovalAs = typeof JobCardRolloverApprovalAs[keyof typeof JobCardRolloverApprovalAs];
+
+
+export const JobCardRolloverApprovalAs = {
+  manager: 'manager',
+  technician: 'technician',
+} as const;
+
+export interface JobCardRolloverApproval {
+  as: JobCardRolloverApprovalAs;
+}
+
+export type JobCardSurchargeDecisionAction = typeof JobCardSurchargeDecisionAction[keyof typeof JobCardSurchargeDecisionAction];
+
+
+export const JobCardSurchargeDecisionAction = {
+  apply: 'apply',
+  waive: 'waive',
+} as const;
+
+export interface JobCardSurchargeDecision {
+  action: JobCardSurchargeDecisionAction;
+  /** @minimum 0 */
+  amount?: number;
 }
 
 export type JobCardInputPayType = typeof JobCardInputPayType[keyof typeof JobCardInputPayType];
@@ -4026,6 +4101,16 @@ export interface JobCardPartInput {
   kind?: JobCardPartInputKind;
 }
 
+export type ServiceInvoiceDiscountStatus = typeof ServiceInvoiceDiscountStatus[keyof typeof ServiceInvoiceDiscountStatus];
+
+
+export const ServiceInvoiceDiscountStatus = {
+  none: 'none',
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
 export type ServiceInvoiceStatus = typeof ServiceInvoiceStatus[keyof typeof ServiceInvoiceStatus];
 
 
@@ -4034,6 +4119,13 @@ export const ServiceInvoiceStatus = {
   paid: 'paid',
   void: 'void',
 } as const;
+
+export interface InvoiceAdjustmentEntry {
+  amount: number;
+  reason: string;
+  by: string;
+  at: string;
+}
 
 export interface ServiceInvoice {
   id: number;
@@ -4046,9 +4138,31 @@ export interface ServiceInvoice {
   vehicleInfo: string;
   partsTotal: number;
   laborTotal: number;
+  surchargeTotal: number;
+  discountTotal: number;
+  discountStatus: ServiceInvoiceDiscountStatus;
+  /** @nullable */
+  discountRequestedAmount?: number | null;
+  /** @nullable */
+  discountReason?: string | null;
+  /** @nullable */
+  discountRequestedBy?: string | null;
+  /** @nullable */
+  discountRequestedAt?: string | null;
+  /** @nullable */
+  discountDecidedBy?: string | null;
+  /** @nullable */
+  discountDecidedAt?: string | null;
   tax: number;
   total: number;
   status: ServiceInvoiceStatus;
+  /** @nullable */
+  lockedAt?: string | null;
+  adjustments: InvoiceAdjustmentEntry[];
+  /** @nullable */
+  signedCopyFiledBy?: string | null;
+  /** @nullable */
+  signedCopyFiledAt?: string | null;
   createdAt: string;
 }
 
@@ -4063,6 +4177,43 @@ export const ServiceInvoiceUpdateStatus = {
 
 export interface ServiceInvoiceUpdate {
   status?: ServiceInvoiceUpdateStatus;
+  signedCopyFiled?: boolean;
+}
+
+export interface ServiceDiscountRequest {
+  /** @minimum 0.01 */
+  amount: number;
+  reason?: string;
+}
+
+export type ServiceDiscountDecisionAction = typeof ServiceDiscountDecisionAction[keyof typeof ServiceDiscountDecisionAction];
+
+
+export const ServiceDiscountDecisionAction = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+export interface ServiceDiscountDecision {
+  action: ServiceDiscountDecisionAction;
+}
+
+export interface ServiceInvoiceAdjustmentInput {
+  amount: number;
+  /** @minLength 3 */
+  reason: string;
+}
+
+export interface ServiceSettings {
+  serviceIntervalKm: number;
+  lateSurchargeFee: number;
+}
+
+export interface ServiceSettingsUpdate {
+  /** @minimum 100 */
+  serviceIntervalKm?: number;
+  /** @minimum 0 */
+  lateSurchargeFee?: number;
 }
 
 export type CoveragePlanType = typeof CoveragePlanType[keyof typeof CoveragePlanType];

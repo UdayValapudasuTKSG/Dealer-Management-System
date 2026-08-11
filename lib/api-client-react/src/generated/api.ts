@@ -149,6 +149,9 @@ import type {
   JobCardInput,
   JobCardPart,
   JobCardPartInput,
+  JobCardRolloverApproval,
+  JobCardRolloverRequest,
+  JobCardSurchargeDecision,
   JobCardUpdate,
   Lead,
   LeadAdvanceInput,
@@ -235,13 +238,18 @@ import type {
   SendQuoteInput,
   SendQuoteResult,
   SentimentAnalysis,
+  ServiceDiscountDecision,
+  ServiceDiscountRequest,
   ServiceInvoice,
+  ServiceInvoiceAdjustmentInput,
   ServiceInvoiceUpdate,
   ServiceOrder,
   ServiceOrderAdvanceBody,
   ServiceOrderAdvanceUnmet,
   ServiceOrderInput,
   ServiceOrderUpdate,
+  ServiceSettings,
+  ServiceSettingsUpdate,
   StageChecklistConfig,
   StageChecklistInput,
   Supplier,
@@ -8739,6 +8747,222 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getUpdateJobCardMutationOptions(options));
     }
 
+export const getRolloverJobCardUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/rollover`
+}
+
+/**
+ * @summary Request carrying an incomplete job card to another day (dual approval)
+ */
+export const rolloverJobCard = async (id: number,
+    jobCardRolloverRequest: JobCardRolloverRequest, options?: RequestInit): Promise<JobCard> => {
+
+  return customFetch<JobCard>(getRolloverJobCardUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(jobCardRolloverRequest)
+  }
+);}
+
+
+
+
+
+export const getRolloverJobCardMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rolloverJobCard>>, TError,{id: number;data: BodyType<JobCardRolloverRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rolloverJobCard>>, TError,{id: number;data: BodyType<JobCardRolloverRequest>}, TContext> => {
+
+const mutationKey = ['rolloverJobCard'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rolloverJobCard>>, {id: number;data: BodyType<JobCardRolloverRequest>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  rolloverJobCard(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RolloverJobCardMutationResult = NonNullable<Awaited<ReturnType<typeof rolloverJobCard>>>
+    export type RolloverJobCardMutationBody = BodyType<JobCardRolloverRequest>
+    export type RolloverJobCardMutationError = ErrorType<Error>
+
+    /**
+ * @summary Request carrying an incomplete job card to another day (dual approval)
+ */
+export const useRolloverJobCard = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rolloverJobCard>>, TError,{id: number;data: BodyType<JobCardRolloverRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rolloverJobCard>>,
+        TError,
+        {id: number;data: BodyType<JobCardRolloverRequest>},
+        TContext
+      > => {
+      return useMutation(getRolloverJobCardMutationOptions(options));
+    }
+
+export const getApproveJobCardRolloverUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/rollover/approve`
+}
+
+/**
+ * @summary Sign off a pending rollover as Service Manager or assigned Technician
+ */
+export const approveJobCardRollover = async (id: number,
+    jobCardRolloverApproval: JobCardRolloverApproval, options?: RequestInit): Promise<JobCard> => {
+
+  return customFetch<JobCard>(getApproveJobCardRolloverUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(jobCardRolloverApproval)
+  }
+);}
+
+
+
+
+
+export const getApproveJobCardRolloverMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveJobCardRollover>>, TError,{id: number;data: BodyType<JobCardRolloverApproval>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveJobCardRollover>>, TError,{id: number;data: BodyType<JobCardRolloverApproval>}, TContext> => {
+
+const mutationKey = ['approveJobCardRollover'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveJobCardRollover>>, {id: number;data: BodyType<JobCardRolloverApproval>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  approveJobCardRollover(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveJobCardRolloverMutationResult = NonNullable<Awaited<ReturnType<typeof approveJobCardRollover>>>
+    export type ApproveJobCardRolloverMutationBody = BodyType<JobCardRolloverApproval>
+    export type ApproveJobCardRolloverMutationError = ErrorType<Error>
+
+    /**
+ * @summary Sign off a pending rollover as Service Manager or assigned Technician
+ */
+export const useApproveJobCardRollover = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveJobCardRollover>>, TError,{id: number;data: BodyType<JobCardRolloverApproval>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approveJobCardRollover>>,
+        TError,
+        {id: number;data: BodyType<JobCardRolloverApproval>},
+        TContext
+      > => {
+      return useMutation(getApproveJobCardRolloverMutationOptions(options));
+    }
+
+export const getDecideJobCardSurchargeUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/surcharge`
+}
+
+/**
+ * @summary Apply or waive the late-service surcharge on a job card
+ */
+export const decideJobCardSurcharge = async (id: number,
+    jobCardSurchargeDecision: JobCardSurchargeDecision, options?: RequestInit): Promise<JobCard> => {
+
+  return customFetch<JobCard>(getDecideJobCardSurchargeUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(jobCardSurchargeDecision)
+  }
+);}
+
+
+
+
+
+export const getDecideJobCardSurchargeMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideJobCardSurcharge>>, TError,{id: number;data: BodyType<JobCardSurchargeDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideJobCardSurcharge>>, TError,{id: number;data: BodyType<JobCardSurchargeDecision>}, TContext> => {
+
+const mutationKey = ['decideJobCardSurcharge'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideJobCardSurcharge>>, {id: number;data: BodyType<JobCardSurchargeDecision>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  decideJobCardSurcharge(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideJobCardSurchargeMutationResult = NonNullable<Awaited<ReturnType<typeof decideJobCardSurcharge>>>
+    export type DecideJobCardSurchargeMutationBody = BodyType<JobCardSurchargeDecision>
+    export type DecideJobCardSurchargeMutationError = ErrorType<Error>
+
+    /**
+ * @summary Apply or waive the late-service surcharge on a job card
+ */
+export const useDecideJobCardSurcharge = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideJobCardSurcharge>>, TError,{id: number;data: BodyType<JobCardSurchargeDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideJobCardSurcharge>>,
+        TError,
+        {id: number;data: BodyType<JobCardSurchargeDecision>},
+        TContext
+      > => {
+      return useMutation(getDecideJobCardSurchargeMutationOptions(options));
+    }
+
 export const getListJobCardPartsUrl = (id: number,) => {
 
 
@@ -9096,6 +9320,299 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getUpdateServiceInvoiceMutationOptions(options));
     }
+
+export const getRequestServiceInvoiceDiscountUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-invoices/${id}/discount`
+}
+
+/**
+ * @summary Request a discount on a service invoice (needs manager approval)
+ */
+export const requestServiceInvoiceDiscount = async (id: number,
+    serviceDiscountRequest: ServiceDiscountRequest, options?: RequestInit): Promise<ServiceInvoice> => {
+
+  return customFetch<ServiceInvoice>(getRequestServiceInvoiceDiscountUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(serviceDiscountRequest)
+  }
+);}
+
+
+
+
+
+export const getRequestServiceInvoiceDiscountMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestServiceInvoiceDiscount>>, TError,{id: number;data: BodyType<ServiceDiscountRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestServiceInvoiceDiscount>>, TError,{id: number;data: BodyType<ServiceDiscountRequest>}, TContext> => {
+
+const mutationKey = ['requestServiceInvoiceDiscount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestServiceInvoiceDiscount>>, {id: number;data: BodyType<ServiceDiscountRequest>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  requestServiceInvoiceDiscount(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestServiceInvoiceDiscountMutationResult = NonNullable<Awaited<ReturnType<typeof requestServiceInvoiceDiscount>>>
+    export type RequestServiceInvoiceDiscountMutationBody = BodyType<ServiceDiscountRequest>
+    export type RequestServiceInvoiceDiscountMutationError = ErrorType<Error>
+
+    /**
+ * @summary Request a discount on a service invoice (needs manager approval)
+ */
+export const useRequestServiceInvoiceDiscount = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestServiceInvoiceDiscount>>, TError,{id: number;data: BodyType<ServiceDiscountRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestServiceInvoiceDiscount>>,
+        TError,
+        {id: number;data: BodyType<ServiceDiscountRequest>},
+        TContext
+      > => {
+      return useMutation(getRequestServiceInvoiceDiscountMutationOptions(options));
+    }
+
+export const getDecideServiceInvoiceDiscountUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-invoices/${id}/discount/decision`
+}
+
+/**
+ * @summary Approve or reject a pending discount (Service Manager / Management)
+ */
+export const decideServiceInvoiceDiscount = async (id: number,
+    serviceDiscountDecision: ServiceDiscountDecision, options?: RequestInit): Promise<ServiceInvoice> => {
+
+  return customFetch<ServiceInvoice>(getDecideServiceInvoiceDiscountUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(serviceDiscountDecision)
+  }
+);}
+
+
+
+
+
+export const getDecideServiceInvoiceDiscountMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideServiceInvoiceDiscount>>, TError,{id: number;data: BodyType<ServiceDiscountDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideServiceInvoiceDiscount>>, TError,{id: number;data: BodyType<ServiceDiscountDecision>}, TContext> => {
+
+const mutationKey = ['decideServiceInvoiceDiscount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideServiceInvoiceDiscount>>, {id: number;data: BodyType<ServiceDiscountDecision>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  decideServiceInvoiceDiscount(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideServiceInvoiceDiscountMutationResult = NonNullable<Awaited<ReturnType<typeof decideServiceInvoiceDiscount>>>
+    export type DecideServiceInvoiceDiscountMutationBody = BodyType<ServiceDiscountDecision>
+    export type DecideServiceInvoiceDiscountMutationError = ErrorType<Error>
+
+    /**
+ * @summary Approve or reject a pending discount (Service Manager / Management)
+ */
+export const useDecideServiceInvoiceDiscount = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideServiceInvoiceDiscount>>, TError,{id: number;data: BodyType<ServiceDiscountDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideServiceInvoiceDiscount>>,
+        TError,
+        {id: number;data: BodyType<ServiceDiscountDecision>},
+        TContext
+      > => {
+      return useMutation(getDecideServiceInvoiceDiscountMutationOptions(options));
+    }
+
+export const getAdjustServiceInvoiceUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-invoices/${id}/adjust`
+}
+
+/**
+ * @summary Post-issue adjustment — the only way a locked invoice total changes
+ */
+export const adjustServiceInvoice = async (id: number,
+    serviceInvoiceAdjustmentInput: ServiceInvoiceAdjustmentInput, options?: RequestInit): Promise<ServiceInvoice> => {
+
+  return customFetch<ServiceInvoice>(getAdjustServiceInvoiceUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(serviceInvoiceAdjustmentInput)
+  }
+);}
+
+
+
+
+
+export const getAdjustServiceInvoiceMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adjustServiceInvoice>>, TError,{id: number;data: BodyType<ServiceInvoiceAdjustmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adjustServiceInvoice>>, TError,{id: number;data: BodyType<ServiceInvoiceAdjustmentInput>}, TContext> => {
+
+const mutationKey = ['adjustServiceInvoice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adjustServiceInvoice>>, {id: number;data: BodyType<ServiceInvoiceAdjustmentInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  adjustServiceInvoice(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdjustServiceInvoiceMutationResult = NonNullable<Awaited<ReturnType<typeof adjustServiceInvoice>>>
+    export type AdjustServiceInvoiceMutationBody = BodyType<ServiceInvoiceAdjustmentInput>
+    export type AdjustServiceInvoiceMutationError = ErrorType<Error>
+
+    /**
+ * @summary Post-issue adjustment — the only way a locked invoice total changes
+ */
+export const useAdjustServiceInvoice = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adjustServiceInvoice>>, TError,{id: number;data: BodyType<ServiceInvoiceAdjustmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof adjustServiceInvoice>>,
+        TError,
+        {id: number;data: BodyType<ServiceInvoiceAdjustmentInput>},
+        TContext
+      > => {
+      return useMutation(getAdjustServiceInvoiceMutationOptions(options));
+    }
+
+export const getGetServiceReceiptPdfUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-invoices/${id}/receipt-pdf`
+}
+
+/**
+ * @summary Printable checkout receipt PDF referencing the job card
+ */
+export const getServiceReceiptPdf = async (id: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetServiceReceiptPdfUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetServiceReceiptPdfQueryKey = (id: number,) => {
+    return [
+    `/api/service-invoices/${id}/receipt-pdf`
+    ] as const;
+    }
+
+
+export const getGetServiceReceiptPdfQueryOptions = <TData = Awaited<ReturnType<typeof getServiceReceiptPdf>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServiceReceiptPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetServiceReceiptPdfQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getServiceReceiptPdf>>> = ({ signal }) => getServiceReceiptPdf(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getServiceReceiptPdf>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetServiceReceiptPdfQueryResult = NonNullable<Awaited<ReturnType<typeof getServiceReceiptPdf>>>
+export type GetServiceReceiptPdfQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Printable checkout receipt PDF referencing the job card
+ */
+
+export function useGetServiceReceiptPdf<TData = Awaited<ReturnType<typeof getServiceReceiptPdf>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServiceReceiptPdf>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetServiceReceiptPdfQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetServiceInvoicePdfUrl = (id: number,) => {
 
@@ -17501,6 +18018,148 @@ export const useUpdateDealerBranding = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getUpdateDealerBrandingMutationOptions(options));
+    }
+
+export const getGetServiceSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/service-settings`
+}
+
+/**
+ * @summary Dealer service settings (interval km + late surcharge fee)
+ */
+export const getServiceSettings = async ( options?: RequestInit): Promise<ServiceSettings> => {
+
+  return customFetch<ServiceSettings>(getGetServiceSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetServiceSettingsQueryKey = () => {
+    return [
+    `/api/admin/service-settings`
+    ] as const;
+    }
+
+
+export const getGetServiceSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getServiceSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServiceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetServiceSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getServiceSettings>>> = ({ signal }) => getServiceSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getServiceSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetServiceSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getServiceSettings>>>
+export type GetServiceSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Dealer service settings (interval km + late surcharge fee)
+ */
+
+export function useGetServiceSettings<TData = Awaited<ReturnType<typeof getServiceSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServiceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetServiceSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateServiceSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/service-settings`
+}
+
+export const updateServiceSettings = async (serviceSettingsUpdate: ServiceSettingsUpdate, options?: RequestInit): Promise<ServiceSettings> => {
+
+  return customFetch<ServiceSettings>(getUpdateServiceSettingsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(serviceSettingsUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateServiceSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceSettings>>, TError,{data: BodyType<ServiceSettingsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateServiceSettings>>, TError,{data: BodyType<ServiceSettingsUpdate>}, TContext> => {
+
+const mutationKey = ['updateServiceSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateServiceSettings>>, {data: BodyType<ServiceSettingsUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateServiceSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateServiceSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateServiceSettings>>>
+    export type UpdateServiceSettingsMutationBody = BodyType<ServiceSettingsUpdate>
+    export type UpdateServiceSettingsMutationError = ErrorType<unknown>
+
+    export const useUpdateServiceSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceSettings>>, TError,{data: BodyType<ServiceSettingsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateServiceSettings>>,
+        TError,
+        {data: BodyType<ServiceSettingsUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateServiceSettingsMutationOptions(options));
     }
 
 export const getListDealerTaxesUrl = () => {
