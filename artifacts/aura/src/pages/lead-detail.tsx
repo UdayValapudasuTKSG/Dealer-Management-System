@@ -27,7 +27,11 @@ import {
   getListLeadsQueryKey,
   getListDealsQueryKey,
 } from "@workspace/api-client-react";
-import type { Lead, LeadUpdate, Vehicle } from "@workspace/api-client-react";
+import type { Lead, LeadUpdate, Vehicle, Deal } from "@workspace/api-client-react";
+import {
+  DealQuickFinanceDialogs,
+  openInvoicesForDeal,
+} from "@/components/deal-quick-finance";
 import { StageNav, type StageNavStage } from "@/components/lead/stage-nav";
 import { AgentBriefPanel } from "@/components/lead/agent-brief";
 import { ActionChain } from "@/components/lead/lead-cockpit";
@@ -47,6 +51,7 @@ import {
   Compass,
   Facebook,
   FileText,
+  Banknote,
   Instagram,
   Loader2,
   Mail,
@@ -680,6 +685,10 @@ export default function LeadDetail() {
   const canEdit = can("leads", "edit");
   const canDeskDeal = can("deals", "create");
   const canDelete = can("leads", "delete");
+  const canFinance = can("finance", "create");
+  // Quick finance actions against the lead's linked deal (header CTAs).
+  const [invoiceDeal, setInvoiceDeal] = useState<Deal | null>(null);
+  const [paymentDeal, setPaymentDeal] = useState<Deal | null>(null);
 
   const createDeal = useCreateDeal({
     mutation: {
@@ -854,6 +863,20 @@ export default function LeadDetail() {
         (lead.customerId != null && d.customerId === lead.customerId),
     )
     .sort((a, b) => dealRank(b.stage) - dealRank(a.stage))[0];
+
+  // Finance CTAs must NEVER use the customer-fallback heuristic above — an
+  // invoice/payment goes only to a deal explicitly desked for THIS lead.
+  // Among those, prefer the furthest-progressed open deal, newest first.
+  const financeDeal = (allDeals ?? [])
+    .filter(
+      (d) =>
+        d.leadId === lead.id &&
+        (d.stage === "desking" || d.stage === "committed"),
+    )
+    .sort(
+      (a, b) =>
+        dealRank(b.stage) - dealRank(a.stage) || b.id - a.id,
+    )[0];
 
   // Reservation invoice + payment progress for this lead's deals.
   const leadDealIds = new Set(
@@ -1203,6 +1226,34 @@ export default function LeadDetail() {
                 Call
               </Button>
             )}
+            {canFinance && financeDeal && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setInvoiceDeal(financeDeal)}
+                  className="gap-1.5"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  Invoice
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setPaymentDeal(financeDeal)}
+                  disabled={
+                    openInvoicesForDeal(allInvoices, financeDeal.id).length === 0
+                  }
+                  title={
+                    openInvoicesForDeal(allInvoices, financeDeal.id).length === 0
+                      ? "Issue an invoice first — payments are recorded against an open invoice"
+                      : undefined
+                  }
+                  className="gap-1.5"
+                >
+                  <Banknote className="w-3.5 h-3.5" />
+                  Payment
+                </Button>
+              </>
+            )}
             {canEdit && (
               <Button
                 variant="outline"
@@ -1272,6 +1323,18 @@ export default function LeadDetail() {
         leadPhone={lead.phone ?? null}
         open={callOpen}
         onOpenChange={setCallOpen}
+      />
+
+      <DealQuickFinanceDialogs
+        invoiceDeal={invoiceDeal}
+        paymentDeal={paymentDeal}
+        onCloseInvoice={() => setInvoiceDeal(null)}
+        onClosePayment={() => setPaymentDeal(null)}
+        invoices={allInvoices}
+        outstandingBalances={outstandingBalances}
+        onDone={() => {
+          qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
+        }}
       />
 
       {/* Journey rail — single source of stage truth */}
