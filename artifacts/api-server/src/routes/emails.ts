@@ -73,6 +73,40 @@ router.post("/emails/test-send", async (req, res): Promise<void> => {
   res.json(SendTestEmailResponse.parse({ ok: true, error: null }));
 });
 
+// Send a test render of ANY template (using its sample data) to an address.
+router.post(
+  "/emails/templates/:key/test-send",
+  async (req, res): Promise<void> => {
+    const key = String(req.params.key ?? "");
+    if (!isKnownTemplate(key)) {
+      res.status(404).json({ error: "Unknown template" });
+      return;
+    }
+    const parsed = SendTestEmailBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    if (!smtpConfigured()) {
+      res.json(
+        SendTestEmailResponse.parse({
+          ok: false,
+          error:
+            "SMTP is not configured. Add GMAIL_USER and GMAIL_APP_PASSWORD secrets.",
+        }),
+      );
+      return;
+    }
+    await enqueueEmail({
+      template: key,
+      to: parsed.data.to,
+      dealerId: activeDealerId(res),
+      data: TEMPLATE_DEFS[key].sample,
+    });
+    res.json(SendTestEmailResponse.parse({ ok: true, error: null }));
+  },
+);
+
 router.get("/emails/templates", (_req, res): void => {
   const list = EMAIL_TEMPLATES.filter((k) => k !== "smtp_test").map((key) => ({
     key,

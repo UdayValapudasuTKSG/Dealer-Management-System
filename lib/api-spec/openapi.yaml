@@ -5769,6 +5769,35 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/EmailTemplateInfo"
+  /emails/templates/{key}/test-send:
+    post:
+      operationId: sendTemplateTestEmail
+      tags: [emails]
+      summary: Send a test email of a specific template (with sample data) to an address
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestEmailRequest"
+      responses:
+        "200":
+          description: Result of the test send
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestEmailResult"
+        "404":
+          description: Unknown template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /emails/templates/{key}/preview:
     get:
       operationId: previewEmailTemplate

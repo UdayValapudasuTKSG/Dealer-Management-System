@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetEmailSettings,
   useSendTestEmail,
+  useSendTemplateTestEmail,
   useListEmailTemplates,
   usePreviewEmailTemplate,
   useListEmailLogs,
@@ -73,6 +74,32 @@ export default function SettingsEmail() {
       onSuccess: (res) => {
         if (res.ok) {
           toast({ title: "Test email queued", description: "Check the inbox shortly." });
+          qc.invalidateQueries({ queryKey: getListEmailLogsQueryKey() });
+        } else {
+          toast({
+            title: "Cannot send",
+            description: res.error ?? "SMTP not configured.",
+            variant: "destructive",
+          });
+        }
+      },
+      onError: (e) =>
+        toast({
+          title: "Test failed",
+          description: e instanceof Error ? e.message : String(e),
+          variant: "destructive",
+        }),
+    },
+  });
+
+  const templateTest = useSendTemplateTestEmail({
+    mutation: {
+      onSuccess: (res, vars) => {
+        if (res.ok) {
+          toast({
+            title: "Test email queued",
+            description: `"${vars.key}" sent to ${testTo.trim()} with sample data.`,
+          });
           qc.invalidateQueries({ queryKey: getListEmailLogsQueryKey() });
         } else {
           toast({
@@ -176,17 +203,46 @@ export default function SettingsEmail() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {(templates ?? []).map((t) => (
-            <button
+            <div
               key={t.key}
+              role="button"
+              tabIndex={0}
               onClick={() => setPreviewKey(t.key)}
-              className="text-left rounded-xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] p-4 transition-colors group"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") setPreviewKey(t.key);
+              }}
+              className="cursor-pointer text-left rounded-xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] p-4 transition-colors group"
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold">{t.label}</span>
                 <Eye className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary transition-colors" />
               </div>
               <p className="mt-1 text-xs text-muted-foreground">{t.description}</p>
-            </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  templateTest.mutate({
+                    key: t.key,
+                    data: { to: testTo.trim() },
+                  });
+                }}
+                disabled={templateTest.isPending || testTo.trim().length < 3}
+                title={
+                  testTo.trim().length < 3
+                    ? "Enter a recipient in the “Send a test email” box above first"
+                    : `Send a "${t.label}" test to ${testTo.trim()}`
+                }
+                className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+              >
+                {templateTest.isPending &&
+                templateTest.variables?.key === t.key ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Send className="h-3 w-3" />
+                )}
+                Send test
+              </button>
+            </div>
           ))}
         </div>
       </div>

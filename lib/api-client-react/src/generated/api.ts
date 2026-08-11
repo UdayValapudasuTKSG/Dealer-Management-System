@@ -18103,6 +18103,78 @@ export function useListEmailTemplates<TData = Awaited<ReturnType<typeof listEmai
 
 
 
+export const getSendTemplateTestEmailUrl = (key: string,) => {
+
+
+
+
+  return `/api/emails/templates/${key}/test-send`
+}
+
+/**
+ * @summary Send a test email of a specific template (with sample data) to an address
+ */
+export const sendTemplateTestEmail = async (key: string,
+    testEmailRequest: TestEmailRequest, options?: RequestInit): Promise<TestEmailResult> => {
+
+  return customFetch<TestEmailResult>(getSendTemplateTestEmailUrl(key),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(testEmailRequest)
+  }
+);}
+
+
+
+
+
+export const getSendTemplateTestEmailMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendTemplateTestEmail>>, TError,{key: string;data: BodyType<TestEmailRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendTemplateTestEmail>>, TError,{key: string;data: BodyType<TestEmailRequest>}, TContext> => {
+
+const mutationKey = ['sendTemplateTestEmail'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendTemplateTestEmail>>, {key: string;data: BodyType<TestEmailRequest>}> = (props) => {
+          const {key,data} = props ?? {};
+
+          return  sendTemplateTestEmail(key,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendTemplateTestEmailMutationResult = NonNullable<Awaited<ReturnType<typeof sendTemplateTestEmail>>>
+    export type SendTemplateTestEmailMutationBody = BodyType<TestEmailRequest>
+    export type SendTemplateTestEmailMutationError = ErrorType<Error>
+
+    /**
+ * @summary Send a test email of a specific template (with sample data) to an address
+ */
+export const useSendTemplateTestEmail = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendTemplateTestEmail>>, TError,{key: string;data: BodyType<TestEmailRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendTemplateTestEmail>>,
+        TError,
+        {key: string;data: BodyType<TestEmailRequest>},
+        TContext
+      > => {
+      return useMutation(getSendTemplateTestEmailMutationOptions(options));
+    }
+
 export const getPreviewEmailTemplateUrl = (key: string,) => {
 
 

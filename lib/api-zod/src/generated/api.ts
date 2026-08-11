@@ -7902,6 +7902,27 @@ export const ListEmailTemplatesResponse = zod.array(ListEmailTemplatesResponseIt
 
 
 /**
+ * @summary Send a test email of a specific template (with sample data) to an address
+ */
+export const SendTemplateTestEmailParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const sendTemplateTestEmailBodyToMin = 3;
+
+
+
+export const SendTemplateTestEmailBody = zod.object({
+  "to": zod.string().min(sendTemplateTestEmailBodyToMin)
+})
+
+export const SendTemplateTestEmailResponse = zod.object({
+  "ok": zod.boolean(),
+  "error": zod.string().nullish()
+})
+
+
+/**
  * @summary Rendered HTML preview of a template with sample data
  */
 export const PreviewEmailTemplateParams = zod.object({
