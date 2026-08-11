@@ -1,6 +1,7 @@
 import {
   useCreateInvoice,
   useCreatePayment,
+  useListPayments,
   getListDealsQueryKey,
   getListInvoicesQueryKey,
   getListPaymentsQueryKey,
@@ -51,6 +52,107 @@ export function paidForDeal(
       );
       return sum + (o?.paidAmount ?? 0);
     }, 0);
+}
+
+const STATUS_STYLE: Record<string, string> = {
+  paid: "text-emerald-400",
+  partially_paid: "text-amber-400",
+  issued: "text-sky-400",
+  void: "text-muted-foreground line-through",
+};
+
+const METHOD_LABEL: Record<string, string> = {
+  cash: "Cash",
+  card: "Card",
+  bank_transfer: "Bank Transfer",
+  cheque: "Cheque",
+  mobile_money: "Mobile Money",
+  financing: "Financing",
+};
+
+/**
+ * Compact read-only list of a deal's invoices and their payments — shown
+ * wherever the deal is displayed so users don't have to open Finance.
+ */
+export function DealFinanceRecords({
+  dealId,
+  invoices,
+  outstandingBalances,
+}: {
+  dealId: number;
+  invoices: Invoice[] | undefined;
+  outstandingBalances: OutstandingBalance[] | undefined;
+}) {
+  const money = useMoney();
+  const { data: payments } = useListPayments();
+  const dealInvoices = (invoices ?? []).filter((inv) => inv.dealId === dealId);
+  if (dealInvoices.length === 0) {
+    return (
+      <div className="text-sm text-muted-foreground">
+        No invoices issued for this deal yet.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {dealInvoices.map((inv) => {
+        const o = (outstandingBalances ?? []).find(
+          (x) => x.invoiceId === inv.id,
+        );
+        const paid =
+          inv.status === "paid" ? inv.amount : (o?.paidAmount ?? 0);
+        const invPayments = (payments ?? []).filter(
+          (p) => p.invoiceId === inv.id,
+        );
+        return (
+          <div
+            key={inv.id}
+            className="rounded-xl border border-white/10 bg-foreground/[0.03] p-3"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="font-mono text-xs font-semibold">
+                {inv.invoiceNumber}
+                <span className="ml-2 text-[10px] uppercase tracking-widest text-muted-foreground">
+                  {inv.kind === "reservation" ? "Reservation" : "Final"}
+                </span>
+              </div>
+              <div
+                className={`text-[10px] uppercase tracking-widest font-semibold ${
+                  STATUS_STYLE[inv.status] ?? "text-muted-foreground"
+                }`}
+              >
+                {inv.status.replace("_", " ")}
+              </div>
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {money.gyd(inv.amount)}
+              {inv.status !== "void" && (
+                <> · paid {money.gyd(paid)}</>
+              )}
+              {inv.dueDate && <> · due {inv.dueDate.slice(0, 10)}</>}
+            </div>
+            {invPayments.length > 0 && (
+              <ul className="mt-2 space-y-1 border-t border-white/10 pt-2">
+                {invPayments.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center justify-between text-xs"
+                  >
+                    <span className="text-muted-foreground">
+                      {p.createdAt.slice(0, 10)} ·{" "}
+                      {METHOD_LABEL[p.method] ?? p.method}
+                      {p.reference ? ` · ${p.reference}` : ""}
+                    </span>
+                    <span className="font-medium">{money.gyd(p.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 type Props = {

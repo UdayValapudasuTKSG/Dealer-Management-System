@@ -30,6 +30,7 @@ import {
 import type { Lead, LeadUpdate, Vehicle, Deal } from "@workspace/api-client-react";
 import {
   DealQuickFinanceDialogs,
+  DealFinanceRecords,
   openInvoicesForDeal,
 } from "@/components/deal-quick-finance";
 import { StageNav, type StageNavStage } from "@/components/lead/stage-nav";
@@ -1514,6 +1515,19 @@ export default function LeadDetail() {
                       )}
                     </div>
                   </div>
+
+                  {linkedDeal && (
+                    <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
+                      <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-3">
+                        Invoices &amp; Payments — Deal #{linkedDeal.id}
+                      </div>
+                      <DealFinanceRecords
+                        dealId={linkedDeal.id}
+                        invoices={allInvoices}
+                        outstandingBalances={outstandingBalances}
+                      />
+                    </div>
+                  )}
 
                   <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">
                     <div className="flex items-center gap-2 mb-3">
