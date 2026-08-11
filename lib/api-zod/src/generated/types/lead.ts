@@ -63,6 +63,7 @@ export interface Lead {
   title?: string | null;
   isRetailCustomer: boolean;
   quotationSent: boolean;
+  emailOptOut?: boolean;
   reservationFeePaid: boolean;
   /** @nullable */
   reservationComments?: string | null;

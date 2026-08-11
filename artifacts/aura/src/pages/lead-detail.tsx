@@ -1799,6 +1799,27 @@ export default function LeadDetail() {
 
                   <Section title="Sales Progress">
                     <InlineField
+                      label="Email Communication"
+                      canEdit={canEdit}
+                      editor={{
+                        kind: "checkbox",
+                        value: !lead.emailOptOut,
+                      }}
+                      onSave={(v) => patchField({ emailOptOut: !v })}
+                    >
+                      <span
+                        className={
+                          lead.emailOptOut
+                            ? "text-destructive font-medium"
+                            : undefined
+                        }
+                      >
+                        {lead.emailOptOut
+                          ? "Off — no emails will be sent to this customer"
+                          : "On"}
+                      </span>
+                    </InlineField>
+                    <InlineField
                       label="Quotation Sent"
                       canEdit={canEdit}
                       editor={{

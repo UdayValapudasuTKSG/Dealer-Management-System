@@ -2,8 +2,10 @@ import nodemailer from "nodemailer";
 import { and, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
 import {
   db,
+  customersTable,
   dealersTable,
   emailLogsTable,
+  leadsTable,
   notificationsTable,
   receiptsTable,
   tasksTable,
@@ -708,10 +710,76 @@ async function getDealerBrandName(
   }
 }
 
+/**
+ * True when the recipient address belongs to a lead (or a lead's linked
+ * customer) that has email communication switched OFF (`emailOptOut`).
+ * Matching is by recipient address within the dealer, so it catches every
+ * send path (quotes, invoices, delivery, agents, sweeps) without touching
+ * internal staff mail, whose recipients are staff addresses.
+ */
+async function isRecipientEmailOptedOut(
+  dealerId: number | null | undefined,
+  to: string,
+): Promise<boolean> {
+  if (!dealerId || !to) return false;
+  const addr = to.trim().toLowerCase();
+  if (!addr) return false;
+  try {
+    const [row] = await db
+      .select({ id: leadsTable.id })
+      .from(leadsTable)
+      .leftJoin(customersTable, eq(leadsTable.customerId, customersTable.id))
+      .where(
+        and(
+          eq(leadsTable.dealerId, dealerId),
+          eq(leadsTable.emailOptOut, true),
+          isNull(leadsTable.deletedAt),
+          or(
+            sql`lower(${leadsTable.email}) = ${addr}`,
+            sql`lower(${customersTable.email}) = ${addr}`,
+          ),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  } catch (err) {
+    logger.error({ err }, "email opt-out check failed (sending anyway)");
+    return false;
+  }
+}
+
 export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
   const { subject } = renderEmail(opts.template, opts.data ?? {}, {
     name: await getDealerBrandName(opts.dealerId),
   });
+  // Per-lead email kill switch: log the suppression for audit, never send.
+  if (await isRecipientEmailOptedOut(opts.dealerId, opts.to)) {
+    const [suppressed] = await db
+      .insert(emailLogsTable)
+      .values({
+        dealerId: opts.dealerId,
+        customerId: opts.customerId ?? null,
+        leadId: opts.leadId ?? null,
+        recipient: opts.to,
+        subject,
+        template: opts.template,
+        channel: "email",
+        status: "cancelled",
+        payload: opts.data ?? {},
+        // Suffixed so a suppressed event never consumes the real dedupe key:
+        // if email is re-enabled later, a legitimate re-send still goes out.
+        dedupeKey: opts.dedupeKey ? `${opts.dedupeKey}:suppressed` : null,
+        lastError: "suppressed: email communication is off for this lead",
+      })
+      .onConflictDoNothing({ target: emailLogsTable.dedupeKey })
+      .returning();
+    if (suppressed) return suppressed;
+    const [existing] = await db
+      .select()
+      .from(emailLogsTable)
+      .where(eq(emailLogsTable.dedupeKey, opts.dedupeKey!));
+    return existing!;
+  }
   const [row] = await db
     .insert(emailLogsTable)
     .values({
@@ -1076,6 +1144,19 @@ export async function processQueue(): Promise<void> {
       return b;
     };
     for (const item of pending) {
+      // Consent recheck at send time: opt-out may have been enabled after
+      // this row was queued (or between scheduled retries) — never deliver.
+      if (await isRecipientEmailOptedOut(item.dealerId, item.recipient)) {
+        await db
+          .update(emailLogsTable)
+          .set({
+            status: "cancelled",
+            lastError:
+              "suppressed: email communication is off for this lead",
+          })
+          .where(eq(emailLogsTable.id, item.id));
+        continue;
+      }
       await db
         .update(emailLogsTable)
         .set({ status: "sending", attempts: item.attempts + 1 })

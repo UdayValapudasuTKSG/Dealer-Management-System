@@ -94,6 +94,10 @@ export const leadsTable = pgTable("leads", {
   title: text("title"),
   isRetailCustomer: boolean("is_retail_customer").notNull().default(false),
   quotationSent: boolean("quotation_sent").notNull().default(false),
+  // When true, NO customer-facing emails are sent for this lead/deal — the
+  // outbox suppresses any message addressed to the lead's (or its linked
+  // customer's) email address.
+  emailOptOut: boolean("email_opt_out").notNull().default(false),
   reservationFeePaid: boolean("reservation_fee_paid").notNull().default(false),
   reservationComments: text("reservation_comments"),
   financingQualified: boolean("financing_qualified").notNull().default(false),

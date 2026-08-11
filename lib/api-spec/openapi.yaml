@@ -7501,6 +7501,7 @@ components:
         title: { type: ["string", "null"] }
         isRetailCustomer: { type: boolean }
         quotationSent: { type: boolean }
+        emailOptOut: { type: boolean }
         reservationFeePaid: { type: boolean }
         reservationComments: { type: ["string", "null"] }
         financingQualified: { type: boolean }
@@ -7573,6 +7574,7 @@ components:
         title: { type: ["string", "null"] }
         isRetailCustomer: { type: boolean }
         quotationSent: { type: boolean }
+        emailOptOut: { type: boolean }
         reservationFeePaid: { type: boolean }
         reservationComments: { type: ["string", "null"] }
         financingQualified: { type: boolean }
