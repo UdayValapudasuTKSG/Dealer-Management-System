@@ -545,6 +545,67 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       `Your <strong>${d(x, "vehicle", "vehicle")}</strong> is due its <strong>${d(x, "milestone", "scheduled")}</strong> check-in. Reply to this email or message your sales advisor and we'll arrange everything, including pickup.`,
     sample: { vehicle: "2026 Toyota Land Cruiser", milestone: "6-month" },
   },
+
+  // -------------------------------------------------------------------------
+  // FR-COM-01..03 service milestone + management summary templates
+  // -------------------------------------------------------------------------
+  "service.booking.confirmed": {
+    label: "Service Booking Confirmed",
+    description: "Confirms a service booking the moment it is scheduled.",
+    subject: (x) => `Your service is booked — ${d(x, "date", "confirmed")}`,
+    heading: (x) => `You're booked in, ${d(x, "name", "see you soon")}`,
+    body: (x) =>
+      `Your <strong>${d(x, "vehicle", "vehicle")}</strong> is booked for <strong>${d(x, "service", "service")}</strong> on <strong>${d(x, "date", "the scheduled date")}</strong>. Arrive at your convenience that morning — our service reception will have everything ready. Reply to this email if you need to adjust the date.`,
+    cta: () => ({ label: "We'll take it from here" }),
+    sample: {
+      name: "Alex Mensah",
+      vehicle: "2025 BMW X7",
+      service: "maintenance",
+      date: "August 14, 2026",
+    },
+  },
+  "service.started": {
+    label: "Service Work Started",
+    description: "Tells the customer the workshop has begun their job.",
+    subject: (x) => `Work has started on your ${d(x, "vehicle", "vehicle")}`,
+    heading: () => "Your vehicle is in the workshop",
+    body: (x) =>
+      `Our technicians have started the <strong>${d(x, "service", "requested work")}</strong> on your <strong>${d(x, "vehicle", "vehicle")}</strong>. We'll keep you posted at every milestone and let you know the moment it's ready for pickup.`,
+    cta: () => ({ label: "In expert hands" }),
+    sample: { vehicle: "2025 BMW X7", service: "20,000 km service" },
+  },
+  "service.delayed": {
+    label: "Service Delayed / Awaiting Parts",
+    description:
+      "Notifies the customer their job is paused — awaiting parts or carried to another day.",
+    subject: (x) => `An update on your ${d(x, "vehicle", "vehicle")}`,
+    heading: () => "A short pause on your service",
+    body: (x) =>
+      `The <strong>${d(x, "service", "work")}</strong> on your <strong>${d(x, "vehicle", "vehicle")}</strong> is briefly on hold${d(x, "reason", "") ? ` — ${d(x, "reason", "")}` : ""}.${x.newDate ? ` Work is now scheduled to continue on <strong>${x.newDate}</strong>.` : " We'll resume as soon as possible and keep you informed."} Nothing is needed from you — your Service Advisor is on top of it.`,
+    cta: () => ({ label: "We'll keep you posted" }),
+    sample: {
+      vehicle: "2025 BMW X7",
+      service: "brake overhaul",
+      reason: "a required part is on its way",
+      newDate: "August 15, 2026",
+    },
+  },
+  "service.summary.management": {
+    label: "Scheduled Services Summary (Internal)",
+    description:
+      "Recurring management digest of the upcoming days' booked services.",
+    subject: (x) =>
+      `Upcoming services: ${d(x, "count", "0")} booked ${d(x, "window", "in the next days")}`,
+    heading: (x) => `${d(x, "count", "0")} services ${d(x, "window", "coming up")}`,
+    body: (x) =>
+      `Here is the workshop's forward schedule ${d(x, "window", "for the coming days")}:<br/><br/>${d(x, "rows", "No services are currently booked in this window.")}`,
+    cta: () => ({ label: "Plan the workshop load" }),
+    sample: {
+      count: "3",
+      window: "over the next 3 days",
+      rows: "<strong>Aug 12</strong> — 2025 BMW X7, maintenance (Alex Mensah)<br/><strong>Aug 13</strong> — Toyota Hilux, repair (Priya Persaud)<br/><strong>Aug 14</strong> — Audi e-tron GT, inspection (Nana Adjei)",
+    },
+  },
 };
 
 /**

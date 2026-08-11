@@ -4,17 +4,33 @@ import {
   dealerServiceSettingsTable,
   DEFAULT_SERVICE_INTERVAL_KM,
   DEFAULT_LATE_SURCHARGE_FEE,
+  DEFAULT_SERVICE_SUMMARY_CADENCE,
+  SERVICE_SUMMARY_CADENCES,
   type DealerServiceSettings,
+  type ServiceSummaryCadence,
 } from "@workspace/db";
 
 /**
- * Per-dealer service settings (FR-SR-07): service interval (km) and the flat
- * late-service surcharge fee. Reads fall back to defaults without writing;
- * updates upsert the row.
+ * Per-dealer service settings (FR-SR-07 + FR-COM-03): service interval (km),
+ * the flat late-service surcharge fee, and the management scheduled-services
+ * summary cadence. Reads fall back to defaults without writing; updates
+ * upsert the row.
  */
+
+type ServiceSettings = Pick<
+  DealerServiceSettings,
+  "serviceIntervalKm" | "lateSurchargeFee"
+> & { summaryCadence: ServiceSummaryCadence };
+
+function asCadence(value: string | undefined | null): ServiceSummaryCadence {
+  return (SERVICE_SUMMARY_CADENCES as readonly string[]).includes(value ?? "")
+    ? (value as ServiceSummaryCadence)
+    : DEFAULT_SERVICE_SUMMARY_CADENCE;
+}
+
 export async function getServiceSettings(
   dealerId: number,
-): Promise<Pick<DealerServiceSettings, "serviceIntervalKm" | "lateSurchargeFee">> {
+): Promise<ServiceSettings> {
   const [row] = await db
     .select()
     .from(dealerServiceSettingsTable)
@@ -22,17 +38,23 @@ export async function getServiceSettings(
   return {
     serviceIntervalKm: row?.serviceIntervalKm ?? DEFAULT_SERVICE_INTERVAL_KM,
     lateSurchargeFee: row?.lateSurchargeFee ?? DEFAULT_LATE_SURCHARGE_FEE,
+    summaryCadence: asCadence(row?.summaryCadence),
   };
 }
 
 export async function updateServiceSettings(
   dealerId: number,
-  patch: { serviceIntervalKm?: number; lateSurchargeFee?: number },
-): Promise<Pick<DealerServiceSettings, "serviceIntervalKm" | "lateSurchargeFee">> {
+  patch: {
+    serviceIntervalKm?: number;
+    lateSurchargeFee?: number;
+    summaryCadence?: ServiceSummaryCadence;
+  },
+): Promise<ServiceSettings> {
   const current = await getServiceSettings(dealerId);
   const next = {
     serviceIntervalKm: patch.serviceIntervalKm ?? current.serviceIntervalKm,
     lateSurchargeFee: patch.lateSurchargeFee ?? current.lateSurchargeFee,
+    summaryCadence: asCadence(patch.summaryCadence ?? current.summaryCadence),
   };
   await db
     .insert(dealerServiceSettingsTable)

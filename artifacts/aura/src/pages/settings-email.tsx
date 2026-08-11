@@ -12,6 +12,9 @@ import {
   useRetryEmailLog,
   getListEmailLogsQueryKey,
   getGetEmailSettingsQueryKey,
+  useGetServiceSettings,
+  useUpdateServiceSettings,
+  getGetServiceSettingsQueryKey,
 } from "@workspace/api-client-react";
 import { Page } from "@/components/layout/page";
 import { Button } from "@/components/ui/button";
@@ -196,6 +199,8 @@ export default function SettingsEmail() {
         </div>
       </div>
 
+      <ServiceSummaryCadenceCard />
+
       {/* Templates */}
       <div className="space-y-3">
         <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
@@ -357,6 +362,68 @@ export default function SettingsEmail() {
       />
     </Page>
     </>
+  );
+}
+
+const CADENCES = [
+  { value: "daily", label: "Daily", hint: "Every morning, next 3 days" },
+  { value: "weekly", label: "Weekly", hint: "Mondays, next 7 days" },
+  { value: "off", label: "Off", hint: "No summary emails" },
+] as const;
+
+function ServiceSummaryCadenceCard() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data: settings } = useGetServiceSettings();
+  const update = useUpdateServiceSettings({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Summary cadence saved" });
+        qc.invalidateQueries({ queryKey: getGetServiceSettingsQueryKey() });
+      },
+      onError: (e) =>
+        toast({
+          title: "Could not save",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+  const current = settings?.summaryCadence ?? "daily";
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+      <div>
+        <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+          Scheduled services summary
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Emails service management a digest of the upcoming days' booked
+          services.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {CADENCES.map((c) => (
+          <button
+            key={c.value}
+            onClick={() =>
+              c.value !== current &&
+              update.mutate({ data: { summaryCadence: c.value } })
+            }
+            disabled={update.isPending}
+            className={cn(
+              "rounded-xl border px-4 py-2.5 text-left transition-colors disabled:opacity-60",
+              current === c.value
+                ? "border-primary/50 bg-primary/10 text-primary"
+                : "border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06]",
+            )}
+          >
+            <div className="text-sm font-semibold">{c.label}</div>
+            <div className="text-[11px] text-muted-foreground">{c.hint}</div>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

@@ -52,6 +52,11 @@ export const EMAIL_TEMPLATES = [
   "manager.note.advisor",
   "feedback.survey",
   "service.cadence.due",
+  // FR-COM-01..03 service milestone + management summary templates
+  "service.booking.confirmed",
+  "service.started",
+  "service.delayed",
+  "service.summary.management",
 ] as const;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 

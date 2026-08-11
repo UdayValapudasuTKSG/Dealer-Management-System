@@ -8441,7 +8441,8 @@ export const UpdateDealerBrandingResponse = zod.object({
  */
 export const GetServiceSettingsResponse = zod.object({
   "serviceIntervalKm": zod.number(),
-  "lateSurchargeFee": zod.number()
+  "lateSurchargeFee": zod.number(),
+  "summaryCadence": zod.enum(['daily', 'weekly', 'off'])
 })
 
 
@@ -8453,12 +8454,14 @@ export const updateServiceSettingsBodyLateSurchargeFeeMin = 0;
 
 export const UpdateServiceSettingsBody = zod.object({
   "serviceIntervalKm": zod.number().min(updateServiceSettingsBodyServiceIntervalKmMin).optional(),
-  "lateSurchargeFee": zod.number().min(updateServiceSettingsBodyLateSurchargeFeeMin).optional()
+  "lateSurchargeFee": zod.number().min(updateServiceSettingsBodyLateSurchargeFeeMin).optional(),
+  "summaryCadence": zod.enum(['daily', 'weekly', 'off']).optional()
 })
 
 export const UpdateServiceSettingsResponse = zod.object({
   "serviceIntervalKm": zod.number(),
-  "lateSurchargeFee": zod.number()
+  "lateSurchargeFee": zod.number(),
+  "summaryCadence": zod.enum(['daily', 'weekly', 'off'])
 })
 
 

@@ -36,4 +36,5 @@
 - [SLA sweep email storm](sla-sweep-email-storm.md) — imported owned leads all breach the 24h SLA at once; cancelling the queue won't help — pre-seed cancelled dedupe-key rows to suppress.
 - [pg pool crash strands mid-flow work](pg-pool-crash-stranded-work.md) — record exists but side effects missing = check deployment logs for a crash at created_at; pool error listener + catch-up sweep guard this.
 - [RBAC POST→create mapping](rbac-post-create-mapping.md) — POST action endpoints (sign-offs, decisions) 403 for edit-only roles unless the path rule overrides the category to "edit".
+- [Post-merge schema drift](post-merge-schema-drift.md) — validation 500s on dealer create usually mean a merged schema column never reached the dev DB; check err.cause, fix with additive ALTER.
 - [Regression suite fixture users](regression-suite-fixture-users.md) — isolation suites must seed ephemeral single-dealer test users; shared demo account memberships drift and break "non-member → 403" checks.

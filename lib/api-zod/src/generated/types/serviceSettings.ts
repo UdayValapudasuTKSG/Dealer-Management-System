@@ -5,8 +5,10 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ServiceSettingsSummaryCadence } from './serviceSettingsSummaryCadence';
 
 export interface ServiceSettings {
   serviceIntervalKm: number;
   lateSurchargeFee: number;
+  summaryCadence: ServiceSettingsSummaryCadence;
 }

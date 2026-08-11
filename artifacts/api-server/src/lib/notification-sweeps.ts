@@ -1,11 +1,16 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, asc } from "drizzle-orm";
 import {
   db,
   assetsTable,
   customersTable,
+  dealersTable,
   leadsTable,
+  serviceOrdersTable,
   testDrivesTable,
+  usersTable,
 } from "@workspace/db";
+import { getServiceSettings } from "./service-settings";
+import { generalManagers, usersWithPermission } from "./notify-matrix";
 import {
   enqueueEmail,
   enqueueWhatsapp,
@@ -367,6 +372,117 @@ async function sweepServiceCadence(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// FR-COM-03 — management scheduled-services summary. Per-dealer cadence
+// (daily default / weekly / off) from the service settings. Recipients are
+// the dealer's service management (service admin/approve grants, falling
+// back to the GMs). Idempotent via a period-scoped dedupe key, so the
+// 10-minute sweep loop sends at most one digest per period per recipient.
+// ---------------------------------------------------------------------------
+const SUMMARY_LOOKAHEAD_DAYS: Record<"daily" | "weekly", number> = {
+  daily: 3,
+  weekly: 7,
+};
+
+/** Guyana-local YYYY-MM-DD for a Date. */
+function guyanaDate(d: Date): string {
+  return d.toLocaleDateString("en-CA", { timeZone: "America/Guyana" });
+}
+
+async function sweepServiceSummaries(): Promise<void> {
+  const dealers = await db.select({ id: dealersTable.id }).from(dealersTable);
+  const now = new Date();
+  const today = guyanaDate(now);
+  const weekday = now.toLocaleDateString("en-US", {
+    timeZone: "America/Guyana",
+    weekday: "short",
+  });
+
+  for (const dealer of dealers) {
+    try {
+      const { summaryCadence } = await getServiceSettings(dealer.id);
+      if (summaryCadence === "off") continue;
+      // Weekly digests go out on Mondays only.
+      if (summaryCadence === "weekly" && weekday !== "Mon") continue;
+
+      const days = SUMMARY_LOOKAHEAD_DAYS[summaryCadence];
+      const until = guyanaDate(new Date(now.getTime() + days * 24 * HOUR));
+      const periodKey =
+        summaryCadence === "weekly" ? `week:${today}` : `day:${today}`;
+
+      let managers = await usersWithPermission(dealer.id, "service", [
+        "admin",
+        "approve",
+      ]);
+      if (managers.length === 0) managers = await generalManagers(dealer.id);
+      if (managers.length === 0) continue;
+
+      const upcoming = await db
+        .select({
+          scheduledDate: serviceOrdersTable.scheduledDate,
+          vehicleInfo: serviceOrdersTable.vehicleInfo,
+          type: serviceOrdersTable.type,
+          customerName: serviceOrdersTable.customerName,
+          technician: serviceOrdersTable.technician,
+        })
+        .from(serviceOrdersTable)
+        .where(
+          and(
+            eq(serviceOrdersTable.dealerId, dealer.id),
+            inArray(serviceOrdersTable.status, [
+              "open",
+              "acknowledged",
+              "in_progress",
+              "on_hold",
+            ]),
+            gte(serviceOrdersTable.scheduledDate, today),
+            lte(serviceOrdersTable.scheduledDate, until),
+          ),
+        )
+        .orderBy(asc(serviceOrdersTable.scheduledDate))
+        .limit(50);
+
+      const rows = upcoming
+        .map((o) => {
+          const day = new Date(`${o.scheduledDate}T12:00:00`).toLocaleDateString(
+            "en-US",
+            { month: "short", day: "numeric" },
+          );
+          const who = o.customerName ? ` (${o.customerName})` : "";
+          const tech = o.technician ? ` — ${o.technician}` : "";
+          return `<strong>${day}</strong> — ${o.vehicleInfo}, ${o.type}${who}${tech}`;
+        })
+        .join("<br/>");
+
+      const data: TemplateData = {
+        count: String(upcoming.length),
+        window:
+          summaryCadence === "weekly"
+            ? "over the next 7 days"
+            : `over the next ${days} days`,
+        rows,
+      };
+
+      const recipients = await db
+        .select({ id: usersTable.id, email: usersTable.email })
+        .from(usersTable)
+        .where(inArray(usersTable.id, managers));
+      for (const r of recipients) {
+        if (!r.email) continue;
+        await enqueueEmail({
+          template: "service.summary.management",
+          to: r.email,
+          dealerId: dealer.id,
+          data,
+          dedupeKey: `svc:summary:${dealer.id}:${periodKey}:u${r.id}`,
+        });
+      }
+    } catch (err) {
+      logger.error({ err, dealerId: dealer.id }, "service summary sweep failed");
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Assignment catch-up: a lead normally gets an owner synchronously at
 // creation (creator or round robin), but a crash/restart mid-intake can
 // strand it unowned. Re-route any unowned lead older than 5 minutes so no
@@ -408,6 +524,7 @@ export async function runNotificationSweeps(): Promise<void> {
   await sweepLeadSla();
   await sweepTestDriveReminders();
   await sweepServiceCadence();
+  await sweepServiceSummaries();
 }
 
 export function startNotificationSweeps(): void {

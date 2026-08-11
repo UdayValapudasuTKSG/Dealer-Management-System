@@ -400,6 +400,11 @@ export type ServiceInvoice = typeof serviceInvoicesTable.$inferSelect;
 export const DEFAULT_SERVICE_INTERVAL_KM = 5000;
 export const DEFAULT_LATE_SURCHARGE_FEE = 10000;
 
+/** FR-COM-03: management scheduled-services summary cadence options. */
+export const SERVICE_SUMMARY_CADENCES = ["daily", "weekly", "off"] as const;
+export type ServiceSummaryCadence = (typeof SERVICE_SUMMARY_CADENCES)[number];
+export const DEFAULT_SERVICE_SUMMARY_CADENCE: ServiceSummaryCadence = "daily";
+
 export const dealerServiceSettingsTable = pgTable(
   "dealer_service_settings",
   {
@@ -411,6 +416,8 @@ export const dealerServiceSettingsTable = pgTable(
     lateSurchargeFee: doublePrecision("late_surcharge_fee")
       .notNull()
       .default(DEFAULT_LATE_SURCHARGE_FEE),
+    /** FR-COM-03: cadence of the management scheduled-services summary email. */
+    summaryCadence: text("summary_cadence").notNull().default("daily"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

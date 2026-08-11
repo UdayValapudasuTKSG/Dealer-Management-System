@@ -495,24 +495,140 @@ export function onDeliveryCompleted(opts: {
   });
 }
 
-/** Service order completed → "vehicle_ready". */
-export function onServiceOrderCompleted(
+// ---------------------------------------------------------------------------
+// FR-COM-01/02 — service milestone + feedback emails. Every send carries a
+// dedupe key derived from the order id + milestone, so status churn (bouncing
+// in/out of on_hold, repeated PATCHes) can never spam the customer.
+// ---------------------------------------------------------------------------
+
+const serviceDateLabel = (value: string | Date | null | undefined): string => {
+  if (!value) return "";
+  const iso = value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
+  const parsed = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? iso : longDate(parsed);
+};
+
+/** Service order created → booking confirmation. */
+export function onServiceOrderBooked(order: ServiceOrder): void {
+  fire("service_booking_confirmed", async () => {
+    const c = await customerEmail(order.dealerId, order.customerId);
+    if (!c.email) return;
+    await enqueueEmail({
+      dealerId: order.dealerId,
+      template: "service.booking.confirmed",
+      to: c.email,
+      customerId: order.customerId,
+      dedupeKey: `svc:${order.id}:booked`,
+      data: {
+        ...(c.name ? { name: c.name } : {}),
+        vehicle: order.vehicleInfo,
+        service: order.type,
+        date: serviceDateLabel(order.scheduledDate),
+      },
+    });
+  });
+}
+
+/**
+ * Service order status transitions → customer milestone emails:
+ * in_progress = work started, on_hold = paused/awaiting parts,
+ * resolved = ready for pickup, closed = feedback request.
+ */
+export function onServiceOrderStatusChanged(
   before: ServiceOrder,
   after: ServiceOrder,
 ): void {
-  if (after.status !== "completed" || before.status === "completed") return;
-  fire("service_order_completed", async () => {
+  if (before.status === after.status) return;
+  fire("service_order_status_changed", async () => {
     const c = await customerEmail(after.dealerId, after.customerId);
     if (!c.email) return;
-    await send({
-      dealerId: after.dealerId,
-      template: "vehicle_ready",
+    const base: TemplateData = {
+      ...(c.name ? { name: c.name } : {}),
+      vehicle: after.vehicleInfo,
+      service: after.type,
+    };
+    switch (after.status) {
+      case "in_progress":
+        // Re-entering in_progress after on_hold dedupes to the first send.
+        await enqueueEmail({
+          dealerId: after.dealerId,
+          template: "service.started",
+          to: c.email,
+          customerId: after.customerId,
+          dedupeKey: `svc:${after.id}:started`,
+          data: base,
+        });
+        break;
+      case "on_hold":
+        await enqueueEmail({
+          dealerId: after.dealerId,
+          template: "service.delayed",
+          to: c.email,
+          customerId: after.customerId,
+          dedupeKey: `svc:${after.id}:delayed`,
+          data: { ...base, reason: "we're waiting on a part or workshop slot" },
+        });
+        break;
+      case "resolved":
+        await enqueueEmail({
+          dealerId: after.dealerId,
+          template: "vehicle_ready",
+          to: c.email,
+          customerId: after.customerId,
+          dedupeKey: `svc:${after.id}:ready`,
+          data: base,
+        });
+        break;
+      case "closed":
+        // FR-COM-02: post-service feedback request. The dedupe key matches
+        // notifyFeedbackSurvey's email leg exactly (`csat:{entityType}:{id}:email`),
+        // so if any other code path also fires a feedback survey for this
+        // service order, the customer still receives at most one email.
+        await enqueueEmail({
+          dealerId: after.dealerId,
+          template: "feedback.survey",
+          to: c.email,
+          customerId: after.customerId,
+          dedupeKey: `csat:service_order:${after.id}:email`,
+          data: {
+            ...(c.name ? { name: c.name } : {}),
+            context: `your recent ${after.type} service on the ${after.vehicleInfo}`,
+          },
+        });
+        break;
+    }
+  });
+}
+
+/**
+ * Job-card rollover fully signed off → tell the customer their job carries
+ * over to another day. Deduped per card + target date.
+ */
+export function onJobCardRolloverApproved(opts: {
+  dealerId: number;
+  jobCardId: number;
+  serviceOrderId: number;
+  customerId: number | null;
+  vehicleInfo: string;
+  serviceType: string;
+  toDate: string | null;
+  reason?: string | null;
+}): void {
+  fire("service_rollover_approved", async () => {
+    const c = await customerEmail(opts.dealerId, opts.customerId);
+    if (!c.email) return;
+    await enqueueEmail({
+      dealerId: opts.dealerId,
+      template: "service.delayed",
       to: c.email,
-      customerId: after.customerId,
+      customerId: opts.customerId,
+      dedupeKey: `svc:${opts.serviceOrderId}:delayed:rollover:${opts.jobCardId}:${opts.toDate ?? "tbd"}`,
       data: {
         ...(c.name ? { name: c.name } : {}),
-        vehicle: after.vehicleInfo,
-        service: after.type,
+        vehicle: opts.vehicleInfo,
+        service: opts.serviceType,
+        reason: opts.reason?.trim() || "the work is carrying over to another day",
+        ...(opts.toDate ? { newDate: serviceDateLabel(opts.toDate) } : {}),
       },
     });
   });

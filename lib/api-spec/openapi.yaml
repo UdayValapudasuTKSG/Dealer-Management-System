@@ -9425,15 +9425,17 @@ components:
         reason: { type: string, minLength: 3 }
     ServiceSettings:
       type: object
-      required: [serviceIntervalKm, lateSurchargeFee]
+      required: [serviceIntervalKm, lateSurchargeFee, summaryCadence]
       properties:
         serviceIntervalKm: { type: integer }
         lateSurchargeFee: { type: number }
+        summaryCadence: { type: string, enum: [daily, weekly, "off"] }
     ServiceSettingsUpdate:
       type: object
       properties:
         serviceIntervalKm: { type: integer, minimum: 100 }
         lateSurchargeFee: { type: number, minimum: 0 }
+        summaryCadence: { type: string, enum: [daily, weekly, "off"] }
 
     CoveragePlan:
       type: object

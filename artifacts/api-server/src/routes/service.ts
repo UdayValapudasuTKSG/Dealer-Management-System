@@ -93,7 +93,11 @@ import {
   CreateJobCardCreditNoteResponse,
 } from "@workspace/api-zod";
 import { checkLowStockCrossing } from "./parts";
-import { onServiceOrderCompleted } from "../lib/email-triggers";
+import {
+  onServiceOrderBooked,
+  onServiceOrderStatusChanged,
+  onJobCardRolloverApproved,
+} from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { activeDealerId } from "../middlewares/rbac";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
@@ -217,23 +221,8 @@ router.post("/service-orders", async (req, res): Promise<void> => {
     })
     .returning();
 
-  // Best-effort booking confirmation / reminder email
-  if (order && order.customerId != null) {
-    const { email } = await customerEmail(order.customerId, order.dealerId);
-    if (email) {
-      void enqueueEmail({
-        template: "service_reminder",
-        to: email,
-        dealerId: order.dealerId,
-        customerId: order.customerId,
-        data: {
-          vehicle: order.vehicleInfo,
-          service: order.type,
-          date: order.scheduledDate,
-        },
-      });
-    }
-  }
+  // FR-COM-01: branded booking confirmation (deduped per order).
+  if (order && order.customerId != null) onServiceOrderBooked(order);
 
   res.status(201).json(CreateServiceOrderResponse.parse(order));
 });
@@ -295,7 +284,7 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  if (before) onServiceOrderCompleted(before, order);
+  if (before) onServiceOrderStatusChanged(before, order);
 
   res.json(UpdateServiceOrderResponse.parse(order));
 });
@@ -486,7 +475,7 @@ router.post("/service-orders/:id/advance", async (req, res): Promise<void> => {
     )
     .returning();
 
-  if (updated && before) onServiceOrderCompleted(before, updated);
+  if (updated && before) onServiceOrderStatusChanged(before, updated);
 
   // Closing the case writes the pickup into the customer's service history.
   if (updated && target === "closed" && updated.customerId != null) {
@@ -945,6 +934,30 @@ router.post(
             ),
           )
           .returning();
+        if (finalized) {
+          // FR-COM-01: tell the customer their job carries to another day.
+          const [parent] = await tx
+            .select()
+            .from(serviceOrdersTable)
+            .where(
+              and(
+                eq(serviceOrdersTable.id, finalized.serviceOrderId),
+                eq(serviceOrdersTable.dealerId, dealerId),
+              ),
+            );
+          if (parent) {
+            onJobCardRolloverApproved({
+              dealerId,
+              jobCardId: finalized.id,
+              serviceOrderId: parent.id,
+              customerId: parent.customerId,
+              vehicleInfo: parent.vehicleInfo,
+              serviceType: parent.type,
+              toDate: finalized.rolloverToDate,
+              reason: finalized.rolloverReason,
+            });
+          }
+        }
         return finalized ?? signed;
       }
       return signed;

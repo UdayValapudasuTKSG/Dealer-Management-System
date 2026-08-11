@@ -4204,16 +4204,36 @@ export interface ServiceInvoiceAdjustmentInput {
   reason: string;
 }
 
+export type ServiceSettingsSummaryCadence = typeof ServiceSettingsSummaryCadence[keyof typeof ServiceSettingsSummaryCadence];
+
+
+export const ServiceSettingsSummaryCadence = {
+  daily: 'daily',
+  weekly: 'weekly',
+  off: 'off',
+} as const;
+
 export interface ServiceSettings {
   serviceIntervalKm: number;
   lateSurchargeFee: number;
+  summaryCadence: ServiceSettingsSummaryCadence;
 }
+
+export type ServiceSettingsUpdateSummaryCadence = typeof ServiceSettingsUpdateSummaryCadence[keyof typeof ServiceSettingsUpdateSummaryCadence];
+
+
+export const ServiceSettingsUpdateSummaryCadence = {
+  daily: 'daily',
+  weekly: 'weekly',
+  off: 'off',
+} as const;
 
 export interface ServiceSettingsUpdate {
   /** @minimum 100 */
   serviceIntervalKm?: number;
   /** @minimum 0 */
   lateSurchargeFee?: number;
+  summaryCadence?: ServiceSettingsUpdateSummaryCadence;
 }
 
 export type CoveragePlanType = typeof CoveragePlanType[keyof typeof CoveragePlanType];
