@@ -66,6 +66,11 @@ export const dealersTable = pgTable("dealers", {
   usdExchangeRate: doublePrecision("usd_exchange_rate")
     .notNull()
     .default(1),
+  // Parts pricing: cost-plus markup percentage applied when a bulk import
+  // (or costing tool) derives a sell price from unit cost.
+  partsMarkupPercent: doublePrecision("parts_markup_percent")
+    .notNull()
+    .default(25),
   // Meta (Facebook/Instagram) page id that routes Lead Ads webhook events to
   // this dealer. Unmapped page ids are rejected (fail closed, no lead write).
   metaPageId: text("meta_page_id"),

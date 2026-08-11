@@ -4427,6 +4427,160 @@ export interface PartPurchaseReceiveBody {
   qtyReceived: number;
 }
 
+export interface PartImportError {
+  /** File row number (1-based, including header) */
+  row: number;
+  /**
+     * Offending field, when attributable
+     * @nullable
+     */
+  field?: string | null;
+  message: string;
+}
+
+export interface PartImportResult {
+  /** Data rows found in the file */
+  total: number;
+  /** New parts created */
+  inserted: number;
+  /** Existing parts updated (upsert by dealer + part number) */
+  updated: number;
+  /** Rows not applied (validation errors, duplicates, row cap) */
+  skipped: number;
+  errors: PartImportError[];
+}
+
+export interface PartsSettings {
+  /** Cost-plus markup % used to derive sell prices on import */
+  markupPercent: number;
+}
+
+export interface PartsSettingsUpdate {
+  /**
+     * @minimum 0
+     * @maximum 500
+     */
+  markupPercent: number;
+}
+
+export interface PurchaseOrderLine {
+  id: number;
+  purchaseOrderId: number;
+  partId: number;
+  partName: string;
+  quantity: number;
+  qtyReceived: number;
+  unitCost: number;
+  /**
+     * Originating job card (backorder link)
+     * @nullable
+     */
+  jobCardId?: number | null;
+  createdAt: string;
+}
+
+export type PurchaseOrderStatus = typeof PurchaseOrderStatus[keyof typeof PurchaseOrderStatus];
+
+
+export const PurchaseOrderStatus = {
+  draft: 'draft',
+  ordered: 'ordered',
+  partially_received: 'partially_received',
+  received: 'received',
+  cancelled: 'cancelled',
+} as const;
+
+export interface PurchaseOrder {
+  id: number;
+  /** @nullable */
+  supplierId?: number | null;
+  status: PurchaseOrderStatus;
+  /** @nullable */
+  expectedDate?: string | null;
+  /** @nullable */
+  reference?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  lines: PurchaseOrderLine[];
+}
+
+export interface PurchaseOrderLineInput {
+  partId: number;
+  /** @minimum 1 */
+  quantity: number;
+  /** @minimum 0 */
+  unitCost?: number;
+  jobCardId?: number;
+}
+
+export type PurchaseOrderInputStatus = typeof PurchaseOrderInputStatus[keyof typeof PurchaseOrderInputStatus];
+
+
+export const PurchaseOrderInputStatus = {
+  draft: 'draft',
+  ordered: 'ordered',
+} as const;
+
+export interface PurchaseOrderInput {
+  supplierId?: number;
+  status?: PurchaseOrderInputStatus;
+  expectedDate?: string;
+  reference?: string;
+  notes?: string;
+  /** @minItems 1 */
+  lines: PurchaseOrderLineInput[];
+}
+
+export type PurchaseOrderUpdateStatus = typeof PurchaseOrderUpdateStatus[keyof typeof PurchaseOrderUpdateStatus];
+
+
+export const PurchaseOrderUpdateStatus = {
+  ordered: 'ordered',
+  cancelled: 'cancelled',
+} as const;
+
+export interface PurchaseOrderUpdate {
+  status?: PurchaseOrderUpdateStatus;
+  expectedDate?: string;
+  notes?: string;
+}
+
+export type PurchaseOrderReceiveBodyLinesItem = {
+  lineId: number;
+  /** @minimum 1 */
+  qty: number;
+};
+
+export interface PurchaseOrderReceiveBody {
+  /** Per-line receipt quantities; omit to receive everything outstanding */
+  lines?: PurchaseOrderReceiveBodyLinesItem[];
+}
+
+export interface PartCreditNote {
+  id: number;
+  jobCardId: number;
+  jobCardPartId: number;
+  partId: number;
+  partName: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  reason: string;
+  /** @nullable */
+  createdBy?: string | null;
+  createdAt: string;
+}
+
+export interface PartCreditNoteInput {
+  /** The issued part line being credited */
+  jobCardPartId: number;
+  /** @minimum 1 */
+  quantity: number;
+  /** @minLength 3 */
+  reason: string;
+}
+
 export type ServiceOrderAdvanceBodyTargetStatus = typeof ServiceOrderAdvanceBodyTargetStatus[keyof typeof ServiceOrderAdvanceBodyTargetStatus];
 
 

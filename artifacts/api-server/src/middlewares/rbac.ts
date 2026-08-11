@@ -724,6 +724,8 @@ const PATH_MODULES: Record<string, RouteRule> = {
   parts: { module: "parts" },
   suppliers: { module: "parts" },
   "part-purchases": { module: "parts" },
+  "purchase-orders": { module: "parts" },
+  "parts-settings": { module: "parts" },
   gates: {
     module: "approvals",
     category: (req) => {

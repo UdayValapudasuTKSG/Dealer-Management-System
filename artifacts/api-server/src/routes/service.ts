@@ -22,7 +22,9 @@ import {
   dealerUsersTable,
   gatesTable,
   timelineEventsTable,
-  partPurchasesTable,
+  purchaseOrdersTable,
+  purchaseOrderLinesTable,
+  partCreditNotesTable,
 } from "@workspace/db";
 import {
   CreateServiceOrderBody,
@@ -84,7 +86,13 @@ import {
   AdjustServiceInvoiceParams,
   AdjustServiceInvoiceBody,
   AdjustServiceInvoiceResponse,
+  ListJobCardCreditNotesParams,
+  ListJobCardCreditNotesResponse,
+  CreateJobCardCreditNoteParams,
+  CreateJobCardCreditNoteBody,
+  CreateJobCardCreditNoteResponse,
 } from "@workspace/api-zod";
+import { checkLowStockCrossing } from "./parts";
 import { onServiceOrderCompleted } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { activeDealerId } from "../middlewares/rbac";
@@ -1129,15 +1137,25 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
             eq(jobCardsTable.dealerId, card.dealerId),
           ),
         );
-      await tx.insert(partPurchasesTable).values({
+      // Raise a formal PO linked back to the originating job card — receiving
+      // it increments stock, fills this backordered line and releases the card.
+      const [po] = await tx
+        .insert(purchaseOrdersTable)
+        .values({
+          dealerId: card.dealerId,
+          supplierId: currentPart.supplierId,
+          status: "ordered",
+          reference: `Backorder — job card #${card.id}`,
+        })
+        .returning();
+      await tx.insert(purchaseOrderLinesTable).values({
         dealerId: card.dealerId,
+        purchaseOrderId: po.id,
         partId: currentPart.id,
-        supplierId: currentPart.supplierId,
+        partName: currentPart.name,
         quantity: Math.max(shortfall, currentPart.reorderLevel),
-        qtyReceived: 0,
-        status: "ordered",
         unitCost: currentPart.unitCost,
-        reference: `Backorder — job card #${card.id}`,
+        jobCardId: card.id,
       });
     } else {
       const delta =
@@ -1155,7 +1173,144 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
     return inserted;
   });
 
+  // MRQ alert: fire only when this issuance CROSSES the reorder threshold.
+  if (!backordered && kind === "issue") {
+    checkLowStockCrossing(
+      currentPart,
+      currentPart.stock,
+      currentPart.stock - parsed.data.quantity,
+    );
+  }
+
   res.status(201).json(AddJobCardPartResponse.parse(line));
+});
+
+// ---------------------------------------------------------------------------
+// Credit notes (FR-PI-09): returned/unused parts restore stock and reduce the
+// job's parts total — internal adjustment only, no cash refund.
+// ---------------------------------------------------------------------------
+
+router.get("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
+  const params = ListJobCardCreditNotesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(partCreditNotesTable)
+    .where(
+      and(
+        eq(partCreditNotesTable.jobCardId, params.data.id),
+        eq(partCreditNotesTable.dealerId, activeDealerId(res)),
+      ),
+    )
+    .orderBy(desc(partCreditNotesTable.createdAt));
+  res.json(ListJobCardCreditNotesResponse.parse(rows));
+});
+
+router.post("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
+  const params = CreateJobCardCreditNoteParams.safeParse(req.params);
+  const parsed = CreateJobCardCreditNoteBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({
+      error: (params.success ? parsed : params).error?.message ?? "Invalid",
+    });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [card] = await db
+    .select()
+    .from(jobCardsTable)
+    .where(
+      and(
+        eq(jobCardsTable.id, params.data.id),
+        eq(jobCardsTable.dealerId, dealerId),
+      ),
+    );
+  if (!card) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  const [line] = await db
+    .select()
+    .from(jobCardPartsTable)
+    .where(
+      and(
+        eq(jobCardPartsTable.id, parsed.data.jobCardPartId),
+        eq(jobCardPartsTable.jobCardId, card.id),
+        eq(jobCardPartsTable.dealerId, dealerId),
+      ),
+    );
+  if (!line || line.kind !== "issue") {
+    res.status(404).json({ error: "Issued part line not found on this job card" });
+    return;
+  }
+  if (line.backordered) {
+    res.status(422).json({
+      error: "This line is still backordered — nothing was issued to credit",
+    });
+    return;
+  }
+  const [{ credited }] = await db
+    .select({
+      credited: sql<number>`coalesce(sum(${partCreditNotesTable.quantity}), 0)::int`,
+    })
+    .from(partCreditNotesTable)
+    .where(
+      and(
+        eq(partCreditNotesTable.jobCardPartId, line.id),
+        eq(partCreditNotesTable.dealerId, dealerId),
+      ),
+    );
+  const remaining = line.quantity - credited;
+  if (parsed.data.quantity > remaining) {
+    res.status(422).json({
+      error: `Only ${remaining} unit(s) of ${line.partName} left to credit on this line`,
+    });
+    return;
+  }
+
+  const note = await db.transaction(async (tx) => {
+    const [inserted] = await tx
+      .insert(partCreditNotesTable)
+      .values({
+        dealerId,
+        jobCardId: card.id,
+        jobCardPartId: line.id,
+        partId: line.partId,
+        partName: line.partName,
+        quantity: parsed.data.quantity,
+        unitPrice: line.unitPrice,
+        amount:
+          Math.round(line.unitPrice * parsed.data.quantity * 100) / 100,
+        reason: parsed.data.reason,
+        createdBy: res.locals.user?.name ?? null,
+      })
+      .returning();
+    // The paired return line restores stock and is what reduces the job's
+    // parts total (and any invoice issued later) — it also shows in history.
+    await tx.insert(jobCardPartsTable).values({
+      dealerId,
+      jobCardId: card.id,
+      partId: line.partId,
+      partName: line.partName,
+      kind: "return",
+      quantity: parsed.data.quantity,
+      unitPrice: line.unitPrice,
+      unitCost: line.unitCost,
+      backordered: false,
+    });
+    await tx
+      .update(partsTable)
+      .set({ stock: sql`${partsTable.stock} + ${parsed.data.quantity}` })
+      .where(
+        and(eq(partsTable.id, line.partId), eq(partsTable.dealerId, dealerId)),
+      );
+    return inserted;
+  });
+
+  res.status(201).json(CreateJobCardCreditNoteResponse.parse(note));
 });
 
 // ---------------------------------------------------------------------------

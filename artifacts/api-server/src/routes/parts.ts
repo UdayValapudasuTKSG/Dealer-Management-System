@@ -1,4 +1,6 @@
 import { Router, type IRouter } from "express";
+import multer from "multer";
+import ExcelJS from "exceljs";
 import { activeDealerId } from "../middlewares/rbac";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import {
@@ -6,6 +8,10 @@ import {
   partsTable,
   suppliersTable,
   partPurchasesTable,
+  purchaseOrdersTable,
+  purchaseOrderLinesTable,
+  dealersTable,
+  type Part,
 } from "@workspace/db";
 import {
   ListPartsQueryParams,
@@ -24,11 +30,112 @@ import {
   ReceivePartPurchaseParams,
   ReceivePartPurchaseBody,
   ReceivePartPurchaseResponse,
+  ImportPartsResponse,
+  GetPartsSettingsResponse,
+  UpdatePartsSettingsBody,
+  UpdatePartsSettingsResponse,
+  ListPurchaseOrdersResponse,
+  CreatePurchaseOrderBody,
+  CreatePurchaseOrderResponse,
+  UpdatePurchaseOrderParams,
+  UpdatePurchaseOrderBody,
+  UpdatePurchaseOrderResponse,
+  ReceivePurchaseOrderParams,
+  ReceivePurchaseOrderBody,
+  ReceivePurchaseOrderResponse,
 } from "@workspace/api-zod";
 import { jobCardPartsTable, jobCardsTable } from "@workspace/db";
 import { inArray } from "drizzle-orm";
+import { notifyPartLowStock } from "../lib/notify-triggers";
 
 const router: IRouter = Router();
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Fill backordered job-card lines for a part oldest-first while stock lasts
+ * (decrementing stock per fill) and flip touched on_hold job cards back to
+ * in_progress once none of their lines wait. Returns the units left over.
+ */
+export async function releaseBackorders(
+  tx: Tx,
+  dealerId: number,
+  partId: number,
+  available: number,
+): Promise<number> {
+  const waiting = await tx
+    .select()
+    .from(jobCardPartsTable)
+    .where(
+      and(
+        eq(jobCardPartsTable.dealerId, dealerId),
+        eq(jobCardPartsTable.partId, partId),
+        eq(jobCardPartsTable.backordered, true),
+      ),
+    )
+    .orderBy(jobCardPartsTable.createdAt);
+  const touchedCards = new Set<number>();
+  for (const line of waiting) {
+    if (line.quantity > available) continue;
+    available -= line.quantity;
+    await tx
+      .update(jobCardPartsTable)
+      .set({ backordered: false })
+      .where(eq(jobCardPartsTable.id, line.id));
+    await tx
+      .update(partsTable)
+      .set({ stock: sql`${partsTable.stock} - ${line.quantity}` })
+      .where(
+        and(eq(partsTable.id, partId), eq(partsTable.dealerId, dealerId)),
+      );
+    touchedCards.add(line.jobCardId);
+  }
+  if (touchedCards.size > 0) {
+    const stillWaiting = await tx
+      .select({ jobCardId: jobCardPartsTable.jobCardId })
+      .from(jobCardPartsTable)
+      .where(
+        and(
+          eq(jobCardPartsTable.dealerId, dealerId),
+          inArray(jobCardPartsTable.jobCardId, [...touchedCards]),
+          eq(jobCardPartsTable.backordered, true),
+        ),
+      );
+    const blocked = new Set(stillWaiting.map((r) => r.jobCardId));
+    const releasable = [...touchedCards].filter((id) => !blocked.has(id));
+    if (releasable.length > 0) {
+      await tx
+        .update(jobCardsTable)
+        .set({ status: "in_progress" })
+        .where(
+          and(
+            eq(jobCardsTable.dealerId, dealerId),
+            inArray(jobCardsTable.id, releasable),
+            eq(jobCardsTable.status, "on_hold"),
+          ),
+        );
+    }
+  }
+  return available;
+}
+
+/** Fire the MRQ alert only when stock CROSSES to at-or-below the reorder level. */
+export function checkLowStockCrossing(
+  part: Pick<Part, "id" | "dealerId" | "sku" | "name" | "reorderLevel">,
+  prevStock: number,
+  newStock: number,
+): void {
+  if (prevStock > part.reorderLevel && newStock <= part.reorderLevel) {
+    notifyPartLowStock({
+      id: part.id,
+      dealerId: part.dealerId,
+      sku: part.sku,
+      name: part.name,
+      stock: newStock,
+      reorderLevel: part.reorderLevel,
+    });
+  }
+}
 
 router.get("/parts", async (req, res): Promise<void> => {
   const query = ListPartsQueryParams.safeParse(req.query);
@@ -76,20 +183,26 @@ router.patch("/parts/:id", async (req, res): Promise<void> => {
     });
     return;
   }
+  const dealerId = activeDealerId(res);
+  const [before] = await db
+    .select({ stock: partsTable.stock, reorderLevel: partsTable.reorderLevel })
+    .from(partsTable)
+    .where(
+      and(eq(partsTable.id, params.data.id), eq(partsTable.dealerId, dealerId)),
+    );
   const [part] = await db
     .update(partsTable)
     .set(parsed.data)
     .where(
-      and(
-        eq(partsTable.id, params.data.id),
-        eq(partsTable.dealerId, activeDealerId(res)),
-      ),
+      and(eq(partsTable.id, params.data.id), eq(partsTable.dealerId, dealerId)),
     )
     .returning();
   if (!part) {
     res.status(404).json({ error: "Part not found" });
     return;
   }
+  // MRQ alert: a manual stock/reorder adjustment can also cross the line.
+  if (before) checkLowStockCrossing(part, before.stock, part.stock);
   res.json(UpdatePartResponse.parse(part));
 });
 
@@ -260,64 +373,756 @@ router.post("/part-purchases/:id/receive", async (req, res): Promise<void> => {
 
     // Backorder resolution: fill waiting job-card lines oldest-first while
     // stock lasts, and release job cards that no longer wait on any part.
-    let available = onHand + received;
-    const waiting = await tx
-      .select()
-      .from(jobCardPartsTable)
+    const leftover = await releaseBackorders(
+      tx,
+      dealerId,
+      part.id,
+      onHand + received,
+    );
+    return { po, leftover };
+  });
+
+  checkLowStockCrossing(part, part.stock, updated.leftover);
+  res.json(ReceivePartPurchaseResponse.parse(updated.po));
+});
+
+// ---------------------------------------------------------------------------
+// Parts pricing settings (cost-plus markup used by bulk import)
+// ---------------------------------------------------------------------------
+
+router.get("/parts-settings", async (_req, res): Promise<void> => {
+  const [dealer] = await db
+    .select({ markupPercent: dealersTable.partsMarkupPercent })
+    .from(dealersTable)
+    .where(eq(dealersTable.id, activeDealerId(res)));
+  res.json(
+    GetPartsSettingsResponse.parse({
+      markupPercent: dealer?.markupPercent ?? 25,
+    }),
+  );
+});
+
+router.patch("/parts-settings", async (req, res): Promise<void> => {
+  const parsed = UpdatePartsSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [dealer] = await db
+    .update(dealersTable)
+    .set({ partsMarkupPercent: parsed.data.markupPercent })
+    .where(eq(dealersTable.id, activeDealerId(res)))
+    .returning({ markupPercent: dealersTable.partsMarkupPercent });
+  res.json(UpdatePartsSettingsResponse.parse(dealer));
+});
+
+// ---------------------------------------------------------------------------
+// Bulk parts import (FR-PI-01/02): CSV or XLSX master list, upsert by part
+// number, dealer markup auto-fills missing sell prices.
+// ---------------------------------------------------------------------------
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
+function handleUpload(
+  req: Parameters<ReturnType<typeof upload.single>>[0],
+  res: Parameters<ReturnType<typeof upload.single>>[1],
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    upload.single("file")(req, res, (err: unknown) => {
+      if (err) {
+        const status =
+          (err as { code?: string }).code === "LIMIT_FILE_SIZE" ? 413 : 400;
+        res.status(status).json({
+          error:
+            status === 413
+              ? "File too large (max 10 MB)"
+              : "Could not read the uploaded file",
+        });
+        resolve(false);
+        return;
+      }
+      resolve(true);
+    });
+  });
+}
+
+/** Normalized header → canonical field. */
+const PART_HEADER_MAP: Record<string, string> = {
+  partnumber: "sku",
+  partno: "sku",
+  sku: "sku",
+  number: "sku",
+  description: "name",
+  name: "name",
+  partname: "name",
+  category: "category",
+  supplier: "supplier",
+  vendor: "supplier",
+  suppliername: "supplier",
+  cost: "unitCost",
+  unitcost: "unitCost",
+  costprice: "unitCost",
+  price: "unitPrice",
+  sellprice: "unitPrice",
+  unitprice: "unitPrice",
+  sellingprice: "unitPrice",
+  quantity: "stock",
+  qty: "stock",
+  stock: "stock",
+  onhand: "stock",
+  reorderlevel: "reorderLevel",
+  reorder: "reorderLevel",
+  minstock: "reorderLevel",
+  mrq: "reorderLevel",
+  location: "location",
+  bin: "location",
+  binlocation: "location",
+};
+
+const normalizeHeader = (h: string): string =>
+  h.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** Minimal RFC-4180-ish CSV parser (quotes, escaped quotes, CRLF). */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else inQuotes = false;
+      } else cell += ch;
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell);
+      cell = "";
+      rows.push(row);
+      row = [];
+    } else cell += ch;
+  }
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows;
+}
+
+function excelCellText(value: ExcelJS.CellValue): string {
+  if (value == null) return "";
+  if (typeof value === "object") {
+    if ("richText" in value)
+      return value.richText.map((r) => r.text).join("");
+    if ("text" in value) return String(value.text);
+    if ("result" in value) return String(value.result ?? "");
+    if (value instanceof Date) return value.toISOString();
+  }
+  return String(value).trim();
+}
+
+router.post("/parts/import", async (req, res): Promise<void> => {
+  if (!(await handleUpload(req, res))) return;
+  const file = (req as { file?: { buffer: Buffer; originalname: string } })
+    .file;
+  if (!file) {
+    res.status(400).json({ error: "No file uploaded — attach a .csv or .xlsx as `file`" });
+    return;
+  }
+
+  // ---- Parse the file into a grid of strings -----------------------------
+  let grid: string[][];
+  const lower = file.originalname.toLowerCase();
+  if (lower.endsWith(".csv")) {
+    grid = parseCsv(file.buffer.toString("utf-8").replace(/^\uFEFF/, ""));
+  } else {
+    const workbook = new ExcelJS.Workbook();
+    try {
+      await workbook.xlsx.load(file.buffer as unknown as ArrayBuffer);
+    } catch {
+      res.status(400).json({
+        error: "Could not read the file — upload a .csv or Excel .xlsx",
+      });
+      return;
+    }
+    const sheet = workbook.worksheets[0];
+    if (!sheet) {
+      res.status(422).json({ error: "The workbook has no sheets" });
+      return;
+    }
+    grid = [];
+    sheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+      const cells: string[] = [];
+      const count = Math.max(row.cellCount, sheet.columnCount);
+      for (let c = 1; c <= count; c++)
+        cells.push(excelCellText(row.getCell(c).value));
+      grid[rowNumber - 1] = cells;
+    });
+    grid = grid.map((r) => r ?? []);
+  }
+
+  const headerRow = grid[0] ?? [];
+  const fieldByCol = headerRow.map(
+    (h) => PART_HEADER_MAP[normalizeHeader(h)] ?? null,
+  );
+  const mapped = new Set(fieldByCol.filter(Boolean));
+  if (!mapped.has("sku") || !mapped.has("name")) {
+    res.status(422).json({
+      error:
+        "No recognizable part columns — the file needs at least a Part Number and a Description column (download the template)",
+    });
+    return;
+  }
+
+  const dealerId = activeDealerId(res);
+  const [dealer] = await db
+    .select({ markup: dealersTable.partsMarkupPercent })
+    .from(dealersTable)
+    .where(eq(dealersTable.id, dealerId));
+  const markup = dealer?.markup ?? 25;
+
+  type ImportRow = {
+    row: number;
+    sku: string;
+    name: string;
+    category?: string;
+    supplier?: string;
+    unitCost?: number;
+    unitPrice?: number;
+    stock?: number;
+    reorderLevel?: number;
+    location?: string;
+  };
+  const errors: { row: number; field?: string | null; message: string }[] = [];
+  const rows: ImportRow[] = [];
+  const MAX_ROWS = 1000;
+
+  const dataRows = grid.slice(1);
+  let total = 0;
+  for (let i = 0; i < dataRows.length; i++) {
+    const cells = dataRows[i] ?? [];
+    if (cells.every((c) => !c || !String(c).trim())) continue; // blank row
+    const rowNum = i + 2; // 1-based incl. header
+    total++;
+    if (total > MAX_ROWS) {
+      errors.push({ row: rowNum, message: `Row cap of ${MAX_ROWS} exceeded — split the file` });
+      continue;
+    }
+    const raw: Record<string, string> = {};
+    fieldByCol.forEach((field, col) => {
+      if (field) {
+        const v = String(cells[col] ?? "").trim();
+        if (v) raw[field] = v;
+      }
+    });
+    if (!raw.sku) {
+      errors.push({ row: rowNum, field: "sku", message: "Part number is required" });
+      continue;
+    }
+    if (!raw.name) {
+      errors.push({ row: rowNum, field: "name", message: "Description is required" });
+      continue;
+    }
+    const num = (field: string, integer = false): number | undefined => {
+      if (raw[field] == null) return undefined;
+      const n = Number(raw[field].replace(/[$, ]/g, ""));
+      if (!Number.isFinite(n) || n < 0 || (integer && !Number.isInteger(n))) {
+        errors.push({
+          row: rowNum,
+          field,
+          message: `"${raw[field]}" is not a valid ${integer ? "whole " : ""}number`,
+        });
+        return NaN;
+      }
+      return n;
+    };
+    const unitCost = num("unitCost");
+    const unitPrice = num("unitPrice");
+    const stock = num("stock", true);
+    const reorderLevel = num("reorderLevel", true);
+    if ([unitCost, unitPrice, stock, reorderLevel].some((n) => Number.isNaN(n)))
+      continue;
+    rows.push({
+      row: rowNum,
+      sku: raw.sku,
+      name: raw.name,
+      category: raw.category,
+      supplier: raw.supplier,
+      unitCost,
+      unitPrice,
+      stock,
+      reorderLevel,
+      location: raw.location,
+    });
+  }
+
+  // In-file duplicate part numbers: last row wins, earlier ones are skipped.
+  const bySku = new Map<string, ImportRow>();
+  for (const r of rows) {
+    const key = r.sku.toUpperCase();
+    const prev = bySku.get(key);
+    if (prev) {
+      errors.push({
+        row: prev.row,
+        field: "sku",
+        message: `Duplicate part number ${r.sku} — row ${r.row} takes precedence`,
+      });
+    }
+    bySku.set(key, r);
+  }
+
+  // Resolve/create suppliers by name (case-insensitive, dealer-scoped).
+  const supplierIds = new Map<string, number>();
+  for (const s of await db
+    .select({ id: suppliersTable.id, name: suppliersTable.name })
+    .from(suppliersTable)
+    .where(eq(suppliersTable.dealerId, dealerId)))
+    supplierIds.set(s.name.toLowerCase(), s.id);
+  const resolveSupplier = async (name: string): Promise<number> => {
+    const key = name.toLowerCase();
+    const existing = supplierIds.get(key);
+    if (existing) return existing;
+    const [created] = await db
+      .insert(suppliersTable)
+      .values({ dealerId, name })
+      .returning({ id: suppliersTable.id });
+    supplierIds.set(key, created.id);
+    return created.id;
+  };
+
+  let inserted = 0;
+  let updated = 0;
+  for (const r of bySku.values()) {
+    try {
+      const supplierId = r.supplier ? await resolveSupplier(r.supplier) : undefined;
+      // Cost-plus markup: derive the sell price whenever it isn't supplied.
+      const cost = r.unitCost;
+      const price =
+        r.unitPrice ??
+        (cost != null
+          ? Math.round(cost * (1 + markup / 100) * 100) / 100
+          : undefined);
+      const [existing] = await db
+        .select()
+        .from(partsTable)
+        .where(
+          and(
+            eq(partsTable.dealerId, dealerId),
+            sql`upper(${partsTable.sku}) = ${r.sku.toUpperCase()}`,
+          ),
+        );
+      if (existing) {
+        await db
+          .update(partsTable)
+          .set({
+            name: r.name,
+            ...(r.category ? { category: r.category } : {}),
+            ...(supplierId ? { supplierId } : {}),
+            ...(cost != null ? { unitCost: cost } : {}),
+            ...(price != null ? { unitPrice: price } : {}),
+            ...(r.stock != null ? { stock: r.stock } : {}),
+            ...(r.reorderLevel != null ? { reorderLevel: r.reorderLevel } : {}),
+            ...(r.location ? { location: r.location } : {}),
+          })
+          .where(eq(partsTable.id, existing.id));
+        updated++;
+      } else {
+        await db.insert(partsTable).values({
+          dealerId,
+          sku: r.sku,
+          name: r.name,
+          category: r.category ?? "general",
+          supplierId,
+          unitCost: cost ?? 0,
+          unitPrice: price ?? 0,
+          stock: r.stock ?? 0,
+          reorderLevel: r.reorderLevel ?? 5,
+          location: r.location,
+        });
+        inserted++;
+      }
+    } catch (err) {
+      errors.push({
+        row: r.row,
+        field: "sku",
+        message:
+          (err as { code?: string }).code === "23505"
+            ? `Part number ${r.sku} is already registered to another dealership`
+            : "Row could not be saved",
+      });
+    }
+  }
+
+  res.json(
+    ImportPartsResponse.parse({
+      total,
+      inserted,
+      updated,
+      skipped: total - inserted - updated,
+      errors,
+    }),
+  );
+});
+
+const PART_TEMPLATE_COLUMNS: { header: string; example: string | number }[] = [
+  { header: "Part Number", example: "BRK-PAD-BMW-X5" },
+  { header: "Description", example: "Front brake pad set" },
+  { header: "Category", example: "Brakes" },
+  { header: "Supplier", example: "Bosch Guyana Ltd" },
+  { header: "Unit Cost", example: 8500 },
+  { header: "Sell Price", example: "" },
+  { header: "Quantity", example: 10 },
+  { header: "Reorder Level", example: 3 },
+  { header: "Bin Location", example: "A-04" },
+];
+
+router.get("/parts/import/template", async (_req, res): Promise<void> => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Parts");
+  sheet.addRow(PART_TEMPLATE_COLUMNS.map((c) => c.header));
+  sheet.getRow(1).font = { bold: true };
+  sheet.addRow(PART_TEMPLATE_COLUMNS.map((c) => c.example));
+  sheet.columns.forEach((col, i) => {
+    col.width = Math.max(14, PART_TEMPLATE_COLUMNS[i].header.length + 4);
+  });
+  const notes = workbook.addWorksheet("Notes");
+  notes.addRow(["Parts import notes"]);
+  notes.addRow(["Required columns: Part Number, Description."]);
+  notes.addRow([
+    "Sell Price is optional — when blank it is derived from Unit Cost using your dealership's markup percentage.",
+  ]);
+  notes.addRow(["Existing parts are updated by Part Number; new ones are created."]);
+  notes.addRow(["Unknown suppliers are created automatically by name."]);
+  notes.addRow(["CSV files with the same headers are accepted too."]);
+  const buffer = await workbook.xlsx.writeBuffer();
+  res
+    .setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    .setHeader(
+      "Content-Disposition",
+      'attachment; filename="aura-parts-import-template.xlsx"',
+    )
+    .send(Buffer.from(buffer));
+});
+
+// ---------------------------------------------------------------------------
+// Formal purchase orders (FR-PI-06/07): multi-line POs with a
+// draft → ordered → partially_received → received lifecycle. Receiving
+// increments stock, weighted-averages cost and releases backordered job lines.
+// ---------------------------------------------------------------------------
+
+async function loadPurchaseOrder(dealerId: number, id: number) {
+  const [order] = await db
+    .select()
+    .from(purchaseOrdersTable)
+    .where(
+      and(
+        eq(purchaseOrdersTable.id, id),
+        eq(purchaseOrdersTable.dealerId, dealerId),
+      ),
+    );
+  if (!order) return null;
+  const lines = await db
+    .select()
+    .from(purchaseOrderLinesTable)
+    .where(
+      and(
+        eq(purchaseOrderLinesTable.purchaseOrderId, id),
+        eq(purchaseOrderLinesTable.dealerId, dealerId),
+      ),
+    )
+    .orderBy(purchaseOrderLinesTable.id);
+  return { ...order, lines };
+}
+
+router.get("/purchase-orders", async (_req, res): Promise<void> => {
+  const dealerId = activeDealerId(res);
+  const orders = await db
+    .select()
+    .from(purchaseOrdersTable)
+    .where(eq(purchaseOrdersTable.dealerId, dealerId))
+    .orderBy(desc(purchaseOrdersTable.createdAt));
+  const ids = orders.map((o) => o.id);
+  const lines = ids.length
+    ? await db
+        .select()
+        .from(purchaseOrderLinesTable)
+        .where(
+          and(
+            eq(purchaseOrderLinesTable.dealerId, dealerId),
+            inArray(purchaseOrderLinesTable.purchaseOrderId, ids),
+          ),
+        )
+        .orderBy(purchaseOrderLinesTable.id)
+    : [];
+  const byOrder = new Map<number, typeof lines>();
+  for (const l of lines) {
+    const list = byOrder.get(l.purchaseOrderId) ?? [];
+    list.push(l);
+    byOrder.set(l.purchaseOrderId, list);
+  }
+  res.json(
+    ListPurchaseOrdersResponse.parse(
+      orders.map((o) => ({ ...o, lines: byOrder.get(o.id) ?? [] })),
+    ),
+  );
+});
+
+router.post("/purchase-orders", async (req, res): Promise<void> => {
+  const parsed = CreatePurchaseOrderBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  if (parsed.data.supplierId != null) {
+    const [supplier] = await db
+      .select({ id: suppliersTable.id })
+      .from(suppliersTable)
       .where(
         and(
-          eq(jobCardPartsTable.dealerId, dealerId),
-          eq(jobCardPartsTable.partId, part.id),
-          eq(jobCardPartsTable.backordered, true),
+          eq(suppliersTable.id, parsed.data.supplierId),
+          eq(suppliersTable.dealerId, dealerId),
         ),
-      )
-      .orderBy(jobCardPartsTable.createdAt);
-    const touchedCards = new Set<number>();
-    for (const line of waiting) {
-      if (line.quantity > available) continue;
-      available -= line.quantity;
+      );
+    if (!supplier) {
+      res.status(404).json({ error: "Supplier not found" });
+      return;
+    }
+  }
+  const partIds = [...new Set(parsed.data.lines.map((l) => l.partId))];
+  const parts = await db
+    .select()
+    .from(partsTable)
+    .where(
+      and(eq(partsTable.dealerId, dealerId), inArray(partsTable.id, partIds)),
+    );
+  const partById = new Map(parts.map((p) => [p.id, p]));
+  const missing = partIds.filter((id) => !partById.has(id));
+  if (missing.length > 0) {
+    res.status(404).json({ error: `Part #${missing[0]} not found` });
+    return;
+  }
+  const order = await db.transaction(async (tx) => {
+    const [po] = await tx
+      .insert(purchaseOrdersTable)
+      .values({
+        dealerId,
+        supplierId: parsed.data.supplierId ?? null,
+        status: parsed.data.status ?? "draft",
+        expectedDate:
+          parsed.data.expectedDate instanceof Date
+            ? parsed.data.expectedDate.toISOString().slice(0, 10)
+            : (parsed.data.expectedDate ?? null),
+        reference: parsed.data.reference ?? null,
+        notes: parsed.data.notes ?? null,
+      })
+      .returning();
+    await tx.insert(purchaseOrderLinesTable).values(
+      parsed.data.lines.map((l) => {
+        const part = partById.get(l.partId)!;
+        return {
+          dealerId,
+          purchaseOrderId: po.id,
+          partId: l.partId,
+          partName: part.name,
+          quantity: l.quantity,
+          unitCost: l.unitCost ?? part.unitCost,
+          jobCardId: l.jobCardId ?? null,
+        };
+      }),
+    );
+    return po;
+  });
+  res
+    .status(201)
+    .json(CreatePurchaseOrderResponse.parse(await loadPurchaseOrder(dealerId, order.id)));
+});
+
+router.patch("/purchase-orders/:id", async (req, res): Promise<void> => {
+  const params = UpdatePurchaseOrderParams.safeParse(req.params);
+  const parsed = UpdatePurchaseOrderBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({
+      error: (params.success ? parsed : params).error?.message ?? "Invalid",
+    });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [order] = await db
+    .select()
+    .from(purchaseOrdersTable)
+    .where(
+      and(
+        eq(purchaseOrdersTable.id, params.data.id),
+        eq(purchaseOrdersTable.dealerId, dealerId),
+      ),
+    );
+  if (!order) {
+    res.status(404).json({ error: "Purchase order not found" });
+    return;
+  }
+  if (parsed.data.status === "ordered" && order.status !== "draft") {
+    res.status(422).json({ error: `Only a draft PO can be placed — this one is ${order.status}` });
+    return;
+  }
+  if (
+    parsed.data.status === "cancelled" &&
+    order.status !== "draft" &&
+    order.status !== "ordered"
+  ) {
+    res.status(422).json({
+      error: `A ${order.status} PO cannot be cancelled — goods were already received`,
+    });
+    return;
+  }
+  await db
+    .update(purchaseOrdersTable)
+    .set({
+      ...(parsed.data.status ? { status: parsed.data.status } : {}),
+      ...(parsed.data.expectedDate !== undefined
+        ? {
+            expectedDate:
+              parsed.data.expectedDate instanceof Date
+                ? parsed.data.expectedDate.toISOString().slice(0, 10)
+                : (parsed.data.expectedDate ?? null),
+          }
+        : {}),
+      ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes } : {}),
+    })
+    .where(
+      and(
+        eq(purchaseOrdersTable.id, order.id),
+        eq(purchaseOrdersTable.dealerId, dealerId),
+      ),
+    );
+  res.json(UpdatePurchaseOrderResponse.parse(await loadPurchaseOrder(dealerId, order.id)));
+});
+
+router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
+  const params = ReceivePurchaseOrderParams.safeParse(req.params);
+  const parsed = ReceivePurchaseOrderBody.safeParse(req.body ?? {});
+  if (!params.success || !parsed.success) {
+    res.status(400).json({
+      error: (params.success ? parsed : params).error?.message ?? "Invalid",
+    });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const order = await loadPurchaseOrder(dealerId, params.data.id);
+  if (!order) {
+    res.status(404).json({ error: "Purchase order not found" });
+    return;
+  }
+  if (order.status !== "ordered" && order.status !== "partially_received") {
+    res.status(422).json({
+      error: `PO is ${order.status} — ${order.status === "draft" ? "place the order first" : "nothing left to receive"}`,
+    });
+    return;
+  }
+
+  // Requested receipt per line — default: everything outstanding.
+  const requested = new Map<number, number>();
+  if (parsed.data.lines && parsed.data.lines.length > 0) {
+    for (const l of parsed.data.lines) {
+      const line = order.lines.find((x) => x.id === l.lineId);
+      if (!line) {
+        res.status(404).json({ error: `PO line #${l.lineId} not found on this order` });
+        return;
+      }
+      const outstanding = line.quantity - line.qtyReceived;
+      if (l.qty > outstanding) {
+        res.status(422).json({
+          error: `Over-receipt on ${line.partName}: only ${outstanding} unit(s) outstanding`,
+        });
+        return;
+      }
+      requested.set(line.id, l.qty);
+    }
+  } else {
+    for (const line of order.lines) {
+      const outstanding = line.quantity - line.qtyReceived;
+      if (outstanding > 0) requested.set(line.id, outstanding);
+    }
+  }
+  if (requested.size === 0) {
+    res.status(422).json({ error: "Nothing outstanding to receive on this order" });
+    return;
+  }
+
+  const lowStockChecks: { part: Part; prevStock: number; leftover: number }[] = [];
+  await db.transaction(async (tx) => {
+    for (const line of order.lines) {
+      const qty = requested.get(line.id);
+      if (!qty) continue;
+      const [part] = await tx
+        .select()
+        .from(partsTable)
+        .where(
+          and(eq(partsTable.id, line.partId), eq(partsTable.dealerId, dealerId)),
+        );
+      if (!part) continue;
+      // Weighted-average cost: blend on-hand value with the receipt value.
+      const onHand = Math.max(part.stock, 0);
+      const newCost =
+        line.unitCost > 0 && onHand + qty > 0
+          ? Math.round(
+              ((onHand * part.unitCost + qty * line.unitCost) / (onHand + qty)) *
+                100,
+            ) / 100
+          : part.unitCost;
       await tx
-        .update(jobCardPartsTable)
-        .set({ backordered: false })
-        .where(eq(jobCardPartsTable.id, line.id));
+        .update(purchaseOrderLinesTable)
+        .set({ qtyReceived: line.qtyReceived + qty })
+        .where(eq(purchaseOrderLinesTable.id, line.id));
       await tx
         .update(partsTable)
-        .set({ stock: sql`${partsTable.stock} - ${line.quantity}` })
+        .set({ stock: sql`${partsTable.stock} + ${qty}`, unitCost: newCost })
         .where(
           and(eq(partsTable.id, part.id), eq(partsTable.dealerId, dealerId)),
         );
-      touchedCards.add(line.jobCardId);
+      // Fill backordered job-card lines — this is what links received parts
+      // back to their originating job cards and takes them off hold.
+      const leftover = await releaseBackorders(tx, dealerId, part.id, onHand + qty);
+      lowStockChecks.push({ part, prevStock: part.stock, leftover });
     }
-    if (touchedCards.size > 0) {
-      const stillWaiting = await tx
-        .select({ jobCardId: jobCardPartsTable.jobCardId })
-        .from(jobCardPartsTable)
-        .where(
-          and(
-            eq(jobCardPartsTable.dealerId, dealerId),
-            inArray(jobCardPartsTable.jobCardId, [...touchedCards]),
-            eq(jobCardPartsTable.backordered, true),
-          ),
-        );
-      const blocked = new Set(stillWaiting.map((r) => r.jobCardId));
-      const releasable = [...touchedCards].filter((id) => !blocked.has(id));
-      if (releasable.length > 0) {
-        await tx
-          .update(jobCardsTable)
-          .set({ status: "in_progress" })
-          .where(
-            and(
-              eq(jobCardsTable.dealerId, dealerId),
-              inArray(jobCardsTable.id, releasable),
-              eq(jobCardsTable.status, "on_hold"),
-            ),
-          );
-      }
-    }
-    return po;
+    const fresh = await tx
+      .select()
+      .from(purchaseOrderLinesTable)
+      .where(
+        and(
+          eq(purchaseOrderLinesTable.purchaseOrderId, order.id),
+          eq(purchaseOrderLinesTable.dealerId, dealerId),
+        ),
+      );
+    const complete = fresh.every((l) => l.qtyReceived >= l.quantity);
+    await tx
+      .update(purchaseOrdersTable)
+      .set({ status: complete ? "received" : "partially_received" })
+      .where(
+        and(
+          eq(purchaseOrdersTable.id, order.id),
+          eq(purchaseOrdersTable.dealerId, dealerId),
+        ),
+      );
   });
+  for (const c of lowStockChecks)
+    checkLowStockCrossing(c.part, c.prevStock, c.leftover);
 
-  res.json(ReceivePartPurchaseResponse.parse(updated));
+  res.json(ReceivePurchaseOrderResponse.parse(await loadPurchaseOrder(dealerId, params.data.id)));
 });
 
 export default router;

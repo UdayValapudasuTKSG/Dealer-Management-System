@@ -4932,6 +4932,251 @@ export const UpdatePartResponse = zod.object({
 })
 
 
+/**
+ * @summary Bulk import parts from a CSV or Excel (.xlsx) file — dealer markup derives missing sell prices
+ */
+export const ImportPartsResponse = zod.object({
+  "total": zod.number().describe('Data rows found in the file'),
+  "inserted": zod.number().describe('New parts created'),
+  "updated": zod.number().describe('Existing parts updated (upsert by dealer + part number)'),
+  "skipped": zod.number().describe('Rows not applied (validation errors, duplicates, row cap)'),
+  "errors": zod.array(zod.object({
+  "row": zod.number().describe('File row number (1-based, including header)'),
+  "field": zod.string().nullish().describe('Offending field, when attributable'),
+  "message": zod.string()
+}))
+})
+
+
+/**
+ * @summary Download the parts import Excel template
+ */
+export const DownloadPartImportTemplateResponse = zod.unknown()
+
+
+/**
+ * @summary Parts pricing settings (cost-plus markup percentage)
+ */
+export const GetPartsSettingsResponse = zod.object({
+  "markupPercent": zod.number().describe('Cost-plus markup % used to derive sell prices on import')
+})
+
+
+export const updatePartsSettingsBodyMarkupPercentMin = 0;
+export const updatePartsSettingsBodyMarkupPercentMax = 500;
+
+
+
+export const UpdatePartsSettingsBody = zod.object({
+  "markupPercent": zod.number().min(updatePartsSettingsBodyMarkupPercentMin).max(updatePartsSettingsBodyMarkupPercentMax)
+})
+
+export const UpdatePartsSettingsResponse = zod.object({
+  "markupPercent": zod.number().describe('Cost-plus markup % used to derive sell prices on import')
+})
+
+
+/**
+ * @summary Formal purchase orders with their line items
+ */
+export const ListPurchaseOrdersResponseItem = zod.object({
+  "id": zod.number(),
+  "supplierId": zod.number().nullish(),
+  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
+  "expectedDate": zod.coerce.date().nullish(),
+  "reference": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "purchaseOrderId": zod.number(),
+  "partId": zod.number(),
+  "partName": zod.string(),
+  "quantity": zod.number(),
+  "qtyReceived": zod.number(),
+  "unitCost": zod.number(),
+  "jobCardId": zod.number().nullish().describe('Originating job card (backorder link)'),
+  "createdAt": zod.coerce.date()
+}))
+})
+export const ListPurchaseOrdersResponse = zod.array(ListPurchaseOrdersResponseItem)
+
+
+/**
+ * @summary Raise a formal PO to a supplier (draft or ordered)
+ */
+
+export const createPurchaseOrderBodyLinesItemUnitCostMin = 0;
+
+
+
+
+export const CreatePurchaseOrderBody = zod.object({
+  "supplierId": zod.number().optional(),
+  "status": zod.enum(['draft', 'ordered']).optional(),
+  "expectedDate": zod.coerce.date().optional(),
+  "reference": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "lines": zod.array(zod.object({
+  "partId": zod.number(),
+  "quantity": zod.number().min(1),
+  "unitCost": zod.number().min(createPurchaseOrderBodyLinesItemUnitCostMin).optional(),
+  "jobCardId": zod.number().optional()
+})).min(1)
+})
+
+export const CreatePurchaseOrderResponse = zod.object({
+  "id": zod.number(),
+  "supplierId": zod.number().nullish(),
+  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
+  "expectedDate": zod.coerce.date().nullish(),
+  "reference": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "purchaseOrderId": zod.number(),
+  "partId": zod.number(),
+  "partName": zod.string(),
+  "quantity": zod.number(),
+  "qtyReceived": zod.number(),
+  "unitCost": zod.number(),
+  "jobCardId": zod.number().nullish().describe('Originating job card (backorder link)'),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Update PO status (draft→ordered, cancel) or expected date
+ */
+export const UpdatePurchaseOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdatePurchaseOrderBody = zod.object({
+  "status": zod.enum(['ordered', 'cancelled']).optional(),
+  "expectedDate": zod.coerce.date().optional(),
+  "notes": zod.string().optional()
+})
+
+export const UpdatePurchaseOrderResponse = zod.object({
+  "id": zod.number(),
+  "supplierId": zod.number().nullish(),
+  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
+  "expectedDate": zod.coerce.date().nullish(),
+  "reference": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "purchaseOrderId": zod.number(),
+  "partId": zod.number(),
+  "partName": zod.string(),
+  "quantity": zod.number(),
+  "qtyReceived": zod.number(),
+  "unitCost": zod.number(),
+  "jobCardId": zod.number().nullish().describe('Originating job card (backorder link)'),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Receive goods against an ordered PO (increments stock, releases backordered job-card lines)
+ */
+export const ReceivePurchaseOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const ReceivePurchaseOrderBody = zod.object({
+  "lines": zod.array(zod.object({
+  "lineId": zod.number(),
+  "qty": zod.number().min(1)
+})).optional().describe('Per-line receipt quantities; omit to receive everything outstanding')
+})
+
+export const ReceivePurchaseOrderResponse = zod.object({
+  "id": zod.number(),
+  "supplierId": zod.number().nullish(),
+  "status": zod.enum(['draft', 'ordered', 'partially_received', 'received', 'cancelled']),
+  "expectedDate": zod.coerce.date().nullish(),
+  "reference": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "purchaseOrderId": zod.number(),
+  "partId": zod.number(),
+  "partName": zod.string(),
+  "quantity": zod.number(),
+  "qtyReceived": zod.number(),
+  "unitCost": zod.number(),
+  "jobCardId": zod.number().nullish().describe('Originating job card (backorder link)'),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Credit notes recorded against a job card
+ */
+export const ListJobCardCreditNotesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListJobCardCreditNotesResponseItem = zod.object({
+  "id": zod.number(),
+  "jobCardId": zod.number(),
+  "jobCardPartId": zod.number(),
+  "partId": zod.number(),
+  "partName": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "amount": zod.number(),
+  "reason": zod.string(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListJobCardCreditNotesResponse = zod.array(ListJobCardCreditNotesResponseItem)
+
+
+/**
+ * @summary Credit returned/unused parts on a job card (restores stock, reduces the job's parts total)
+ */
+export const CreateJobCardCreditNoteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const createJobCardCreditNoteBodyReasonMin = 3;
+
+
+
+export const CreateJobCardCreditNoteBody = zod.object({
+  "jobCardPartId": zod.number().describe('The issued part line being credited'),
+  "quantity": zod.number().min(1),
+  "reason": zod.string().min(createJobCardCreditNoteBodyReasonMin)
+})
+
+export const CreateJobCardCreditNoteResponse = zod.object({
+  "id": zod.number(),
+  "jobCardId": zod.number(),
+  "jobCardPartId": zod.number(),
+  "partId": zod.number(),
+  "partName": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "amount": zod.number(),
+  "reason": zod.string(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
 export const ListSuppliersResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),

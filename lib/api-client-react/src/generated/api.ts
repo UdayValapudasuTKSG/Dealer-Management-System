@@ -209,11 +209,16 @@ import type {
   OutreachResult,
   OutstandingBalance,
   Part,
+  PartCreditNote,
+  PartCreditNoteInput,
+  PartImportResult,
   PartInput,
   PartPurchase,
   PartPurchaseInput,
   PartPurchaseReceiveBody,
   PartUpdate,
+  PartsSettings,
+  PartsSettingsUpdate,
   Payment,
   PaymentInput,
   PipelineStage,
@@ -221,6 +226,10 @@ import type {
   PlatformUser,
   PredictiveAnalytics,
   ProvisioningStatus,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderReceiveBody,
+  PurchaseOrderUpdate,
   Quote,
   Receipt,
   ReceiveMetaWebhook200,
@@ -10255,6 +10264,737 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdatePartMutationOptions(options));
+    }
+
+export const getImportPartsUrl = () => {
+
+
+
+
+  return `/api/parts/import`
+}
+
+/**
+ * @summary Bulk import parts from a CSV or Excel (.xlsx) file — dealer markup derives missing sell prices
+ */
+export const importParts = async ( options?: RequestInit): Promise<PartImportResult> => {
+
+  return customFetch<PartImportResult>(getImportPartsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getImportPartsMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,void, TContext> => {
+
+const mutationKey = ['importParts'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importParts>>, void> = () => {
+
+
+          return  importParts(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportPartsMutationResult = NonNullable<Awaited<ReturnType<typeof importParts>>>
+
+    export type ImportPartsMutationError = ErrorType<Error>
+
+    /**
+ * @summary Bulk import parts from a CSV or Excel (.xlsx) file — dealer markup derives missing sell prices
+ */
+export const useImportParts = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importParts>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getImportPartsMutationOptions(options));
+    }
+
+export const getDownloadPartImportTemplateUrl = () => {
+
+
+
+
+  return `/api/parts/import/template`
+}
+
+/**
+ * @summary Download the parts import Excel template
+ */
+export const downloadPartImportTemplate = async ( options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadPartImportTemplateUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadPartImportTemplateQueryKey = () => {
+    return [
+    `/api/parts/import/template`
+    ] as const;
+    }
+
+
+export const getDownloadPartImportTemplateQueryOptions = <TData = Awaited<ReturnType<typeof downloadPartImportTemplate>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadPartImportTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadPartImportTemplateQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadPartImportTemplate>>> = ({ signal }) => downloadPartImportTemplate({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadPartImportTemplate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadPartImportTemplateQueryResult = NonNullable<Awaited<ReturnType<typeof downloadPartImportTemplate>>>
+export type DownloadPartImportTemplateQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Download the parts import Excel template
+ */
+
+export function useDownloadPartImportTemplate<TData = Awaited<ReturnType<typeof downloadPartImportTemplate>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadPartImportTemplate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadPartImportTemplateQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPartsSettingsUrl = () => {
+
+
+
+
+  return `/api/parts-settings`
+}
+
+/**
+ * @summary Parts pricing settings (cost-plus markup percentage)
+ */
+export const getPartsSettings = async ( options?: RequestInit): Promise<PartsSettings> => {
+
+  return customFetch<PartsSettings>(getGetPartsSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPartsSettingsQueryKey = () => {
+    return [
+    `/api/parts-settings`
+    ] as const;
+    }
+
+
+export const getGetPartsSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getPartsSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPartsSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPartsSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPartsSettings>>> = ({ signal }) => getPartsSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPartsSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPartsSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getPartsSettings>>>
+export type GetPartsSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Parts pricing settings (cost-plus markup percentage)
+ */
+
+export function useGetPartsSettings<TData = Awaited<ReturnType<typeof getPartsSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPartsSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPartsSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdatePartsSettingsUrl = () => {
+
+
+
+
+  return `/api/parts-settings`
+}
+
+export const updatePartsSettings = async (partsSettingsUpdate: PartsSettingsUpdate, options?: RequestInit): Promise<PartsSettings> => {
+
+  return customFetch<PartsSettings>(getUpdatePartsSettingsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partsSettingsUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdatePartsSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePartsSettings>>, TError,{data: BodyType<PartsSettingsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePartsSettings>>, TError,{data: BodyType<PartsSettingsUpdate>}, TContext> => {
+
+const mutationKey = ['updatePartsSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePartsSettings>>, {data: BodyType<PartsSettingsUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updatePartsSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePartsSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updatePartsSettings>>>
+    export type UpdatePartsSettingsMutationBody = BodyType<PartsSettingsUpdate>
+    export type UpdatePartsSettingsMutationError = ErrorType<unknown>
+
+    export const useUpdatePartsSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePartsSettings>>, TError,{data: BodyType<PartsSettingsUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePartsSettings>>,
+        TError,
+        {data: BodyType<PartsSettingsUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdatePartsSettingsMutationOptions(options));
+    }
+
+export const getListPurchaseOrdersUrl = () => {
+
+
+
+
+  return `/api/purchase-orders`
+}
+
+/**
+ * @summary Formal purchase orders with their line items
+ */
+export const listPurchaseOrders = async ( options?: RequestInit): Promise<PurchaseOrder[]> => {
+
+  return customFetch<PurchaseOrder[]>(getListPurchaseOrdersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPurchaseOrdersQueryKey = () => {
+    return [
+    `/api/purchase-orders`
+    ] as const;
+    }
+
+
+export const getListPurchaseOrdersQueryOptions = <TData = Awaited<ReturnType<typeof listPurchaseOrders>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPurchaseOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPurchaseOrdersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPurchaseOrders>>> = ({ signal }) => listPurchaseOrders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPurchaseOrders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPurchaseOrdersQueryResult = NonNullable<Awaited<ReturnType<typeof listPurchaseOrders>>>
+export type ListPurchaseOrdersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Formal purchase orders with their line items
+ */
+
+export function useListPurchaseOrders<TData = Awaited<ReturnType<typeof listPurchaseOrders>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPurchaseOrders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPurchaseOrdersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreatePurchaseOrderUrl = () => {
+
+
+
+
+  return `/api/purchase-orders`
+}
+
+/**
+ * @summary Raise a formal PO to a supplier (draft or ordered)
+ */
+export const createPurchaseOrder = async (purchaseOrderInput: PurchaseOrderInput, options?: RequestInit): Promise<PurchaseOrder> => {
+
+  return customFetch<PurchaseOrder>(getCreatePurchaseOrderUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(purchaseOrderInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePurchaseOrderMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPurchaseOrder>>, TError,{data: BodyType<PurchaseOrderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPurchaseOrder>>, TError,{data: BodyType<PurchaseOrderInput>}, TContext> => {
+
+const mutationKey = ['createPurchaseOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPurchaseOrder>>, {data: BodyType<PurchaseOrderInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPurchaseOrder(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePurchaseOrderMutationResult = NonNullable<Awaited<ReturnType<typeof createPurchaseOrder>>>
+    export type CreatePurchaseOrderMutationBody = BodyType<PurchaseOrderInput>
+    export type CreatePurchaseOrderMutationError = ErrorType<Error>
+
+    /**
+ * @summary Raise a formal PO to a supplier (draft or ordered)
+ */
+export const useCreatePurchaseOrder = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPurchaseOrder>>, TError,{data: BodyType<PurchaseOrderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPurchaseOrder>>,
+        TError,
+        {data: BodyType<PurchaseOrderInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePurchaseOrderMutationOptions(options));
+    }
+
+export const getUpdatePurchaseOrderUrl = (id: number,) => {
+
+
+
+
+  return `/api/purchase-orders/${id}`
+}
+
+/**
+ * @summary Update PO status (draft→ordered, cancel) or expected date
+ */
+export const updatePurchaseOrder = async (id: number,
+    purchaseOrderUpdate: PurchaseOrderUpdate, options?: RequestInit): Promise<PurchaseOrder> => {
+
+  return customFetch<PurchaseOrder>(getUpdatePurchaseOrderUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(purchaseOrderUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdatePurchaseOrderMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePurchaseOrder>>, TError,{id: number;data: BodyType<PurchaseOrderUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePurchaseOrder>>, TError,{id: number;data: BodyType<PurchaseOrderUpdate>}, TContext> => {
+
+const mutationKey = ['updatePurchaseOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePurchaseOrder>>, {id: number;data: BodyType<PurchaseOrderUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updatePurchaseOrder(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePurchaseOrderMutationResult = NonNullable<Awaited<ReturnType<typeof updatePurchaseOrder>>>
+    export type UpdatePurchaseOrderMutationBody = BodyType<PurchaseOrderUpdate>
+    export type UpdatePurchaseOrderMutationError = ErrorType<Error>
+
+    /**
+ * @summary Update PO status (draft→ordered, cancel) or expected date
+ */
+export const useUpdatePurchaseOrder = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePurchaseOrder>>, TError,{id: number;data: BodyType<PurchaseOrderUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePurchaseOrder>>,
+        TError,
+        {id: number;data: BodyType<PurchaseOrderUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdatePurchaseOrderMutationOptions(options));
+    }
+
+export const getReceivePurchaseOrderUrl = (id: number,) => {
+
+
+
+
+  return `/api/purchase-orders/${id}/receive`
+}
+
+/**
+ * @summary Receive goods against an ordered PO (increments stock, releases backordered job-card lines)
+ */
+export const receivePurchaseOrder = async (id: number,
+    purchaseOrderReceiveBody?: PurchaseOrderReceiveBody, options?: RequestInit): Promise<PurchaseOrder> => {
+
+  return customFetch<PurchaseOrder>(getReceivePurchaseOrderUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(purchaseOrderReceiveBody)
+  }
+);}
+
+
+
+
+
+export const getReceivePurchaseOrderMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receivePurchaseOrder>>, TError,{id: number;data?: BodyType<PurchaseOrderReceiveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof receivePurchaseOrder>>, TError,{id: number;data?: BodyType<PurchaseOrderReceiveBody>}, TContext> => {
+
+const mutationKey = ['receivePurchaseOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof receivePurchaseOrder>>, {id: number;data?: BodyType<PurchaseOrderReceiveBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  receivePurchaseOrder(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReceivePurchaseOrderMutationResult = NonNullable<Awaited<ReturnType<typeof receivePurchaseOrder>>>
+    export type ReceivePurchaseOrderMutationBody = BodyType<PurchaseOrderReceiveBody> | undefined
+    export type ReceivePurchaseOrderMutationError = ErrorType<Error>
+
+    /**
+ * @summary Receive goods against an ordered PO (increments stock, releases backordered job-card lines)
+ */
+export const useReceivePurchaseOrder = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof receivePurchaseOrder>>, TError,{id: number;data?: BodyType<PurchaseOrderReceiveBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof receivePurchaseOrder>>,
+        TError,
+        {id: number;data?: BodyType<PurchaseOrderReceiveBody>},
+        TContext
+      > => {
+      return useMutation(getReceivePurchaseOrderMutationOptions(options));
+    }
+
+export const getListJobCardCreditNotesUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/credit-notes`
+}
+
+/**
+ * @summary Credit notes recorded against a job card
+ */
+export const listJobCardCreditNotes = async (id: number, options?: RequestInit): Promise<PartCreditNote[]> => {
+
+  return customFetch<PartCreditNote[]>(getListJobCardCreditNotesUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListJobCardCreditNotesQueryKey = (id: number,) => {
+    return [
+    `/api/job-cards/${id}/credit-notes`
+    ] as const;
+    }
+
+
+export const getListJobCardCreditNotesQueryOptions = <TData = Awaited<ReturnType<typeof listJobCardCreditNotes>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobCardCreditNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListJobCardCreditNotesQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJobCardCreditNotes>>> = ({ signal }) => listJobCardCreditNotes(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJobCardCreditNotes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListJobCardCreditNotesQueryResult = NonNullable<Awaited<ReturnType<typeof listJobCardCreditNotes>>>
+export type ListJobCardCreditNotesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Credit notes recorded against a job card
+ */
+
+export function useListJobCardCreditNotes<TData = Awaited<ReturnType<typeof listJobCardCreditNotes>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobCardCreditNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListJobCardCreditNotesQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateJobCardCreditNoteUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/credit-notes`
+}
+
+/**
+ * @summary Credit returned/unused parts on a job card (restores stock, reduces the job's parts total)
+ */
+export const createJobCardCreditNote = async (id: number,
+    partCreditNoteInput: PartCreditNoteInput, options?: RequestInit): Promise<PartCreditNote> => {
+
+  return customFetch<PartCreditNote>(getCreateJobCardCreditNoteUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partCreditNoteInput)
+  }
+);}
+
+
+
+
+
+export const getCreateJobCardCreditNoteMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJobCardCreditNote>>, TError,{id: number;data: BodyType<PartCreditNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createJobCardCreditNote>>, TError,{id: number;data: BodyType<PartCreditNoteInput>}, TContext> => {
+
+const mutationKey = ['createJobCardCreditNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createJobCardCreditNote>>, {id: number;data: BodyType<PartCreditNoteInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createJobCardCreditNote(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateJobCardCreditNoteMutationResult = NonNullable<Awaited<ReturnType<typeof createJobCardCreditNote>>>
+    export type CreateJobCardCreditNoteMutationBody = BodyType<PartCreditNoteInput>
+    export type CreateJobCardCreditNoteMutationError = ErrorType<Error>
+
+    /**
+ * @summary Credit returned/unused parts on a job card (restores stock, reduces the job's parts total)
+ */
+export const useCreateJobCardCreditNote = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJobCardCreditNote>>, TError,{id: number;data: BodyType<PartCreditNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createJobCardCreditNote>>,
+        TError,
+        {id: number;data: BodyType<PartCreditNoteInput>},
+        TContext
+      > => {
+      return useMutation(getCreateJobCardCreditNoteMutationOptions(options));
     }
 
 export const getListSuppliersUrl = () => {

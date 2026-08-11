@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useListParts,
   useCreatePart,
@@ -10,6 +10,14 @@ import {
   useCreatePartPurchase,
   useReceivePartPurchase,
   getListPartPurchasesQueryKey,
+  useGetPartsSettings,
+  useUpdatePartsSettings,
+  getGetPartsSettingsQueryKey,
+  useListPurchaseOrders,
+  useCreatePurchaseOrder,
+  useUpdatePurchaseOrder,
+  useReceivePurchaseOrder,
+  getListPurchaseOrdersQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,13 +25,28 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   Plus,
   Package,
   Truck,
   ShoppingCart,
   AlertTriangle,
   Search,
+  FileSpreadsheet,
+  ClipboardList,
+  Trash2,
+  Loader2,
+  Percent,
 } from "lucide-react";
+import { ImportPartsDialog } from "@/components/parts/import-parts-dialog";
 import { format } from "date-fns";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
@@ -38,7 +61,8 @@ import { useMoney } from "@/lib/format";
 const TABS = [
   { key: "parts", label: "Parts", icon: Package },
   { key: "suppliers", label: "Suppliers", icon: Truck },
-  { key: "purchases", label: "Purchases", icon: ShoppingCart },
+  { key: "orders", label: "Purchase Orders", icon: ClipboardList },
+  { key: "purchases", label: "Quick Purchases", icon: ShoppingCart },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -58,6 +82,8 @@ export default function Parts() {
           <CreatePartDialog />
         ) : tab === "suppliers" ? (
           <CreateSupplierDialog />
+        ) : tab === "orders" ? (
+          <CreatePurchaseOrderDialog />
         ) : (
           <CreatePurchaseDialog />
         )
@@ -99,6 +125,7 @@ export default function Parts() {
         >
           {tab === "parts" && <PartsTab />}
           {tab === "suppliers" && <SuppliersTab />}
+          {tab === "orders" && <PurchaseOrdersTab />}
           {tab === "purchases" && <PurchasesTab />}
         </motion.div>
       </AnimatePresence>
@@ -163,10 +190,54 @@ function CreatePartDialog() {
   );
 }
 
+function MarkupEditor() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: settings } = useGetPartsSettings();
+  const update = useUpdatePartsSettings();
+  const [value, setValue] = useState<string>("");
+
+  useEffect(() => {
+    if (settings) setValue(String(settings.markupPercent));
+  }, [settings]);
+
+  const save = async () => {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0 || n > 500) {
+      toast({ title: "Invalid markup", description: "Enter a percentage between 0 and 500.", variant: "destructive" });
+      return;
+    }
+    if (settings && n === settings.markupPercent) return;
+    await update.mutateAsync({ data: { markupPercent: n } });
+    queryClient.invalidateQueries({ queryKey: getGetPartsSettingsQueryKey() });
+    toast({ title: "Markup updated", description: `Imports now price at cost + ${n}%.` });
+  };
+
+  return (
+    <div
+      className="flex items-center gap-1.5 rounded-full bg-white/[0.03] border border-white/10 px-3 h-10"
+      title="Cost-plus markup used to auto-price imported parts"
+    >
+      <Percent className="w-3.5 h-3.5 text-muted-foreground" />
+      <span className="text-xs text-muted-foreground whitespace-nowrap">Markup</span>
+      <Input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        className="w-14 h-7 px-1.5 text-right border-none bg-transparent text-sm tabular-nums"
+        inputMode="decimal"
+      />
+      <span className="text-xs text-muted-foreground">%</span>
+    </div>
+  );
+}
+
 function PartsTab() {
   const money = useMoney();
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
+  const { data: settings } = useGetPartsSettings();
   const { data: parts, isLoading } = useListParts({
     ...(search ? { search } : {}),
     ...(lowOnly ? { lowStock: "1" } : {}),
@@ -200,6 +271,16 @@ function PartsTab() {
           <AlertTriangle className="w-4 h-4" />
           Reorder alerts{lowCount > 0 && !lowOnly ? ` (${lowCount})` : ""}
         </Button>
+        <ImportPartsDialog
+          markupPercent={settings?.markupPercent}
+          trigger={
+            <Button variant="outline" className="rounded-full gap-2 border-white/15">
+              <FileSpreadsheet className="w-4 h-4" />
+              Import
+            </Button>
+          }
+        />
+        <MarkupEditor />
         <ViewControls
           layout={layout}
           onLayoutChange={setLayout}
@@ -484,6 +565,372 @@ function ReceivePurchaseDialog({ purchaseId, outstanding }: { purchaseId: number
         }
       }}
     />
+  );
+}
+
+const PO_STATUS_STYLES: Record<string, string> = {
+  draft: "bg-white/[0.08] text-muted-foreground",
+  ordered: "bg-sky-500/15 text-sky-400",
+  partially_received: "bg-amber-500/15 text-amber-400",
+  received: "bg-primary/15 text-primary",
+  cancelled: "bg-white/[0.05] text-muted-foreground/60",
+};
+
+function CreatePurchaseOrderDialog() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: parts } = useListParts();
+  const { data: suppliers } = useListSuppliers();
+  const create = useCreatePurchaseOrder();
+  const [open, setOpen] = useState(false);
+  const [supplierId, setSupplierId] = useState<string>("");
+  const [expectedDate, setExpectedDate] = useState("");
+  const [reference, setReference] = useState("");
+  const [placeNow, setPlaceNow] = useState(true);
+  const [lines, setLines] = useState<{ partId: string; quantity: string; unitCost: string }[]>([
+    { partId: "", quantity: "1", unitCost: "" },
+  ]);
+
+  const reset = () => {
+    setSupplierId("");
+    setExpectedDate("");
+    setReference("");
+    setPlaceNow(true);
+    setLines([{ partId: "", quantity: "1", unitCost: "" }]);
+  };
+
+  const setLine = (i: number, patch: Partial<(typeof lines)[number]>) =>
+    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+
+  const submit = async () => {
+    const parsedLines = lines
+      .filter((l) => l.partId)
+      .map((l) => ({
+        partId: Number(l.partId),
+        quantity: Math.max(1, Math.floor(Number(l.quantity) || 1)),
+        ...(l.unitCost !== "" && Number.isFinite(Number(l.unitCost))
+          ? { unitCost: Number(l.unitCost) }
+          : {}),
+      }));
+    if (parsedLines.length === 0) {
+      toast({ title: "Add at least one part line", variant: "destructive" });
+      return;
+    }
+    try {
+      await create.mutateAsync({
+        data: {
+          ...(supplierId ? { supplierId: Number(supplierId) } : {}),
+          ...(expectedDate ? { expectedDate } : {}),
+          ...(reference ? { reference } : {}),
+          status: placeNow ? "ordered" : "draft",
+          lines: parsedLines,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
+      toast({
+        title: placeNow ? "Purchase order placed" : "Draft PO saved",
+        description: `${parsedLines.length} line${parsedLines.length === 1 ? "" : "s"}.`,
+      });
+      setOpen(false);
+      reset();
+    } catch {
+      toast({ title: "Could not create the purchase order", variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2">
+          <Plus className="w-4 h-4" />
+          New Purchase Order
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="glass-panel border-white/10 sm:max-w-[640px]">
+        <DialogHeader>
+          <DialogTitle className="text-xl tracking-tight">Raise a purchase order</DialogTitle>
+          <DialogDescription>
+            Multi-line order to a supplier — receiving it adds stock and releases any waiting job
+            cards.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Supplier</label>
+            <select
+              value={supplierId}
+              onChange={(e) => setSupplierId(e.target.value)}
+              className="w-full h-10 rounded-xl bg-white/[0.04] border border-white/10 px-3 text-sm"
+            >
+              <option value="">— None —</option>
+              {suppliers?.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Expected receipt</label>
+            <Input
+              type="date"
+              value={expectedDate}
+              onChange={(e) => setExpectedDate(e.target.value)}
+              className="h-10 rounded-xl bg-white/[0.04] border-white/10"
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-muted-foreground mb-1 block">Reference</label>
+            <Input
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="e.g. Monthly restock"
+              className="h-10 rounded-xl bg-white/[0.04] border-white/10"
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="grid grid-cols-[1fr_84px_110px_36px] gap-2 text-[11px] uppercase tracking-widest text-muted-foreground px-1">
+            <span>Part</span>
+            <span>Qty</span>
+            <span>Unit cost</span>
+            <span />
+          </div>
+          {lines.map((line, i) => (
+            <div key={i} className="grid grid-cols-[1fr_84px_110px_36px] gap-2">
+              <select
+                value={line.partId}
+                onChange={(e) => {
+                  const part = parts?.find((p) => p.id === Number(e.target.value));
+                  setLine(i, {
+                    partId: e.target.value,
+                    unitCost: part ? String(part.unitCost) : line.unitCost,
+                  });
+                }}
+                className="h-10 rounded-xl bg-white/[0.04] border border-white/10 px-3 text-sm min-w-0"
+              >
+                <option value="">Select part…</option>
+                {parts?.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.sku} — {p.name}
+                  </option>
+                ))}
+              </select>
+              <Input
+                type="number"
+                min={1}
+                value={line.quantity}
+                onChange={(e) => setLine(i, { quantity: e.target.value })}
+                className="h-10 rounded-xl bg-white/[0.04] border-white/10 text-right"
+              />
+              <Input
+                type="number"
+                min={0}
+                value={line.unitCost}
+                onChange={(e) => setLine(i, { unitCost: e.target.value })}
+                placeholder="auto"
+                className="h-10 rounded-xl bg-white/[0.04] border-white/10 text-right"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-9 rounded-xl text-muted-foreground hover:text-destructive"
+                onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
+                disabled={lines.length === 1}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="outline"
+            className="rounded-full gap-2 border-white/15 h-9"
+            onClick={() => setLines((prev) => [...prev, { partId: "", quantity: "1", unitCost: "" }])}
+          >
+            <Plus className="w-4 h-4" />
+            Add line
+          </Button>
+        </div>
+        <DialogFooter className="items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground mr-auto cursor-pointer">
+            <input
+              type="checkbox"
+              checked={placeNow}
+              onChange={(e) => setPlaceNow(e.target.checked)}
+              className="accent-primary"
+            />
+            Place order now (uncheck to save as draft)
+          </label>
+          <Button
+            onClick={submit}
+            disabled={create.isPending}
+            className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
+          >
+            {create.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            {placeNow ? "Place order" : "Save draft"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PurchaseOrdersTab() {
+  const money = useMoney();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { data: orders, isLoading } = useListPurchaseOrders();
+  const { data: suppliers } = useListSuppliers();
+  const update = useUpdatePurchaseOrder();
+  const receive = useReceivePurchaseOrder();
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const supplierName = (id: number | null | undefined) =>
+    id == null ? "No supplier" : (suppliers?.find((s) => s.id === id)?.name ?? `Supplier #${id}`);
+
+  const act = async (id: number, fn: () => Promise<unknown>, done: string) => {
+    setBusyId(id);
+    try {
+      await fn();
+      queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
+      toast({ title: done });
+    } catch (err) {
+      toast({
+        title: "Action failed",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (isLoading) return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
+  if (!orders?.length)
+    return (
+      <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 flex flex-col items-center gap-3">
+        <ClipboardList className="w-8 h-8 text-muted-foreground" />
+        <p className="text-muted-foreground">No purchase orders yet — raise one to restock.</p>
+      </div>
+    );
+
+  return (
+    <div className="grid grid-cols-1 gap-3">
+      {orders.map((po) => {
+        const totalValue = po.lines.reduce((sum, l) => sum + l.quantity * l.unitCost, 0);
+        const outstanding = po.lines.reduce(
+          (sum, l) => sum + Math.max(0, l.quantity - l.qtyReceived),
+          0,
+        );
+        const busy = busyId === po.id;
+        return (
+          <Card key={po.id} className="glass-panel border-none rounded-2xl">
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="font-medium">
+                    PO #{po.id} · {supplierName(po.supplierId)}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {po.reference && `${po.reference} · `}
+                    Raised {format(new Date(po.createdAt), "MMM d, yyyy")}
+                    {po.expectedDate &&
+                      ` · Expected ${format(new Date(`${String(po.expectedDate).slice(0, 10)}T12:00:00`), "MMM d, yyyy")}`}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className="font-light text-xl">{money.gyd(totalValue)}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {po.lines.length} line{po.lines.length === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                  <Badge
+                    className={cn(
+                      "border-none rounded-full text-[10px] font-bold uppercase tracking-widest",
+                      PO_STATUS_STYLES[po.status] ?? PO_STATUS_STYLES.draft,
+                    )}
+                  >
+                    {po.status.replace("_", " ")}
+                  </Badge>
+                </div>
+              </div>
+              <div className="rounded-xl bg-white/[0.03] border border-white/5 divide-y divide-white/5">
+                {po.lines.map((l) => (
+                  <div key={l.id} className="px-4 py-2 flex items-center justify-between text-sm">
+                    <span className="min-w-0 truncate">
+                      {l.partName}
+                      {l.jobCardId != null && (
+                        <span className="text-xs text-muted-foreground"> · Job card #{l.jobCardId}</span>
+                      )}
+                    </span>
+                    <span className="text-muted-foreground tabular-nums shrink-0 ml-3">
+                      {l.qtyReceived}/{l.quantity} @ {money.gyd(l.unitCost)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {(po.status === "draft" ||
+                po.status === "ordered" ||
+                po.status === "partially_received") && (
+                <div className="flex items-center gap-2 justify-end">
+                  {po.status === "draft" && (
+                    <Button
+                      size="sm"
+                      disabled={busy}
+                      onClick={() =>
+                        act(
+                          po.id,
+                          () => update.mutateAsync({ id: po.id, data: { status: "ordered" } }),
+                          `PO #${po.id} placed with the supplier`,
+                        )
+                      }
+                      className="bg-primary hover:bg-primary/90 text-white rounded-full px-5"
+                    >
+                      Place order
+                    </Button>
+                  )}
+                  {(po.status === "ordered" || po.status === "partially_received") && (
+                    <Button
+                      size="sm"
+                      disabled={busy || outstanding === 0}
+                      onClick={() =>
+                        act(
+                          po.id,
+                          () => receive.mutateAsync({ id: po.id, data: {} }),
+                          `Received ${outstanding} unit(s) into stock`,
+                        )
+                      }
+                      className="bg-primary hover:bg-primary/90 text-white rounded-full px-5"
+                    >
+                      Receive all ({outstanding})
+                    </Button>
+                  )}
+                  {(po.status === "draft" || po.status === "ordered") && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() =>
+                        act(
+                          po.id,
+                          () => update.mutateAsync({ id: po.id, data: { status: "cancelled" } }),
+                          `PO #${po.id} cancelled`,
+                        )
+                      }
+                      className="rounded-full px-5 border-white/15 text-muted-foreground"
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
   );
 }
 

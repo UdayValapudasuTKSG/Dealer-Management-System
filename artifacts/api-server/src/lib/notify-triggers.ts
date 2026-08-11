@@ -85,6 +85,36 @@ async function notifyInternal(opts: {
 }
 
 // ---------------------------------------------------------------------------
+// MRQ low-stock alert → parts staff (In-App only). Callers fire this only when
+// stock CROSSES from above to at-or-below the reorder level, and the in-app
+// natural key (dealer, user, type, part) upserts — so it never spams a bell
+// per issuance.
+// ---------------------------------------------------------------------------
+export function notifyPartLowStock(part: {
+  id: number;
+  dealerId: number;
+  sku: string;
+  name: string;
+  stock: number;
+  reorderLevel: number;
+}): void {
+  fire("part.low_stock", async () => {
+    let users = await usersWithPermission(part.dealerId, "parts");
+    if (users.length === 0) users = await serviceUsers(part.dealerId);
+    if (users.length === 0) return;
+    await notifyUsers(users, {
+      dealerId: part.dealerId,
+      type: "part.low_stock",
+      title: `Low stock — ${part.name}`,
+      body: `${part.sku}: ${part.stock} on hand, at or below the reorder level of ${part.reorderLevel}. Raise a purchase order.`,
+      link: "/parts",
+      entityType: "part",
+      entityId: part.id,
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
 // #1 New Lead → division sales managers (In-App + Email), key lead:new:{id}
 // ---------------------------------------------------------------------------
 export function notifyLeadNew(lead: {

@@ -39,6 +39,7 @@ export const NOTIFICATION_TYPES = [
   "case.opened",
   "manager.note.advisor",
   "service.cadence.due",
+  "part.low_stock",
   "channel.delivery.failed",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

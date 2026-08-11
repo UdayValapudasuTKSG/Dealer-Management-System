@@ -25,6 +25,9 @@ import {
   useListServiceTechnicians,
   useListParts,
   getListPartsQueryKey,
+  useListJobCardCreditNotes,
+  useCreateJobCardCreditNote,
+  getListJobCardCreditNotesQueryKey,
   useCreateCase,
   getListCasesQueryKey,
   useRolloverJobCard,
@@ -868,15 +871,22 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
   const update = useUpdateJobCard();
   const invoice = useCreateJobCardInvoice();
   const addPart = useAddJobCardPart();
+  const createCreditNote = useCreateJobCardCreditNote();
   const money = useMoney();
   const { data: lines } = useListJobCardParts(card.id);
   const { data: parts } = useListParts();
+  const { data: creditNotes } = useListJobCardCreditNotes(card.id);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getListJobCardPartsQueryKey(card.id) });
     queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListJobCardCreditNotesQueryKey(card.id) });
   };
+
+  // Issued (non-backordered) lines are what a credit note can be raised against.
+  const creditableLines =
+    lines?.filter((l) => l.kind === "issue" && !l.backordered) ?? [];
 
   const toggleChecklist = async (idx: number) => {
     const next = card.checklist.map((c, i) => (i === idx ? { ...c, done: !c.done } : c));
@@ -1044,7 +1054,71 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
                 }
               }}
             />
+            {creditableLines.length > 0 && (
+              <CreateRecordDialog
+                title="Credit Note — return unused parts"
+                description="Restores stock and reduces this job's parts total. Internal adjustment only — no cash refund."
+                pending={createCreditNote.isPending}
+                submitLabel="Issue credit note"
+                trigger={
+                  <Button size="sm" variant="outline" className="rounded-full border-white/15 gap-1.5 text-xs">
+                    <Receipt className="w-3.5 h-3.5" /> Credit note
+                  </Button>
+                }
+                fields={[
+                  {
+                    name: "jobCardPartId",
+                    label: "Issued part line",
+                    type: "select",
+                    required: true,
+                    span: "full",
+                    options: creditableLines.map((l) => ({
+                      value: String(l.id),
+                      label: `${l.partName} × ${l.quantity} @ ${money.gyd(l.unitPrice)}`,
+                    })),
+                  },
+                  { name: "quantity", label: "Quantity to credit", type: "number", required: true, span: "half", defaultValue: "1" },
+                  { name: "reason", label: "Reason", type: "text", required: true, span: "full", placeholder: "e.g. Part unused — customer declined the repair" },
+                ]}
+                onSubmit={async (values) => {
+                  const v = values as Record<string, unknown>;
+                  try {
+                    await createCreditNote.mutateAsync({
+                      id: card.id,
+                      data: {
+                        jobCardPartId: Number(v.jobCardPartId),
+                        quantity: Number(v.quantity),
+                        reason: String(v.reason ?? ""),
+                      },
+                    });
+                    invalidate();
+                    toast({ title: "Credit note issued", description: "Stock restored and parts total reduced." });
+                  } catch (e: unknown) {
+                    const msg =
+                      (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+                      "Could not issue the credit note.";
+                    toast({ title: "Failed", description: msg, variant: "destructive" });
+                    throw e;
+                  }
+                }}
+              />
+            )}
           </div>
+          {creditNotes && creditNotes.length > 0 && (
+            <div className="pt-2 border-t border-white/5 space-y-1">
+              <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+                Credit notes
+              </div>
+              {creditNotes.map((cn) => (
+                <div key={cn.id} className="flex items-center justify-between text-sm gap-3">
+                  <span className="min-w-0 truncate text-muted-foreground">
+                    CN-{cn.id} · {cn.partName} × {cn.quantity} — {cn.reason}
+                  </span>
+                  <span className="text-primary shrink-0">−{money.gyd(cn.amount)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {(card.quoteTotal ?? 0) > 0 && (

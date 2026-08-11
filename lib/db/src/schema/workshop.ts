@@ -108,10 +108,14 @@ export const insertPartPurchaseSchema = createInsertSchema(
 export type InsertPartPurchase = z.infer<typeof insertPartPurchaseSchema>;
 export type PartPurchase = typeof partPurchasesTable.$inferSelect;
 
-// ---------------------------------------------------------------------------
-// Job cards
-// ---------------------------------------------------------------------------
-
+/** Formal PO lifecycle: draft → ordered → partially_received → received (+ cancelled). */
+export const PURCHASE_ORDER_STATUSES = [
+  "draft",
+  "ordered",
+  "partially_received",
+  "received",
+  "cancelled",
+] as const;
 export type ChecklistItem = { label: string; done: boolean };
 
 /** Canonical job-card machine (NC-3): open → in_progress → on_hold → completed → closed (+ cancelled). */
@@ -276,10 +280,29 @@ export const insertJobCardPartSchema = createInsertSchema(
 export type InsertJobCardPart = z.infer<typeof insertJobCardPartSchema>;
 export type JobCardPart = typeof jobCardPartsTable.$inferSelect;
 
-// ---------------------------------------------------------------------------
-// Warranty / AMC coverage per vehicle
-// ---------------------------------------------------------------------------
-
+export const partCreditNotesTable = pgTable("part_credit_notes", {
+  id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
+  jobCardId: integer("job_card_id")
+    .notNull()
+    .references(() => jobCardsTable.id, { onDelete: "cascade" }),
+  /** The originating issue line being credited. */
+  jobCardPartId: integer("job_card_part_id")
+    .notNull()
+    .references(() => jobCardPartsTable.id),
+  partId: integer("part_id")
+    .notNull()
+    .references(() => partsTable.id),
+  partName: text("part_name").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPrice: doublePrecision("unit_price").notNull().default(0),
+  amount: doublePrecision("amount").notNull().default(0),
+  reason: text("reason").notNull(),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 export const coveragePlansTable = pgTable("coverage_plans", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
@@ -397,3 +420,44 @@ export const dealerServiceSettingsTable = pgTable(
 
 export type DealerServiceSettings =
   typeof dealerServiceSettingsTable.$inferSelect;
+
+export type PartCreditNote = typeof partCreditNotesTable.$inferSelect;
+
+export const purchaseOrdersTable = pgTable("purchase_orders", {
+  id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
+  supplierId: integer("supplier_id").references(() => suppliersTable.id),
+  status: text("status").notNull().default("draft"),
+  expectedDate: date("expected_date", { mode: "string" }),
+  reference: text("reference"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type PurchaseOrder = typeof purchaseOrdersTable.$inferSelect;
+
+export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number];
+
+export const purchaseOrderLinesTable = pgTable("purchase_order_lines", {
+  id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
+  purchaseOrderId: integer("purchase_order_id")
+    .notNull()
+    .references(() => purchaseOrdersTable.id, { onDelete: "cascade" }),
+  partId: integer("part_id")
+    .notNull()
+    .references(() => partsTable.id),
+  partName: text("part_name").notNull(),
+  quantity: integer("quantity").notNull(),
+  qtyReceived: integer("qty_received").notNull().default(0),
+  unitCost: doublePrecision("unit_cost").notNull().default(0),
+  /** Originating job card (backorder link) — received parts trace back here. */
+  jobCardId: integer("job_card_id"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type PurchaseOrderLine = typeof purchaseOrderLinesTable.$inferSelect;
