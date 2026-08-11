@@ -4,13 +4,10 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-const rawPort = process.env.PORT;
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
+// PORT/BASE_PATH are injected by the dev workflow and the artifact's
+// production build config. The publish pre-build hook runs `vite build`
+// without them, so fall back to sane defaults instead of throwing.
+const rawPort = process.env.PORT ?? "3000";
 
 const port = Number(rawPort);
 
@@ -18,13 +15,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+const basePath = process.env.BASE_PATH ?? "/realm/";
 
 export default defineConfig({
   base: basePath,
