@@ -1207,6 +1207,7 @@ export default function Deals() {
         onClosePayment={() => setPaymentDeal(null)}
         invoices={invoices}
         outstandingBalances={outstandingBalances}
+        onRequestPayment={setPaymentDeal}
       />
 
       <Dialog

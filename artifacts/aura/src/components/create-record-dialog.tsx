@@ -20,6 +20,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Loader2, Sparkles } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export type FieldDef = {
   name: string;
@@ -106,6 +107,7 @@ export function CreateRecordDialog({
   onOpenChange,
   onSubmit,
 }: CreateRecordDialogProps) {
+  const { toast } = useToast();
   const [openState, setOpenState] = useState(false);
   const isControlled = openProp !== undefined;
   const open = isControlled ? openProp : openState;
@@ -153,7 +155,21 @@ export function CreateRecordDialog({
       if (raw === undefined || raw === "") continue;
       payload[f.name] = f.type === "number" ? Number(raw) : raw.trim();
     }
-    await onSubmit(payload);
+    try {
+      await onSubmit(payload);
+    } catch (err: unknown) {
+      // Never fail silently — the record was NOT saved.
+      const apiErr = err as { data?: { message?: string; error?: string } };
+      toast({
+        title: "Could not save",
+        description:
+          apiErr?.data?.message ||
+          apiErr?.data?.error ||
+          "The record was not saved. Please try again.",
+        variant: "destructive",
+      });
+      return; // keep the dialog open with the entered values
+    }
     setOpen(false);
     setValues(Object.fromEntries(fields.map((f) => [f.name, f.defaultValue ?? ""])));
     setTouched({});

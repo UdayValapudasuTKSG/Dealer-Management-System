@@ -1333,6 +1333,7 @@ export default function LeadDetail() {
         onClosePayment={() => setPaymentDeal(null)}
         invoices={allInvoices}
         outstandingBalances={outstandingBalances}
+        onRequestPayment={setPaymentDeal}
         onDone={() => {
           qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
         }}

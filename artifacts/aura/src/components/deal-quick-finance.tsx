@@ -166,6 +166,12 @@ type Props = {
   outstandingBalances: OutstandingBalance[] | undefined;
   /** Extra cache invalidation after either action (page-specific keys). */
   onDone?: () => void;
+  /**
+   * Called right after an invoice is issued so the host can open the payment
+   * dialog for the same deal — issuing an invoice does NOT record money
+   * received; chaining the two steps prevents "I thought I paid" confusion.
+   */
+  onRequestPayment?: (deal: Deal) => void;
 };
 
 export function DealQuickFinanceDialogs({
@@ -176,6 +182,7 @@ export function DealQuickFinanceDialogs({
   invoices,
   outstandingBalances,
   onDone,
+  onRequestPayment,
 }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -262,16 +269,18 @@ export function DealQuickFinanceDialogs({
               dueDate: (v.dueDate as string) || undefined,
               description: (v.description as string) || undefined,
             };
+            const dealForPayment = invoiceDeal;
             await createInvoice.mutateAsync({ data: payload });
             refresh();
             onCloseInvoice();
             toast({
-              title: "Invoice issued",
+              title: "Invoice issued — payment NOT yet recorded",
               description:
                 payload.kind === "reservation"
-                  ? "Once this reservation invoice is fully paid, the deal's deposit requirement is satisfied."
-                  : "The invoice is linked to this deal — record payments right from here.",
+                  ? "Now record the money received. The reservation fee only shows as paid once the payment is recorded."
+                  : "Now record the money received — an invoice alone doesn't mark anything as paid.",
             });
+            onRequestPayment?.(dealForPayment);
           }}
         />
       )}
