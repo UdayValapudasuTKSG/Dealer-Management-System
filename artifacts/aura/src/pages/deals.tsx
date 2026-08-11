@@ -13,12 +13,18 @@ import {
   useListBookings,
   useListInvoices,
   useListOutstandingBalances,
+  useCreateInvoice,
+  useCreatePayment,
   getListDealsQueryKey,
   getListBookingsQueryKey,
+  getListInvoicesQueryKey,
+  getListPaymentsQueryKey,
+  getListReceiptsQueryKey,
+  getListOutstandingBalancesQueryKey,
   getGetLeadQueryKey,
   getGetLeadTimelineQueryKey,
 } from "@workspace/api-client-react";
-import type { Deal } from "@workspace/api-client-react";
+import type { Deal, InvoiceInput, PaymentInput } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -161,6 +167,7 @@ export default function Deals() {
   const { me, can } = useAuthz();
   const canEditDeals = can("deals", "edit");
   const canCreateDeals = can("deals", "create");
+  const canFinance = can("finance", "create");
   const isLeadership =
     !!me && (me.isSuperAdmin || me.roleName === "General Manager");
 
@@ -181,6 +188,27 @@ export default function Deals() {
       setSortKey(key);
       setSortDir("asc");
     }
+  };
+
+  // Quick finance actions straight from the deal card — no trip to Finance.
+  const createInvoice = useCreateInvoice();
+  const createPayment = useCreatePayment();
+  const [invoiceDeal, setInvoiceDeal] = useState<Deal | null>(null);
+  const [paymentDeal, setPaymentDeal] = useState<Deal | null>(null);
+  const openInvoicesForDeal = (dealId: number) =>
+    (invoices ?? []).filter(
+      (inv) =>
+        inv.dealId === dealId &&
+        (inv.status === "issued" || inv.status === "partially_paid"),
+    );
+  const refreshFinanceState = () => {
+    queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListPaymentsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getListReceiptsQueryKey() });
+    queryClient.invalidateQueries({
+      queryKey: getListOutstandingBalancesQueryKey(),
+    });
+    queryClient.invalidateQueries({ queryKey: getListDealsQueryKey() });
   };
 
   const [attachDeal, setAttachDeal] = useState<Deal | null>(null);
@@ -1100,6 +1128,34 @@ export default function Deals() {
                                 Waiting for Approvals
                               </div>
                             )}
+                            {canFinance &&
+                              (deal.stage === "desking" ||
+                                deal.stage === "committed") && (
+                                <div className="flex items-center gap-1.5">
+                                  <Button
+                                    variant="secondary"
+                                    onClick={() => setInvoiceDeal(deal)}
+                                    className="flex-1 text-[10px] font-bold uppercase tracking-widest h-7 rounded-lg gap-1 bg-white/[0.05] hover:bg-white/[0.1] text-foreground border border-border/60"
+                                  >
+                                    <FileText className="w-3 h-3" /> Invoice
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    onClick={() => setPaymentDeal(deal)}
+                                    disabled={
+                                      openInvoicesForDeal(deal.id).length === 0
+                                    }
+                                    title={
+                                      openInvoicesForDeal(deal.id).length === 0
+                                        ? "Issue an invoice first — payments are recorded against an open invoice"
+                                        : undefined
+                                    }
+                                    className="flex-1 text-[10px] font-bold uppercase tracking-widest h-7 rounded-lg gap-1 bg-white/[0.05] hover:bg-white/[0.1] text-foreground border border-border/60 disabled:opacity-40"
+                                  >
+                                    <Banknote className="w-3 h-3" /> Payment
+                                  </Button>
+                                </div>
+                              )}
                             <div className="flex items-center gap-1.5">
                               {canEditDeals && deal.stage === "desking" && (
                                 <Button
@@ -1158,6 +1214,194 @@ export default function Deals() {
           );
         })}
       </div>
+      )}
+
+      {invoiceDeal && (
+        <CreateRecordDialog
+          title={`New invoice — ${invoiceDeal.customerName || "Unknown Customer"}`}
+          description={`Issued against Deal #${invoiceDeal.id} and visible in Finance too.`}
+          open
+          onOpenChange={(o) => !o && setInvoiceDeal(null)}
+          pending={createInvoice.isPending}
+          submitLabel="Issue invoice"
+          trigger={<span className="hidden" />}
+          fields={[
+            {
+              name: "kind",
+              label: "Kind",
+              type: "select",
+              span: "half",
+              defaultValue: "final",
+              options: [
+                { value: "reservation", label: "Reservation (deposit)" },
+                { value: "final", label: "Final (balance)" },
+              ],
+            },
+            {
+              name: "amount",
+              label: "Amount (GYD)",
+              type: "number",
+              required: true,
+              span: "half",
+              min: 1,
+              defaultValue: String(
+                Math.max(
+                  Math.round(
+                    (invoiceDeal.otdPrice - paidForDeal(invoiceDeal.id)) * 100,
+                  ) / 100,
+                  0,
+                ) || "",
+              ),
+            },
+            { name: "dueDate", label: "Due date", type: "date", span: "half" },
+            {
+              name: "description",
+              label: "Description",
+              type: "textarea",
+              span: "full",
+              placeholder: "Reservation deposit, vehicle balance, accessories…",
+            },
+          ]}
+          onSubmit={async (values) => {
+            const v = values as Record<string, unknown>;
+            const payload: InvoiceInput = {
+              customerName: invoiceDeal.customerName || "Unknown Customer",
+              customerId: invoiceDeal.customerId ?? undefined,
+              dealId: invoiceDeal.id,
+              amount: Number(v.amount),
+              kind: (v.kind as InvoiceInput["kind"]) || "final",
+              dueDate: (v.dueDate as string) || undefined,
+              description: (v.description as string) || undefined,
+            };
+            await createInvoice.mutateAsync({ data: payload });
+            refreshFinanceState();
+            setInvoiceDeal(null);
+            toast({
+              title: "Invoice issued",
+              description:
+                payload.kind === "reservation"
+                  ? "Once this reservation invoice is fully paid, the deal's deposit requirement is satisfied."
+                  : "The invoice is linked to this deal — record payments right from the card.",
+            });
+          }}
+        />
+      )}
+
+      {paymentDeal && (
+        <CreateRecordDialog
+          title={`Record payment — ${paymentDeal.customerName || "Unknown Customer"}`}
+          description={`Against an open invoice on Deal #${paymentDeal.id} — a receipt is issued automatically.`}
+          open
+          onOpenChange={(o) => !o && setPaymentDeal(null)}
+          pending={createPayment.isPending}
+          submitLabel="Record payment"
+          trigger={<span className="hidden" />}
+          fields={[
+            {
+              name: "invoiceId",
+              label: "Invoice",
+              type: "select",
+              required: true,
+              span: "full",
+              defaultValue:
+                openInvoicesForDeal(paymentDeal.id).length === 1
+                  ? String(openInvoicesForDeal(paymentDeal.id)[0].id)
+                  : undefined,
+              options: openInvoicesForDeal(paymentDeal.id).map((inv) => {
+                const o = (outstandingBalances ?? []).find(
+                  (x) => x.invoiceId === inv.id,
+                );
+                const outstanding = o
+                  ? inv.amount - (o.paidAmount ?? 0)
+                  : inv.amount;
+                return {
+                  value: String(inv.id),
+                  label: `${inv.invoiceNumber} — ${
+                    inv.kind === "reservation" ? "Reservation" : "Final"
+                  } (${money.gyd(outstanding)} due)`,
+                };
+              }),
+            },
+            {
+              name: "amount",
+              label: "Amount (GYD)",
+              type: "number",
+              required: true,
+              span: "half",
+              min: 1,
+              defaultValue: (() => {
+                const open = openInvoicesForDeal(paymentDeal.id);
+                if (open.length !== 1) return undefined;
+                const o = (outstandingBalances ?? []).find(
+                  (x) => x.invoiceId === open[0].id,
+                );
+                const outstanding = o
+                  ? open[0].amount - (o.paidAmount ?? 0)
+                  : open[0].amount;
+                return outstanding > 0 ? String(outstanding) : undefined;
+              })(),
+            },
+            {
+              name: "method",
+              label: "Method",
+              type: "select",
+              required: true,
+              span: "half",
+              defaultValue: "bank_transfer",
+              options: [
+                { value: "cash", label: "Cash" },
+                { value: "card", label: "Card" },
+                { value: "bank_transfer", label: "Bank Transfer" },
+                { value: "cheque", label: "Cheque" },
+                { value: "mobile_money", label: "Mobile Money" },
+                { value: "financing", label: "Financing" },
+              ],
+            },
+            {
+              name: "reference",
+              label: "Reference",
+              type: "text",
+              span: "full",
+              placeholder: "Transfer / cheque number",
+            },
+          ]}
+          onSubmit={async (values) => {
+            const v = values as Record<string, unknown>;
+            const payload: PaymentInput = {
+              invoiceId: Number(v.invoiceId),
+              amount: Number(v.amount),
+              method: v.method as PaymentInput["method"],
+              reference: (v.reference as string) || undefined,
+            };
+            try {
+              await createPayment.mutateAsync({ data: payload });
+            } catch (err: unknown) {
+              const apiErr = err as {
+                status?: number;
+                data?: { error?: string };
+              };
+              if (
+                apiErr.status === 409 &&
+                apiErr.data?.error === "duplicate_reference" &&
+                window.confirm(
+                  "A payment with this reference already exists for this dealership. Record it again as a separate payment?",
+                )
+              ) {
+                await createPayment.mutateAsync({
+                  data: { ...payload, confirmDuplicate: true },
+                });
+              } else {
+                throw err;
+              }
+            }
+            refreshFinanceState();
+            setPaymentDeal(null);
+            toast({
+              title: "Payment recorded",
+              description: "A receipt was issued automatically.",
+            });
+          }}
+        />
       )}
 
       <Dialog
