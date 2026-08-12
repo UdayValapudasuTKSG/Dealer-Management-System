@@ -170,6 +170,7 @@ export default function Service() {
   const focusOrderId = useFocusParam("order");
   const tab: TabKey =
     pickedTab ?? (focusOrderId != null ? "bookings" : isTechnician ? "myjobs" : "bookings");
+  const { density, setDensity, layout, setLayout } = useViewMode("service");
 
   return (
     <>
@@ -211,6 +212,16 @@ export default function Service() {
           </button>
           );
         })}
+        {tab === "bookings" && (
+          <div className="ml-auto shrink-0 pl-2">
+            <ViewControls
+              layout={layout}
+              onLayoutChange={setLayout}
+              density={density}
+              onDensityChange={setDensity}
+            />
+          </div>
+        )}
       </div>
 
       <AnimatePresence mode="wait">
@@ -700,14 +711,6 @@ function BookingsTab() {
   if (!isLoading && orders?.length !== 0 && layout === "list") {
     return (
       <div className="space-y-4">
-        <div className="flex justify-end">
-          <ViewControls
-            layout={layout}
-            onLayoutChange={setLayout}
-            density={density}
-            onDensityChange={setDensity}
-          />
-        </div>
         <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
           <table className="w-full text-sm">
             <thead>
@@ -764,16 +767,6 @@ function BookingsTab() {
 
   return (
     <div className="space-y-4">
-      {!isLoading && orders?.length !== 0 && (
-        <div className="flex justify-end">
-          <ViewControls
-            layout={layout}
-            onLayoutChange={setLayout}
-            density={density}
-            onDensityChange={setDensity}
-          />
-        </div>
-      )}
       <div className="grid grid-cols-1 gap-3">
       {isLoading ? (
         [...Array(4)].map((_, i) => (

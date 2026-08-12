@@ -5,6 +5,7 @@ export type Layout = "grid" | "list";
 
 const DENSITY_KEY = "aura-density";
 const DENSITY_EVENT = "aura-density-change";
+const LAYOUT_EVENT = "aura-layout-change";
 
 function readDensity(): Density {
   try {
@@ -34,13 +35,18 @@ export function useViewMode(pageKey: string) {
 
   useEffect(() => {
     const sync = () => setDensityState(readDensity());
+    const syncLayout = () => setLayoutState(readLayout(pageKey));
     window.addEventListener(DENSITY_EVENT, sync);
+    window.addEventListener(LAYOUT_EVENT, syncLayout);
     window.addEventListener("storage", sync);
+    window.addEventListener("storage", syncLayout);
     return () => {
       window.removeEventListener(DENSITY_EVENT, sync);
+      window.removeEventListener(LAYOUT_EVENT, syncLayout);
       window.removeEventListener("storage", sync);
+      window.removeEventListener("storage", syncLayout);
     };
-  }, []);
+  }, [pageKey]);
 
   const setDensity = useCallback((d: Density) => {
     try {
@@ -60,6 +66,7 @@ export function useViewMode(pageKey: string) {
         /* ignore */
       }
       setLayoutState(l);
+      window.dispatchEvent(new Event(LAYOUT_EVENT));
     },
     [pageKey],
   );
