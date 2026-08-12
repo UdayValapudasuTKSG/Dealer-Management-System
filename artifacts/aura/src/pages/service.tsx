@@ -325,8 +325,8 @@ function CreateBookingDialog() {
       pending={createOrder.isPending}
       submitLabel="Create booking"
       trigger={
-        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-          <Plus className="w-5 h-5" />
+        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-4 h-9 text-sm shadow-md shadow-primary/20 gap-1.5 font-medium tracking-wide">
+          <Plus className="w-4 h-4" />
           Book Service
         </Button>
       }
@@ -941,8 +941,8 @@ function CreateJobCardDialog() {
       pending={create.isPending}
       submitLabel="Open job card"
       trigger={
-        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-          <Plus className="w-5 h-5" />
+        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-4 h-9 text-sm shadow-md shadow-primary/20 gap-1.5 font-medium tracking-wide">
+          <Plus className="w-4 h-4" />
           Open Job Card
         </Button>
       }
@@ -2074,8 +2074,8 @@ function CreateCoverageDialog() {
       pending={create.isPending}
       submitLabel="Add coverage"
       trigger={
-        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-          <Plus className="w-5 h-5" />
+        <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-4 h-9 text-sm shadow-md shadow-primary/20 gap-1.5 font-medium tracking-wide">
+          <Plus className="w-4 h-4" />
           Add Coverage
         </Button>
       }
