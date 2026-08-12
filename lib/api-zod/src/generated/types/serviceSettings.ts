@@ -11,4 +11,6 @@ export interface ServiceSettings {
   serviceIntervalKm: number;
   lateSurchargeFee: number;
   summaryCadence: ServiceSettingsSummaryCadence;
+  defaultJobHours: number;
+  techWorkHoursPerDay: number;
 }

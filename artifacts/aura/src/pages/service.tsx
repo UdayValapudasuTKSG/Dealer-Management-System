@@ -75,12 +75,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -168,7 +171,12 @@ export default function Service() {
     <Page className="space-y-5">
 
       <div className="flex items-center gap-1 border-b border-white/10 overflow-x-auto no-scrollbar">
-        {TABS.map((t) => (
+        {TABS.map((raw) => {
+          // Technicians see only their own bookings (server-enforced), so the
+          // tab reads as their personal day plan.
+          const t =
+            isTechnician && raw.key === "bookings" ? { ...raw, label: "My Day" } : raw;
+          return (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -188,7 +196,8 @@ export default function Service() {
               />
             )}
           </button>
-        ))}
+          );
+        })}
       </div>
 
       <AnimatePresence mode="wait">
@@ -331,13 +340,31 @@ function CreateBookingDialog() {
         { name: "scheduledDate", label: "Scheduled date", type: "date", required: true, span: "half" },
         { name: "odometer", label: "Odometer (km)", type: "number", span: "half", placeholder: "42000" },
         { name: "estimatedCost", label: "Est. cost", type: "number", span: "half", placeholder: "0" },
+        { name: "estimatedHours", label: "Booked hours (blank = dealer default)", type: "number", span: "half", placeholder: "2" },
       ]}
       onSubmit={async (values) => {
         const v = values as Record<string, unknown>;
         if (v.odometer != null && v.odometer !== "") v.odometer = Number(v.odometer);
-        await createOrder.mutateAsync({ data: v as never });
+        if (v.estimatedHours != null && v.estimatedHours !== "") {
+          v.estimatedHours = Number(v.estimatedHours);
+        } else {
+          delete v.estimatedHours;
+        }
+        const order = await createOrder.mutateAsync({ data: v as never });
         queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
-        toast({ title: "Booking created", description: "AURA scheduled the service bay." });
+        if (order.technician) {
+          toast({
+            title: "Booking created",
+            description: `Auto-assigned to ${order.technician} for ${order.estimatedHours}h.`,
+          });
+        } else {
+          toast({
+            title: "Booking created — no technician free",
+            description:
+              "Every technician's day is fully booked for that date. Reschedule or assign manually.",
+            variant: "destructive",
+          });
+        }
       }}
     />
   );
@@ -355,37 +382,75 @@ function AdvanceOrderButton({
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const advance = useAdvanceServiceOrder();
+  const [open, setOpen] = useState(false);
+  const [justification, setJustification] = useState("");
   const target = ORDER_NEXT[order.status];
   if (!target) return null;
+  const canSubmit = justification.trim().length >= 3 && !advance.isPending;
   return (
-    <Button
-      size="sm"
-      disabled={advance.isPending}
-      className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs gap-1.5"
-      onClick={async () => {
-        try {
-          await advance.mutateAsync({ id: order.id, data: { targetStatus: target } });
-          queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
-          toast({
-            title: "Case advanced",
-            description: `RO #${order.id} → ${target.replace(/_/g, " ")}.`,
-          });
-          if (target === "closed") onClosed?.();
-        } catch (e: unknown) {
-          const data = (e as { response?: { data?: { unmet?: string[]; error?: string } } })
-            ?.response?.data;
-          const msg = data?.unmet?.join(" · ") ?? data?.error ?? "Could not advance the case.";
-          toast({ title: "Advance blocked", description: msg, variant: "destructive" });
-        }
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setJustification("");
       }}
     >
-      {advance.isPending ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-      ) : (
-        <Wrench className="w-3.5 h-3.5" />
-      )}
-      {ORDER_NEXT_LABEL[target]}
-    </Button>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs gap-1.5"
+        >
+          <Wrench className="w-3.5 h-3.5" />
+          {ORDER_NEXT_LABEL[target]}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{ORDER_NEXT_LABEL[target]}</DialogTitle>
+          <DialogDescription>
+            RO #{order.id} → {target.replace(/_/g, " ")}. A justification is required for every
+            stage change and is kept on the case's audit trail.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label>Justification</Label>
+          <Textarea
+            value={justification}
+            onChange={(e) => setJustification(e.target.value)}
+            placeholder="Why is this case moving to the next stage?"
+            rows={3}
+          />
+        </div>
+        <Button
+          disabled={!canSubmit}
+          className="w-full rounded-full bg-primary hover:bg-primary/90 text-white gap-1.5"
+          onClick={async () => {
+            try {
+              await advance.mutateAsync({
+                id: order.id,
+                data: { targetStatus: target, justification: justification.trim() },
+              });
+              queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
+              toast({
+                title: "Case advanced",
+                description: `RO #${order.id} → ${target.replace(/_/g, " ")}.`,
+              });
+              setOpen(false);
+              setJustification("");
+              if (target === "closed") onClosed?.();
+            } catch (e: unknown) {
+              const data = (e as { response?: { data?: { unmet?: string[]; error?: string } } })
+                ?.response?.data;
+              const msg = data?.unmet?.join(" · ") ?? data?.error ?? "Could not advance the case.";
+              toast({ title: "Advance blocked", description: msg, variant: "destructive" });
+            }
+          }}
+        >
+          {advance.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+          Confirm {ORDER_NEXT_LABEL[target]}
+        </Button>
+      </DialogContent>
+    </Dialog>
   );
 }
 

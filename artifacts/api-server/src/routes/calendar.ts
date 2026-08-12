@@ -11,6 +11,7 @@ import {
 } from "@workspace/db";
 import { GetCalendarResponse } from "@workspace/api-zod";
 import { activeDealerId } from "../middlewares/rbac";
+import { isTechnicianRole } from "./service";
 
 // ---------------------------------------------------------------------------
 // Dealership calendar — a DERIVED view over existing scheduling data:
@@ -154,7 +155,7 @@ router.get("/calendar", async (req, res): Promise<void> => {
         eq(serviceOrdersTable.dealerId, dealerId),
         gte(serviceOrdersTable.scheduledDate, fromKey),
         lte(serviceOrdersTable.scheduledDate, toKey),
-        ...(ownOnly
+        ...(ownOnly || isTechnicianRole(user)
           ? [eq(serviceOrdersTable.technicianUserId, user!.id)]
           : []),
       ),

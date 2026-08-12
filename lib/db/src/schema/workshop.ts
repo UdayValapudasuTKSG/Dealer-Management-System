@@ -399,6 +399,9 @@ export type ServiceInvoice = typeof serviceInvoicesTable.$inferSelect;
 /** Defaults: 5,000 km service interval; GYD 10,000 flat late surcharge. */
 export const DEFAULT_SERVICE_INTERVAL_KM = 5000;
 export const DEFAULT_LATE_SURCHARGE_FEE = 10000;
+/** Capacity planning defaults: 2h per vehicle, 8h technician workday. */
+export const DEFAULT_JOB_HOURS = 2;
+export const DEFAULT_TECH_WORK_HOURS_PER_DAY = 8;
 
 /** FR-COM-03: management scheduled-services summary cadence options. */
 export const SERVICE_SUMMARY_CADENCES = ["daily", "weekly", "off"] as const;
@@ -418,6 +421,14 @@ export const dealerServiceSettingsTable = pgTable(
       .default(DEFAULT_LATE_SURCHARGE_FEE),
     /** FR-COM-03: cadence of the management scheduled-services summary email. */
     summaryCadence: text("summary_cadence").notNull().default("daily"),
+    /** GM-configurable capacity planning: default booked hours per vehicle. */
+    defaultJobHours: doublePrecision("default_job_hours")
+      .notNull()
+      .default(DEFAULT_JOB_HOURS),
+    /** GM-configurable capacity planning: technician working hours per day. */
+    techWorkHoursPerDay: doublePrecision("tech_work_hours_per_day")
+      .notNull()
+      .default(DEFAULT_TECH_WORK_HOURS_PER_DAY),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

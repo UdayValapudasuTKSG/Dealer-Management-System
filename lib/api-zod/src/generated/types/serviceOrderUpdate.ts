@@ -20,5 +20,10 @@ export interface ServiceOrderUpdate {
   /** @nullable */
   technicianUserId?: number | null;
   estimatedCost?: number;
+  /**
+     * @minimum 0.25
+     * @maximum 24
+     */
+  estimatedHours?: number;
   jobs?: string[];
 }

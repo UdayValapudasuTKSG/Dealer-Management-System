@@ -8,6 +8,7 @@
 import type { ServiceOrderPayType } from './serviceOrderPayType';
 import type { ServiceOrderStatus } from './serviceOrderStatus';
 import type { ServiceOrderType } from './serviceOrderType';
+import type { ServiceStageEvent } from './serviceStageEvent';
 
 export interface ServiceOrder {
   id: number;
@@ -33,6 +34,8 @@ export interface ServiceOrder {
   /** @nullable */
   technicianUserId?: number | null;
   estimatedCost: number;
+  estimatedHours?: number;
+  stageHistory?: ServiceStageEvent[];
   jobs: string[];
   createdAt: Date;
 }

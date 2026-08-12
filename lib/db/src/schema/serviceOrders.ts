@@ -6,6 +6,7 @@ import {
   doublePrecision,
   date,
   timestamp,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -46,6 +47,16 @@ export const SERVICE_PAY_TYPES = [
 ] as const;
 export type ServicePayType = (typeof SERVICE_PAY_TYPES)[number];
 
+/** One audited entry per stage transition; justification is mandatory. */
+export type ServiceStageEvent = {
+  from: string;
+  to: string;
+  justification: string;
+  byUserId: number | null;
+  byName: string;
+  at: string;
+};
+
 export const serviceOrdersTable = pgTable("service_orders", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
@@ -63,6 +74,13 @@ export const serviceOrdersTable = pgTable("service_orders", {
   technician: text("technician"),
   technicianUserId: integer("technician_user_id"),
   estimatedCost: doublePrecision("estimated_cost").notNull().default(0),
+  /** Booked technician hours for capacity planning (default from dealer settings). */
+  estimatedHours: doublePrecision("estimated_hours").notNull().default(2),
+  /** Append-only stage-transition audit trail with mandatory justifications. */
+  stageHistory: jsonb("stage_history")
+    .$type<ServiceStageEvent[]>()
+    .notNull()
+    .default([]),
   jobs: text("jobs").array().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

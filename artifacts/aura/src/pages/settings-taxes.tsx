@@ -343,6 +343,8 @@ function ServiceSettingsCard() {
   const { data: settings, isLoading } = useGetServiceSettings();
   const [intervalKm, setIntervalKm] = useState<string | null>(null);
   const [fee, setFee] = useState<string | null>(null);
+  const [jobHours, setJobHours] = useState<string | null>(null);
+  const [dayHours, setDayHours] = useState<string | null>(null);
 
   const update = useUpdateServiceSettings({
     mutation: {
@@ -350,6 +352,8 @@ function ServiceSettingsCard() {
         qc.invalidateQueries({ queryKey: getGetServiceSettingsQueryKey() });
         setIntervalKm(null);
         setFee(null);
+        setJobHours(null);
+        setDayHours(null);
         toast({ title: "Service settings saved" });
       },
       onError: (err: unknown) =>
@@ -363,12 +367,20 @@ function ServiceSettingsCard() {
 
   const shownInterval = intervalKm ?? (settings ? String(settings.serviceIntervalKm) : "");
   const shownFee = fee ?? (settings ? String(settings.lateSurchargeFee) : "");
-  const dirty = intervalKm != null || fee != null;
+  const shownJobHours = jobHours ?? (settings ? String(settings.defaultJobHours) : "");
+  const shownDayHours = dayHours ?? (settings ? String(settings.techWorkHoursPerDay) : "");
+  const dirty = intervalKm != null || fee != null || jobHours != null || dayHours != null;
   const valid =
     shownInterval.trim() !== "" &&
     Number(shownInterval) > 0 &&
     shownFee.trim() !== "" &&
-    Number(shownFee) >= 0;
+    Number(shownFee) >= 0 &&
+    shownJobHours.trim() !== "" &&
+    Number(shownJobHours) >= 0.25 &&
+    Number(shownJobHours) <= 24 &&
+    shownDayHours.trim() !== "" &&
+    Number(shownDayHours) >= 1 &&
+    Number(shownDayHours) <= 24;
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
@@ -404,6 +416,34 @@ function ServiceSettingsCard() {
               onChange={(e) => setFee(e.target.value)}
             />
           </div>
+          <div className="space-y-2">
+            <Label>Hours per vehicle (default)</Label>
+            <Input
+              type="number"
+              min="0.25"
+              max="24"
+              step="0.25"
+              value={shownJobHours}
+              onChange={(e) => setJobHours(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Booked technician hours per new service booking.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>Technician workday (hours)</Label>
+            <Input
+              type="number"
+              min="1"
+              max="24"
+              step="0.5"
+              value={shownDayHours}
+              onChange={(e) => setDayHours(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Daily capacity used by round-robin auto-assignment.
+            </p>
+          </div>
           <div>
             <Button
               disabled={!dirty || !valid || update.isPending}
@@ -412,6 +452,8 @@ function ServiceSettingsCard() {
                   data: {
                     serviceIntervalKm: Number(shownInterval),
                     lateSurchargeFee: Number(shownFee),
+                    defaultJobHours: Number(shownJobHours),
+                    techWorkHoursPerDay: Number(shownDayHours),
                   },
                 })
               }

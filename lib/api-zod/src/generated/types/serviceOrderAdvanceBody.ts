@@ -9,4 +9,9 @@ import type { ServiceOrderAdvanceBodyTargetStatus } from './serviceOrderAdvanceB
 
 export interface ServiceOrderAdvanceBody {
   targetStatus: ServiceOrderAdvanceBodyTargetStatus;
+  /**
+     * @minLength 3
+     * @maxLength 2000
+     */
+  justification: string;
 }

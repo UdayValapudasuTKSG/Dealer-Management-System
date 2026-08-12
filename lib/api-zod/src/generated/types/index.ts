@@ -516,6 +516,7 @@ export * from './serviceSettings';
 export * from './serviceSettingsSummaryCadence';
 export * from './serviceSettingsUpdate';
 export * from './serviceSettingsUpdateSummaryCadence';
+export * from './serviceStageEvent';
 export * from './stageChecklistConfig';
 export * from './stageChecklistConfigStage';
 export * from './stageChecklistInput';

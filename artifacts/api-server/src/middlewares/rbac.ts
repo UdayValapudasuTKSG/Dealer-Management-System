@@ -705,7 +705,17 @@ const PATH_MODULES: Record<string, RouteRule> = {
   payments: { module: "finance" },
   receipts: { module: "finance" },
   "outstanding-balances": { module: "finance" },
-  "service-orders": { module: "service" },
+  "service-orders": {
+    module: "service",
+    category: (req) => {
+      // Stage advance must be reachable by Technicians (service:edit, no
+      // service:create); the route enforces assigned-technician ownership.
+      if (/^\/service-orders\/\d+\/advance\/?$/.test(req.path)) {
+        return "edit";
+      }
+      return METHOD_CATEGORY[req.method] ?? "view";
+    },
+  },
   "service-technicians": { module: "service" },
   "job-cards": {
     module: "service",

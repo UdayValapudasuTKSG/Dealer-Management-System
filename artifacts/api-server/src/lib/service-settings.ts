@@ -5,6 +5,8 @@ import {
   DEFAULT_SERVICE_INTERVAL_KM,
   DEFAULT_LATE_SURCHARGE_FEE,
   DEFAULT_SERVICE_SUMMARY_CADENCE,
+  DEFAULT_JOB_HOURS,
+  DEFAULT_TECH_WORK_HOURS_PER_DAY,
   SERVICE_SUMMARY_CADENCES,
   type DealerServiceSettings,
   type ServiceSummaryCadence,
@@ -12,14 +14,18 @@ import {
 
 /**
  * Per-dealer service settings (FR-SR-07 + FR-COM-03): service interval (km),
- * the flat late-service surcharge fee, and the management scheduled-services
- * summary cadence. Reads fall back to defaults without writing; updates
- * upsert the row.
+ * the flat late-service surcharge fee, the management scheduled-services
+ * summary cadence, and GM-configurable technician capacity planning (default
+ * hours per vehicle + working hours per day). Reads fall back to defaults
+ * without writing; updates upsert the row.
  */
 
 type ServiceSettings = Pick<
   DealerServiceSettings,
-  "serviceIntervalKm" | "lateSurchargeFee"
+  | "serviceIntervalKm"
+  | "lateSurchargeFee"
+  | "defaultJobHours"
+  | "techWorkHoursPerDay"
 > & { summaryCadence: ServiceSummaryCadence };
 
 function asCadence(value: string | undefined | null): ServiceSummaryCadence {
@@ -39,6 +45,9 @@ export async function getServiceSettings(
     serviceIntervalKm: row?.serviceIntervalKm ?? DEFAULT_SERVICE_INTERVAL_KM,
     lateSurchargeFee: row?.lateSurchargeFee ?? DEFAULT_LATE_SURCHARGE_FEE,
     summaryCadence: asCadence(row?.summaryCadence),
+    defaultJobHours: row?.defaultJobHours ?? DEFAULT_JOB_HOURS,
+    techWorkHoursPerDay:
+      row?.techWorkHoursPerDay ?? DEFAULT_TECH_WORK_HOURS_PER_DAY,
   };
 }
 
@@ -48,6 +57,8 @@ export async function updateServiceSettings(
     serviceIntervalKm?: number;
     lateSurchargeFee?: number;
     summaryCadence?: ServiceSummaryCadence;
+    defaultJobHours?: number;
+    techWorkHoursPerDay?: number;
   },
 ): Promise<ServiceSettings> {
   const current = await getServiceSettings(dealerId);
@@ -55,6 +66,9 @@ export async function updateServiceSettings(
     serviceIntervalKm: patch.serviceIntervalKm ?? current.serviceIntervalKm,
     lateSurchargeFee: patch.lateSurchargeFee ?? current.lateSurchargeFee,
     summaryCadence: asCadence(patch.summaryCadence ?? current.summaryCadence),
+    defaultJobHours: patch.defaultJobHours ?? current.defaultJobHours,
+    techWorkHoursPerDay:
+      patch.techWorkHoursPerDay ?? current.techWorkHoursPerDay,
   };
   await db
     .insert(dealerServiceSettingsTable)

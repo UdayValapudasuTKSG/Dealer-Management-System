@@ -3813,12 +3813,24 @@ export const ListServiceOrdersResponseItem = zod.object({
   "technician": zod.string().nullish(),
   "technicianUserId": zod.number().nullish(),
   "estimatedCost": zod.number(),
+  "estimatedHours": zod.number().optional(),
+  "stageHistory": zod.array(zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "justification": zod.string(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })
 export const ListServiceOrdersResponse = zod.array(ListServiceOrdersResponseItem)
 
 
+
+export const createServiceOrderBodyEstimatedHoursMin = 0.25;
+export const createServiceOrderBodyEstimatedHoursMax = 24;
 
 
 
@@ -3837,6 +3849,7 @@ export const CreateServiceOrderBody = zod.object({
   "technician": zod.string().optional(),
   "technicianUserId": zod.number().optional(),
   "estimatedCost": zod.number().optional(),
+  "estimatedHours": zod.number().min(createServiceOrderBodyEstimatedHoursMin).max(createServiceOrderBodyEstimatedHoursMax).optional(),
   "jobs": zod.array(zod.string()).optional()
 })
 
@@ -3856,6 +3869,15 @@ export const CreateServiceOrderResponse = zod.object({
   "technician": zod.string().nullish(),
   "technicianUserId": zod.number().nullish(),
   "estimatedCost": zod.number(),
+  "estimatedHours": zod.number().optional(),
+  "stageHistory": zod.array(zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "justification": zod.string(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })
@@ -3864,6 +3886,11 @@ export const CreateServiceOrderResponse = zod.object({
 export const UpdateServiceOrderParams = zod.object({
   "id": zod.coerce.number()
 })
+
+export const updateServiceOrderBodyEstimatedHoursMin = 0.25;
+export const updateServiceOrderBodyEstimatedHoursMax = 24;
+
+
 
 export const UpdateServiceOrderBody = zod.object({
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection', 'comeback', 'unscheduled']).optional(),
@@ -3875,6 +3902,7 @@ export const UpdateServiceOrderBody = zod.object({
   "technician": zod.string().optional(),
   "technicianUserId": zod.number().nullish(),
   "estimatedCost": zod.number().optional(),
+  "estimatedHours": zod.number().min(updateServiceOrderBodyEstimatedHoursMin).max(updateServiceOrderBodyEstimatedHoursMax).optional(),
   "jobs": zod.array(zod.string()).optional()
 })
 
@@ -3894,6 +3922,15 @@ export const UpdateServiceOrderResponse = zod.object({
   "technician": zod.string().nullish(),
   "technicianUserId": zod.number().nullish(),
   "estimatedCost": zod.number(),
+  "estimatedHours": zod.number().optional(),
+  "stageHistory": zod.array(zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "justification": zod.string(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })
@@ -3906,8 +3943,14 @@ export const AdvanceServiceOrderParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const advanceServiceOrderBodyJustificationMin = 3;
+export const advanceServiceOrderBodyJustificationMax = 2000;
+
+
+
 export const AdvanceServiceOrderBody = zod.object({
-  "targetStatus": zod.enum(['acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled'])
+  "targetStatus": zod.enum(['acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']),
+  "justification": zod.string().min(advanceServiceOrderBodyJustificationMin).max(advanceServiceOrderBodyJustificationMax)
 })
 
 export const AdvanceServiceOrderResponse = zod.object({
@@ -3926,6 +3969,15 @@ export const AdvanceServiceOrderResponse = zod.object({
   "technician": zod.string().nullish(),
   "technicianUserId": zod.number().nullish(),
   "estimatedCost": zod.number(),
+  "estimatedHours": zod.number().optional(),
+  "stageHistory": zod.array(zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "justification": zod.string(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })
@@ -6254,6 +6306,15 @@ export const GetCustomerOverviewResponse = zod.object({
   "technician": zod.string().nullish(),
   "technicianUserId": zod.number().nullish(),
   "estimatedCost": zod.number(),
+  "estimatedHours": zod.number().optional(),
+  "stageHistory": zod.array(zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "justification": zod.string(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})).optional(),
   "jobs": zod.array(zod.string()),
   "createdAt": zod.coerce.date()
 })),
@@ -8442,7 +8503,9 @@ export const UpdateDealerBrandingResponse = zod.object({
 export const GetServiceSettingsResponse = zod.object({
   "serviceIntervalKm": zod.number(),
   "lateSurchargeFee": zod.number(),
-  "summaryCadence": zod.enum(['daily', 'weekly', 'off'])
+  "summaryCadence": zod.enum(['daily', 'weekly', 'off']),
+  "defaultJobHours": zod.number(),
+  "techWorkHoursPerDay": zod.number()
 })
 
 
@@ -8450,18 +8513,27 @@ export const updateServiceSettingsBodyServiceIntervalKmMin = 100;
 
 export const updateServiceSettingsBodyLateSurchargeFeeMin = 0;
 
+export const updateServiceSettingsBodyDefaultJobHoursMin = 0.25;
+export const updateServiceSettingsBodyDefaultJobHoursMax = 24;
+
+export const updateServiceSettingsBodyTechWorkHoursPerDayMax = 24;
+
 
 
 export const UpdateServiceSettingsBody = zod.object({
   "serviceIntervalKm": zod.number().min(updateServiceSettingsBodyServiceIntervalKmMin).optional(),
   "lateSurchargeFee": zod.number().min(updateServiceSettingsBodyLateSurchargeFeeMin).optional(),
-  "summaryCadence": zod.enum(['daily', 'weekly', 'off']).optional()
+  "summaryCadence": zod.enum(['daily', 'weekly', 'off']).optional(),
+  "defaultJobHours": zod.number().min(updateServiceSettingsBodyDefaultJobHoursMin).max(updateServiceSettingsBodyDefaultJobHoursMax).optional(),
+  "techWorkHoursPerDay": zod.number().min(1).max(updateServiceSettingsBodyTechWorkHoursPerDayMax).optional()
 })
 
 export const UpdateServiceSettingsResponse = zod.object({
   "serviceIntervalKm": zod.number(),
   "lateSurchargeFee": zod.number(),
-  "summaryCadence": zod.enum(['daily', 'weekly', 'off'])
+  "summaryCadence": zod.enum(['daily', 'weekly', 'off']),
+  "defaultJobHours": zod.number(),
+  "techWorkHoursPerDay": zod.number()
 })
 
 

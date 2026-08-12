@@ -25,5 +25,10 @@ export interface ServiceOrderInput {
   technician?: string;
   technicianUserId?: number;
   estimatedCost?: number;
+  /**
+     * @minimum 0.25
+     * @maximum 24
+     */
+  estimatedHours?: number;
   jobs?: string[];
 }

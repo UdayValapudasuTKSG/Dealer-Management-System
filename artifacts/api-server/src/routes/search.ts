@@ -11,6 +11,7 @@ import {
 } from "@workspace/db";
 import { GlobalSearchResponse } from "@workspace/api-zod";
 import { activeDealerId, hasPermission } from "../middlewares/rbac";
+import { isTechnicianRole } from "./service";
 
 const router: IRouter = Router();
 
@@ -216,6 +217,10 @@ router.get("/search", async (req, res): Promise<void> => {
         .where(
           and(
             eq(serviceOrdersTable.dealerId, dealerId),
+            // Technicians only surface their own assigned orders in search.
+            isTechnicianRole(user)
+              ? eq(serviceOrdersTable.technicianUserId, user.id)
+              : undefined,
             or(
               ilike(serviceOrdersTable.customerName, like),
               ilike(serviceOrdersTable.vehicleInfo, like),

@@ -3709,6 +3709,16 @@ export const ServiceOrderStatus = {
   cancelled: 'cancelled',
 } as const;
 
+export interface ServiceStageEvent {
+  from: string;
+  to: string;
+  justification: string;
+  /** @nullable */
+  byUserId?: number | null;
+  byName: string;
+  at: string;
+}
+
 export interface ServiceOrder {
   id: number;
   /** @nullable */
@@ -3733,6 +3743,8 @@ export interface ServiceOrder {
   /** @nullable */
   technicianUserId?: number | null;
   estimatedCost: number;
+  estimatedHours?: number;
+  stageHistory?: ServiceStageEvent[];
   jobs: string[];
   createdAt: string;
 }
@@ -3789,6 +3801,11 @@ export interface ServiceOrderInput {
   technician?: string;
   technicianUserId?: number;
   estimatedCost?: number;
+  /**
+     * @minimum 0.25
+     * @maximum 24
+     */
+  estimatedHours?: number;
   jobs?: string[];
 }
 
@@ -3839,6 +3856,11 @@ export interface ServiceOrderUpdate {
   /** @nullable */
   technicianUserId?: number | null;
   estimatedCost?: number;
+  /**
+     * @minimum 0.25
+     * @maximum 24
+     */
+  estimatedHours?: number;
   jobs?: string[];
 }
 
@@ -4217,6 +4239,8 @@ export interface ServiceSettings {
   serviceIntervalKm: number;
   lateSurchargeFee: number;
   summaryCadence: ServiceSettingsSummaryCadence;
+  defaultJobHours: number;
+  techWorkHoursPerDay: number;
 }
 
 export type ServiceSettingsUpdateSummaryCadence = typeof ServiceSettingsUpdateSummaryCadence[keyof typeof ServiceSettingsUpdateSummaryCadence];
@@ -4234,6 +4258,16 @@ export interface ServiceSettingsUpdate {
   /** @minimum 0 */
   lateSurchargeFee?: number;
   summaryCadence?: ServiceSettingsUpdateSummaryCadence;
+  /**
+     * @minimum 0.25
+     * @maximum 24
+     */
+  defaultJobHours?: number;
+  /**
+     * @minimum 1
+     * @maximum 24
+     */
+  techWorkHoursPerDay?: number;
 }
 
 export type CoveragePlanType = typeof CoveragePlanType[keyof typeof CoveragePlanType];
@@ -4615,6 +4649,11 @@ export const ServiceOrderAdvanceBodyTargetStatus = {
 
 export interface ServiceOrderAdvanceBody {
   targetStatus: ServiceOrderAdvanceBodyTargetStatus;
+  /**
+     * @minLength 3
+     * @maxLength 2000
+     */
+  justification: string;
 }
 
 export interface ServiceOrderAdvanceUnmet {

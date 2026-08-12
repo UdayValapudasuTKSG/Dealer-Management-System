@@ -13,4 +13,14 @@ export interface ServiceSettingsUpdate {
   /** @minimum 0 */
   lateSurchargeFee?: number;
   summaryCadence?: ServiceSettingsUpdateSummaryCadence;
+  /**
+     * @minimum 0.25
+     * @maximum 24
+     */
+  defaultJobHours?: number;
+  /**
+     * @minimum 1
+     * @maximum 24
+     */
+  techWorkHoursPerDay?: number;
 }

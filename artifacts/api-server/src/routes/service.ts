@@ -147,6 +147,83 @@ async function customerEmail(
 // Service orders (bookings)
 // ---------------------------------------------------------------------------
 
+/** Technicians only ever see their own assigned bookings (RBAC "My Day"). */
+export function isTechnicianRole(user: {
+  roleName?: string | null;
+  isSuperAdmin?: boolean;
+} | null | undefined): boolean {
+  if (!user || user.isSuperAdmin) return false;
+  return /technician/i.test(user.roleName ?? "");
+}
+
+/**
+ * Round-robin technician auto-assignment with capacity awareness.
+ * Eligibility: booked hours on the scheduled date + this job's hours must fit
+ * inside the GM-configured workday. Among eligible technicians, pick the
+ * least-loaded; tie-break round-robin by least-recently-assigned.
+ * Returns null when every technician's day is already full.
+ */
+async function pickTechnicianRoundRobin(
+  dealerId: number,
+  scheduledDate: string,
+  jobHours: number,
+  workHoursPerDay: number,
+  tx: Pick<typeof db, "select"> = db,
+): Promise<{ id: number; name: string } | null> {
+  const techs = await tx
+    .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
+    .from(usersTable)
+    .innerJoin(dealerUsersTable, eq(dealerUsersTable.userId, usersTable.id))
+    .innerJoin(rolesTable, eq(dealerUsersTable.roleId, rolesTable.id))
+    .where(
+      and(
+        eq(dealerUsersTable.dealerId, dealerId),
+        eq(rolesTable.name, "Technician"),
+      ),
+    );
+  if (techs.length === 0) return null;
+
+  // One pass: per-technician booked hours on the date + last assignment time.
+  const load = await tx
+    .select({
+      technicianUserId: serviceOrdersTable.technicianUserId,
+      bookedHours: sql<number>`coalesce(sum(case when ${serviceOrdersTable.scheduledDate} = ${scheduledDate} and ${serviceOrdersTable.status} not in ('cancelled','closed') then ${serviceOrdersTable.estimatedHours} else 0 end), 0)`,
+      lastAssignedAt: sql<string | null>`max(${serviceOrdersTable.createdAt})`,
+    })
+    .from(serviceOrdersTable)
+    .where(
+      and(
+        eq(serviceOrdersTable.dealerId, dealerId),
+        sql`${serviceOrdersTable.technicianUserId} is not null`,
+      ),
+    )
+    .groupBy(serviceOrdersTable.technicianUserId);
+  const byTech = new Map(load.map((l) => [l.technicianUserId, l]));
+
+  const eligible = techs
+    .map((t) => {
+      const l = byTech.get(t.id);
+      return {
+        id: t.id,
+        name: t.name ?? t.email ?? `User #${t.id}`,
+        booked: Number(l?.bookedHours ?? 0),
+        lastAssignedAt: l?.lastAssignedAt ?? null,
+      };
+    })
+    .filter((t) => t.booked + jobHours <= workHoursPerDay);
+  if (eligible.length === 0) return null;
+
+  eligible.sort((a, b) => {
+    if (a.booked !== b.booked) return a.booked - b.booked;
+    // Round-robin tie-break: never-assigned first, then oldest last assignment.
+    if (a.lastAssignedAt === b.lastAssignedAt) return a.id - b.id;
+    if (a.lastAssignedAt == null) return -1;
+    if (b.lastAssignedAt == null) return 1;
+    return a.lastAssignedAt < b.lastAssignedAt ? -1 : 1;
+  });
+  return { id: eligible[0]!.id, name: eligible[0]!.name };
+}
+
 router.get("/service-orders", async (req, res): Promise<void> => {
   const query = ListServiceOrdersQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -154,6 +231,8 @@ router.get("/service-orders", async (req, res): Promise<void> => {
     return;
   }
 
+  // RBAC: technicians only see bookings assigned to them (server-enforced).
+  const viewer = res.locals.user;
   const rows = await db
     .select()
     .from(serviceOrdersTable)
@@ -162,6 +241,9 @@ router.get("/service-orders", async (req, res): Promise<void> => {
         eq(serviceOrdersTable.dealerId, activeDealerId(res)),
         query.data.status
           ? eq(serviceOrdersTable.status, query.data.status)
+          : undefined,
+        isTechnicianRole(viewer)
+          ? eq(serviceOrdersTable.technicianUserId, viewer!.id)
           : undefined,
       ),
     )
@@ -178,10 +260,18 @@ router.post("/service-orders", async (req, res): Promise<void> => {
   }
 
   const createDealerId = activeDealerId(res);
+  const settings = await getServiceSettings(createDealerId);
+  const estimatedHours = parsed.data.estimatedHours ?? settings.defaultJobHours;
+  const scheduledDateStr = toDateString(parsed.data.scheduledDate)!;
+
   // Stamp the technician's user ID so briefing scoping matches by ID, not name.
-  const technicianUserId =
+  let technicianUserId =
     parsed.data.technicianUserId ??
     (await resolveDealerUserIdByName(createDealerId, parsed.data.technician));
+  let technicianName = parsed.data.technician;
+  let assignmentNote: string | null = null;
+
+  const autoAssign = technicianUserId == null && !parsed.data.technician;
 
   // Pay-type resolution: explicit wins; warranty/recall work defaults to
   // warranty pay; otherwise an active coverage plan (by date window) for the
@@ -210,20 +300,61 @@ router.post("/service-orders", async (req, res): Promise<void> => {
     }
   }
 
-  const [order] = await db
-    .insert(serviceOrdersTable)
-    .values({
-      ...parsed.data,
-      payType,
-      technicianUserId,
+  // Assignment + insert run in one transaction under a per-dealer/date
+  // advisory lock so concurrent bookings can't both grab a technician's last
+  // free hours and overbook the day.
+  const order = await db.transaction(async (tx) => {
+    if (autoAssign) {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`svc-assign-${createDealerId}-${scheduledDateStr}`}))`,
+      );
+      const pick = await pickTechnicianRoundRobin(
+        createDealerId,
+        scheduledDateStr,
+        estimatedHours,
+        settings.techWorkHoursPerDay,
+        tx,
+      );
+      if (pick) {
+        technicianUserId = pick.id;
+        technicianName = pick.name;
+      } else {
+        assignmentNote = `No technician has ${estimatedHours}h free on ${scheduledDateStr} (workday is ${settings.techWorkHoursPerDay}h) — booking left unassigned; reschedule or assign manually.`;
+      }
+    }
+    const [row] = await tx
+      .insert(serviceOrdersTable)
+      .values({
+        ...parsed.data,
+        payType,
+        technician: technicianName,
+        technicianUserId,
+        estimatedHours,
+        dealerId: createDealerId,
+        scheduledDate: scheduledDateStr,
+      })
+      .returning();
+    return row;
+  });
+
+  // Tell the auto-assigned technician a job landed on their day.
+  if (order && technicianUserId != null && parsed.data.technicianUserId == null) {
+    notifyUser({
       dealerId: createDealerId,
-      scheduledDate: toDateString(parsed.data.scheduledDate)!,
-    })
-    .returning();
+      userId: technicianUserId,
+      type: "assignment",
+      entityType: "service_order",
+      entityId: order.id,
+      title: `New service booking #${order.id} assigned to you`,
+      body: `${order.vehicleInfo} — ${order.type}, ${estimatedHours}h on ${scheduledDateStr}.`,
+    }).catch(() => {});
+  }
 
   // FR-COM-01: branded booking confirmation (deduped per order).
   if (order && order.customerId != null) onServiceOrderBooked(order);
 
+  // Note: when assignmentNote is set the order goes out unassigned; the
+  // client detects technician == null and surfaces the capacity warning.
   res.status(201).json(CreateServiceOrderResponse.parse(order));
 });
 
@@ -253,6 +384,11 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
         eq(serviceOrdersTable.dealerId, dealerId),
       ),
     );
+
+  if (before && !technicianOwnsOrder(res, before)) {
+    res.status(404).json({ error: "Service order not found" });
+    return;
+  }
 
   // Keep the technician user ID in sync when only the display name is sent.
   // Clear the ID explicitly when the new name doesn't resolve, so a stale ID
@@ -288,6 +424,16 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
 
   res.json(UpdateServiceOrderResponse.parse(order));
 });
+
+/** Technicians may only touch orders assigned to them (404, not 403, to avoid leaking existence). */
+function technicianOwnsOrder(
+  res: { locals: { user?: { id: number; roleName?: string | null; isSuperAdmin?: boolean } | null } },
+  order: { technicianUserId: number | null },
+): boolean {
+  const viewer = res.locals.user;
+  if (!isTechnicianRole(viewer)) return true;
+  return order.technicianUserId === viewer!.id;
+}
 
 router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
   const params = SendServiceReminderParams.safeParse(req.params);
@@ -366,7 +512,7 @@ router.post("/service-orders/:id/advance", async (req, res): Promise<void> => {
         eq(serviceOrdersTable.dealerId, dealerId),
       ),
     );
-  if (!order) {
+  if (!order || !technicianOwnsOrder(res, order)) {
     res.status(404).json({ error: "Service order not found" });
     return;
   }
@@ -463,10 +609,23 @@ router.post("/service-orders/:id/advance", async (req, res): Promise<void> => {
     return;
   }
 
+  // Every stage transition carries a mandatory justification (audit trail).
+  const stageEvent = {
+    from: order.status,
+    to: target,
+    justification: parsed.data.justification.trim(),
+    byUserId: res.locals.user?.id ?? null,
+    byName: res.locals.user?.name ?? res.locals.user?.email ?? "Unknown",
+    at: new Date().toISOString(),
+  };
+
   const [before] = [order];
   const [updated] = await db
     .update(serviceOrdersTable)
-    .set({ status: target })
+    .set({
+      status: target,
+      stageHistory: sql`coalesce(${serviceOrdersTable.stageHistory}, '[]'::jsonb) || ${JSON.stringify([stageEvent])}::jsonb`,
+    })
     .where(
       and(
         eq(serviceOrdersTable.id, order.id),

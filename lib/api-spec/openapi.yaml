@@ -9163,10 +9163,25 @@ components:
         technician: { type: ["string", "null"] }
         technicianUserId: { type: ["integer", "null"] }
         estimatedCost: { type: number }
+        estimatedHours: { type: number }
+        stageHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceStageEvent"
         jobs:
           type: array
           items: { type: string }
         createdAt: { type: string, format: date-time }
+    ServiceStageEvent:
+      type: object
+      required: [from, to, justification, byName, at]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        justification: { type: string }
+        byUserId: { type: ["integer", "null"] }
+        byName: { type: string }
+        at: { type: string }
     ServiceOrderInput:
       type: object
       required: [vehicleInfo, type, scheduledDate]
@@ -9185,6 +9200,7 @@ components:
         technician: { type: string }
         technicianUserId: { type: integer }
         estimatedCost: { type: number }
+        estimatedHours: { type: number, minimum: 0.25, maximum: 24 }
         jobs:
           type: array
           items: { type: string }
@@ -9200,6 +9216,7 @@ components:
         technician: { type: string }
         technicianUserId: { type: ["integer", "null"] }
         estimatedCost: { type: number }
+        estimatedHours: { type: number, minimum: 0.25, maximum: 24 }
         jobs:
           type: array
           items: { type: string }
@@ -9425,17 +9442,21 @@ components:
         reason: { type: string, minLength: 3 }
     ServiceSettings:
       type: object
-      required: [serviceIntervalKm, lateSurchargeFee, summaryCadence]
+      required: [serviceIntervalKm, lateSurchargeFee, summaryCadence, defaultJobHours, techWorkHoursPerDay]
       properties:
         serviceIntervalKm: { type: integer }
         lateSurchargeFee: { type: number }
         summaryCadence: { type: string, enum: [daily, weekly, "off"] }
+        defaultJobHours: { type: number }
+        techWorkHoursPerDay: { type: number }
     ServiceSettingsUpdate:
       type: object
       properties:
         serviceIntervalKm: { type: integer, minimum: 100 }
         lateSurchargeFee: { type: number, minimum: 0 }
         summaryCadence: { type: string, enum: [daily, weekly, "off"] }
+        defaultJobHours: { type: number, minimum: 0.25, maximum: 24 }
+        techWorkHoursPerDay: { type: number, minimum: 1, maximum: 24 }
 
     CoveragePlan:
       type: object
@@ -9692,9 +9713,10 @@ components:
         reason: { type: string, minLength: 3 }
     ServiceOrderAdvanceBody:
       type: object
-      required: [targetStatus]
+      required: [targetStatus, justification]
       properties:
         targetStatus: { type: string, enum: [acknowledged, in_progress, on_hold, resolved, closed, cancelled] }
+        justification: { type: string, minLength: 3, maxLength: 2000 }
     ServiceOrderAdvanceUnmet:
       type: object
       required: [unmet]
