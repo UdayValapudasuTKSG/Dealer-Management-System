@@ -774,10 +774,10 @@ function BookingsTab() {
           />
         </div>
       )}
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 gap-3">
       {isLoading ? (
         [...Array(4)].map((_, i) => (
-          <div key={i} className="h-40 bg-white/[0.05] rounded-3xl animate-pulse" />
+          <div key={i} className="h-24 bg-white/[0.05] rounded-2xl animate-pulse" />
         ))
       ) : orders?.length === 0 ? (
         <EmptyState icon={Calendar} text="No bookings yet. Book the first service." />
@@ -1004,9 +1004,9 @@ function JobCardsTab() {
 
   if (isLoading)
     return (
-      <div className="grid gap-6">
+      <div className="grid gap-4">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-48 bg-white/[0.05] rounded-3xl animate-pulse" />
+          <div key={i} className="h-32 bg-white/[0.05] rounded-2xl animate-pulse" />
         ))}
       </div>
     );
@@ -1015,7 +1015,7 @@ function JobCardsTab() {
     return <EmptyState icon={ClipboardList} text="No job cards yet. Open one from a booking." />;
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
       {cards.map((card) => (
         <JobCardPanel key={card.id} card={card} />
       ))}
@@ -1081,31 +1081,34 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
   const next = NEXT[card.status];
 
   return (
-    <Card className="glass-panel border-none rounded-3xl overflow-hidden">
-      <CardContent className="p-6 space-y-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-xs font-semibold tracking-widest text-primary uppercase mb-1">
-              Job Card #{card.id} · RO #{card.serviceOrderId}
+    <Card className="glass-panel border-none rounded-2xl overflow-hidden">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-bold text-base leading-tight truncate">{card.title}</h3>
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border-none shrink-0",
+                  card.status === "completed"
+                    ? "bg-primary/15 text-primary"
+                    : "bg-white/[0.05] text-foreground",
+                )}
+              >
+                {JOB_STATUS_LABEL[card.status]}
+              </Badge>
             </div>
-            <h3 className="font-bold text-lg leading-tight">{card.title}</h3>
-            <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-              <PenTool className="w-3.5 h-3.5" />
+            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+              <span className="font-semibold tracking-wider text-primary uppercase">
+                JC #{card.id} · RO #{card.serviceOrderId}
+              </span>
+              <span>·</span>
+              <PenTool className="w-3 h-3" />
               {card.technicianName ?? "Unassigned"}
               <span>· {card.laborHours}h @ {money.gyd(card.laborRate)}/hr</span>
             </div>
           </div>
-          <Badge
-            variant="secondary"
-            className={cn(
-              "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest border-none",
-              card.status === "completed"
-                ? "bg-primary/15 text-primary"
-                : "bg-white/[0.05] text-foreground",
-            )}
-          >
-            {JOB_STATUS_LABEL[card.status]}
-          </Badge>
         </div>
 
         {card.checklist.length > 0 && (
@@ -1129,19 +1132,19 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
           </div>
         )}
 
-        <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 space-y-2">
-          <div className="flex items-center justify-between text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+        <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 space-y-1.5">
+          <div className="flex items-center justify-between text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
             <span className="flex items-center gap-1.5">
-              <Package className="w-3.5 h-3.5" /> Parts
+              <Package className="w-3 h-3" /> Parts
             </span>
             <span>
               Parts {money.gyd(partsTotal)} · Labour {money.gyd(laborTotal)}
             </span>
           </div>
           {lines?.length ? (
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {lines.map((l) => (
-                <div key={l.id} className="flex items-center justify-between text-sm">
+                <div key={l.id} className="flex items-center justify-between text-xs">
                   <span className={cn(l.kind === "return" && "text-muted-foreground line-through")}>
                     {l.partName} × {l.quantity}
                     {l.kind === "return" && " (returned)"}
@@ -1158,9 +1161,9 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No parts issued.</p>
+            <p className="text-xs text-muted-foreground">No parts issued.</p>
           )}
-          <div className="flex gap-2 pt-1">
+          <div className="flex gap-2 pt-0.5">
             <CreateRecordDialog
               title="Issue / Return Part"
               description="Issuing decrements stock; returning restocks it."
@@ -1287,12 +1290,12 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
         </div>
 
         {(card.quoteTotal ?? 0) > 0 && (
-          <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 flex items-center justify-between gap-3">
+          <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 flex items-center justify-between gap-3">
             <div>
-              <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-0.5">
+              <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mb-0.5">
                 Customer quote
               </div>
-              <div className="font-light text-xl tracking-tight">
+              <div className="font-medium text-base tracking-tight">
                 {money.gyd(card.quoteTotal ?? 0)}
               </div>
             </div>
@@ -1397,7 +1400,7 @@ function SurchargeSection({ card, onChanged }: { card: JobCard; onChanged: () =>
   };
 
   return (
-    <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 space-y-2">
+    <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 space-y-2">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1.5 mb-0.5">
@@ -1501,7 +1504,7 @@ function RolloverSection({
   if (card.rolloverStatus === "none" && !active) return null;
 
   return (
-    <div className="rounded-2xl bg-white/[0.03] border border-white/10 p-4 space-y-3">
+    <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 space-y-2">
       <div className="flex items-center justify-between gap-3">
         <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1.5">
           <CalendarClock className="w-3.5 h-3.5" /> Multi-day rollover
