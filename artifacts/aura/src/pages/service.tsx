@@ -304,6 +304,7 @@ function CreateBookingDialog() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createOrder = useCreateServiceOrder();
+  const { data: technicians } = useListServiceTechnicians();
   return (
     <CreateRecordDialog
       title="Book Service"
@@ -341,6 +342,17 @@ function CreateBookingDialog() {
         { name: "odometer", label: "Odometer (km)", type: "number", span: "half", placeholder: "42000" },
         { name: "estimatedCost", label: "Est. cost", type: "number", span: "half", placeholder: "0" },
         { name: "estimatedHours", label: "Booked hours (blank = dealer default)", type: "number", span: "half", placeholder: "2" },
+        {
+          name: "technicianUserId",
+          label: "Technician (blank = auto round-robin)",
+          type: "select",
+          span: "half",
+          options: [
+            { value: "auto", label: "Auto — round-robin" },
+            ...(technicians?.map((t) => ({ value: String(t.id), label: t.name })) ?? []),
+          ],
+          defaultValue: "auto",
+        },
       ]}
       onSubmit={async (values) => {
         const v = values as Record<string, unknown>;
@@ -350,18 +362,25 @@ function CreateBookingDialog() {
         } else {
           delete v.estimatedHours;
         }
+        if (v.technicianUserId && v.technicianUserId !== "auto") {
+          const tech = technicians?.find((t) => String(t.id) === String(v.technicianUserId));
+          v.technicianUserId = Number(v.technicianUserId);
+          if (tech) v.technician = tech.name;
+        } else {
+          delete v.technicianUserId;
+        }
         const order = await createOrder.mutateAsync({ data: v as never });
         queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
         if (order.technician) {
           toast({
             title: "Booking created",
-            description: `Auto-assigned to ${order.technician} for ${order.estimatedHours}h.`,
+            description: `Assigned to ${order.technician} for ${order.estimatedHours}h.`,
           });
         } else {
           toast({
-            title: "Booking created — no technician free",
+            title: "Booking created — unassigned",
             description:
-              "Every technician's day is fully booked for that date. Reschedule or assign manually.",
+              "No technicians are set up for this dealership yet, so the booking has no assignee.",
             variant: "destructive",
           });
         }

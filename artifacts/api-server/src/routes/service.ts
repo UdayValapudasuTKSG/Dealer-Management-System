@@ -169,7 +169,7 @@ async function pickTechnicianRoundRobin(
   jobHours: number,
   workHoursPerDay: number,
   tx: Pick<typeof db, "select"> = db,
-): Promise<{ id: number; name: string } | null> {
+): Promise<{ id: number; name: string; overCapacity: boolean } | null> {
   const techs = await tx
     .select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
     .from(usersTable)
@@ -200,28 +200,40 @@ async function pickTechnicianRoundRobin(
     .groupBy(serviceOrdersTable.technicianUserId);
   const byTech = new Map(load.map((l) => [l.technicianUserId, l]));
 
-  const eligible = techs
-    .map((t) => {
-      const l = byTech.get(t.id);
-      return {
-        id: t.id,
-        name: t.name ?? t.email ?? `User #${t.id}`,
-        booked: Number(l?.bookedHours ?? 0),
-        lastAssignedAt: l?.lastAssignedAt ?? null,
-      };
-    })
-    .filter((t) => t.booked + jobHours <= workHoursPerDay);
-  if (eligible.length === 0) return null;
+  const candidates = techs.map((t) => {
+    const l = byTech.get(t.id);
+    return {
+      id: t.id,
+      name: t.name ?? t.email ?? `User #${t.id}`,
+      booked: Number(l?.bookedHours ?? 0),
+      lastAssignedAt: l?.lastAssignedAt ?? null,
+    };
+  });
 
-  eligible.sort((a, b) => {
-    if (a.booked !== b.booked) return a.booked - b.booked;
-    // Round-robin tie-break: never-assigned first, then oldest last assignment.
+  // FIFO ordering: never-assigned first, then oldest last assignment.
+  const fifo = (a: (typeof candidates)[number], b: (typeof candidates)[number]) => {
     if (a.lastAssignedAt === b.lastAssignedAt) return a.id - b.id;
     if (a.lastAssignedAt == null) return -1;
     if (b.lastAssignedAt == null) return 1;
     return a.lastAssignedAt < b.lastAssignedAt ? -1 : 1;
-  });
-  return { id: eligible[0]!.id, name: eligible[0]!.name };
+  };
+
+  const eligible = candidates.filter(
+    (t) => t.booked + jobHours <= workHoursPerDay,
+  );
+  if (eligible.length > 0) {
+    eligible.sort((a, b) =>
+      a.booked !== b.booked ? a.booked - b.booked : fifo(a, b),
+    );
+    const top = eligible[0]!;
+    return { id: top.id, name: top.name, overCapacity: false };
+  }
+
+  // Everyone is full: still assign — strict FIFO across all technicians so
+  // the overflow lands on whoever has waited longest since their last job.
+  candidates.sort(fifo);
+  const next = candidates[0]!;
+  return { id: next.id, name: next.name, overCapacity: true };
 }
 
 router.get("/service-orders", async (req, res): Promise<void> => {
@@ -271,6 +283,16 @@ router.post("/service-orders", async (req, res): Promise<void> => {
   let technicianName = parsed.data.technician;
   let assignmentNote: string | null = null;
 
+  // Manual assignment by ID only: backfill the display name from the user
+  // record so the booking card never shows "Unassigned" for an assigned tech.
+  if (technicianUserId != null && !technicianName) {
+    const [u] = await db
+      .select({ name: usersTable.name, email: usersTable.email })
+      .from(usersTable)
+      .where(eq(usersTable.id, technicianUserId));
+    technicianName = u?.name ?? u?.email ?? `User #${technicianUserId}`;
+  }
+
   const autoAssign = technicianUserId == null && !parsed.data.technician;
 
   // Pay-type resolution: explicit wins; warranty/recall work defaults to
@@ -318,8 +340,11 @@ router.post("/service-orders", async (req, res): Promise<void> => {
       if (pick) {
         technicianUserId = pick.id;
         technicianName = pick.name;
+        if (pick.overCapacity) {
+          assignmentNote = `All technicians are fully booked on ${scheduledDateStr} — assigned to ${pick.name} over capacity (FIFO).`;
+        }
       } else {
-        assignmentNote = `No technician has ${estimatedHours}h free on ${scheduledDateStr} (workday is ${settings.techWorkHoursPerDay}h) — booking left unassigned; reschedule or assign manually.`;
+        assignmentNote = `No technicians are set up for this dealership — booking left unassigned.`;
       }
     }
     const [row] = await tx
