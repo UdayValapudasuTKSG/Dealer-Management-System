@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   gatesTable,
@@ -11,8 +11,15 @@ import {
   bookingsTable,
   deliveriesTable,
   timelineEventsTable,
+  paymentsTable,
   type Gate,
 } from "@workspace/db";
+import {
+  ensureFinalInvoiceForDeal,
+  approvedFinanceAppForDeal,
+  applyPayment,
+  PaymentGuardError,
+} from "../lib/invoicing";
 import {
   ADVANCE_TARGET_PHASE,
   REVIEW_STAGE_LABEL,
@@ -376,6 +383,131 @@ async function applyCascade(
         title: "Recall/damage hold cleared",
         detail:
           "The unit was inspected and cleared; its recall/damage flags are lifted and the blocked deal commit can be retried.",
+      };
+    }
+    case "bank_funds_received": {
+      // Manager confirmed the bank's undertaken funds actually arrived.
+      // Post the payment against the deal's settlement invoice (capped at
+      // the outstanding balance — applyPayment's overpayment/duplicate
+      // guards also hold), then record the financing facility as disbursed
+      // so the bank-financed commit check passes.
+      if (gate.refType !== "deal" || !gate.refId) {
+        return { title: "Bank funds confirmed", detail: "" };
+      }
+      const [deal] = await tx
+        .select()
+        .from(dealsTable)
+        .where(
+          and(eq(dealsTable.id, gate.refId), eq(dealsTable.dealerId, gate.dealerId)),
+        );
+      if (!deal) {
+        return { title: "Bank funds confirmed", detail: "Deal no longer exists." };
+      }
+      // Ensure the settlement invoice BEFORE any finance app exists so its
+      // amount is NOT netted by the facility — the bank's money arrives as a
+      // visible ledger payment instead, driving Remaining to zero.
+      const invoice = await ensureFinalInvoiceForDeal(deal);
+      let posted = 0;
+      if (invoice && invoice.status !== "void") {
+        const [{ paid }] = await tx
+          .select({
+            paid: sql<number>`coalesce(sum(${paymentsTable.amount}), 0)::float`,
+          })
+          .from(paymentsTable)
+          .where(
+            and(
+              eq(paymentsTable.invoiceId, invoice.id),
+              eq(paymentsTable.dealerId, gate.dealerId),
+            ),
+          );
+        const outstanding =
+          Math.round((invoice.amount - (paid ?? 0)) * 100) / 100;
+        const confirmed = effectiveAmount > 0 ? effectiveAmount : outstanding;
+        posted = Math.min(confirmed, outstanding);
+        if (posted > 0.005) {
+          try {
+            await applyPayment({
+              invoice,
+              amount: posted,
+              method: "financing",
+              reference: `bank-letter-gate-${gate.id}`,
+              receivedBy: "Bank funds confirmation",
+            });
+          } catch (err) {
+            // A duplicate reference means a previous approval attempt already
+            // posted this gate's payment — safe to continue idempotently.
+            if (
+              !(err instanceof PaymentGuardError && err.code === "duplicate_reference")
+            ) {
+              throw err;
+            }
+            posted = 0;
+          }
+        } else {
+          posted = 0;
+        }
+      }
+      // Record the disbursed facility so the financed-commit check passes.
+      const existingApp = await approvedFinanceAppForDeal(deal);
+      const nowIso = new Date().toISOString();
+      if (existingApp) {
+        if (existingApp.status !== "disbursed") {
+          await tx
+            .update(financeApplicationsTable)
+            .set({
+              status: "disbursed",
+              disbursedAt: new Date(),
+              statusHistory: [
+                ...existingApp.statusHistory,
+                {
+                  status: "disbursed",
+                  note: `Bank letter approved (gate #${gate.id}) — funds received`,
+                  at: nowIso,
+                },
+              ],
+            })
+            .where(eq(financeApplicationsTable.id, existingApp.id));
+        }
+      } else {
+        const lender =
+          gate.evidence.find((e) => e.label === "Bank")?.value ?? "Bank (letter)";
+        // Clamp to the deal's OTD price: the letter content is untrusted, so
+        // a fabricated undertaking amount must never inflate the recorded
+        // facility beyond what the deal is actually worth.
+        const facilityAmount = Math.min(
+          effectiveAmount > 0 ? effectiveAmount : posted,
+          deal.otdPrice,
+        );
+        await tx.insert(financeApplicationsTable).values({
+          dealerId: gate.dealerId,
+          dealId: deal.id,
+          leadId: deal.leadId,
+          customerId: deal.customerId,
+          customerName: deal.customerName ?? "Customer",
+          amount: facilityAmount,
+          downPayment: 0,
+          termMonths: 0,
+          apr: 0,
+          lender,
+          status: "disbursed",
+          submittedAt: new Date(),
+          decisionAt: new Date(),
+          disbursedAt: new Date(),
+          statusHistory: [
+            {
+              status: "disbursed",
+              note: `Created from approved bank letter (gate #${gate.id})`,
+              at: nowIso,
+            },
+          ],
+        });
+      }
+      return {
+        title: "Bank funds confirmed",
+        detail:
+          posted > 0
+            ? `GY$${posted.toLocaleString("en-US", { maximumFractionDigits: 0 })} posted to the settlement invoice from the bank's letter of undertaking; the financing facility is recorded as disbursed and the deal can now commit.`
+            : "Funds confirmation recorded; the settlement invoice was already covered and the financing facility is recorded as disbursed.",
       };
     }
     default:

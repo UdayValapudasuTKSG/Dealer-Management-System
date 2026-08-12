@@ -48,6 +48,8 @@ import type {
   AuditLogEntry,
   Bank,
   BankInput,
+  BankLetterResult,
+  BankLetterUpload,
   BankUpdate,
   BookTestDriveInput,
   Booking,
@@ -6269,6 +6271,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateDealMutationOptions(options));
+    }
+
+export const getUploadDealBankLetterUrl = (id: number,) => {
+
+
+
+
+  return `/api/deals/${id}/bank-letters`
+}
+
+export const uploadDealBankLetter = async (id: number,
+    bankLetterUpload: BankLetterUpload, options?: RequestInit): Promise<BankLetterResult> => {
+
+  return customFetch<BankLetterResult>(getUploadDealBankLetterUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bankLetterUpload)
+  }
+);}
+
+
+
+
+
+export const getUploadDealBankLetterMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDealBankLetter>>, TError,{id: number;data: BodyType<BankLetterUpload>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadDealBankLetter>>, TError,{id: number;data: BodyType<BankLetterUpload>}, TContext> => {
+
+const mutationKey = ['uploadDealBankLetter'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadDealBankLetter>>, {id: number;data: BodyType<BankLetterUpload>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  uploadDealBankLetter(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadDealBankLetterMutationResult = NonNullable<Awaited<ReturnType<typeof uploadDealBankLetter>>>
+    export type UploadDealBankLetterMutationBody = BodyType<BankLetterUpload>
+    export type UploadDealBankLetterMutationError = ErrorType<Error>
+
+    export const useUploadDealBankLetter = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadDealBankLetter>>, TError,{id: number;data: BodyType<BankLetterUpload>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadDealBankLetter>>,
+        TError,
+        {id: number;data: BodyType<BankLetterUpload>},
+        TContext
+      > => {
+      return useMutation(getUploadDealBankLetterMutationOptions(options));
     }
 
 export const getListAppraisalsUrl = () => {

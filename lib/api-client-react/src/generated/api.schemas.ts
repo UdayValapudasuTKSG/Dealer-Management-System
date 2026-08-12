@@ -5473,6 +5473,7 @@ export const GateType = {
   refund_release: 'refund_release',
   stage_advance: 'stage_advance',
   recall_damage: 'recall_damage',
+  bank_funds_received: 'bank_funds_received',
 } as const;
 
 export type GateStatus = typeof GateStatus[keyof typeof GateStatus];
@@ -5539,6 +5540,22 @@ export interface GateResolution {
   note?: string;
   adjustedAmount?: number;
   resolvedBy?: string;
+}
+
+export interface BankLetterUpload {
+  /** @minLength 1 */
+  storageKey: string;
+  /** @minLength 1 */
+  fileName: string;
+  /** @minLength 1 */
+  mimeType: string;
+  /** @minimum 1 */
+  sizeBytes: number;
+}
+
+export interface BankLetterResult {
+  document: Document;
+  gate?: Gate | null;
 }
 
 export type GraExtractRequestMediaType = typeof GraExtractRequestMediaType[keyof typeof GraExtractRequestMediaType];

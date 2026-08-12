@@ -49,6 +49,7 @@ export const insertGateSchema = createInsertSchema(gatesTable, {
     "refund_release",
     "stage_advance",
     "recall_damage",
+    "bank_funds_received",
   ]),
   status: z.enum(["pending", "approved", "adjusted", "dismissed"]),
   priority: z.enum(["high", "normal", "low"]),

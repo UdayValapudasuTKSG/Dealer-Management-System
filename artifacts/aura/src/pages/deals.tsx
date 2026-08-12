@@ -13,12 +13,17 @@ import {
   useListBookings,
   useListInvoices,
   useListOutstandingBalances,
+  useUploadDealBankLetter,
+  getListGatesQueryKey,
+  getListDocumentsQueryKey,
   getListDealsQueryKey,
   getListBookingsQueryKey,
   getGetLeadQueryKey,
   getGetLeadTimelineQueryKey,
 } from "@workspace/api-client-react";
-import type { Deal } from "@workspace/api-client-react";
+import type { Deal, Gate } from "@workspace/api-client-react";
+import { useUpload } from "@workspace/object-storage-web";
+import { useRef } from "react";
 import { DealQuickFinanceDialogs } from "@/components/deal-quick-finance";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1041,6 +1046,24 @@ export default function Deals() {
                                   </span>
                                 )}
                               </div>
+                              {deal.finalPaymentMethod === "bank_financing" && (
+                                <BankLetterSection
+                                  deal={deal}
+                                  pendingGate={(gates ?? []).find(
+                                    (g) =>
+                                      g.type === "bank_funds_received" &&
+                                      g.refType === "deal" &&
+                                      g.refId === deal.id,
+                                  )}
+                                  approvedGate={(approvedGates ?? []).find(
+                                    (g) =>
+                                      g.type === "bank_funds_received" &&
+                                      g.refType === "deal" &&
+                                      g.refId === deal.id,
+                                  )}
+                                  canUpload={canEditDeals || canFinance}
+                                />
+                              )}
                               {(deal.stage === "desking" ||
                                 deal.stage === "committed") &&
                                 deal.otdPrice > 0 && (
@@ -1554,5 +1577,122 @@ export default function Deals() {
       </Dialog>
     </Page>
     </>
+  );
+}
+
+/**
+ * Bank letter of undertaking for bank-financed deals: upload the letter
+ * (stored on the linked lead's document file), the agent reads it and raises
+ * a funds-received approval; approval posts the bank's payment so the
+ * remaining balance clears and the deal can commit.
+ */
+function BankLetterSection({
+  deal,
+  pendingGate,
+  approvedGate,
+  canUpload,
+}: {
+  deal: Deal;
+  pendingGate?: Gate;
+  approvedGate?: Gate;
+  canUpload: boolean;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const { uploadFile } = useUpload();
+  const uploadLetter = useUploadDealBankLetter();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const onFile = async (file: File | null) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const uploaded = await uploadFile(file);
+      if (!uploaded) throw new Error("Upload failed");
+      const result = await uploadLetter.mutateAsync({
+        id: deal.id,
+        data: {
+          storageKey: uploaded.objectPath,
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+        },
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: getListGatesQueryKey({ status: "pending" }) }),
+        queryClient.invalidateQueries({ queryKey: getListDocumentsQueryKey({ entityType: "lead", entityId: deal.leadId ?? 0 }) }),
+      ]);
+      const amt = result.gate?.amount;
+      toast({
+        title: "Bank letter sent for approval",
+        description: amt
+          ? `The letter was read (GY$${Number(amt).toLocaleString("en-US")}) and is awaiting manager confirmation that the funds were received.`
+          : "The letter was saved to the lead's documents and is awaiting manager review.",
+      });
+    } catch (err) {
+      toast({
+        title: "Bank letter upload failed",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1 pt-1.5">
+      <div className="flex justify-between items-center">
+        <span className="uppercase tracking-wider text-[10px] text-muted-foreground">
+          Bank letter
+        </span>
+        {approvedGate ? (
+          <span className="text-[10px] font-semibold text-emerald-500">
+            Funds confirmed
+          </span>
+        ) : pendingGate ? (
+          <span className="text-[10px] font-semibold text-amber-500">
+            Awaiting approval
+          </span>
+        ) : !deal.depositPaid ? (
+          <span className="text-[10px] text-muted-foreground">
+            After reservation fee
+          </span>
+        ) : deal.leadId == null ? (
+          <span className="text-[10px] text-muted-foreground">
+            Link a lead first
+          </span>
+        ) : canUpload ? (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              className="hidden"
+              onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 px-2 text-[10px]"
+              disabled={busy}
+              onClick={() => fileRef.current?.click()}
+            >
+              {busy ? "Reading letter…" : "Upload letter"}
+            </Button>
+          </>
+        ) : (
+          <span className="text-[10px] text-muted-foreground">Not uploaded</span>
+        )}
+      </div>
+      {pendingGate?.amount != null && (
+        <span className="text-[10px] text-muted-foreground text-right">
+          GY${Number(pendingGate.amount).toLocaleString("en-US")} undertaken —
+          approve on this page once received
+        </span>
+      )}
+    </div>
   );
 }

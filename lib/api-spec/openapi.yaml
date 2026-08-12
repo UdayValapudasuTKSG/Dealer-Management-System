@@ -2122,6 +2122,41 @@ paths:
                   gate: { type: string }
                   gateId: { type: integer }
 
+  /deals/{id}/bank-letters:
+    post:
+      operationId: uploadDealBankLetter
+      tags: [deals]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankLetterUpload"
+      responses:
+        "201":
+          description: Bank letter stored on the linked lead; extraction result and approval gate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankLetterResult"
+        "404":
+          description: Deal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Deal is not bank-financed, reservation fee unpaid, no linked lead, or invalid file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /appraisals:
     get:
       operationId: listAppraisals
@@ -10328,7 +10363,7 @@ components:
       required: [id, type, status, priority, title, summary, evidence, createdAt]
       properties:
         id: { type: integer }
-        type: { type: string, enum: [below_floor_price, fee_waiver, credit_decline, capital_order, gra_filing, refund_release, stage_advance, recall_damage] }
+        type: { type: string, enum: [below_floor_price, fee_waiver, credit_decline, capital_order, gra_filing, refund_release, stage_advance, recall_damage, bank_funds_received] }
         status: { type: string, enum: [pending, approved, adjusted, dismissed] }
         priority: { type: string, enum: [high, normal, low] }
         customerId: { type: ["integer", "null"] }
@@ -10355,6 +10390,25 @@ components:
         note: { type: string }
         adjustedAmount: { type: number }
         resolvedBy: { type: string }
+
+    BankLetterUpload:
+      type: object
+      required: [storageKey, fileName, mimeType, sizeBytes]
+      properties:
+        storageKey: { type: string, minLength: 1 }
+        fileName: { type: string, minLength: 1 }
+        mimeType: { type: string, minLength: 1 }
+        sizeBytes: { type: integer, minimum: 1 }
+    BankLetterResult:
+      type: object
+      required: [document]
+      properties:
+        document:
+          $ref: "#/components/schemas/Document"
+        gate:
+          oneOf:
+            - $ref: "#/components/schemas/Gate"
+            - type: "null"
 
     GraExtractRequest:
       type: object

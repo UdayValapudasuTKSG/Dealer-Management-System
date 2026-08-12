@@ -3065,6 +3065,74 @@ export const UpdateDealResponse = zod.object({
 })
 
 
+export const UploadDealBankLetterParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+
+
+
+export const UploadDealBankLetterBody = zod.object({
+  "storageKey": zod.string().min(1),
+  "fileName": zod.string().min(1),
+  "mimeType": zod.string().min(1),
+  "sizeBytes": zod.number().min(1)
+})
+
+export const UploadDealBankLetterResponse = zod.object({
+  "document": zod.object({
+  "id": zod.number(),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
+  "entityId": zod.number(),
+  "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
+  "version": zod.number(),
+  "fileName": zod.string(),
+  "storageKey": zod.string().nullish(),
+  "externalUrl": zod.string().nullish(),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "comments": zod.string().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "extractionStatus": zod.enum(['none', 'pending', 'proposed', 'accepted', 'dismissed', 'failed']),
+  "extraction": zod.union([zod.object({
+  "summary": zod.string().nullish(),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "label": zod.string(),
+  "value": zod.string()
+}))
+}),zod.null()]).optional(),
+  "createdAt": zod.coerce.date()
+}),
+  "gate": zod.union([zod.object({
+  "id": zod.number(),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received']),
+  "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
+  "priority": zod.enum(['high', 'normal', 'low']),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "refType": zod.string().nullish(),
+  "refId": zod.number().nullish(),
+  "title": zod.string(),
+  "summary": zod.string(),
+  "recommendation": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "floorAmount": zod.number().nullish(),
+  "evidence": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string()
+})),
+  "resolution": zod.string().nullish(),
+  "resolvedBy": zod.string().nullish(),
+  "resolvedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional()
+})
+
+
 export const ListAppraisalsResponseItem = zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
@@ -6398,7 +6466,7 @@ export const GetCustomerOverviewResponse = zod.object({
 })),
   "openGates": zod.array(zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),
@@ -7084,7 +7152,7 @@ export const ListGatesQueryParams = zod.object({
 
 export const ListGatesResponseItem = zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),
@@ -7124,7 +7192,7 @@ export const ResolveGateBody = zod.object({
 
 export const ResolveGateResponse = zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),
@@ -7200,7 +7268,7 @@ export const ReviewGraFilingBody = zod.object({
 
 export const ReviewGraFilingResponse = zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),

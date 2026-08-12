@@ -56,6 +56,8 @@ export * from './auditLogEntryDetails';
 export * from './availabilitySlot';
 export * from './bank';
 export * from './bankInput';
+export * from './bankLetterResult';
+export * from './bankLetterUpload';
 export * from './bankUpdate';
 export * from './booking';
 export * from './bookingCancellationReason';

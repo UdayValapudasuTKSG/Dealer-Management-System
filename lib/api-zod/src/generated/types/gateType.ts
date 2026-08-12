@@ -18,4 +18,5 @@ export const GateType = {
   refund_release: 'refund_release',
   stage_advance: 'stage_advance',
   recall_damage: 'recall_damage',
+  bank_funds_received: 'bank_funds_received',
 } as const;

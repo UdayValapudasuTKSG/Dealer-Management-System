@@ -10,6 +10,7 @@ import {
   invoicesTable,
   paymentsTable,
   timelineEventsTable,
+  documentsTable,
   VIN_LENGTH,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
@@ -29,7 +30,12 @@ import {
   ListDealsResponse,
   GetDealResponse,
   UpdateDealResponse,
+  UploadDealBankLetterParams,
+  UploadDealBankLetterBody,
+  UploadDealBankLetterResponse,
 } from "@workspace/api-zod";
+import { ObjectStorageService } from "../lib/objectStorage";
+import { processBankLetter } from "../lib/bank-letter";
 import { onDealStageChanged } from "../lib/email-triggers";
 import { ensureDeliveryForDeal } from "../lib/delivery";
 import {
@@ -1035,6 +1041,129 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
   }
 
   res.json(UpdateDealResponse.parse(deal));
+});
+
+// ---------------------------------------------------------------------------
+// Bank letter of undertaking — financed-deal settlement intake.
+// The letter is stored as a document on the deal's LINKED LEAD (the lead file
+// is the customer's document home), then the agent reads it and raises a
+// bank_funds_received gate. Money only moves when a manager approves the gate.
+// ---------------------------------------------------------------------------
+const BANK_LETTER_MIME = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+]);
+const MAX_BANK_LETTER_BYTES = 20 * 1024 * 1024;
+
+router.post("/deals/:id/bank-letters", async (req, res): Promise<void> => {
+  const params = UploadDealBankLetterParams.safeParse(req.params);
+  const body = UploadDealBankLetterBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({
+      error: (params.success ? body.error : params.error)?.message ?? "Invalid request",
+    });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [deal] = await db
+    .select()
+    .from(dealsTable)
+    .where(and(eq(dealsTable.id, params.data.id), eq(dealsTable.dealerId, dealerId)));
+  if (!deal) {
+    res.status(404).json({ error: "Deal not found" });
+    return;
+  }
+  if (deal.finalPaymentMethod !== "bank_financing") {
+    res.status(422).json({
+      error:
+        "Bank letters only apply to bank-financed deals — set the payment method to Bank Financing first",
+    });
+    return;
+  }
+  if (!deal.depositPaid) {
+    res.status(422).json({
+      error:
+        "The reservation fee must be paid before the bank letter step",
+    });
+    return;
+  }
+  if (deal.leadId == null) {
+    res.status(422).json({
+      error:
+        "Link this deal to a lead first — the bank letter is stored on the lead's document file",
+    });
+    return;
+  }
+  const [lead] = await db
+    .select({ id: leadsTable.id })
+    .from(leadsTable)
+    .where(and(eq(leadsTable.id, deal.leadId), eq(leadsTable.dealerId, dealerId)));
+  if (!lead) {
+    res.status(422).json({ error: "The linked lead no longer exists" });
+    return;
+  }
+  if (!BANK_LETTER_MIME.has(body.data.mimeType)) {
+    res.status(422).json({ error: "Only PDF, JPG or PNG bank letters are allowed" });
+    return;
+  }
+  if (body.data.sizeBytes > MAX_BANK_LETTER_BYTES) {
+    res.status(422).json({ error: "File is too large (max 20MB)" });
+    return;
+  }
+
+  // Same tenancy rule as generic documents: only keys presigned for this dealer.
+  const storage = new ObjectStorageService();
+  const storageKey = storage.normalizeObjectEntityPath(body.data.storageKey);
+  if (!storageKey.startsWith(`/objects/uploads/dealer-${dealerId}/`)) {
+    res.status(422).json({ error: "Invalid storage path" });
+    return;
+  }
+
+  const user = res.locals.user as
+    | { name?: string | null; email?: string | null }
+    | undefined;
+
+  const [{ maxVersion }] = await db
+    .select({
+      maxVersion: sql<number>`coalesce(max(${documentsTable.version}), 0)`,
+    })
+    .from(documentsTable)
+    .where(
+      and(
+        eq(documentsTable.dealerId, dealerId),
+        eq(documentsTable.entityType, "lead"),
+        eq(documentsTable.entityId, deal.leadId),
+        eq(documentsTable.type, "financing"),
+      ),
+    );
+
+  const [doc] = await db
+    .insert(documentsTable)
+    .values({
+      dealerId,
+      entityType: "lead",
+      entityId: deal.leadId,
+      type: "financing",
+      version: Number(maxVersion) + 1,
+      fileName: body.data.fileName,
+      storageKey,
+      mimeType: body.data.mimeType,
+      sizeBytes: body.data.sizeBytes,
+      comments: `Bank letter of undertaking for deal #${deal.id}`,
+      uploadedBy: user?.name ?? user?.email ?? null,
+      extractionStatus: "pending",
+    })
+    .returning();
+
+  // Read the letter and raise the approval gate synchronously so the
+  // uploader immediately sees "sent for approval" with what the agent read.
+  const gate = await processBankLetter(doc!, deal);
+
+  res.status(201).json(
+    UploadDealBankLetterResponse.parse({ document: doc, gate: gate ?? null }),
+  );
 });
 
 export default router;
