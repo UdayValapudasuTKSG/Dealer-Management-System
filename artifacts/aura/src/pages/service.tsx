@@ -174,14 +174,14 @@ export default function Service() {
   return (
     <>
     <PageHero
-
+      className="pb-0"
       eyebrow="After-Sales"
       title="Service"
       accent="Operations"
       subtitle="Bookings, job cards, invoices and coverage — the full after-sales lane."
       action={<HeaderAction tab={tab} />}
     />
-    <Page className="space-y-5">
+    <Page className="space-y-4">
 
       <div className="flex items-center gap-1 border-b border-white/10 overflow-x-auto no-scrollbar">
         {TABS.map((raw) => {
