@@ -8261,6 +8261,77 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCreateServiceOrderMutationOptions(options));
     }
 
+export const getDeleteServiceOrderUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-orders/${id}`
+}
+
+/**
+ * @summary Delete a booking and its job cards (blocked once invoiced)
+ */
+export const deleteServiceOrder = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteServiceOrderUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteServiceOrderMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteServiceOrder>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteServiceOrder>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteServiceOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteServiceOrder>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteServiceOrder(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteServiceOrderMutationResult = NonNullable<Awaited<ReturnType<typeof deleteServiceOrder>>>
+
+    export type DeleteServiceOrderMutationError = ErrorType<Error>
+
+    /**
+ * @summary Delete a booking and its job cards (blocked once invoiced)
+ */
+export const useDeleteServiceOrder = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteServiceOrder>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteServiceOrder>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteServiceOrderMutationOptions(options));
+    }
+
 export const getUpdateServiceOrderUrl = (id: number,) => {
 
 

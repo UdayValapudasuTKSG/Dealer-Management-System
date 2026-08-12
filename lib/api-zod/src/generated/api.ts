@@ -3883,6 +3883,16 @@ export const CreateServiceOrderResponse = zod.object({
 })
 
 
+/**
+ * @summary Delete a booking and its job cards (blocked once invoiced)
+ */
+export const DeleteServiceOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteServiceOrderResponse = zod.void()
+
+
 export const UpdateServiceOrderParams = zod.object({
   "id": zod.coerce.number()
 })

@@ -5,6 +5,7 @@ import {
   useListServiceOrders,
   useCreateServiceOrder,
   useAdvanceServiceOrder,
+  useDeleteServiceOrder,
   getListServiceOrdersQueryKey,
   useSendServiceReminder,
   useListJobCards,
@@ -71,8 +72,20 @@ import {
   Star,
   Printer,
   Archive,
+  Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -386,6 +399,66 @@ function CreateBookingDialog() {
         }
       }}
     />
+  );
+}
+
+/* Delete a booking (and its job cards) after confirmation. The server
+   refuses once an invoice exists — surface that as a clear error. */
+function DeleteOrderButton({ order }: { order: ServiceOrder }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const del = useDeleteServiceOrder();
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          className="rounded-full border-white/15 h-8 w-8 p-0 text-muted-foreground hover:text-red-400 hover:border-red-400/40"
+          aria-label={`Delete booking #${order.id}`}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Delete RO #{order.id.toString().padStart(5, "0")}?
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {order.vehicleInfo} — this permanently removes the booking and any
+            job cards opened for it. This can't be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-red-600 hover:bg-red-700 text-white"
+            disabled={del.isPending}
+            onClick={async () => {
+              try {
+                await del.mutateAsync({ id: order.id });
+                queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
+                queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
+                toast({ title: "Booking deleted", description: `RO #${order.id} removed.` });
+              } catch (e: unknown) {
+                const msg =
+                  (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "";
+                toast({
+                  title: "Could not delete",
+                  description: msg.startsWith("order_invoiced")
+                    ? "This booking already has an issued invoice — void the invoice first."
+                    : msg || "Delete failed.",
+                  variant: "destructive",
+                });
+              }
+            }}
+          >
+            Delete booking
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
@@ -837,6 +910,7 @@ function BookingsTab() {
                       refId={order.id}
                       contextLabel={`RO #${order.id.toString().padStart(5, "0")} — ${order.vehicleInfo}`}
                     />
+                    <DeleteOrderButton order={order} />
                   </div>
                 </div>
               </CardContent>

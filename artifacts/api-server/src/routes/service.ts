@@ -685,6 +685,62 @@ router.post("/service-orders/:id/advance", async (req, res): Promise<void> => {
   res.json(AdvanceServiceOrderResponse.parse(updated));
 });
 
+router.delete("/service-orders/:id", async (req, res): Promise<void> => {
+  const params = UpdateServiceOrderParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [order] = await db
+    .select()
+    .from(serviceOrdersTable)
+    .where(
+      and(
+        eq(serviceOrdersTable.id, params.data.id),
+        eq(serviceOrdersTable.dealerId, dealerId),
+      ),
+    );
+  if (!order || !technicianOwnsOrder(res, order)) {
+    res.status(404).json({ error: "Service order not found" });
+    return;
+  }
+
+  // Invoiced work is a financial record — it can't be deleted from here.
+  const [invoice] = await db
+    .select({ id: serviceInvoicesTable.id })
+    .from(serviceInvoicesTable)
+    .where(
+      and(
+        eq(serviceInvoicesTable.dealerId, dealerId),
+        eq(serviceInvoicesTable.serviceOrderId, order.id),
+      ),
+    )
+    .limit(1);
+  if (invoice) {
+    res.status(409).json({
+      error:
+        "order_invoiced: this booking has an issued invoice — void the invoice first",
+    });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(jobCardsTable)
+      .where(
+        and(
+          eq(jobCardsTable.dealerId, dealerId),
+          eq(jobCardsTable.serviceOrderId, order.id),
+        ),
+      );
+    await tx
+      .delete(serviceOrdersTable)
+      .where(eq(serviceOrdersTable.id, order.id));
+  });
+  res.status(204).end();
+});
+
 // ---------------------------------------------------------------------------
 // Technicians
 // ---------------------------------------------------------------------------
