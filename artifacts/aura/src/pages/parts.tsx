@@ -233,18 +233,29 @@ function MarkupEditor() {
   );
 }
 
+const PARTS_PAGE_SIZE = 24;
+
 function PartsTab() {
   const money = useMoney();
   const [search, setSearch] = useState("");
   const [lowOnly, setLowOnly] = useState(false);
+  const [page, setPage] = useState(1);
   const { data: settings } = useGetPartsSettings();
-  const { data: parts, isLoading } = useListParts({
+  const { data: allParts, isLoading } = useListParts({
     ...(search ? { search } : {}),
     ...(lowOnly ? { lowStock: "1" } : {}),
   });
 
-  const lowCount = parts?.filter((p) => p.stock <= p.reorderLevel).length ?? 0;
+  const lowCount = allParts?.filter((p) => p.stock <= p.reorderLevel).length ?? 0;
   const { density, setDensity, layout, setLayout } = useViewMode("parts");
+
+  const total = allParts?.length ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PARTS_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const parts = allParts?.slice(
+    (safePage - 1) * PARTS_PAGE_SIZE,
+    safePage * PARTS_PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-5">
@@ -253,14 +264,20 @@ function PartsTab() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             placeholder="Search by name or SKU..."
             className="pl-10 rounded-full bg-white/[0.03] border-white/10"
           />
         </div>
         <Button
           variant={lowOnly ? "default" : "outline"}
-          onClick={() => setLowOnly((v) => !v)}
+          onClick={() => {
+            setLowOnly((v) => !v);
+            setPage(1);
+          }}
           className={cn(
             "rounded-full gap-2",
             lowOnly
@@ -400,6 +417,38 @@ function PartsTab() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {total > PARTS_PAGE_SIZE && (
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <div className="text-xs text-muted-foreground tabular-nums">
+            Showing {(safePage - 1) * PARTS_PAGE_SIZE + 1}–
+            {Math.min(safePage * PARTS_PAGE_SIZE, total)} of {total} parts
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full border-white/15 text-xs h-8"
+              disabled={safePage <= 1}
+              onClick={() => setPage(safePage - 1)}
+            >
+              Previous
+            </Button>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              Page {safePage} / {pageCount}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full border-white/15 text-xs h-8"
+              disabled={safePage >= pageCount}
+              onClick={() => setPage(safePage + 1)}
+            >
+              Next
+            </Button>
+          </div>
         </div>
       )}
     </div>
