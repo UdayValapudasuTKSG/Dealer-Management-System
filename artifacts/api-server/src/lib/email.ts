@@ -115,11 +115,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     subject: (x) => `Your personalised quote — ${d(x, "vehicle", "your vehicle")}`,
     heading: (x) => `Your quote is ready, ${d(x, "name", "there")}`,
     body: (x) =>
-      `Thank you for your interest in the <strong>${d(x, "vehicle", "vehicle of your choice")}</strong>. Your personalised quotation is attached as a PDF — it covers the ${d(x, "color", "selected")} finish at <strong>${d(x, "total", "the current showroom price")}</strong> and is valid until <strong>${d(x, "validUntil", "the date shown on the quote")}</strong>. ${
-        x.link
-          ? "Ready to take the wheel? Reserve your test-drive slot below — it takes under a minute."
-          : "Your sales advisor will follow up shortly to arrange a viewing or test drive."
-      }`,
+      `Thank you for your interest in the <strong>${d(x, "vehicle", "vehicle of your choice")}</strong>. Your personalised quotation is attached as a PDF — it covers the ${d(x, "color", "selected")} finish at <strong>${d(x, "total", "the current showroom price")}</strong> and is valid until <strong>${d(x, "validUntil", "the date shown on the quote")}</strong>. Your sales advisor will follow up shortly to arrange a viewing or test drive.`,
     cta: (x) =>
       x.link
         ? { label: "Book your test drive", href: x.link }
@@ -678,8 +674,7 @@ export function renderEmail(
   const cta = def.cta?.(x);
   const safeName = escapeHtml(brandName || "AURA Dealership");
   const headerHtml = branding?.logoSrc
-    ? `<img src="${branding.logoSrc}" alt="${safeName}" height="44" style="display:block;height:44px;max-width:240px;width:auto;border:0;" />
-            <div style="font-size:12px;letter-spacing:2px;color:#c9c9c9;text-transform:uppercase;margin-top:10px;font-weight:600;">${safeName}</div>`
+    ? `<img src="${branding.logoSrc}" alt="${safeName}" style="display:block;max-height:56px;max-width:240px;height:auto;width:auto;border:0;" />`
     : brandName
       ? `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#ffffff;">${escapeHtml(brandName)}</div>
             <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Automotive Dealership</div>`
