@@ -152,9 +152,9 @@ function CreatePartDialog() {
         </Button>
       }
       fields={[
-        { name: "sku", label: "SKU", type: "text", required: true, span: "half", placeholder: "BRK-PAD-BMW-X5" },
-        { name: "name", label: "Name", type: "text", required: true, span: "half", placeholder: "Front brake pad set" },
-        { name: "category", label: "Category", type: "text", span: "half", placeholder: "Brakes" },
+        { name: "sku", label: "Part no.", type: "text", required: true, span: "half", placeholder: "13691814-00" },
+        { name: "name", label: "Part name", type: "text", required: true, span: "half", placeholder: "Engine oil filter" },
+        { name: "category", label: "Category / make", type: "text", span: "half", placeholder: "BYD" },
         {
           name: "supplierId",
           label: "Supplier",
@@ -162,11 +162,11 @@ function CreatePartDialog() {
           span: "half",
           options: suppliers?.map((s) => ({ value: String(s.id), label: s.name })) ?? [],
         },
-        { name: "unitCost", label: "Unit cost", type: "number", span: "half", placeholder: "85" },
-        { name: "unitPrice", label: "Unit price", type: "number", span: "half", placeholder: "140" },
-        { name: "stock", label: "Opening stock", type: "number", span: "half", placeholder: "10" },
+        { name: "unitCost", label: "Unit cost (GYD)", type: "number", span: "half", placeholder: "53908.78" },
+        { name: "unitPrice", label: "Selling price (GYD)", type: "number", span: "half", placeholder: "80863.17" },
+        { name: "stock", label: "Quantity in stock", type: "number", span: "half", placeholder: "10" },
         { name: "reorderLevel", label: "Reorder level", type: "number", span: "half", placeholder: "3" },
-        { name: "location", label: "Bin location", type: "text", span: "full", placeholder: "A-04" },
+        { name: "location", label: "Location", type: "text", span: "full", placeholder: "Container 1 353439" },
       ]}
       onSubmit={async (values) => {
         const v = values as Record<string, unknown>;
