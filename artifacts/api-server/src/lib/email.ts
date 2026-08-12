@@ -669,26 +669,30 @@ export function renderEmail(
   // Templates reference the dealership via the `__brand` key; default AURA.
   const x: TemplateData = { ...data, __brand: brandName || "AURA" };
   const subject = def.subject(x);
-  const heading = def.heading(x);
+  // Headings always end with a full stop for consistent punctuation.
+  const headingRaw = def.heading(x).trim();
+  const heading = /[.!?…]$/.test(headingRaw) ? headingRaw : `${headingRaw}.`;
   const body = def.body(x);
-  const cta = def.cta?.(x);
+  const ctaRaw = def.cta?.(x);
+  // Button/CTA text is always upper-case.
+  const cta = ctaRaw ? { ...ctaRaw, label: ctaRaw.label.toUpperCase() } : undefined;
   const safeName = escapeHtml(brandName || "AURA Dealership");
   const headerHtml = branding?.logoSrc
     ? `<img src="${branding.logoSrc}" alt="${safeName}" style="display:block;max-height:56px;max-width:240px;height:auto;width:auto;border:0;" />`
     : brandName
-      ? `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#ffffff;">${escapeHtml(brandName)}</div>
+      ? `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#111111;">${escapeHtml(brandName)}</div>
             <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Automotive Dealership</div>`
-      : `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#ffffff;">AURA<span style="color:#e01313;">.OS</span></div>
+      : `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#111111;">AURA<span style="color:#e01313;">.OS</span></div>
             <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Dealership Operating System</div>`;
   const footerName = escapeHtml(brandName || "AURA Dealership");
   const html = `<!DOCTYPE html>
 <html>
-<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0a;padding:40px 16px;">
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:40px 16px;">
     <tr><td align="center">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#121212;border:1px solid #262626;border-radius:16px;overflow:hidden;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border:1px solid #e6e6e6;border-radius:16px;overflow:hidden;">
         <tr>
-          <td style="height:4px;background:linear-gradient(90deg,#7a0d0d,#e01313,#7a0d0d);font-size:0;line-height:0;">&nbsp;</td>
+          <td style="height:5px;background:linear-gradient(90deg,#1fa34a 0%,#1fa34a 33%,#f5d800 33%,#f5d800 66%,#e01313 66%,#e01313 100%);font-size:0;line-height:0;">&nbsp;</td>
         </tr>
         <tr>
           <td style="padding:36px 44px 8px;">
@@ -697,12 +701,12 @@ export function renderEmail(
         </tr>
         <tr>
           <td style="padding:28px 44px 0;">
-            <div style="font-size:26px;font-weight:600;color:#ffffff;line-height:1.3;">${heading}</div>
+            <div style="font-size:26px;font-weight:600;color:#111111;line-height:1.3;">${heading}</div>
           </td>
         </tr>
         <tr>
           <td style="padding:18px 44px 0;">
-            <div style="font-size:15px;color:#c9c9c9;line-height:1.7;">${body}</div>
+            <div style="font-size:15px;color:#444444;line-height:1.7;">${body}</div>
           </td>
         </tr>
         ${
@@ -710,15 +714,15 @@ export function renderEmail(
             ? `<tr><td style="padding:28px 44px 0;">
             ${
               cta.href
-                ? `<a href="${cta.href}" style="display:inline-block;background-color:#e01313;color:#ffffff;font-size:13px;font-weight:600;letter-spacing:0.5px;padding:12px 26px;border-radius:999px;text-decoration:none;">${cta.label}</a>`
-                : `<div style="display:inline-block;background-color:#e01313;color:#ffffff;font-size:13px;font-weight:600;letter-spacing:0.5px;padding:12px 26px;border-radius:999px;">${cta.label}</div>`
+                ? `<a href="${cta.href}" style="display:inline-block;background-color:#111111;color:#ffffff;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:12px 26px;border-radius:999px;text-decoration:none;border-bottom:3px solid #1fa34a;">${cta.label}</a>`
+                : `<div style="display:inline-block;background-color:#111111;color:#ffffff;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:12px 26px;border-radius:999px;border-bottom:3px solid #1fa34a;">${cta.label}</div>`
             }
           </td></tr>`
             : ""
         }
         <tr>
           <td style="padding:36px 44px 32px;">
-            <div style="border-top:1px solid #262626;padding-top:20px;font-size:11px;color:#6f6f6f;line-height:1.6;">
+            <div style="border-top:1px solid #e6e6e6;padding-top:20px;font-size:11px;color:#8a8a8a;line-height:1.6;">
               ${footerName} — Premium Automotive Sales Advisory<br/>
               You are receiving this because of your relationship with our showroom.
             </div>
