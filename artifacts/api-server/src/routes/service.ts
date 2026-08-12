@@ -25,6 +25,8 @@ import {
   purchaseOrdersTable,
   purchaseOrderLinesTable,
   partCreditNotesTable,
+  type JobCard,
+  type ServiceInvoice,
 } from "@workspace/db";
 import {
   CreateServiceOrderBody,
@@ -97,11 +99,13 @@ import {
   onServiceOrderBooked,
   onServiceOrderStatusChanged,
   onJobCardRolloverApproved,
+  onServiceInvoiceIssued,
 } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { activeDealerId } from "../middlewares/rbac";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
 import { computeServiceTax, ensureDealerTaxes } from "../lib/taxes";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -272,6 +276,50 @@ router.post("/service-orders", async (req, res): Promise<void> => {
   }
 
   const createDealerId = activeDealerId(res);
+
+  // Customer email capture: link the booking to a customer record by email so
+  // confirmations and the completion invoice have a real recipient. Matches an
+  // existing dealer customer first; otherwise creates one from name + email.
+  const { customerEmail: bookingEmail, ...orderInput } = parsed.data;
+  let bookingCustomerId = orderInput.customerId;
+  if (bookingEmail && bookingCustomerId == null) {
+    const [existingCustomer] = await db
+      .select({ id: customersTable.id })
+      .from(customersTable)
+      .where(
+        and(
+          eq(customersTable.dealerId, createDealerId),
+          sql`lower(${customersTable.email}) = ${bookingEmail.toLowerCase()}`,
+        ),
+      )
+      .limit(1);
+    if (existingCustomer) {
+      bookingCustomerId = existingCustomer.id;
+    } else {
+      const [created] = await db
+        .insert(customersTable)
+        .values({
+          dealerId: createDealerId,
+          name: orderInput.customerName?.trim() || bookingEmail,
+          email: bookingEmail,
+        })
+        .returning({ id: customersTable.id });
+      bookingCustomerId = created?.id;
+    }
+  } else if (bookingEmail && bookingCustomerId != null) {
+    // Booking supplied both: backfill the customer's email if they have none.
+    await db
+      .update(customersTable)
+      .set({ email: bookingEmail })
+      .where(
+        and(
+          eq(customersTable.id, bookingCustomerId),
+          eq(customersTable.dealerId, createDealerId),
+          isNull(customersTable.email),
+        ),
+      );
+  }
+
   const settings = await getServiceSettings(createDealerId);
   const estimatedHours = parsed.data.estimatedHours ?? settings.defaultJobHours;
   const scheduledDateStr = toDateString(parsed.data.scheduledDate)!;
@@ -302,7 +350,7 @@ router.post("/service-orders", async (req, res): Promise<void> => {
   if (!payType) {
     if (parsed.data.type === "warranty" || parsed.data.type === "recall") {
       payType = "warranty";
-    } else if (parsed.data.customerId != null) {
+    } else if (bookingCustomerId != null) {
       const today = new Date().toISOString().slice(0, 10);
       const [plan] = await db
         .select({ id: coveragePlansTable.id })
@@ -310,7 +358,7 @@ router.post("/service-orders", async (req, res): Promise<void> => {
         .where(
           and(
             eq(coveragePlansTable.dealerId, createDealerId),
-            eq(coveragePlansTable.customerId, parsed.data.customerId),
+            eq(coveragePlansTable.customerId, bookingCustomerId),
             sql`${coveragePlansTable.startDate} <= ${today}`,
             sql`${coveragePlansTable.endDate} >= ${today}`,
           ),
@@ -350,7 +398,8 @@ router.post("/service-orders", async (req, res): Promise<void> => {
     const [row] = await tx
       .insert(serviceOrdersTable)
       .values({
-        ...parsed.data,
+        ...orderInput,
+        customerId: bookingCustomerId,
         payType,
         technician: technicianName,
         technicianUserId,
@@ -1011,6 +1060,22 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     )
     .returning();
 
+  // Service completed → automatically issue the invoice and email it to the
+  // customer (PDF attached). Best-effort: an undecided surcharge or an
+  // already-existing invoice leaves the manual "Generate invoice" path open.
+  if (card && parsed.data.status === "completed" && existing.status !== "completed") {
+    const result = await issueServiceInvoice(card).catch((err) => {
+      logger.error({ err, jobCardId: card.id }, "auto-invoice on completion failed");
+      return null;
+    });
+    if (result && !result.ok && result.status !== 409) {
+      logger.warn(
+        { jobCardId: card.id, reason: result.error },
+        "auto-invoice skipped on completion",
+      );
+    }
+  }
+
   if (
     card &&
     parsed.data.technicianUserId != null &&
@@ -1619,25 +1684,17 @@ router.post("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
 // Invoices
 // ---------------------------------------------------------------------------
 
-router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
-  const params = CreateJobCardInvoiceParams.safeParse(req.params);
-  if (!params.success) {
-    res.status(400).json({ error: params.error.message });
-    return;
-  }
-  const [card] = await db
-    .select()
-    .from(jobCardsTable)
-    .where(
-      and(
-        eq(jobCardsTable.id, params.data.id),
-        eq(jobCardsTable.dealerId, activeDealerId(res)),
-      ),
-    );
-  if (!card) {
-    res.status(404).json({ error: "Job card not found" });
-    return;
-  }
+/**
+ * Compute totals and issue the invoice for a job card. Shared by the manual
+ * "Generate invoice" endpoint and the automatic issue-on-completion path.
+ * Fires the customer invoice email (deduped per invoice) on success.
+ */
+async function issueServiceInvoice(
+  card: JobCard,
+): Promise<
+  | { ok: true; invoice: ServiceInvoice }
+  | { ok: false; status: number; error: string }
+> {
   const [existing] = await db
     .select()
     .from(serviceInvoicesTable)
@@ -1648,10 +1705,11 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
       ),
     );
   if (existing) {
-    res
-      .status(409)
-      .json({ error: `Invoice #${existing.id} already exists for this job card` });
-    return;
+    return {
+      ok: false,
+      status: 409,
+      error: `Invoice #${existing.id} already exists for this job card`,
+    };
   }
   const [order] = await db
     .select()
@@ -1663,8 +1721,7 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
       ),
     );
   if (!order) {
-    res.status(404).json({ error: "Service order not found" });
-    return;
+    return { ok: false, status: 404, error: "Service order not found" };
   }
 
   const lines = await db
@@ -1685,11 +1742,12 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
   // A suggested-but-undecided surcharge blocks invoicing: staff must apply
   // or waive it so the decision is on record before totals lock.
   if (card.surchargeStatus === "suggested") {
-    res.status(422).json({
+    return {
+      ok: false,
+      status: 422,
       error:
         "Late-service surcharge is still undecided — apply or waive it before invoicing",
-    });
-    return;
+    };
   }
   const surchargeTotal =
     card.surchargeStatus === "applied" ? card.surchargeAmount : 0;
@@ -1722,7 +1780,37 @@ router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
     })
     .returning();
 
-  res.status(201).json(CreateJobCardInvoiceResponse.parse(invoice));
+  // FR-COM: customer gets the invoice PDF by email (deduped per invoice).
+  if (invoice) onServiceInvoiceIssued(invoice);
+
+  return { ok: true, invoice };
+}
+
+router.post("/job-cards/:id/invoice", async (req, res): Promise<void> => {
+  const params = CreateJobCardInvoiceParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [card] = await db
+    .select()
+    .from(jobCardsTable)
+    .where(
+      and(
+        eq(jobCardsTable.id, params.data.id),
+        eq(jobCardsTable.dealerId, activeDealerId(res)),
+      ),
+    );
+  if (!card) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  const result = await issueServiceInvoice(card);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+  res.status(201).json(CreateJobCardInvoiceResponse.parse(result.invoice));
 });
 
 router.get("/service-invoices", async (req, res): Promise<void> => {

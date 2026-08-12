@@ -7,6 +7,7 @@ import {
   type Lead,
   type Deal,
   type ServiceOrder,
+  type ServiceInvoice,
   usersTable,
   dealerUsersTable,
 } from "@workspace/db";
@@ -524,6 +525,32 @@ export function onServiceOrderBooked(order: ServiceOrder): void {
         vehicle: order.vehicleInfo,
         service: order.type,
         date: serviceDateLabel(order.scheduledDate),
+      },
+    });
+  });
+}
+
+/**
+ * Service invoice issued (work completed) → email the customer the invoice
+ * with the branded PDF attached. Deduped per invoice, so a manual "Generate
+ * invoice" click after an auto-issue never sends twice.
+ */
+export function onServiceInvoiceIssued(invoice: ServiceInvoice): void {
+  fire("service_invoice_issued", async () => {
+    const c = await customerEmail(invoice.dealerId, invoice.customerId);
+    if (!c.email) return;
+    await enqueueEmail({
+      dealerId: invoice.dealerId,
+      template: "service.invoice.issued",
+      to: c.email,
+      customerId: invoice.customerId,
+      dedupeKey: `svcinv:${invoice.id}:issued`,
+      data: {
+        ...(c.name ? { name: c.name } : {}),
+        vehicle: invoice.vehicleInfo ?? "",
+        invoiceRef: `SV-${String(invoice.id).padStart(5, "0")}`,
+        total: money(invoice.total),
+        serviceInvoiceId: String(invoice.id),
       },
     });
   });

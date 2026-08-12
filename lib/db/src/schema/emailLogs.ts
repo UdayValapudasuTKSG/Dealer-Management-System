@@ -56,6 +56,7 @@ export const EMAIL_TEMPLATES = [
   "service.booking.confirmed",
   "service.started",
   "service.delayed",
+  "service.invoice.issued",
   "service.summary.management",
 ] as const;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];

@@ -3828,6 +3828,8 @@ export const ListServiceOrdersResponseItem = zod.object({
 export const ListServiceOrdersResponse = zod.array(ListServiceOrdersResponseItem)
 
 
+export const createServiceOrderBodyCustomerEmailMin = 3;
+
 
 export const createServiceOrderBodyEstimatedHoursMin = 0.25;
 export const createServiceOrderBodyEstimatedHoursMax = 24;
@@ -3837,6 +3839,7 @@ export const createServiceOrderBodyEstimatedHoursMax = 24;
 export const CreateServiceOrderBody = zod.object({
   "customerId": zod.number().optional(),
   "customerName": zod.string().optional(),
+  "customerEmail": zod.string().min(createServiceOrderBodyCustomerEmailMin).optional(),
   "vehicleInfo": zod.string().min(1),
   "vehicleId": zod.number().optional(),
   "assetId": zod.number().optional(),

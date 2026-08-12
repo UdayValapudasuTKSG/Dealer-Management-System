@@ -19,7 +19,21 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { Loader2, Sparkles } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Check, ChevronsUpDown, Loader2, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 export type FieldDef = {
@@ -37,6 +51,9 @@ export type FieldDef = {
   required?: boolean;
   placeholder?: string;
   options?: { value: string; label: string }[];
+  /** Select fields only: render a searchable combobox instead of a plain
+   * dropdown — for long option lists (e.g. hundreds of parts). */
+  searchable?: boolean;
   defaultValue?: string;
   span?: "full" | "half";
   render?: (value: string, set: (value: string) => void) => ReactNode;
@@ -267,6 +284,13 @@ export function CreateRecordDialog({
               </Label>
               {f.type === "custom" ? (
                 f.render?.(values[f.name], (v) => set(f.name, v))
+              ) : f.type === "select" && f.searchable ? (
+                <SearchableSelect
+                  value={values[f.name]}
+                  onChange={(v) => set(f.name, v)}
+                  options={f.options ?? []}
+                  placeholder={f.placeholder ?? "Select"}
+                />
               ) : f.type === "select" ? (
                 <Select value={values[f.name]} onValueChange={(v) => set(f.name, v)}>
                   <SelectTrigger className="h-8 text-xs bg-white/[0.04] border-white/10">
@@ -347,5 +371,71 @@ export function CreateRecordDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Searchable combobox for long option lists (Popover + Command). */
+function SearchableSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => o.value === value);
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="h-8 w-full justify-between rounded-md bg-white/[0.04] border-white/10 px-3 text-xs font-normal hover:bg-white/[0.06]"
+        >
+          <span className={cn("truncate", !selected && "text-muted-foreground")}>
+            {selected?.label ?? placeholder}
+          </span>
+          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="p-0 w-[--radix-popover-trigger-width] max-h-none"
+        align="start"
+      >
+        <Command>
+          <CommandInput placeholder="Type to search..." className="h-9 text-xs" />
+          <CommandList className="max-h-56">
+            <CommandEmpty>No matches.</CommandEmpty>
+            <CommandGroup>
+              {options.map((o) => (
+                <CommandItem
+                  key={o.value}
+                  value={o.label}
+                  className="text-xs"
+                  onSelect={() => {
+                    onChange(o.value);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-3.5 w-3.5",
+                      value === o.value ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {o.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }

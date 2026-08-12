@@ -66,6 +66,7 @@ import {
   MessageSquareWarning,
   Loader2,
   CalendarClock,
+  Clock,
   AlertTriangle,
   BadgePercent,
   Lock,
@@ -116,6 +117,15 @@ import { useAuthz } from "@/lib/auth";
 import { ViewControls } from "@/components/view-controls";
 import { cn } from "@/lib/utils";
 import { useMoney } from "@/lib/format";
+
+/** "3h 25m" between two timestamps (wall-clock time the card was open). */
+function formatWorkDuration(start: Date, end: Date): string {
+  const mins = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}m`;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
 
 const TABS = [
   { key: "bookings", label: "Bookings", icon: Calendar },
@@ -343,6 +353,7 @@ function CreateBookingDialog() {
       }
       fields={[
         { name: "customerName", label: "Customer", type: "text", span: "half", placeholder: "Nana Adjei" },
+        { name: "customerEmail", label: "Customer email (for confirmations & invoice)", type: "email", span: "half", placeholder: "customer@email.com" },
         { name: "vehicleInfo", label: "Vehicle", type: "text", required: true, span: "half", placeholder: "2022 BMW X5" },
         { name: "complaint", label: "Customer complaint", type: "textarea", span: "full", placeholder: "Grinding noise when braking..." },
         {
@@ -380,6 +391,7 @@ function CreateBookingDialog() {
       ]}
       onSubmit={async (values) => {
         const v = values as Record<string, unknown>;
+        if (!v.customerEmail) delete v.customerEmail;
         if (v.odometer != null && v.odometer !== "") v.odometer = Number(v.odometer);
         if (v.estimatedHours != null && v.estimatedHours !== "") {
           v.estimatedHours = Number(v.estimatedHours);
@@ -1101,6 +1113,22 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
               {card.technicianName ?? "Unassigned"}
               <span>· {card.laborHours}h @ {money.gyd(card.laborRate)}/hr</span>
             </div>
+            {(card.startedAt || card.completedAt) && (
+              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <Clock className="w-3 h-3" />
+                {card.startedAt && (
+                  <span>Started {format(new Date(card.startedAt), "MMM d, h:mm a")}</span>
+                )}
+                {card.completedAt && (
+                  <span>· Finished {format(new Date(card.completedAt), "MMM d, h:mm a")}</span>
+                )}
+                {card.startedAt && card.completedAt && (
+                  <span className="text-foreground font-medium">
+                    · {formatWorkDuration(new Date(card.startedAt), new Date(card.completedAt))} on vehicle
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1172,8 +1200,10 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
                   name: "partId",
                   label: "Part",
                   type: "select",
+                  searchable: true,
                   required: true,
                   span: "full",
+                  placeholder: "Search parts by name or number...",
                   options:
                     parts?.map((p) => ({
                       value: String(p.id),

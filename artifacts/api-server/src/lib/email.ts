@@ -8,6 +8,7 @@ import {
   leadsTable,
   notificationsTable,
   receiptsTable,
+  serviceInvoicesTable,
   tasksTable,
   timelineEventsTable,
   whatsappConversationsTable,
@@ -20,7 +21,11 @@ import {
 import { sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { buildQuotePdf } from "./quote-pdf";
-import { buildInvoicePdfFromPayload, buildReceiptPdf } from "./document-pdfs";
+import {
+  buildInvoicePdfFromPayload,
+  buildReceiptPdf,
+  buildServiceInvoicePdf,
+} from "./document-pdfs";
 import { getDealerPdfBranding } from "./dealer-branding";
 import { testDriveIcsFromPayload } from "./calendar";
 import {
@@ -588,6 +593,22 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       service: "brake overhaul",
       reason: "a required part is on its way",
       newDate: "August 15, 2026",
+    },
+  },
+  "service.invoice.issued": {
+    label: "Service Invoice",
+    description:
+      "Sends the customer their service invoice (PDF attached) when work is completed.",
+    subject: (x) => `Your service invoice for ${d(x, "vehicle", "your vehicle")}`,
+    heading: () => "Your vehicle is ready — invoice enclosed",
+    body: (x) =>
+      `Work on your <strong>${d(x, "vehicle", "vehicle")}</strong> is complete. Your invoice <strong>${d(x, "invoiceRef", "")}</strong> for <strong>${d(x, "total", "")}</strong> is attached as a PDF. You can settle it at pickup — our team will have everything ready.`,
+    cta: () => ({ label: "See you at pickup" }),
+    sample: {
+      name: "Alex Mensah",
+      vehicle: "2025 BMW X7",
+      invoiceRef: "SV-00012",
+      total: "GYD 45,200",
     },
   },
   "service.summary.management": {
@@ -1270,6 +1291,31 @@ export async function processQueue(): Promise<void> {
             attachments = [
               {
                 filename: `${filePrefix}-Receipt-${receipt.receiptNumber.replace(/[^A-Za-z0-9-]/g, "")}.pdf`,
+                content: pdf,
+                contentType: "application/pdf",
+              },
+            ];
+          }
+        }
+        if (
+          item.template === "service.invoice.issued" &&
+          item.payload?.serviceInvoiceId
+        ) {
+          const [svcInvoice] = await db
+            .select()
+            .from(serviceInvoicesTable)
+            .where(
+              and(
+                eq(serviceInvoicesTable.id, Number(item.payload.serviceInvoiceId)),
+                eq(serviceInvoicesTable.dealerId, item.dealerId),
+              ),
+            );
+          if (svcInvoice) {
+            const pdf = await buildServiceInvoicePdf(svcInvoice, 1, branding);
+            const ref = `SV-${String(svcInvoice.id).padStart(5, "0")}`;
+            attachments = [
+              {
+                filename: `${filePrefix}-ServiceInvoice-${ref}.pdf`,
                 content: pdf,
                 contentType: "application/pdf",
               },
