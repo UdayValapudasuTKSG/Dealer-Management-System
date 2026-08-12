@@ -246,6 +246,16 @@ async function preBookFollowThrough(
               divisionId:
                 vehicle.divisionId ?? (await defaultDivisionId(dealerId)),
               salesAdvisor: lead.assignedTo ?? null,
+              // Inherit the lead's payment decision + reservation status.
+              ...(lead.purchaseType
+                ? {
+                    finalPaymentMethod:
+                      lead.purchaseType === "finance"
+                        ? "bank_financing"
+                        : "cash",
+                  }
+                : {}),
+              depositPaid: lead.reservationFeePaid ?? false,
             })
             .returning();
           if (autoDeal) {

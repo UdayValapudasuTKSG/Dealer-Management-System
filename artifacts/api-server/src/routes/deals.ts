@@ -572,7 +572,21 @@ router.post("/deals", async (req, res): Promise<void> => {
 
   const [deal] = await db
     .insert(dealsTable)
-    .values({ ...parsed.data, divisionId, salesAdvisorUserId, dealerId })
+    .values({
+      ...parsed.data,
+      divisionId,
+      salesAdvisorUserId,
+      dealerId,
+      // Inherit the lead's payment decision and reservation-fee status so a
+      // converted lead's choices don't have to be re-entered on the deal.
+      ...(parsed.data.finalPaymentMethod == null && linkedLead?.purchaseType
+        ? {
+            finalPaymentMethod:
+              linkedLead.purchaseType === "finance" ? "bank_financing" : "cash",
+          }
+        : {}),
+      ...(linkedLead?.reservationFeePaid ? { depositPaid: true } : {}),
+    })
     .returning();
 
   await raiseBelowFloorGateIfNeeded(deal!);

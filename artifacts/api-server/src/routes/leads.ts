@@ -1590,6 +1590,16 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
           divisionId:
             vehicle.divisionId ?? (await defaultDivisionId(dealerId)),
           salesAdvisor: lead.assignedTo ?? null,
+          // Carry the lead's payment decision + reservation status onto the
+          // auto-desked deal so downstream flows (bank letter, commit gates)
+          // see them without manual re-entry.
+          ...(lead.purchaseType
+            ? {
+                finalPaymentMethod:
+                  lead.purchaseType === "finance" ? "bank_financing" : "cash",
+              }
+            : {}),
+          depositPaid: lead.reservationFeePaid ?? false,
         })
         .returning();
       if (autoDeal) {
