@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import {
   useListParts,
   useCreatePart,
+  useUpdatePart,
+  type Part,
   getListPartsQueryKey,
   useListSuppliers,
   useCreateSupplier,
@@ -45,6 +47,7 @@ import {
   Trash2,
   Loader2,
   Percent,
+  Pencil,
 } from "lucide-react";
 import { ImportPartsDialog } from "@/components/parts/import-parts-dialog";
 import { format } from "date-fns";
@@ -190,6 +193,69 @@ function CreatePartDialog() {
   );
 }
 
+function EditPartDialog({ part }: { part: Part }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const update = useUpdatePart();
+  const { data: suppliers } = useListSuppliers();
+  return (
+    <CreateRecordDialog
+      title={`Edit ${part.name}`}
+      description="Update pricing, stock and details for this part."
+      pending={update.isPending}
+      submitLabel="Save changes"
+      trigger={
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground"
+          aria-label={`Edit ${part.name}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </Button>
+      }
+      fields={[
+        { name: "sku", label: "Part no.", type: "text", required: true, span: "half", defaultValue: part.sku },
+        { name: "name", label: "Part name", type: "text", required: true, span: "half", defaultValue: part.name },
+        { name: "category", label: "Category / make", type: "text", span: "half", defaultValue: part.category ?? "" },
+        {
+          name: "supplierId",
+          label: "Supplier",
+          type: "select",
+          span: "half",
+          defaultValue: part.supplierId ? String(part.supplierId) : "",
+          options: suppliers?.map((s) => ({ value: String(s.id), label: s.name })) ?? [],
+        },
+        { name: "unitCost", label: "Unit cost (GYD)", type: "number", span: "half", defaultValue: String(part.unitCost ?? 0) },
+        { name: "unitPrice", label: "Selling price (GYD)", type: "number", span: "half", defaultValue: String(part.unitPrice ?? 0) },
+        { name: "stock", label: "Quantity in stock", type: "number", span: "half", defaultValue: String(part.stock ?? 0) },
+        { name: "reorderLevel", label: "Reorder level", type: "number", span: "half", defaultValue: String(part.reorderLevel ?? 5) },
+        { name: "location", label: "Location", type: "text", span: "full", defaultValue: part.location ?? "" },
+      ]}
+      onSubmit={async (values) => {
+        const v = values as Record<string, unknown>;
+        await update.mutateAsync({
+          id: part.id,
+          data: {
+            sku: String(v.sku),
+            name: String(v.name),
+            ...(v.category !== undefined && v.category !== "" ? { category: String(v.category) } : {}),
+            ...(v.supplierId ? { supplierId: Number(v.supplierId) } : {}),
+            unitCost: v.unitCost === "" ? 0 : Number(v.unitCost),
+            unitPrice: v.unitPrice === "" ? 0 : Number(v.unitPrice),
+            stock: v.stock === "" ? 0 : Number(v.stock),
+            reorderLevel: v.reorderLevel === "" ? 5 : Number(v.reorderLevel),
+            ...(v.location !== undefined && v.location !== "" ? { location: String(v.location) } : {}),
+          },
+        });
+        queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
+        toast({ title: "Part updated" });
+      }}
+    />
+  );
+}
+
 function MarkupEditor() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -324,6 +390,7 @@ function PartsTab() {
                 <th className="px-4 py-3 font-semibold text-right">Stock</th>
                 <th className="px-4 py-3 font-semibold text-right hidden md:table-cell">Cost</th>
                 <th className="px-4 py-3 font-semibold text-right">Price</th>
+                <th className="px-4 py-3 font-semibold text-right w-12" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
@@ -354,6 +421,9 @@ function PartsTab() {
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">
                       {money.gyd(p.unitPrice)}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <EditPartDialog part={p} />
                     </td>
                   </tr>
                 );
@@ -387,11 +457,14 @@ function PartsTab() {
                         )}
                       </div>
                     </div>
-                    {low && (
-                      <Badge className="bg-primary/15 text-primary border-none rounded-full text-[10px] font-bold uppercase tracking-widest gap-1 shrink-0">
-                        <AlertTriangle className="w-3 h-3" /> Reorder
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {low && (
+                        <Badge className="bg-primary/15 text-primary border-none rounded-full text-[10px] font-bold uppercase tracking-widest gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Reorder
+                        </Badge>
+                      )}
+                      <EditPartDialog part={p} />
+                    </div>
                   </div>
                   <div className="flex items-end justify-between">
                     <div>
