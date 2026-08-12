@@ -506,6 +506,18 @@ router.post("/bookings", async (req, res): Promise<void> => {
       })
       .where(eq(leadsTable.id, lead.id));
 
+    // Mirror the settled reservation onto any deals already desked for this
+    // lead so deal-side flows (bank letter, commit gates) see depositPaid
+    // without waiting for a separate deal-linked invoice payment.
+    if (paidNow) {
+      await db
+        .update(dealsTable)
+        .set({ depositPaid: true })
+        .where(
+          and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, lead.id)),
+        );
+    }
+
     if (customerId) {
       try {
         await db.insert(timelineEventsTable).values({
