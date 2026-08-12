@@ -375,6 +375,10 @@ router.post("/service-orders", async (req, res): Promise<void> => {
     }).catch(() => {});
   }
 
+  // The initial job card is opened automatically with the booking so the
+  // workshop queue always mirrors intake.
+  if (order) await autoCreateJobCard(order);
+
   // FR-COM-01: branded booking confirmation (deduped per order).
   if (order && order.customerId != null) onServiceOrderBooked(order);
 
@@ -712,6 +716,98 @@ router.get("/service-technicians", async (_req, res): Promise<void> => {
 // Job cards
 // ---------------------------------------------------------------------------
 
+/**
+ * Late-service surcharge detection (FR-SR-07): the case's intake odometer is
+ * compared against the vehicle's last serviced odometer plus the
+ * dealer-configured interval. Over-interval arrivals get a surcharge
+ * suggestion staff must apply or waive.
+ */
+async function computeLateSurcharge(order: {
+  id: number;
+  dealerId: number;
+  odometer: number | null;
+  vehicleId: number | null;
+  customerId: number | null;
+  vehicleInfo: string;
+}): Promise<{
+  surchargeStatus?: string;
+  surchargeAmount?: number;
+  surchargeOverKm?: number;
+}> {
+  if (order.odometer == null) return {};
+  const settings = await getServiceSettings(order.dealerId);
+  const priorFilter = order.vehicleId != null
+    ? eq(serviceOrdersTable.vehicleId, order.vehicleId)
+    : order.customerId != null
+      ? and(
+          eq(serviceOrdersTable.customerId, order.customerId),
+          eq(serviceOrdersTable.vehicleInfo, order.vehicleInfo),
+        )
+      : undefined;
+  if (!priorFilter) return {};
+  const [prior] = await db
+    .select({
+      lastOdo: sql<number | null>`max(${serviceOrdersTable.odometer})`,
+    })
+    .from(serviceOrdersTable)
+    .where(
+      and(
+        eq(serviceOrdersTable.dealerId, order.dealerId),
+        priorFilter,
+        sql`${serviceOrdersTable.id} <> ${order.id}`,
+        sql`${serviceOrdersTable.status} in ('resolved', 'closed')`,
+        sql`${serviceOrdersTable.odometer} is not null`,
+      ),
+    );
+  const lastOdo = prior?.lastOdo;
+  if (lastOdo == null) return {};
+  const overKm = order.odometer - Number(lastOdo) - settings.serviceIntervalKm;
+  if (overKm <= 0) return {};
+  return {
+    surchargeStatus: "suggested",
+    surchargeAmount: settings.lateSurchargeFee,
+    surchargeOverKm: overKm,
+  };
+}
+
+/**
+ * Auto-create the initial job card when a booking lands (walk-in intake).
+ * Inherits technician, pay type, hours and schedule from the case. Swallows
+ * the one-active-card-per-asset conflict — the booking itself still stands.
+ */
+async function autoCreateJobCard(
+  order: typeof serviceOrdersTable.$inferSelect,
+): Promise<void> {
+  const surcharge = await computeLateSurcharge(order);
+  try {
+    await db.insert(jobCardsTable).values({
+      dealerId: order.dealerId,
+      serviceOrderId: order.id,
+      assetId: order.assetId ?? null,
+      title:
+        order.complaint?.trim() ||
+        `${order.type.replace(/_/g, " ")} — ${order.vehicleInfo}`,
+      status: "open",
+      payType: order.payType,
+      technicianUserId: order.technicianUserId,
+      technicianName: order.technician,
+      scheduledAt: new Date(`${order.scheduledDate}T09:00:00`),
+      durationMins: Math.round(order.estimatedHours * 60),
+      ...surcharge,
+    });
+  } catch (err) {
+    // Partial unique index: one active job card per asset — skip silently.
+    if (
+      err instanceof Error &&
+      "code" in err &&
+      (err as { code?: string }).code === "23505"
+    ) {
+      return;
+    }
+    throw err;
+  }
+}
+
 router.get("/job-cards", async (req, res): Promise<void> => {
   const query = ListJobCardsQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -759,54 +855,7 @@ router.post("/job-cards", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Service order not found" });
     return;
   }
-  // Late-service surcharge detection (FR-SR-07): the case's intake odometer
-  // is compared against the vehicle's last serviced odometer plus the
-  // dealer-configured interval. Over-interval arrivals get a surcharge
-  // suggestion staff must apply or waive.
-  let surcharge: {
-    surchargeStatus?: string;
-    surchargeAmount?: number;
-    surchargeOverKm?: number;
-  } = {};
-  if (order.odometer != null) {
-    const settings = await getServiceSettings(order.dealerId);
-    const priorFilter = order.vehicleId != null
-      ? eq(serviceOrdersTable.vehicleId, order.vehicleId)
-      : order.customerId != null
-        ? and(
-            eq(serviceOrdersTable.customerId, order.customerId),
-            eq(serviceOrdersTable.vehicleInfo, order.vehicleInfo),
-          )
-        : undefined;
-    if (priorFilter) {
-      const [prior] = await db
-        .select({
-          lastOdo: sql<number | null>`max(${serviceOrdersTable.odometer})`,
-        })
-        .from(serviceOrdersTable)
-        .where(
-          and(
-            eq(serviceOrdersTable.dealerId, order.dealerId),
-            priorFilter,
-            sql`${serviceOrdersTable.id} <> ${order.id}`,
-            sql`${serviceOrdersTable.status} in ('resolved', 'closed')`,
-            sql`${serviceOrdersTable.odometer} is not null`,
-          ),
-        );
-      const lastOdo = prior?.lastOdo;
-      if (lastOdo != null) {
-        const overKm =
-          order.odometer - Number(lastOdo) - settings.serviceIntervalKm;
-        if (overKm > 0) {
-          surcharge = {
-            surchargeStatus: "suggested",
-            surchargeAmount: settings.lateSurchargeFee,
-            surchargeOverKm: overKm,
-          };
-        }
-      }
-    }
-  }
+  const surcharge = await computeLateSurcharge(order);
 
   let card: typeof jobCardsTable.$inferSelect | undefined;
   try {

@@ -723,92 +723,99 @@ function BookingsTab() {
               <div
                 className={`absolute top-0 bottom-0 left-0 w-1.5 ${order.status === "resolved" || order.status === "closed" ? "bg-primary" : "bg-white/10"}`}
               />
-              <CardContent className="p-6 md:p-7 flex flex-col md:flex-row gap-6 justify-between pl-7 md:pl-8">
-                <div className="flex gap-4 items-start w-full md:w-2/5">
-                  <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center shrink-0 group-hover:border-primary/40 group-hover:bg-primary/10 transition-colors duration-300">
-                    <Wrench className="w-[18px] h-[18px] text-muted-foreground group-hover:text-primary transition-colors duration-300" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold tracking-widest text-primary mb-1 uppercase flex items-center gap-2">
-                      RO #{order.id.toString().padStart(5, "0")}
-                      <span className="w-1 h-1 rounded-full bg-primary" />
-                      <span className="text-muted-foreground">{order.type}</span>
-                      {order.payType && order.payType !== "customer" && (
-                        <span className="rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-bold">
-                          {PAY_TYPE_LABEL[order.payType] ?? order.payType}
-                        </span>
-                      )}
+              <CardContent className="px-4 py-3.5 md:px-5 md:py-4 pl-5 md:pl-6">
+                <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-5">
+                  {/* Identity */}
+                  <div className="flex gap-3 items-center min-w-0 lg:w-[34%]">
+                    <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center shrink-0 group-hover:border-primary/40 group-hover:bg-primary/10 transition-colors duration-300">
+                      <Wrench className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors duration-300" />
                     </div>
-                    <h3 className="font-bold text-xl leading-tight mb-1">{order.vehicleInfo}</h3>
-                    {order.complaint && (
-                      <p className="text-sm text-muted-foreground italic mb-2 line-clamp-2">
-                        “{order.complaint}”
-                      </p>
-                    )}
-                    <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      {order.customerId ? (
-                        <Link
-                          href={`/customers/${order.customerId}`}
-                          className="text-primary hover:underline"
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-base leading-tight truncate">{order.vehicleInfo}</h3>
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border-none shrink-0",
+                            order.status === "in_progress"
+                              ? "bg-primary/15 text-primary"
+                              : order.status === "resolved" || order.status === "closed"
+                                ? "bg-emerald-500/15 text-emerald-400"
+                                : "bg-white/[0.06] text-foreground",
+                          )}
                         >
-                          {order.customerName || "Unknown"}
-                        </Link>
-                      ) : (
-                        <span>{order.customerName || "Unknown"}</span>
-                      )}
-                      {order.odometer != null && (
-                        <span className="normal-case tracking-normal">
-                          · {order.odometer.toLocaleString()} km
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 w-full md:w-3/5 items-center">
-                  <div>
-                    <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1.5 mb-2">
-                      <Calendar className="w-3.5 h-3.5" /> Scheduled
-                    </div>
-                    <div className="font-medium text-lg leading-tight">
-                      {format(new Date(order.scheduledDate), "MMM d")}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase mb-2">
-                      Status
-                    </div>
-                    <Badge
-                      variant="secondary"
-                      className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest border-none bg-white/[0.05] text-foreground"
-                    >
-                      {order.status.replace("_", " ")}
-                    </Badge>
-                  </div>
-
-                  <div>
-                    <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1.5 mb-2">
-                      <PenTool className="w-3.5 h-3.5" /> Technician
-                    </div>
-                    <div className="font-medium text-lg">{order.technician || "Unassigned"}</div>
-                  </div>
-
-                  <div className="text-left md:text-right space-y-2">
-                    <div>
-                      <div className="text-xs font-semibold tracking-widest text-muted-foreground uppercase flex items-center justify-start md:justify-end gap-1.5 mb-1">
-                        <DollarSign className="w-3.5 h-3.5" /> Est. Total
+                          {order.status.replace("_", " ")}
+                        </Badge>
                       </div>
-                      <div className="font-light text-2xl tracking-tight">
+                      <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span className="font-semibold tracking-wider text-primary uppercase">
+                          RO #{order.id.toString().padStart(5, "0")}
+                        </span>
+                        <span>· {order.type}</span>
+                        {order.payType && order.payType !== "customer" && (
+                          <span className="rounded-full bg-primary/15 text-primary px-1.5 py-px text-[10px] font-bold">
+                            {PAY_TYPE_LABEL[order.payType] ?? order.payType}
+                          </span>
+                        )}
+                        <span>·</span>
+                        {order.customerId ? (
+                          <Link
+                            href={`/customers/${order.customerId}`}
+                            className="text-primary hover:underline truncate"
+                          >
+                            {order.customerName || "Unknown"}
+                          </Link>
+                        ) : (
+                          <span className="truncate">{order.customerName || "Unknown"}</span>
+                        )}
+                        {order.odometer != null && (
+                          <span>· {order.odometer.toLocaleString()} km</span>
+                        )}
+                      </div>
+                      {order.complaint && (
+                        <p className="text-xs text-muted-foreground/80 italic line-clamp-1 mt-0.5">
+                          “{order.complaint}”
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Facts */}
+                  <div className="flex items-center gap-5 lg:gap-6 lg:w-[38%] flex-wrap">
+                    <div>
+                      <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1 mb-0.5">
+                        <Calendar className="w-3 h-3" /> Scheduled
+                      </div>
+                      <div className="font-medium text-sm leading-tight">
+                        {format(new Date(order.scheduledDate), "MMM d")}
+                        <span className="text-muted-foreground"> · {order.estimatedHours}h</span>
+                      </div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1 mb-0.5">
+                        <PenTool className="w-3 h-3" /> Technician
+                      </div>
+                      <div className={cn("font-medium text-sm truncate", !order.technician && "text-muted-foreground")}>
+                        {order.technician || "Unassigned"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1 mb-0.5">
+                        <DollarSign className="w-3 h-3" /> Est. Total
+                      </div>
+                      <div className="font-medium text-sm tracking-tight">
                         {money.gyd(order.estimatedCost)}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 flex-wrap lg:justify-end lg:flex-1">
                     <Button
                       size="sm"
                       variant="outline"
                       disabled={remind.isPending}
-                      className="rounded-full border-white/15 gap-1.5 text-xs"
+                      className="rounded-full border-white/15 gap-1.5 text-xs h-8"
                       onClick={async () => {
                         try {
                           const r = await remind.mutateAsync({ id: order.id });
