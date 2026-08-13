@@ -31,5 +31,11 @@ export interface Dealer {
      * @nullable
      */
   exportUrl?: string | null;
+  /**
+     * Super-admin theme accent hex — light mode only; null = default bronze
+     * @nullable
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  themeColor?: string | null;
   createdAt: Date;
 }

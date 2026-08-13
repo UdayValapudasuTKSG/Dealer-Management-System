@@ -79,6 +79,12 @@ export interface DealerMembershipInfo {
      * @nullable
      */
   logoUrl?: string | null;
+  /**
+     * Super-admin theme accent hex — light mode only; null = default bronze
+     * @nullable
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  themeColor?: string | null;
 }
 
 export interface CurrentUser {
@@ -160,6 +166,12 @@ export interface Dealer {
      * @nullable
      */
   exportUrl?: string | null;
+  /**
+     * Super-admin theme accent hex — light mode only; null = default bronze
+     * @nullable
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  themeColor?: string | null;
   createdAt: string;
 }
 
@@ -177,6 +189,12 @@ export interface DealerInput {
      * @exclusiveMinimum 0
      */
   usdExchangeRate?: number;
+  /**
+     * Theme accent hex applied to the dealer's workspace in light mode; null clears to default
+     * @nullable
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  themeColor?: string | null;
   entitlements?: Entitlements;
   /**
      * First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)

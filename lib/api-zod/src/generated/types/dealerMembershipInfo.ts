@@ -26,4 +26,10 @@ export interface DealerMembershipInfo {
      * @nullable
      */
   logoUrl?: string | null;
+  /**
+     * Super-admin theme accent hex — light mode only; null = default bronze
+     * @nullable
+     * @pattern ^#[0-9a-fA-F]{6}$
+     */
+  themeColor?: string | null;
 }

@@ -7041,6 +7041,7 @@ components:
         usdExchangeRate: { type: number, description: "GYD per 1 USD for this dealership" }
         brandName: { type: ["string", "null"], description: "White-label display name (falls back to AURA branding when null)" }
         logoUrl: { type: ["string", "null"], description: "White-label logo object path (served via /api/storage/objects)" }
+        themeColor: { type: ["string", "null"], pattern: "^#[0-9a-fA-F]{6}$", description: "Super-admin theme accent hex — light mode only; null = default bronze" }
     DealerBranding:
       type: object
       required: [dealerId, dealerName]
@@ -7075,6 +7076,7 @@ components:
         offboardedAt: { type: ["string", "null"], format: date-time }
         retentionUntil: { type: ["string", "null"], format: date-time }
         exportUrl: { type: ["string", "null"], description: "Whole-tenant offboarding export bundle" }
+        themeColor: { type: ["string", "null"], pattern: "^#[0-9a-fA-F]{6}$", description: "Super-admin theme accent hex — light mode only; null = default bronze" }
         createdAt: { type: string, format: date-time }
     DealerInput:
       type: object
@@ -7085,6 +7087,7 @@ components:
         country: { type: ["string", "null"] }
         legalHold: { type: boolean, description: "Legal hold — blocks close/purge while true" }
         usdExchangeRate: { type: number, exclusiveMinimum: 0, description: "GYD per 1 USD" }
+        themeColor: { type: ["string", "null"], pattern: "^#[0-9a-fA-F]{6}$", description: "Theme accent hex applied to the dealer's workspace in light mode; null clears to default" }
         entitlements:
           $ref: "#/components/schemas/Entitlements"
         ownerEmail:

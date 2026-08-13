@@ -9,6 +9,7 @@ import "@copilotkit/react-ui/styles.css";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Shell } from "@/components/layout/shell";
+import { DealerTheme } from "@/components/dealer-theme";
 import { AuthProvider, useAuthz } from "@/lib/auth";
 import { roleHome } from "@/lib/role-home";
 import { SignInPage, SignUpPage } from "@/pages/auth-pages";
@@ -203,6 +204,7 @@ function AppShell() {
   if (testPersonaActive) {
     return (
       <AuthProvider>
+        <DealerTheme />
         <DealershipGate>
           <MaybeCopilot>
             <Shell>
@@ -217,6 +219,7 @@ function AppShell() {
     <>
       <Show when="signed-in">
         <AuthProvider>
+          <DealerTheme />
           <DealershipGate>
           <MaybeCopilot>
             <Shell>

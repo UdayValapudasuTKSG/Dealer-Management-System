@@ -56,6 +56,9 @@ export const dealersTable = pgTable("dealers", {
   // fall back to the default AURA branding.
   brandName: text("brand_name"),
   logoUrl: text("logo_url"),
+  // Super-admin-managed theme accent (hex, e.g. "#B91C1C"). Applied to the
+  // dealership's AURA workspace in LIGHT mode only; null = default bronze.
+  themeColor: text("theme_color"),
   // Contact details printed on customer-facing documents (e.g. the warranty
   // certificate): street address, service line(s), 24h emergency line.
   address: text("address"),

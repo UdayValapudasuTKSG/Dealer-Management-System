@@ -423,12 +423,26 @@ function ProvisioningPanel({ dealer }: { dealer: Dealer }) {
   );
 }
 
+const THEME_PRESETS = [
+  { hex: "#B91C1C", label: "Crimson" },
+  { hex: "#C2410C", label: "Burnt Orange" },
+  { hex: "#A16207", label: "Amber" },
+  { hex: "#15803D", label: "Emerald" },
+  { hex: "#0F766E", label: "Teal" },
+  { hex: "#1D4ED8", label: "Cobalt" },
+  { hex: "#6D28D9", label: "Violet" },
+  { hex: "#0F172A", label: "Ink" },
+];
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
 function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [name, setName] = useState(dealer.name);
   const [city, setCity] = useState(dealer.city || "");
   const [country, setCountry] = useState(dealer.country || "");
+  const [themeColor, setThemeColor] = useState<string | null>(dealer.themeColor ?? null);
 
   const update = useUpdateDealer({
     mutation: {
@@ -441,12 +455,17 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
   });
 
   const handleSave = () => {
+    if (themeColor !== null && !HEX_RE.test(themeColor)) {
+      toast({ title: "Invalid theme color", description: "Use a 6-digit hex color like #B91C1C.", variant: "destructive" });
+      return;
+    }
     update.mutate({
       id: dealer.id,
       data: {
         name: name.trim(),
         city: city.trim() || null,
-        country: country.trim() || null
+        country: country.trim() || null,
+        themeColor
       }
     });
   };
@@ -469,6 +488,64 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
           <div className="space-y-1.5">
             <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Country</label>
             <Input value={country} onChange={e => setCountry(e.target.value)} className="bg-white/50 border-black/10 rounded-md focus-visible:ring-1 focus-visible:ring-black/20 h-10 text-[13px]" />
+          </div>
+        </div>
+
+        {/* Theme — super-admin accent color for the dealer's AURA workspace (light mode only) */}
+        <div className="pt-5 border-t border-black/5 space-y-3">
+          <div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Theme</div>
+            <p className="mt-1 text-[11.5px] text-zinc-500">
+              Accent color applied across this dealership's AURA workspace in light mode. Dark mode keeps the standard AURA bronze.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {THEME_PRESETS.map(p => (
+              <button
+                key={p.hex}
+                type="button"
+                title={p.label}
+                aria-label={`Preset ${p.label}`}
+                onClick={() => setThemeColor(p.hex)}
+                className={`h-7 w-7 rounded-full border transition-transform hover:scale-110 ${themeColor?.toLowerCase() === p.hex.toLowerCase() ? "ring-2 ring-offset-2 ring-zinc-900 border-transparent" : "border-black/10"}`}
+                style={{ backgroundColor: p.hex }}
+              />
+            ))}
+            <label className="relative h-7 w-7 rounded-full border border-dashed border-black/20 overflow-hidden cursor-pointer" title="Custom color">
+              <input
+                type="color"
+                value={themeColor && HEX_RE.test(themeColor) ? themeColor : "#B91C1C"}
+                onChange={e => setThemeColor(e.target.value)}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                aria-label="Custom theme color"
+              />
+              <span className="absolute inset-0 flex items-center justify-center text-[13px] text-zinc-400 pointer-events-none">+</span>
+            </label>
+          </div>
+          <div className="flex items-center gap-3">
+            {themeColor ? (
+              <>
+                <span className="inline-flex items-center gap-2 rounded-md border border-black/10 bg-white/60 px-2.5 py-1.5">
+                  <span className="h-4 w-4 rounded-full border border-black/10" style={{ backgroundColor: HEX_RE.test(themeColor) ? themeColor : "transparent" }} />
+                  <span className="font-mono text-[11.5px] text-zinc-700 uppercase">{themeColor}</span>
+                </span>
+                <span
+                  className="inline-flex items-center rounded-md px-3 py-1.5 text-[11.5px] font-medium text-white"
+                  style={{ backgroundColor: HEX_RE.test(themeColor) ? themeColor : "#71717a" }}
+                >
+                  Preview button
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setThemeColor(null)}
+                  className="text-[11.5px] text-zinc-500 underline underline-offset-2 hover:text-zinc-800"
+                >
+                  Reset to default
+                </button>
+              </>
+            ) : (
+              <span className="text-[11.5px] text-zinc-400 italic">Default AURA bronze</span>
+            )}
           </div>
         </div>
 

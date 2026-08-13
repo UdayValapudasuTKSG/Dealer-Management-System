@@ -441,6 +441,9 @@ router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
       ...(body.data.legalHold !== undefined
         ? { legalHold: body.data.legalHold }
         : {}),
+      ...(body.data.themeColor !== undefined
+        ? { themeColor: body.data.themeColor }
+        : {}),
     })
     .where(eq(dealersTable.id, params.data.id))
     .returning();
