@@ -76,7 +76,22 @@ async function refLabel(
 }
 
 router.get("/capacity-blocks", async (req, res): Promise<void> => {
-  const query = ListCapacityBlocksQueryParams.safeParse(req.query);
+  // The capacity plan is manager territory — same settings module that gates
+  // the page in the nav.
+  const user = res.locals.user as
+    | Parameters<typeof hasPermission>[0]
+    | undefined;
+  if (!user || !hasPermission(user, "settings", "view")) {
+    res.status(403).json({ error: "You do not have access to the capacity plan" });
+    return;
+  }
+  // Express delivers query params as strings; the generated schema expects
+  // Dates — coerce before validating or every filtered list 400s.
+  const rawQ = req.query as Record<string, unknown>;
+  const query = ListCapacityBlocksQueryParams.safeParse({
+    from: rawQ.from ? new Date(String(rawQ.from)) : undefined,
+    to: rawQ.to ? new Date(String(rawQ.to)) : undefined,
+  });
   if (!query.success) {
     res.status(400).json({ error: query.error.message });
     return;
@@ -124,6 +139,18 @@ router.post("/capacity-blocks", async (req, res): Promise<void> => {
     });
     return;
   }
+  const startHour = parsed.data.startHour ?? null;
+  const endHour = parsed.data.endHour ?? null;
+  if ((startHour == null) !== (endHour == null)) {
+    res.status(422).json({
+      error: "Provide both start and end hours, or neither for a full-day block.",
+    });
+    return;
+  }
+  if (startHour != null && endHour != null && endHour <= startHour) {
+    res.status(422).json({ error: "End hour must be after the start hour." });
+    return;
+  }
   const [row] = await db
     .insert(capacityBlocksTable)
     .values({
@@ -131,6 +158,8 @@ router.post("/capacity-blocks", async (req, res): Promise<void> => {
       kind: parsed.data.kind,
       refId: parsed.data.refId,
       date: dateStr(parsed.data.date),
+      startHour,
+      endHour,
       reason: parsed.data.reason ?? null,
       createdBy: actorName(res),
     })

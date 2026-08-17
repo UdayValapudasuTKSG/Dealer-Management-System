@@ -768,6 +768,7 @@ export const ListDeliveriesResponseItem = zod.object({
   "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "handoverOverrides": zod.record(zod.string(), zod.string()).optional().describe('Manual corrections shown on the printed handover form'),
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
@@ -841,6 +842,7 @@ export const CreateDeliveryResponse = zod.object({
   "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "handoverOverrides": zod.record(zod.string(), zod.string()).optional().describe('Manual corrections shown on the printed handover form'),
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
@@ -909,6 +911,7 @@ export const GetDeliveryResponse = zod.object({
   "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "handoverOverrides": zod.record(zod.string(), zod.string()).optional().describe('Manual corrections shown on the printed handover form'),
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
@@ -950,7 +953,21 @@ export const UpdateDeliveryBody = zod.object({
   "insuranceProvider": zod.string().optional(),
   "customerName": zod.string().min(1).optional(),
   "appointmentAt": zod.coerce.date().nullish(),
-  "deliveredAt": zod.coerce.date().nullish()
+  "deliveredAt": zod.coerce.date().nullish(),
+  "handoverOverrides": zod.object({
+  "customerAddress": zod.string().optional(),
+  "customerEmail": zod.string().optional(),
+  "customerPhone": zod.string().optional(),
+  "salesperson": zod.string().optional(),
+  "date": zod.string().optional(),
+  "invoiceNumber": zod.string().optional(),
+  "make": zod.string().optional(),
+  "model": zod.string().optional(),
+  "vin": zod.string().optional(),
+  "mileage": zod.string().optional(),
+  "keyNumber": zod.string().optional(),
+  "stockNumber": zod.string().optional()
+}).optional().describe('Manual corrections shown on the printed handover form. Empty string clears an override (PDF falls back to system data).')
 })
 
 export const UpdateDeliveryResponse = zod.object({
@@ -995,6 +1012,7 @@ export const UpdateDeliveryResponse = zod.object({
   "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "handoverOverrides": zod.record(zod.string(), zod.string()).optional().describe('Manual corrections shown on the printed handover form'),
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
@@ -1086,6 +1104,7 @@ export const AdvanceDeliveryResponse = zod.object({
   "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "handoverOverrides": zod.record(zod.string(), zod.string()).optional().describe('Manual corrections shown on the printed handover form'),
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
@@ -1166,6 +1185,7 @@ export const UpdateDeliveryPdiResponse = zod.object({
   "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
   "insurancePolicy": zod.string().nullish(),
   "insuranceProvider": zod.string().nullish(),
+  "handoverOverrides": zod.record(zod.string(), zod.string()).optional().describe('Manual corrections shown on the printed handover form'),
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
@@ -2603,12 +2623,21 @@ export const ListCapacityBlocksQueryParams = zod.object({
   "to": zod.date().optional()
 })
 
+export const listCapacityBlocksResponseStartHourMin = 0;
+export const listCapacityBlocksResponseStartHourMax = 23;
+
+export const listCapacityBlocksResponseEndHourMax = 24;
+
+
+
 export const ListCapacityBlocksResponseItem = zod.object({
   "id": zod.number(),
   "kind": zod.enum(['vehicle', 'advisor']),
   "refId": zod.number(),
   "refLabel": zod.string().nullish().describe('Display label — vehicle description or advisor name'),
   "date": zod.coerce.date(),
+  "startHour": zod.number().min(listCapacityBlocksResponseStartHourMin).max(listCapacityBlocksResponseStartHourMax).nullish().describe('Blocked from this hour (dealer-local). Null with null endHour = full day.'),
+  "endHour": zod.number().min(1).max(listCapacityBlocksResponseEndHourMax).nullish().describe('Blocked until this hour, exclusive (dealer-local).'),
   "reason": zod.string().nullish(),
   "createdBy": zod.string().nullish(),
   "createdAt": zod.coerce.date()
@@ -2619,12 +2648,28 @@ export const ListCapacityBlocksResponse = zod.array(ListCapacityBlocksResponseIt
 /**
  * @summary Block a vehicle or advisor for test drives on a given day (managers only)
  */
+export const createCapacityBlockBodyStartHourMin = 0;
+export const createCapacityBlockBodyStartHourMax = 23;
+
+export const createCapacityBlockBodyEndHourMax = 24;
+
+
+
 export const CreateCapacityBlockBody = zod.object({
   "kind": zod.enum(['vehicle', 'advisor']),
   "refId": zod.number(),
   "date": zod.coerce.date(),
+  "startHour": zod.number().min(createCapacityBlockBodyStartHourMin).max(createCapacityBlockBodyStartHourMax).optional(),
+  "endHour": zod.number().min(1).max(createCapacityBlockBodyEndHourMax).optional(),
   "reason": zod.string().optional()
 })
+
+export const createCapacityBlockResponseStartHourMin = 0;
+export const createCapacityBlockResponseStartHourMax = 23;
+
+export const createCapacityBlockResponseEndHourMax = 24;
+
+
 
 export const CreateCapacityBlockResponse = zod.object({
   "id": zod.number(),
@@ -2632,6 +2677,8 @@ export const CreateCapacityBlockResponse = zod.object({
   "refId": zod.number(),
   "refLabel": zod.string().nullish().describe('Display label — vehicle description or advisor name'),
   "date": zod.coerce.date(),
+  "startHour": zod.number().min(createCapacityBlockResponseStartHourMin).max(createCapacityBlockResponseStartHourMax).nullish().describe('Blocked from this hour (dealer-local). Null with null endHour = full day.'),
+  "endHour": zod.number().min(1).max(createCapacityBlockResponseEndHourMax).nullish().describe('Blocked until this hour, exclusive (dealer-local).'),
   "reason": zod.string().nullish(),
   "createdBy": zod.string().nullish(),
   "createdAt": zod.coerce.date()

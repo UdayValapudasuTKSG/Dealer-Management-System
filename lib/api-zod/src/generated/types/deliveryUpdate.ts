@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DeliveryUpdateHandoverOverrides } from './deliveryUpdateHandoverOverrides';
 import type { DeliveryUpdateRegistrationStatus } from './deliveryUpdateRegistrationStatus';
 
 export interface DeliveryUpdate {
@@ -21,4 +22,6 @@ export interface DeliveryUpdate {
   appointmentAt?: Date | null;
   /** @nullable */
   deliveredAt?: Date | null;
+  /** Manual corrections shown on the printed handover form. Empty string clears an override (PDF falls back to system data). */
+  handoverOverrides?: DeliveryUpdateHandoverOverrides;
 }

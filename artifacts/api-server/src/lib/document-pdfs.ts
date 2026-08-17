@@ -322,6 +322,8 @@ export interface HandoverPdfExtras {
   customerEmail?: string | null;
   customerPhone?: string | null;
   invoiceNumber?: string | null;
+  /** Manual per-field overrides from the delivery's handover_overrides. */
+  overrides?: Record<string, string>;
 }
 
 // Checklist content mirrors the dealership's printed "New Vehicle Handover
@@ -418,6 +420,7 @@ export function buildHandoverPdf(
   advisorName: string | null,
   extras: HandoverPdfExtras = {},
 ): Promise<Buffer> {
+  const ov = extras.overrides ?? {};
   return collect((doc) => {
     const M = 40;
     const pageW = doc.page.width;
@@ -520,16 +523,16 @@ export function buildHandoverPdf(
     doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("CUSTOMER DETAILS", M, y);
     let ly = y + 14;
     ly = fieldLine("CUSTOMER NAME:", delivery.customerName ?? "", M, ly, colW, 82);
-    ly = fieldLine("ADDRESS:", extras.customerAddress ?? "", M, ly, colW, 50);
+    ly = fieldLine("ADDRESS:", ov.customerAddress ?? extras.customerAddress ?? "", M, ly, colW, 50);
     ly = fieldLine("", "", M, ly, colW, 0);
-    ly = fieldLine("EMAIL ADDRESS:", extras.customerEmail ?? "", M, ly, colW, 80);
-    ly = fieldLine("TEL NOS.:", extras.customerPhone ?? "", M, ly, colW, 48);
+    ly = fieldLine("EMAIL ADDRESS:", ov.customerEmail ?? extras.customerEmail ?? "", M, ly, colW, 80);
+    ly = fieldLine("TEL NOS.:", ov.customerPhone ?? extras.customerPhone ?? "", M, ly, colW, 48);
 
     // Salesperson / date / invoice (right)
     let ry = y + 14;
     ry = fieldLine(
       "SALESPERSON:",
-      extras.salesAdvisorName ?? advisorName ?? "",
+      ov.salesperson ?? extras.salesAdvisorName ?? advisorName ?? "",
       rightX,
       ry,
       colW,
@@ -537,13 +540,13 @@ export function buildHandoverPdf(
     );
     ry = fieldLine(
       "DATE:",
-      fmtDate(delivery.deliveredAt ?? delivery.appointmentAt ?? new Date()),
+      ov.date ?? fmtDate(delivery.deliveredAt ?? delivery.appointmentAt ?? new Date()),
       rightX,
       ry,
       colW,
       34,
     );
-    ry = fieldLine("INVOICE#", extras.invoiceNumber ?? "", rightX, ry, colW, 48);
+    ry = fieldLine("INVOICE#", ov.invoiceNumber ?? extras.invoiceNumber ?? "", rightX, ry, colW, 48);
 
     y = Math.max(ly, ry) + 6;
 
@@ -551,8 +554,8 @@ export function buildHandoverPdf(
     doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("VEHICLE DETAILS", M, y);
     y += 14;
     const halfCol = (colW - 12) / 2;
-    let vy = fieldLine("MAKE:", vehicle?.make ?? "", M, y, halfCol, 34);
-    fieldLine("MODEL:", vehicle?.model ?? "", M + halfCol + 12, y, halfCol, 40);
+    let vy = fieldLine("MAKE:", ov.make ?? vehicle?.make ?? "", M, y, halfCol, 34);
+    fieldLine("MODEL:", ov.model ?? vehicle?.model ?? "", M + halfCol + 12, y, halfCol, 40);
     let vy2 = fieldLine(
       "REGISTRATION#",
       delivery.registrationNumber ?? "",
@@ -561,13 +564,14 @@ export function buildHandoverPdf(
       halfCol,
       74,
     );
-    fieldLine("VIN:", vehicle?.vin ?? "", M + halfCol + 12, vy, halfCol, 26);
-    const vy3 = fieldLine("KEY #", "", M, vy2, halfCol, 32);
+    fieldLine("VIN:", ov.vin ?? vehicle?.vin ?? "", M + halfCol + 12, vy, halfCol, 26);
+    const vy3 = fieldLine("KEY #", ov.keyNumber ?? "", M, vy2, halfCol, 32);
     fieldLine(
       "MILEAGE:",
-      vehicle?.mileageKm != null
-        ? `${vehicle.mileageKm.toLocaleString("en-US")} km`
-        : "",
+      ov.mileage ??
+        (vehicle?.mileageKm != null
+          ? `${vehicle.mileageKm.toLocaleString("en-US")} km`
+          : ""),
       M + halfCol + 12,
       vy2,
       halfCol,
@@ -575,7 +579,7 @@ export function buildHandoverPdf(
     );
     y = fieldLine(
       "STOCK#",
-      vehicle ? `V-${String(vehicle.id).padStart(5, "0")}` : "",
+      ov.stockNumber ?? (vehicle ? `V-${String(vehicle.id).padStart(5, "0")}` : ""),
       M,
       vy3,
       halfCol,
@@ -604,7 +608,7 @@ export function buildHandoverPdf(
     doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("CUSTOMER DETAILS", M, y);
     let p2y = y + 14;
     p2y = fieldLine("CUSTOMER NAME:", delivery.customerName ?? "", M, p2y, colW, 82);
-    p2y = fieldLine("ADDRESS:", extras.customerAddress ?? "", M, p2y, colW, 50);
+    p2y = fieldLine("ADDRESS:", ov.customerAddress ?? extras.customerAddress ?? "", M, p2y, colW, 50);
     p2y += 14;
 
     doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("CONDITION OF VEHICLE", M, p2y);

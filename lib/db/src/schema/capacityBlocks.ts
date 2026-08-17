@@ -28,6 +28,9 @@ export const capacityBlocksTable = pgTable(
     refId: integer("ref_id").notNull(),
     /** Blocked calendar day (dealer-local), YYYY-MM-DD. */
     date: date("date", { mode: "string" }).notNull(),
+    /** Optional hour window (dealer-local, 0-23). Both null = full day. */
+    startHour: integer("start_hour"),
+    endHour: integer("end_hour"),
     reason: text("reason"),
     createdBy: text("created_by"),
     createdAt: timestamp("created_at", { withTimezone: true })

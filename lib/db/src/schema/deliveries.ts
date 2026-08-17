@@ -188,6 +188,13 @@ export const deliveriesTable = pgTable("deliveries", {
     withTimezone: true,
   }),
   insurancePolicy: text("insurance_policy"),
+  /** Manual corrections shown on the printed handover form (PDF). Keys:
+   *  customerAddress, customerEmail, customerPhone, salesperson, date,
+   *  invoiceNumber, make, model, vin, mileage, keyNumber, stockNumber. */
+  handoverOverrides: jsonb("handover_overrides")
+    .$type<Record<string, string>>()
+    .notNull()
+    .default({}),
   insuranceProvider: text("insurance_provider"),
   insuranceDocId: integer("insurance_doc_id"),
   handoverSheetDocId: integer("handover_sheet_doc_id"),

@@ -498,6 +498,21 @@ router.patch("/deliveries/:id", async (req, res): Promise<void> => {
     patch.deliveredAt = parsed.data.deliveredAt
       ? new Date(parsed.data.deliveredAt)
       : null;
+  if (parsed.data.handoverOverrides !== undefined) {
+    // Merge atomically in SQL (jsonb || / -) so concurrent PATCHes editing
+    // different fields don't clobber each other. An empty-string value
+    // clears that key — the PDF falls back to the system-derived value.
+    const sets: Record<string, string> = {};
+    const clears: string[] = [];
+    for (const [k, v] of Object.entries(parsed.data.handoverOverrides)) {
+      if (typeof v !== "string") continue;
+      if (v.trim() === "") clears.push(k);
+      else sets[k] = v.trim();
+    }
+    patch.handoverOverrides = sql`(${deliveriesTable.handoverOverrides} || ${JSON.stringify(sets)}::jsonb) - ${sql.raw(
+      `ARRAY[${clears.map((k) => `'${k.replace(/'/g, "''")}'`).join(",") || "''"}]::text[]`,
+    )}` as unknown as Record<string, string>;
+  }
   if (
     parsed.data.registrationStatus !== undefined &&
     parsed.data.registrationStatus !== current.registrationStatus
@@ -1531,6 +1546,7 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
     customerEmail: customer?.email ?? null,
     customerPhone: customer?.phone ?? null,
     invoiceNumber,
+    overrides: delivery.handoverOverrides ?? {},
   });
   res
     .setHeader("Content-Type", "application/pdf")

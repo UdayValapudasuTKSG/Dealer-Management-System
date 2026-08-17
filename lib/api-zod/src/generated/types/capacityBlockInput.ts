@@ -11,5 +11,15 @@ export interface CapacityBlockInput {
   kind: CapacityBlockInputKind;
   refId: number;
   date: Date;
+  /**
+     * @minimum 0
+     * @maximum 23
+     */
+  startHour?: number;
+  /**
+     * @minimum 1
+     * @maximum 24
+     */
+  endHour?: number;
   reason?: string;
 }

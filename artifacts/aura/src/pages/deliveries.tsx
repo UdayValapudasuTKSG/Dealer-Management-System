@@ -841,11 +841,24 @@ function DeliveryDetail({
               variant="outline"
               className="h-10 rounded-full border-border text-sm font-medium"
               onClick={() => {
+                const ov = (delivery.handoverOverrides ?? {}) as Record<string, string>;
                 setHandoverDraft({
                   customerName: delivery.customerName ?? "",
                   registrationNumber: delivery.registrationNumber ?? "",
                   insuranceProvider: delivery.insuranceProvider ?? "",
                   insurancePolicy: delivery.insurancePolicy ?? "",
+                  customerAddress: ov.customerAddress ?? "",
+                  customerEmail: ov.customerEmail ?? "",
+                  customerPhone: ov.customerPhone ?? "",
+                  salesperson: ov.salesperson ?? "",
+                  date: ov.date ?? "",
+                  invoiceNumber: ov.invoiceNumber ?? "",
+                  make: ov.make ?? "",
+                  model: ov.model ?? "",
+                  vin: ov.vin ?? "",
+                  mileage: ov.mileage ?? "",
+                  keyNumber: ov.keyNumber ?? "",
+                  stockNumber: ov.stockNumber ?? "",
                 });
                 setHandoverOpen(true);
               }}
@@ -855,23 +868,21 @@ function DeliveryDetail({
           </div>
 
           <Dialog open={handoverOpen} onOpenChange={setHandoverOpen}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit handover form</DialogTitle>
                 <DialogDescription>
-                  Changes save to this delivery and appear on the printed
-                  handover form immediately.
+                  Every field printed on the handover form. Leave a field blank
+                  to use the system value (customer record, vehicle record,
+                  invoice); type in it to override what prints.
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-3">
-                {(
-                  [
-                    ["customerName", "Customer name", "Nana Adjei"],
-                    ["registrationNumber", "Registration / plate (e.g. PAB1234)", "PAB1234"],
-                    ["insuranceProvider", "Insurance provider", "Assuria"],
-                    ["insurancePolicy", "Insurance policy #", "POL-000123"],
-                  ] as const
-                ).map(([key, label, placeholder]) => (
+              {(() => {
+                const field = (
+                  key: string,
+                  label: string,
+                  placeholder: string,
+                ) => (
                   <div key={key} className="space-y-1.5">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       {label}
@@ -884,8 +895,48 @@ function DeliveryDetail({
                       }
                     />
                   </div>
-                ))}
-              </div>
+                );
+                return (
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm font-bold mb-2">Customer details</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {field("customerName", "Customer name", "Nana Adjei")}
+                        {field("customerAddress", "Address", "From customer record")}
+                        {field("customerEmail", "Email address", "From customer record")}
+                        {field("customerPhone", "Tel nos.", "From customer record")}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold mb-2">Sale details</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {field("salesperson", "Salesperson", "From the deal")}
+                        {field("date", "Date", "Delivery/appointment date")}
+                        {field("invoiceNumber", "Invoice #", "From the invoice")}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold mb-2">Vehicle details</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {field("make", "Make", "From vehicle record")}
+                        {field("model", "Model", "From vehicle record")}
+                        {field("registrationNumber", "Registration / plate", "PAB1234")}
+                        {field("vin", "VIN", "From vehicle record")}
+                        {field("keyNumber", "Key #", "Blank on form by default")}
+                        {field("mileage", "Mileage", "From vehicle record")}
+                        {field("stockNumber", "Stock #", "V-00000")}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold mb-2">Insurance (registration step)</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {field("insuranceProvider", "Insurance provider", "Assuria")}
+                        {field("insurancePolicy", "Insurance policy #", "POL-000123")}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <DialogFooter>
                 <Button
                   variant="outline"
@@ -918,6 +969,22 @@ function DeliveryDetail({
                           ...(plate ? { registrationNumber: plate } : {}),
                           insuranceProvider: handoverDraft.insuranceProvider ?? "",
                           insurancePolicy: handoverDraft.insurancePolicy ?? "",
+                          // Blank values clear the override so the PDF falls
+                          // back to system data.
+                          handoverOverrides: {
+                            customerAddress: handoverDraft.customerAddress ?? "",
+                            customerEmail: handoverDraft.customerEmail ?? "",
+                            customerPhone: handoverDraft.customerPhone ?? "",
+                            salesperson: handoverDraft.salesperson ?? "",
+                            date: handoverDraft.date ?? "",
+                            invoiceNumber: handoverDraft.invoiceNumber ?? "",
+                            make: handoverDraft.make ?? "",
+                            model: handoverDraft.model ?? "",
+                            vin: handoverDraft.vin ?? "",
+                            mileage: handoverDraft.mileage ?? "",
+                            keyNumber: handoverDraft.keyNumber ?? "",
+                            stockNumber: handoverDraft.stockNumber ?? "",
+                          },
                         },
                       });
                       setHandoverOpen(false);

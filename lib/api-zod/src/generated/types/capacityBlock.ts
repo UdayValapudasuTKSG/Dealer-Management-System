@@ -17,6 +17,20 @@ export interface CapacityBlock {
      */
   refLabel?: string | null;
   date: Date;
+  /**
+     * Blocked from this hour (dealer-local). Null with null endHour = full day.
+     * @minimum 0
+     * @maximum 23
+     * @nullable
+     */
+  startHour?: number | null;
+  /**
+     * Blocked until this hour, exclusive (dealer-local).
+     * @minimum 1
+     * @maximum 24
+     * @nullable
+     */
+  endHour?: number | null;
   /** @nullable */
   reason?: string | null;
   /** @nullable */

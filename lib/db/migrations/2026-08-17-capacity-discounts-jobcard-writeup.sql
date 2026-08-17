@@ -23,3 +23,8 @@ ALTER TABLE quotes ADD COLUMN IF NOT EXISTS discount_gate_id integer;
 
 ALTER TABLE job_cards ADD COLUMN IF NOT EXISTS service_analysis text;
 ALTER TABLE job_cards ADD COLUMN IF NOT EXISTS work_performed text;
+
+-- Hour-window capacity blocks + handover form overrides
+ALTER TABLE capacity_blocks ADD COLUMN IF NOT EXISTS start_hour integer;
+ALTER TABLE capacity_blocks ADD COLUMN IF NOT EXISTS end_hour integer;
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS handover_overrides jsonb DEFAULT '{}'::jsonb NOT NULL;

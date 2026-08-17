@@ -1854,16 +1854,31 @@ function localDateStr(d: Date): string {
  * Days blocked in the manager capacity plan for a vehicle and/or advisor
  * (test drives). Returns a set of YYYY-MM-DD strings.
  */
+/** date -> hour windows; an empty array means the whole day is blocked. */
+type BlockedDays = Map<string, Array<{ startHour: number; endHour: number }>>;
+
+function isSlotBlocked(blocked: BlockedDays, start: Date): boolean {
+  const windows = blocked.get(localDateStr(start));
+  if (!windows) return false;
+  if (windows.length === 0) return true; // full-day block
+  // Slots are generated with local wall-clock hours (new Date(y,m,d,hour)),
+  // so compare in the same frame as localDateStr — via getHours().
+  const hour = start.getHours();
+  return windows.some((w) => hour >= w.startHour && hour < w.endHour);
+}
+
 async function capacityBlockedDays(
   dealerId: number,
-  refs: { vehicleId?: number | null; advisorUserId?: number | null },
-): Promise<Set<string>> {
+  refs: { vehicleIds?: number[]; advisorUserId?: number | null },
+): Promise<BlockedDays> {
   const conds: SQL[] = [];
-  if (refs.vehicleId != null) {
+  if (refs.vehicleIds && refs.vehicleIds.length > 0) {
+    // A block on ANY unit of the model blocks the model's test drives — the
+    // capacity planner shows one representative demo unit per model line.
     conds.push(
       and(
         eq(capacityBlocksTable.kind, "vehicle"),
-        eq(capacityBlocksTable.refId, refs.vehicleId),
+        inArray(capacityBlocksTable.refId, refs.vehicleIds),
       )!,
     );
   }
@@ -1875,12 +1890,29 @@ async function capacityBlockedDays(
       )!,
     );
   }
-  if (conds.length === 0) return new Set();
+  if (conds.length === 0) return new Map();
   const rows = await db
-    .select({ date: capacityBlocksTable.date })
+    .select({
+      date: capacityBlocksTable.date,
+      startHour: capacityBlocksTable.startHour,
+      endHour: capacityBlocksTable.endHour,
+    })
     .from(capacityBlocksTable)
     .where(and(eq(capacityBlocksTable.dealerId, dealerId), or(...conds)));
-  return new Set(rows.map((r) => r.date));
+  const map: BlockedDays = new Map();
+  for (const r of rows) {
+    const existing = map.get(r.date);
+    if (r.startHour == null || r.endHour == null) {
+      map.set(r.date, []); // full day wins
+      continue;
+    }
+    if (existing && existing.length === 0) continue; // already full-day
+    map.set(r.date, [
+      ...(existing ?? []),
+      { startHour: r.startHour, endHour: r.endHour },
+    ]);
+  }
+  return map;
 }
 
 router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
@@ -1947,14 +1979,42 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
     }
     // Manager capacity planning: the vehicle or the lead's advisor may be
     // blocked out for that day.
+    let blockVehicleIds: number[] = [];
+    if (checkLead.interestedVehicleId != null) {
+      const [iv] = await db
+        .select({ make: vehiclesTable.make, model: vehiclesTable.model })
+        .from(vehiclesTable)
+        .where(
+          and(
+            eq(vehiclesTable.id, checkLead.interestedVehicleId),
+            eq(vehiclesTable.dealerId, existing.dealerId),
+          ),
+        );
+      const siblings = iv
+        ? await db
+            .select({ id: vehiclesTable.id })
+            .from(vehiclesTable)
+            .where(
+              and(
+                eq(vehiclesTable.dealerId, existing.dealerId),
+                eq(vehiclesTable.make, iv.make),
+                eq(vehiclesTable.model, iv.model),
+              ),
+            )
+        : [];
+      blockVehicleIds = [
+        checkLead.interestedVehicleId,
+        ...siblings.map((u) => u.id),
+      ];
+    }
     const blockedDays = await capacityBlockedDays(existing.dealerId, {
-      vehicleId: checkLead.interestedVehicleId,
+      vehicleIds: blockVehicleIds,
       advisorUserId: existing.ownerUserId,
     });
-    if (blockedDays.has(localDateStr(when))) {
+    if (isSlotBlocked(blockedDays, when)) {
       res.status(409).json({
         error:
-          "That day is blocked in the capacity plan (vehicle or advisor unavailable) — pick another day.",
+          "That time is blocked in the capacity plan (vehicle or advisor unavailable) — pick another slot.",
       });
       return;
     }
@@ -2162,8 +2222,20 @@ router.get(
     const taken = new Set(otherBookings.map((r) => r.at!.getTime()));
     // Manager capacity planning: days where the vehicle or the lead's
     // advisor is blocked out are not offerable.
+    // Blocks may sit on ANY unit of the model (the planner shows one
+    // representative demo unit regardless of its sale status).
+    const modelUnits = await db
+      .select({ id: vehiclesTable.id })
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.dealerId, dealerId),
+          eq(vehiclesTable.make, vehicle.make),
+          eq(vehiclesTable.model, vehicle.model),
+        ),
+      );
     const blockedDays = await capacityBlockedDays(dealerId, {
-      vehicleId: vehicle.id,
+      vehicleIds: [vehicle.id, ...modelUnits.map((u) => u.id)],
       advisorUserId: lead.ownerUserId,
     });
     const drivable = !(await vehicleAvailabilityError(lead));
@@ -2179,7 +2251,7 @@ router.get(
           vehicleFree:
             drivable &&
             !taken.has(start.getTime()) &&
-            !blockedDays.has(localDateStr(start)),
+            !isSlotBlocked(blockedDays, start),
           customerFree: ownBooking !== start.getTime(),
         })),
       }),

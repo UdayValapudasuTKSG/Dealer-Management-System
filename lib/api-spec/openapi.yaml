@@ -7995,6 +7995,11 @@ components:
           description: Registration has sat at "submitted" for more than 72 hours
         insurancePolicy: { type: ["string", "null"] }
         insuranceProvider: { type: ["string", "null"] }
+        handoverOverrides:
+          type: object
+          additionalProperties: { type: string }
+          description: "Manual corrections shown on the printed handover form"
+
         insuranceDocId: { type: ["integer", "null"] }
         handoverSheetDocId: { type: ["integer", "null"] }
         pdiWorkOrderId: { type: ["integer", "null"] }
@@ -8026,6 +8031,23 @@ components:
         customerName: { type: string, minLength: 1 }
         appointmentAt: { type: ["string", "null"], format: date-time }
         deliveredAt: { type: ["string", "null"], format: date-time }
+        handoverOverrides:
+          type: object
+          description: "Manual corrections shown on the printed handover form. Empty string clears an override (PDF falls back to system data)."
+          additionalProperties: false
+          properties:
+            customerAddress: { type: string }
+            customerEmail: { type: string }
+            customerPhone: { type: string }
+            salesperson: { type: string }
+            date: { type: string }
+            invoiceNumber: { type: string }
+            make: { type: string }
+            model: { type: string }
+            vin: { type: string }
+            mileage: { type: string }
+            keyNumber: { type: string }
+            stockNumber: { type: string }
     DeliveryAdvanceInput:
       type: object
       required: [step]
@@ -8422,6 +8444,8 @@ components:
         refId: { type: integer }
         refLabel: { type: ["string", "null"], description: "Display label — vehicle description or advisor name" }
         date: { type: string, format: date }
+        startHour: { type: ["integer", "null"], minimum: 0, maximum: 23, description: "Blocked from this hour (dealer-local). Null with null endHour = full day." }
+        endHour: { type: ["integer", "null"], minimum: 1, maximum: 24, description: "Blocked until this hour, exclusive (dealer-local)." }
         reason: { type: ["string", "null"] }
         createdBy: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
@@ -8432,6 +8456,8 @@ components:
         kind: { type: string, enum: [vehicle, advisor] }
         refId: { type: integer }
         date: { type: string, format: date }
+        startHour: { type: integer, minimum: 0, maximum: 23 }
+        endHour: { type: integer, minimum: 1, maximum: 24 }
         reason: { type: string }
     Quote:
       type: object

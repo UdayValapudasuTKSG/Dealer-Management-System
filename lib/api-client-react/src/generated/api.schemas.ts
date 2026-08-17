@@ -1344,6 +1344,11 @@ export const DeliveryRegistrationStatus = {
   issued: 'issued',
 } as const;
 
+/**
+ * Manual corrections shown on the printed handover form
+ */
+export type DeliveryHandoverOverrides = {[key: string]: string};
+
 export interface Delivery {
   id: number;
   dealId: number;
@@ -1395,6 +1400,8 @@ export interface Delivery {
   insurancePolicy?: string | null;
   /** @nullable */
   insuranceProvider?: string | null;
+  /** Manual corrections shown on the printed handover form */
+  handoverOverrides?: DeliveryHandoverOverrides;
   /** @nullable */
   insuranceDocId?: number | null;
   /** @nullable */
@@ -1425,6 +1432,24 @@ export const DeliveryUpdateRegistrationStatus = {
   issued: 'issued',
 } as const;
 
+/**
+ * Manual corrections shown on the printed handover form. Empty string clears an override (PDF falls back to system data).
+ */
+export type DeliveryUpdateHandoverOverrides = {
+  customerAddress?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  salesperson?: string;
+  date?: string;
+  invoiceNumber?: string;
+  make?: string;
+  model?: string;
+  vin?: string;
+  mileage?: string;
+  keyNumber?: string;
+  stockNumber?: string;
+};
+
 export interface DeliveryUpdate {
   /** @nullable */
   advisorUserId?: number | null;
@@ -1439,6 +1464,8 @@ export interface DeliveryUpdate {
   appointmentAt?: string | null;
   /** @nullable */
   deliveredAt?: string | null;
+  /** Manual corrections shown on the printed handover form. Empty string clears an override (PDF falls back to system data). */
+  handoverOverrides?: DeliveryUpdateHandoverOverrides;
 }
 
 export type DeliveryAdvanceInputStep = typeof DeliveryAdvanceInputStep[keyof typeof DeliveryAdvanceInputStep];
@@ -2245,6 +2272,20 @@ export interface CapacityBlock {
      */
   refLabel?: string | null;
   date: string;
+  /**
+     * Blocked from this hour (dealer-local). Null with null endHour = full day.
+     * @minimum 0
+     * @maximum 23
+     * @nullable
+     */
+  startHour?: number | null;
+  /**
+     * Blocked until this hour, exclusive (dealer-local).
+     * @minimum 1
+     * @maximum 24
+     * @nullable
+     */
+  endHour?: number | null;
   /** @nullable */
   reason?: string | null;
   /** @nullable */
@@ -2264,6 +2305,16 @@ export interface CapacityBlockInput {
   kind: CapacityBlockInputKind;
   refId: number;
   date: string;
+  /**
+     * @minimum 0
+     * @maximum 23
+     */
+  startHour?: number;
+  /**
+     * @minimum 1
+     * @maximum 24
+     */
+  endHour?: number;
   reason?: string;
 }
 

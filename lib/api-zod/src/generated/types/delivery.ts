@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DeliveryCurrentStep } from './deliveryCurrentStep';
+import type { DeliveryHandoverOverrides } from './deliveryHandoverOverrides';
 import type { DeliveryRegistrationStatus } from './deliveryRegistrationStatus';
 import type { DeliveryStatus } from './deliveryStatus';
 import type { DeliveryStepState } from './deliveryStepState';
@@ -63,6 +64,8 @@ export interface Delivery {
   insurancePolicy?: string | null;
   /** @nullable */
   insuranceProvider?: string | null;
+  /** Manual corrections shown on the printed handover form */
+  handoverOverrides?: DeliveryHandoverOverrides;
   /** @nullable */
   insuranceDocId?: number | null;
   /** @nullable */
