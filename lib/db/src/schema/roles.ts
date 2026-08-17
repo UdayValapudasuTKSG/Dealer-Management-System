@@ -23,6 +23,7 @@ export const PERMISSION_MODULES = [
   "customers",
   "approvals",
   "gra",
+  "capacity",
   "settings",
 ] as const;
 export type PermissionModule = (typeof PERMISSION_MODULES)[number];

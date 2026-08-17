@@ -21,6 +21,7 @@ export const PermissionGrantModule = {
   customers: 'customers',
   approvals: 'approvals',
   gra: 'gra',
+  capacity: 'capacity',
   settings: 'settings',
 } as const;
 

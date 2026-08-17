@@ -7666,7 +7666,7 @@ export const GetCurrentUserResponse = zod.object({
   "themeColor": zod.string().regex(getCurrentUserResponseDealersItemThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze')
 })),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 }))
 })
@@ -8499,7 +8499,7 @@ export const ListAdminRolesResponseItem = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "fieldPermissions": zod.array(zod.object({
@@ -8526,7 +8526,7 @@ export const CreateAdminRoleResponse = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "fieldPermissions": zod.array(zod.object({
@@ -8556,7 +8556,7 @@ export const UpdateAdminRoleResponse = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "fieldPermissions": zod.array(zod.object({
@@ -8583,7 +8583,7 @@ export const SetRolePermissionsParams = zod.object({
 
 export const SetRolePermissionsBody = zod.object({
   "grants": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 }))
 })
@@ -8595,7 +8595,7 @@ export const SetRolePermissionsResponse = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "fieldPermissions": zod.array(zod.object({
@@ -8642,7 +8642,7 @@ export const SetRoleFieldPermissionsResponse = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "fieldPermissions": zod.array(zod.object({

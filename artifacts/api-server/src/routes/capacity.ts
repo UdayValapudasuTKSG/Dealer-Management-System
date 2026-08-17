@@ -36,7 +36,7 @@ function canManage(res: {
   const user = res.locals.user as
     | Parameters<typeof hasPermission>[0]
     | undefined;
-  return !!user && hasPermission(user, "settings", "edit");
+  return !!user && hasPermission(user, "capacity", "edit");
 }
 
 async function refLabel(
@@ -81,7 +81,7 @@ router.get("/capacity-blocks", async (req, res): Promise<void> => {
   const user = res.locals.user as
     | Parameters<typeof hasPermission>[0]
     | undefined;
-  if (!user || !hasPermission(user, "settings", "view")) {
+  if (!user || !hasPermission(user, "capacity", "view")) {
     res.status(403).json({ error: "You do not have access to the capacity plan" });
     return;
   }

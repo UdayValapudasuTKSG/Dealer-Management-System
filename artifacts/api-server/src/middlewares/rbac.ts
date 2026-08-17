@@ -758,11 +758,11 @@ const PATH_MODULES: Record<string, RouteRule> = {
     category: () => "admin",
   },
   "audit-logs": { module: "settings" },
-  // Test-drive capacity planning: manager territory under the settings
-  // module. Writes map to "edit" (not create/delete) so managers whose role
-  // grants settings edit can block/unblock without a create grant.
+  // Test-drive capacity planning has its own permission module so it shows
+  // as a distinct row in Roles & Permissions. Writes map to "edit" (not
+  // create/delete) so a single edit grant covers block + unblock.
   "capacity-blocks": {
-    module: "settings",
+    module: "capacity",
     category: (req) => (req.method === "GET" ? "view" : "edit"),
   },
   emails: { module: "settings" },

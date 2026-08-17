@@ -7107,7 +7107,7 @@ components:
       properties:
         module:
           type: string
-          enum: [dashboard, inventory, leads, deals, appraisals, finance, service, parts, deliveries, customers, approvals, gra, settings]
+          enum: [dashboard, inventory, leads, deals, appraisals, finance, service, parts, deliveries, customers, approvals, gra, capacity, settings]
         category:
           type: string
           enum: [view, create, edit, delete, approve, reject, export, assign, admin]

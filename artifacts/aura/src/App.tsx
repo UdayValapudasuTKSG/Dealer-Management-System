@@ -274,7 +274,11 @@ function AppRoutes() {
                   <Redirect to="/service" />
                 </Route>
                 <Route path="/deliveries" component={Deliveries} />
-                <Route path="/capacity" component={CapacityPage} />
+                <Route path="/capacity">
+        <RequireModule module="capacity" label="Capacity">
+          <CapacityPage />
+        </RequireModule>
+      </Route>
                 <Route path="/customers" component={Customers} />
                 <Route path="/customers/:id" component={CustomerDetail} />
                 <Route path="/lead/:id" component={LeadDetail} />
