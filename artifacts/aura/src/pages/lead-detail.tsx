@@ -16,6 +16,7 @@ import {
   useListLeadCalls,
   useListLeadQuotes,
   useGenerateLeadQuote,
+  useRequestQuoteDiscount,
   useSendLeadQuote,
   useSendTestDriveInvite,
   useListGates,
@@ -1013,6 +1014,29 @@ export default function LeadDetail() {
     },
   });
 
+  const requestDiscount = useRequestQuoteDiscount({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getListLeadQuotesQueryKey(id) });
+        qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
+        setDiscountOpen(false);
+        toast({
+          title: "Discount requested",
+          description: "Sent to management for approval — watch the Approvals queue.",
+        });
+      },
+      onError: (err: unknown) =>
+        toast({
+          title: "Could not request discount",
+          description: (err as { error?: string })?.error ?? undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [discountReason, setDiscountReason] = useState("");
+
   const sendQuote = useSendLeadQuote({
     mutation: {
       onSuccess: (r) => {
@@ -1218,7 +1242,7 @@ export default function LeadDetail() {
     {
       key: "new",
       label: "New",
-      caption: "Code generated, advisor assigned — call within 24 hours.",
+      caption: "Code generated, advisor assigned — call within 48 hours.",
       checklist: [
         { label: "Sales advisor assigned", done: !!lead.ownerUserId },
         { label: "Quote code generated", done: quoteSent },
@@ -1228,7 +1252,7 @@ export default function LeadDetail() {
     {
       key: "contacted",
       label: "Contacted",
-      caption: "First call logged inside the 24-hour SLA.",
+      caption: "First call logged inside the 48-hour SLA.",
       checklist: [
         { label: "First contact logged", done: !!lead.contactedDate },
         { label: "Address captured", done: !!lead.address },
@@ -2384,6 +2408,73 @@ export default function LeadDetail() {
                       )}
                     </div>
 
+                    <Dialog open={discountOpen} onOpenChange={setDiscountOpen}>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Request quote discount</DialogTitle>
+                          <DialogDescription>
+                            Management must approve the discount before it is
+                            applied to the quote total.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Discount amount (GYD)
+                            </p>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={discountAmount}
+                              onChange={(e) => setDiscountAmount(e.target.value)}
+                              placeholder="100000"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Reason
+                            </p>
+                            <Textarea
+                              value={discountReason}
+                              onChange={(e) => setDiscountReason(e.target.value)}
+                              placeholder="Why this customer should get a discount…"
+                              rows={3}
+                            />
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            variant="outline"
+                            onClick={() => setDiscountOpen(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            disabled={
+                              requestDiscount.isPending ||
+                              !(Number(discountAmount) > 0)
+                            }
+                            onClick={() =>
+                              requestDiscount.mutate({
+                                id: lead.id,
+                                data: {
+                                  amount: Number(discountAmount),
+                                  ...(discountReason.trim()
+                                    ? { reason: discountReason.trim() }
+                                    : {}),
+                                },
+                              })
+                            }
+                          >
+                            {requestDiscount.isPending && (
+                              <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                            )}
+                            Submit for approval
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+
                     {quoteVersions && quoteVersions.length > 0 ? (
                       <div className="space-y-2">
                         {quoteVersions.map((q) => (
@@ -2435,6 +2526,33 @@ export default function LeadDetail() {
                               </a>
                               {canEdit && q.status === "current" && (
                                 <>
+                                  {q.discountStatus === "pending" ? (
+                                    <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500">
+                                      Discount pending approval
+                                    </span>
+                                  ) : q.discountStatus === "approved" &&
+                                    (q.discountAmount ?? 0) > 0 ? (
+                                    <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500">
+                                      Discount {money.gyd(q.discountAmount ?? 0)}
+                                    </span>
+                                  ) : (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setDiscountAmount("");
+                                        setDiscountReason("");
+                                        setDiscountOpen(true);
+                                      }}
+                                    >
+                                      Request Discount
+                                    </Button>
+                                  )}
+                                  {q.discountStatus === "rejected" && (
+                                    <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-500/15 text-red-500">
+                                      Discount declined
+                                    </span>
+                                  )}
                                   <Button
                                     variant="outline"
                                     size="sm"

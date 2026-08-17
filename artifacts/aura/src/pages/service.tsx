@@ -379,14 +379,15 @@ function CreateBookingDialog() {
         { name: "estimatedHours", label: "Booked hours (blank = dealer default)", type: "number", span: "half", placeholder: "2" },
         {
           name: "technicianUserId",
-          label: "Technician (blank = auto round-robin)",
+          label: "Technician (default: unassigned)",
           type: "select",
           span: "half",
           options: [
+            { value: "none", label: "Unassigned — pick later" },
             { value: "auto", label: "Auto — round-robin" },
             ...(technicians?.map((t) => ({ value: String(t.id), label: t.name })) ?? []),
           ],
-          defaultValue: "auto",
+          defaultValue: "none",
         },
       ]}
       onSubmit={async (values) => {
@@ -398,11 +399,12 @@ function CreateBookingDialog() {
         } else {
           delete v.estimatedHours;
         }
-        if (v.technicianUserId && v.technicianUserId !== "auto") {
+        if (v.technicianUserId && v.technicianUserId !== "auto" && v.technicianUserId !== "none") {
           const tech = technicians?.find((t) => String(t.id) === String(v.technicianUserId));
           v.technicianUserId = Number(v.technicianUserId);
           if (tech) v.technician = tech.name;
         } else {
+          if (v.technicianUserId === "auto") v.autoAssign = true;
           delete v.technicianUserId;
         }
         const order = await createOrder.mutateAsync({ data: v as never });
@@ -1064,10 +1066,50 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
     invalidate();
   };
 
+  // Completion write-up (mandatory): analysis of the service + work performed
+  // must be recorded before the card can be moved to Completed.
+  const [completeOpen, setCompleteOpen] = useState(false);
+  const [analysisDraft, setAnalysisDraft] = useState("");
+  const [performedDraft, setPerformedDraft] = useState("");
+
   const setStatus = async (status: JobCard["status"]) => {
+    if (
+      status === "completed" &&
+      (!card.serviceAnalysis?.trim() || !card.workPerformed?.trim())
+    ) {
+      setAnalysisDraft(card.serviceAnalysis ?? "");
+      setPerformedDraft(card.workPerformed ?? "");
+      setCompleteOpen(true);
+      return;
+    }
     await update.mutateAsync({ id: card.id, data: { status } });
     invalidate();
     toast({ title: "Job card updated", description: `Status → ${JOB_STATUS_LABEL[status]}.` });
+  };
+
+  const submitCompletion = async () => {
+    try {
+      await update.mutateAsync({
+        id: card.id,
+        data: {
+          status: "completed",
+          serviceAnalysis: analysisDraft.trim(),
+          workPerformed: performedDraft.trim(),
+        },
+      });
+      setCompleteOpen(false);
+      invalidate();
+      toast({
+        title: "Job card completed",
+        description: "Completion write-up saved.",
+      });
+    } catch (err) {
+      toast({
+        title: "Could not complete job card",
+        description: err instanceof Error ? err.message : "Try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const partsTotal =
@@ -1353,6 +1395,77 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
         )}
 
         <RolloverSection card={card} onChanged={invalidate} technicianView={technicianView} />
+
+        <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Completion write-up</DialogTitle>
+              <DialogDescription>
+                Record the service analysis and the work performed — both are
+                required before the job card can be marked completed.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor={`jc-analysis-${card.id}`}>Analysis of the service</Label>
+                <Textarea
+                  id={`jc-analysis-${card.id}`}
+                  value={analysisDraft}
+                  onChange={(e) => setAnalysisDraft(e.target.value)}
+                  placeholder="What was found — diagnosis, root cause, condition notes…"
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`jc-performed-${card.id}`}>Work performed</Label>
+                <Textarea
+                  id={`jc-performed-${card.id}`}
+                  value={performedDraft}
+                  onChange={(e) => setPerformedDraft(e.target.value)}
+                  placeholder="What was done — repairs, replacements, adjustments…"
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                className="rounded-full"
+                onClick={() => setCompleteOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="rounded-full bg-primary hover:bg-primary/90 text-white"
+                disabled={
+                  update.isPending ||
+                  !analysisDraft.trim() ||
+                  !performedDraft.trim()
+                }
+                onClick={submitCompletion}
+              >
+                Complete job card
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {(card.serviceAnalysis || card.workPerformed) && (
+          <div className="rounded-xl bg-white/5 p-3 space-y-1.5 text-xs">
+            {card.serviceAnalysis && (
+              <p>
+                <span className="font-bold uppercase tracking-wider text-[10px] text-muted-foreground">Analysis: </span>
+                {card.serviceAnalysis}
+              </p>
+            )}
+            {card.workPerformed && (
+              <p>
+                <span className="font-bold uppercase tracking-wider text-[10px] text-muted-foreground">Work performed: </span>
+                {card.workPerformed}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center gap-2 flex-wrap">
           {next && (

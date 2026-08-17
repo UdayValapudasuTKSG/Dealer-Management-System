@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { QuoteDiscountStatus } from './quoteDiscountStatus';
 import type { QuoteStatus } from './quoteStatus';
 import type { QuoteTaxLine } from './quoteTaxLine';
 
@@ -30,6 +31,14 @@ export interface Quote {
   mfgDate?: string | null;
   quantity: number;
   basePrice: number;
+  discountAmount?: number;
+  discountStatus?: QuoteDiscountStatus;
+  /** @nullable */
+  discountRequestedAmount?: number | null;
+  /** @nullable */
+  discountReason?: string | null;
+  /** @nullable */
+  discountRequestedBy?: string | null;
   taxLines: QuoteTaxLine[];
   totalTax: number;
   total: number;

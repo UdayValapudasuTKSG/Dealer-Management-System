@@ -1433,6 +1433,12 @@ export interface DeliveryUpdate {
   registrationStatus?: DeliveryUpdateRegistrationStatus;
   insurancePolicy?: string;
   insuranceProvider?: string;
+  /** @minLength 1 */
+  customerName?: string;
+  /** @nullable */
+  appointmentAt?: string | null;
+  /** @nullable */
+  deliveredAt?: string | null;
 }
 
 export type DeliveryAdvanceInputStep = typeof DeliveryAdvanceInputStep[keyof typeof DeliveryAdvanceInputStep];
@@ -2212,12 +2218,71 @@ export interface QuoteTaxLine {
   amount: number;
 }
 
+export interface QuoteDiscountRequestInput {
+  /**
+     * Requested discount in GYD, off the quote total
+     * @exclusiveMinimum 0
+     */
+  amount: number;
+  reason?: string;
+}
+
+export type CapacityBlockKind = typeof CapacityBlockKind[keyof typeof CapacityBlockKind];
+
+
+export const CapacityBlockKind = {
+  vehicle: 'vehicle',
+  advisor: 'advisor',
+} as const;
+
+export interface CapacityBlock {
+  id: number;
+  kind: CapacityBlockKind;
+  refId: number;
+  /**
+     * Display label — vehicle description or advisor name
+     * @nullable
+     */
+  refLabel?: string | null;
+  date: string;
+  /** @nullable */
+  reason?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
+  createdAt: string;
+}
+
+export type CapacityBlockInputKind = typeof CapacityBlockInputKind[keyof typeof CapacityBlockInputKind];
+
+
+export const CapacityBlockInputKind = {
+  vehicle: 'vehicle',
+  advisor: 'advisor',
+} as const;
+
+export interface CapacityBlockInput {
+  kind: CapacityBlockInputKind;
+  refId: number;
+  date: string;
+  reason?: string;
+}
+
 export type QuoteStatus = typeof QuoteStatus[keyof typeof QuoteStatus];
 
 
 export const QuoteStatus = {
   current: 'current',
   superseded: 'superseded',
+} as const;
+
+export type QuoteDiscountStatus = typeof QuoteDiscountStatus[keyof typeof QuoteDiscountStatus];
+
+
+export const QuoteDiscountStatus = {
+  none: 'none',
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
 } as const;
 
 export interface Quote {
@@ -2242,6 +2307,14 @@ export interface Quote {
   mfgDate?: string | null;
   quantity: number;
   basePrice: number;
+  discountAmount?: number;
+  discountStatus?: QuoteDiscountStatus;
+  /** @nullable */
+  discountRequestedAmount?: number | null;
+  /** @nullable */
+  discountReason?: string | null;
+  /** @nullable */
+  discountRequestedBy?: string | null;
   taxLines: QuoteTaxLine[];
   totalTax: number;
   total: number;
@@ -3820,6 +3893,8 @@ export interface ServiceOrderInput {
   odometer?: number;
   technician?: string;
   technicianUserId?: number;
+  /** Explicitly request round-robin auto-assignment; by default bookings are created unassigned so a technician can be assigned later */
+  autoAssign?: boolean;
   estimatedCost?: number;
   /**
      * @minimum 0.25
@@ -3977,6 +4052,10 @@ export interface JobCard {
   laborRate: number;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  serviceAnalysis?: string | null;
+  /** @nullable */
+  workPerformed?: string | null;
   rolloverStatus?: JobCardRolloverStatus;
   /** @nullable */
   rolloverToDate?: string | null;
@@ -4105,6 +4184,10 @@ export interface JobCardUpdate {
   laborHours?: number;
   laborRate?: number;
   notes?: string;
+  /** Technician's analysis of the service — mandatory before the card can be marked completed */
+  serviceAnalysis?: string;
+  /** What work was done — mandatory before the card can be marked completed */
+  workPerformed?: string;
 }
 
 export type JobCardPartKind = typeof JobCardPartKind[keyof typeof JobCardPartKind];
@@ -5492,6 +5575,7 @@ export const GateType = {
   stage_advance: 'stage_advance',
   recall_damage: 'recall_damage',
   bank_funds_received: 'bank_funds_received',
+  quote_discount: 'quote_discount',
 } as const;
 
 export type GateStatus = typeof GateStatus[keyof typeof GateStatus];
@@ -6249,6 +6333,11 @@ includeDeleted?: boolean;
 
 export type ListLeadSourcesParams = {
 includeInactive?: boolean;
+};
+
+export type ListCapacityBlocksParams = {
+from?: string;
+to?: string;
 };
 
 export type ListCustomersParams = {

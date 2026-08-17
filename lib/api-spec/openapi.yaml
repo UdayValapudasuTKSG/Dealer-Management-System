@@ -1639,6 +1639,112 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /leads/{id}/quotes/discount-request:
+    post:
+      operationId: requestQuoteDiscount
+      tags: [leads]
+      summary: Request a discount on the lead's current quote — management must approve via a gate before it applies
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteDiscountRequestInput"
+      responses:
+        "200":
+          description: Quote with the pending discount request recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+        "404":
+          description: Lead or current quote not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: A discount request is already pending on this quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid discount amount
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /capacity-blocks:
+    get:
+      operationId: listCapacityBlocks
+      tags: [capacity]
+      summary: List test-drive capacity blocks (days when a vehicle or advisor is unavailable)
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Capacity blocks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CapacityBlock"
+    post:
+      operationId: createCapacityBlock
+      tags: [capacity]
+      summary: Block a vehicle or advisor for test drives on a given day (managers only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CapacityBlockInput"
+      responses:
+        "201":
+          description: Created block (or the existing identical block)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapacityBlock"
+        "404":
+          description: Vehicle or advisor not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /capacity-blocks/{id}:
+    delete:
+      operationId: deleteCapacityBlock
+      tags: [capacity]
+      summary: Remove a capacity block (managers only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Block not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /leads/{id}/quotes/{quoteId}/pdf:
     get:
       operationId: downloadLeadQuoteVersionPdf
@@ -7917,6 +8023,9 @@ components:
         registrationStatus: { type: string, enum: [pending, submitted, issued] }
         insurancePolicy: { type: string }
         insuranceProvider: { type: string }
+        customerName: { type: string, minLength: 1 }
+        appointmentAt: { type: ["string", "null"], format: date-time }
+        deliveredAt: { type: ["string", "null"], format: date-time }
     DeliveryAdvanceInput:
       type: object
       required: [step]
@@ -8298,6 +8407,32 @@ components:
         kind: { type: string, enum: [percent, fixed] }
         rate: { type: number }
         amount: { type: number }
+    QuoteDiscountRequestInput:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: number, exclusiveMinimum: 0, description: "Requested discount in GYD, off the quote total" }
+        reason: { type: string }
+    CapacityBlock:
+      type: object
+      required: [id, kind, refId, date, createdAt]
+      properties:
+        id: { type: integer }
+        kind: { type: string, enum: [vehicle, advisor] }
+        refId: { type: integer }
+        refLabel: { type: ["string", "null"], description: "Display label — vehicle description or advisor name" }
+        date: { type: string, format: date }
+        reason: { type: ["string", "null"] }
+        createdBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    CapacityBlockInput:
+      type: object
+      required: [kind, refId, date]
+      properties:
+        kind: { type: string, enum: [vehicle, advisor] }
+        refId: { type: integer }
+        date: { type: string, format: date }
+        reason: { type: string }
     Quote:
       type: object
       required:
@@ -8340,6 +8475,11 @@ components:
         mfgDate: { type: ["string", "null"] }
         quantity: { type: integer }
         basePrice: { type: number }
+        discountAmount: { type: number }
+        discountStatus: { type: string, enum: [none, pending, approved, rejected] }
+        discountRequestedAmount: { type: ["number", "null"] }
+        discountReason: { type: ["string", "null"] }
+        discountRequestedBy: { type: ["string", "null"] }
         taxLines:
           type: array
           items:
@@ -9262,6 +9402,7 @@ components:
         odometer: { type: integer }
         technician: { type: string }
         technicianUserId: { type: integer }
+        autoAssign: { type: boolean, description: "Explicitly request round-robin auto-assignment; by default bookings are created unassigned so a technician can be assigned later" }
         estimatedCost: { type: number }
         estimatedHours: { type: number, minimum: 0.25, maximum: 24 }
         jobs:
@@ -9346,6 +9487,8 @@ components:
         laborHours: { type: number }
         laborRate: { type: number }
         notes: { type: ["string", "null"] }
+        serviceAnalysis: { type: ["string", "null"] }
+        workPerformed: { type: ["string", "null"] }
         rolloverStatus: { type: string, enum: [none, pending, approved] }
         rolloverToDate: { type: ["string", "null"], format: date }
         rolloverReason: { type: ["string", "null"] }
@@ -9419,6 +9562,8 @@ components:
         laborHours: { type: number }
         laborRate: { type: number }
         notes: { type: string }
+        serviceAnalysis: { type: string, description: "Technician's analysis of the service — mandatory before the card can be marked completed" }
+        workPerformed: { type: string, description: "What work was done — mandatory before the card can be marked completed" }
 
     JobCardPart:
       type: object
@@ -10366,7 +10511,7 @@ components:
       required: [id, type, status, priority, title, summary, evidence, createdAt]
       properties:
         id: { type: integer }
-        type: { type: string, enum: [below_floor_price, fee_waiver, credit_decline, capital_order, gra_filing, refund_release, stage_advance, recall_damage, bank_funds_received] }
+        type: { type: string, enum: [below_floor_price, fee_waiver, credit_decline, capital_order, gra_filing, refund_release, stage_advance, recall_damage, bank_funds_received, quote_discount] }
         status: { type: string, enum: [pending, approved, adjusted, dismissed] }
         priority: { type: string, enum: [high, normal, low] }
         customerId: { type: ["integer", "null"] }

@@ -27,4 +27,8 @@ export interface JobCardUpdate {
   laborHours?: number;
   laborRate?: number;
   notes?: string;
+  /** Technician's analysis of the service — mandatory before the card can be marked completed */
+  serviceAnalysis?: string;
+  /** What work was done — mandatory before the card can be marked completed */
+  workPerformed?: string;
 }

@@ -487,6 +487,17 @@ router.patch("/deliveries/:id", async (req, res): Promise<void> => {
     patch.insurancePolicy = parsed.data.insurancePolicy;
   if (parsed.data.insuranceProvider !== undefined)
     patch.insuranceProvider = parsed.data.insuranceProvider;
+  // Handover-form fields (editable via the "Edit handover form" dialog).
+  if (parsed.data.customerName !== undefined)
+    patch.customerName = parsed.data.customerName;
+  if ("appointmentAt" in (req.body ?? {}))
+    patch.appointmentAt = parsed.data.appointmentAt
+      ? new Date(parsed.data.appointmentAt)
+      : null;
+  if ("deliveredAt" in (req.body ?? {}))
+    patch.deliveredAt = parsed.data.deliveredAt
+      ? new Date(parsed.data.deliveredAt)
+      : null;
   if (
     parsed.data.registrationStatus !== undefined &&
     parsed.data.registrationStatus !== current.registrationStatus

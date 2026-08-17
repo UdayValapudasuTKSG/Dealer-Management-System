@@ -178,6 +178,11 @@ export const jobCardsTable = pgTable(
     laborHours: doublePrecision("labor_hours").notNull().default(0),
     laborRate: doublePrecision("labor_rate").notNull().default(120),
     notes: text("notes"),
+    // Mandatory completion write-up: the technician must record their
+    // analysis of the service and what work was performed before the card
+    // can be marked completed (enforced in the update route).
+    serviceAnalysis: text("service_analysis"),
+    workPerformed: text("work_performed"),
     // Multi-day rollover (FR-SR-06): carrying an incomplete job to another
     // day needs BOTH the Service Manager and the assigned Technician to sign
     // off. Approvals record who/when; on the second approval the card's

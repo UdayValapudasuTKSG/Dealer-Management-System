@@ -20,6 +20,7 @@ import {
   gatesTable,
   quotesTable,
   testDrivesTable,
+  capacityBlocksTable,
   SOCIAL_SUB_PLATFORMS,
   type Lead,
   type ChecklistStage,
@@ -65,6 +66,9 @@ import {
   ListLeadQuotesResponse,
   GenerateLeadQuoteParams,
   GenerateLeadQuoteResponse,
+  RequestQuoteDiscountParams,
+  RequestQuoteDiscountBody,
+  RequestQuoteDiscountResponse,
   DownloadLeadQuoteVersionPdfParams,
   SendLeadQuoteParams,
   SendLeadQuoteBody,
@@ -1075,6 +1079,148 @@ router.post("/leads/:id/quotes", async (req, res): Promise<void> => {
   res.status(201).json(GenerateLeadQuoteResponse.parse(quote));
 });
 
+// Advisor requests a discount on the current quote; a manager gate must
+// approve it before it applies to the quote total.
+router.post(
+  "/leads/:id/quotes/discount-request",
+  async (req, res): Promise<void> => {
+    const params = RequestQuoteDiscountParams.safeParse(req.params);
+    const body = RequestQuoteDiscountBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({
+        error: (params.success ? body : params).error?.message ?? "Invalid",
+      });
+      return;
+    }
+    const lead = await leadForDealer(params.data.id, activeDealerId(res));
+    if (!lead) {
+      res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    const [quote] = await db
+      .select()
+      .from(quotesTable)
+      .where(
+        and(
+          eq(quotesTable.dealerId, lead.dealerId),
+          eq(quotesTable.leadId, lead.id),
+          eq(quotesTable.status, "current"),
+        ),
+      )
+      .orderBy(desc(quotesTable.version))
+      .limit(1);
+    if (!quote) {
+      res.status(404).json({
+        error: "No current quote on this lead — generate the Code first.",
+      });
+      return;
+    }
+    if (quote.discountStatus === "pending") {
+      res.status(409).json({
+        error:
+          "A discount request is already pending management approval on this quote.",
+      });
+      return;
+    }
+    const amount = body.data.amount;
+    if (amount >= quote.total) {
+      res.status(422).json({
+        error: `Discount must be less than the quote total (GY$${quote.total.toLocaleString("en-US")}).`,
+      });
+      return;
+    }
+    const actor = actorName(res);
+    // Gate insert + quote flag flip run in ONE transaction with a
+    // compare-and-set on discountStatus, so two concurrent requests can't
+    // both create pending gates for the same quote.
+    let gate: typeof gatesTable.$inferSelect | undefined;
+    let updated: typeof quotesTable.$inferSelect | undefined;
+    try {
+      await db.transaction(async (tx) => {
+        const [g] = await tx
+          .insert(gatesTable)
+          .values({
+        dealerId: lead.dealerId,
+        type: "quote_discount",
+        status: "pending",
+        priority: "normal",
+        customerId: lead.customerId ?? null,
+        customerName: lead.name,
+        refType: "quote",
+        refId: quote.id,
+        amount,
+        title: `Quote discount approval — ${lead.name}`,
+        summary:
+          `${actor} requested a GY$${amount.toLocaleString("en-US")} discount on ` +
+          `${quote.quoteNumber} rev ${quote.version} (total GY$${quote.total.toLocaleString("en-US")}).` +
+          (body.data.reason ? ` Reason: ${body.data.reason}` : ""),
+        evidence: [
+          { label: "Quote", value: `${quote.quoteNumber}-R${quote.version}` },
+          {
+            label: "Quote total",
+            value: `GY$${quote.total.toLocaleString("en-US")}`,
+          },
+          {
+            label: "Requested discount",
+            value: `GY$${amount.toLocaleString("en-US")}`,
+          },
+          { label: "Requested by", value: actor },
+          ...(body.data.reason
+            ? [{ label: "Reason", value: body.data.reason }]
+            : []),
+        ],
+          })
+          .returning();
+        gate = g;
+        // CAS: only flip to pending if it isn't already pending — a
+        // concurrent request that won the race makes this update match
+        // zero rows and the whole transaction rolls back.
+        const [u] = await tx
+          .update(quotesTable)
+          .set({
+            discountStatus: "pending",
+            discountRequestedAmount: amount,
+            discountReason: body.data.reason ?? null,
+            discountRequestedBy: actor,
+            discountGateId: g?.id ?? null,
+          })
+          .where(
+            and(
+              eq(quotesTable.id, quote.id),
+              eq(quotesTable.dealerId, lead.dealerId),
+              eq(quotesTable.status, "current"),
+              ne(quotesTable.discountStatus, "pending"),
+            ),
+          )
+          .returning();
+        if (!u) throw new Error("DISCOUNT_RACE");
+        updated = u;
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === "DISCOUNT_RACE") {
+        res.status(409).json({
+          error:
+            "A discount request is already pending management approval on this quote.",
+        });
+        return;
+      }
+      throw err;
+    }
+    await db.insert(timelineEventsTable).values({
+      dealerId: lead.dealerId,
+      customerId: lead.customerId,
+      domain: "leads",
+      kind: "quote_discount_requested",
+      title: `Discount requested on ${quote.quoteNumber}`,
+      detail: `GY$${amount.toLocaleString("en-US")} off rev ${quote.version} — pending management approval.${body.data.reason ? ` Reason: ${body.data.reason}` : ""}`,
+      actor,
+      refType: "lead",
+      refId: lead.id,
+    });
+    res.json(RequestQuoteDiscountResponse.parse(updated));
+  },
+);
+
 router.get(
   "/leads/:id/quotes/:quoteId/pdf",
   async (req, res): Promise<void> => {
@@ -1455,7 +1601,7 @@ router.get("/leads/:id/review", async (req, res): Promise<void> => {
     (s) => s.state === "current" && s.stage !== "delivery",
   );
 
-  // 24h contact SLA (Layer 2): only while the lead is still being chased for
+  // 48h contact SLA (Layer 2): only while the lead is still being chased for
   // first contact. Breach lazily notifies the owner exactly once.
   let sla: { deadline: Date; remainingMs: number; breached: boolean } | null =
     null;
@@ -1465,7 +1611,7 @@ router.get("/leads/:id/review", async (req, res): Promise<void> => {
     lead.status !== "converted"
   ) {
     const since = lead.stageEnteredAt ?? lead.createdAt;
-    const deadline = new Date(since.getTime() + 24 * 60 * 60 * 1000);
+    const deadline = new Date(since.getTime() + 48 * 60 * 60 * 1000);
     const remainingMs = deadline.getTime() - Date.now();
     sla = { deadline, remainingMs, breached: remainingMs <= 0 };
     if (sla.breached && !lead.slaBreachNotifiedAt && lead.ownerUserId) {
@@ -1488,7 +1634,7 @@ router.get("/leads/:id/review", async (req, res): Promise<void> => {
         dealerId,
         type: "assignment",
         title: `Contact SLA breached: ${lead.name}`,
-        body: "The 24h first-contact window has passed with no logged call. Reach the customer now or close the lead with a reason.",
+        body: "The 48h first-contact window has passed with no logged call. Reach the customer now or close the lead with a reason.",
         link: `/lead/${lead.id}`,
       });
     }
@@ -1699,6 +1845,44 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
   res.json(GetLeadResponse.parse(updated));
 });
 
+/** Local-timezone YYYY-MM-DD of a slot/booking time. */
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Days blocked in the manager capacity plan for a vehicle and/or advisor
+ * (test drives). Returns a set of YYYY-MM-DD strings.
+ */
+async function capacityBlockedDays(
+  dealerId: number,
+  refs: { vehicleId?: number | null; advisorUserId?: number | null },
+): Promise<Set<string>> {
+  const conds: SQL[] = [];
+  if (refs.vehicleId != null) {
+    conds.push(
+      and(
+        eq(capacityBlocksTable.kind, "vehicle"),
+        eq(capacityBlocksTable.refId, refs.vehicleId),
+      )!,
+    );
+  }
+  if (refs.advisorUserId != null) {
+    conds.push(
+      and(
+        eq(capacityBlocksTable.kind, "advisor"),
+        eq(capacityBlocksTable.refId, refs.advisorUserId),
+      )!,
+    );
+  }
+  if (conds.length === 0) return new Set();
+  const rows = await db
+    .select({ date: capacityBlocksTable.date })
+    .from(capacityBlocksTable)
+    .where(and(eq(capacityBlocksTable.dealerId, dealerId), or(...conds)));
+  return new Set(rows.map((r) => r.date));
+}
+
 router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
   const params = ScheduleTestDriveParams.safeParse(req.params);
   if (!params.success) {
@@ -1759,6 +1943,19 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
     const vehicleError = await vehicleAvailabilityError(checkLead);
     if (vehicleError) {
       res.status(409).json({ error: vehicleError });
+      return;
+    }
+    // Manager capacity planning: the vehicle or the lead's advisor may be
+    // blocked out for that day.
+    const blockedDays = await capacityBlockedDays(existing.dealerId, {
+      vehicleId: checkLead.interestedVehicleId,
+      advisorUserId: existing.ownerUserId,
+    });
+    if (blockedDays.has(localDateStr(when))) {
+      res.status(409).json({
+        error:
+          "That day is blocked in the capacity plan (vehicle or advisor unavailable) — pick another day.",
+      });
       return;
     }
   }
@@ -1963,6 +2160,12 @@ router.get(
         ),
       );
     const taken = new Set(otherBookings.map((r) => r.at!.getTime()));
+    // Manager capacity planning: days where the vehicle or the lead's
+    // advisor is blocked out are not offerable.
+    const blockedDays = await capacityBlockedDays(dealerId, {
+      vehicleId: vehicle.id,
+      advisorUserId: lead.ownerUserId,
+    });
     const drivable = !(await vehicleAvailabilityError(lead));
     const ownBooking = lead.testDriveAt?.getTime() ?? null;
 
@@ -1973,7 +2176,10 @@ router.get(
         slots: slots.map((start) => ({
           start: start.toISOString(),
           end: new Date(start.getTime() + SLOT_LENGTH_MS).toISOString(),
-          vehicleFree: drivable && !taken.has(start.getTime()),
+          vehicleFree:
+            drivable &&
+            !taken.has(start.getTime()) &&
+            !blockedDays.has(localDateStr(start)),
           customerFree: ownBooking !== start.getTime(),
         })),
       }),

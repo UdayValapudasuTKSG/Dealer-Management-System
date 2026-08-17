@@ -12,6 +12,7 @@ import {
   deliveriesTable,
   timelineEventsTable,
   paymentsTable,
+  quotesTable,
   type Gate,
 } from "@workspace/db";
 import {
@@ -205,6 +206,53 @@ async function applyCascade(
       return {
         title: "Capital order approved",
         detail: `Stock order committed for $${effectiveAmount.toLocaleString()}; logistics opened the inbound shipment and the unit is now in transit.`,
+      };
+    }
+    case "quote_discount": {
+      // Manager approved (or adjusted) an advisor's quote-discount request.
+      // Apply the authorized amount to the CURRENT quote row: the printed
+      // quote shows the discount line and the reduced total.
+      if (gate.refId) {
+        const [quote] = await tx
+          .select()
+          .from(quotesTable)
+          .where(
+            and(
+              eq(quotesTable.id, gate.refId),
+              eq(quotesTable.dealerId, gate.dealerId),
+              // Guard against stale gates: the quote must still be the
+              // CURRENT revision with THIS gate's request pending —
+              // regenerating the quote supersedes the request.
+              eq(quotesTable.status, "current"),
+              eq(quotesTable.discountStatus, "pending"),
+              eq(quotesTable.discountGateId, gate.id),
+            ),
+          );
+        if (quote) {
+          const amt = Math.min(
+            Math.max(effectiveAmount, 0),
+            Math.max(quote.basePrice + quote.totalTax - 1, 0),
+          );
+          await tx
+            .update(quotesTable)
+            .set({
+              discountAmount: amt,
+              discountStatus: "approved",
+              total: quote.basePrice + quote.totalTax - amt,
+            })
+            .where(eq(quotesTable.id, quote.id));
+          return {
+            title:
+              action === "adjust"
+                ? "Quote discount adjusted and approved"
+                : "Quote discount approved",
+            detail: `GY$${amt.toLocaleString("en-US")} discount applied to ${quote.quoteNumber} rev ${quote.version}; the quote total is now GY$${(quote.basePrice + quote.totalTax - amt).toLocaleString("en-US")}.`,
+          };
+        }
+      }
+      return {
+        title: "Quote discount approved",
+        detail: "Quote no longer found — no changes applied.",
       };
     }
     case "gra_filing": {
@@ -618,6 +666,19 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
       const receipt = await applyCascade(tx, row, action, adjustedAmount);
       await writeReceipt(tx, row, receipt.title, receipt.detail);
     } else {
+      if (row.type === "quote_discount" && row.refId) {
+        // Manager declined the discount — mark the request rejected.
+        await tx
+          .update(quotesTable)
+          .set({ discountStatus: "rejected" })
+          .where(
+            and(
+              eq(quotesTable.id, row.refId),
+              eq(quotesTable.dealerId, row.dealerId),
+              eq(quotesTable.discountStatus, "pending"),
+            ),
+          );
+      }
       if (row.type === "gra_filing") {
         // Officer declined the filing — the snapshot is rejected, never filed.
         await tx

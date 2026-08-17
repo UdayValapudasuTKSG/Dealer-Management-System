@@ -61,6 +61,8 @@ import type {
   CallLogUpdate,
   CallSentimentSuggestInput,
   CallSentimentSuggestion,
+  CapacityBlock,
+  CapacityBlockInput,
   Case,
   CaseCreate,
   CaseUpdate,
@@ -179,6 +181,7 @@ import type {
   ListAgentRunsParams,
   ListAuditLogsParams,
   ListBookingsParams,
+  ListCapacityBlocksParams,
   ListCasesParams,
   ListCoveragePlansParams,
   ListCustomersParams,
@@ -233,6 +236,7 @@ import type {
   PurchaseOrderReceiveBody,
   PurchaseOrderUpdate,
   Quote,
+  QuoteDiscountRequestInput,
   Receipt,
   ReceiveMetaWebhook200,
   RemindAck,
@@ -4953,6 +4957,304 @@ export const useGenerateLeadQuote = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getGenerateLeadQuoteMutationOptions(options));
+    }
+
+export const getRequestQuoteDiscountUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/quotes/discount-request`
+}
+
+/**
+ * @summary Request a discount on the lead's current quote — management must approve via a gate before it applies
+ */
+export const requestQuoteDiscount = async (id: number,
+    quoteDiscountRequestInput: QuoteDiscountRequestInput, options?: RequestInit): Promise<Quote> => {
+
+  return customFetch<Quote>(getRequestQuoteDiscountUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(quoteDiscountRequestInput)
+  }
+);}
+
+
+
+
+
+export const getRequestQuoteDiscountMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestQuoteDiscount>>, TError,{id: number;data: BodyType<QuoteDiscountRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestQuoteDiscount>>, TError,{id: number;data: BodyType<QuoteDiscountRequestInput>}, TContext> => {
+
+const mutationKey = ['requestQuoteDiscount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestQuoteDiscount>>, {id: number;data: BodyType<QuoteDiscountRequestInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  requestQuoteDiscount(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestQuoteDiscountMutationResult = NonNullable<Awaited<ReturnType<typeof requestQuoteDiscount>>>
+    export type RequestQuoteDiscountMutationBody = BodyType<QuoteDiscountRequestInput>
+    export type RequestQuoteDiscountMutationError = ErrorType<Error>
+
+    /**
+ * @summary Request a discount on the lead's current quote — management must approve via a gate before it applies
+ */
+export const useRequestQuoteDiscount = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestQuoteDiscount>>, TError,{id: number;data: BodyType<QuoteDiscountRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestQuoteDiscount>>,
+        TError,
+        {id: number;data: BodyType<QuoteDiscountRequestInput>},
+        TContext
+      > => {
+      return useMutation(getRequestQuoteDiscountMutationOptions(options));
+    }
+
+export const getListCapacityBlocksUrl = (params?: ListCapacityBlocksParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/capacity-blocks?${stringifiedParams}` : `/api/capacity-blocks`
+}
+
+/**
+ * @summary List test-drive capacity blocks (days when a vehicle or advisor is unavailable)
+ */
+export const listCapacityBlocks = async (params?: ListCapacityBlocksParams, options?: RequestInit): Promise<CapacityBlock[]> => {
+
+  return customFetch<CapacityBlock[]>(getListCapacityBlocksUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCapacityBlocksQueryKey = (params?: ListCapacityBlocksParams,) => {
+    return [
+    `/api/capacity-blocks`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCapacityBlocksQueryOptions = <TData = Awaited<ReturnType<typeof listCapacityBlocks>>, TError = ErrorType<unknown>>(params?: ListCapacityBlocksParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCapacityBlocks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCapacityBlocksQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCapacityBlocks>>> = ({ signal }) => listCapacityBlocks(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCapacityBlocks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCapacityBlocksQueryResult = NonNullable<Awaited<ReturnType<typeof listCapacityBlocks>>>
+export type ListCapacityBlocksQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List test-drive capacity blocks (days when a vehicle or advisor is unavailable)
+ */
+
+export function useListCapacityBlocks<TData = Awaited<ReturnType<typeof listCapacityBlocks>>, TError = ErrorType<unknown>>(
+ params?: ListCapacityBlocksParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCapacityBlocks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCapacityBlocksQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateCapacityBlockUrl = () => {
+
+
+
+
+  return `/api/capacity-blocks`
+}
+
+/**
+ * @summary Block a vehicle or advisor for test drives on a given day (managers only)
+ */
+export const createCapacityBlock = async (capacityBlockInput: CapacityBlockInput, options?: RequestInit): Promise<CapacityBlock> => {
+
+  return customFetch<CapacityBlock>(getCreateCapacityBlockUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(capacityBlockInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCapacityBlockMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCapacityBlock>>, TError,{data: BodyType<CapacityBlockInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCapacityBlock>>, TError,{data: BodyType<CapacityBlockInput>}, TContext> => {
+
+const mutationKey = ['createCapacityBlock'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCapacityBlock>>, {data: BodyType<CapacityBlockInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCapacityBlock(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCapacityBlockMutationResult = NonNullable<Awaited<ReturnType<typeof createCapacityBlock>>>
+    export type CreateCapacityBlockMutationBody = BodyType<CapacityBlockInput>
+    export type CreateCapacityBlockMutationError = ErrorType<Error>
+
+    /**
+ * @summary Block a vehicle or advisor for test drives on a given day (managers only)
+ */
+export const useCreateCapacityBlock = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCapacityBlock>>, TError,{data: BodyType<CapacityBlockInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCapacityBlock>>,
+        TError,
+        {data: BodyType<CapacityBlockInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCapacityBlockMutationOptions(options));
+    }
+
+export const getDeleteCapacityBlockUrl = (id: number,) => {
+
+
+
+
+  return `/api/capacity-blocks/${id}`
+}
+
+/**
+ * @summary Remove a capacity block (managers only)
+ */
+export const deleteCapacityBlock = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteCapacityBlockUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteCapacityBlockMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCapacityBlock>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCapacityBlock>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteCapacityBlock'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCapacityBlock>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteCapacityBlock(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCapacityBlockMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCapacityBlock>>>
+
+    export type DeleteCapacityBlockMutationError = ErrorType<Error>
+
+    /**
+ * @summary Remove a capacity block (managers only)
+ */
+export const useDeleteCapacityBlock = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCapacityBlock>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCapacityBlock>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteCapacityBlockMutationOptions(options));
     }
 
 export const getDownloadLeadQuoteVersionPdfUrl = (id: number,

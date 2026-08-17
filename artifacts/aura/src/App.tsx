@@ -25,6 +25,7 @@ import Finance from "@/pages/finance";
 import Service from "@/pages/service";
 import Parts from "@/pages/parts";
 import Deliveries from "@/pages/deliveries";
+import CapacityPage from "@/pages/capacity";
 import Customers from "@/pages/customers";
 import CustomerDetail from "@/pages/customer-detail";
 import LeadDetail from "@/pages/lead-detail";
@@ -273,6 +274,7 @@ function AppRoutes() {
                   <Redirect to="/service" />
                 </Route>
                 <Route path="/deliveries" component={Deliveries} />
+                <Route path="/capacity" component={CapacityPage} />
                 <Route path="/customers" component={Customers} />
                 <Route path="/customers/:id" component={CustomerDetail} />
                 <Route path="/lead/:id" component={LeadDetail} />

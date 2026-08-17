@@ -341,7 +341,12 @@ router.post("/service-orders", async (req, res): Promise<void> => {
     technicianName = u?.name ?? u?.email ?? `User #${technicianUserId}`;
   }
 
-  const autoAssign = technicianUserId == null && !parsed.data.technician;
+  // Bookings are created unassigned by default — the workshop assigns a
+  // technician later. Round-robin only runs when explicitly requested.
+  const autoAssign =
+    parsed.data.autoAssign === true &&
+    technicianUserId == null &&
+    !parsed.data.technician;
 
   // Pay-type resolution: explicit wins; warranty/recall work defaults to
   // warranty pay; otherwise an active coverage plan (by date window) for the
@@ -1046,6 +1051,24 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     patch.startedAt = new Date();
   }
   if (parsed.data.status === "completed" && existing.status !== "completed") {
+    // Completion write-up is mandatory: the technician must record their
+    // analysis of the service AND what work was performed before the card
+    // can be marked completed (either in this request or already saved).
+    const analysis =
+      parsed.data.serviceAnalysis?.trim() || existing.serviceAnalysis?.trim();
+    const performed =
+      parsed.data.workPerformed?.trim() || existing.workPerformed?.trim();
+    const missing: string[] = [];
+    if (!analysis) missing.push("service_analysis_required");
+    if (!performed) missing.push("work_performed_required");
+    if (missing.length > 0) {
+      res.status(422).json({
+        error:
+          "Completion write-up required — record the service analysis and the work performed before marking this job card completed.",
+        unmet: missing,
+      });
+      return;
+    }
     patch.completedAt = new Date();
   }
 

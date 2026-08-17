@@ -55,6 +55,14 @@ export const quotesTable = pgTable("quotes", {
   taxLines: jsonb("tax_lines").$type<QuoteTaxLine[]>().notNull().default([]),
   totalTax: doublePrecision("total_tax").notNull().default(0),
   total: doublePrecision("total").notNull(),
+  // Discount workflow: a sales advisor may request a discount on the quote;
+  // management must approve via a gate before it is applied to the total.
+  discountAmount: doublePrecision("discount_amount").notNull().default(0),
+  discountStatus: text("discount_status").notNull().default("none"),
+  discountRequestedAmount: doublePrecision("discount_requested_amount"),
+  discountReason: text("discount_reason"),
+  discountRequestedBy: text("discount_requested_by"),
+  discountGateId: integer("discount_gate_id"),
   issuedOn: text("issued_on").notNull(),
   validUntil: text("valid_until").notNull(),
   /** What caused this version: lead_created | lead_updated | manual. */

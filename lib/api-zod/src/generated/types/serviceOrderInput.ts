@@ -26,6 +26,8 @@ export interface ServiceOrderInput {
   odometer?: number;
   technician?: string;
   technicianUserId?: number;
+  /** Explicitly request round-robin auto-assignment; by default bookings are created unassigned so a technician can be assigned later */
+  autoAssign?: boolean;
   estimatedCost?: number;
   /**
      * @minimum 0.25

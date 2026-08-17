@@ -20,7 +20,7 @@ import type { ChecklistStage } from "@workspace/db";
 // draft message; if it fails or drifts, deterministic fallbacks are used.
 // ---------------------------------------------------------------------------
 
-export const FIRST_CONTACT_SLA_HOURS = 24;
+export const FIRST_CONTACT_SLA_HOURS = 48;
 const STALL_MEDIUM_DAYS = 7;
 const STALL_HIGH_DAYS = 14;
 

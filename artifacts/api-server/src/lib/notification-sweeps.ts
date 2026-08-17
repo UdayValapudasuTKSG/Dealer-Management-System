@@ -31,7 +31,7 @@ import { logger } from "./logger";
 const HOUR = 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
-// #3 / #4a / #4b — 24h first-contact SLA on assigned leads.
+// #3 / #4a / #4b — 48h first-contact SLA on assigned leads.
 // A lead still in phase "new" has, by the NC-3 machine, no logged first
 // contact (the contact log is exactly what advances it to "contacted").
 // ---------------------------------------------------------------------------
@@ -61,14 +61,14 @@ async function sweepLeadSla(): Promise<void> {
     const start = (lead.stageEnteredAt ?? lead.createdAt).getTime();
     const age = now - start;
     try {
-      if (age >= 24 * HOUR) {
+      if (age >= 48 * HOUR) {
         // #4a breach → advisor (In-App + Email).
         await notifyUser({
           userId: advisorId,
           dealerId: lead.dealerId,
           type: "lead.sla.breach.advisor",
           title: `SLA breached — ${lead.name}`,
-          body: "24 hours have passed with no logged first contact on this lead. Reach out now and log the contact.",
+          body: "48 hours have passed with no logged first contact on this lead. Reach out now and log the contact.",
           link: `/pipeline/${lead.id}`,
           entityType: "lead",
           entityId: lead.id,
@@ -102,7 +102,7 @@ async function sweepLeadSla(): Promise<void> {
             dealerId: lead.dealerId,
             type: "lead.sla.breach.manager",
             title: `SLA breach escalation — ${lead.name}`,
-            body: "An assigned lead passed the 24h first-contact SLA with no outreach logged. Review with the advisor.",
+            body: "An assigned lead passed the 48h first-contact SLA with no outreach logged. Review with the advisor.",
             link: `/pipeline/${lead.id}`,
             entityType: "lead",
             entityId: lead.id,
@@ -115,7 +115,7 @@ async function sweepLeadSla(): Promise<void> {
             data: { name: lead.name },
           });
         }
-      } else if (age >= 20 * HOUR) {
+      } else if (age >= 44 * HOUR) {
         // #3 approaching (~T-4h) → advisor In-App reminder (one per window).
         // Spec adds WhatsApp "if advisor opted in" — advisors have no stored
         // phone/opt-in today, so In-App (the guaranteed floor) is the only
@@ -125,7 +125,7 @@ async function sweepLeadSla(): Promise<void> {
           dealerId: lead.dealerId,
           type: "lead.sla.reminder",
           title: `First-contact SLA closing — ${lead.name}`,
-          body: "Less than 4 hours remain on the 24h first-contact SLA. Make contact and log it to stop the clock.",
+          body: "Less than 4 hours remain on the 48h first-contact SLA. Make contact and log it to stop the clock.",
           link: `/pipeline/${lead.id}`,
           entityType: "lead",
           entityId: lead.id,

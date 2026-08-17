@@ -15,4 +15,10 @@ export interface DeliveryUpdate {
   registrationStatus?: DeliveryUpdateRegistrationStatus;
   insurancePolicy?: string;
   insuranceProvider?: string;
+  /** @minLength 1 */
+  customerName?: string;
+  /** @nullable */
+  appointmentAt?: Date | null;
+  /** @nullable */
+  deliveredAt?: Date | null;
 }

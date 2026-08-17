@@ -941,12 +941,16 @@ export const UpdateDeliveryParams = zod.object({
 export const updateDeliveryBodyRegistrationNumberRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
 
 
+
 export const UpdateDeliveryBody = zod.object({
   "advisorUserId": zod.number().nullish(),
   "registrationNumber": zod.string().regex(updateDeliveryBodyRegistrationNumberRegExp).optional(),
   "registrationStatus": zod.enum(['pending', 'submitted', 'issued']).optional(),
   "insurancePolicy": zod.string().optional(),
-  "insuranceProvider": zod.string().optional()
+  "insuranceProvider": zod.string().optional(),
+  "customerName": zod.string().min(1).optional(),
+  "appointmentAt": zod.coerce.date().nullish(),
+  "deliveredAt": zod.coerce.date().nullish()
 })
 
 export const UpdateDeliveryResponse = zod.object({
@@ -2458,6 +2462,11 @@ export const ListLeadQuotesResponseItem = zod.object({
   "mfgDate": zod.string().nullish(),
   "quantity": zod.number(),
   "basePrice": zod.number(),
+  "discountAmount": zod.number().optional(),
+  "discountStatus": zod.enum(['none', 'pending', 'approved', 'rejected']).optional(),
+  "discountRequestedAmount": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "discountRequestedBy": zod.string().nullish(),
   "taxLines": zod.array(zod.object({
   "code": zod.string(),
   "name": zod.string(),
@@ -2503,6 +2512,11 @@ export const GenerateLeadQuoteResponse = zod.object({
   "mfgDate": zod.string().nullish(),
   "quantity": zod.number(),
   "basePrice": zod.number(),
+  "discountAmount": zod.number().optional(),
+  "discountStatus": zod.enum(['none', 'pending', 'approved', 'rejected']).optional(),
+  "discountRequestedAmount": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "discountRequestedBy": zod.string().nullish(),
   "taxLines": zod.array(zod.object({
   "code": zod.string(),
   "name": zod.string(),
@@ -2521,6 +2535,117 @@ export const GenerateLeadQuoteResponse = zod.object({
   "sentVia": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Request a discount on the lead's current quote — management must approve via a gate before it applies
+ */
+export const RequestQuoteDiscountParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const requestQuoteDiscountBodyAmountExclusiveMin = 0;
+
+
+
+export const RequestQuoteDiscountBody = zod.object({
+  "amount": zod.number().gt(requestQuoteDiscountBodyAmountExclusiveMin).describe('Requested discount in GYD, off the quote total'),
+  "reason": zod.string().optional()
+})
+
+export const RequestQuoteDiscountResponse = zod.object({
+  "id": zod.number(),
+  "leadId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "quoteNumber": zod.string(),
+  "version": zod.number(),
+  "status": zod.enum(['current', 'superseded']),
+  "customerName": zod.string(),
+  "customerAddress": zod.string().nullish(),
+  "modelYear": zod.number(),
+  "vehicleLine": zod.string(),
+  "trim": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "manufacturer": zod.string(),
+  "mfgDate": zod.string().nullish(),
+  "quantity": zod.number(),
+  "basePrice": zod.number(),
+  "discountAmount": zod.number().optional(),
+  "discountStatus": zod.enum(['none', 'pending', 'approved', 'rejected']).optional(),
+  "discountRequestedAmount": zod.number().nullish(),
+  "discountReason": zod.string().nullish(),
+  "discountRequestedBy": zod.string().nullish(),
+  "taxLines": zod.array(zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "kind": zod.enum(['percent', 'fixed']),
+  "rate": zod.number(),
+  "amount": zod.number()
+})),
+  "totalTax": zod.number(),
+  "total": zod.number(),
+  "issuedOn": zod.string(),
+  "validUntil": zod.string(),
+  "trigger": zod.string(),
+  "createdBy": zod.string(),
+  "isAgent": zod.boolean(),
+  "sentAt": zod.coerce.date().nullish(),
+  "sentVia": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List test-drive capacity blocks (days when a vehicle or advisor is unavailable)
+ */
+export const ListCapacityBlocksQueryParams = zod.object({
+  "from": zod.date().optional(),
+  "to": zod.date().optional()
+})
+
+export const ListCapacityBlocksResponseItem = zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['vehicle', 'advisor']),
+  "refId": zod.number(),
+  "refLabel": zod.string().nullish().describe('Display label — vehicle description or advisor name'),
+  "date": zod.coerce.date(),
+  "reason": zod.string().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCapacityBlocksResponse = zod.array(ListCapacityBlocksResponseItem)
+
+
+/**
+ * @summary Block a vehicle or advisor for test drives on a given day (managers only)
+ */
+export const CreateCapacityBlockBody = zod.object({
+  "kind": zod.enum(['vehicle', 'advisor']),
+  "refId": zod.number(),
+  "date": zod.coerce.date(),
+  "reason": zod.string().optional()
+})
+
+export const CreateCapacityBlockResponse = zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['vehicle', 'advisor']),
+  "refId": zod.number(),
+  "refLabel": zod.string().nullish().describe('Display label — vehicle description or advisor name'),
+  "date": zod.coerce.date(),
+  "reason": zod.string().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Remove a capacity block (managers only)
+ */
+export const DeleteCapacityBlockParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteCapacityBlockResponse = zod.void()
 
 
 /**
@@ -3109,7 +3234,7 @@ export const UploadDealBankLetterResponse = zod.object({
 }),
   "gate": zod.union([zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received', 'quote_discount']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),
@@ -3919,6 +4044,7 @@ export const CreateServiceOrderBody = zod.object({
   "odometer": zod.number().optional(),
   "technician": zod.string().optional(),
   "technicianUserId": zod.number().optional(),
+  "autoAssign": zod.boolean().optional().describe('Explicitly request round-robin auto-assignment; by default bookings are created unassigned so a technician can be assigned later'),
   "estimatedCost": zod.number().optional(),
   "estimatedHours": zod.number().min(createServiceOrderBodyEstimatedHoursMin).max(createServiceOrderBodyEstimatedHoursMax).optional(),
   "jobs": zod.array(zod.string()).optional()
@@ -4130,6 +4256,8 @@ export const ListJobCardsResponseItem = zod.object({
   "laborHours": zod.number(),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
   "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
   "rolloverToDate": zod.coerce.date().nullish(),
   "rolloverReason": zod.string().nullish(),
@@ -4209,6 +4337,8 @@ export const CreateJobCardResponse = zod.object({
   "laborHours": zod.number(),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
   "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
   "rolloverToDate": zod.coerce.date().nullish(),
   "rolloverReason": zod.string().nullish(),
@@ -4266,7 +4396,9 @@ export const UpdateJobCardBody = zod.object({
 })).optional(),
   "laborHours": zod.number().optional(),
   "laborRate": zod.number().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "serviceAnalysis": zod.string().optional().describe('Technician\'s analysis of the service — mandatory before the card can be marked completed'),
+  "workPerformed": zod.string().optional().describe('What work was done — mandatory before the card can be marked completed')
 })
 
 export const UpdateJobCardResponse = zod.object({
@@ -4306,6 +4438,8 @@ export const UpdateJobCardResponse = zod.object({
   "laborHours": zod.number(),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
   "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
   "rolloverToDate": zod.coerce.date().nullish(),
   "rolloverReason": zod.string().nullish(),
@@ -4375,6 +4509,8 @@ export const RolloverJobCardResponse = zod.object({
   "laborHours": zod.number(),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
   "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
   "rolloverToDate": zod.coerce.date().nullish(),
   "rolloverReason": zod.string().nullish(),
@@ -4443,6 +4579,8 @@ export const ApproveJobCardRolloverResponse = zod.object({
   "laborHours": zod.number(),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
   "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
   "rolloverToDate": zod.coerce.date().nullish(),
   "rolloverReason": zod.string().nullish(),
@@ -4516,6 +4654,8 @@ export const DecideJobCardSurchargeResponse = zod.object({
   "laborHours": zod.number(),
   "laborRate": zod.number(),
   "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
   "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
   "rolloverToDate": zod.coerce.date().nullish(),
   "rolloverReason": zod.string().nullish(),
@@ -6466,7 +6606,7 @@ export const GetCustomerOverviewResponse = zod.object({
 })),
   "openGates": zod.array(zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received', 'quote_discount']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),
@@ -7152,7 +7292,7 @@ export const ListGatesQueryParams = zod.object({
 
 export const ListGatesResponseItem = zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received', 'quote_discount']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),
@@ -7192,7 +7332,7 @@ export const ResolveGateBody = zod.object({
 
 export const ResolveGateResponse = zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received', 'quote_discount']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),
@@ -7268,7 +7408,7 @@ export const ReviewGraFilingBody = zod.object({
 
 export const ReviewGraFilingResponse = zod.object({
   "id": zod.number(),
-  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received']),
+  "type": zod.enum(['below_floor_price', 'fee_waiver', 'credit_decline', 'capital_order', 'gra_filing', 'refund_release', 'stage_advance', 'recall_damage', 'bank_funds_received', 'quote_discount']),
   "status": zod.enum(['pending', 'approved', 'adjusted', 'dismissed']),
   "priority": zod.enum(['high', 'normal', 'low']),
   "customerId": zod.number().nullish(),

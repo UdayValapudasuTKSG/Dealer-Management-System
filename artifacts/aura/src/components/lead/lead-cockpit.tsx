@@ -227,8 +227,8 @@ export function ActionChain({
             </div>
             <div className="text-xs text-muted-foreground">
               {sla.breached
-                ? "The 24-hour first-contact window has passed — call the customer now or close the lead with a reason."
-                : "Log a call before the 24-hour first-contact window closes."}
+                ? "The 48-hour first-contact window has passed — call the customer now or close the lead with a reason."
+                : "Log a call before the 48-hour first-contact window closes."}
             </div>
           </div>
         </div>

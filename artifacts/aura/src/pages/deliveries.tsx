@@ -310,6 +310,10 @@ function DeliveryDetail({
 
   const [form, setForm] = useState<Record<string, string>>({});
   const [showDuty, setShowDuty] = useState(false);
+  // Handover form edit dialog — corrections to the details printed on the
+  // handover PDF (customer name, plate, insurance).
+  const [handoverOpen, setHandoverOpen] = useState(false);
+  const [handoverDraft, setHandoverDraft] = useState<Record<string, string>>({});
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: getListDeliveriesQueryKey() });
@@ -833,7 +837,111 @@ function DeliveryDetail({
             >
               <FileText className="w-4 h-4" /> Handover Form
             </a>
+            <Button
+              variant="outline"
+              className="h-10 rounded-full border-border text-sm font-medium"
+              onClick={() => {
+                setHandoverDraft({
+                  customerName: delivery.customerName ?? "",
+                  registrationNumber: delivery.registrationNumber ?? "",
+                  insuranceProvider: delivery.insuranceProvider ?? "",
+                  insurancePolicy: delivery.insurancePolicy ?? "",
+                });
+                setHandoverOpen(true);
+              }}
+            >
+              Edit Handover Form
+            </Button>
           </div>
+
+          <Dialog open={handoverOpen} onOpenChange={setHandoverOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit handover form</DialogTitle>
+                <DialogDescription>
+                  Changes save to this delivery and appear on the printed
+                  handover form immediately.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                {(
+                  [
+                    ["customerName", "Customer name", "Nana Adjei"],
+                    ["registrationNumber", "Registration / plate (e.g. PAB1234)", "PAB1234"],
+                    ["insuranceProvider", "Insurance provider", "Assuria"],
+                    ["insurancePolicy", "Insurance policy #", "POL-000123"],
+                  ] as const
+                ).map(([key, label, placeholder]) => (
+                  <div key={key} className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {label}
+                    </p>
+                    <Input
+                      value={handoverDraft[key] ?? ""}
+                      placeholder={placeholder}
+                      onChange={(e) =>
+                        setHandoverDraft((d) => ({ ...d, [key]: e.target.value }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  className="rounded-full"
+                  onClick={() => setHandoverOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="rounded-full bg-primary hover:bg-primary/90 text-white"
+                  disabled={
+                    updateDelivery.isPending || !handoverDraft.customerName?.trim()
+                  }
+                  onClick={async () => {
+                    const plate = handoverDraft.registrationNumber?.trim().toUpperCase();
+                    if (plate && !/^[A-Z]{3}[0-9]{1,4}$/.test(plate)) {
+                      toast({
+                        title: "Invalid registration number",
+                        description:
+                          "Guyana plates are 3 letters followed by 1–4 digits (e.g. PAB1234).",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                    try {
+                      await updateDelivery.mutateAsync({
+                        id: delivery.id,
+                        data: {
+                          customerName: handoverDraft.customerName.trim(),
+                          ...(plate ? { registrationNumber: plate } : {}),
+                          insuranceProvider: handoverDraft.insuranceProvider ?? "",
+                          insurancePolicy: handoverDraft.insurancePolicy ?? "",
+                        },
+                      });
+                      setHandoverOpen(false);
+                      invalidate();
+                      toast({
+                        title: "Handover form updated",
+                        description:
+                          "The printed form now reflects the new details.",
+                      });
+                    } catch (err) {
+                      toast({
+                        title: "Could not save",
+                        description:
+                          err instanceof Error ? err.message : "Try again.",
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                >
+                  Save changes
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Steps */}
           <div className="mt-7 space-y-1.5">

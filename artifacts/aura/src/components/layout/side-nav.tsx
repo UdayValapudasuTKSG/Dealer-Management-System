@@ -24,6 +24,7 @@ import {
   Handshake,
   Users,
   Settings,
+  CalendarRange,
   Shield,
   Bot,
   type LucideIcon,
@@ -64,6 +65,7 @@ const CLUSTERS: Cluster[] = [
     label: "Operations",
     items: [
       { name: "Inventory", href: "/inventory", module: "inventory", icon: Car },
+      { name: "Capacity", href: "/capacity", module: "settings", icon: CalendarRange },
       { name: "Deliveries", href: "/deliveries", module: "deliveries", icon: Truck },
       { name: "Service", href: "/service", module: "service", icon: Wrench, ent: "service_module" },
       { name: "Parts", href: "/parts", module: "parts", icon: Package, ent: "parts_module" },

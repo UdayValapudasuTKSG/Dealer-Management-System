@@ -290,12 +290,16 @@ export async function quotePdfPayload(
     quantity: String(quote.quantity),
     unitPrice: money(quote.basePrice),
     subtotal: money(quote.basePrice),
-    taxLines: JSON.stringify(
-      quote.taxLines.map((l) => ({
+    taxLines: JSON.stringify([
+      ...quote.taxLines.map((l) => ({
         name: l.kind === "percent" ? `${l.name} (${l.rate}%)` : l.name,
         amount: money(l.amount),
       })),
-    ),
+      // Management-approved discount shows as its own line on the quote.
+      ...(quote.discountAmount > 0 && quote.discountStatus === "approved"
+        ? [{ name: "Discount (approved)", amount: `-${money(quote.discountAmount)}` }]
+        : []),
+    ]),
     totalTax: money(quote.totalTax),
     total: money(quote.total),
     quoteRef: `${quote.quoteNumber}-R${quote.version}`,

@@ -40,6 +40,10 @@ export interface JobCard {
   laborRate: number;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  serviceAnalysis?: string | null;
+  /** @nullable */
+  workPerformed?: string | null;
   rolloverStatus?: JobCardRolloverStatus;
   /** @nullable */
   rolloverToDate?: Date | null;

@@ -33,7 +33,7 @@ export const DELIVERY_STEP_LABELS: Record<DeliveryStep, string> = {
   registration: "Registration",
   insurance: "Insurance",
   invoice: "Invoice",
-  appointment: "Delivery Appointment",
+  appointment: "Expected Delivery Date",
   warranty: "Warranty Documents",
   delivery: "Vehicle Delivery",
   signature: "Customer Signature",
@@ -132,8 +132,16 @@ export function normalizeDeliverySteps(
 ): DeliveryStepState[] {
   const present = new Set(steps.map((s) => s.key));
   const missing = DELIVERY_STEPS.filter((k) => !present.has(k));
-  if (missing.length === 0) return steps;
-  const out = [...steps];
+  // Labels are persisted per delivery; refresh them so renamed steps (e.g.
+  // "Delivery Appointment" → "Expected Delivery Date") show the current
+  // wording on old workflows too.
+  const relabeled = steps.map((s) =>
+    DELIVERY_STEP_LABELS[s.key] && s.label !== DELIVERY_STEP_LABELS[s.key]
+      ? { ...s, label: DELIVERY_STEP_LABELS[s.key] }
+      : s,
+  );
+  if (missing.length === 0) return relabeled;
+  const out = [...relabeled];
   for (const key of missing) {
     const idx = DELIVERY_STEPS.indexOf(key);
     // Insert after the last present step that canonically precedes it.
