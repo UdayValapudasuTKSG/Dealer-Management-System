@@ -935,6 +935,7 @@ export default function LeadDetail() {
   // Quick finance actions against the lead's linked deal (header CTAs).
   const [invoiceDeal, setInvoiceDeal] = useState<Deal | null>(null);
   const [paymentDeal, setPaymentDeal] = useState<Deal | null>(null);
+  const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
 
   const createDeal = useCreateDeal({
     mutation: {
@@ -1394,8 +1395,6 @@ export default function LeadDetail() {
       <ArrowUpRight className="w-3 h-3" />
     </Link>
   ) : null;
-
-  const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
 
   const saveVehicle = async (v: string | boolean) => {
     const vehicleId = Number(v);
