@@ -2053,6 +2053,33 @@ router.post(
       true,
     );
 
+    // Back-order landing: if the reservation fee was already collected while
+    // the unit was out of stock, block it the moment it becomes available —
+    // conditional update = race-safe against a concurrent sale.
+    if (isAvailable && existing.reservationFeePaid) {
+      const [reserved] = await db
+        .update(vehiclesTable)
+        .set({ status: "reserved" })
+        .where(
+          and(
+            eq(vehiclesTable.id, vehicle.id),
+            eq(vehiclesTable.dealerId, activeDealerId(res)),
+            eq(vehiclesTable.status, "available"),
+          ),
+        )
+        .returning({ id: vehiclesTable.id });
+      if (reserved) {
+        await logLeadEvent(
+          lead!,
+          "vehicle_reserved",
+          "Unit blocked in inventory",
+          `Reservation fee was already collected — ${label} is now reserved for this lead.`,
+          "Inventory Check",
+          true,
+        );
+      }
+    }
+
     if (!isAvailable && lead!.ownerUserId) {
       await notifyUser({
         userId: lead!.ownerUserId,
