@@ -1,6 +1,6 @@
 import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { Router, type IRouter } from "express";
-import { eq, desc, and, or, isNull, isNotNull, ne, ilike, gte, lte, sql, inArray, notInArray, type SQL } from "drizzle-orm";
+import { eq, desc, and, or, isNull, isNotNull, ne, ilike, gte, lte, sql, inArray, notInArray, notExists, type SQL } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -2312,21 +2312,183 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [lead] = await db
-    .update(leadsTable)
-    .set({
-      ...parsed.data,
-      ...(parsed.data.phase && parsed.data.phase !== before.phase
-        ? { stageEnteredAt: new Date() }
-        : {}),
-    })
-    .where(
-      and(
-        eq(leadsTable.id, params.data.id),
-        eq(leadsTable.dealerId, activeDealerId(res)),
-      ),
-    )
-    .returning();
+  // Vehicle swap + lead update run as ONE transaction with the lead row
+  // locked, so concurrent swaps serialize instead of orphaning reservations:
+  // reserve the replacement (when the fee is/becomes paid) BEFORE the lead
+  // points at it, update the lead, then atomically release the old unit —
+  // all of it rolls back together if any step loses a race.
+  const dealerId = activeDealerId(res);
+  let lead: typeof before | undefined;
+  let swappedFromVehicleId: number | null = null;
+  let newVehicleReserved = false;
+  let releasedOldVehicle = false;
+  let swapInVehicle: { id: number; vin: string | null; year: number | null; make: string; model: string } | null = null;
+  let swapFailure: { status: number; body: Record<string, unknown> } | null =
+    null;
+  const SWAP_ABORT = new Error("lead-vehicle-swap-abort");
+  try {
+    await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select()
+        .from(leadsTable)
+        .where(
+          and(
+            eq(leadsTable.id, params.data.id),
+            eq(leadsTable.dealerId, dealerId),
+            isNull(leadsTable.deletedAt),
+          ),
+        )
+        .for("update");
+      if (!locked) {
+        swapFailure = { status: 404, body: { error: "Lead not found" } };
+        throw SWAP_ABORT;
+      }
+      const swapping =
+        parsed.data.interestedVehicleId !== undefined &&
+        parsed.data.interestedVehicleId !== locked.interestedVehicleId;
+      const feePaidAfter =
+        parsed.data.reservationFeePaid ?? locked.reservationFeePaid;
+      if (swapping && parsed.data.interestedVehicleId != null) {
+        const [newVehicle] = await tx
+          .select({
+            id: vehiclesTable.id,
+            status: vehiclesTable.status,
+            vin: vehiclesTable.vin,
+            year: vehiclesTable.year,
+            make: vehiclesTable.make,
+            model: vehiclesTable.model,
+          })
+          .from(vehiclesTable)
+          .where(
+            and(
+              eq(vehiclesTable.id, parsed.data.interestedVehicleId),
+              eq(vehiclesTable.dealerId, dealerId),
+              isNull(vehiclesTable.deletedAt),
+            ),
+          );
+        if (!newVehicle) {
+          swapFailure = { status: 404, body: { error: "Vehicle not found" } };
+          throw SWAP_ABORT;
+        }
+        swapInVehicle = newVehicle;
+        if (feePaidAfter) {
+          // Fee collected (already or in this request) — the replacement must
+          // be blocked in inventory. Conditional update = race-safe.
+          const [reserved] = await tx
+            .update(vehiclesTable)
+            .set({ status: "reserved" })
+            .where(
+              and(
+                eq(vehiclesTable.id, newVehicle.id),
+                eq(vehiclesTable.dealerId, dealerId),
+                eq(vehiclesTable.status, "available"),
+              ),
+            )
+            .returning({ id: vehiclesTable.id });
+          if (!reserved) {
+            swapFailure = {
+              status: 422,
+              body: {
+                error: "Selected vehicle is no longer available",
+                unmet: ["vehicle_not_available"],
+              },
+            };
+            throw SWAP_ABORT;
+          }
+          newVehicleReserved = true;
+        } else if (newVehicle.status !== "available") {
+          swapFailure = {
+            status: 422,
+            body: {
+              error: "Selected vehicle is not available",
+              unmet: ["vehicle_not_available"],
+            },
+          };
+          throw SWAP_ABORT;
+        }
+      }
+
+      const [updated] = await tx
+        .update(leadsTable)
+        .set({
+          ...parsed.data,
+          ...(parsed.data.phase && parsed.data.phase !== locked.phase
+            ? { stageEnteredAt: new Date() }
+            : {}),
+        })
+        .where(
+          and(
+            eq(leadsTable.id, params.data.id),
+            eq(leadsTable.dealerId, dealerId),
+          ),
+        )
+        .returning();
+      if (!updated) {
+        swapFailure = { status: 404, body: { error: "Lead not found" } };
+        throw SWAP_ABORT;
+      }
+      lead = updated;
+
+      // Free the previous unit back to available — a single conditional
+      // update whose NOT EXISTS predicates keep it atomic with the claim
+      // checks (no check-then-update window).
+      if (swapping && locked.interestedVehicleId != null) {
+        swappedFromVehicleId = locked.interestedVehicleId;
+        const oldVehicleId = locked.interestedVehicleId;
+        const [released] = await tx
+          .update(vehiclesTable)
+          .set({ status: "available" })
+          .where(
+            and(
+              eq(vehiclesTable.dealerId, dealerId),
+              eq(vehiclesTable.id, oldVehicleId),
+              eq(vehiclesTable.status, "reserved"),
+              notExists(
+                db
+                  .select({ id: dealsTable.id })
+                  .from(dealsTable)
+                  .where(
+                    and(
+                      eq(dealsTable.dealerId, dealerId),
+                      eq(dealsTable.vehicleId, oldVehicleId),
+                      notInArray(dealsTable.stage, [
+                        "cancelled",
+                        "lost",
+                        "delivered",
+                      ]),
+                    ),
+                  ),
+              ),
+              notExists(
+                db
+                  .select({ id: bookingsTable.id })
+                  .from(bookingsTable)
+                  .where(
+                    and(
+                      eq(bookingsTable.dealerId, dealerId),
+                      eq(bookingsTable.vehicleId, oldVehicleId),
+                      eq(bookingsTable.status, "active"),
+                    ),
+                  ),
+              ),
+            ),
+          )
+          .returning({ id: vehiclesTable.id });
+        releasedOldVehicle = !!released;
+      }
+    });
+  } catch (err) {
+    // (cast: TS can't see assignments made inside the transaction closure)
+    const failure = swapFailure as {
+      status: number;
+      body: Record<string, unknown>;
+    } | null;
+    if (failure) {
+      res.status(failure.status).json(failure.body);
+      return;
+    }
+    throw err;
+  }
 
   // Pre-booking blocks the unit: taking the reservation fee reserves the
   // interested vehicle so it can't be double-sold from inventory.
@@ -2357,6 +2519,44 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     }
   }
 
+  // Vehicle swap follow-through: timeline entries (audit only — the actual
+  // inventory moves happened inside the transaction above).
+  if (lead) {
+    if (releasedOldVehicle && swappedFromVehicleId != null) {
+      await logLeadEvent(
+        lead,
+        "vehicle_released",
+        "Previous unit released",
+        `${actorName(res)} changed the interested vehicle — the previous unit is back in available stock.`,
+        actorName(res),
+      );
+    }
+    const swapIn = swapInVehicle as {
+      id: number;
+      vin: string | null;
+      year: number | null;
+      make: string;
+      model: string;
+    } | null;
+    if (newVehicleReserved && swapIn) {
+      const unit = [
+        swapIn.year,
+        swapIn.make,
+        swapIn.model,
+        swapIn.vin ? `(VIN ${swapIn.vin})` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      await logLeadEvent(
+        lead,
+        "vehicle_reserved",
+        "Replacement unit blocked in inventory",
+        `${actorName(res)} switched the interested vehicle to ${unit} — it is now reserved for this lead.`,
+        actorName(res),
+      );
+    }
+  }
+
   if (goingLost) {
     // Closing the lead ends the follow-up cadence.
     await completeCadenceTasks(lead!, "Lead closed — cadence stopped.");
@@ -2380,7 +2580,7 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     );
   }
 
-  if (before) onLeadUpdated(before, lead);
+  if (before && lead) onLeadUpdated(before, lead);
   // Quote agent (A3): regenerate the Code when a pricing-relevant field
   // (vehicle, color, variant, financing) changed and a Code already exists.
   if (before && lead) autoQuoteOnLeadUpdated(before, lead);

@@ -516,8 +516,13 @@ function modelInterestOptions(
   vehicles: Vehicle[],
   currentId?: number | null,
 ): { value: string; label: string }[] {
+  // Only free stock is offered — plus the currently assigned unit so the
+  // select can still render its label.
+  const selectable = vehicles.filter(
+    (v) => v.status === "available" || v.id === currentId,
+  );
   const map = new Map<string, Vehicle[]>();
-  for (const v of vehicles) {
+  for (const v of selectable) {
     const key = `${v.make}|${v.model}|${v.year}|${v.trim ?? v.variant ?? ""}|${v.exteriorColor ?? ""}`.toLowerCase();
     const arr = map.get(key);
     if (arr) arr.push(v);
@@ -537,6 +542,7 @@ function modelInterestOptions(
         rep.trim || rep.variant || "",
         `— ${rep.exteriorColor}`,
         units.length > 1 ? `· ${units.length} in stock` : "",
+        units.length === 1 && rep.vin ? `· VIN ${rep.vin}` : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -718,6 +724,10 @@ export default function LeadDetail() {
         qc.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });
         qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
         qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+        // Vehicle swap frees the old unit / reserves the new one — refresh
+        // inventory-backed queries so statuses and options stay current.
+        qc.invalidateQueries({ queryKey: ["lead-edit-vehicles"] });
+        qc.invalidateQueries({ queryKey: ["lead-detail-vehicle"] });
         toast({ title: "Lead updated" });
       },
       onError: () =>
@@ -1629,6 +1639,15 @@ export default function LeadDetail() {
                       ) : null}
                     </InlineField>
                     <InlineField
+                      label="Address"
+                      canEdit={canEdit}
+                      full
+                      editor={{ kind: "textarea", value: lead.address ?? "" }}
+                      onSave={(v) => patchField({ address: textOrNull(v) })}
+                    >
+                      {lead.address}
+                    </InlineField>
+                    <InlineField
                       label="Lead Source"
                       canEdit={canEdit}
                       editor={{
@@ -2535,15 +2554,6 @@ export default function LeadDetail() {
                       onSave={(v) => patchField({ notes: textOrNull(v) })}
                     >
                       {lead.notes}
-                    </InlineField>
-                    <InlineField
-                      label="Address"
-                      canEdit={canEdit}
-                      full
-                      editor={{ kind: "textarea", value: lead.address ?? "" }}
-                      onSave={(v) => patchField({ address: textOrNull(v) })}
-                    >
-                      {lead.address}
                     </InlineField>
                   </Section>
 
