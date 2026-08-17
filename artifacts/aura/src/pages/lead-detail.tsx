@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import {
   useGetLead,
@@ -77,6 +77,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -549,6 +557,237 @@ function modelInterestOptions(
       return { value: String(rep.id), label };
     })
     .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+const vehicleModelKey = (v: Vehicle) =>
+  `${v.year}|${v.make}|${v.model}|${v.trim ?? v.variant ?? ""}`.toLowerCase();
+const vehicleModelLabel = (v: Vehicle) =>
+  [`${v.year} ${v.make} ${v.model}`, v.trim || v.variant || ""]
+    .filter(Boolean)
+    .join(" ");
+
+/**
+ * Cascading vehicle picker: Model → Color → Unit (VIN). Only free stock is
+ * offered (plus the currently assigned unit so the dialog can show it).
+ */
+function VehicleSwapDialog({
+  open,
+  onOpenChange,
+  vehicles,
+  currentId,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  vehicles: Vehicle[];
+  currentId?: number | null;
+  onSave: (vehicleId: number) => Promise<void>;
+}) {
+  const [model, setModel] = useState("");
+  const [color, setColor] = useState("");
+  const [unitId, setUnitId] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const selectable = useMemo(
+    () =>
+      vehicles.filter((v) => v.status === "available" || v.id === currentId),
+    [vehicles, currentId],
+  );
+  const current = currentId
+    ? vehicles.find((v) => v.id === currentId)
+    : undefined;
+
+  // Re-seed from the currently assigned unit each time the dialog opens.
+  useEffect(() => {
+    if (!open) return;
+    setModel(current ? vehicleModelKey(current) : "");
+    setColor(current?.exteriorColor ?? "");
+    setUnitId(current ? String(current.id) : "");
+    setSaving(false);
+  }, [open, current]);
+
+  const modelOptions = useMemo(() => {
+    const map = new Map<string, { label: string; count: number }>();
+    for (const v of selectable) {
+      const key = vehicleModelKey(v);
+      const entry = map.get(key);
+      if (entry) entry.count += v.status === "available" ? 1 : 0;
+      else
+        map.set(key, {
+          label: vehicleModelLabel(v),
+          count: v.status === "available" ? 1 : 0,
+        });
+    }
+    return Array.from(map.entries())
+      .map(([value, m]) => ({ value, label: m.label, count: m.count }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [selectable]);
+
+  const colorOptions = useMemo(() => {
+    if (!model) return [];
+    const map = new Map<string, number>();
+    for (const v of selectable) {
+      if (vehicleModelKey(v) !== model) continue;
+      const c = v.exteriorColor ?? "Unspecified";
+      map.set(c, (map.get(c) ?? 0) + (v.status === "available" ? 1 : 0));
+    }
+    return Array.from(map.entries())
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => a.value.localeCompare(b.value));
+  }, [selectable, model]);
+
+  const unitOptions = useMemo(() => {
+    if (!model || !color) return [];
+    return selectable
+      .filter(
+        (v) =>
+          vehicleModelKey(v) === model &&
+          (v.exteriorColor ?? "Unspecified") === color,
+      )
+      .map((v) => ({
+        value: String(v.id),
+        label: [
+          v.vin ? `VIN ${v.vin}` : `Unit #${v.id}`,
+          v.id === currentId ? "· currently assigned" : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [selectable, model, color, currentId]);
+
+  const pickModel = (value: string) => {
+    setModel(value);
+    const colors = new Set(
+      selectable
+        .filter((v) => vehicleModelKey(v) === value)
+        .map((v) => v.exteriorColor ?? "Unspecified"),
+    );
+    const onlyColor = colors.size === 1 ? [...colors][0] : "";
+    setColor(onlyColor);
+    setUnitId("");
+    if (onlyColor) autoPickUnit(value, onlyColor);
+  };
+
+  const autoPickUnit = (m: string, c: string) => {
+    const units = selectable.filter(
+      (v) =>
+        vehicleModelKey(v) === m && (v.exteriorColor ?? "Unspecified") === c,
+    );
+    if (units.length === 1) setUnitId(String(units[0].id));
+  };
+
+  const pickColor = (value: string) => {
+    setColor(value);
+    setUnitId("");
+    autoPickUnit(model, value);
+  };
+
+  const canSave =
+    !!unitId && Number(unitId) !== currentId && !saving;
+
+  const save = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      await onSave(Number(unitId));
+      onOpenChange(false);
+    } catch {
+      // toast handled by the mutation's onError
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectClass =
+    "h-9 w-full rounded-md border border-white/15 bg-background/60 px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Change interested vehicle</DialogTitle>
+          <DialogDescription>
+            Pick the model, then the color, then the exact unit. Only vehicles
+            in available stock are shown.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+              Vehicle model
+            </div>
+            <select
+              value={model}
+              onChange={(e) => pickModel(e.target.value)}
+              className={selectClass}
+              data-testid="select-swap-model"
+            >
+              <option value="">Select a model…</option>
+              {modelOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                  {o.count > 0 ? ` · ${o.count} in stock` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+              Color
+            </div>
+            <select
+              value={color}
+              onChange={(e) => pickColor(e.target.value)}
+              disabled={!model}
+              className={selectClass}
+              data-testid="select-swap-color"
+            >
+              <option value="">Select a color…</option>
+              {colorOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.value}
+                  {o.count > 0 ? ` · ${o.count} in stock` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+              Available unit (VIN)
+            </div>
+            <select
+              value={unitId}
+              onChange={(e) => setUnitId(e.target.value)}
+              disabled={!model || !color}
+              className={selectClass}
+              data-testid="select-swap-unit"
+            >
+              <option value="">Select a unit…</option>
+              {unitOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            data-testid="button-swap-cancel"
+          >
+            Cancel
+          </Button>
+          <Button onClick={() => void save()} disabled={!canSave} data-testid="button-swap-save">
+            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Assign vehicle
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
@@ -1156,10 +1395,7 @@ export default function LeadDetail() {
     </Link>
   ) : null;
 
-  const vehicleOptions = modelInterestOptions(
-    vehicles ?? [],
-    lead?.interestedVehicleId,
-  );
+  const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
 
   const saveVehicle = async (v: string | boolean) => {
     const vehicleId = Number(v);
@@ -1328,6 +1564,13 @@ export default function LeadDetail() {
         </div>
       </div>
 
+      <VehicleSwapDialog
+        open={vehicleDialogOpen}
+        onOpenChange={setVehicleDialogOpen}
+        vehicles={vehicles ?? []}
+        currentId={lead?.interestedVehicleId}
+        onSave={(id) => saveVehicle(String(id))}
+      />
       <CallDialog
         leadId={lead.id}
         leadName={lead.name}
@@ -1715,20 +1958,24 @@ export default function LeadDetail() {
                   </Section>
 
                   <Section title="Product Interest">
-                    <InlineField
-                      label="Interested Model"
-                      canEdit={canEdit}
-                      editor={{
-                        kind: "select",
-                        value: lead.interestedVehicleId
-                          ? String(lead.interestedVehicleId)
-                          : "",
-                        options: vehicleOptions,
-                        allowEmpty: !lead.interestedVehicleId,
-                      }}
-                      onSave={saveVehicle}
-                    >
-                      {vehicleLink}
+                    <InlineField label="Interested Model">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          {vehicleLink ?? (
+                            <span className="text-muted-foreground/60">—</span>
+                          )}
+                        </div>
+                        {canEdit && (
+                          <button
+                            onClick={() => setVehicleDialogOpen(true)}
+                            aria-label="Change interested vehicle"
+                            data-testid="button-change-vehicle"
+                            className="text-muted-foreground hover:text-primary shrink-0 mt-0.5"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </InlineField>
                     <InlineField label="Vehicle Version">
                       {vehicle?.trim || vehicle?.variant || lead.variant}
