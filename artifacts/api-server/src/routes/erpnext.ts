@@ -234,7 +234,6 @@ router.post("/erpnext/backfill", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
   const conn = await getErpnextConnection(dealerId);
 
-  const entityCounts = await backfillErpnext(dealerId);
   if (!conn) {
     res.status(404).json({ error: "Connect ERPNext before running a backfill" });
     return;
