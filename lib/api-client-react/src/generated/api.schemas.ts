@@ -5,6 +5,12 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * AURA payment method → ERPNext Mode of Payment
+ * @nullable
+ */
+export type ErpnextSettingsPaymentModes = {[key: string]: string} | null;
+
 export interface ErpnextSettings {
   configured: boolean;
   enabled: boolean;
@@ -29,7 +35,25 @@ export interface ErpnextSettings {
   erpnextVersion?: string | null;
   /** @nullable */
   defaultWarehouse?: string | null;
+  /** @nullable */
+  incomeAccount?: string | null;
+  /** @nullable */
+  taxAccount?: string | null;
+  /** @nullable */
+  receivableAccount?: string | null;
+  /** @nullable */
+  settlementAccount?: string | null;
+  /**
+     * AURA payment method → ERPNext Mode of Payment
+     * @nullable
+     */
+  paymentModes?: ErpnextSettingsPaymentModes;
 }
+
+/**
+ * @nullable
+ */
+export type UpdateErpnextSettingsRequestPaymentModes = {[key: string]: string} | null;
 
 export interface UpdateErpnextSettingsRequest {
   /** @minLength 8 */
@@ -44,9 +68,22 @@ export interface UpdateErpnextSettingsRequest {
      * @nullable
      */
   defaultWarehouse?: string | null;
+  /** @nullable */
+  incomeAccount?: string | null;
+  /** @nullable */
+  taxAccount?: string | null;
+  /** @nullable */
+  receivableAccount?: string | null;
+  /** @nullable */
+  settlementAccount?: string | null;
+  /** @nullable */
+  paymentModes?: UpdateErpnextSettingsRequestPaymentModes;
 }
 
-export interface BackfillErpnextResult {
+export interface ErpnextBackfillResult {
+  customers: number;
+  invoices: number;
+  payments: number;
   parts: number;
   suppliers: number;
   purchaseOrders: number;
@@ -6740,4 +6777,3 @@ export const ListDocumentsEntityType = {
 export type RotateErpnextWebhookSecret200 = {
   webhookSecret: string;
 };
-

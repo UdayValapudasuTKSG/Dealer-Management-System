@@ -10,6 +10,7 @@ import { registerErpnextPartsSync } from "./lib/erpnext/parts-sync";
 import { migrateLegacyAttachments } from "./lib/documents-migrate";
 import { startMetricsFlusher } from "./lib/metrics";
 import { logPendingInfraSeams } from "./lib/infra-seams";
+import { registerErpnextEntitySync } from "./lib/erpnext/entities";
 
 const rawPort = process.env["PORT"];
 
@@ -38,6 +39,7 @@ app.listen(port, (err) => {
   startNotificationSweeps();
   startRetentionSweeps();
   registerErpnextPartsSync();
+  registerErpnextEntitySync();
   startErpnextSyncWorker();
   void migrateLegacyAttachments();
   startMetricsFlusher();

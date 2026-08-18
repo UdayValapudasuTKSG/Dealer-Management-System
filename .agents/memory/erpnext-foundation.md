@@ -9,3 +9,8 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 - Inbound webhooks authenticate via a per-dealer shared secret header with timing-safe compare; the ERPNext webhook body template must include `doctype`/`name`/`event` — routing depends on it, unhandled DocTypes are recorded as "skipped".
 - Secrets exposure: API secret never returned; API key masked; webhook shared secret readable by GM/super-admin only (they must paste it into ERPNext). Connection writes are GM-only.
 - ERPNext doc names live in a generic external-refs mapping (dealer+entity+doctype unique); updates must resolve the mapped doc name, never guess.
+
+## Entity sync durable invariants
+- Every customer-write path must bump `updatedAt` and enqueue outbound sync, or inbound last-write-wins overwrites newer AURA data.
+- ERPNext allocations/amounts are non-negative; direction lives in payment_type ("Pay" for refunds).
+- Remote-create + local-ref is a crash window: persist the ref before submit and reconcile orphans by a deterministic remarks key before creating financial docs, or retries duplicate them.

@@ -30,8 +30,8 @@ import {
   KeyRound,
   Globe,
   BookOpen,
+  DatabaseBackup,
   Warehouse,
-  UploadCloud,
 } from "lucide-react";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -58,6 +58,11 @@ export default function SettingsErpnext() {
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [warehouse, setWarehouse] = useState<string | null>(null);
+  const [incomeAccount, setIncomeAccount] = useState<string | null>(null);
+  const [taxAccount, setTaxAccount] = useState<string | null>(null);
+  const [receivableAccount, setReceivableAccount] = useState<string | null>(null);
+  const [settlementAccount, setSettlementAccount] = useState<string | null>(null);
+  const [modes, setModes] = useState<Record<string, string> | null>(null);
 
   const refreshSettings = () =>
     qc.invalidateQueries({ queryKey: getGetErpnextSettingsQueryKey() });
@@ -125,12 +130,32 @@ export default function SettingsErpnext() {
     },
   });
 
+  const saveMapping = useUpdateErpnextSettings({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Accounting mapping saved" });
+        setIncomeAccount(null);
+        setTaxAccount(null);
+        setReceivableAccount(null);
+        setSettlementAccount(null);
+        setModes(null);
+        refreshSettings();
+      },
+      onError: (e) =>
+        toast({
+          title: "Could not save mapping",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+
   const backfill = useBackfillErpnext({
     mutation: {
-      onSuccess: (res) => {
+      onSuccess: (r) => {
         toast({
-          title: "Backfill started",
-          description: `Queued ${res.parts} part(s), ${res.suppliers} supplier(s) and ${res.purchaseOrders} open PO(s) for sync.`,
+          title: "Backfill queued",
+          description: `${r.customers} customer(s), ${r.invoices} invoice(s), ${r.payments} payment(s), ${r.parts} part(s), ${r.suppliers} supplier(s) and ${r.purchaseOrders} open PO(s) queued for sync. Records already queued or synced are skipped.`,
         });
         qc.invalidateQueries({ queryKey: getListErpnextSyncJobsQueryKey() });
       },
@@ -378,70 +403,165 @@ export default function SettingsErpnext() {
           </div>
         )}
 
-        {/* Inventory sync: default warehouse + backfill */}
+        {/* Inventory sync: default warehouse */}
         {configured && (
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
             <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
               Parts inventory sync
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-                  <Warehouse className="h-3.5 w-3.5" /> Default ERPNext warehouse
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder='e.g. "Stores - AC" (blank = first warehouse in ERPNext)'
-                    value={warehouse ?? settings?.defaultWarehouse ?? ""}
-                    onChange={(e) => setWarehouse(e.target.value)}
-                    disabled={!isGm}
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      save.mutate({
-                        data: {
-                          defaultWarehouse:
-                            (warehouse ?? settings?.defaultWarehouse ?? "").trim() ||
-                            null,
-                        },
-                      })
-                    }
-                    disabled={!isGm || save.isPending || warehouse === null}
-                  >
-                    Save
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Stock Entries and Purchase Receipts post to this warehouse.
-                  Use the exact ERPNext warehouse name, including the company
-                  suffix.
-                </p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                <Warehouse className="h-3.5 w-3.5" /> Default ERPNext warehouse
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-                  <UploadCloud className="h-3.5 w-3.5" /> Backfill existing records
-                </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder='e.g. "Stores - AC" (blank = first warehouse in ERPNext)'
+                  value={warehouse ?? settings?.defaultWarehouse ?? ""}
+                  onChange={(e) => setWarehouse(e.target.value)}
+                  disabled={!isGm}
+                />
                 <Button
                   variant="outline"
-                  onClick={() => backfill.mutate()}
-                  disabled={!isGm || backfill.isPending}
-                  className="gap-2"
+                  onClick={() =>
+                    save.mutate({
+                      data: {
+                        defaultWarehouse:
+                          (warehouse ?? settings?.defaultWarehouse ?? "").trim() ||
+                          null,
+                      },
+                    })
+                  }
+                  disabled={!isGm || save.isPending || warehouse === null}
                 >
-                  {backfill.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <UploadCloud className="h-4 w-4" />
-                  )}
-                  Push parts, suppliers & open POs
+                  Save
                 </Button>
-                <p className="text-xs text-muted-foreground">
-                  Queues every part, supplier and open purchase order for sync.
-                  Items are matched by SKU in ERPNext, so running this more
-                  than once never creates duplicates.
-                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Stock Entries and Purchase Receipts post to this warehouse.
+                Use the exact ERPNext warehouse name, including the company
+                suffix.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Accounting mapping */}
+        {configured && (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+            <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+              Accounting mapping
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Where AURA posts money in ERPNext: invoice line items go to the
+              income account, tax snapshot lines to the tax account, and each
+              AURA payment method maps to an ERPNext Mode of Payment. Accounts
+              must already exist in ERPNext (validated on save).
+            </p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-semibold text-muted-foreground">
+                  Income account (e.g. <code>Sales - GD</code>)
+                </div>
+                <Input
+                  placeholder="Sales - GD"
+                  value={incomeAccount ?? settings?.incomeAccount ?? ""}
+                  onChange={(e) => setIncomeAccount(e.target.value)}
+                  disabled={!isGm}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-semibold text-muted-foreground">
+                  Tax account (e.g. <code>VAT - GD</code>)
+                </div>
+                <Input
+                  placeholder="VAT - GD"
+                  value={taxAccount ?? settings?.taxAccount ?? ""}
+                  onChange={(e) => setTaxAccount(e.target.value)}
+                  disabled={!isGm}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-semibold text-muted-foreground">
+                  Receivable account (e.g. <code>Debtors - GD</code>)
+                </div>
+                <Input
+                  placeholder="Debtors - GD"
+                  value={receivableAccount ?? settings?.receivableAccount ?? ""}
+                  onChange={(e) => setReceivableAccount(e.target.value)}
+                  disabled={!isGm}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-semibold text-muted-foreground">
+                  Settlement account payments land in (e.g. <code>Cash - GD</code>)
+                </div>
+                <Input
+                  placeholder="Cash - GD"
+                  value={settlementAccount ?? settings?.settlementAccount ?? ""}
+                  onChange={(e) => setSettlementAccount(e.target.value)}
+                  disabled={!isGm}
+                />
               </div>
             </div>
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-semibold text-muted-foreground">
+                Payment method → ERPNext Mode of Payment (blank = ERPNext default)
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {(["cash", "card", "bank_transfer", "cheque", "mobile_money", "financing"] as const).map(
+                  (method) => (
+                    <div key={method} className="space-y-1">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {method.replace(/_/g, " ")}
+                      </div>
+                      <Input
+                        placeholder={
+                          method === "cash" ? "Cash" : method === "card" ? "Credit Card" : "Bank Draft"
+                        }
+                        value={
+                          (modes ?? settings?.paymentModes ?? {})[method] ?? ""
+                        }
+                        onChange={(e) =>
+                          setModes({
+                            ...(modes ?? settings?.paymentModes ?? {}),
+                            [method]: e.target.value,
+                          })
+                        }
+                        disabled={!isGm}
+                      />
+                    </div>
+                  ),
+                )}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const cleanedModes = Object.fromEntries(
+                  Object.entries(modes ?? settings?.paymentModes ?? {}).filter(
+                    ([, v]) => v.trim(),
+                  ),
+                );
+                saveMapping.mutate({
+                  data: {
+                    incomeAccount: (incomeAccount ?? settings?.incomeAccount ?? "").trim() || null,
+                    taxAccount: (taxAccount ?? settings?.taxAccount ?? "").trim() || null,
+                    receivableAccount: (receivableAccount ?? settings?.receivableAccount ?? "").trim() || null,
+                    settlementAccount: (settlementAccount ?? settings?.settlementAccount ?? "").trim() || null,
+                    paymentModes: cleanedModes,
+                  },
+                });
+              }}
+              disabled={!isGm || saveMapping.isPending}
+              className="gap-2"
+            >
+              {saveMapping.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" />
+              )}
+              Save mapping
+            </Button>
           </div>
         )}
 
@@ -499,14 +619,31 @@ export default function SettingsErpnext() {
             <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
               Sync activity
             </div>
-            <button
-              onClick={() =>
-                qc.invalidateQueries({ queryKey: getListErpnextSyncJobsQueryKey() })
-              }
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <RefreshCw className="h-3.5 w-3.5" /> Refresh
-            </button>
+            <div className="flex items-center gap-4">
+              {configured && isGm && (
+                <button
+                  onClick={() => backfill.mutate()}
+                  disabled={backfill.isPending}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline disabled:opacity-50"
+                  title="Queue every existing customer, invoice and payment for sync (safe to re-run — records are matched by email/phone to avoid duplicates)"
+                >
+                  {backfill.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <DatabaseBackup className="h-3.5 w-3.5" />
+                  )}
+                  Sync existing records
+                </button>
+              )}
+              <button
+                onClick={() =>
+                  qc.invalidateQueries({ queryKey: getListErpnextSyncJobsQueryKey() })
+                }
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Refresh
+              </button>
+            </div>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
             {jobsLoading ? (

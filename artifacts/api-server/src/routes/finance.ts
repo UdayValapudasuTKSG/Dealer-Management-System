@@ -67,6 +67,7 @@ import {
   issueInvoice,
   logPaymentEvent,
 } from "../lib/invoicing";
+import { queueInvoiceSync } from "../lib/erpnext/entities";
 import { buildReceiptPdf } from "../lib/document-pdfs";
 import { storage } from "../lib/storage";
 import { getLosConnector } from "../lib/los";
@@ -679,6 +680,7 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
   // Void guard (L6): an invoice with applied funds cannot be voided
   // directly — the payments must be reversed (negative payment) first so
   // the ledger stays append-only and every dollar has a receipt trail.
+  let voiding = false;
   if (parsed.data.status === "void") {
     const [existing] = await db
       .select()
@@ -703,6 +705,7 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
         });
         return;
       }
+      voiding = true;
     }
   }
   const [invoice] = await db
@@ -718,6 +721,10 @@ router.patch("/invoices/:id", async (req, res): Promise<void> => {
   if (!invoice) {
     res.status(404).json({ error: "Invoice not found" });
     return;
+  }
+  // ERPNext accounting sync: voiding mirrors as a Sales Invoice cancellation.
+  if (voiding) {
+    queueInvoiceSync(invoice.dealerId, invoice.id, "cancel");
   }
   res.json(UpdateInvoiceResponse.parse(invoice));
 });

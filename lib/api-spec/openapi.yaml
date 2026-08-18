@@ -7224,21 +7224,21 @@ paths:
     post:
       operationId: backfillErpnext
       tags: [erpnext]
-      summary: Push existing parts, suppliers and open purchase orders to ERPNext
+      summary: Enqueue sync jobs for all pre-existing customers, invoices, payments, parts, suppliers and open purchase orders
       responses:
         "200":
-          description: Counts of enqueued sync jobs
+          description: Counts of newly queued sync jobs per record type
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BackfillErpnextResult"
+                $ref: "#/components/schemas/ErpnextBackfillResult"
         "403":
           description: Not permitted
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-        "422":
+        "404":
           description: ERPNext is not configured yet
           content:
             application/json:
@@ -7300,6 +7300,14 @@ components:
         companyName: { type: ["string", "null"] }
         erpnextVersion: { type: ["string", "null"] }
         defaultWarehouse: { type: ["string", "null"] }
+        incomeAccount: { type: ["string", "null"] }
+        taxAccount: { type: ["string", "null"] }
+        receivableAccount: { type: ["string", "null"] }
+        settlementAccount: { type: ["string", "null"] }
+        paymentModes:
+          type: ["object", "null"]
+          additionalProperties: { type: string }
+          description: "AURA payment method → ERPNext Mode of Payment"
     UpdateErpnextSettingsRequest:
       type: object
       properties:
@@ -7308,10 +7316,20 @@ components:
         apiSecret: { type: string, minLength: 1 }
         enabled: { type: boolean }
         defaultWarehouse: { type: ["string", "null"], maxLength: 140 }
-    BackfillErpnextResult:
+        incomeAccount: { type: ["string", "null"] }
+        taxAccount: { type: ["string", "null"] }
+        receivableAccount: { type: ["string", "null"] }
+        settlementAccount: { type: ["string", "null"] }
+        paymentModes:
+          type: ["object", "null"]
+          additionalProperties: { type: string }
+    ErpnextBackfillResult:
       type: object
-      required: [parts, suppliers, purchaseOrders]
+      required: [customers, invoices, payments, parts, suppliers, purchaseOrders]
       properties:
+        customers: { type: integer }
+        invoices: { type: integer }
+        payments: { type: integer }
         parts: { type: integer }
         suppliers: { type: integer }
         purchaseOrders: { type: integer }

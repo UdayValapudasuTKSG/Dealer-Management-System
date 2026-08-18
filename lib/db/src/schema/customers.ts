@@ -62,6 +62,11 @@ export const customersTable = pgTable("customers", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  /** Bumped on contact-detail edits; drives ERPNext two-way sync
+   * last-write-wins conflict checks. */
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 export const insertCustomerSchema = createInsertSchema(customersTable, {

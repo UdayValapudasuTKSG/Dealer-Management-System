@@ -8,6 +8,7 @@ import {
   type Lead,
 } from "@workspace/db";
 import { logger } from "./logger";
+import { queueCustomerSync } from "./erpnext/entities";
 
 /**
  * Guarantee an account carries a primary contact.
@@ -146,6 +147,8 @@ export async function ensureAccountForLead(
       created = true;
     }
     if (!customer) return null;
+    // ERPNext two-way sync: mirror lead-promoted accounts as ERPNext Customers.
+    if (created) queueCustomerSync(lead.dealerId, customer.id);
 
     // Every account carries at least one primary contact. For a business
     // account this is the person on the lead; for a person account it mirrors

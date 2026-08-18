@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateErpnextSettingsRequestPaymentModes } from './updateErpnextSettingsRequestPaymentModes';
 
 export interface UpdateErpnextSettingsRequest {
   /** @minLength 8 */
@@ -19,4 +20,14 @@ export interface UpdateErpnextSettingsRequest {
      * @nullable
      */
   defaultWarehouse?: string | null;
+  /** @nullable */
+  incomeAccount?: string | null;
+  /** @nullable */
+  taxAccount?: string | null;
+  /** @nullable */
+  receivableAccount?: string | null;
+  /** @nullable */
+  settlementAccount?: string | null;
+  /** @nullable */
+  paymentModes?: UpdateErpnextSettingsRequestPaymentModes;
 }

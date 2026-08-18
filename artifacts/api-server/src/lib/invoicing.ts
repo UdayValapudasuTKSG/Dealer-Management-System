@@ -22,6 +22,7 @@ import { ensureAccountForLead } from "./accounts";
 import { logger } from "./logger";
 import { enqueueEmail, enqueueWhatsapp, notifyUsers } from "./email";
 import { financeUsers } from "./notify-matrix";
+import { queueInvoiceSync, queuePaymentSync } from "./erpnext/entities";
 
 /**
  * Invoicing + payment ledger helpers (L6). All amounts in GYD; each
@@ -88,6 +89,8 @@ export async function issueInvoice(args: IssueInvoiceArgs): Promise<Invoice> {
     notifyInvoiceIssued(invoice).catch((err) =>
       logger.error({ err, invoiceId: invoice.id }, "invoice notification failed"),
     );
+    // ERPNext accounting sync: post the issued invoice as a Sales Invoice.
+    queueInvoiceSync(invoice.dealerId, invoice.id, "create");
     return invoice;
   });
 }
@@ -421,6 +424,10 @@ export async function applyPayment(args: ApplyPaymentArgs) {
 
     return { payment: row!, receipt: receipt!, invoiceStatus: status, paid };
   });
+
+  // ERPNext accounting sync: post the ledger row as a Payment Entry
+  // allocated against the mapped Sales Invoice (refunds post as Pay).
+  queuePaymentSync(invoice.dealerId, result.payment.id);
 
   // Post-commit: a settled reservation means real business — make sure the
   // lead is linked to a customer account with a primary contact (the Pre-Book

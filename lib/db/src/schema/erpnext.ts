@@ -38,6 +38,19 @@ export const erpnextConnectionsTable = pgTable(
     lastStatus: text("last_status"),
     lastError: text("last_error"),
     lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    /** Accounting mapping: ERPNext income account for invoice line items. */
+    incomeAccount: text("income_account"),
+    /** Accounting mapping: ERPNext account head for AURA tax snapshot lines. */
+    taxAccount: text("tax_account"),
+    /** AURA payment method → ERPNext Mode of Payment (e.g. cash → "Cash"). */
+    paymentModes: jsonb("payment_modes").$type<Record<string, string>>(),
+    /** ERPNext receivable (Debtors) account for Payment Entries. */
+    receivableAccount: text("receivable_account"),
+    /** ERPNext cash/bank account payments settle into (paid_to for Receive). */
+    settlementAccount: text("settlement_account"),
+    /** ERPNext site timezone (System Settings.time_zone) — naive webhook
+     * timestamps are interpreted in this zone for conflict ordering. */
+    siteTimezone: text("site_timezone"),
     /** Reported by the test-connection call. */
     companyName: text("company_name"),
     erpnextVersion: text("erpnext_version"),

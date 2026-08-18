@@ -36,6 +36,11 @@ export async function upsertErpnextConnection(
     apiSecret?: string;
     enabled?: boolean;
     defaultWarehouse?: string | null;
+    incomeAccount?: string | null;
+    taxAccount?: string | null;
+    paymentModes?: Record<string, string> | null;
+    receivableAccount?: string | null;
+    settlementAccount?: string | null;
   },
 ): Promise<ErpnextConnection> {
   // SSRF policy: only public HTTPS ERPNext hosts may be stored. (Throws a
@@ -59,6 +64,11 @@ export async function upsertErpnextConnection(
         webhookSecret: newWebhookSecret(),
         enabled: input.enabled ?? true,
         defaultWarehouse: input.defaultWarehouse?.trim() || null,
+        incomeAccount: input.incomeAccount?.trim() || null,
+        taxAccount: input.taxAccount?.trim() || null,
+        paymentModes: input.paymentModes ?? null,
+        receivableAccount: input.receivableAccount?.trim() || null,
+        settlementAccount: input.settlementAccount?.trim() || null,
       })
       .returning();
     return created!;
@@ -74,6 +84,21 @@ export async function upsertErpnextConnection(
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
       ...(input.defaultWarehouse !== undefined
         ? { defaultWarehouse: input.defaultWarehouse?.trim() || null }
+        : {}),
+      ...(input.incomeAccount !== undefined
+        ? { incomeAccount: input.incomeAccount?.trim() || null }
+        : {}),
+      ...(input.taxAccount !== undefined
+        ? { taxAccount: input.taxAccount?.trim() || null }
+        : {}),
+      ...(input.paymentModes !== undefined
+        ? { paymentModes: input.paymentModes }
+        : {}),
+      ...(input.receivableAccount !== undefined
+        ? { receivableAccount: input.receivableAccount?.trim() || null }
+        : {}),
+      ...(input.settlementAccount !== undefined
+        ? { settlementAccount: input.settlementAccount?.trim() || null }
         : {}),
       // Credentials changed → previous health result is stale.
       ...(input.siteUrl !== undefined || input.apiKey || input.apiSecret
@@ -128,7 +153,20 @@ export async function testErpnextConnection(dealerId: number): Promise<{
     };
   }
   try {
-    const result = await clientFor(conn).testConnection();
+    const client = clientFor(conn);
+    const result = await client.testConnection();
+    // Best-effort: capture the site timezone so inbound webhook timestamps
+    // (naive, site-local) can be ordered correctly against AURA edits.
+    let siteTimezone: string | null = conn.siteTimezone;
+    try {
+      const sys = await client.getDoc<{ time_zone?: string }>(
+        "System Settings",
+        "System Settings",
+      );
+      if (sys.time_zone) siteTimezone = sys.time_zone;
+    } catch {
+      // Not fatal — keep whatever we knew; UTC fallback applies inbound.
+    }
     await db
       .update(erpnextConnectionsTable)
       .set({
@@ -137,6 +175,7 @@ export async function testErpnextConnection(dealerId: number): Promise<{
         lastCheckedAt: new Date(),
         companyName: result.companyName,
         erpnextVersion: result.version,
+        siteTimezone,
         updatedAt: new Date(),
       })
       .where(eq(erpnextConnectionsTable.dealerId, dealerId));

@@ -8,9 +8,9 @@ import {
   TestErpnextConnectionResponse,
   RotateErpnextWebhookSecretResponse,
   ListErpnextSyncJobsResponse,
+  BackfillErpnextResponse,
   RetryErpnextSyncJobParams,
   RetryErpnextSyncJobResponse,
-  BackfillErpnextResponse,
 } from "@workspace/api-zod";
 import { activeDealerId } from "../middlewares/rbac";
 import {
@@ -19,9 +19,12 @@ import {
   rotateWebhookSecret,
   testErpnextConnection,
   maskApiKey,
+  clientFor,
 } from "../lib/erpnext/connection";
+import { ErpnextError } from "../lib/erpnext/client";
 import { retryErpnextSyncJob } from "../lib/erpnext/sync";
 import { backfillErpnextParts } from "../lib/erpnext/parts-sync";
+import { backfillErpnext } from "../lib/erpnext/entities";
 
 const router: IRouter = Router();
 
@@ -60,6 +63,11 @@ async function settingsPayload(dealerId: number, showSecret: boolean) {
       companyName: null,
       erpnextVersion: null,
       defaultWarehouse: null,
+      incomeAccount: null,
+      taxAccount: null,
+      paymentModes: null,
+      receivableAccount: null,
+      settlementAccount: null,
     };
   }
   return {
@@ -78,7 +86,64 @@ async function settingsPayload(dealerId: number, showSecret: boolean) {
     companyName: conn.companyName,
     erpnextVersion: conn.erpnextVersion,
     defaultWarehouse: conn.defaultWarehouse,
+    incomeAccount: conn.incomeAccount,
+    taxAccount: conn.taxAccount,
+    paymentModes: conn.paymentModes,
+    receivableAccount: conn.receivableAccount,
+    settlementAccount: conn.settlementAccount,
   };
+}
+
+/** Best-effort existence check for mapped ERPNext accounts / modes of
+ * payment: a definite "not found" rejects the save; an unreachable ERPNext
+ * does not block configuration (the sync log surfaces bad mappings later). */
+async function validateMapping(
+  dealerId: number,
+  input: {
+    incomeAccount?: string | null;
+    taxAccount?: string | null;
+    paymentModes?: Record<string, string> | null;
+    receivableAccount?: string | null;
+    settlementAccount?: string | null;
+  },
+): Promise<string | null> {
+  const conn = await getErpnextConnection(dealerId);
+  if (!conn) return null;
+  const client = clientFor(conn);
+  const checks: Array<{ doctype: string; name: string; label: string }> = [];
+  if (input.incomeAccount?.trim()) {
+    checks.push({ doctype: "Account", name: input.incomeAccount.trim(), label: "Income account" });
+  }
+  if (input.taxAccount?.trim()) {
+    checks.push({ doctype: "Account", name: input.taxAccount.trim(), label: "Tax account" });
+  }
+  if (input.receivableAccount?.trim()) {
+    checks.push({ doctype: "Account", name: input.receivableAccount.trim(), label: "Receivable account" });
+  }
+  if (input.settlementAccount?.trim()) {
+    checks.push({ doctype: "Account", name: input.settlementAccount.trim(), label: "Settlement account" });
+  }
+  for (const [method, mode] of Object.entries(input.paymentModes ?? {})) {
+    if (mode?.trim()) {
+      checks.push({
+        doctype: "Mode of Payment",
+        name: mode.trim(),
+        label: `Mode of payment for "${method.replace(/_/g, " ")}"`,
+      });
+    }
+  }
+  for (const check of checks) {
+    try {
+      await client.getDoc(check.doctype, check.name);
+    } catch (err) {
+      if (err instanceof ErpnextError && err.kind === "not_found") {
+        return `${check.label} "${check.name}" does not exist in ERPNext — create it there first or fix the spelling`;
+      }
+      // Unreachable / auth problems: don't block the save on validation.
+      return null;
+    }
+  }
+  return null;
 }
 
 router.get("/erpnext/settings", async (_req, res): Promise<void> => {
@@ -101,11 +166,23 @@ router.put("/erpnext/settings", async (req, res): Promise<void> => {
     return;
   }
   const dealerId = activeDealerId(res);
+  if (
+    body.data.incomeAccount !== undefined ||
+    body.data.taxAccount !== undefined ||
+    body.data.paymentModes !== undefined ||
+    body.data.receivableAccount !== undefined ||
+    body.data.settlementAccount !== undefined
+  ) {
+    const problem = await validateMapping(dealerId, body.data);
+    if (problem) {
+      res.status(422).json({ error: problem });
+      return;
+    }
+  }
   try {
     await upsertErpnextConnection(dealerId, body.data);
   } catch (err) {
-    const status =
-      (err as { statusCode?: number }).statusCode ?? 500;
+      const status = (err as { statusCode?: number }).statusCode ?? 500;
     res.status(status).json({
       error: err instanceof Error ? err.message : "Failed to save connection",
     });
@@ -144,23 +221,27 @@ router.post(
   },
 );
 
-// ————— Backfill —————
+// ————— Backfill: sync records that existed before the integration —————
 
-// Push all existing parts, suppliers and open POs to ERPNext. Items are
-// matched by SKU in the handlers, so re-running never duplicates documents.
+// Pushes existing customers, invoices and payments (matched/deduped by the
+// entity handlers) AND parts, suppliers and open POs (matched by SKU) to
+// ERPNext. Re-running never duplicates documents.
 router.post("/erpnext/backfill", async (_req, res): Promise<void> => {
   if (!canManageConnection(res)) {
-    res.status(403).json({ error: "Only the general manager can run an ERPNext backfill" });
+    res.status(403).json({ error: "Only the general manager can run a backfill" });
     return;
   }
   const dealerId = activeDealerId(res);
   const conn = await getErpnextConnection(dealerId);
+
+  const entityCounts = await backfillErpnext(dealerId);
   if (!conn) {
-    res.status(422).json({ error: "Connect ERPNext before running a backfill" });
+    res.status(404).json({ error: "Connect ERPNext before running a backfill" });
     return;
   }
-  const counts = await backfillErpnextParts(dealerId);
-  res.json(BackfillErpnextResponse.parse(counts));
+  const entityCounts = await backfillErpnext(dealerId);
+  const partsCounts = await backfillErpnextParts(dealerId);
+  res.json(BackfillErpnextResponse.parse({ ...entityCounts, ...partsCounts }));
 });
 
 // ————— Sync activity log —————

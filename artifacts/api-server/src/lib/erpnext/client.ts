@@ -196,6 +196,29 @@ export class ErpnextClient {
     return data;
   }
 
+  /** Submit a saved doc (docstatus 0 → 1) via frappe.client.submit. */
+  async submitDoc(doctype: string, name: string): Promise<void> {
+    const doc = await this.getDoc(doctype, name);
+    await this.request("POST", "/api/method/frappe.client.submit", {
+      doc: { ...doc, doctype },
+    });
+  }
+
+  /** Cancel a submitted doc (docstatus 1 → 2). Fetches the document first
+   * (mirrors submitDoc) so we fail fast with a clear "not found" and can
+   * short-circuit docs that are already cancelled; the cancel call itself
+   * carries both the frappe.client.cancel signature args (doctype, name)
+   * and the full doc for API variants that expect it. */
+  async cancelDoc(doctype: string, name: string): Promise<void> {
+    const doc = await this.getDoc<{ docstatus?: number }>(doctype, name);
+    if (doc.docstatus === 2) return; // already cancelled — idempotent
+    await this.request("POST", "/api/method/frappe.client.cancel", {
+      doctype,
+      name,
+      doc: { ...doc, doctype },
+    });
+  }
+
   /** Verify credentials and report the connected user, version and default
    * company — used by the settings "Test connection" button. */
   async testConnection(): Promise<{

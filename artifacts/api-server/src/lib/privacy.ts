@@ -26,6 +26,7 @@ import {
 } from "@workspace/db";
 import { storage } from "./storage";
 import { logger } from "./logger";
+import { queueCustomerSync } from "./erpnext/entities";
 
 // ---------------------------------------------------------------------------
 // R10 privacy / DSAR engine.
@@ -434,8 +435,11 @@ export async function runErasureSaga(
           avatarUrl: null,
           tags: [],
           erasedAt: new Date(),
+          updatedAt: new Date(),
         })
         .where(eq(customersTable.id, customer.id));
+      // ERPNext sync: disable the mapped ERPNext Customer for erased records.
+      queueCustomerSync(dealerId, customer.id);
       await db
         .update(contactsTable)
         .set({ name: ERASED_NAME(tok), email: null, phone: null, title: null })

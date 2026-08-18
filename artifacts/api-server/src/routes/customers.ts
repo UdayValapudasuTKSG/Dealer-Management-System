@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { queueCustomerSync } from "../lib/erpnext/entities";
 import { eq, desc, and, or, ilike, sql, isNotNull, isNull } from "drizzle-orm";
 import multer from "multer";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
@@ -339,6 +340,8 @@ router.post("/customers", async (req, res): Promise<void> => {
       email: customer.email,
       phone: customer.phone,
     });
+    // ERPNext two-way sync: mirror the new account as an ERPNext Customer.
+    queueCustomerSync(dealerId, customer.id);
   }
 
   res.status(201).json(GetCustomerResponse.parse(customer));
@@ -397,8 +400,10 @@ router.delete("/customers/:id", async (req, res): Promise<void> => {
 
   await db
     .update(customersTable)
-    .set({ deletedAt: new Date() })
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
     .where(and(eq(customersTable.id, customer.id), eq(customersTable.dealerId, dealerId)));
+  // ERPNext sync: disable (not delete) the mapped ERPNext Customer.
+  queueCustomerSync(dealerId, customer.id);
   // Unlink open leads so they can be re-promoted to a fresh account.
   await db
     .update(leadsTable)
@@ -480,7 +485,8 @@ router.patch("/customers/:id", async (req, res): Promise<void> => {
 
   const [customer] = await db
     .update(customersTable)
-    .set(parsed.data)
+    // updatedAt drives the ERPNext two-way sync last-write-wins check.
+    .set({ ...parsed.data, updatedAt: new Date() })
     .where(
       and(
         eq(customersTable.id, params.data.id),
@@ -493,6 +499,9 @@ router.patch("/customers/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Customer not found" });
     return;
   }
+
+  // ERPNext two-way sync: push the edit to the mapped ERPNext Customer.
+  queueCustomerSync(customer.dealerId, customer.id);
 
   res.json(UpdateCustomerResponse.parse(customer));
 });

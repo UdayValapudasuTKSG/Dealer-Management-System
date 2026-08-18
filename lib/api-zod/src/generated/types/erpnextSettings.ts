@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ErpnextSettingsPaymentModes } from './erpnextSettingsPaymentModes';
 
 export interface ErpnextSettings {
   configured: boolean;
@@ -30,4 +31,17 @@ export interface ErpnextSettings {
   erpnextVersion?: string | null;
   /** @nullable */
   defaultWarehouse?: string | null;
+  /** @nullable */
+  incomeAccount?: string | null;
+  /** @nullable */
+  taxAccount?: string | null;
+  /** @nullable */
+  receivableAccount?: string | null;
+  /** @nullable */
+  settlementAccount?: string | null;
+  /**
+     * AURA payment method → ERPNext Mode of Payment
+     * @nullable
+     */
+  paymentModes?: ErpnextSettingsPaymentModes;
 }

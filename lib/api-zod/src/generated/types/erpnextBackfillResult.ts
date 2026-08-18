@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface BackfillErpnextResult {
+export interface ErpnextBackfillResult {
+  customers: number;
+  invoices: number;
+  payments: number;
   parts: number;
   suppliers: number;
   purchaseOrders: number;

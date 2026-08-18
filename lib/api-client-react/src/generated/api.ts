@@ -46,7 +46,6 @@ import type {
   Asset,
   AssignLeadInput,
   AuditLogEntry,
-  BackfillErpnextResult,
   Bank,
   BankInput,
   BankLetterResult,
@@ -121,6 +120,7 @@ import type {
   EnqueueEmailRequest,
   EnquiryInput,
   EnquiryVehicle,
+  ErpnextBackfillResult,
   ErpnextSettings,
   ErpnextSyncJob,
   ErpnextTestResult,
@@ -22171,11 +22171,11 @@ export const getBackfillErpnextUrl = () => {
 }
 
 /**
- * @summary Push existing parts, suppliers and open purchase orders to ERPNext
+ * @summary Enqueue sync jobs for all pre-existing customers, invoices, payments, parts, suppliers and open purchase orders
  */
-export const backfillErpnext = async ( options?: RequestInit): Promise<BackfillErpnextResult> => {
+export const backfillErpnext = async ( options?: RequestInit): Promise<ErpnextBackfillResult> => {
 
-  return customFetch<BackfillErpnextResult>(getBackfillErpnextUrl(),
+  return customFetch<ErpnextBackfillResult>(getBackfillErpnextUrl(),
   {
     ...options,
     method: 'POST'
@@ -22220,7 +22220,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type BackfillErpnextMutationError = ErrorType<Error>
 
     /**
- * @summary Push existing parts, suppliers and open purchase orders to ERPNext
+ * @summary Enqueue sync jobs for all pre-existing customers, invoices, payments, parts, suppliers and open purchase orders
  */
 export const useBackfillErpnext = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof backfillErpnext>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}

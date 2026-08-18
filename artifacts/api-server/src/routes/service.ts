@@ -6,6 +6,7 @@ import {
   buildServiceReceiptPdf,
 } from "../lib/document-pdfs";
 import { getServiceSettings } from "../lib/service-settings";
+import { queueCustomerSync } from "../lib/erpnext/entities";
 import { dealerExchangeRate } from "../lib/invoicing";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import {
@@ -309,19 +310,25 @@ router.post("/service-orders", async (req, res): Promise<void> => {
         })
         .returning({ id: customersTable.id });
       bookingCustomerId = created?.id;
+      // ERPNext two-way sync: mirror the service-created account.
+      if (created) queueCustomerSync(createDealerId, created.id);
     }
   } else if (bookingEmail && bookingCustomerId != null) {
     // Booking supplied both: backfill the customer's email if they have none.
-    await db
+    const [backfilled] = await db
       .update(customersTable)
-      .set({ email: bookingEmail })
+      // updatedAt drives the ERPNext last-write-wins check.
+      .set({ email: bookingEmail, updatedAt: new Date() })
       .where(
         and(
           eq(customersTable.id, bookingCustomerId),
           eq(customersTable.dealerId, createDealerId),
           isNull(customersTable.email),
         ),
-      );
+      )
+      .returning({ id: customersTable.id });
+    // ERPNext two-way sync: push the contact-field change.
+    if (backfilled) queueCustomerSync(createDealerId, backfilled.id);
   }
 
   const settings = await getServiceSettings(createDealerId);
