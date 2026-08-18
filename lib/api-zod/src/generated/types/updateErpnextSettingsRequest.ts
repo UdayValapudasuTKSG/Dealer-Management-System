@@ -14,4 +14,9 @@ export interface UpdateErpnextSettingsRequest {
   /** @minLength 1 */
   apiSecret?: string;
   enabled?: boolean;
+  /**
+     * @maxLength 140
+     * @nullable
+     */
+  defaultWarehouse?: string | null;
 }

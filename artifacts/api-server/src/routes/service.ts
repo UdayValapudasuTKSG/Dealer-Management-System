@@ -96,6 +96,10 @@ import {
 } from "@workspace/api-zod";
 import { checkLowStockCrossing } from "./parts";
 import {
+  enqueueStockEntrySync,
+  enqueuePurchaseOrderSync,
+} from "../lib/erpnext/parts-sync";
+import {
   onServiceOrderBooked,
   onServiceOrderStatusChanged,
   onJobCardRolloverApproved,
@@ -1501,6 +1505,7 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
   const backordered = kind === "issue" && part.stock < parsed.data.quantity;
   const currentPart = part;
 
+  let backorderPoId: number | null = null;
   const [line] = await db.transaction(async (tx) => {
     const inserted = await tx
       .insert(jobCardPartsTable)
@@ -1547,6 +1552,7 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
         unitCost: currentPart.unitCost,
         jobCardId: card.id,
       });
+      backorderPoId = po.id;
     } else {
       const delta =
         kind === "issue" ? -parsed.data.quantity : parsed.data.quantity;
@@ -1570,6 +1576,23 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
       currentPart.stock,
       currentPart.stock - parsed.data.quantity,
     );
+  }
+
+  // ERPNext: issues/returns are Stock Entries; the backorder path moved no
+  // stock but raised a PO that must sync instead.
+  if (backorderPoId != null) {
+    enqueuePurchaseOrderSync(card.dealerId, backorderPoId, "insert");
+  } else {
+    enqueueStockEntrySync({
+      dealerId: card.dealerId,
+      partId: currentPart.id,
+      qty: parsed.data.quantity,
+      direction: kind === "issue" ? "out" : "in",
+      entityType: "job_card_part",
+      entityId: line.id,
+      remark: `AURA job card #${card.id} — part ${kind} (${currentPart.sku})`,
+      dedupeKey: `erp:se:jcp:${card.dealerId}:${line.id}`,
+    });
   }
 
   res.status(201).json(AddJobCardPartResponse.parse(line));
@@ -1698,6 +1721,19 @@ router.post("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
         and(eq(partsTable.id, line.partId), eq(partsTable.dealerId, dealerId)),
       );
     return inserted;
+    // (ERPNext Material Receipt for this return is enqueued after commit.)
+  });
+
+  // ERPNext: the credited return restores stock → Material Receipt.
+  enqueueStockEntrySync({
+    dealerId,
+    partId: line.partId,
+    qty: parsed.data.quantity,
+    direction: "in",
+    entityType: "part_credit_note",
+    entityId: note.id,
+    remark: `AURA job card #${card.id} — credit note return (${line.partName})`,
+    dedupeKey: `erp:se:credit:${dealerId}:${note.id}`,
   });
 
   res.status(201).json(CreateJobCardCreditNoteResponse.parse(note));

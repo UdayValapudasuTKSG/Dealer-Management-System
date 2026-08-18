@@ -9677,7 +9677,8 @@ export const GetErpnextSettingsResponse = zod.object({
   "lastError": zod.string().nullish(),
   "lastCheckedAt": zod.coerce.date().nullish(),
   "companyName": zod.string().nullish(),
-  "erpnextVersion": zod.string().nullish()
+  "erpnextVersion": zod.string().nullish(),
+  "defaultWarehouse": zod.string().nullish()
 })
 
 
@@ -9688,13 +9689,16 @@ export const updateErpnextSettingsBodySiteUrlMin = 8;
 
 
 
+export const updateErpnextSettingsBodyDefaultWarehouseMax = 140;
+
 
 
 export const UpdateErpnextSettingsBody = zod.object({
   "siteUrl": zod.string().min(updateErpnextSettingsBodySiteUrlMin).optional(),
   "apiKey": zod.string().min(1).optional(),
   "apiSecret": zod.string().min(1).optional(),
-  "enabled": zod.boolean().optional()
+  "enabled": zod.boolean().optional(),
+  "defaultWarehouse": zod.string().max(updateErpnextSettingsBodyDefaultWarehouseMax).nullish()
 })
 
 export const UpdateErpnextSettingsResponse = zod.object({
@@ -9709,7 +9713,8 @@ export const UpdateErpnextSettingsResponse = zod.object({
   "lastError": zod.string().nullish(),
   "lastCheckedAt": zod.coerce.date().nullish(),
   "companyName": zod.string().nullish(),
-  "erpnextVersion": zod.string().nullish()
+  "erpnextVersion": zod.string().nullish(),
+  "defaultWarehouse": zod.string().nullish()
 })
 
 
@@ -9730,6 +9735,16 @@ export const TestErpnextConnectionResponse = zod.object({
  */
 export const RotateErpnextWebhookSecretResponse = zod.object({
   "webhookSecret": zod.string()
+})
+
+
+/**
+ * @summary Push existing parts, suppliers and open purchase orders to ERPNext
+ */
+export const BackfillErpnextResponse = zod.object({
+  "parts": zod.number(),
+  "suppliers": zod.number(),
+  "purchaseOrders": zod.number()
 })
 
 

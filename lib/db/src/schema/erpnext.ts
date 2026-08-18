@@ -32,6 +32,8 @@ export const erpnextConnectionsTable = pgTable(
     webhookSecret: text("webhook_secret").notNull(),
     /** Master switch: disabled pauses outbound sync without losing config. */
     enabled: boolean("enabled").notNull().default(true),
+    /** Default ERPNext warehouse for parts stock movements (one per dealer). */
+    defaultWarehouse: text("default_warehouse"),
     /** Last test/health result: connected | error | null (never tested). */
     lastStatus: text("last_status"),
     lastError: text("last_error"),

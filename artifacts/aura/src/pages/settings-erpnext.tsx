@@ -9,6 +9,7 @@ import {
   useRotateErpnextWebhookSecret,
   useListErpnextSyncJobs,
   useRetryErpnextSyncJob,
+  useBackfillErpnext,
   getGetErpnextSettingsQueryKey,
   getListErpnextSyncJobsQueryKey,
 } from "@workspace/api-client-react";
@@ -29,6 +30,8 @@ import {
   KeyRound,
   Globe,
   BookOpen,
+  Warehouse,
+  UploadCloud,
 } from "lucide-react";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -54,6 +57,7 @@ export default function SettingsErpnext() {
   const [siteUrl, setSiteUrl] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
+  const [warehouse, setWarehouse] = useState<string | null>(null);
 
   const refreshSettings = () =>
     qc.invalidateQueries({ queryKey: getGetErpnextSettingsQueryKey() });
@@ -115,6 +119,24 @@ export default function SettingsErpnext() {
       onError: (e) =>
         toast({
           title: "Could not rotate secret",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+
+  const backfill = useBackfillErpnext({
+    mutation: {
+      onSuccess: (res) => {
+        toast({
+          title: "Backfill started",
+          description: `Queued ${res.parts} part(s), ${res.suppliers} supplier(s) and ${res.purchaseOrders} open PO(s) for sync.`,
+        });
+        qc.invalidateQueries({ queryKey: getListErpnextSyncJobsQueryKey() });
+      },
+      onError: (e) =>
+        toast({
+          title: "Backfill failed",
           description: e instanceof Error ? e.message : undefined,
           variant: "destructive",
         }),
@@ -353,6 +375,73 @@ export default function SettingsErpnext() {
               <li>Add a header <code className="text-foreground">X-AURA-Webhook-Secret</code> with the shared secret.</li>
               <li>In the JSON body template include <code className="text-foreground">{'"doctype"'}</code>, <code className="text-foreground">{'"name"'}</code> and <code className="text-foreground">{'"event"'}</code> fields so AURA can route the event.</li>
             </ol>
+          </div>
+        )}
+
+        {/* Inventory sync: default warehouse + backfill */}
+        {configured && (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+            <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+              Parts inventory sync
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                  <Warehouse className="h-3.5 w-3.5" /> Default ERPNext warehouse
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder='e.g. "Stores - AC" (blank = first warehouse in ERPNext)'
+                    value={warehouse ?? settings?.defaultWarehouse ?? ""}
+                    onChange={(e) => setWarehouse(e.target.value)}
+                    disabled={!isGm}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      save.mutate({
+                        data: {
+                          defaultWarehouse:
+                            (warehouse ?? settings?.defaultWarehouse ?? "").trim() ||
+                            null,
+                        },
+                      })
+                    }
+                    disabled={!isGm || save.isPending || warehouse === null}
+                  >
+                    Save
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Stock Entries and Purchase Receipts post to this warehouse.
+                  Use the exact ERPNext warehouse name, including the company
+                  suffix.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                  <UploadCloud className="h-3.5 w-3.5" /> Backfill existing records
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => backfill.mutate()}
+                  disabled={!isGm || backfill.isPending}
+                  className="gap-2"
+                >
+                  {backfill.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <UploadCloud className="h-4 w-4" />
+                  )}
+                  Push parts, suppliers & open POs
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Queues every part, supplier and open purchase order for sync.
+                  Items are matched by SKU in ERPNext, so running this more
+                  than once never creates duplicates.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 

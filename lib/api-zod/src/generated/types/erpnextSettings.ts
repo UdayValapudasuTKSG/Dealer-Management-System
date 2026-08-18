@@ -28,4 +28,6 @@ export interface ErpnextSettings {
   companyName?: string | null;
   /** @nullable */
   erpnextVersion?: string | null;
+  /** @nullable */
+  defaultWarehouse?: string | null;
 }

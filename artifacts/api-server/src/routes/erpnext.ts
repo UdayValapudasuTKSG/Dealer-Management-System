@@ -10,6 +10,7 @@ import {
   ListErpnextSyncJobsResponse,
   RetryErpnextSyncJobParams,
   RetryErpnextSyncJobResponse,
+  BackfillErpnextResponse,
 } from "@workspace/api-zod";
 import { activeDealerId } from "../middlewares/rbac";
 import {
@@ -20,6 +21,7 @@ import {
   maskApiKey,
 } from "../lib/erpnext/connection";
 import { retryErpnextSyncJob } from "../lib/erpnext/sync";
+import { backfillErpnextParts } from "../lib/erpnext/parts-sync";
 
 const router: IRouter = Router();
 
@@ -57,6 +59,7 @@ async function settingsPayload(dealerId: number, showSecret: boolean) {
       lastCheckedAt: null,
       companyName: null,
       erpnextVersion: null,
+      defaultWarehouse: null,
     };
   }
   return {
@@ -74,6 +77,7 @@ async function settingsPayload(dealerId: number, showSecret: boolean) {
     lastCheckedAt: conn.lastCheckedAt,
     companyName: conn.companyName,
     erpnextVersion: conn.erpnextVersion,
+    defaultWarehouse: conn.defaultWarehouse,
   };
 }
 
@@ -139,6 +143,25 @@ router.post(
     }
   },
 );
+
+// ————— Backfill —————
+
+// Push all existing parts, suppliers and open POs to ERPNext. Items are
+// matched by SKU in the handlers, so re-running never duplicates documents.
+router.post("/erpnext/backfill", async (_req, res): Promise<void> => {
+  if (!canManageConnection(res)) {
+    res.status(403).json({ error: "Only the general manager can run an ERPNext backfill" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const conn = await getErpnextConnection(dealerId);
+  if (!conn) {
+    res.status(422).json({ error: "Connect ERPNext before running a backfill" });
+    return;
+  }
+  const counts = await backfillErpnextParts(dealerId);
+  res.json(BackfillErpnextResponse.parse(counts));
+});
 
 // ————— Sync activity log —————
 

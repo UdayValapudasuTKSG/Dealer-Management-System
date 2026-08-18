@@ -27,6 +27,8 @@ export interface ErpnextSettings {
   companyName?: string | null;
   /** @nullable */
   erpnextVersion?: string | null;
+  /** @nullable */
+  defaultWarehouse?: string | null;
 }
 
 export interface UpdateErpnextSettingsRequest {
@@ -37,6 +39,17 @@ export interface UpdateErpnextSettingsRequest {
   /** @minLength 1 */
   apiSecret?: string;
   enabled?: boolean;
+  /**
+     * @maxLength 140
+     * @nullable
+     */
+  defaultWarehouse?: string | null;
+}
+
+export interface BackfillErpnextResult {
+  parts: number;
+  suppliers: number;
+  purchaseOrders: number;
 }
 
 export interface ErpnextTestResult {

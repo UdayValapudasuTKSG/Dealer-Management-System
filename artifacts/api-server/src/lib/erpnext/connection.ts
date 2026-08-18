@@ -35,6 +35,7 @@ export async function upsertErpnextConnection(
     apiKey?: string;
     apiSecret?: string;
     enabled?: boolean;
+    defaultWarehouse?: string | null;
   },
 ): Promise<ErpnextConnection> {
   // SSRF policy: only public HTTPS ERPNext hosts may be stored. (Throws a
@@ -57,6 +58,7 @@ export async function upsertErpnextConnection(
         apiSecret: input.apiSecret.trim(),
         webhookSecret: newWebhookSecret(),
         enabled: input.enabled ?? true,
+        defaultWarehouse: input.defaultWarehouse?.trim() || null,
       })
       .returning();
     return created!;
@@ -70,6 +72,9 @@ export async function upsertErpnextConnection(
       ...(input.apiKey ? { apiKey: input.apiKey.trim() } : {}),
       ...(input.apiSecret ? { apiSecret: input.apiSecret.trim() } : {}),
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+      ...(input.defaultWarehouse !== undefined
+        ? { defaultWarehouse: input.defaultWarehouse?.trim() || null }
+        : {}),
       // Credentials changed → previous health result is stale.
       ...(input.siteUrl !== undefined || input.apiKey || input.apiSecret
         ? { lastStatus: null, lastError: null, companyName: null, erpnextVersion: null }

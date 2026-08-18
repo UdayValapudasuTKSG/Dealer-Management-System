@@ -47,22 +47,36 @@ import {
 import { jobCardPartsTable, jobCardsTable } from "@workspace/db";
 import { inArray } from "drizzle-orm";
 import { notifyPartLowStock } from "../lib/notify-triggers";
+import {
+  enqueuePartItemSync,
+  enqueueSupplierSync,
+  enqueueStockEntrySync,
+  enqueuePurchaseOrderSync,
+  enqueuePurchaseReceiptSync,
+} from "../lib/erpnext/parts-sync";
 
 const router: IRouter = Router();
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+export type BackorderRelease = {
+  available: number;
+  /** Job-card lines filled by this release — each is a stock issue. */
+  filledLines: { id: number; partId: number; quantity: number; jobCardId: number }[];
+};
+
 /**
  * Fill backordered job-card lines for a part oldest-first while stock lasts
  * (decrementing stock per fill) and flip touched on_hold job cards back to
- * in_progress once none of their lines wait. Returns the units left over.
+ * in_progress once none of their lines wait. Returns the units left over
+ * plus the filled lines (so callers can post ERPNext stock issues on commit).
  */
 export async function releaseBackorders(
   tx: Tx,
   dealerId: number,
   partId: number,
   available: number,
-): Promise<number> {
+): Promise<BackorderRelease> {
   const waiting = await tx
     .select()
     .from(jobCardPartsTable)
@@ -75,9 +89,16 @@ export async function releaseBackorders(
     )
     .orderBy(jobCardPartsTable.createdAt);
   const touchedCards = new Set<number>();
+  const filledLines: BackorderRelease["filledLines"] = [];
   for (const line of waiting) {
     if (line.quantity > available) continue;
     available -= line.quantity;
+    filledLines.push({
+      id: line.id,
+      partId: line.partId,
+      quantity: line.quantity,
+      jobCardId: line.jobCardId,
+    });
     await tx
       .update(jobCardPartsTable)
       .set({ backordered: false })
@@ -116,7 +137,27 @@ export async function releaseBackorders(
         );
     }
   }
-  return available;
+  return { available, filledLines };
+}
+
+/** Post ERPNext Material Issues for job-card lines filled by a backorder
+ * release (dedupe key per line — a line only ever fills once). */
+function syncFilledBackorderLines(
+  dealerId: number,
+  filled: BackorderRelease["filledLines"],
+): void {
+  for (const line of filled) {
+    enqueueStockEntrySync({
+      dealerId,
+      partId: line.partId,
+      qty: line.quantity,
+      direction: "out",
+      entityType: "job_card_part",
+      entityId: line.id,
+      remark: `AURA job card #${line.jobCardId} — backordered issue filled`,
+      dedupeKey: `erp:se:jcp:${dealerId}:${line.id}`,
+    });
+  }
 }
 
 /** Fire the MRQ alert only when stock CROSSES to at-or-below the reorder level. */
@@ -171,6 +212,20 @@ router.post("/parts", async (req, res): Promise<void> => {
     .insert(partsTable)
     .values({ ...parsed.data, dealerId: activeDealerId(res) })
     .returning();
+  enqueuePartItemSync(part.dealerId, part.id, "insert");
+  // A part created with opening stock is an opening Material Receipt.
+  if (part.stock > 0) {
+    enqueueStockEntrySync({
+      dealerId: part.dealerId,
+      partId: part.id,
+      qty: part.stock,
+      direction: "in",
+      entityType: "part",
+      entityId: part.id,
+      remark: `AURA part ${part.sku} — opening stock`,
+      dedupeKey: `erp:se:part-open:${part.dealerId}:${part.id}`,
+    });
+  }
   res.status(201).json(CreatePartResponse.parse(part));
 });
 
@@ -203,6 +258,21 @@ router.patch("/parts/:id", async (req, res): Promise<void> => {
   }
   // MRQ alert: a manual stock/reorder adjustment can also cross the line.
   if (before) checkLowStockCrossing(part, before.stock, part.stock);
+  enqueuePartItemSync(dealerId, part.id, "update");
+  // Manual stock adjustment → ERPNext Stock Entry for the delta.
+  if (before && parsed.data.stock !== undefined && part.stock !== before.stock) {
+    const delta = part.stock - before.stock;
+    enqueueStockEntrySync({
+      dealerId,
+      partId: part.id,
+      qty: Math.abs(delta),
+      direction: delta > 0 ? "in" : "out",
+      entityType: "part",
+      entityId: part.id,
+      remark: `AURA manual stock adjustment ${before.stock} → ${part.stock} (${part.sku})`,
+      dedupeKey: `erp:se:adjust:${dealerId}:${part.id}:${before.stock}:${part.stock}:${Date.now()}`,
+    });
+  }
   res.json(UpdatePartResponse.parse(part));
 });
 
@@ -225,6 +295,7 @@ router.post("/suppliers", async (req, res): Promise<void> => {
     .insert(suppliersTable)
     .values({ ...parsed.data, dealerId: activeDealerId(res) })
     .returning();
+  enqueueSupplierSync(supplier.dealerId, supplier.id, "insert");
   res.status(201).json(CreateSupplierResponse.parse(supplier));
 });
 
@@ -287,6 +358,19 @@ router.post("/part-purchases", async (req, res): Promise<void> => {
     }
     return inserted;
   });
+  // Immediate-receipt purchases move stock now → ERPNext Material Receipt.
+  if (!isOrdered) {
+    enqueueStockEntrySync({
+      dealerId: part.dealerId,
+      partId: part.id,
+      qty: parsed.data.quantity,
+      direction: "in",
+      entityType: "part_purchase",
+      entityId: purchase.id,
+      remark: `AURA part purchase #${purchase.id} (${part.sku})`,
+      dedupeKey: `erp:se:pp:${part.dealerId}:${purchase.id}:init`,
+    });
+  }
   res.status(201).json(CreatePartPurchaseResponse.parse(purchase));
 });
 
@@ -373,16 +457,29 @@ router.post("/part-purchases/:id/receive", async (req, res): Promise<void> => {
 
     // Backorder resolution: fill waiting job-card lines oldest-first while
     // stock lasts, and release job cards that no longer wait on any part.
-    const leftover = await releaseBackorders(
+    const release = await releaseBackorders(
       tx,
       dealerId,
       part.id,
       onHand + received,
     );
-    return { po, leftover };
+    return { po, leftover: release.available, filled: release.filledLines };
   });
 
   checkLowStockCrossing(part, part.stock, updated.leftover);
+  // ERPNext: the received units are a Material Receipt; backordered job-card
+  // lines filled by this receipt are Material Issues.
+  enqueueStockEntrySync({
+    dealerId,
+    partId: part.id,
+    qty: received,
+    direction: "in",
+    entityType: "part_purchase",
+    entityId: purchase.id,
+    remark: `AURA part purchase #${purchase.id} received (${part.sku})`,
+    dedupeKey: `erp:se:pp:${dealerId}:${purchase.id}:${newQtyReceived}`,
+  });
+  syncFilledBackorderLines(dealerId, updated.filled);
   res.json(ReceivePartPurchaseResponse.parse(updated.po));
 });
 
@@ -698,6 +795,7 @@ router.post("/parts/import", async (req, res): Promise<void> => {
       .values({ dealerId, name })
       .returning({ id: suppliersTable.id });
     supplierIds.set(key, created.id);
+    enqueueSupplierSync(dealerId, created.id, "insert");
     return created.id;
   };
 
@@ -737,8 +835,9 @@ router.post("/parts/import", async (req, res): Promise<void> => {
           })
           .where(eq(partsTable.id, existing.id));
         updated++;
+        enqueuePartItemSync(dealerId, existing.id, "update");
       } else {
-        await db.insert(partsTable).values({
+        const [createdPart] = await db.insert(partsTable).values({
           dealerId,
           sku: r.sku,
           name: r.name,
@@ -749,8 +848,9 @@ router.post("/parts/import", async (req, res): Promise<void> => {
           stock: r.stock ?? 0,
           reorderLevel: r.reorderLevel ?? 5,
           location: r.location,
-        });
+        }).returning({ id: partsTable.id });
         inserted++;
+        enqueuePartItemSync(dealerId, createdPart.id, "insert");
       }
     } catch (err) {
       errors.push({
@@ -947,6 +1047,7 @@ router.post("/purchase-orders", async (req, res): Promise<void> => {
     );
     return po;
   });
+  enqueuePurchaseOrderSync(dealerId, order.id, "insert");
   res
     .status(201)
     .json(CreatePurchaseOrderResponse.parse(await loadPurchaseOrder(dealerId, order.id)));
@@ -1009,6 +1110,10 @@ router.patch("/purchase-orders/:id", async (req, res): Promise<void> => {
         eq(purchaseOrdersTable.dealerId, dealerId),
       ),
     );
+  // Status transitions (place / cancel) must reach the ERPNext PO too.
+  if (parsed.data.status && parsed.data.status !== order.status) {
+    enqueuePurchaseOrderSync(dealerId, order.id, "update");
+  }
   res.json(UpdatePurchaseOrderResponse.parse(await loadPurchaseOrder(dealerId, order.id)));
 });
 
@@ -1064,6 +1169,14 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
   }
 
   const lowStockChecks: { part: Part; prevStock: number; leftover: number }[] = [];
+  const filledBackorderLines: BackorderRelease["filledLines"] = [];
+  const receivedForErpnext: {
+    partId: number;
+    qty: number;
+    rate: number;
+    cumulative: number;
+    lineId: number;
+  }[] = [];
   await db.transaction(async (tx) => {
     for (const line of order.lines) {
       const qty = requested.get(line.id);
@@ -1096,8 +1209,20 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
         );
       // Fill backordered job-card lines — this is what links received parts
       // back to their originating job cards and takes them off hold.
-      const leftover = await releaseBackorders(tx, dealerId, part.id, onHand + qty);
-      lowStockChecks.push({ part, prevStock: part.stock, leftover });
+      const release = await releaseBackorders(tx, dealerId, part.id, onHand + qty);
+      lowStockChecks.push({
+        part,
+        prevStock: part.stock,
+        leftover: release.available,
+      });
+      filledBackorderLines.push(...release.filledLines);
+      receivedForErpnext.push({
+        partId: part.id,
+        qty,
+        rate: line.unitCost,
+        cumulative: line.qtyReceived + qty,
+        lineId: line.id,
+      });
     }
     const fresh = await tx
       .select()
@@ -1121,6 +1246,25 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
   });
   for (const c of lowStockChecks)
     checkLowStockCrossing(c.part, c.prevStock, c.leftover);
+
+  // ERPNext: post a Purchase Receipt with the received line quantities (the
+  // receipt moves ERPNext stock, so no separate Stock Entry is posted), plus
+  // Material Issues for backordered job-card lines this receipt filled.
+  enqueuePurchaseReceiptSync({
+    dealerId,
+    purchaseOrderId: order.id,
+    lines: receivedForErpnext.map((r) => ({
+      partId: r.partId,
+      qty: r.qty,
+      rate: r.rate,
+    })),
+    // Cumulative per-line totals make each distinct receipt event unique,
+    // even when the same quantities are received twice on purpose.
+    dedupeKey: `erp:pr:${dealerId}:${order.id}:${receivedForErpnext
+      .map((r) => `${r.lineId}-${r.cumulative}`)
+      .join(",")}`,
+  });
+  syncFilledBackorderLines(dealerId, filledBackorderLines);
 
   res.json(ReceivePurchaseOrderResponse.parse(await loadPurchaseOrder(dealerId, params.data.id)));
 });

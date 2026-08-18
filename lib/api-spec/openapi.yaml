@@ -7220,6 +7220,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /erpnext/backfill:
+    post:
+      operationId: backfillErpnext
+      tags: [erpnext]
+      summary: Push existing parts, suppliers and open purchase orders to ERPNext
+      responses:
+        "200":
+          description: Counts of enqueued sync jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackfillErpnextResult"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: ERPNext is not configured yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /erpnext/sync-jobs:
     get:
       operationId: listErpnextSyncJobs
@@ -7275,6 +7299,7 @@ components:
         lastCheckedAt: { type: ["string", "null"], format: date-time }
         companyName: { type: ["string", "null"] }
         erpnextVersion: { type: ["string", "null"] }
+        defaultWarehouse: { type: ["string", "null"] }
     UpdateErpnextSettingsRequest:
       type: object
       properties:
@@ -7282,6 +7307,14 @@ components:
         apiKey: { type: string, minLength: 1 }
         apiSecret: { type: string, minLength: 1 }
         enabled: { type: boolean }
+        defaultWarehouse: { type: ["string", "null"], maxLength: 140 }
+    BackfillErpnextResult:
+      type: object
+      required: [parts, suppliers, purchaseOrders]
+      properties:
+        parts: { type: integer }
+        suppliers: { type: integer }
+        purchaseOrders: { type: integer }
     ErpnextTestResult:
       type: object
       required: [ok]

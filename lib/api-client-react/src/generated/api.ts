@@ -46,6 +46,7 @@ import type {
   Asset,
   AssignLeadInput,
   AuditLogEntry,
+  BackfillErpnextResult,
   Bank,
   BankInput,
   BankLetterResult,
@@ -22159,6 +22160,77 @@ export const useRotateErpnextWebhookSecret = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getRotateErpnextWebhookSecretMutationOptions(options));
+    }
+
+export const getBackfillErpnextUrl = () => {
+
+
+
+
+  return `/api/erpnext/backfill`
+}
+
+/**
+ * @summary Push existing parts, suppliers and open purchase orders to ERPNext
+ */
+export const backfillErpnext = async ( options?: RequestInit): Promise<BackfillErpnextResult> => {
+
+  return customFetch<BackfillErpnextResult>(getBackfillErpnextUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getBackfillErpnextMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof backfillErpnext>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof backfillErpnext>>, TError,void, TContext> => {
+
+const mutationKey = ['backfillErpnext'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof backfillErpnext>>, void> = () => {
+
+
+          return  backfillErpnext(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BackfillErpnextMutationResult = NonNullable<Awaited<ReturnType<typeof backfillErpnext>>>
+
+    export type BackfillErpnextMutationError = ErrorType<Error>
+
+    /**
+ * @summary Push existing parts, suppliers and open purchase orders to ERPNext
+ */
+export const useBackfillErpnext = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof backfillErpnext>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof backfillErpnext>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getBackfillErpnextMutationOptions(options));
     }
 
 export const getListErpnextSyncJobsUrl = () => {

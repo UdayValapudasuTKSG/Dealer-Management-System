@@ -54,6 +54,7 @@ export * from './assignLeadInput';
 export * from './auditLogEntry';
 export * from './auditLogEntryDetails';
 export * from './availabilitySlot';
+export * from './backfillErpnextResult';
 export * from './bank';
 export * from './bankInput';
 export * from './bankLetterResult';
