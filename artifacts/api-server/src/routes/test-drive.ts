@@ -112,7 +112,20 @@ async function takenSlotTimes(
         lte(leadsTable.testDriveAt, end),
       ),
     );
-  return new Set(rows.map((r) => r.at!.getTime()));
+  // A booking blocks every grid slot within ±30 minutes (exclusive), matching
+  // the conflict window enforced at claim time — legacy off-grid bookings
+  // therefore grey out both slots they overlap instead of showing as free.
+  const taken = new Set<number>();
+  for (const r of rows) {
+    const at = r.at!.getTime();
+    for (const day of days) {
+      for (const t of daySlotTimes(day)) {
+        const ms = t.getTime();
+        if (Math.abs(ms - at) < SLOT_LENGTH_MS) taken.add(ms);
+      }
+    }
+  }
+  return taken;
 }
 
 async function buildInvite(lead: Lead) {

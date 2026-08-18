@@ -69,8 +69,12 @@ export default function BookTestDrive({
     } catch (err) {
       const status = errorStatus(err);
       if (status === 409) {
+        const serverMessage = (
+          err as { response?: { data?: { error?: string } } }
+        )?.response?.data?.error;
         setBookError(
-          "That time was just taken — please choose another slot.",
+          serverMessage ??
+            "That time was just taken — please choose another slot.",
         );
         setSelectedSlot(null);
         void queryClient.invalidateQueries({
