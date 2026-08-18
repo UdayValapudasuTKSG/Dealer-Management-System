@@ -15,6 +15,7 @@ import type {
   InvoiceInput,
   PaymentInput,
 } from "@workspace/api-client-react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -189,6 +190,12 @@ export function DealQuickFinanceDialogs({
   const money = useMoney();
   const createInvoice = useCreateInvoice();
   const createPayment = useCreatePayment();
+  // Kind currently selected in the invoice dialog — a reservation fee is paid
+  // on the spot, so its date field is a plain "Date" prefilled with today.
+  const [invoiceKind, setInvoiceKind] = useState<string>("final");
+  useEffect(() => {
+    if (invoiceDeal) setInvoiceKind("final");
+  }, [invoiceDeal]);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
@@ -237,6 +244,15 @@ export function DealQuickFinanceDialogs({
                 { value: "reservation", label: "Reservation (deposit)" },
                 { value: "final", label: "Final (balance)" },
               ],
+              onChange: (value, setField) => {
+                setInvoiceKind(value);
+                if (value === "reservation") {
+                  // Reservation fees are paid on the spot — prefill today.
+                  setField("dueDate", new Date().toISOString().slice(0, 10));
+                } else {
+                  setField("dueDate", "");
+                }
+              },
             },
             {
               name: "amount",
@@ -249,7 +265,12 @@ export function DealQuickFinanceDialogs({
                 ? String(remaining(invoiceDeal))
                 : undefined,
             },
-            { name: "dueDate", label: "Due date", type: "date", span: "half" },
+            {
+              name: "dueDate",
+              label: invoiceKind === "reservation" ? "Date" : "Due date",
+              type: "date",
+              span: "half",
+            },
             {
               name: "description",
               label: "Description",
