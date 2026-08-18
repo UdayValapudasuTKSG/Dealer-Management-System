@@ -117,7 +117,7 @@ export async function generateQuoteForLead(
     (vehicle.model.toLowerCase().startsWith(vehicle.make.toLowerCase())
       ? vehicle.model
       : `${vehicle.make} ${vehicle.model}`);
-  const validUntil = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
+  const validUntil = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const [quote] = await db
     .insert(quotesTable)
     .values({
