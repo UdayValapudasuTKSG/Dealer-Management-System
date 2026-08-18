@@ -10,6 +10,7 @@ import {
   usersTable,
   dealerUsersTable,
   webhookEventsTable,
+  erpnextWebhookEventsTable,
 } from "@workspace/db";
 import { mapTwilioDialStatus, twilioVoiceConfig } from "../lib/telephony";
 import { notifyUser } from "../lib/email";
@@ -34,6 +35,109 @@ import {
 } from "../lib/whatsapp-flow";
 
 const router: IRouter = Router();
+
+// ---------------------------------------------------------------------------
+// ERPNext inbound webhook. ERPNext is configured (per dealer) to POST doc
+// events here with the dealer's shared secret in X-AURA-Webhook-Secret.
+// Events are recorded, then dispatched to per-DocType handlers (registered
+// by the entity-sync tasks; unhandled DocTypes are stored as "skipped").
+// Mounted publicly under the rate-limited /webhooks prefix.
+// ---------------------------------------------------------------------------
+
+type ErpnextInboundHandler = (event: {
+  dealerId: number;
+  doctype: string;
+  docName: string | null;
+  event: string | null;
+  payload: Record<string, unknown>;
+}) => Promise<void>;
+
+const erpnextInboundHandlers = new Map<string, ErpnextInboundHandler>();
+
+export function registerErpnextInboundHandler(
+  doctype: string,
+  handler: ErpnextInboundHandler,
+): void {
+  erpnextInboundHandlers.set(doctype, handler);
+}
+
+router.post("/webhooks/erpnext/:dealerId", async (req, res): Promise<void> => {
+  const dealerId = Number(req.params["dealerId"]);
+  if (!Number.isInteger(dealerId) || dealerId <= 0) {
+    res.status(404).json({ error: "Unknown dealer" });
+    return;
+  }
+  const { getErpnextConnection } = await import("../lib/erpnext/connection");
+  const conn = await getErpnextConnection(dealerId);
+  if (!conn) {
+    res.status(404).json({ error: "ERPNext is not configured for this dealer" });
+    return;
+  }
+  const given = req.get("x-aura-webhook-secret") ?? "";
+  const a = Buffer.from(conn.webhookSecret, "utf8");
+  const b = Buffer.from(given, "utf8");
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    req.log.warn({ dealerId }, "ERPNext webhook rejected: bad shared secret");
+    res.status(403).json({ error: "Invalid webhook secret" });
+    return;
+  }
+
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  // ERPNext webhooks send the doc as the JSON body; the DocType/event can be
+  // included in the payload template (recommended in our setup guide) or
+  // via headers.
+  const doctype =
+    (typeof body["doctype"] === "string" ? body["doctype"] : null) ??
+    req.get("x-frappe-doctype") ??
+    null;
+  const docName = typeof body["name"] === "string" ? body["name"] : null;
+  const event =
+    (typeof body["event"] === "string" ? body["event"] : null) ??
+    req.get("x-frappe-event") ??
+    null;
+
+  const [row] = await db
+    .insert(erpnextWebhookEventsTable)
+    .values({
+      dealerId,
+      doctype,
+      docName,
+      event,
+      payload: body,
+      status: "received",
+    })
+    .returning();
+
+  // Acknowledge fast; processing failures are recorded on the event row so
+  // ERPNext isn't made to retry (it has no durable retry semantics anyway).
+  res.status(200).json({ received: true, eventId: row!.id });
+
+  const handler = doctype ? erpnextInboundHandlers.get(doctype) : undefined;
+  try {
+    if (handler && doctype) {
+      await handler({ dealerId, doctype, docName, event, payload: body });
+      await db
+        .update(erpnextWebhookEventsTable)
+        .set({ status: "processed" })
+        .where(eq(erpnextWebhookEventsTable.id, row!.id));
+    } else {
+      await db
+        .update(erpnextWebhookEventsTable)
+        .set({ status: "skipped" })
+        .where(eq(erpnextWebhookEventsTable.id, row!.id));
+    }
+  } catch (err) {
+    logger.error({ err, dealerId, doctype }, "ERPNext webhook handler failed");
+    await db
+      .update(erpnextWebhookEventsTable)
+      .set({
+        status: "error",
+        error: (err instanceof Error ? err.message : String(err)).slice(0, 500),
+      })
+      .where(eq(erpnextWebhookEventsTable.id, row!.id))
+      .catch(() => undefined);
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Meta Lead Ads webhook (Facebook / Instagram lead forms)

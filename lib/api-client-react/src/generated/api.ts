@@ -120,6 +120,9 @@ import type {
   EnqueueEmailRequest,
   EnquiryInput,
   EnquiryVehicle,
+  ErpnextSettings,
+  ErpnextSyncJob,
+  ErpnextTestResult,
   Error,
   FinanceApplication,
   FinanceApplicationDetail,
@@ -248,6 +251,7 @@ import type {
   RolePermissionsInput,
   RoleUpdate,
   RoleWithPermissions,
+  RotateErpnextWebhookSecret200,
   SalesPerformance,
   SearchResults,
   SendDeliveryWarrantyEmail200,
@@ -290,6 +294,7 @@ import type {
   UnmetError,
   UnmetResponse,
   UpdateDeal422,
+  UpdateErpnextSettingsRequest,
   UploadUrlRequest,
   UploadUrlResponse,
   Vehicle,
@@ -21865,4 +21870,442 @@ export function useGetStorageObject<TData = Awaited<ReturnType<typeof getStorage
 
 
 
+
+export const getGetErpnextSettingsUrl = () => {
+
+
+
+
+  return `/api/erpnext/settings`
+}
+
+/**
+ * @summary ERPNext connection settings (credentials masked)
+ */
+export const getErpnextSettings = async ( options?: RequestInit): Promise<ErpnextSettings> => {
+
+  return customFetch<ErpnextSettings>(getGetErpnextSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetErpnextSettingsQueryKey = () => {
+    return [
+    `/api/erpnext/settings`
+    ] as const;
+    }
+
+
+export const getGetErpnextSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getErpnextSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getErpnextSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetErpnextSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getErpnextSettings>>> = ({ signal }) => getErpnextSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getErpnextSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetErpnextSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getErpnextSettings>>>
+export type GetErpnextSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary ERPNext connection settings (credentials masked)
+ */
+
+export function useGetErpnextSettings<TData = Awaited<ReturnType<typeof getErpnextSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getErpnextSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetErpnextSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateErpnextSettingsUrl = () => {
+
+
+
+
+  return `/api/erpnext/settings`
+}
+
+/**
+ * @summary Create or update the ERPNext connection for the active dealership
+ */
+export const updateErpnextSettings = async (updateErpnextSettingsRequest: UpdateErpnextSettingsRequest, options?: RequestInit): Promise<ErpnextSettings> => {
+
+  return customFetch<ErpnextSettings>(getUpdateErpnextSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateErpnextSettingsRequest)
+  }
+);}
+
+
+
+
+
+export const getUpdateErpnextSettingsMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateErpnextSettings>>, TError,{data: BodyType<UpdateErpnextSettingsRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateErpnextSettings>>, TError,{data: BodyType<UpdateErpnextSettingsRequest>}, TContext> => {
+
+const mutationKey = ['updateErpnextSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateErpnextSettings>>, {data: BodyType<UpdateErpnextSettingsRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateErpnextSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateErpnextSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateErpnextSettings>>>
+    export type UpdateErpnextSettingsMutationBody = BodyType<UpdateErpnextSettingsRequest>
+    export type UpdateErpnextSettingsMutationError = ErrorType<Error>
+
+    /**
+ * @summary Create or update the ERPNext connection for the active dealership
+ */
+export const useUpdateErpnextSettings = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateErpnextSettings>>, TError,{data: BodyType<UpdateErpnextSettingsRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateErpnextSettings>>,
+        TError,
+        {data: BodyType<UpdateErpnextSettingsRequest>},
+        TContext
+      > => {
+      return useMutation(getUpdateErpnextSettingsMutationOptions(options));
+    }
+
+export const getTestErpnextConnectionUrl = () => {
+
+
+
+
+  return `/api/erpnext/settings/test`
+}
+
+/**
+ * @summary Verify the stored credentials against the ERPNext instance
+ */
+export const testErpnextConnection = async ( options?: RequestInit): Promise<ErpnextTestResult> => {
+
+  return customFetch<ErpnextTestResult>(getTestErpnextConnectionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTestErpnextConnectionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testErpnextConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testErpnextConnection>>, TError,void, TContext> => {
+
+const mutationKey = ['testErpnextConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testErpnextConnection>>, void> = () => {
+
+
+          return  testErpnextConnection(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestErpnextConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testErpnextConnection>>>
+
+    export type TestErpnextConnectionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Verify the stored credentials against the ERPNext instance
+ */
+export const useTestErpnextConnection = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testErpnextConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testErpnextConnection>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestErpnextConnectionMutationOptions(options));
+    }
+
+export const getRotateErpnextWebhookSecretUrl = () => {
+
+
+
+
+  return `/api/erpnext/settings/rotate-webhook-secret`
+}
+
+/**
+ * @summary Generate a new webhook shared secret
+ */
+export const rotateErpnextWebhookSecret = async ( options?: RequestInit): Promise<RotateErpnextWebhookSecret200> => {
+
+  return customFetch<RotateErpnextWebhookSecret200>(getRotateErpnextWebhookSecretUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRotateErpnextWebhookSecretMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rotateErpnextWebhookSecret>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rotateErpnextWebhookSecret>>, TError,void, TContext> => {
+
+const mutationKey = ['rotateErpnextWebhookSecret'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rotateErpnextWebhookSecret>>, void> = () => {
+
+
+          return  rotateErpnextWebhookSecret(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RotateErpnextWebhookSecretMutationResult = NonNullable<Awaited<ReturnType<typeof rotateErpnextWebhookSecret>>>
+
+    export type RotateErpnextWebhookSecretMutationError = ErrorType<Error>
+
+    /**
+ * @summary Generate a new webhook shared secret
+ */
+export const useRotateErpnextWebhookSecret = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rotateErpnextWebhookSecret>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rotateErpnextWebhookSecret>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRotateErpnextWebhookSecretMutationOptions(options));
+    }
+
+export const getListErpnextSyncJobsUrl = () => {
+
+
+
+
+  return `/api/erpnext/sync-jobs`
+}
+
+/**
+ * @summary Recent ERPNext sync jobs for the active dealership
+ */
+export const listErpnextSyncJobs = async ( options?: RequestInit): Promise<ErpnextSyncJob[]> => {
+
+  return customFetch<ErpnextSyncJob[]>(getListErpnextSyncJobsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListErpnextSyncJobsQueryKey = () => {
+    return [
+    `/api/erpnext/sync-jobs`
+    ] as const;
+    }
+
+
+export const getListErpnextSyncJobsQueryOptions = <TData = Awaited<ReturnType<typeof listErpnextSyncJobs>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listErpnextSyncJobs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListErpnextSyncJobsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listErpnextSyncJobs>>> = ({ signal }) => listErpnextSyncJobs({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listErpnextSyncJobs>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListErpnextSyncJobsQueryResult = NonNullable<Awaited<ReturnType<typeof listErpnextSyncJobs>>>
+export type ListErpnextSyncJobsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Recent ERPNext sync jobs for the active dealership
+ */
+
+export function useListErpnextSyncJobs<TData = Awaited<ReturnType<typeof listErpnextSyncJobs>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listErpnextSyncJobs>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListErpnextSyncJobsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRetryErpnextSyncJobUrl = (id: number,) => {
+
+
+
+
+  return `/api/erpnext/sync-jobs/${id}/retry`
+}
+
+/**
+ * @summary Requeue a failed or dead-lettered sync job
+ */
+export const retryErpnextSyncJob = async (id: number, options?: RequestInit): Promise<ErpnextSyncJob> => {
+
+  return customFetch<ErpnextSyncJob>(getRetryErpnextSyncJobUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryErpnextSyncJobMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryErpnextSyncJob>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryErpnextSyncJob>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['retryErpnextSyncJob'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryErpnextSyncJob>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryErpnextSyncJob(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryErpnextSyncJobMutationResult = NonNullable<Awaited<ReturnType<typeof retryErpnextSyncJob>>>
+
+    export type RetryErpnextSyncJobMutationError = ErrorType<Error>
+
+    /**
+ * @summary Requeue a failed or dead-lettered sync job
+ */
+export const useRetryErpnextSyncJob = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryErpnextSyncJob>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryErpnextSyncJob>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRetryErpnextSyncJobMutationOptions(options));
+    }
 

@@ -5,6 +5,83 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+export interface ErpnextSettings {
+  configured: boolean;
+  enabled: boolean;
+  /** @nullable */
+  siteUrl?: string | null;
+  /** @nullable */
+  apiKeyMasked?: string | null;
+  hasApiSecret?: boolean;
+  /** @nullable */
+  webhookSecret?: string | null;
+  /** @nullable */
+  webhookPath?: string | null;
+  /** @nullable */
+  lastStatus?: string | null;
+  /** @nullable */
+  lastError?: string | null;
+  /** @nullable */
+  lastCheckedAt?: string | null;
+  /** @nullable */
+  companyName?: string | null;
+  /** @nullable */
+  erpnextVersion?: string | null;
+}
+
+export interface UpdateErpnextSettingsRequest {
+  /** @minLength 8 */
+  siteUrl?: string;
+  /** @minLength 1 */
+  apiKey?: string;
+  /** @minLength 1 */
+  apiSecret?: string;
+  enabled?: boolean;
+}
+
+export interface ErpnextTestResult {
+  ok: boolean;
+  /** @nullable */
+  companyName?: string | null;
+  /** @nullable */
+  version?: string | null;
+  /** @nullable */
+  user?: string | null;
+  /** @nullable */
+  error?: string | null;
+}
+
+export type ErpnextSyncJobStatus = typeof ErpnextSyncJobStatus[keyof typeof ErpnextSyncJobStatus];
+
+
+export const ErpnextSyncJobStatus = {
+  queued: 'queued',
+  processing: 'processing',
+  succeeded: 'succeeded',
+  failed: 'failed',
+  dead: 'dead',
+} as const;
+
+export interface ErpnextSyncJob {
+  id: number;
+  direction: string;
+  doctype: string;
+  operation: string;
+  entityType: string;
+  entityId: number;
+  status: ErpnextSyncJobStatus;
+  attempts: number;
+  /** @nullable */
+  lastError?: string | null;
+  /** @nullable */
+  erpnextDocName?: string | null;
+  /** @nullable */
+  nextAttemptAt?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  createdAt: string;
+}
+
 export type PermissionGrantModule = typeof PermissionGrantModule[keyof typeof PermissionGrantModule];
 
 
@@ -6646,4 +6723,8 @@ export const ListDocumentsEntityType = {
   vehicle: 'vehicle',
   delivery: 'delivery',
 } as const;
+
+export type RotateErpnextWebhookSecret200 = {
+  webhookSecret: string;
+};
 

@@ -33,6 +33,7 @@ import VehicleDetailPage from "@/pages/vehicle-detail";
 import TeamProfile from "@/pages/team-profile";
 import SettingsUsers from "@/pages/settings-users";
 import SettingsEmail from "@/pages/settings-email";
+import SettingsErpnext from "@/pages/settings-erpnext";
 import SettingsBranding from "@/pages/settings-branding";
 import SettingsRoles from "@/pages/settings-roles";
 import SettingsSources from "@/pages/settings-sources";
@@ -331,6 +332,11 @@ function AppRoutes() {
                 <Route path="/settings/email">
                   <RequireSettings>
                     <SettingsEmail />
+                  </RequireSettings>
+                </Route>
+                <Route path="/settings/erpnext">
+                  <RequireSettings>
+                    <SettingsErpnext />
                   </RequireSettings>
                 </Route>
                 <Route path="/settings">

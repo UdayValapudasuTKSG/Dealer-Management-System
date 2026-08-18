@@ -8,6 +8,7 @@ import {
   ScrollText,
   Mail,
   Paintbrush,
+  Plug,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -74,6 +75,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: "White-label the app and printed documents with your logo and name.",
     module: "settings",
     gmOnly: true,
+  },
+  {
+    name: "ERPNext",
+    href: "/settings/erpnext",
+    icon: Plug,
+    description: "Connect an ERPNext instance for accounting and inventory sync.",
+    module: "settings",
   },
   {
     name: "Email Engine",

@@ -9662,3 +9662,119 @@ export const GetStorageObjectParams = zod.object({
 export const GetStorageObjectResponse = zod.unknown()
 
 
+/**
+ * @summary ERPNext connection settings (credentials masked)
+ */
+export const GetErpnextSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "enabled": zod.boolean(),
+  "siteUrl": zod.string().nullish(),
+  "apiKeyMasked": zod.string().nullish(),
+  "hasApiSecret": zod.boolean().optional(),
+  "webhookSecret": zod.string().nullish(),
+  "webhookPath": zod.string().nullish(),
+  "lastStatus": zod.string().nullish(),
+  "lastError": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
+  "companyName": zod.string().nullish(),
+  "erpnextVersion": zod.string().nullish()
+})
+
+
+/**
+ * @summary Create or update the ERPNext connection for the active dealership
+ */
+export const updateErpnextSettingsBodySiteUrlMin = 8;
+
+
+
+
+
+export const UpdateErpnextSettingsBody = zod.object({
+  "siteUrl": zod.string().min(updateErpnextSettingsBodySiteUrlMin).optional(),
+  "apiKey": zod.string().min(1).optional(),
+  "apiSecret": zod.string().min(1).optional(),
+  "enabled": zod.boolean().optional()
+})
+
+export const UpdateErpnextSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "enabled": zod.boolean(),
+  "siteUrl": zod.string().nullish(),
+  "apiKeyMasked": zod.string().nullish(),
+  "hasApiSecret": zod.boolean().optional(),
+  "webhookSecret": zod.string().nullish(),
+  "webhookPath": zod.string().nullish(),
+  "lastStatus": zod.string().nullish(),
+  "lastError": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
+  "companyName": zod.string().nullish(),
+  "erpnextVersion": zod.string().nullish()
+})
+
+
+/**
+ * @summary Verify the stored credentials against the ERPNext instance
+ */
+export const TestErpnextConnectionResponse = zod.object({
+  "ok": zod.boolean(),
+  "companyName": zod.string().nullish(),
+  "version": zod.string().nullish(),
+  "user": zod.string().nullish(),
+  "error": zod.string().nullish()
+})
+
+
+/**
+ * @summary Generate a new webhook shared secret
+ */
+export const RotateErpnextWebhookSecretResponse = zod.object({
+  "webhookSecret": zod.string()
+})
+
+
+/**
+ * @summary Recent ERPNext sync jobs for the active dealership
+ */
+export const ListErpnextSyncJobsResponseItem = zod.object({
+  "id": zod.number(),
+  "direction": zod.string(),
+  "doctype": zod.string(),
+  "operation": zod.string(),
+  "entityType": zod.string(),
+  "entityId": zod.number(),
+  "status": zod.enum(['queued', 'processing', 'succeeded', 'failed', 'dead']),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "erpnextDocName": zod.string().nullish(),
+  "nextAttemptAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListErpnextSyncJobsResponse = zod.array(ListErpnextSyncJobsResponseItem)
+
+
+/**
+ * @summary Requeue a failed or dead-lettered sync job
+ */
+export const RetryErpnextSyncJobParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RetryErpnextSyncJobResponse = zod.object({
+  "id": zod.number(),
+  "direction": zod.string(),
+  "doctype": zod.string(),
+  "operation": zod.string(),
+  "entityType": zod.string(),
+  "entityId": zod.number(),
+  "status": zod.enum(['queued', 'processing', 'succeeded', 'failed', 'dead']),
+  "attempts": zod.number(),
+  "lastError": zod.string().nullish(),
+  "erpnextDocName": zod.string().nullish(),
+  "nextAttemptAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+

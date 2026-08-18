@@ -14,6 +14,7 @@
     "backfill-assignee-user-ids": "tsx ./src/backfill-assignee-user-ids.ts",
     "check-gate-cascades": "bash ./run-gate-cascade-check.sh",
     "verify-p0-security": "tsx ./src/verify-p0-security.ts",
+    "verify-erpnext-ssrf": "tsx ./src/verify-erpnext-ssrf.ts",
     "verify-service-workflow": "tsx ./src/verify-service-workflow.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify-provisioning-saga": "tsx ./src/verify-provisioning-saga.ts",

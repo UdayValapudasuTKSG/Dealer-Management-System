@@ -43,6 +43,7 @@ import testDrivesRouter from "./test-drives";
 import reviewsRouter from "./reviews";
 import casesRouter from "./cases";
 import telephonyRouter from "./telephony";
+import erpnextRouter from "./erpnext";
 import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
 import { authedRateLimit, publicRateLimit } from "../middlewares/rate-limit";
 
@@ -115,5 +116,6 @@ router.use(teamRouter);
 router.use(storageRouter);
 router.use(documentsRouter);
 router.use(telephonyRouter);
+router.use(erpnextRouter);
 
 export default router;

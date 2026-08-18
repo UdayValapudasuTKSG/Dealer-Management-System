@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: erpnext
+    description: ERPNext integration settings and sync
   - name: vehicles
     description: Inventory of vehicles
   - name: bookings
@@ -7132,8 +7134,182 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /erpnext/settings:
+    get:
+      operationId: getErpnextSettings
+      tags: [erpnext]
+      summary: ERPNext connection settings (credentials masked)
+      responses:
+        "200":
+          description: ERPNext connection settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErpnextSettings"
+    put:
+      operationId: updateErpnextSettings
+      tags: [erpnext]
+      summary: Create or update the ERPNext connection for the active dealership
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateErpnextSettingsRequest"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErpnextSettings"
+        "400":
+          description: Missing required fields for a first-time connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /erpnext/settings/test:
+    post:
+      operationId: testErpnextConnection
+      tags: [erpnext]
+      summary: Verify the stored credentials against the ERPNext instance
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErpnextTestResult"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /erpnext/settings/rotate-webhook-secret:
+    post:
+      operationId: rotateErpnextWebhookSecret
+      tags: [erpnext]
+      summary: Generate a new webhook shared secret
+      responses:
+        "200":
+          description: New secret
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [webhookSecret]
+                properties:
+                  webhookSecret: { type: string }
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: ERPNext is not configured yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /erpnext/sync-jobs:
+    get:
+      operationId: listErpnextSyncJobs
+      tags: [erpnext]
+      summary: Recent ERPNext sync jobs for the active dealership
+      responses:
+        "200":
+          description: Sync jobs, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ErpnextSyncJob"
+  /erpnext/sync-jobs/{id}/retry:
+    post:
+      operationId: retryErpnextSyncJob
+      tags: [erpnext]
+      summary: Requeue a failed or dead-lettered sync job
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: The requeued job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErpnextSyncJob"
+        "404":
+          description: Job not found or not retryable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
+    ErpnextSettings:
+      type: object
+      required: [configured, enabled]
+      properties:
+        configured: { type: boolean }
+        enabled: { type: boolean }
+        siteUrl: { type: ["string", "null"] }
+        apiKeyMasked: { type: ["string", "null"] }
+        hasApiSecret: { type: boolean }
+        webhookSecret: { type: ["string", "null"] }
+        webhookPath: { type: ["string", "null"] }
+        lastStatus: { type: ["string", "null"] }
+        lastError: { type: ["string", "null"] }
+        lastCheckedAt: { type: ["string", "null"], format: date-time }
+        companyName: { type: ["string", "null"] }
+        erpnextVersion: { type: ["string", "null"] }
+    UpdateErpnextSettingsRequest:
+      type: object
+      properties:
+        siteUrl: { type: string, minLength: 8 }
+        apiKey: { type: string, minLength: 1 }
+        apiSecret: { type: string, minLength: 1 }
+        enabled: { type: boolean }
+    ErpnextTestResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        companyName: { type: ["string", "null"] }
+        version: { type: ["string", "null"] }
+        user: { type: ["string", "null"] }
+        error: { type: ["string", "null"] }
+    ErpnextSyncJob:
+      type: object
+      required: [id, direction, doctype, operation, entityType, entityId, status, attempts, createdAt]
+      properties:
+        id: { type: integer }
+        direction: { type: string }
+        doctype: { type: string }
+        operation: { type: string }
+        entityType: { type: string }
+        entityId: { type: integer }
+        status:
+          type: string
+          enum: [queued, processing, succeeded, failed, dead]
+        attempts: { type: integer }
+        lastError: { type: ["string", "null"] }
+        erpnextDocName: { type: ["string", "null"] }
+        nextAttemptAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
     PermissionGrant:
       type: object
       required: [module, category]
