@@ -21,8 +21,8 @@ export const DELIVERY_STEPS = [
   "invoice",
   "appointment",
   "delivery",
-  "warranty",
   "signature",
+  "warranty",
   "feedback",
 ] as const;
 export type DeliveryStep = (typeof DELIVERY_STEPS)[number];

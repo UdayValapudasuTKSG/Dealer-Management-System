@@ -188,7 +188,9 @@ export async function buildWarrantyBookletForDelivery(
     // date autofills here; the appointment date is only a pre-handover
     // fallback.
     dateOfDelivery: fmt(delivery.deliveredAt ?? delivery.appointmentAt),
-    signatureDataUrl: delivery.warrantySignatureData,
+    // The Customer Signature step precedes Warranty — fall back to that
+    // signature so downloads/emails always carry the customer's signature.
+    signatureDataUrl: delivery.warrantySignatureData ?? delivery.signatureData,
   });
   return {
     pdf,

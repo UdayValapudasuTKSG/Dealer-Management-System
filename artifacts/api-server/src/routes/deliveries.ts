@@ -155,9 +155,12 @@ async function computeUnmet(d: Delivery): Promise<string[]> {
         unmet.push("Insurance cover note document not attached");
       break;
     case "warranty":
-      if (!d.warrantySignatureData)
+      // Warranty runs AFTER Customer Signature — the signature captured there
+      // is reused on the warranty certificate (a fresh pad signature supplied
+      // with this step also satisfies the gate).
+      if (!d.warrantySignatureData && !d.signatureData)
         unmet.push(
-          "Customer signature on the warranty certificate is required — capture it on the signature pad",
+          "Customer signature is required — complete the Customer Signature step (or capture it on the signature pad)",
         );
       break;
     case "delivery": {
@@ -803,12 +806,16 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       })().catch((err) => logger.error({ err }, "delivery-ready notify failed"));
       break;
     }
-    case "warranty":
-      if (parsed.data.signatureName)
-        extra.warrantySignatureName = parsed.data.signatureName;
-      if (parsed.data.signatureData)
-        extra.warrantySignatureData = parsed.data.signatureData;
+    case "warranty": {
+      // Reuse the signature captured at the Customer Signature step so the
+      // certificate (and the emailed booklet) carry the same signature; an
+      // explicitly supplied pad signature takes precedence.
+      const name = parsed.data.signatureName ?? delivery.signatureName;
+      const dataUrl = parsed.data.signatureData ?? delivery.signatureData;
+      if (name) extra.warrantySignatureName = name;
+      if (dataUrl) extra.warrantySignatureData = dataUrl;
       break;
+    }
     case "signature":
       if (parsed.data.signatureName)
         extra.signatureName = parsed.data.signatureName;

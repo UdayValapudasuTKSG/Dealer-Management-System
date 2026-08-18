@@ -617,29 +617,32 @@ function DeliveryDetail({
             </div>
             <p className="text-xs text-muted-foreground">
               The booklet is pre-filled with the customer, vehicle, dealer
-              details and the recorded handover date. Capture the customer's
-              signature below — it is placed in the certificate's "Customer
-              signature" box.
+              details and the recorded handover date. The signature captured at
+              the Customer Signature step is placed in the certificate's
+              "Customer signature" box — downloads and the emailed PDF both
+              carry it.
             </p>
-            <Input
-              placeholder="Customer's full name (warranty signature)"
-              value={form.signatureName ?? ""}
-              onChange={(e) =>
-                setForm({ ...form, signatureName: e.target.value })
-              }
-            />
-            <SignaturePad
-              value={form.signatureData ?? ""}
-              onChange={(dataUrl) =>
-                setForm({ ...form, signatureData: dataUrl })
-              }
-            />
-            {delivery.warrantySignatureData ? (
-              <p className="text-xs text-emerald-500">
-                Warranty signature already captured — re-sign above to replace
-                it, then re-download the documents.
+            {delivery.warrantySignatureData ?? delivery.signatureData ? (
+              <div className="rounded-md border bg-white p-2">
+                <img
+                  src={delivery.warrantySignatureData ?? delivery.signatureData ?? ""}
+                  alt="Customer signature"
+                  className="h-16 object-contain"
+                />
+                <p className="text-xs text-emerald-600 mt-1">
+                  Customer signature on file
+                  {delivery.warrantySignatureName ?? delivery.signatureName
+                    ? ` — ${delivery.warrantySignatureName ?? delivery.signatureName}`
+                    : ""}
+                  .
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-amber-500">
+                No customer signature yet — complete the Customer Signature
+                step first.
               </p>
-            ) : null}
+            )}
           </div>
         );
       case "signature":
