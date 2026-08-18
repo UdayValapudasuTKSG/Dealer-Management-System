@@ -167,18 +167,19 @@ export async function testErpnextConnection(dealerId: number): Promise<{
     } catch {
       // Not fatal — keep whatever we knew; UTC fallback applies inbound.
     }
+    // Keep an explicitly-chosen company (e.g. UAT → dedicated test company)
+    // as long as it still exists on the site; only fall back to discovery.
+    const effectiveCompanyName =
+      conn.companyName && result.companyNames.includes(conn.companyName)
+        ? conn.companyName
+        : result.companyName;
     await db
       .update(erpnextConnectionsTable)
       .set({
         lastStatus: "connected",
         lastError: null,
         lastCheckedAt: new Date(),
-        // Keep an explicitly-chosen company (e.g. UAT → demo company) as long
-        // as it still exists on the site; only fall back to discovery.
-        companyName:
-          conn.companyName && result.companyNames.includes(conn.companyName)
-            ? conn.companyName
-            : result.companyName,
+        companyName: effectiveCompanyName,
         erpnextVersion: result.version,
         siteTimezone,
         updatedAt: new Date(),
@@ -186,7 +187,7 @@ export async function testErpnextConnection(dealerId: number): Promise<{
       .where(eq(erpnextConnectionsTable.dealerId, dealerId));
     return {
       ok: true,
-      companyName: result.companyName,
+      companyName: effectiveCompanyName,
       version: result.version,
       user: result.user,
       error: null,

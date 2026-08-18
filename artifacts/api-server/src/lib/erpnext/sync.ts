@@ -208,7 +208,7 @@ export async function retryErpnextSyncJob(
 
 let processing = false;
 
-export async function processQueue(): Promise<void> {
+export async function processQueue(dealerId?: number): Promise<void> {
   if (processing) return;
   processing = true;
   try {
@@ -223,6 +223,9 @@ export async function processQueue(): Promise<void> {
             isNull(erpnextSyncJobsTable.nextAttemptAt),
             lte(erpnextSyncJobsTable.nextAttemptAt, now),
           ),
+          dealerId === undefined
+            ? undefined
+            : eq(erpnextSyncJobsTable.dealerId, dealerId),
         ),
       )
       .orderBy(asc(erpnextSyncJobsTable.createdAt))

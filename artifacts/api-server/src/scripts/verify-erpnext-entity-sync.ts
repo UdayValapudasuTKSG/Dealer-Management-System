@@ -38,6 +38,7 @@ import {
   queueCustomerSync,
   queueInvoiceSync,
   queuePaymentSync,
+  normalizeErpnextDueDate,
   parseErpnextModified,
 } from "../lib/erpnext/entities";
 import { ensureAccountForLead } from "../lib/accounts";
@@ -157,8 +158,8 @@ const server = http.createServer((req, res) => {
   });
 });
 
-async function drain(passes = 6) {
-  for (let i = 0; i < passes; i++) await processQueue();
+async function drain(dealerId: number, passes = 6) {
+  for (let i = 0; i < passes; i++) await processQueue(dealerId);
 }
 const settle = () => new Promise((r) => setTimeout(r, 300));
 
@@ -210,6 +211,24 @@ async function main() {
     "unknown timezone falls back to UTC",
     parseErpnextModified("2026-08-18 10:00:00", "Not/AZone")?.toISOString() === "2026-08-18T10:00:00.000Z",
   );
+  check(
+    "missing due date leaves ERPNext payment terms in control",
+    normalizeErpnextDueDate(null, "2026-08-18") === undefined,
+  );
+  check(
+    "historical due date is clamped to posting date",
+    normalizeErpnextDueDate("2026-08-01", "2026-08-18") === "2026-08-18",
+  );
+  check(
+    "same/later due date is preserved",
+    normalizeErpnextDueDate("2026-08-18", "2026-08-18") === "2026-08-18" &&
+      normalizeErpnextDueDate("2026-09-01", "2026-08-18") === "2026-09-01",
+  );
+  check(
+    "malformed due date is omitted",
+    normalizeErpnextDueDate("9999-invalid", "2026-08-18") === undefined &&
+      normalizeErpnextDueDate("2026-02-30", "2026-08-18") === undefined,
+  );
 
   try {
     // 1 — lead promotion enqueues customer sync
@@ -220,7 +239,7 @@ async function main() {
     const accountId = await ensureAccountForLead(lead!, "reservation");
     check("lead promotion created an account", accountId != null);
     await settle();
-    await drain();
+    await drain(dealerId);
     const leadRef = accountId != null
       ? await db
           .select()
@@ -244,9 +263,9 @@ async function main() {
     failSubmits = 1;
     queueInvoiceSync(dealerId, inv!.id, "create");
     await settle();
-    await drain(2); // first pass: create ok, submit fails (retryable)
+    await drain(dealerId, 2); // first pass: create ok, submit fails (retryable)
     await fastForwardJobs(dealerId);
-    await drain(4); // retry: must reuse the mapped doc and submit it
+    await drain(dealerId, 4); // retry: must reuse the mapped doc and submit it
     const siDocs = [...bucket("Sales Invoice").values()];
     check("submit-failure retry did not duplicate the Sales Invoice", siDocs.length === 1, `count=${siDocs.length}`);
     check("Sales Invoice submitted after retry", siDocs[0]?.docstatus === 1);
@@ -267,7 +286,7 @@ async function main() {
     } as Doc);
     queueInvoiceSync(dealerId, inv2!.id, "create");
     await settle();
-    await drain(4);
+    await drain(dealerId, 4);
     const orphanRef = await db
       .select()
       .from(erpnextRefsTable)
@@ -287,7 +306,7 @@ async function main() {
       .returning();
     queuePaymentSync(dealerId, refund!.id);
     await settle();
-    await drain(6);
+    await drain(dealerId, 6);
     const peDocs = [...bucket("Payment Entry").values()];
     const receive = peDocs.find((d) => d["payment_type"] === "Receive");
     const payOut = peDocs.find((d) => d["payment_type"] === "Pay");
@@ -296,14 +315,45 @@ async function main() {
     check("refund is Pay with non-negative allocation", payOut?.docstatus === 1 && rRefs?.[0]?.["allocated_amount"] === 250, JSON.stringify({ alloc: rRefs?.[0]?.["allocated_amount"] }));
     check("mode of payment mapped (cash → Cash)", receive?.["mode_of_payment"] === "Cash");
 
-    // 5 — void mirrors cancel; cancel is idempotent
+    // 5 — zero-value operational invoice/payment pair is a clean no-op
+    const [zeroInv] = await db
+      .insert(invoicesTable)
+      .values({ dealerId, invoiceNumber: "INV-ES-ZERO", customerId: cust!.id, customerName: "Ann Persaud", amount: 0, kind: "final", status: "issued", taxLines: [], currency: "GYD" } as never)
+      .returning();
+    queueInvoiceSync(dealerId, zeroInv!.id, "create");
+    const [zeroPay] = await db
+      .insert(paymentsTable)
+      .values({ dealerId, invoiceId: zeroInv!.id, customerName: "Ann Persaud", amount: 0, method: "cash" } as never)
+      .returning();
+    queuePaymentSync(dealerId, zeroPay!.id);
+    await settle();
+    await drain(dealerId, 4);
+    const zeroJobs = await db
+      .select()
+      .from(erpnextSyncJobsTable)
+      .where(
+        and(
+          eq(erpnextSyncJobsTable.dealerId, dealerId),
+          eq(erpnextSyncJobsTable.entityId, zeroPay!.id),
+          eq(erpnextSyncJobsTable.entityType, "payment"),
+        ),
+      );
+    check(
+      "zero invoice/payment completes without ERPNext documents",
+      zeroJobs[0]?.status === "succeeded" &&
+        ![...bucket("Sales Invoice").values()].some(
+          (d) => d["remarks"] === "AURA INV-ES-ZERO (final)",
+        ),
+    );
+
+    // 6 — void mirrors cancel; cancel is idempotent
     queueInvoiceSync(dealerId, inv!.id, "cancel");
     await settle();
-    await drain(4);
+    await drain(dealerId, 4);
     check("void cancelled the Sales Invoice (docstatus 2)", siDocs[0]?.docstatus === 2);
     queueInvoiceSync(dealerId, inv!.id, "cancel", { dedupeKey: `verify-cancel-again-${Date.now()}` });
     await settle();
-    await drain(4);
+    await drain(dealerId, 4);
     const cancelJobs = await db
       .select()
       .from(erpnextSyncJobsTable)

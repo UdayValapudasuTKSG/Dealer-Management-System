@@ -204,6 +204,24 @@ async function ensureSubmitted(
   if ((doc.docstatus ?? 0) === 0) await client.submitDoc(doctype, name);
 }
 
+/** Normalize an optional date-only due date for ERPNext.
+ * Missing/malformed legacy values are omitted so ERPNext can apply payment
+ * terms. A valid date before the posting date is clamped to posting date. */
+export function normalizeErpnextDueDate(
+  value: string | null | undefined,
+  postingDate: string,
+): string | undefined {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  ) {
+    return undefined;
+  }
+  return value < postingDate ? postingDate : value;
+}
+
 async function handleSalesInvoiceJob(
   job: ErpnextSyncJob,
 ): Promise<{ docName: string | null }> {
@@ -236,6 +254,15 @@ async function handleSalesInvoiceJob(
     return { docName: existing };
   }
   if (invoice.status === "void") return { docName: null }; // voided before it ever synced
+  // Zero-value invoices are operational placeholders in AURA, not accounting
+  // transactions. ERPNext rejects zero-rate Sales Invoices, so complete the
+  // sync job without creating a remote document.
+  if (invoice.amount === 0) return { docName: null };
+  if (invoice.amount < 0) {
+    throw configError(
+      `Invoice ${invoice.invoiceNumber} has a negative total; issue it through the refund/credit-note flow instead`,
+    );
+  }
 
   if (!conn.incomeAccount) {
     throw configError(
@@ -275,6 +302,7 @@ async function handleSalesInvoiceJob(
     Math.round(taxLines.reduce((s, l) => s + l.amount, 0) * 100) / 100;
   const base = Math.round((invoice.amount - taxTotal) * 100) / 100;
   const postingDate = invoice.createdAt.toISOString().slice(0, 10);
+  const dueDate = normalizeErpnextDueDate(invoice.dueDate, postingDate);
 
   const itemCode = await ensureSalesItem(client);
   const created = await client.insertDoc("Sales Invoice", {
@@ -283,7 +311,7 @@ async function handleSalesInvoiceJob(
     currency: "GYD",
     set_posting_time: 1,
     posting_date: postingDate,
-    ...(invoice.dueDate ? { due_date: invoice.dueDate } : {}),
+    ...(dueDate ? { due_date: dueDate } : {}),
     remarks,
     items: [
       {
@@ -333,6 +361,9 @@ async function handlePaymentEntryJob(
       and(eq(paymentsTable.id, job.entityId), eq(paymentsTable.dealerId, job.dealerId)),
     );
   if (!payment) throw configError(`Payment #${job.entityId} no longer exists in AURA`);
+  // Zero payments carry no accounting value and must not wait forever for a
+  // zero operational invoice that intentionally has no ERPNext reference.
+  if (payment.amount === 0) return { docName: null };
 
   const [invoice] = await db
     .select()
@@ -483,9 +514,10 @@ async function handleInboundCustomer(event: {
       ),
     );
   if (!ref) {
-    throw new Error(
-      `No AURA customer is mapped to ERPNext Customer "${docName}" — run the backfill or create the customer in AURA first`,
-    );
+    // An ERPNext webhook can race the outbound Customer job before its ref is
+    // persisted. External/unmapped ERPNext customers are not imported into
+    // AURA, so treating this as a no-op is both safe and retry-free.
+    return;
   }
 
   const [customer] = await db

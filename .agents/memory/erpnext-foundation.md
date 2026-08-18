@@ -14,3 +14,8 @@ description: Durable decisions the ERPNext entity-sync tasks must respect (queue
 - Every customer-write path must bump `updatedAt` and enqueue outbound sync, or inbound last-write-wins overwrites newer AURA data.
 - ERPNext allocations/amounts are non-negative; direction lives in payment_type ("Pay" for refunds).
 - Remote-create + local-ref is a crash window: persist the ref before submit and reconcile orphans by a deterministic remarks key before creating financial docs, or retries duplicate them.
+
+## Environment/company mapping
+- Production posts to ERPNext company `ksquare`; UAT/dev posts to the separate `ksquare UAT` company. Both companies and their accounting ledgers use GYD.
+  **Why:** The user confirmed all AURA accounting is GYD, and sharing one ERPNext company would mix UAT activity into live books.
+  **How to apply:** Preserve the selected company during connection tests; never point UAT at `ksquare` or revert either active company/account mapping to INR.
