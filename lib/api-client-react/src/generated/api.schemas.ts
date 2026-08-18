@@ -6376,6 +6376,11 @@ status?: string;
 mine?: number;
 };
 
+export type SendDeliveryWarrantyEmail200 = {
+  queued: boolean;
+  recipient: string;
+};
+
 export type ListLeadsParams = {
 phase?: string;
 status?: string;

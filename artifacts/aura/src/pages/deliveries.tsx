@@ -12,6 +12,7 @@ import {
   useListBookings,
   useUpdateBooking,
   useSendBookingPaymentReminder,
+  useSendDeliveryWarrantyEmail,
   getListDeliveriesQueryKey,
   getListBookingsQueryKey,
   getListGatesQueryKey,
@@ -25,6 +26,7 @@ import type {
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Truck,
+  Mail,
   CheckCircle2,
   Circle,
   ClipboardCheck,
@@ -305,6 +307,7 @@ function DeliveryDetail({
   const { data: salesAdvisors } = useListLeadAdvisors();
   const updateDeal = useUpdateDeal();
   const advance = useAdvanceDelivery();
+  const sendWarrantyEmail = useSendDeliveryWarrantyEmail();
   const updateDelivery = useUpdateDelivery();
   const updatePdi = useUpdateDeliveryPdi();
 
@@ -573,29 +576,50 @@ function DeliveryDetail({
             <div className="grid grid-cols-2 gap-2">
               <Button variant="outline" asChild>
                 <a
-                  href={`${import.meta.env.BASE_URL}api/deliveries/${delivery.id}/warranty.pdf?doc=certificate`}
+                  href={`${import.meta.env.BASE_URL}api/deliveries/${delivery.id}/warranty.pdf`}
                   target="_blank"
                   rel="noreferrer"
                 >
                   <FileText className="w-4 h-4 mr-2" />
-                  Warranty certificate (1 page)
+                  Warranty booklet
                 </a>
               </Button>
-              <Button variant="outline" asChild>
-                <a
-                  href={`${import.meta.env.BASE_URL}api/deliveries/${delivery.id}/warranty.pdf?doc=booklet`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Full warranty booklet
-                </a>
+              <Button
+                variant="outline"
+                disabled={sendWarrantyEmail.isPending}
+                onClick={() =>
+                  sendWarrantyEmail.mutate(
+                    { id: delivery.id },
+                    {
+                      onSuccess: (r) =>
+                        toast({
+                          title: "Warranty email queued",
+                          description: `The warranty booklet will be sent to ${r.recipient}.`,
+                        }),
+                      onError: (err: unknown) =>
+                        toast({
+                          title: "Couldn't send warranty email",
+                          description:
+                            (err as { response?: { data?: { error?: string } } })
+                              ?.response?.data?.error ??
+                            "No customer email on file.",
+                          variant: "destructive",
+                        }),
+                    },
+                  )
+                }
+              >
+                <Mail className="w-4 h-4 mr-2" />
+                {sendWarrantyEmail.isPending
+                  ? "Sending…"
+                  : "Send warranty email"}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Both documents are pre-filled with the customer, vehicle and
-              dealer details. Capture the customer's signature below — it is
-              placed in the certificate's "Customer signature" box.
+              The booklet is pre-filled with the customer, vehicle, dealer
+              details and the recorded handover date. Capture the customer's
+              signature below — it is placed in the certificate's "Customer
+              signature" box.
             </p>
             <Input
               placeholder="Customer's full name (warranty signature)"

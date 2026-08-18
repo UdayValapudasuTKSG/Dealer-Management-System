@@ -1229,6 +1229,19 @@ export const GetDeliveryHandoverPdfResponse = zod.unknown()
 
 
 /**
+ * @summary Email the autofilled warranty booklet to the customer
+ */
+export const SendDeliveryWarrantyEmailParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendDeliveryWarrantyEmailResponse = zod.object({
+  "queued": zod.boolean(),
+  "recipient": zod.string()
+})
+
+
+/**
  * @summary List users assignable as delivery advisors
  */
 export const ListDeliveryAdvisorsResponseItem = zod.object({

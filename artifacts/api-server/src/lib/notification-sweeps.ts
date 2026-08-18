@@ -1,8 +1,21 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lte, asc } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  asc,
+  sql,
+} from "drizzle-orm";
 import {
   db,
   assetsTable,
   customersTable,
+  deliveriesTable,
+  vehiclesTable,
+  emailLogsTable,
   dealersTable,
   leadsTable,
   serviceOrdersTable,
@@ -514,6 +527,93 @@ async function sweepUnassignedLeads(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Post-delivery feedback: one email to the customer 7 days after handover.
+// The lower bound (21 days) keeps a backlog of historical/imported
+// deliveries from all firing at once when this sweep first ships; the
+// dedupeKey makes each delivery one-shot regardless.
+// ---------------------------------------------------------------------------
+async function sweepDeliveryFeedback(): Promise<void> {
+  const now = Date.now();
+  const upper = new Date(now - 7 * 24 * HOUR);
+  const lower = new Date(now - 21 * 24 * HOUR);
+  const rows = await db
+    .select({
+      id: deliveriesTable.id,
+      dealerId: deliveriesTable.dealerId,
+      customerId: deliveriesTable.customerId,
+      customerName: deliveriesTable.customerName,
+      vehicleId: deliveriesTable.vehicleId,
+      email: customersTable.email,
+      name: customersTable.name,
+    })
+    .from(deliveriesTable)
+    .leftJoin(
+      customersTable,
+      and(
+        eq(customersTable.id, deliveriesTable.customerId),
+        eq(customersTable.dealerId, deliveriesTable.dealerId),
+      ),
+    )
+    // Anti-join on the outbox dedupe key so already-handled deliveries never
+    // occupy the batch — a backlog larger than one batch drains across runs
+    // instead of re-selecting the same deduped rows forever.
+    .leftJoin(
+      emailLogsTable,
+      eq(
+        emailLogsTable.dedupeKey,
+        sql`'delivery:feedback7d:' || ${deliveriesTable.id}`,
+      ),
+    )
+    .where(
+      and(
+        eq(deliveriesTable.status, "completed"),
+        isNotNull(deliveriesTable.deliveredAt),
+        lte(deliveriesTable.deliveredAt, upper),
+        gte(deliveriesTable.deliveredAt, lower),
+        isNull(emailLogsTable.id),
+      ),
+    )
+    // Oldest first so nothing ages past the window while newer rows hog the batch.
+    .orderBy(asc(deliveriesTable.deliveredAt))
+    .limit(200);
+  for (const row of rows) {
+    if (!row.email) continue;
+    try {
+      const [v] = await db
+        .select({
+          year: vehiclesTable.year,
+          make: vehiclesTable.make,
+          model: vehiclesTable.model,
+        })
+        .from(vehiclesTable)
+        .where(
+          and(
+            eq(vehiclesTable.id, row.vehicleId),
+            eq(vehiclesTable.dealerId, row.dealerId),
+          ),
+        );
+      const vehicle = v ? `${v.year} ${v.make} ${v.model}` : "your new vehicle";
+      await enqueueEmail({
+        template: "feedback_request",
+        to: row.email,
+        dealerId: row.dealerId,
+        customerId: row.customerId,
+        data: {
+          name: row.name ?? row.customerName ?? "there",
+          context: `the delivery of your ${vehicle}`,
+        },
+        dedupeKey: `delivery:feedback7d:${row.id}`,
+      });
+    } catch (err) {
+      logger.error(
+        { err, deliveryId: row.id },
+        "delivery feedback sweep failed",
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Worker
 // ---------------------------------------------------------------------------
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
@@ -525,6 +625,7 @@ export async function runNotificationSweeps(): Promise<void> {
   await sweepTestDriveReminders();
   await sweepServiceCadence();
   await sweepServiceSummaries();
+  await sweepDeliveryFeedback();
 }
 
 export function startNotificationSweeps(): void {

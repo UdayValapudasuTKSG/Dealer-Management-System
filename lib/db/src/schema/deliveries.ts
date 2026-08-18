@@ -20,8 +20,8 @@ export const DELIVERY_STEPS = [
   "insurance",
   "invoice",
   "appointment",
-  "warranty",
   "delivery",
+  "warranty",
   "signature",
   "feedback",
 ] as const;
@@ -140,7 +140,6 @@ export function normalizeDeliverySteps(
       ? { ...s, label: DELIVERY_STEP_LABELS[s.key] }
       : s,
   );
-  if (missing.length === 0) return relabeled;
   const out = [...relabeled];
   for (const key of missing) {
     const idx = DELIVERY_STEPS.indexOf(key);
@@ -155,7 +154,29 @@ export function normalizeDeliverySteps(
       status: "pending",
     });
   }
-  return out;
+  // Steps can be REORDERED between releases (e.g. warranty moved after
+  // delivery). Persisted arrays keep their creation-time order, so sort into
+  // the current canonical order — statuses travel with their step.
+  return out
+    .slice()
+    .sort(
+      (a, b) => DELIVERY_STEPS.indexOf(a.key) - DELIVERY_STEPS.indexOf(b.key),
+    );
+}
+
+/**
+ * The actionable step for an in-flight delivery. Persisted `currentStep`
+ * pointers can go stale when the canonical step ORDER changes between
+ * releases (e.g. a row saved "warranty" as current while "delivery" — now
+ * earlier — is still pending). The first pending step in canonical order is
+ * always the true pointer.
+ */
+export function effectiveCurrentStep(
+  steps: DeliveryStepState[],
+  fallback: DeliveryStep,
+): DeliveryStep {
+  const firstPending = steps.find((s) => s.status === "pending");
+  return firstPending ? firstPending.key : fallback;
 }
 
 export const deliveriesTable = pgTable("deliveries", {

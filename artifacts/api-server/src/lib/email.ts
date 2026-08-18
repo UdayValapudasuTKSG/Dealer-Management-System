@@ -27,6 +27,7 @@ import {
   buildServiceInvoicePdf,
 } from "./document-pdfs";
 import { getDealerPdfBranding } from "./dealer-branding";
+import { buildWarrantyBookletForDelivery } from "./warranty-doc";
 import { testDriveIcsFromPayload } from "./calendar";
 import {
   whatsappConfig,
@@ -509,6 +510,16 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     body: (x) =>
       `<strong>${d(x, "vehicle", "A vehicle")}</strong> was delivered to <strong>${d(x, "name", "the customer")}</strong>. The service cadence starts now — first check-in lands on the schedule automatically.`,
     sample: { vehicle: "2026 Toyota Land Cruiser", name: "Alex Mensah" },
+  },
+  "warranty.document": {
+    label: "Warranty Document",
+    description: "Sends the customer their autofilled warranty booklet.",
+    subject: (x) => `Your warranty documents — ${d(x, "vehicle", "your vehicle")}`,
+    heading: (x) => `Your warranty, ${d(x, "name", "all set")}`,
+    body: (x) =>
+      `Attached is the warranty booklet for your <strong>${d(x, "vehicle", "vehicle")}</strong>, pre-filled with your details and the delivery date. Keep it with your vehicle papers — and if anything ever needs attention, your service team is one message away.`,
+    cta: () => ({ label: "Covered from day one" }),
+    sample: { name: "Alex", vehicle: "2026 BYD Sealion 6" },
   },
   "case.opened": {
     label: "Service Case Opened (Internal)",
@@ -1320,6 +1331,20 @@ export async function processQueue(): Promise<void> {
               },
             ];
           }
+        }
+        if (item.template === "warranty.document" && item.payload?.deliveryId) {
+          const doc = await buildWarrantyBookletForDelivery(
+            Number(item.payload.deliveryId),
+            item.dealerId,
+          );
+          if (!doc) throw new Error("warranty booklet delivery not found");
+          attachments = [
+            {
+              filename: `${filePrefix}-Warranty-Booklet.pdf`,
+              content: doc.pdf,
+              contentType: "application/pdf",
+            },
+          ];
         }
         if (item.template === "vehicle_quote") {
           const pdf = await buildQuotePdf(item.payload ?? {}, branding.logo);

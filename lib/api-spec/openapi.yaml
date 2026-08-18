@@ -830,6 +830,39 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /deliveries/{id}/warranty-email:
+    post:
+      operationId: sendDeliveryWarrantyEmail
+      tags: [deliveries]
+      summary: Email the autofilled warranty booklet to the customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Warranty email queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queued, recipient]
+                properties:
+                  queued: { type: boolean }
+                  recipient: { type: string }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: No customer email on file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /delivery-advisors:
     get:
       operationId: listDeliveryAdvisors

@@ -3,29 +3,19 @@ import path from "node:path";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 /**
- * BYD warranty documents, autofilled by overlaying data onto the dealership's
- * actual PDF templates (assets/warranty). Two variants share the same
- * "Vehicle Warranty Certificate" layout:
- *  - certificate: the standalone one-page warranty certificate
- *  - booklet:     the full BYD private-cars warranty booklet — the
- *                 certificate is its page 5 and is the only page filled.
+ * BYD warranty booklet, autofilled by overlaying data onto the dealership's
+ * actual PDF template (assets/warranty/byd-warranty-booklet.pdf). The
+ * "Vehicle Warranty Certificate" is the booklet's page 5 and is the only
+ * page filled.
  */
 
-export type WarrantyVariant = "certificate" | "booklet";
+const TEMPLATE_FILE = "byd-warranty-booklet.pdf";
 
-const TEMPLATE_FILES: Record<WarrantyVariant, string> = {
-  certificate: "warranty-certificate.pdf",
-  booklet: "byd-warranty-booklet.pdf",
-};
+/** Certificate page index within the booklet. */
+const CERT_PAGE = 4;
 
-/** Certificate page index within each template. */
-const CERT_PAGE: Record<WarrantyVariant, number> = {
-  certificate: 0,
-  booklet: 4,
-};
-
-function templatePath(variant: WarrantyVariant): string {
-  const file = TEMPLATE_FILES[variant];
+function templatePath(): string {
+  const file = TEMPLATE_FILE;
   // Resolution order: next to the built bundle (build.mjs copies assets/
   // into dist/, and the esbuild banner defines __dirname), then the dev
   // source tree (dev workflow cwd is artifacts/api-server), then the
@@ -66,12 +56,11 @@ export interface WarrantyFillData {
 const INK = rgb(0.08, 0.1, 0.42);
 
 export async function buildWarrantyPdf(
-  variant: WarrantyVariant,
   data: WarrantyFillData,
 ): Promise<Buffer> {
-  const bytes = fs.readFileSync(templatePath(variant));
+  const bytes = fs.readFileSync(templatePath());
   const pdf = await PDFDocument.load(bytes);
-  const page = pdf.getPage(CERT_PAGE[variant]);
+  const page = pdf.getPage(CERT_PAGE);
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
 

@@ -250,6 +250,7 @@ import type {
   RoleWithPermissions,
   SalesPerformance,
   SearchResults,
+  SendDeliveryWarrantyEmail200,
   SendQuoteInput,
   SendQuoteResult,
   SentimentAnalysis,
@@ -2697,6 +2698,77 @@ export function useGetDeliveryHandoverPdf<TData = Awaited<ReturnType<typeof getD
 
 
 
+
+export const getSendDeliveryWarrantyEmailUrl = (id: number,) => {
+
+
+
+
+  return `/api/deliveries/${id}/warranty-email`
+}
+
+/**
+ * @summary Email the autofilled warranty booklet to the customer
+ */
+export const sendDeliveryWarrantyEmail = async (id: number, options?: RequestInit): Promise<SendDeliveryWarrantyEmail200> => {
+
+  return customFetch<SendDeliveryWarrantyEmail200>(getSendDeliveryWarrantyEmailUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSendDeliveryWarrantyEmailMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendDeliveryWarrantyEmail>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendDeliveryWarrantyEmail>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['sendDeliveryWarrantyEmail'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendDeliveryWarrantyEmail>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  sendDeliveryWarrantyEmail(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendDeliveryWarrantyEmailMutationResult = NonNullable<Awaited<ReturnType<typeof sendDeliveryWarrantyEmail>>>
+
+    export type SendDeliveryWarrantyEmailMutationError = ErrorType<Error>
+
+    /**
+ * @summary Email the autofilled warranty booklet to the customer
+ */
+export const useSendDeliveryWarrantyEmail = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendDeliveryWarrantyEmail>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendDeliveryWarrantyEmail>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getSendDeliveryWarrantyEmailMutationOptions(options));
+    }
 
 export const getListDeliveryAdvisorsUrl = () => {
 

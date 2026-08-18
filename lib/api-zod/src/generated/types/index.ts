@@ -489,6 +489,7 @@ export * from './salesPoint';
 export * from './searchGroup';
 export * from './searchItem';
 export * from './searchResults';
+export * from './sendDeliveryWarrantyEmail200';
 export * from './sendQuoteInput';
 export * from './sendQuoteInputChannel';
 export * from './sendQuoteResult';

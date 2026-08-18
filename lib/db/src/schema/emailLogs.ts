@@ -48,6 +48,7 @@ export const EMAIL_TEMPLATES = [
   "refund.customer",
   "delivery.ready",
   "delivered.service.handoff",
+  "warranty.document",
   "case.opened",
   "manager.note.advisor",
   "feedback.survey",

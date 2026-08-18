@@ -30,6 +30,7 @@ import {
   type PdiItem,
   normalizePdiItems,
   normalizeDeliverySteps,
+  effectiveCurrentStep,
 } from "@workspace/db";
 import {
   ListDeliveriesQueryParams,
@@ -58,7 +59,7 @@ import {
   type HandoverVerification,
 } from "../lib/handover-verify";
 import { buildHandoverPdf } from "../lib/document-pdfs";
-import { buildWarrantyPdf } from "../lib/warranty-pdf";
+import { buildWarrantyBookletForDelivery } from "../lib/warranty-doc";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import {
   onDealStageChanged,
@@ -318,13 +319,19 @@ async function loadDelivery(
     .select()
     .from(deliveriesTable)
     .where(and(eq(deliveriesTable.id, id), eq(deliveriesTable.dealerId, dealerId)));
-  return row
-    ? {
-        ...row,
-        pdiItems: normalizePdiItems(row.pdiItems),
-        steps: normalizeRowSteps(row),
-      }
-    : row;
+  if (!row) return row;
+  const steps = normalizeRowSteps(row);
+  return {
+    ...row,
+    pdiItems: normalizePdiItems(row.pdiItems),
+    steps,
+    // Step ORDER can change between releases (warranty moved after
+    // delivery) — the first pending step is the true pointer.
+    currentStep:
+      row.status === "completed"
+        ? row.currentStep
+        : effectiveCurrentStep(steps, row.currentStep as DeliveryStep),
+  };
 }
 
 /**
@@ -366,11 +373,18 @@ router.get("/deliveries", async (req, res): Promise<void> => {
       .from(deliveriesTable)
       .where(and(...filters))
       .orderBy(desc(deliveriesTable.createdAt))
-  ).map((r) => ({
-    ...r,
-    pdiItems: normalizePdiItems(r.pdiItems),
-    steps: normalizeRowSteps(r),
-  }));
+  ).map((r) => {
+    const steps = normalizeRowSteps(r);
+    return {
+      ...r,
+      pdiItems: normalizePdiItems(r.pdiItems),
+      steps,
+      currentStep:
+        r.status === "completed"
+          ? r.currentStep
+          : effectiveCurrentStep(steps, r.currentStep as DeliveryStep),
+    };
+  });
 
   res.json(ListDeliveriesResponse.parse(await enrich(rows, activeDealerId(res))));
 });
@@ -823,9 +837,13 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
         }
       : s,
   );
-  const idx = DELIVERY_STEPS.indexOf(step);
-  const isLast = idx === DELIVERY_STEPS.length - 1;
-  const nextStep = isLast ? step : DELIVERY_STEPS[idx + 1]!;
+  // The next actionable step is the first still-pending step in the updated
+  // array — NOT the canonical neighbor. Legacy rows can carry steps already
+  // completed/skipped under a previous step ORDER (e.g. warranty finished
+  // back when it preceded delivery), and those must not become current again.
+  const nextPending = steps.find((s) => s.status === "pending");
+  const isLast = !nextPending;
+  const nextStep = nextPending ? nextPending.key : step;
 
   const [updated] = await db
     .update(deliveriesTable)
@@ -1557,175 +1575,74 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
     .send(pdf);
 });
 
-// Autofilled BYD warranty documents (warranty step downloads). `doc` selects
-// the standalone certificate or the full booklet (certificate = its page 5).
+// Autofilled BYD warranty booklet (warranty step download) — the certificate
+// is the booklet's page 5 and is the only page filled.
 router.get("/deliveries/:id/warranty.pdf", async (req, res): Promise<void> => {
   const params = GetDeliveryHandoverPdfParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const variant = req.query.doc === "booklet" ? "booklet" : "certificate";
-  const delivery = await loadDelivery(params.data.id, activeDealerId(res));
-  if (!delivery) {
+  const doc = await buildWarrantyBookletForDelivery(
+    params.data.id,
+    activeDealerId(res),
+  );
+  if (!doc) {
     res.status(404).json({ error: "Delivery not found" });
     return;
   }
-  const [vehicle] = await db
-    .select()
-    .from(vehiclesTable)
-    .where(
-      and(
-        eq(vehiclesTable.id, delivery.vehicleId),
-        eq(vehiclesTable.dealerId, delivery.dealerId),
-      ),
-    );
-  // Owner details: prefer the delivery's linked customer, then the deal's
-  // customer, then the deal's lead — many deals only carry a lead record.
-  let warrantyCustomerId = delivery.customerId;
-  let warrantyLeadId: number | null = null;
-  {
-    const [deal] = await db
-      .select({
-        customerId: dealsTable.customerId,
-        leadId: dealsTable.leadId,
-      })
-      .from(dealsTable)
-      .where(
-        and(
-          eq(dealsTable.id, delivery.dealId),
-          eq(dealsTable.dealerId, delivery.dealerId),
-        ),
-      );
-    warrantyCustomerId = warrantyCustomerId ?? deal?.customerId ?? null;
-    warrantyLeadId = deal?.leadId ?? null;
-  }
-  const [customer] = warrantyCustomerId
-    ? await db
-        .select({
-          name: customersTable.name,
-          email: customersTable.email,
-          phone: customersTable.phone,
-          location: customersTable.location,
-          city: customersTable.city,
-          country: customersTable.country,
-        })
-        .from(customersTable)
-        .where(
-          and(
-            eq(customersTable.id, warrantyCustomerId),
-            eq(customersTable.dealerId, delivery.dealerId),
-          ),
-        )
-    : [];
-  const [dealer] = await db
-    .select({
-      name: dealersTable.name,
-      city: dealersTable.city,
-      country: dealersTable.country,
-      address: dealersTable.address,
-      servicePhone: dealersTable.servicePhone,
-      emergencyPhone: dealersTable.emergencyPhone,
-    })
-    .from(dealersTable)
-    .where(eq(dealersTable.id, delivery.dealerId));
-  // Lead fallback for owner contact details — many deals carry only a lead.
-  const [lead] =
-    !customer && warrantyLeadId
-      ? await db
-          .select({
-            name: leadsTable.name,
-            email: leadsTable.email,
-            phone: leadsTable.phone,
-            address: leadsTable.address,
-          })
-          .from(leadsTable)
-          .where(
-            and(
-              eq(leadsTable.id, warrantyLeadId),
-              eq(leadsTable.dealerId, delivery.dealerId),
-            ),
-          )
-      : [];
-  let invoiceNumber: string | null = null;
-  // Date of sale = the day the final payment settled the invoice.
-  let dateOfSale: Date | null = null;
-  if (delivery.invoiceId) {
-    const [inv] = await db
-      .select({
-        invoiceNumber: invoicesTable.invoiceNumber,
-        status: invoicesTable.status,
-      })
-      .from(invoicesTable)
-      .where(
-        and(
-          eq(invoicesTable.id, delivery.invoiceId),
-          eq(invoicesTable.dealerId, delivery.dealerId),
-        ),
-      );
-    invoiceNumber = inv?.invoiceNumber ?? null;
-    if (inv?.status === "paid") {
-      const [lastPayment] = await db
-        .select({ createdAt: paymentsTable.createdAt })
-        .from(paymentsTable)
-        .where(
-          and(
-            eq(paymentsTable.invoiceId, delivery.invoiceId),
-            eq(paymentsTable.dealerId, delivery.dealerId),
-          ),
-        )
-        .orderBy(desc(paymentsTable.createdAt))
-        .limit(1);
-      dateOfSale = lastPayment?.createdAt ?? null;
-    }
-  }
-  const branding = await getDealerPdfBranding(delivery.dealerId);
-  const fmt = (d: Date | null | undefined) =>
-    d
-      ? d.toLocaleDateString("en-US", {
-          timeZone: "America/Guyana",
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        })
-      : null;
-  const address =
-    customer?.location ??
-    ([customer?.city, customer?.country].filter(Boolean).join(", ") || null) ??
-    lead?.address ??
-    null;
-  const ownerPhone = customer?.phone ?? lead?.phone ?? null;
-  const pdf = await buildWarrantyPdf(variant, {
-    ownerName: customer?.name ?? delivery.customerName ?? lead?.name,
-    ownerEmail: customer?.email ?? lead?.email,
-    ownerAddressContact:
-      [address, ownerPhone].filter(Boolean).join(" · ") || null,
-    vehicleModel: vehicle ? `${vehicle.make} ${vehicle.model}` : null,
-    color: vehicle?.exteriorColor,
-    // Odometer reading at delivery is recorded by hand during handover.
-    odometer: null,
-    manufactureYear: vehicle?.year ? String(vehicle.year) : null,
-    vin: vehicle?.vin,
-    motorNumber: vehicle?.engineNumber,
-    dealerName: branding.displayName ?? dealer?.name ?? null,
-    servicePhone: dealer?.servicePhone,
-    emergencyContact: dealer?.emergencyPhone,
-    dealerAddress:
-      dealer?.address ??
-      ([dealer?.city, dealer?.country].filter(Boolean).join(", ") || null),
-    dateOfSale: fmt(dateOfSale),
-    invoiceNumber,
-    dateOfDelivery: fmt(delivery.deliveredAt ?? delivery.appointmentAt),
-    signatureDataUrl: delivery.warrantySignatureData,
-  });
   res
     .setHeader("Content-Type", "application/pdf")
     .setHeader(
       "Content-Disposition",
-      `inline; filename="warranty-${variant}-delivery-${delivery.id}.pdf"`,
+      `inline; filename="warranty-booklet-delivery-${params.data.id}.pdf"`,
     )
-    .send(pdf);
+    .send(doc.pdf);
 });
+
+// Queues the autofilled warranty booklet to the customer by email. The queue
+// worker rebuilds the PDF at send time, so a re-signed certificate is always
+// the version that goes out.
+router.post(
+  "/deliveries/:id/warranty-email",
+  async (req, res): Promise<void> => {
+    const params = GetDeliveryHandoverPdfParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const delivery = await loadDelivery(params.data.id, activeDealerId(res));
+    if (!delivery) {
+      res.status(404).json({ error: "Delivery not found" });
+      return;
+    }
+    const doc = await buildWarrantyBookletForDelivery(
+      delivery.id,
+      delivery.dealerId,
+    );
+    const email = doc?.ownerEmail ?? null;
+    if (!email) {
+      res.status(422).json({
+        error:
+          "No customer email on file — add an email to the customer (or lead) record first",
+      });
+      return;
+    }
+    await enqueueEmail({
+      template: "warranty.document",
+      to: email,
+      dealerId: delivery.dealerId,
+      customerId: delivery.customerId,
+      data: {
+        name: doc?.ownerName ?? delivery.customerName ?? "there",
+        vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
+        deliveryId: String(delivery.id),
+      },
+    });
+    res.json({ queued: true, recipient: email });
+  },
+);
+
 
 router.get("/delivery-advisors", async (_req, res): Promise<void> => {
   const rows = await db
