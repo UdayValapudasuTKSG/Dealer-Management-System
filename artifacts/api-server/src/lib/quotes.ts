@@ -260,23 +260,52 @@ export async function quotePdfPayload(
   quote: Quote,
 ): Promise<Record<string, string>> {
   const money = (n: number) =>
-    `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+    n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const [dealer] = await db
     .select({
       name: dealersTable.name,
       brandName: dealersTable.brandName,
+      address: dealersTable.address,
       city: dealersTable.city,
       country: dealersTable.country,
+      tin: dealersTable.tin,
+      servicePhone: dealersTable.servicePhone,
     })
     .from(dealersTable)
     .where(eq(dealersTable.id, quote.dealerId))
     .limit(1);
-  const gyd = (n: number) =>
-    `GYD ${Math.round(n).toLocaleString("en-US")}`;
+  const gyd = (n: number) => `GYD ${money(n)}`;
+  // Vehicle spec lines (body / engine / transmission) shown under the model.
+  let specLines: string[] = [];
+  if (quote.vehicleId) {
+    const [veh] = await db
+      .select({
+        bodyType: vehiclesTable.bodyType,
+        engine: vehiclesTable.engine,
+        transmission: vehiclesTable.transmission,
+      })
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.id, quote.vehicleId),
+          eq(vehiclesTable.dealerId, quote.dealerId),
+        ),
+      )
+      .limit(1);
+    if (veh) {
+      specLines = [veh.bodyType, veh.engine, veh.transmission].filter(
+        (s): s is string => Boolean(s && s.trim()),
+      );
+    }
+  }
   return {
     totalGyd: gyd(quote.total),
     dealerName: dealer?.brandName ?? dealer?.name ?? "",
-    dealerAddress: [dealer?.city, dealer?.country].filter(Boolean).join(", "),
+    dealerAddress:
+      dealer?.address ??
+      [dealer?.city, dealer?.country].filter(Boolean).join(", "),
+    dealerTin: dealer?.tin ?? "",
+    dealerPhone: dealer?.servicePhone ?? "",
     exchangeRateNote: "All figures in GYD",
     name: quote.customerName,
     address: quote.customerAddress ?? "",
@@ -302,6 +331,7 @@ export async function quotePdfPayload(
     ]),
     totalTax: money(quote.totalTax),
     total: money(quote.total),
+    specLines: JSON.stringify(specLines),
     quoteRef: `${quote.quoteNumber}-R${quote.version}`,
     issuedOn: quote.issuedOn,
     validUntil: quote.validUntil,

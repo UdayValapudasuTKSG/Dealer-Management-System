@@ -116,7 +116,7 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     subject: (x) => `Your personalised quote — ${d(x, "vehicle", "your vehicle")}`,
     heading: (x) => `Your quote is ready, ${d(x, "name", "there")}`,
     body: (x) =>
-      `Thank you for your interest in the <strong>${d(x, "vehicle", "vehicle of your choice")}</strong>. Your personalised quotation is attached as a PDF — it covers the ${d(x, "color", "selected")} finish at <strong>${d(x, "total", "the current showroom price")}</strong> and is valid until <strong>${d(x, "validUntil", "the date shown on the quote")}</strong>. Your sales advisor will follow up shortly to arrange a viewing or test drive.`,
+      `Thank you for your interest in the <strong>${d(x, "vehicle", "vehicle of your choice")}</strong>. Your personalised quotation is attached as a PDF — it covers the ${d(x, "color", "selected")} finish at <strong>${d(x, "totalGyd", d(x, "total", "the current showroom price"))}</strong> and is valid until <strong>${d(x, "validUntil", "the date shown on the quote")}</strong>. Your sales advisor will follow up shortly to arrange a viewing or test drive.`,
     cta: (x) =>
       x.link
         ? { label: "Book your test drive", href: x.link }
