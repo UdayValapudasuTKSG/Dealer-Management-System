@@ -177,7 +177,7 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
       const color = v.exteriorColor || lead.color || "";
       const quantity = 1;
       const now = new Date();
-      const validUntil = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+      const validUntil = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
       // Booking CTA rides along inside the quote email too, so the customer
       // can reserve a slot even if the separate invite email is missed.
       const bookingLink = lead.testDriveAt
@@ -234,10 +234,12 @@ export async function sendTestDriveInviteEmail(
       error: "A test drive is already scheduled for this lead.",
     };
   }
-  // Dealership policy: no customer self-scheduling — the invite carries the
-  // assigned sales advisor's phone number for a follow-up call instead.
+  // The invite carries the customer's self-service booking link (slots are
+  // filtered by advisor + vehicle capacity), with the assigned sales
+  // advisor's contact riding along for questions.
   const advisor = await leadAdvisorContact(lead);
   const vehicle = await vehicleName(lead.dealerId, lead.interestedVehicleId);
+  const bookingLink = testDriveBookingUrl(lead.testDriveToken);
   await send({
     dealerId: lead.dealerId,
     template: "test_drive_invite",
@@ -248,6 +250,7 @@ export async function sendTestDriveInviteEmail(
       ...(advisor?.name ? { advisorName: advisor.name } : {}),
       ...(advisor?.phone ? { advisorPhone: advisor.phone } : {}),
       ...(vehicle ? { vehicle } : {}),
+      ...(bookingLink ? { link: bookingLink } : {}),
     },
   });
   return { ok: true };

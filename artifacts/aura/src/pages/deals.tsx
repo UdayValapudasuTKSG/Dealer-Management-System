@@ -14,6 +14,7 @@ import {
   useListInvoices,
   useListOutstandingBalances,
   useUploadDealBankLetter,
+  useSendTestDriveInvite,
   getListGatesQueryKey,
   getListDocumentsQueryKey,
   getListDealsQueryKey,
@@ -53,6 +54,7 @@ import {
   Ban,
   Lock,
   Clock,
+  CarFront,
 } from "lucide-react";
 import { useAuthz } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
@@ -199,6 +201,9 @@ export default function Deals() {
         inv.dealId === dealId &&
         (inv.status === "issued" || inv.status === "partially_paid"),
     );
+
+  const sendInvite = useSendTestDriveInvite();
+  const [inviteDealId, setInviteDealId] = useState<number | null>(null);
 
   const [attachDeal, setAttachDeal] = useState<Deal | null>(null);
   const [attachLeadId, setAttachLeadId] = useState<string>("");
@@ -1162,6 +1167,47 @@ export default function Deals() {
                                     <Banknote className="w-3 h-3" /> Payment
                                   </Button>
                                 </div>
+                              )}
+                            {canEditDeals &&
+                              deal.leadId != null &&
+                              (deal.stage === "desking" ||
+                                deal.stage === "committed") && (
+                                <Button
+                                  variant="secondary"
+                                  disabled={
+                                    sendInvite.isPending &&
+                                    inviteDealId === deal.id
+                                  }
+                                  onClick={() => {
+                                    setInviteDealId(deal.id);
+                                    sendInvite.mutate(
+                                      { id: deal.leadId! },
+                                      {
+                                        onSuccess: () =>
+                                          toast({
+                                            title: "Test drive invite sent",
+                                            description: `${leadName(deal.leadId)} received an email with their self-service booking link.`,
+                                          }),
+                                        onError: (err: unknown) =>
+                                          toast({
+                                            title: "Could not send invite",
+                                            description:
+                                              (err as { error?: string })
+                                                ?.error ??
+                                              (err instanceof Error
+                                                ? err.message
+                                                : undefined),
+                                            variant: "destructive",
+                                          }),
+                                        onSettled: () => setInviteDealId(null),
+                                      },
+                                    );
+                                  }}
+                                  className="w-full text-[10px] font-bold uppercase tracking-widest h-7 rounded-lg gap-1 bg-white/[0.05] hover:bg-white/[0.1] text-foreground border border-border/60"
+                                >
+                                  <CarFront className="w-3 h-3" /> Send Test
+                                  Drive Invite
+                                </Button>
                               )}
                             <div className="flex items-center gap-1.5">
                               {canEditDeals && deal.stage === "desking" && (

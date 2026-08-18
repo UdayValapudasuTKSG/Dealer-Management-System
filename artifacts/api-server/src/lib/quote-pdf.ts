@@ -63,21 +63,23 @@ export function buildQuotePdf(
     const dealerName = val(data, "dealerName", "AURA Dealership");
 
     // ---- Letterhead --------------------------------------------------------
-    // Logo top-right; dealer identity block top-left (serif, like the
-    // reference estimate).
+    // Single brand mark: the dealer logo IS the letterhead (top-left), with
+    // the address/TIN/phone lines beneath it. Only when no logo is on file
+    // does the bold company name render instead — never both.
+    let hy = 64;
+    let logoDrawn = false;
     if (logo) {
       try {
-        doc.image(logo, right - 220, 38, { fit: [220, 48], align: "right" });
+        doc.image(logo, left, 40, { fit: [190, 44] });
+        logoDrawn = true;
+        hy = 96;
       } catch {
         // Unreadable logo bytes — keep the text-only letterhead.
       }
     }
-    doc
-      .font("Times-Bold")
-      .fontSize(12)
-      .fillColor(TEXT)
-      .text(dealerName, left, 46);
-    let hy = 64;
+    if (!logoDrawn) {
+      doc.font("Times-Bold").fontSize(12).fillColor(TEXT).text(dealerName, left, 46);
+    }
     const headerLine = (text: string) => {
       doc.font("Times-Roman").fontSize(8.5).fillColor("#333333").text(text, left, hy, {
         width: contentW / 2,
@@ -189,7 +191,14 @@ export function buildQuotePdf(
       // Missing/legacy payloads have no spec lines.
     }
     const manufacturer = data.manufacturer?.trim() ?? "";
-    const model = val(data, "vehicle", val(data, "model", ""));
+    let model = val(data, "vehicle", val(data, "model", ""));
+    // De-duplicate "BYD" / "BYD SHARK" → "BYD" / "SHARK".
+    if (
+      manufacturer &&
+      model.toLowerCase().startsWith(`${manufacturer.toLowerCase()} `)
+    ) {
+      model = model.slice(manufacturer.length + 1).trim();
+    }
     const descLines = [
       manufacturer || model,
       ...(manufacturer && model && model !== manufacturer ? [model] : []),

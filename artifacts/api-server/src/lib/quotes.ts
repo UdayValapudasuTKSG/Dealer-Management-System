@@ -64,7 +64,13 @@ export async function leadVehicle(lead: Lead): Promise<Vehicle | null> {
  */
 export async function generateQuoteForLead(
   lead: Lead,
-  opts: { actor: string; isAgent: boolean; trigger: QuoteTrigger },
+  opts: {
+    actor: string;
+    isAgent: boolean;
+    trigger: QuoteTrigger;
+    /** Staff-entered overrides from the Generate Code dialog. */
+    overrides?: { modelName?: string; modelYear?: number };
+  },
 ): Promise<Quote | null> {
   const vehicle = await leadVehicle(lead);
   if (!vehicle) return null;
@@ -103,7 +109,15 @@ export async function generateQuoteForLead(
       );
   }
 
-  const validUntil = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+  const modelYear = opts.overrides?.modelYear ?? vehicle.year;
+  // Avoid "BYD BYD SHARK": drop the make prefix from the model when the
+  // inventory model already repeats it.
+  const modelName =
+    opts.overrides?.modelName?.trim() ||
+    (vehicle.model.toLowerCase().startsWith(vehicle.make.toLowerCase())
+      ? vehicle.model
+      : `${vehicle.make} ${vehicle.model}`);
+  const validUntil = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const [quote] = await db
     .insert(quotesTable)
     .values({
@@ -115,12 +129,12 @@ export async function generateQuoteForLead(
       status: "current",
       customerName: lead.name,
       customerAddress: lead.address,
-      modelYear: vehicle.year,
-      vehicleLine: `${vehicle.make} ${vehicle.model}`,
+      modelYear,
+      vehicleLine: modelName,
       trim: vehicle.trim || vehicle.variant || lead.variant || null,
       color: vehicle.exteriorColor || lead.color || null,
       manufacturer: vehicle.make,
-      mfgDate: String(vehicle.year),
+      mfgDate: String(modelYear),
       quantity: 1,
       basePrice: vehicle.price,
       taxLines: computed.lines,

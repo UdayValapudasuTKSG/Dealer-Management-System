@@ -2659,6 +2659,20 @@ export interface LeadTestDriveInput {
   waiverAccepted: boolean;
 }
 
+export interface GenerateQuoteInput {
+  /**
+     * Override the vehicle model name printed on the quote
+     * @maxLength 120
+     */
+  modelName?: string;
+  /**
+     * Override the model year printed on the quote
+     * @minimum 1980
+     * @maximum 2100
+     */
+  modelYear?: number;
+}
+
 export type LeadAdvanceInputToStage = typeof LeadAdvanceInputToStage[keyof typeof LeadAdvanceInputToStage];
 
 
@@ -6777,3 +6791,4 @@ export const ListDocumentsEntityType = {
 export type RotateErpnextWebhookSecret200 = {
   webhookSecret: string;
 };
+

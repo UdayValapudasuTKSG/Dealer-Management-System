@@ -40,6 +40,7 @@ import { ActionChain } from "@/components/lead/lead-cockpit";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -998,6 +999,7 @@ export default function LeadDetail() {
       onSuccess: (q) => {
         qc.invalidateQueries({ queryKey: getListLeadQuotesQueryKey(id) });
         qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
+        setQuoteGenOpen(false);
         toast({
           title: `Code ${q.quoteNumber} generated`,
           description: `Revision ${q.version} priced with current taxes.`,
@@ -1036,6 +1038,9 @@ export default function LeadDetail() {
   const [discountOpen, setDiscountOpen] = useState(false);
   const [discountAmount, setDiscountAmount] = useState("");
   const [discountReason, setDiscountReason] = useState("");
+  const [quoteGenOpen, setQuoteGenOpen] = useState(false);
+  const [quoteModelName, setQuoteModelName] = useState("");
+  const [quoteModelYear, setQuoteModelYear] = useState("");
 
   const sendQuote = useSendLeadQuote({
     mutation: {
@@ -2394,7 +2399,11 @@ export default function LeadDetail() {
                         <Button
                           size="sm"
                           disabled={generateQuote.isPending}
-                          onClick={() => generateQuote.mutate({ id: lead.id })}
+                          onClick={() => {
+                            setQuoteModelName("");
+                            setQuoteModelYear("");
+                            setQuoteGenOpen(true);
+                          }}
                         >
                           {generateQuote.isPending ? (
                             <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
@@ -2407,6 +2416,94 @@ export default function LeadDetail() {
                         </Button>
                       )}
                     </div>
+
+                    <Dialog open={quoteGenOpen} onOpenChange={setQuoteGenOpen}>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Generate quotation Code</DialogTitle>
+                          <DialogDescription>
+                            Priced from the vehicle of interest. Optionally
+                            override the model name or model year printed on
+                            the quote.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="quote-model-name">
+                              Model name (optional)
+                            </Label>
+                            <Input
+                              id="quote-model-name"
+                              placeholder={
+                                vehicle
+                                  ? vehicle.model
+                                  : "e.g. SHARK 6 Premium"
+                              }
+                              maxLength={120}
+                              value={quoteModelName}
+                              onChange={(e) =>
+                                setQuoteModelName(e.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label htmlFor="quote-model-year">
+                              Model year (optional)
+                            </Label>
+                            <Input
+                              id="quote-model-year"
+                              type="number"
+                              min={1980}
+                              max={2100}
+                              placeholder={
+                                vehicle ? String(vehicle.year) : "e.g. 2026"
+                              }
+                              value={quoteModelYear}
+                              onChange={(e) =>
+                                setQuoteModelYear(e.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2 pt-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setQuoteGenOpen(false)}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              size="sm"
+                              disabled={
+                                generateQuote.isPending ||
+                                (quoteModelYear !== "" &&
+                                  (Number(quoteModelYear) < 1980 ||
+                                    Number(quoteModelYear) > 2100 ||
+                                    !Number.isInteger(Number(quoteModelYear))))
+                              }
+                              onClick={() =>
+                                generateQuote.mutate({
+                                  id: lead.id,
+                                  data: {
+                                    ...(quoteModelName.trim()
+                                      ? { modelName: quoteModelName.trim() }
+                                      : {}),
+                                    ...(quoteModelYear !== ""
+                                      ? { modelYear: Number(quoteModelYear) }
+                                      : {}),
+                                  },
+                                })
+                              }
+                            >
+                              {generateQuote.isPending && (
+                                <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                              )}
+                              Generate
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
 
                     <Dialog open={discountOpen} onOpenChange={setDiscountOpen}>
                       <DialogContent className="sm:max-w-md">

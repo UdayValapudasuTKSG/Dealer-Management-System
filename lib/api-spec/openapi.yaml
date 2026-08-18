@@ -1655,6 +1655,12 @@ paths:
           in: path
           required: true
           schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateQuoteInput"
       responses:
         "201":
           description: Newly generated quote version
@@ -8907,6 +8913,18 @@ components:
         vehicleId: { type: integer }
         licenceNumber: { type: string, minLength: 1 }
         waiverAccepted: { type: boolean }
+    GenerateQuoteInput:
+      type: object
+      properties:
+        modelName:
+          type: string
+          maxLength: 120
+          description: Override the vehicle model name printed on the quote
+        modelYear:
+          type: integer
+          minimum: 1980
+          maximum: 2100
+          description: Override the model year printed on the quote
     LeadAdvanceInput:
       type: object
       required: [toStage]

@@ -138,16 +138,23 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     heading: (x) => `Take the wheel, ${d(x, "name", "there")}`,
     body: (x) =>
       `The <strong>${d(x, "vehicle", "vehicle of your choice")}</strong> is ready when you are. ` +
-      (x.advisorPhone
-        ? `To arrange a time that suits you, call your sales advisor <strong>${d(x, "advisorName", "our team")}</strong> on <strong>${x.advisorPhone}</strong> — the vehicle will be detailed, charged/fuelled and waiting at the showroom entrance.`
-        : `Your sales advisor${x.advisorName ? ` <strong>${x.advisorName}</strong>` : ""} will call you shortly to arrange a time — the vehicle will be detailed, charged/fuelled and waiting at the showroom entrance.`),
+      (x.link
+        ? `Pick a 30-minute slot that suits you using the booking link below — it reserves the vehicle and your sales advisor${x.advisorName ? ` <strong>${x.advisorName}</strong>` : ""} exclusively for your drive.` +
+          (x.advisorPhone
+            ? ` Questions? Call <strong>${d(x, "advisorName", "your sales advisor")}</strong> on <strong>${x.advisorPhone}</strong>.`
+            : "")
+        : x.advisorPhone
+          ? `To arrange a time that suits you, call your sales advisor <strong>${d(x, "advisorName", "our team")}</strong> on <strong>${x.advisorPhone}</strong> — the vehicle will be detailed, charged/fuelled and waiting at the showroom entrance.`
+          : `Your sales advisor${x.advisorName ? ` <strong>${x.advisorName}</strong>` : ""} will call you shortly to arrange a time — the vehicle will be detailed, charged/fuelled and waiting at the showroom entrance.`),
     cta: (x) =>
-      x.advisorPhone
-        ? {
-            label: `Call ${d(x, "advisorName", "your sales advisor")} — ${x.advisorPhone}`,
-            href: `tel:${x.advisorPhone.replace(/[^+\d]/g, "")}`,
-          }
-        : { label: "Your sales advisor will call you" },
+      x.link
+        ? { label: "Book your test drive", href: x.link }
+        : x.advisorPhone
+          ? {
+              label: `Call ${d(x, "advisorName", "your sales advisor")} — ${x.advisorPhone}`,
+              href: `tel:${x.advisorPhone.replace(/[^+\d]/g, "")}`,
+            }
+          : { label: "Your sales advisor will call you" },
     sample: {
       name: "Alex Mensah",
       vehicle: "BMW i7 xDrive60",

@@ -257,6 +257,7 @@ export * from './gateResolution';
 export * from './gateResolutionAction';
 export * from './gateStatus';
 export * from './gateType';
+export * from './generateQuoteInput';
 export * from './getCalendarParams';
 export * from './getPermissionMeta200';
 export * from './getPipelineSuggestionsParams';

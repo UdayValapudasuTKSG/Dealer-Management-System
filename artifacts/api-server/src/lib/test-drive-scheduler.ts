@@ -25,9 +25,9 @@ const REMINDER_LEAD_MS = 24 * 60 * 60 * 1000;
 // Showroom slot grid — shared with the public booking page and the staff
 // A10 availability check so both always agree on what's offerable.
 export const SLOT_OPEN_HOUR = 9; // first slot 9:00 AM
-export const SLOT_LAST_HOUR = 16; // last slot 4:00 PM
+export const SLOT_LAST_HOUR = 16; // last slot starts 4:30 PM
 export const SLOT_WINDOW_DAYS = 14; // bookable window starts tomorrow
-export const SLOT_LENGTH_MS = 60 * 60 * 1000;
+export const SLOT_LENGTH_MS = 30 * 60 * 1000; // 30-minute drives
 
 export function slotWindowDays(): Date[] {
   const now = new Date();
@@ -41,17 +41,31 @@ export function slotWindowDays(): Date[] {
 }
 
 export function offeredSlotTimes(): Date[] {
-  return slotWindowDays().flatMap((day) =>
-    Array.from(
-      { length: SLOT_LAST_HOUR - SLOT_OPEN_HOUR + 1 },
-      (_, i) =>
-        new Date(
-          day.getFullYear(),
-          day.getMonth(),
-          day.getDate(),
-          SLOT_OPEN_HOUR + i,
-        ),
-    ),
+  return slotWindowDays().flatMap((day) => daySlotTimes(day));
+}
+
+/** True when a time sits on the shared 30-minute booking grid. */
+export function slotGridAligned(d: Date): boolean {
+  return (
+    d.getMinutes() % 30 === 0 &&
+    d.getSeconds() === 0 &&
+    d.getMilliseconds() === 0
+  );
+}
+
+/** 30-minute slot start times for one day: 9:00, 9:30, … 4:30 PM. */
+export function daySlotTimes(day: Date): Date[] {
+  const halfHours = (SLOT_LAST_HOUR - SLOT_OPEN_HOUR + 1) * 2;
+  return Array.from(
+    { length: halfHours },
+    (_, i) =>
+      new Date(
+        day.getFullYear(),
+        day.getMonth(),
+        day.getDate(),
+        SLOT_OPEN_HOUR + Math.floor(i / 2),
+        (i % 2) * 30,
+      ),
   );
 }
 

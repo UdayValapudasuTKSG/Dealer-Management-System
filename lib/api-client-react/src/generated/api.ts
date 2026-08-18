@@ -133,6 +133,7 @@ import type {
   FinanceDocument,
   Gate,
   GateResolution,
+  GenerateQuoteInput,
   GetCalendarParams,
   GetPermissionMeta200,
   GetPipelineSuggestionsParams,
@@ -4977,14 +4978,15 @@ export const getGenerateLeadQuoteUrl = (id: number,) => {
 /**
  * @summary Generate (or regenerate) the Code for this lead from inventory + tax config
  */
-export const generateLeadQuote = async (id: number, options?: RequestInit): Promise<Quote> => {
+export const generateLeadQuote = async (id: number,
+    generateQuoteInput?: GenerateQuoteInput, options?: RequestInit): Promise<Quote> => {
 
   return customFetch<Quote>(getGenerateLeadQuoteUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(generateQuoteInput)
   }
 );}
 
@@ -4993,8 +4995,8 @@ export const generateLeadQuote = async (id: number, options?: RequestInit): Prom
 
 
 export const getGenerateLeadQuoteMutationOptions = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateLeadQuote>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof generateLeadQuote>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateLeadQuote>>, TError,{id: number;data?: BodyType<GenerateQuoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateLeadQuote>>, TError,{id: number;data?: BodyType<GenerateQuoteInput>}, TContext> => {
 
 const mutationKey = ['generateLeadQuote'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -5006,10 +5008,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateLeadQuote>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateLeadQuote>>, {id: number;data?: BodyType<GenerateQuoteInput>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  generateLeadQuote(id,requestOptions)
+          return  generateLeadQuote(id,data,requestOptions)
         }
 
 
@@ -5020,18 +5022,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type GenerateLeadQuoteMutationResult = NonNullable<Awaited<ReturnType<typeof generateLeadQuote>>>
-
+    export type GenerateLeadQuoteMutationBody = BodyType<GenerateQuoteInput> | undefined
     export type GenerateLeadQuoteMutationError = ErrorType<Error>
 
     /**
  * @summary Generate (or regenerate) the Code for this lead from inventory + tax config
  */
 export const useGenerateLeadQuote = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateLeadQuote>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateLeadQuote>>, TError,{id: number;data?: BodyType<GenerateQuoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof generateLeadQuote>>,
         TError,
-        {id: number},
+        {id: number;data?: BodyType<GenerateQuoteInput>},
         TContext
       > => {
       return useMutation(getGenerateLeadQuoteMutationOptions(options));

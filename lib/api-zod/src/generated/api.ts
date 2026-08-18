@@ -157,6 +157,9 @@ export const ListVehiclesQueryParams = zod.object({
 })
 
 
+
+
+
 export const ListVehiclesResponseItem = zod.object({
   "id": zod.number(),
   "divisionId": zod.number().nullish(),
@@ -219,6 +222,9 @@ export const createVehicleBodyEngineMin = 17;
 export const createVehicleBodyEngineMax = 17;
 
 
+
+
+
 export const CreateVehicleBody = zod.object({
   "divisionId": zod.number().optional(),
   "make": zod.string().min(1),
@@ -248,6 +254,9 @@ export const CreateVehicleBody = zod.object({
   "description": zod.string().optional(),
   "featured": zod.boolean().optional()
 })
+
+
+
 
 
 export const CreateVehicleResponse = zod.object({
@@ -300,6 +309,9 @@ export const GetVehicleParams = zod.object({
 })
 
 
+
+
+
 export const GetVehicleResponse = zod.object({
   "id": zod.number(),
   "divisionId": zod.number().nullish(),
@@ -350,6 +362,7 @@ export const UpdateVehicleParams = zod.object({
 })
 
 
+
 export const updateVehicleBodyVinMin = 17;
 export const updateVehicleBodyVinMax = 17;
 
@@ -359,6 +372,9 @@ export const updateVehicleBodyEngineNumberMax = 17;
 export const updateVehicleBodyRegistrationRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
 export const updateVehicleBodyEngineMin = 17;
 export const updateVehicleBodyEngineMax = 17;
+
+
+
 
 
 export const UpdateVehicleBody = zod.object({
@@ -392,6 +408,9 @@ export const UpdateVehicleBody = zod.object({
   "description": zod.string().optional(),
   "featured": zod.boolean().optional()
 })
+
+
+
 
 
 export const UpdateVehicleResponse = zod.object({
@@ -452,6 +471,9 @@ export const DeleteVehicleResponse = zod.void()
 export const RestoreVehicleParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
+
 
 
 export const RestoreVehicleResponse = zod.object({
@@ -563,6 +585,7 @@ export const createBookingBodyWaiverReasonMin = 5;
 export const createBookingBodyWaiverReasonMax = 500;
 
 
+
 export const CreateBookingBody = zod.object({
   "vehicleId": zod.number(),
   "customerId": zod.number().optional(),
@@ -633,6 +656,7 @@ export const UpdateBookingParams = zod.object({
 export const updateBookingBodyAmountPaidMin = 0;
 
 export const updateBookingBodyCancellationNoteMax = 1000;
+
 
 
 export const UpdateBookingBody = zod.object({
@@ -920,6 +944,7 @@ export const UpdateDeliveryParams = zod.object({
 export const updateDeliveryBodyRegistrationNumberRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
 
 
+
 export const UpdateDeliveryBody = zod.object({
   "advisorUserId": zod.number().nullish(),
   "registrationNumber": zod.string().regex(updateDeliveryBodyRegistrationNumberRegExp).optional(),
@@ -1019,6 +1044,7 @@ export const AdvanceDeliveryParams = zod.object({
 
 export const advanceDeliveryBodyRegistrationNumberRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
 export const advanceDeliveryBodyFeedbackRatingMax = 5;
+
 
 
 export const AdvanceDeliveryBody = zod.object({
@@ -1237,6 +1263,9 @@ export const ListLeadsQueryParams = zod.object({
 })
 
 
+
+
+
 export const ListLeadsResponseItem = zod.object({
   "id": zod.number(),
   "divisionId": zod.number().nullish(),
@@ -1291,6 +1320,10 @@ export const ListLeadsResponseItem = zod.object({
 export const ListLeadsResponse = zod.array(ListLeadsResponseItem)
 
 
+
+
+
+
 export const CreateLeadBody = zod.object({
   "divisionId": zod.number().optional(),
   "name": zod.string().min(1),
@@ -1316,6 +1349,9 @@ export const CreateLeadBody = zod.object({
   "address": zod.string().optional(),
   "description": zod.string().optional()
 })
+
+
+
 
 
 export const CreateLeadResponse = zod.object({
@@ -1380,6 +1416,9 @@ export const GetLeadParams = zod.object({
 })
 
 
+
+
+
 export const GetLeadResponse = zod.object({
   "id": zod.number(),
   "divisionId": zod.number().nullish(),
@@ -1438,6 +1477,11 @@ export const UpdateLeadParams = zod.object({
 })
 
 
+
+
+
+
+
 export const UpdateLeadBody = zod.object({
   "divisionId": zod.number().nullish(),
   "name": zod.string().min(1).optional(),
@@ -1480,6 +1524,9 @@ export const UpdateLeadBody = zod.object({
   "description": zod.string().nullish(),
   "address": zod.string().nullish()
 })
+
+
+
 
 
 export const UpdateLeadResponse = zod.object({
@@ -1550,6 +1597,9 @@ export const RestoreLeadParams = zod.object({
 })
 
 
+
+
+
 export const RestoreLeadResponse = zod.object({
   "id": zod.number(),
   "divisionId": zod.number().nullish(),
@@ -1608,6 +1658,8 @@ export const RestoreLeadResponse = zod.object({
  */
 
 
+
+
 export const CreateEnquiryBody = zod.object({
   "name": zod.string().min(1),
   "email": zod.string().optional(),
@@ -1621,6 +1673,9 @@ export const CreateEnquiryBody = zod.object({
   "comments": zod.string().optional(),
   "marketingConsent": zod.boolean().optional()
 })
+
+
+
 
 
 export const CreateEnquiryResponse = zod.object({
@@ -1728,6 +1783,8 @@ export const BookTestDriveSlotParams = zod.object({
 })
 
 
+
+
 export const BookTestDriveSlotBody = zod.object({
   "slot": zod.coerce.date(),
   "licenceNumber": zod.string().min(1),
@@ -1791,6 +1848,9 @@ export const AssignLeadParams = zod.object({
 export const AssignLeadBody = zod.object({
   "userId": zod.number()
 })
+
+
+
 
 
 export const AssignLeadResponse = zod.object({
@@ -1880,6 +1940,9 @@ export const AdvanceLeadStageParams = zod.object({
 export const AdvanceLeadStageBody = zod.object({
   "toStage": zod.enum(['qualified', 'test_drive', 'proposal', 'negotiation', 'sold'])
 })
+
+
+
 
 
 export const AdvanceLeadStageResponse = zod.object({
@@ -1972,6 +2035,8 @@ export const ScheduleTestDriveParams = zod.object({
 })
 
 
+
+
 export const ScheduleTestDriveBody = zod.object({
   "scheduledAt": zod.coerce.date(),
   "branch": zod.string().optional(),
@@ -1979,6 +2044,9 @@ export const ScheduleTestDriveBody = zod.object({
   "licenceNumber": zod.string().min(1),
   "waiverAccepted": zod.boolean()
 })
+
+
+
 
 
 export const ScheduleTestDriveResponse = zod.object({
@@ -2058,6 +2126,9 @@ export const CheckLeadAvailabilityParams = zod.object({
 })
 
 
+
+
+
 export const CheckLeadAvailabilityResponse = zod.object({
   "id": zod.number(),
   "divisionId": zod.number().nullish(),
@@ -2118,10 +2189,14 @@ export const RecordLeadDecisionParams = zod.object({
 export const recordLeadDecisionBodyReasonMax = 500;
 
 
+
 export const RecordLeadDecisionBody = zod.object({
   "choice": zod.enum(['cash', 'finance', 'not_interested']),
   "reason": zod.string().max(recordLeadDecisionBodyReasonMax).optional()
 })
+
+
+
 
 
 export const RecordLeadDecisionResponse = zod.object({
@@ -2208,6 +2283,7 @@ export const CreateLeadNoteParams = zod.object({
 export const createLeadNoteBodyTextMax = 2000;
 
 
+
 export const CreateLeadNoteBody = zod.object({
   "text": zod.string().min(1).max(createLeadNoteBodyTextMax)
 })
@@ -2259,6 +2335,7 @@ export const SendLeadWhatsappReplyParams = zod.object({
 export const sendLeadWhatsappReplyBodyTextMax = 2000;
 
 
+
 export const SendLeadWhatsappReplyBody = zod.object({
   "text": zod.string().min(1).max(sendLeadWhatsappReplyBodyTextMax)
 })
@@ -2282,6 +2359,7 @@ export const SendLeadOutreachParams = zod.object({
 export const sendLeadOutreachBodyMessageMax = 4000;
 
 export const sendLeadOutreachBodySubjectMax = 200;
+
 
 
 export const SendLeadOutreachBody = zod.object({
@@ -2308,6 +2386,9 @@ export const LinkLeadAccountParams = zod.object({
 export const LinkLeadAccountBody = zod.object({
   "customerId": zod.number()
 })
+
+
+
 
 
 export const LinkLeadAccountResponse = zod.object({
@@ -2447,6 +2528,18 @@ export const GenerateLeadQuoteParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const generateLeadQuoteBodyModelNameMax = 120;
+
+export const generateLeadQuoteBodyModelYearMin = 1980;
+export const generateLeadQuoteBodyModelYearMax = 2100;
+
+
+
+export const GenerateLeadQuoteBody = zod.object({
+  "modelName": zod.string().max(generateLeadQuoteBodyModelNameMax).optional().describe('Override the vehicle model name printed on the quote'),
+  "modelYear": zod.number().min(generateLeadQuoteBodyModelYearMin).max(generateLeadQuoteBodyModelYearMax).optional().describe('Override the model year printed on the quote')
+})
+
 export const GenerateLeadQuoteResponse = zod.object({
   "id": zod.number(),
   "leadId": zod.number(),
@@ -2497,6 +2590,7 @@ export const RequestQuoteDiscountParams = zod.object({
 })
 
 export const requestQuoteDiscountBodyAmountExclusiveMin = 0;
+
 
 
 export const RequestQuoteDiscountBody = zod.object({
@@ -2560,6 +2654,7 @@ export const listCapacityBlocksResponseStartHourMax = 23;
 export const listCapacityBlocksResponseEndHourMax = 24;
 
 
+
 export const ListCapacityBlocksResponseItem = zod.object({
   "id": zod.number(),
   "kind": zod.enum(['vehicle', 'advisor']),
@@ -2584,6 +2679,7 @@ export const createCapacityBlockBodyStartHourMax = 23;
 export const createCapacityBlockBodyEndHourMax = 24;
 
 
+
 export const CreateCapacityBlockBody = zod.object({
   "kind": zod.enum(['vehicle', 'advisor']),
   "refId": zod.number(),
@@ -2597,6 +2693,7 @@ export const createCapacityBlockResponseStartHourMin = 0;
 export const createCapacityBlockResponseStartHourMax = 23;
 
 export const createCapacityBlockResponseEndHourMax = 24;
+
 
 
 export const CreateCapacityBlockResponse = zod.object({
@@ -2691,6 +2788,7 @@ export const createLeadCallBodyDurationSecondsMin = 0;
 export const createLeadCallBodyNotesMax = 4000;
 
 
+
 export const CreateLeadCallBody = zod.object({
   "direction": zod.enum(['outbound', 'inbound']),
   "status": zod.enum(['completed', 'no_answer', 'busy', 'voicemail', 'wrong_number', 'callback']),
@@ -2728,6 +2826,7 @@ export const UpdateLeadCallParams = zod.object({
 })
 
 export const updateLeadCallBodyNotesMax = 4000;
+
 
 
 export const UpdateLeadCallBody = zod.object({
@@ -2795,6 +2894,7 @@ export const suggestCallSentimentBodyNotesMin = 5;
 export const suggestCallSentimentBodyNotesMax = 4000;
 
 
+
 export const SuggestCallSentimentBody = zod.object({
   "notes": zod.string().min(suggestCallSentimentBodyNotesMin).max(suggestCallSentimentBodyNotesMax)
 })
@@ -2844,6 +2944,9 @@ export const ListCustomersResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListCustomersResponse = zod.array(ListCustomersResponseItem)
+
+
+
 
 
 export const CreateCustomerBody = zod.object({
@@ -2939,6 +3042,8 @@ export const GetCustomerResponse = zod.object({
 export const UpdateCustomerParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const UpdateCustomerBody = zod.object({
@@ -3112,6 +3217,7 @@ export const UpdateDealParams = zod.object({
 export const updateDealBodyCancellationNoteMax = 1000;
 
 
+
 export const UpdateDealBody = zod.object({
   "customerId": zod.number().optional(),
   "leadId": zod.number().nullish(),
@@ -3159,6 +3265,11 @@ export const UpdateDealResponse = zod.object({
 export const UploadDealBankLetterParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
+
+
+
 
 
 export const UploadDealBankLetterBody = zod.object({
@@ -3235,6 +3346,10 @@ export const ListAppraisalsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListAppraisalsResponse = zod.array(ListAppraisalsResponseItem)
+
+
+
+
 
 
 export const CreateAppraisalBody = zod.object({
@@ -3334,6 +3449,9 @@ export const ListFinanceApplicationsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListFinanceApplicationsResponse = zod.array(ListFinanceApplicationsResponseItem)
+
+
+
 
 
 export const CreateFinanceApplicationBody = zod.object({
@@ -3671,6 +3789,9 @@ export const ListBanksResponseItem = zod.object({
 export const ListBanksResponse = zod.array(ListBanksResponseItem)
 
 
+
+
+
 export const CreateBankBody = zod.object({
   "name": zod.string().min(1),
   "code": zod.string().optional(),
@@ -3699,6 +3820,8 @@ export const CreateBankResponse = zod.object({
 export const UpdateBankParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const UpdateBankBody = zod.object({
@@ -3754,6 +3877,9 @@ export const ListInvoicesResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem)
+
+
+
 
 
 export const CreateInvoiceBody = zod.object({
@@ -3974,6 +4100,7 @@ export const createServiceOrderBodyEstimatedHoursMin = 0.25;
 export const createServiceOrderBodyEstimatedHoursMax = 24;
 
 
+
 export const CreateServiceOrderBody = zod.object({
   "customerId": zod.number().optional(),
   "customerName": zod.string().optional(),
@@ -4043,6 +4170,7 @@ export const updateServiceOrderBodyEstimatedHoursMin = 0.25;
 export const updateServiceOrderBodyEstimatedHoursMax = 24;
 
 
+
 export const UpdateServiceOrderBody = zod.object({
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection', 'comeback', 'unscheduled']).optional(),
   "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']).optional(),
@@ -4096,6 +4224,7 @@ export const AdvanceServiceOrderParams = zod.object({
 
 export const advanceServiceOrderBodyJustificationMin = 3;
 export const advanceServiceOrderBodyJustificationMax = 2000;
+
 
 
 export const AdvanceServiceOrderBody = zod.object({
@@ -4220,6 +4349,9 @@ export const ListJobCardsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListJobCardsResponse = zod.array(ListJobCardsResponseItem)
+
+
+
 
 
 export const CreateJobCardBody = zod.object({
@@ -4551,6 +4683,7 @@ export const DecideJobCardSurchargeParams = zod.object({
 export const decideJobCardSurchargeBodyAmountMin = 0;
 
 
+
 export const DecideJobCardSurchargeBody = zod.object({
   "action": zod.enum(['apply', 'waive']),
   "amount": zod.number().min(decideJobCardSurchargeBodyAmountMin).optional()
@@ -4640,6 +4773,8 @@ export const ListJobCardPartsResponse = zod.array(ListJobCardPartsResponseItem)
 export const AddJobCardPartParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const AddJobCardPartBody = zod.object({
@@ -4795,6 +4930,7 @@ export const RequestServiceInvoiceDiscountParams = zod.object({
 export const requestServiceInvoiceDiscountBodyAmountMin = 0.01;
 
 
+
 export const RequestServiceInvoiceDiscountBody = zod.object({
   "amount": zod.number().min(requestServiceInvoiceDiscountBodyAmountMin),
   "reason": zod.string().optional()
@@ -4889,6 +5025,7 @@ export const AdjustServiceInvoiceParams = zod.object({
 export const adjustServiceInvoiceBodyReasonMin = 3;
 
 
+
 export const AdjustServiceInvoiceBody = zod.object({
   "amount": zod.number(),
   "reason": zod.string().min(adjustServiceInvoiceBodyReasonMin)
@@ -4965,6 +5102,9 @@ export const ListCoveragePlansResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListCoveragePlansResponse = zod.array(ListCoveragePlansResponseItem)
+
+
+
 
 
 export const CreateCoveragePlanBody = zod.object({
@@ -5067,6 +5207,10 @@ export const ListPartsResponseItem = zod.object({
 export const ListPartsResponse = zod.array(ListPartsResponseItem)
 
 
+
+
+
+
 export const CreatePartBody = zod.object({
   "sku": zod.string().min(1),
   "name": zod.string().min(1),
@@ -5167,6 +5311,7 @@ export const updatePartsSettingsBodyMarkupPercentMin = 0;
 export const updatePartsSettingsBodyMarkupPercentMax = 500;
 
 
+
 export const UpdatePartsSettingsBody = zod.object({
   "markupPercent": zod.number().min(updatePartsSettingsBodyMarkupPercentMin).max(updatePartsSettingsBodyMarkupPercentMax)
 })
@@ -5207,6 +5352,8 @@ export const ListPurchaseOrdersResponse = zod.array(ListPurchaseOrdersResponseIt
  */
 
 export const createPurchaseOrderBodyLinesItemUnitCostMin = 0;
+
+
 
 
 export const CreatePurchaseOrderBody = zod.object({
@@ -5288,6 +5435,8 @@ export const ReceivePurchaseOrderParams = zod.object({
 })
 
 
+
+
 export const ReceivePurchaseOrderBody = zod.object({
   "lines": zod.array(zod.object({
   "lineId": zod.number(),
@@ -5351,6 +5500,7 @@ export const CreateJobCardCreditNoteParams = zod.object({
 export const createJobCardCreditNoteBodyReasonMin = 3;
 
 
+
 export const CreateJobCardCreditNoteBody = zod.object({
   "jobCardPartId": zod.number().describe('The issued part line being credited'),
   "quantity": zod.number().min(1),
@@ -5381,6 +5531,9 @@ export const ListSuppliersResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 })
 export const ListSuppliersResponse = zod.array(ListSuppliersResponseItem)
+
+
+
 
 
 export const CreateSupplierBody = zod.object({
@@ -5420,6 +5573,7 @@ export const ListPartPurchasesResponse = zod.array(ListPartPurchasesResponseItem
  */
 
 
+
 export const CreatePartPurchaseBody = zod.object({
   "partId": zod.number(),
   "supplierId": zod.number().optional(),
@@ -5450,6 +5604,8 @@ export const CreatePartPurchaseResponse = zod.object({
 export const ReceivePartPurchaseParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const ReceivePartPurchaseBody = zod.object({
@@ -5572,6 +5728,7 @@ export const ListReviewsQueryParams = zod.object({
 export const listReviewsResponseRatingMax = 5;
 
 
+
 export const ListReviewsResponseItem = zod.object({
   "id": zod.number(),
   "customerId": zod.number().nullish(),
@@ -5594,6 +5751,7 @@ export const ListReviewsResponse = zod.array(ListReviewsResponseItem)
 export const createReviewBodyRatingMax = 5;
 
 
+
 export const CreateReviewBody = zod.object({
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
@@ -5606,6 +5764,7 @@ export const CreateReviewBody = zod.object({
 })
 
 export const createReviewResponseRatingMax = 5;
+
 
 
 export const CreateReviewResponse = zod.object({
@@ -5657,6 +5816,7 @@ export const ListCasesResponse = zod.array(ListCasesResponseItem)
  * @summary Open a customer case
  */
 export const createCaseBodyTitleMin = 3;
+
 
 
 export const CreateCaseBody = zod.object({
@@ -6123,6 +6283,13 @@ export const GetCustomerOverviewParams = zod.object({
 })
 
 
+
+
+
+
+
+
+
 export const GetCustomerOverviewResponse = zod.object({
   "customer": zod.object({
   "id": zod.number(),
@@ -6563,6 +6730,8 @@ export const CreateContactParams = zod.object({
 })
 
 
+
+
 export const CreateContactBody = zod.object({
   "name": zod.string().min(1),
   "title": zod.string().optional(),
@@ -6590,6 +6759,8 @@ export const UpdateContactParams = zod.object({
   "id": zod.coerce.number(),
   "contactId": zod.coerce.number()
 })
+
+
 
 
 export const UpdateContactBody = zod.object({
@@ -6714,6 +6885,9 @@ export const GetCustomerPersonaParams = zod.object({
 })
 
 
+
+
+
 export const GetCustomerPersonaResponse = zod.object({
   "id": zod.number().nullish(),
   "customerId": zod.number(),
@@ -6810,6 +6984,9 @@ export const UpsertCustomerPersonaBody = zod.object({
 })
 
 
+
+
+
 export const UpsertCustomerPersonaResponse = zod.object({
   "id": zod.number().nullish(),
   "customerId": zod.number(),
@@ -6885,6 +7062,9 @@ export const UpsertCustomerPersonaResponse = zod.object({
 export const RecommendCustomerVehicleParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
+
 
 
 export const RecommendCustomerVehicleResponse = zod.object({
@@ -6979,6 +7159,8 @@ export const ListCustomerNotesResponse = zod.array(ListCustomerNotesResponseItem
 export const CreateCustomerNoteParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const CreateCustomerNoteBody = zod.object({
@@ -7693,6 +7875,7 @@ export const AbortDealerProvisioningParams = zod.object({
 export const abortDealerProvisioningBodyReasonMin = 5;
 
 
+
 export const AbortDealerProvisioningBody = zod.object({
   "reason": zod.string().min(abortDealerProvisioningBodyReasonMin)
 })
@@ -7816,6 +7999,7 @@ export const OffboardDealerParams = zod.object({
 })
 
 export const offboardDealerBodyReasonMin = 5;
+
 
 
 export const OffboardDealerBody = zod.object({
@@ -8352,6 +8536,9 @@ export const ListAdminRolesResponseItem = zod.object({
 export const ListAdminRolesResponse = zod.array(ListAdminRolesResponseItem)
 
 
+
+
+
 export const CreateAdminRoleBody = zod.object({
   "name": zod.string().min(1),
   "description": zod.string().optional()
@@ -8378,6 +8565,8 @@ export const CreateAdminRoleResponse = zod.object({
 export const UpdateAdminRoleParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const UpdateAdminRoleBody = zod.object({
@@ -8509,6 +8698,7 @@ export const ListAdminLeadSourcesResponse = zod.array(ListAdminLeadSourcesRespon
  */
 
 
+
 export const CreateAdminLeadSourceBody = zod.object({
   "name": zod.string().min(1),
   "code": zod.string().optional().describe('Defaults to a slug of the name'),
@@ -8536,6 +8726,8 @@ export const UpdateAdminLeadSourceParams = zod.object({
 })
 
 
+
+
 export const UpdateAdminLeadSourceBody = zod.object({
   "name": zod.string().min(1).optional(),
   "isSocial": zod.boolean().optional(),
@@ -8558,6 +8750,7 @@ export const UpdateAdminLeadSourceResponse = zod.object({
  * @summary Active advance-gate checklist per pipeline stage (latest version)
  */
 export const listStageChecklistsResponseItemsItemLabelMax = 200;
+
 
 
 export const ListStageChecklistsResponseItem = zod.object({
@@ -8584,6 +8777,7 @@ export const SetStageChecklistParams = zod.object({
 export const setStageChecklistBodyItemsItemLabelMax = 200;
 
 
+
 export const SetStageChecklistBody = zod.object({
   "items": zod.array(zod.object({
   "key": zod.enum(['contact_details', 'vehicle_selected', 'budget_discussed', 'test_drive_booked', 'licence_on_file', 'waiver_signed', 'vehicle_available', 'test_drive_completed', 'deal_created', 'deal_exists', 'selected_model', 'reservation_fee', 'primary_contact', 'deposit_taken', 'finance_approved']),
@@ -8593,6 +8787,7 @@ export const SetStageChecklistBody = zod.object({
 })
 
 export const setStageChecklistResponseItemsItemLabelMax = 200;
+
 
 
 export const SetStageChecklistResponse = zod.object({
@@ -8623,6 +8818,7 @@ export const GetDealerBrandingResponse = zod.object({
  * @summary Update white-label branding (GM only)
  */
 export const updateDealerBrandingBodyBrandNameMax = 80;
+
 
 
 export const UpdateDealerBrandingBody = zod.object({
@@ -8658,6 +8854,7 @@ export const updateServiceSettingsBodyDefaultJobHoursMin = 0.25;
 export const updateServiceSettingsBodyDefaultJobHoursMax = 24;
 
 export const updateServiceSettingsBodyTechWorkHoursPerDayMax = 24;
+
 
 
 export const UpdateServiceSettingsBody = zod.object({
@@ -8704,6 +8901,7 @@ export const ListDealerTaxesResponse = zod.array(ListDealerTaxesResponseItem)
 export const createDealerTaxBodyRateMin = 0;
 
 
+
 export const CreateDealerTaxBody = zod.object({
   "name": zod.string().min(1),
   "code": zod.string().optional(),
@@ -8742,6 +8940,7 @@ export const UpdateDealerTaxParams = zod.object({
 
 
 export const updateDealerTaxBodyRateMin = 0;
+
 
 
 export const UpdateDealerTaxBody = zod.object({
@@ -8825,6 +9024,7 @@ export const GetEmailSettingsResponse = zod.object({
 export const sendTestEmailBodyToMin = 3;
 
 
+
 export const SendTestEmailBody = zod.object({
   "to": zod.string().min(sendTestEmailBodyToMin)
 })
@@ -8856,6 +9056,7 @@ export const SendTemplateTestEmailParams = zod.object({
 export const sendTemplateTestEmailBodyToMin = 3;
 
 
+
 export const SendTemplateTestEmailBody = zod.object({
   "to": zod.string().min(sendTemplateTestEmailBodyToMin)
 })
@@ -8884,6 +9085,7 @@ export const PreviewEmailTemplateResponse = zod.object({
  * @summary Enqueue a templated email (manual trigger)
  */
 export const enqueueEmailBodyToMin = 3;
+
 
 
 export const EnqueueEmailBody = zod.object({
@@ -9037,6 +9239,8 @@ export const NotifyLeadOwnerParams = zod.object({
 })
 
 
+
+
 export const NotifyLeadOwnerBody = zod.object({
   "message": zod.string().min(1)
 })
@@ -9078,6 +9282,9 @@ export const ListTasksResponseItem = zod.object({
 export const ListTasksResponse = zod.array(ListTasksResponseItem)
 
 
+
+
+
 export const CreateTaskBody = zod.object({
   "title": zod.string().min(1),
   "description": zod.string().optional(),
@@ -9116,6 +9323,8 @@ export const CreateTaskResponse = zod.object({
 export const UpdateTaskParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const UpdateTaskBody = zod.object({
@@ -9179,6 +9388,8 @@ export const ListTaskCommentsResponse = zod.array(ListTaskCommentsResponseItem)
 export const CreateTaskCommentParams = zod.object({
   "id": zod.coerce.number()
 })
+
+
 
 
 export const CreateTaskCommentBody = zod.object({
@@ -9253,6 +9464,8 @@ export const CreateCommNoteParams = zod.object({
 })
 
 
+
+
 export const CreateCommNoteBody = zod.object({
   "kind": zod.enum(['call', 'meeting']),
   "subject": zod.string().min(1),
@@ -9312,7 +9525,9 @@ export const ListDocumentsResponse = zod.array(ListDocumentsResponseItem)
  */
 
 
+
 export const createDocumentBodySizeBytesMin = 0;
+
 
 
 export const CreateDocumentBody = zod.object({
@@ -9410,11 +9625,18 @@ export const ReviewDocumentExtractionResponse = zod.object({
  */
 
 
+
+
+
 export const RequestUploadUrlBody = zod.object({
   "name": zod.string().min(1).describe('Original file name.'),
   "size": zod.number().min(1).describe('File size in bytes.'),
   "contentType": zod.string().min(1).describe('MIME type of the file (e.g. `image\/jpeg`).')
 })
+
+
+
+
 
 
 export const RequestUploadUrlResponse = zod.object({
@@ -9483,7 +9705,9 @@ export const GetErpnextSettingsResponse = zod.object({
 export const updateErpnextSettingsBodySiteUrlMin = 8;
 
 
+
 export const updateErpnextSettingsBodyDefaultWarehouseMax = 140;
+
 
 
 export const UpdateErpnextSettingsBody = zod.object({
@@ -9597,4 +9821,5 @@ export const RetryErpnextSyncJobResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
 })
+
 

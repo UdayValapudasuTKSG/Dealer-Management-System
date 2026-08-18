@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, gte, isNotNull, lte, ne } from "drizzle-orm";
+import { and, eq, gt, gte, isNotNull, lt, lte, ne, sql } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -24,8 +24,16 @@ import {
 } from "../lib/calendar";
 import {
   afterTestDriveBooked,
+  daySlotTimes,
+  SLOT_LENGTH_MS,
   vehicleAvailabilityError,
 } from "../lib/test-drive-scheduler";
+import {
+  capacityBlockedDays,
+  isSlotBlocked,
+  modelUnitIds,
+  type BlockedDays,
+} from "../lib/capacity-blocks";
 
 // ---------------------------------------------------------------------------
 // PUBLIC self-service test-drive booking — reached from the unique link
@@ -35,9 +43,7 @@ import {
 
 const router: IRouter = Router();
 
-const OPEN_HOUR = 9; // first slot 9:00 AM
-const LAST_HOUR = 16; // last slot 4:00 PM
-const WINDOW_DAYS = 14; // bookable window starts tomorrow
+const WINDOW_DAYS = 14; // bookable window starts tomorrow; 30-minute slots
 
 function windowDays(): Date[] {
   const now = new Date();
@@ -50,6 +56,17 @@ function windowDays(): Date[] {
 
 const timeLabel = (t: Date) =>
   t.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+/** Capacity-plan blocks for this lead's advisor + interested vehicle model. */
+async function leadCapacityBlocks(lead: Lead): Promise<BlockedDays> {
+  const vehicleIds = lead.interestedVehicleId
+    ? await modelUnitIds(lead.dealerId, lead.interestedVehicleId)
+    : [];
+  return capacityBlockedDays(lead.dealerId, {
+    vehicleIds,
+    advisorUserId: lead.ownerUserId,
+  });
+}
 
 const fullLabel = (t: Date) =>
   `${t.toLocaleDateString("en-US", {
@@ -111,6 +128,8 @@ async function buildInvite(lead: Lead) {
         )
     : [];
   const taken = await takenSlotTimes(lead.dealerId, lead.id);
+  // Advisor/vehicle capacity blocks hide those slots from the customer.
+  const blocked = await leadCapacityBlocks(lead);
 
   const days = windowDays().map((day) => ({
     date: localDateKey(day),
@@ -119,19 +138,11 @@ async function buildInvite(lead: Lead) {
       month: "short",
       day: "numeric",
     }),
-    slots: Array.from({ length: LAST_HOUR - OPEN_HOUR + 1 }, (_, i) => {
-      const t = new Date(
-        day.getFullYear(),
-        day.getMonth(),
-        day.getDate(),
-        OPEN_HOUR + i,
-      );
-      return {
-        iso: t.toISOString(),
-        label: timeLabel(t),
-        available: !taken.has(t.getTime()),
-      };
-    }),
+    slots: daySlotTimes(day).map((t) => ({
+      iso: t.toISOString(),
+      label: timeLabel(t),
+      available: !taken.has(t.getTime()) && !isSlotBlocked(blocked, t),
+    })),
   }));
 
   return {
@@ -203,31 +214,14 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
   }
 
   // The slot must be one the showroom actually offers (tomorrow → +14 days,
-  // on the hour between opening hours).
+  // on the half-hour between opening hours).
   const offered = new Set(
-    windowDays().flatMap((day) =>
-      Array.from({ length: LAST_HOUR - OPEN_HOUR + 1 }, (_, i) =>
-        new Date(
-          day.getFullYear(),
-          day.getMonth(),
-          day.getDate(),
-          OPEN_HOUR + i,
-        ).getTime(),
-      ),
-    ),
+    windowDays().flatMap((day) => daySlotTimes(day).map((t) => t.getTime())),
   );
   if (!offered.has(when.getTime())) {
     res
       .status(422)
       .json({ error: "That time is outside the bookable window" });
-    return;
-  }
-
-  const taken = await takenSlotTimes(lead.dealerId, lead.id);
-  if (taken.has(when.getTime())) {
-    res
-      .status(409)
-      .json({ error: "That time was just taken — please pick another slot" });
     return;
   }
 
@@ -238,25 +232,67 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
     return;
   }
 
-  const [updated] = await db
-    .update(leadsTable)
-    .set({
-      testDriveAt: when,
-      testDriveBranch:
-        lead.testDriveBranch ?? lead.preferredBranch ?? "Main Showroom",
-      testDriveLicence: body.data.licenceNumber,
-      testDriveWaiver: true,
-      status: "test_drive",
-      phase:
-        lead.phase === "new" || lead.phase === "contacted"
-          ? "qualified"
-          : lead.phase,
-      ...(lead.phase === "new" || lead.phase === "contacted"
-        ? { stageEnteredAt: new Date() }
-        : {}),
-    })
-    .where(and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)))
-    .returning();
+  // Atomic slot claim: a per-dealer advisory lock serialises concurrent
+  // bookings, and conflict + capacity are re-checked inside the transaction
+  // so two simultaneous requests can never both take the same slot.
+  let claimError: string | null = null;
+  const updated = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(42001, ${lead.dealerId})`,
+    );
+    const lo = new Date(when.getTime() - SLOT_LENGTH_MS);
+    const hi = new Date(when.getTime() + SLOT_LENGTH_MS);
+    const [conflict] = await tx
+      .select({ id: leadsTable.id })
+      .from(leadsTable)
+      .where(
+        and(
+          eq(leadsTable.dealerId, lead.dealerId),
+          isNotNull(leadsTable.testDriveAt),
+          gt(leadsTable.testDriveAt, lo),
+          lt(leadsTable.testDriveAt, hi),
+          ne(leadsTable.id, lead.id),
+        ),
+      );
+    if (conflict) {
+      claimError = "That time was just taken — please pick another slot";
+      return null;
+    }
+    // Advisor/vehicle capacity blocks apply to self-service bookings too.
+    if (isSlotBlocked(await leadCapacityBlocks(lead), when)) {
+      claimError =
+        "That time is unavailable (your advisor or the vehicle is booked out) — please pick another slot";
+      return null;
+    }
+    const [row] = await tx
+      .update(leadsTable)
+      .set({
+        testDriveAt: when,
+        testDriveBranch:
+          lead.testDriveBranch ?? lead.preferredBranch ?? "Main Showroom",
+        testDriveLicence: body.data.licenceNumber,
+        testDriveWaiver: true,
+        status: "test_drive",
+        phase:
+          lead.phase === "new" || lead.phase === "contacted"
+            ? "qualified"
+            : lead.phase,
+        ...(lead.phase === "new" || lead.phase === "contacted"
+          ? { stageEnteredAt: new Date() }
+          : {}),
+      })
+      .where(
+        and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)),
+      )
+      .returning();
+    return row ?? null;
+  });
+  if (!updated) {
+    res.status(409).json({
+      error: claimError ?? "That time is unavailable — please pick another slot",
+    });
+    return;
+  }
 
   // A booked test drive promotes the lead to an account.
   updated!.customerId = await ensureAccountForLead(updated!);
