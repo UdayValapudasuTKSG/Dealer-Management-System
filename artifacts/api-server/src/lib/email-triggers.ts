@@ -177,7 +177,7 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
       const color = v.exteriorColor || lead.color || "";
       const quantity = 1;
       const now = new Date();
-      const validUntil = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const validUntil = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
       // Booking CTA rides along inside the quote email too, so the customer
       // can reserve a slot even if the separate invite email is missed.
       const bookingLink = lead.testDriveAt

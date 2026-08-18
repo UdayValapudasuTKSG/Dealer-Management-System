@@ -282,6 +282,43 @@ export function buildQuotePdf(
     doc.font("Times-Roman").fontSize(9.5).fillColor(LABEL_GREY).text("Accepted By", left, y);
     y += 34;
     doc.text("Accepted Date", left, y);
+    y += 40;
+
+    // ---- Disclaimer ---------------------------------------------------------
+    // Derive the validity wording from the quote's own dates so historical
+    // 30-day quotes don't contradict their printed expiration date.
+    let validityClause = "is valid until the expiration date shown above";
+    {
+      const issued = new Date(val(data, "issuedOn", ""));
+      const until = new Date(val(data, "validUntil", ""));
+      if (!Number.isNaN(issued.getTime()) && !Number.isNaN(until.getTime())) {
+        const days = Math.round((until.getTime() - issued.getTime()) / 86400000);
+        if (days > 0) validityClause = `is valid for ${days} days`;
+      }
+    }
+    const disclaimer =
+      `All vehicles are subject to availability at the time of order confirmation. ` +
+      `Allocation is on a first-come, first-served basis and is not guaranteed until a ` +
+      `deposit or bank letter of undertaking is received and confirmed by ${dealerName}. ` +
+      `Pricing, availability, and colors may change without notice. This quotation ` +
+      `${validityClause} and does not constitute a binding agreement.`;
+    const discHeight =
+      14 +
+      doc.font("Times-Roman").fontSize(8).heightOfString(disclaimer, { width: contentW });
+    // Render just under the acceptance block, never above it (moving up would
+    // overlap already-drawn content). If the page is unusually full, it sits
+    // closer to the footer rather than colliding with the content above.
+    const discY = y;
+    doc
+      .font("Times-Bold")
+      .fontSize(8.5)
+      .fillColor(LABEL_GREY)
+      .text("DISCLAIMER", left, discY, { characterSpacing: 0.5 });
+    doc
+      .font("Times-Roman")
+      .fontSize(8)
+      .fillColor(LABEL_GREY)
+      .text(disclaimer, left, discY + 14, { width: contentW, align: "justify" });
 
     // ---- Footer ------------------------------------------------------------
     doc

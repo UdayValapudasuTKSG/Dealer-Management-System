@@ -933,7 +933,7 @@ function freshQuotePayload(
   quoteRef: string,
 ): Record<string, string> {
   const issued = new Date();
-  const validUntil = new Date(issued.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const validUntil = new Date(issued.getTime() + 60 * 24 * 60 * 60 * 1000);
   return {
     name: lead.name,
     vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
