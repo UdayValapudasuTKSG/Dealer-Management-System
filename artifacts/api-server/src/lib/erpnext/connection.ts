@@ -173,7 +173,12 @@ export async function testErpnextConnection(dealerId: number): Promise<{
         lastStatus: "connected",
         lastError: null,
         lastCheckedAt: new Date(),
-        companyName: result.companyName,
+        // Keep an explicitly-chosen company (e.g. UAT → demo company) as long
+        // as it still exists on the site; only fall back to discovery.
+        companyName:
+          conn.companyName && result.companyNames.includes(conn.companyName)
+            ? conn.companyName
+            : result.companyName,
         erpnextVersion: result.version,
         siteTimezone,
         updatedAt: new Date(),

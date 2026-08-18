@@ -225,6 +225,7 @@ export class ErpnextClient {
     user: string;
     version: string | null;
     companyName: string | null;
+    companyNames: string[];
   }> {
     const { message: user } = await this.request<{ message: string }>(
       "GET",
@@ -241,14 +242,16 @@ export class ErpnextClient {
       /* optional */
     }
     let companyName: string | null = null;
+    let companyNames: string[] = [];
     try {
       const companies = await this.listDocs<{ name: string }>("Company", {
-        limit: 1,
+        limit: 20,
       });
-      companyName = companies[0]?.name ?? null;
+      companyNames = companies.map((c) => c.name);
+      companyName = companyNames[0] ?? null;
     } catch {
       /* Accounts module may not be enabled yet */
     }
-    return { user, version, companyName };
+    return { user, version, companyName, companyNames };
   }
 }
