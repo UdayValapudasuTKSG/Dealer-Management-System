@@ -1,6 +1,7 @@
 import { and, eq, gt, isNotNull, isNull, notInArray } from "drizzle-orm";
 import {
   db,
+  dealsTable,
   leadsTable,
   timelineEventsTable,
   vehiclesTable,
@@ -11,6 +12,7 @@ import {
 import { ensureAccountForLead } from "./accounts";
 import { notifyUser } from "./email";
 import {
+  createConfirmedRepeatInboundLead,
   createInboundLead,
   matchVehicleByText,
   type MatchedVehicle,
@@ -27,8 +29,10 @@ import { isAgentEnabled, recordAgentRun } from "./agent-governance";
 import { rescheduleLink } from "./test-drive-scheduler";
 import type { Lead } from "@workspace/db";
 import {
+  classifyRepeatCustomerIntent,
   interpretWhatsappLeadMessage,
 } from "./whatsapp-ai-concierge";
+import { normalizeWhatsappPhone } from "./whatsapp-phone";
 
 // ---------------------------------------------------------------------------
 // WhatsApp guided lead-capture bot — deterministic state machine, shared by
@@ -51,7 +55,7 @@ const OTHER_VEHICLE_ID = "veh_other";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const OPEN_EXCLUDED_PHASES = ["won", "lost"];
 
-const digits = (s: string): string => s.replace(/\D/g, "");
+const digits = (s: string): string => normalizeWhatsappPhone(s) ?? "";
 
 export type InboundWhatsappMessage = {
   /** Sender WhatsApp id (E.164 digits, no "+"). */
@@ -83,7 +87,7 @@ async function findOpenLeadByPhone(dealerId: number, phone: string) {
     candidates.find((l) => {
       const d = digits(l.phone ?? "");
       if (!d) return false;
-      return d.slice(-10) === needle.slice(-10) || d === needle;
+      return d === needle;
     }) ?? null
   );
 }
@@ -92,13 +96,15 @@ async function activeConversation(
   dealerId: number,
   phone: string,
 ): Promise<WhatsappConversation | null> {
+  const canonical = digits(phone);
+  if (!canonical) return null;
   const [row] = await db
     .select()
     .from(whatsappConversationsTable)
     .where(
       and(
         eq(whatsappConversationsTable.dealerId, dealerId),
-        eq(whatsappConversationsTable.phone, phone),
+        eq(whatsappConversationsTable.phone, canonical),
         gt(whatsappConversationsTable.expiresAt, new Date()),
       ),
     );
@@ -120,10 +126,12 @@ async function upsertConversation(
     brand: string | null;
   }>,
 ): Promise<void> {
+  const canonical = digits(phone);
+  if (!canonical) throw new Error("Invalid WhatsApp phone");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await db
     .insert(whatsappConversationsTable)
-    .values({ dealerId, phone, step: "name", ...values, expiresAt })
+    .values({ dealerId, phone: canonical, step: "name", ...values, expiresAt })
     .onConflictDoUpdate({
       target: [whatsappConversationsTable.dealerId, whatsappConversationsTable.phone],
       set: { ...values, expiresAt, updatedAt: new Date() },
@@ -131,6 +139,8 @@ async function upsertConversation(
 }
 
 async function endConversation(dealerId: number, phone: string): Promise<void> {
+  const canonical = digits(phone);
+  if (!canonical) return;
   // Opt-out records live on this row (R6.4) — expire the session instead of
   // deleting when the phone has opted out, so the STOP preference survives.
   const [row] = await db
@@ -139,7 +149,7 @@ async function endConversation(dealerId: number, phone: string): Promise<void> {
     .where(
       and(
         eq(whatsappConversationsTable.dealerId, dealerId),
-        eq(whatsappConversationsTable.phone, phone),
+        eq(whatsappConversationsTable.phone, canonical),
       ),
     );
   if (row?.optedOutAt) {
@@ -149,7 +159,7 @@ async function endConversation(dealerId: number, phone: string): Promise<void> {
       .where(
         and(
           eq(whatsappConversationsTable.dealerId, dealerId),
-          eq(whatsappConversationsTable.phone, phone),
+          eq(whatsappConversationsTable.phone, canonical),
         ),
       );
     return;
@@ -159,7 +169,7 @@ async function endConversation(dealerId: number, phone: string): Promise<void> {
     .where(
       and(
         eq(whatsappConversationsTable.dealerId, dealerId),
-        eq(whatsappConversationsTable.phone, phone),
+        eq(whatsappConversationsTable.phone, canonical),
       ),
     );
 }
@@ -186,12 +196,14 @@ export async function handleOptKeyword(
   const isOut = OPT_OUT_KEYWORDS.has(keyword);
   const isIn = OPT_IN_KEYWORDS.has(keyword);
   if (!isOut && !isIn) return null;
+  const canonical = digits(phone);
+  if (!canonical) return null;
   const now = new Date();
   await db
     .insert(whatsappConversationsTable)
     .values({
       dealerId,
-      phone,
+      phone: canonical,
       step: "done",
       optedOutAt: isOut ? now : null,
       expiresAt: now, // no active bot session — just the preference record
@@ -200,7 +212,10 @@ export async function handleOptKeyword(
       target: [whatsappConversationsTable.dealerId, whatsappConversationsTable.phone],
       set: { optedOutAt: isOut ? now : null, updatedAt: now },
     });
-  logger.info({ dealerId, phone, optOut: isOut }, "whatsapp opt keyword processed");
+  logger.info(
+    { dealerId, phone: canonical, optOut: isOut },
+    "whatsapp opt keyword processed",
+  );
   return isOut
     ? "You've been unsubscribed from WhatsApp updates. We won't message you here again — important updates will reach you by email instead. Reply START to re-subscribe."
     : "Welcome back — WhatsApp updates are switched on again.";
@@ -585,11 +600,18 @@ async function promptBrand(
   dealerId: number,
   phone: string,
   firstName: string,
+  flow: "standard" | "new_enquiry" = "standard",
 ): Promise<void> {
+  const brandStep = flow === "new_enquiry" ? "ni_brand" : "brand";
+  const modelStep = flow === "new_enquiry" ? "ni_model" : "model";
   const rows = await buildBrandRows(dealerId);
   if (rows.length === 0) {
     // No inventory to list — fall back to free text.
-    await upsertConversation(dealerId, phone, { step: "model", brand: null, menu: null });
+    await upsertConversation(dealerId, phone, {
+      step: modelStep,
+      brand: null,
+      menu: null,
+    });
     await t.sendText(
       phone,
       `Thanks ${firstName}! Which model are you interested in? Just type the make and model.`,
@@ -602,7 +624,7 @@ async function promptBrand(
     description: "Tell us what you're looking for",
   });
   await upsertConversation(dealerId, phone, {
-    step: "brand",
+    step: brandStep,
     brand: null,
     menu: JSON.stringify(rows.map((r) => r.id)),
   });
@@ -633,10 +655,16 @@ async function promptModel(
   phone: string,
   firstName: string,
   make: string,
+  flow: "standard" | "new_enquiry" = "standard",
 ): Promise<void> {
+  const modelStep = flow === "new_enquiry" ? "ni_model" : "model";
   const rows = await buildModelRows(dealerId, make);
   if (rows.length === 0) {
-    await upsertConversation(dealerId, phone, { step: "model", brand: make, menu: null });
+    await upsertConversation(dealerId, phone, {
+      step: modelStep,
+      brand: make,
+      menu: null,
+    });
     await t.sendText(
       phone,
       `We don't have ${make} models in stock right now — just type the model you're looking for and we'll note it.`,
@@ -649,7 +677,7 @@ async function promptModel(
     description: "Tell us what you're looking for",
   });
   await upsertConversation(dealerId, phone, {
-    step: "model",
+    step: modelStep,
     brand: make,
     menu: JSON.stringify(rows.map((r) => r.id)),
   });
@@ -823,47 +851,663 @@ async function handleTestDriveReminderReply(
   return true;
 }
 
-/** Open-lead repeat message: append to the file instead of restarting. */
-async function appendToOpenLead(
-  t: WhatsappTransport,
-  lead: {
-    id: number;
-    dealerId: number;
-    name: string;
-    customerId: number | null;
-    ownerUserId: number | null;
-  },
-  msg: InboundWhatsappMessage,
+// ---------------------------------------------------------------------------
+// R#220 — Repeat-customer inbound: intent-aware handling.
+// New conversation step names used (never modify schema columns):
+//   "ni_confirm"  — asking customer to confirm they want a new enquiry
+//   "ni_name"     — new-enquiry intake: collect name (reuse from existing lead)
+//   "ni_email"    — new-enquiry intake: collect email
+//   "ni_address"  — new-enquiry intake: collect address
+//   "ni_brand"    — new-enquiry intake: pick brand
+//   "ni_model"    — new-enquiry intake: pick model
+//   "ni_confirm_details" — new-enquiry intake: confirm all fields
+// ---------------------------------------------------------------------------
+
+type RepeatLeadRef = {
+  id: number;
+  dealerId: number;
+  name: string;
+  customerId: number | null;
+  ownerUserId: number | null;
+  phase: string;
+  interestedVehicleId: number | null;
+};
+
+/** Log a timeline event and (optionally) notify the lead owner. */
+async function logHandoffAndNotify(
+  lead: RepeatLeadRef,
+  kind: string,
+  title: string,
+  detail: string,
+  notifyTitle?: string,
+  notifyBody?: string,
 ): Promise<void> {
   await db.insert(timelineEventsTable).values({
     dealerId: lead.dealerId,
     customerId: lead.customerId,
     domain: "leads",
-    kind: "whatsapp_message",
-    title: `WhatsApp message from ${lead.name}`,
-    detail: msg.text || msg.replyTitle || "(no text)",
+    kind,
+    title,
+    detail,
     actor: "WhatsApp",
     isAgent: true,
     refType: "lead",
     refId: lead.id,
   });
-  if (lead.ownerUserId) {
+  if (lead.ownerUserId && notifyTitle) {
     await notifyUser({
       userId: lead.ownerUserId,
       dealerId: lead.dealerId,
       type: "system",
-      title: `WhatsApp: ${lead.name}`,
-      body: msg.text ? msg.text.slice(0, 180) : "New WhatsApp message received.",
+      title: notifyTitle,
+      body: notifyBody ?? detail.slice(0, 180),
       link: `/lead/${lead.id}`,
     });
   }
-  await t.sendText(
-    msg.from,
-    "Thanks — we've noted your message and added it to your file. Your advisor will follow up shortly.",
+}
+
+/** Build a safe status reply from verified lead/deal facts only. Never invents
+ *  pricing, stock, finance approval, or delivery dates. */
+async function buildStatusReply(lead: RepeatLeadRef): Promise<string> {
+  const firstName = lead.name.split(/\s+/)[0] ?? lead.name;
+
+  // Fetch vehicle label if present (from THIS dealer only — enforced by dealerId join).
+  let vehicleLabel: string | null = null;
+  if (lead.interestedVehicleId) {
+    const [v] = await db
+      .select({ year: vehiclesTable.year, make: vehiclesTable.make, model: vehiclesTable.model })
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.id, lead.interestedVehicleId),
+          eq(vehiclesTable.dealerId, lead.dealerId),
+          isNull(vehiclesTable.deletedAt),
+        ),
+      );
+    if (v) vehicleLabel = [v.year, v.make, v.model].filter(Boolean).join(" ");
+  }
+
+  // Fetch the most recent active deal for this lead (from THIS dealer only).
+  const [deal] = await db
+    .select({ stage: dealsTable.stage, salesAdvisor: dealsTable.salesAdvisor })
+    .from(dealsTable)
+    .where(
+      and(
+        eq(dealsTable.dealerId, lead.dealerId),
+        eq(dealsTable.leadId, lead.id),
+        notInArray(dealsTable.stage, ["cancelled", "lost"]),
+      ),
+    )
+    .limit(1);
+
+  const phaseLabels: Record<string, string> = {
+    new: "new — our team will be in touch shortly",
+    contacted: "under review with our sales team",
+    qualified: "being prepared for a proposal",
+    proposal: "at the proposal stage — check your email for a quotation",
+    negotiation: "in the final stages — your advisor is preparing your offer",
+    won: "completed — congratulations on your purchase!",
+    lost: "closed",
+  };
+  const phaseText = phaseLabels[lead.phase] ?? lead.phase;
+
+  const lines: string[] = [`Hi ${firstName}! Here's a summary of your current enquiry with us:`];
+  if (vehicleLabel) lines.push(`🚗 Vehicle: ${vehicleLabel}`);
+  lines.push(`📋 Enquiry status: ${phaseText}`);
+
+  if (deal) {
+    const dealStageLabels: Record<string, string> = {
+      desking: "in progress — your deal is being prepared",
+      committed: "committed — awaiting final steps",
+      delivered: "complete — your vehicle has been delivered",
+    };
+    lines.push(`📝 Deal status: ${dealStageLabels[deal.stage] ?? deal.stage}`);
+    if (deal.salesAdvisor) lines.push(`👤 Your advisor: ${deal.salesAdvisor}`);
+  }
+
+  lines.push(
+    "\nFor specific questions about pricing, finance, delivery dates, or availability, your advisor is best placed to help — they'll follow up with you directly.",
   );
-  // Link after the ack send so both the inbound message and the ack land
-  // in the transcript.
-  await linkWhatsappMessagesToLead(msg.from, lead);
+
+  return lines.join("\n");
+}
+
+/**
+ * Intent-aware handler for a repeat customer's inbound WhatsApp message.
+ *
+ * Routes to:
+ *  - status: answers with verified lead/deal facts only
+ *  - help/unclear: logs handoff timeline event + notifies owner + helpful reply
+ *  - new_enquiry: asks for explicit confirmation before starting a new intake
+ *
+ * Also drives the new-enquiry intake state machine (steps prefixed "ni_").
+ */
+async function handleRepeatCustomerMessage(
+  t: WhatsappTransport,
+  lead: RepeatLeadRef,
+  msg: InboundWhatsappMessage,
+  existingConvo: WhatsappConversation | null,
+): Promise<void> {
+  const phone = msg.from;
+  const firstName = lead.name.split(/\s+/)[0] ?? lead.name;
+  const text = (msg.text ?? "").trim();
+
+  // ── New-enquiry intake state machine (ni_* steps) ──────────────────────
+  // These steps live on the whatsapp_conversations row using the `step` field
+  // with "ni_" prefix. No schema columns are added; we reuse existing fields.
+
+  if (existingConvo) {
+    const step = existingConvo.step;
+
+    if (step === "ni_creating") {
+      await t.sendText(
+        phone,
+        "Your confirmed enquiry is already being processed. Your advisor will follow up shortly.",
+      );
+      return;
+    }
+
+    // ── ni_confirm: waiting for explicit confirmation ────────────────────
+    if (step === "ni_confirm") {
+      const confirmed =
+        /^(yes|y|confirm(ed)?|ok(ay)?|sure|go ahead|yep|yeah)\s*[.!]*$/i.test(text);
+      const cancelled =
+        /^(no|n|cancel|nope|stop|never mind|nevermind|forget it)\s*[.!]*$/i.test(text);
+
+      if (confirmed) {
+        // Idempotency: only advance if still on ni_confirm.
+        await upsertConversation(lead.dealerId, phone, {
+          step: "ni_name",
+          name: lead.name, // pre-fill from existing lead — customer can update
+          email: null,
+          address: null,
+          interestedVehicleId: null,
+          menu: null,
+        });
+        await t.sendText(
+          phone,
+          `Great! Let's start a fresh enquiry for you.\n\nI have your name as *${lead.name}* — is that still correct? (Reply YES to keep it, or type your updated name.)`,
+        );
+        return;
+      }
+
+      if (cancelled) {
+        await endConversation(lead.dealerId, phone);
+        await t.sendText(
+          phone,
+          `No problem, ${firstName} — I've kept your existing enquiry open. Your advisor will be in touch. Is there anything else I can help with?`,
+        );
+        await linkWhatsappMessagesToLead(phone, lead);
+        return;
+      }
+
+      // Ambiguous response — re-prompt.
+      await t.sendText(
+        phone,
+        `Sorry, I didn't catch that. Reply *YES* to start a new enquiry, or *NO* to stay with your existing one.`,
+      );
+      return;
+    }
+
+    // ── ni_name: confirm / update name ───────────────────────────────────
+    if (step === "ni_name") {
+      let name = existingConvo.name ?? lead.name;
+      const isYes = /^(yes|y|correct|ok(ay)?|same|keep it)\s*[.!]*$/i.test(text);
+      if (!isYes && text.length >= 2 && text.length <= 80 && !/^\d+$/.test(text)) {
+        name = text;
+      } else if (!isYes) {
+        await t.sendText(phone, "Please type your name, or reply YES to keep it as is.");
+        return;
+      }
+      await upsertConversation(lead.dealerId, phone, {
+        step: "ni_email",
+        name,
+        menu: JSON.stringify([SKIP_EMAIL_ID]),
+      });
+      if (t.interactive) {
+        await t.sendButtons(
+          phone,
+          `Thanks ${name.split(/\s+/)[0]!}! What's your email address? (Tap Skip if you'd prefer not to provide one.)`,
+          [{ id: SKIP_EMAIL_ID, title: "Skip" }],
+        );
+      } else {
+        await t.sendText(
+          phone,
+          `Thanks ${name.split(/\s+/)[0]!}! What's your email address? Reply 1 to skip.`,
+        );
+      }
+      return;
+    }
+
+    // ── ni_email: collect email ───────────────────────────────────────────
+    if (step === "ni_email") {
+      const replyId = resolveMenuReply(existingConvo, msg);
+      const isSkipped = replyId === SKIP_EMAIL_ID || /^(skip|no|none)$/i.test(text);
+      const isValid = EMAIL_RE.test(text);
+      if (!isValid && !isSkipped) {
+        await t.sendText(
+          phone,
+          "That doesn't look like a valid email address. Please try again, or reply SKIP.",
+        );
+        return;
+      }
+      const email = isValid ? text.toLowerCase() : null;
+      await upsertConversation(lead.dealerId, phone, {
+        step: "ni_address",
+        email,
+        menu: JSON.stringify([SKIP_ADDRESS_ID]),
+      });
+      const niFirst = (existingConvo.name ?? lead.name).split(/\s+/)[0]!;
+      if (t.interactive) {
+        await t.sendButtons(
+          phone,
+          `Thanks! What's your address? (Helps us assign the nearest advisor.)`,
+          [{ id: SKIP_ADDRESS_ID, title: "Skip" }],
+        );
+      } else {
+        await t.sendText(phone, `Thanks! What's your address? Reply 1 to skip.`);
+      }
+      void niFirst; // used in message above
+      return;
+    }
+
+    // ── ni_address: collect address ───────────────────────────────────────
+    if (step === "ni_address") {
+      const replyId = resolveMenuReply(existingConvo, msg);
+      const isSkipped = replyId === SKIP_ADDRESS_ID || /^(skip|no|none)$/i.test(text);
+      let address: string | null = null;
+      if (!isSkipped) {
+        if (text.length >= 3) {
+          address = text.slice(0, 300);
+        } else {
+          await t.sendText(phone, "Sorry, I didn't catch that. Please type your address or reply SKIP.");
+          return;
+        }
+      }
+      await upsertConversation(lead.dealerId, phone, {
+        step: "ni_brand",
+        address,
+        menu: null,
+      });
+      const niFirstB = (existingConvo.name ?? lead.name).split(/\s+/)[0]!;
+      await promptBrand(t, lead.dealerId, phone, niFirstB, "new_enquiry");
+      return;
+    }
+
+    // ── ni_brand / ni_model: handled by brand/model logic below ──────────
+    // We remap these to the standard brand/model logic by temporarily
+    // treating the step as "brand" or "model" respectively.
+    if (step === "ni_brand" || step === "ni_model") {
+      // Swap step prefix so the existing brand/model handlers apply.
+      const fakeStep = step === "ni_brand" ? "brand" : "model";
+      const fakeConvo: WhatsappConversation = { ...existingConvo, step: fakeStep };
+      // Delegate to a version of completeFlow that creates a NEW lead
+      // instead of completing the existing one.
+      await handleNiVehicleStep(t, lead, fakeConvo, msg, step);
+      return;
+    }
+
+    // ── ni_confirm_details: final confirmation before creating new lead ───
+    if (step === "ni_confirm_details") {
+      const confirmed =
+        /^(yes|y|confirm(ed)?|ok(ay)?|sure|go ahead|looks good)\s*[.!]*$/i.test(text);
+      const cancelled =
+        /^(no|n|cancel|nope|change)\s*[.!]*$/i.test(text);
+
+      if (confirmed) {
+        await completeNewEnquiryFlow(t, lead, existingConvo);
+        return;
+      }
+      if (cancelled) {
+        await t.sendText(
+          phone,
+          "No problem — tell me which detail you'd like to change (e.g. email, address, or vehicle).",
+        );
+        // Go back to ni_email step so they can re-provide fields.
+        await upsertConversation(lead.dealerId, phone, {
+          step: "ni_email",
+          menu: JSON.stringify([SKIP_EMAIL_ID]),
+        });
+        return;
+      }
+      await t.sendText(
+        phone,
+        "Reply *YES* to confirm and submit your new enquiry, or *NO* to make changes.",
+      );
+      return;
+    }
+  }
+
+  // ── No active ni_* convo: classify intent ────────────────────────────────
+  const messageBody = (msg.text ?? msg.replyTitle ?? "").trim();
+
+  // Look up vehicle label for context (from THIS dealer only).
+  let vehicleLabel: string | null = null;
+  if (lead.interestedVehicleId) {
+    const [v] = await db
+      .select({ year: vehiclesTable.year, make: vehiclesTable.make, model: vehiclesTable.model })
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.id, lead.interestedVehicleId),
+          eq(vehiclesTable.dealerId, lead.dealerId),
+          isNull(vehiclesTable.deletedAt),
+        ),
+      );
+    if (v) vehicleLabel = [v.year, v.make, v.model].filter(Boolean).join(" ");
+  }
+
+  // Check whether there's an active deal for context only.
+  const [activeDeal] = await db
+    .select({ id: dealsTable.id })
+    .from(dealsTable)
+    .where(
+      and(
+        eq(dealsTable.dealerId, lead.dealerId),
+        eq(dealsTable.leadId, lead.id),
+        notInArray(dealsTable.stage, ["cancelled", "lost"]),
+      ),
+    )
+    .limit(1);
+
+  const intentResult = await classifyRepeatCustomerIntent({
+    dealerId: lead.dealerId,
+    customerMessage: messageBody || "(no text)",
+    leadPhase: lead.phase,
+    leadVehicleLabel: vehicleLabel,
+    hasDeal: !!activeDeal,
+  });
+
+  logger.info(
+    { leadId: lead.id, intent: intentResult.intent, confidence: intentResult.confidence },
+    "whatsapp repeat-customer intent classified",
+  );
+
+  // ── INTENT: status ───────────────────────────────────────────────────────
+  if (intentResult.intent === "status" && intentResult.confidence >= 0.7) {
+    await logHandoffAndNotify(
+      lead,
+      "whatsapp_status_check",
+      `${lead.name} asked for a status update`,
+      `Message: "${messageBody.slice(0, 200)}"${intentResult.staffSummary ? ` — ${intentResult.staffSummary}` : ""}`,
+    );
+    const reply = await buildStatusReply(lead);
+    await t.sendText(phone, reply);
+    await linkWhatsappMessagesToLead(phone, lead);
+    return;
+  }
+
+  // ── INTENT: new_enquiry ──────────────────────────────────────────────────
+  if (intentResult.intent === "new_enquiry" && intentResult.confidence >= 0.7) {
+    await logHandoffAndNotify(
+      lead,
+      "whatsapp_new_enquiry_intent",
+      `${lead.name} may be interested in a new vehicle`,
+      `Message: "${messageBody.slice(0, 200)}"${intentResult.staffSummary ? ` — ${intentResult.staffSummary}` : ""}`,
+      `New vehicle interest: ${lead.name}`,
+      intentResult.staffSummary ?? `Customer may want to enquire about a different vehicle.`,
+    );
+    // Start the new-enquiry confirmation step.
+    await upsertConversation(lead.dealerId, phone, {
+      step: "ni_confirm",
+      name: lead.name,
+      email: null,
+      address: null,
+      interestedVehicleId: null,
+      menu: null,
+    });
+    await t.sendText(
+      phone,
+      `Hi ${firstName}! It sounds like you might be interested in a new vehicle enquiry. I can open a separate enquiry for you — your existing one won't be affected.\n\nWould you like to start a new enquiry? Reply *YES* to continue or *NO* to stay with your existing file.`,
+    );
+    await linkWhatsappMessagesToLead(phone, lead);
+    return;
+  }
+
+  // ── INTENT: help / unclear / low-confidence ──────────────────────────────
+  await logHandoffAndNotify(
+    lead,
+    "whatsapp_handoff",
+    `WhatsApp message from ${lead.name} — advisor follow-up needed`,
+    `Message: "${messageBody.slice(0, 200)}"${intentResult.staffSummary ? ` — ${intentResult.staffSummary}` : ""}`,
+    `WhatsApp message: ${lead.name}`,
+    `New WhatsApp message — please follow up.${intentResult.staffSummary ? " " + intentResult.staffSummary : ""}`,
+  );
+  await t.sendText(
+    phone,
+    `Hi ${firstName}! Thanks for your message. I've flagged this for your advisor and they'll follow up with you shortly.\n\nIf this is urgent, feel free to call us directly. We're here to help!`,
+  );
+  await linkWhatsappMessagesToLead(phone, lead);
+}
+
+/** Handle vehicle selection steps during new-enquiry intake (ni_brand / ni_model). */
+async function handleNiVehicleStep(
+  t: WhatsappTransport,
+  lead: RepeatLeadRef,
+  fakeConvo: WhatsappConversation,
+  msg: InboundWhatsappMessage,
+  originalStep: string,
+): Promise<void> {
+  const phone = msg.from;
+  const firstName = (fakeConvo.name ?? lead.name).split(/\s+/)[0]!;
+
+  if (fakeConvo.step === "brand") {
+    const replyId = resolveMenuReply(fakeConvo, msg);
+    if (replyId === OTHER_VEHICLE_ID) {
+      await upsertConversation(lead.dealerId, phone, { step: "ni_model", brand: null, menu: null });
+      await t.sendText(phone, "No problem — just type the make and model you're looking for.");
+      return;
+    }
+    if (replyId && replyId.startsWith("brand_")) {
+      await upsertConversation(lead.dealerId, phone, {
+        step: "ni_model",
+        brand: replyId.slice("brand_".length),
+        menu: null,
+      });
+      await promptModel(
+        t,
+        lead.dealerId,
+        phone,
+        firstName,
+        replyId.slice("brand_".length),
+        "new_enquiry",
+      );
+      return;
+    }
+    const answer = (msg.text ?? msg.replyTitle ?? "").trim();
+    if (answer) {
+      const brands = await buildBrandRows(lead.dealerId);
+      const hit = brands.find((b) => b.title.toLowerCase() === answer.toLowerCase());
+      if (hit) {
+        await upsertConversation(lead.dealerId, phone, {
+          step: "ni_model",
+          brand: hit.title,
+          menu: null,
+        });
+        await promptModel(
+          t,
+          lead.dealerId,
+          phone,
+          firstName,
+          hit.title,
+          "new_enquiry",
+        );
+        return;
+      }
+      const matched = await matchVehicleByText(answer, lead.dealerId);
+      await promptNiConfirmDetails(t, lead, fakeConvo, matched, answer, phone);
+      return;
+    }
+    await t.sendText(phone, "Which brand are you interested in? Pick one from the list, or type the make and model.");
+    return;
+  }
+
+  // step === "model"
+  const replyId = resolveMenuReply(fakeConvo, msg);
+  if (replyId === OTHER_VEHICLE_ID) {
+    await upsertConversation(lead.dealerId, phone, { step: "ni_model", menu: null });
+    await t.sendText(phone, "No problem — just type the make and model you're looking for.");
+    return;
+  }
+  if (replyId && replyId.startsWith("veh_")) {
+    const vehicleId = Number(replyId.slice("veh_".length));
+    const [v] = await db
+      .select()
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.id, vehicleId),
+          eq(vehiclesTable.dealerId, lead.dealerId),
+          eq(vehiclesTable.status, "available"),
+          isNull(vehiclesTable.deletedAt),
+        ),
+      );
+    if (v) {
+      const vehicle: MatchedVehicle = {
+        id: v.id,
+        label: `${v.year} ${v.make} ${v.model}`,
+        variant: v.trim || v.variant || null,
+        color: v.exteriorColor || null,
+      };
+      await promptNiConfirmDetails(t, lead, fakeConvo, vehicle, null, phone);
+      return;
+    }
+  }
+  const answer = (msg.text ?? msg.replyTitle ?? "").trim();
+  if (!answer) {
+    await t.sendText(phone, "Which model are you interested in? Pick one from the list, or type the make and model.");
+    return;
+  }
+  const matched =
+    (await matchVehicleByText(
+      fakeConvo.brand ? `${fakeConvo.brand} ${answer}` : answer,
+      lead.dealerId,
+    )) ?? (await matchVehicleByText(answer, lead.dealerId));
+  await promptNiConfirmDetails(t, lead, fakeConvo, matched, answer, phone);
+}
+
+/** Show a confirmation summary before creating the new lead. */
+async function promptNiConfirmDetails(
+  t: WhatsappTransport,
+  lead: RepeatLeadRef,
+  convo: WhatsappConversation,
+  vehicle: MatchedVehicle | null,
+  freeText: string | null,
+  phone: string,
+): Promise<void> {
+  await upsertConversation(lead.dealerId, phone, {
+    step: "ni_confirm_details",
+    interestedVehicleId: vehicle?.id ?? null,
+    brand: vehicle ? null : freeText,
+    menu: null,
+  });
+  const name = convo.name ?? lead.name;
+  const vehicleDesc = vehicle ? vehicle.label : freeText ? `"${freeText}"` : "Not specified";
+  await t.sendText(
+    phone,
+    `Please confirm these new enquiry details:\n\nName: ${name}\nEmail: ${convo.email || "Not provided"}\nAddress: ${convo.address || "Not provided"}\nVehicle: ${vehicleDesc}\n\nReply *YES* to submit, or *NO* to make changes.`,
+  );
+}
+
+/** Complete the new-enquiry intake: create a separate lead, never modify the existing one. */
+async function completeNewEnquiryFlow(
+  t: WhatsappTransport,
+  existingLead: RepeatLeadRef,
+  convo: WhatsappConversation,
+): Promise<void> {
+  const phone = convo.phone;
+  const [claimed] = await db
+    .update(whatsappConversationsTable)
+    .set({ step: "ni_creating", updatedAt: new Date() })
+    .where(
+      and(
+        eq(whatsappConversationsTable.dealerId, existingLead.dealerId),
+        eq(whatsappConversationsTable.phone, phone),
+        eq(whatsappConversationsTable.step, "ni_confirm_details"),
+      ),
+    )
+    .returning({ phone: whatsappConversationsTable.phone });
+  if (!claimed) {
+    await t.sendText(
+      phone,
+      "Your confirmed enquiry is already being processed. Your advisor will follow up shortly.",
+    );
+    return;
+  }
+  const name = convo.name ?? existingLead.name;
+  const mobile = convo.mobile ?? `+${digits(phone)}`;
+
+  let vehicle: MatchedVehicle | null = null;
+  if (convo.interestedVehicleId) {
+    const [v] = await db
+      .select()
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.id, convo.interestedVehicleId),
+          eq(vehiclesTable.dealerId, existingLead.dealerId),
+          eq(vehiclesTable.status, "available"),
+          isNull(vehiclesTable.deletedAt),
+        ),
+      );
+    if (v) {
+      vehicle = {
+        id: v.id,
+        label: [v.year, v.make, v.model].filter(Boolean).join(" "),
+        variant: v.trim || v.variant || null,
+        color: v.exteriorColor || null,
+      };
+    }
+  }
+
+  const newLead = await createConfirmedRepeatInboundLead(
+    {
+      dealerId: existingLead.dealerId,
+      name,
+      phone: mobile,
+      email: convo.email ?? null,
+      address: convo.address ?? null,
+      channel: "social",
+      source: "whatsapp",
+      notes: [
+        `New enquiry via WhatsApp concierge (repeat customer, existing lead #${existingLead.id}).`,
+        !vehicle && convo.brand
+          ? `Customer is interested in: ${convo.brand}.`
+          : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      vehicle,
+      channelLabel: "WhatsApp",
+      actor: "AURA WhatsApp Bot",
+    },
+    existingLead.id,
+  );
+
+  await recordAgentRun({
+    dealerId: existingLead.dealerId,
+    agentKey: "intake_dedup",
+    runType: "whatsapp_new_enquiry_intake",
+    inputSource: "whatsapp",
+    inputSummary: `Repeat customer confirmed new enquiry (existing lead #${existingLead.id})`,
+    outputSummary: `Created new lead #${newLead.id} for repeat customer`,
+    confidence: 1,
+    refType: "lead",
+    refId: newLead.id,
+    mutation: true,
+    changeSummary: `Repeat customer confirmed new vehicle enquiry → lead #${newLead.id} created`,
+  });
+
+  await endConversation(existingLead.dealerId, phone);
+
+  const firstName = name.split(/\s+/)[0] ?? name;
+  await t.sendText(
+    phone,
+    vehicle
+      ? `Thanks ${firstName}! We've opened a new enquiry for the ${vehicle.label}. One of our advisors will be in touch shortly on ${mobile}.`
+      : `Thanks ${firstName}! We've logged your new enquiry. One of our advisors will be in touch shortly on ${mobile}.`,
+  );
+  await linkWhatsappMessagesToLead(phone, newLead);
 }
 
 /**
@@ -877,7 +1521,9 @@ export async function handleWhatsappMessage(
   dealerId: number,
 ): Promise<void> {
   const phone = msg.from;
-  const t = recordingTransport(rawTransport, "AURA WhatsApp Bot", dealerId);
+  const t = rawTransport.durable
+    ? rawTransport
+    : recordingTransport(rawTransport, "AURA WhatsApp Bot", dealerId);
   try {
     // R6.4: STOP/START must always work — even when the bot is paused.
     const optReply = await handleOptKeyword(dealerId, phone, msg.text);
@@ -888,7 +1534,7 @@ export async function handleWhatsappMessage(
         body: msg.text ?? "",
         dealerId,
       });
-      await t.sendText(phone, optReply);
+      await (t.sendComplianceText ?? t.sendText)(phone, optReply);
       return;
     }
     // Kill switch: when the concierge agent is paused for this dealer, log
@@ -920,13 +1566,26 @@ export async function handleWhatsappMessage(
     let convo = await activeConversation(dealerId, phone);
     let startedNewConversation = false;
 
+    // If there is an active conversation in the ni_* steps, we are in a
+    // repeat-customer new-enquiry intake. Route to handleRepeatCustomerMessage
+    // with the existing lead as context.
+    if (convo && convo.step.startsWith("ni_")) {
+      const existing = await findOpenLeadByPhone(dealerId, phone);
+      if (existing) {
+        await handleRepeatCustomerMessage(t, existing, msg, convo);
+        return;
+      }
+      // Orphaned ni_* convo (existing lead closed/deleted) — fall through to normal flow.
+      await endConversation(dealerId, phone);
+      convo = null;
+    }
+
     if (!convo) {
-      // Repeat message from someone with an open lead: append to their file
-      // instead of restarting the guided flow.
+      // Repeat message from someone with an open lead: route to intent-aware handler.
       const existing = await findOpenLeadByPhone(dealerId, phone);
       if (existing) {
         if (await handleTestDriveReminderReply(t, existing, msg)) return;
-        await appendToOpenLead(t, existing, msg);
+        await handleRepeatCustomerMessage(t, existing, msg, null);
         return;
       }
 
@@ -1195,7 +1854,7 @@ export async function handleWhatsappOneShot(
     const existing = await findOpenLeadByPhone(dealerId, msg.from);
     if (existing) {
       if (await handleTestDriveReminderReply(t, existing, msg)) return;
-      await appendToOpenLead(t, existing, msg);
+      await handleRepeatCustomerMessage(t, existing, msg, null);
       return;
     }
     const body = (msg.text ?? msg.replyTitle ?? "").trim();

@@ -6658,6 +6658,155 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getUpdateDealMutationOptions(options));
     }
 
+export const getGetDealWhatsappThreadUrl = (id: number,) => {
+
+
+
+
+  return `/api/deals/${id}/whatsapp`
+}
+
+/**
+ * @summary WhatsApp conversation for the lead linked to this deal
+ */
+export const getDealWhatsappThread = async (id: number, options?: RequestInit): Promise<WhatsappThread> => {
+
+  return customFetch<WhatsappThread>(getGetDealWhatsappThreadUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDealWhatsappThreadQueryKey = (id: number,) => {
+    return [
+    `/api/deals/${id}/whatsapp`
+    ] as const;
+    }
+
+
+export const getGetDealWhatsappThreadQueryOptions = <TData = Awaited<ReturnType<typeof getDealWhatsappThread>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDealWhatsappThread>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDealWhatsappThreadQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDealWhatsappThread>>> = ({ signal }) => getDealWhatsappThread(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDealWhatsappThread>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDealWhatsappThreadQueryResult = NonNullable<Awaited<ReturnType<typeof getDealWhatsappThread>>>
+export type GetDealWhatsappThreadQueryError = ErrorType<Error>
+
+
+/**
+ * @summary WhatsApp conversation for the lead linked to this deal
+ */
+
+export function useGetDealWhatsappThread<TData = Awaited<ReturnType<typeof getDealWhatsappThread>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDealWhatsappThread>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDealWhatsappThreadQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSendDealWhatsappReplyUrl = (id: number,) => {
+
+
+
+
+  return `/api/deals/${id}/whatsapp`
+}
+
+/**
+ * @summary Queue a staff WhatsApp reply for the lead linked to this deal
+ */
+export const sendDealWhatsappReply = async (id: number,
+    whatsappReplyInput: WhatsappReplyInput, options?: RequestInit): Promise<WhatsappMessage> => {
+
+  return customFetch<WhatsappMessage>(getSendDealWhatsappReplyUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(whatsappReplyInput)
+  }
+);}
+
+
+
+
+
+export const getSendDealWhatsappReplyMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendDealWhatsappReply>>, TError,{id: number;data: BodyType<WhatsappReplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendDealWhatsappReply>>, TError,{id: number;data: BodyType<WhatsappReplyInput>}, TContext> => {
+
+const mutationKey = ['sendDealWhatsappReply'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendDealWhatsappReply>>, {id: number;data: BodyType<WhatsappReplyInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  sendDealWhatsappReply(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendDealWhatsappReplyMutationResult = NonNullable<Awaited<ReturnType<typeof sendDealWhatsappReply>>>
+    export type SendDealWhatsappReplyMutationBody = BodyType<WhatsappReplyInput>
+    export type SendDealWhatsappReplyMutationError = ErrorType<Error>
+
+    /**
+ * @summary Queue a staff WhatsApp reply for the lead linked to this deal
+ */
+export const useSendDealWhatsappReply = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendDealWhatsappReply>>, TError,{id: number;data: BodyType<WhatsappReplyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendDealWhatsappReply>>,
+        TError,
+        {id: number;data: BodyType<WhatsappReplyInput>},
+        TContext
+      > => {
+      return useMutation(getSendDealWhatsappReplyMutationOptions(options));
+    }
+
 export const getUploadDealBankLetterUrl = (id: number,) => {
 
 

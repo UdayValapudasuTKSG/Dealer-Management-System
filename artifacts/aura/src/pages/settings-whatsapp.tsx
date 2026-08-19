@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -50,6 +51,16 @@ const formSchema = z.object({
     .max(64)
     .regex(/^\d+$/, "Use the numeric Phone Number ID from Meta"),
   accessToken: z.string().optional(),
+  serviceTemplateName: z
+    .string()
+    .regex(/^[a-z0-9_]*$/, "Use lowercase letters, numbers, and underscores only")
+    .optional(),
+  serviceTemplateLanguage: z
+    .string()
+    .regex(
+      /^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$/,
+      "Use a Meta language code such as en_US",
+    ),
 });
 
 function saveErrorMessage(error: unknown): string {
@@ -82,6 +93,8 @@ export default function SettingsWhatsapp() {
       wabaId: "",
       phoneNumberId: "",
       accessToken: "",
+      serviceTemplateName: "",
+      serviceTemplateLanguage: "en_US",
     },
   });
 
@@ -91,6 +104,8 @@ export default function SettingsWhatsapp() {
         wabaId: settings.wabaId ?? "",
         phoneNumberId: settings.phoneNumberId ?? "",
         accessToken: "",
+        serviceTemplateName: settings.serviceTemplateName ?? "",
+        serviceTemplateLanguage: settings.serviceTemplateLanguage ?? "en_US",
       });
     }
   }, [settings, form]);
@@ -153,6 +168,9 @@ export default function SettingsWhatsapp() {
         wabaId: values.wabaId.trim(),
         phoneNumberId: values.phoneNumberId.trim(),
         accessToken: values.accessToken?.trim() || undefined,
+        serviceTemplateName: values.serviceTemplateName?.trim() || null,
+        serviceTemplateLanguage:
+          values.serviceTemplateLanguage?.trim() || "en_US",
       },
     });
   }
@@ -315,6 +333,49 @@ export default function SettingsWhatsapp() {
                           }
                           disabled={!isGm}
                           data-testid="input-access-token"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="serviceTemplateName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Approved service template</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="customer_service_update"
+                          autoComplete="off"
+                          disabled={!isGm}
+                          data-testid="input-service-template-name"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Used only when Meta's 24-hour reply window is closed.
+                        The approved template must contain exactly one text body
+                        variable for AURA's message.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="serviceTemplateLanguage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Template language</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="en_US"
+                          autoComplete="off"
+                          disabled={!isGm}
+                          data-testid="input-service-template-language"
                           {...field}
                         />
                       </FormControl>

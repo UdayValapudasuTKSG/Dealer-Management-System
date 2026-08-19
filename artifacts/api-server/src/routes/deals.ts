@@ -11,6 +11,7 @@ import {
   paymentsTable,
   timelineEventsTable,
   documentsTable,
+  whatsappMessagesTable,
   VIN_LENGTH,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
@@ -33,6 +34,11 @@ import {
   UploadDealBankLetterParams,
   UploadDealBankLetterBody,
   UploadDealBankLetterResponse,
+  GetDealWhatsappThreadParams,
+  GetDealWhatsappThreadResponse,
+  SendDealWhatsappReplyParams,
+  SendDealWhatsappReplyBody,
+  SendDealWhatsappReplyResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { processBankLetter } from "../lib/bank-letter";
@@ -52,6 +58,12 @@ import {
 } from "../lib/cancellation";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
 import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
+import {
+  enqueueWhatsapp,
+  isWhatsappOptedOut,
+} from "../lib/email";
+import { getChannelByDealerId } from "../lib/whatsapp-channel";
+import { normalizeWhatsappPhone } from "../lib/whatsapp-phone";
 
 const router: IRouter = Router();
 
@@ -622,6 +634,233 @@ router.get("/deals/:id", async (req, res): Promise<void> => {
 
   const [visible] = await redactHiddenFields(res.locals.user, "deals", [deal]);
   res.json(GetDealResponse.parse(visible));
+});
+
+const DEAL_WHATSAPP_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function dealWhatsappReplyWindow(
+  rows: { direction: string; createdAt: Date }[],
+): { open: boolean; expiresAt: Date | null } {
+  const lastInbound = [...rows]
+    .reverse()
+    .find((row) => row.direction === "in");
+  if (!lastInbound) return { open: false, expiresAt: null };
+  const expiresAt = new Date(
+    lastInbound.createdAt.getTime() + DEAL_WHATSAPP_WINDOW_MS,
+  );
+  return { open: expiresAt.getTime() > Date.now(), expiresAt };
+}
+
+router.get("/deals/:id/whatsapp", async (req, res): Promise<void> => {
+  const params = GetDealWhatsappThreadParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [deal] = await db
+    .select()
+    .from(dealsTable)
+    .where(
+      and(eq(dealsTable.id, params.data.id), eq(dealsTable.dealerId, dealerId)),
+    );
+  if (!deal) {
+    res.status(404).json({ error: "Deal not found" });
+    return;
+  }
+  if (deal.leadId == null) {
+    res.json(
+      GetDealWhatsappThreadResponse.parse({
+        messages: [],
+        canReply: false,
+        replyBlockedReason:
+          "Attach the correct pipeline lead to this deal before opening WhatsApp.",
+        windowExpiresAt: null,
+      }),
+    );
+    return;
+  }
+  const lead = await findDealerLead(deal.leadId, dealerId);
+  if (!lead) {
+    res.json(
+      GetDealWhatsappThreadResponse.parse({
+        messages: [],
+        canReply: false,
+        replyBlockedReason:
+          "The linked lead is unavailable. Attach the correct lead before messaging.",
+        windowExpiresAt: null,
+      }),
+    );
+    return;
+  }
+
+  const rows = await db
+    .select()
+    .from(whatsappMessagesTable)
+    .where(
+      and(
+        eq(whatsappMessagesTable.dealerId, dealerId),
+        eq(whatsappMessagesTable.leadId, lead.id),
+      ),
+    )
+    .orderBy(whatsappMessagesTable.createdAt, whatsappMessagesTable.id);
+  const window = dealWhatsappReplyWindow(rows);
+  const channel = await getChannelByDealerId(dealerId);
+  const configured = Boolean(channel);
+  const templateAvailable = Boolean(channel?.serviceTemplateName);
+  const phone =
+    rows.at(-1)?.phone ?? normalizeWhatsappPhone(lead.phone ?? "") ?? "";
+  const optedOut = phone
+    ? await isWhatsappOptedOut(dealerId, phone)
+    : false;
+  let blocked: string | null = null;
+  if (!phone)
+    blocked = "The linked lead has no valid WhatsApp number to message.";
+  else if (!configured)
+    blocked = "WhatsApp sending is not configured for this dealership.";
+  else if (optedOut)
+    blocked = "This customer opted out of WhatsApp. Ask them to send START before replying.";
+  else if (!window.open && !templateAvailable)
+    blocked =
+      "The 24-hour reply window is closed and no approved service template is configured.";
+
+  res.json(
+    GetDealWhatsappThreadResponse.parse({
+      messages: rows.map((row) => ({
+        id: row.id,
+        direction: row.direction,
+        body: row.body,
+        actor: row.actor,
+        deliveryStatus: row.deliveryStatus,
+        deliveryError: row.deliveryError,
+        createdAt: row.createdAt,
+      })),
+      canReply:
+        Boolean(phone) &&
+        configured &&
+        !optedOut &&
+        (window.open || templateAvailable),
+      replyBlockedReason: blocked,
+      windowExpiresAt: window.expiresAt,
+    }),
+  );
+});
+
+router.post("/deals/:id/whatsapp", async (req, res): Promise<void> => {
+  const params = SendDealWhatsappReplyParams.safeParse(req.params);
+  const body = SendDealWhatsappReplyBody.safeParse(req.body);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [deal] = await db
+    .select()
+    .from(dealsTable)
+    .where(
+      and(eq(dealsTable.id, params.data.id), eq(dealsTable.dealerId, dealerId)),
+    );
+  if (!deal) {
+    res.status(404).json({ error: "Deal not found" });
+    return;
+  }
+  if (deal.leadId == null) {
+    res.status(422).json({
+      error: "Attach the correct pipeline lead before sending a WhatsApp reply.",
+    });
+    return;
+  }
+  const lead = await findDealerLead(deal.leadId, dealerId);
+  if (!lead) {
+    res.status(404).json({ error: "Linked lead not found" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(whatsappMessagesTable)
+    .where(
+      and(
+        eq(whatsappMessagesTable.dealerId, dealerId),
+        eq(whatsappMessagesTable.leadId, lead.id),
+      ),
+    )
+    .orderBy(whatsappMessagesTable.createdAt, whatsappMessagesTable.id);
+  const to =
+    rows.at(-1)?.phone ?? normalizeWhatsappPhone(lead.phone ?? "") ?? "";
+  if (!to) {
+    res.status(422).json({ error: "The linked lead has no valid WhatsApp number." });
+    return;
+  }
+  const channel = await getChannelByDealerId(dealerId);
+  if (!channel) {
+    res.status(422).json({
+      error: "WhatsApp sending is not configured for this dealership.",
+    });
+    return;
+  }
+  if (await isWhatsappOptedOut(dealerId, to)) {
+    res.status(422).json({
+      error:
+        "This customer opted out of WhatsApp. Ask them to send START before replying.",
+    });
+    return;
+  }
+  if (
+    !dealWhatsappReplyWindow(rows).open &&
+    !channel.serviceTemplateName
+  ) {
+    res.status(422).json({
+      error:
+        "The 24-hour reply window is closed and no approved service template is configured.",
+    });
+    return;
+  }
+
+  const actor = dealActor(res);
+  const queued = await enqueueWhatsapp({
+    kind: "whatsapp_message",
+    to,
+    body: body.data.text,
+    dealerId,
+    leadId: lead.id,
+    customerId: lead.customerId,
+    summary: `Deal #${deal.id} reply to ${lead.name}`,
+    actor,
+  });
+  if (queued.status === "cancelled" || queued.status === "failed") {
+    res.status(422).json({
+      error: queued.lastError ?? "The WhatsApp reply could not be queued.",
+    });
+    return;
+  }
+
+  await db.insert(timelineEventsTable).values({
+    dealerId,
+    customerId: lead.customerId,
+    domain: "leads",
+    kind: "whatsapp_message",
+    title: `WhatsApp reply queued from deal #${deal.id}`,
+    detail: body.data.text,
+    actor,
+    isAgent: false,
+    refType: "lead",
+    refId: lead.id,
+  });
+  res.status(201).json(
+    SendDealWhatsappReplyResponse.parse({
+      id: queued.id,
+      direction: "out",
+      body: body.data.text,
+      actor,
+      deliveryStatus: queued.deliveryStatus ?? "queued",
+      deliveryError: queued.lastError,
+      createdAt: queued.createdAt,
+    }),
+  );
 });
 
 // Idempotent: stage changes allocate/release vehicles — a retried request

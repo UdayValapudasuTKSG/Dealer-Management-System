@@ -114,7 +114,13 @@ import {
 } from "../lib/lead-assignment";
 import { findOpenDuplicate, mergeIntoExistingLead } from "../lib/lead-dedup";
 import { telephonyAdapter } from "../lib/telephony";
-import { enqueueEmail, enqueueWhatsapp, notifyUser } from "../lib/email";
+import {
+  enqueueEmail,
+  enqueueWhatsapp,
+  isWhatsappOptedOut,
+  notifyUser,
+} from "../lib/email";
+import { normalizeWhatsappPhone } from "../lib/whatsapp-phone";
 import {
   notifyLeadNew,
   notifyLeadAssigned,
@@ -568,7 +574,7 @@ router.post(
 );
 
 const REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
-const waDigits = (s: string): string => s.replace(/\D/g, "");
+const waDigits = (s: string): string => normalizeWhatsappPhone(s) ?? "";
 
 /** Fetch the lead's WhatsApp transcript (by lead id, plus phone fallback). */
 async function leadWhatsappMessages(lead: Lead) {
@@ -616,13 +622,22 @@ router.get("/leads/:id/whatsapp", async (req, res): Promise<void> => {
   const window = replyWindow(rows);
   const channel = await getChannelByDealerId(lead.dealerId);
   const configured = Boolean(channel);
+  const templateAvailable = Boolean(channel?.serviceTemplateName);
+  const transcriptPhone =
+    rows.length > 0 ? rows[rows.length - 1]!.phone : waDigits(lead.phone ?? "");
+  const optedOut = transcriptPhone
+    ? await isWhatsappOptedOut(lead.dealerId, transcriptPhone)
+    : false;
   let blocked: string | null = null;
-  if (rows.length === 0) blocked = "No WhatsApp conversation on this lead yet.";
+  if (!transcriptPhone)
+    blocked = "This lead has no valid WhatsApp number to message.";
   else if (!configured)
     blocked = "WhatsApp sending is not configured for this dealership.";
-  else if (!window.open)
+  else if (optedOut)
+    blocked = "This customer opted out of WhatsApp. Ask them to send START before replying.";
+  else if (!window.open && !templateAvailable)
     blocked =
-      "The 24-hour reply window has closed. It reopens when the customer messages again.";
+      "The 24-hour reply window is closed and no approved service template is configured.";
 
   res.json(
     GetLeadWhatsappThreadResponse.parse({
@@ -631,9 +646,15 @@ router.get("/leads/:id/whatsapp", async (req, res): Promise<void> => {
         direction: r.direction,
         body: r.body,
         actor: r.actor,
+        deliveryStatus: r.deliveryStatus,
+        deliveryError: r.deliveryError,
         createdAt: r.createdAt,
       })),
-      canReply: rows.length > 0 && configured && window.open,
+      canReply:
+        Boolean(transcriptPhone) &&
+        configured &&
+        !optedOut &&
+        (window.open || templateAvailable),
       replyBlockedReason: blocked,
       windowExpiresAt: window.expiresAt,
     }),
@@ -683,10 +704,17 @@ router.post("/leads/:id/whatsapp", async (req, res): Promise<void> => {
     return;
   }
   const window = replyWindow(rows);
-  if (!window.open) {
+  if (await isWhatsappOptedOut(lead.dealerId, to)) {
     res.status(422).json({
       error:
-        "The 24-hour reply window has closed. It reopens when the customer messages again.",
+        "This customer opted out of WhatsApp. Ask them to send START before replying.",
+    });
+    return;
+  }
+  if (!window.open && !channel.serviceTemplateName) {
+    res.status(422).json({
+      error:
+        "The 24-hour reply window is closed and no approved service template is configured.",
     });
     return;
   }
@@ -704,11 +732,17 @@ router.post("/leads/:id/whatsapp", async (req, res): Promise<void> => {
     summary: `Reply to ${lead.name}`,
     actor,
   });
+  if (queued.status === "cancelled" || queued.status === "failed") {
+    res.status(422).json({
+      error: queued.lastError ?? "The WhatsApp reply could not be queued.",
+    });
+    return;
+  }
 
   await logLeadEvent(
     lead,
     "whatsapp_message",
-    `WhatsApp reply sent to ${lead.name}`,
+    `WhatsApp reply queued for ${lead.name}`,
     body.data.text,
     actor,
   );
@@ -719,6 +753,8 @@ router.post("/leads/:id/whatsapp", async (req, res): Promise<void> => {
       direction: "out",
       body: body.data.text,
       actor,
+      deliveryStatus: queued.deliveryStatus ?? "queued",
+      deliveryError: queued.lastError,
       createdAt: queued.createdAt,
     }),
   );

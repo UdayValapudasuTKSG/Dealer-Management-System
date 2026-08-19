@@ -55,11 +55,13 @@ import {
   Lock,
   Clock,
   CarFront,
+  MessageSquare,
 } from "lucide-react";
 import { useAuthz } from "@/lib/auth";
 import { motion, AnimatePresence } from "framer-motion";
 import { GateCard, GATE_LABEL } from "@/components/gate-card";
 import { Page } from "@/components/layout/page";
+import { DealWhatsappPanel } from "@/components/lead/whatsapp-panel";
 import { PageHero } from "@/components/layout/page-hero";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -208,6 +210,8 @@ export default function Deals() {
   const [attachDeal, setAttachDeal] = useState<Deal | null>(null);
   const [attachLeadId, setAttachLeadId] = useState<string>("");
   const [attachSearch, setAttachSearch] = useState("");
+  const [chatDeal, setChatDeal] = useState<Deal | null>(null);
+  const closeChat = () => setChatDeal(null);
   const [cancelDeal, setCancelDeal] = useState<Deal | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelNote, setCancelNote] = useState("");
@@ -839,8 +843,19 @@ export default function Deals() {
                       )}
                     </td>
                     <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                      {deal.stage === "desking" && canEditDeals ? (
-                        <span className="inline-flex items-center gap-2">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                          onClick={() => setChatDeal(deal)}
+                          title="WhatsApp Chat"
+                          data-testid="button-open-chat"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                        </Button>
+                        {deal.stage === "desking" && canEditDeals ? (
+                          <span className="inline-flex items-center gap-2">
                           {hasPendingGates && (
                             <span className="text-xs font-semibold text-amber-500 inline-flex items-center gap-1.5">
                               <Clock className="w-3.5 h-3.5" /> Approvals
@@ -873,6 +888,7 @@ export default function Deals() {
                       ) : (
                         <span className="text-xs text-muted-foreground">None</span>
                       )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -957,6 +973,18 @@ export default function Deals() {
                                 </div>
                               )}
                               <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setChatDeal(deal);
+                                  }}
+                                  aria-label="WhatsApp Chat"
+                                  title="WhatsApp Chat"
+                                  data-testid="button-open-chat"
+                                  className="w-6 h-6 rounded-full bg-foreground/[0.05] flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                </button>
                                 {canEditDeals && (
                                   <button
                                     onClick={() => openAttach(deal)}
@@ -1430,6 +1458,67 @@ export default function Deals() {
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={chatDeal != null}
+        onOpenChange={(open) => {
+          if (!open) closeChat();
+        }}
+      >
+        <DialogContent
+          className="glass-panel border-white/10 sm:max-w-2xl max-h-[88vh] overflow-hidden flex flex-col"
+          data-testid="deal-whatsapp-dialog"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-xl tracking-tight">
+              WhatsApp conversation
+            </DialogTitle>
+            <DialogDescription>
+              {chatDeal
+                ? `${chatDeal.customerName || "Customer"} · Deal #${chatDeal.id}`
+                : "Customer conversation"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-hidden py-2">
+            {chatDeal?.leadId != null ? (
+              <DealWhatsappPanel
+                dealId={chatDeal.id}
+                canReply={canEditDeals}
+              />
+            ) : (
+              <div className="h-full min-h-[300px] rounded-2xl border border-dashed border-border/70 flex flex-col items-center justify-center text-center px-8">
+                <Link2 className="w-8 h-8 text-muted-foreground/50" />
+                <p
+                  className="mt-4 text-sm font-medium"
+                  data-testid="reply-blocked-reason"
+                >
+                  Attach the correct pipeline lead before opening this
+                  customer's WhatsApp conversation.
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground max-w-sm">
+                  AURA only shows messages from the lead linked to this deal, so
+                  conversations cannot be mixed between customers.
+                </p>
+                {canEditDeals && chatDeal && (
+                  <Button
+                    variant="secondary"
+                    className="mt-5 gap-2"
+                    onClick={() => {
+                      const deal = chatDeal;
+                      closeChat();
+                      openAttach(deal);
+                    }}
+                    data-testid="button-attach-lead-from-chat"
+                  >
+                    <Link2 className="w-4 h-4" />
+                    Attach lead
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

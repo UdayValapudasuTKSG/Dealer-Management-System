@@ -26,4 +26,17 @@ export interface UpdateWhatsappSettingsRequest {
      */
   accessToken?: string;
   enabled?: boolean;
+  /**
+     * @minLength 1
+     * @maxLength 512
+     * @nullable
+     * @pattern ^[a-z0-9_]+$
+     */
+  serviceTemplateName?: string | null;
+  /**
+     * @minLength 2
+     * @maxLength 12
+     * @pattern ^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$
+     */
+  serviceTemplateLanguage?: string;
 }

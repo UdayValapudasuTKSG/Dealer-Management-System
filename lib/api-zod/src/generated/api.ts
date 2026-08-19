@@ -2317,6 +2317,8 @@ export const GetLeadWhatsappThreadResponse = zod.object({
   "direction": zod.enum(['in', 'out']),
   "body": zod.string(),
   "actor": zod.string().nullish(),
+  "deliveryStatus": zod.enum(['received', 'queued', 'accepted', 'delivered', 'read', 'failed', 'cancelled']),
+  "deliveryError": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })),
   "canReply": zod.boolean(),
@@ -2345,6 +2347,8 @@ export const SendLeadWhatsappReplyResponse = zod.object({
   "direction": zod.enum(['in', 'out']),
   "body": zod.string(),
   "actor": zod.string().nullish(),
+  "deliveryStatus": zod.enum(['received', 'queued', 'accepted', 'delivered', 'read', 'failed', 'cancelled']),
+  "deliveryError": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -3258,6 +3262,55 @@ export const UpdateDealResponse = zod.object({
   "salesAdvisorUserId": zod.number().nullish(),
   "cancellationReason": zod.union([zod.literal('customer_changed_mind'),zod.literal('financing_declined'),zod.literal('found_elsewhere'),zod.literal('price'),zod.literal('delivery_delay'),zod.literal('vehicle_defect'),zod.literal('duplicate'),zod.literal('other'),zod.literal(null)]).nullish(),
   "cancellationNote": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary WhatsApp conversation for the lead linked to this deal
+ */
+export const GetDealWhatsappThreadParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetDealWhatsappThreadResponse = zod.object({
+  "messages": zod.array(zod.object({
+  "id": zod.number(),
+  "direction": zod.enum(['in', 'out']),
+  "body": zod.string(),
+  "actor": zod.string().nullish(),
+  "deliveryStatus": zod.enum(['received', 'queued', 'accepted', 'delivered', 'read', 'failed', 'cancelled']),
+  "deliveryError": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "canReply": zod.boolean(),
+  "replyBlockedReason": zod.string().nullish(),
+  "windowExpiresAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Queue a staff WhatsApp reply for the lead linked to this deal
+ */
+export const SendDealWhatsappReplyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const sendDealWhatsappReplyBodyTextMax = 2000;
+
+
+
+export const SendDealWhatsappReplyBody = zod.object({
+  "text": zod.string().min(1).max(sendDealWhatsappReplyBodyTextMax)
+})
+
+export const SendDealWhatsappReplyResponse = zod.object({
+  "id": zod.number(),
+  "direction": zod.enum(['in', 'out']),
+  "body": zod.string(),
+  "actor": zod.string().nullish(),
+  "deliveryStatus": zod.enum(['received', 'queued', 'accepted', 'delivered', 'read', 'failed', 'cancelled']),
+  "deliveryError": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
 
@@ -9684,6 +9737,8 @@ export const GetWhatsappSettingsResponse = zod.object({
   "phoneNumberId": zod.string().nullish(),
   "displayPhoneNumber": zod.string().nullish(),
   "verifiedName": zod.string().nullish(),
+  "serviceTemplateName": zod.string().nullish(),
+  "serviceTemplateLanguage": zod.string(),
   "hasAccessToken": zod.boolean(),
   "lastStatus": zod.string().nullish(),
   "lastError": zod.string().nullish(),
@@ -9707,13 +9762,24 @@ export const updateWhatsappSettingsBodyPhoneNumberIdRegExp = new RegExp('^[0-9]+
 export const updateWhatsappSettingsBodyAccessTokenMin = 20;
 export const updateWhatsappSettingsBodyAccessTokenMax = 4096;
 
+export const updateWhatsappSettingsBodyServiceTemplateNameMax = 512;
+
+
+export const updateWhatsappSettingsBodyServiceTemplateNameRegExp = new RegExp('^[a-z0-9_]+$');
+export const updateWhatsappSettingsBodyServiceTemplateLanguageMin = 2;
+export const updateWhatsappSettingsBodyServiceTemplateLanguageMax = 12;
+
+
+export const updateWhatsappSettingsBodyServiceTemplateLanguageRegExp = new RegExp('^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$');
 
 
 export const UpdateWhatsappSettingsBody = zod.object({
   "wabaId": zod.string().min(updateWhatsappSettingsBodyWabaIdMin).max(updateWhatsappSettingsBodyWabaIdMax).regex(updateWhatsappSettingsBodyWabaIdRegExp).optional(),
   "phoneNumberId": zod.string().min(updateWhatsappSettingsBodyPhoneNumberIdMin).max(updateWhatsappSettingsBodyPhoneNumberIdMax).regex(updateWhatsappSettingsBodyPhoneNumberIdRegExp).optional(),
   "accessToken": zod.string().min(updateWhatsappSettingsBodyAccessTokenMin).max(updateWhatsappSettingsBodyAccessTokenMax).optional().describe('Meta access token — stored encrypted; omit to preserve the existing token'),
-  "enabled": zod.boolean().optional()
+  "enabled": zod.boolean().optional(),
+  "serviceTemplateName": zod.string().min(1).max(updateWhatsappSettingsBodyServiceTemplateNameMax).regex(updateWhatsappSettingsBodyServiceTemplateNameRegExp).nullish(),
+  "serviceTemplateLanguage": zod.string().min(updateWhatsappSettingsBodyServiceTemplateLanguageMin).max(updateWhatsappSettingsBodyServiceTemplateLanguageMax).regex(updateWhatsappSettingsBodyServiceTemplateLanguageRegExp).optional()
 })
 
 export const UpdateWhatsappSettingsResponse = zod.object({
@@ -9723,6 +9789,8 @@ export const UpdateWhatsappSettingsResponse = zod.object({
   "phoneNumberId": zod.string().nullish(),
   "displayPhoneNumber": zod.string().nullish(),
   "verifiedName": zod.string().nullish(),
+  "serviceTemplateName": zod.string().nullish(),
+  "serviceTemplateLanguage": zod.string(),
   "hasAccessToken": zod.boolean(),
   "lastStatus": zod.string().nullish(),
   "lastError": zod.string().nullish(),

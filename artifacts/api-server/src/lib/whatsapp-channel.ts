@@ -22,6 +22,8 @@ export type ResolvedChannel = {
   phoneNumberId: string;
   displayPhoneNumber: string | null;
   verifiedName: string | null;
+  serviceTemplateName: string | null;
+  serviceTemplateLanguage: string;
   /** Plaintext access token — never log this value. */
   accessToken: string;
 };
@@ -46,6 +48,10 @@ function legacyEnvChannel(): ResolvedChannel | null {
     phoneNumberId,
     displayPhoneNumber: null,
     verifiedName: null,
+    serviceTemplateName:
+      process.env["WHATSAPP_SERVICE_TEMPLATE_NAME"]?.trim() || null,
+    serviceTemplateLanguage:
+      process.env["WHATSAPP_SERVICE_TEMPLATE_LANGUAGE"]?.trim() || "en_US",
     accessToken,
   };
 }
@@ -74,6 +80,8 @@ export async function getChannelByDealerId(
         phoneNumberId: row.phoneNumberId,
         displayPhoneNumber: row.displayPhoneNumber ?? null,
         verifiedName: row.verifiedName ?? null,
+        serviceTemplateName: row.serviceTemplateName ?? null,
+        serviceTemplateLanguage: row.serviceTemplateLanguage || "en_US",
         accessToken,
       };
     } catch (err) {
@@ -117,6 +125,8 @@ export async function getChannelByPhoneNumberId(
         phoneNumberId: row.phoneNumberId,
         displayPhoneNumber: row.displayPhoneNumber ?? null,
         verifiedName: row.verifiedName ?? null,
+        serviceTemplateName: row.serviceTemplateName ?? null,
+        serviceTemplateLanguage: row.serviceTemplateLanguage || "en_US",
         accessToken,
       };
     } catch (err) {

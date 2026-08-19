@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { WhatsappMessageDeliveryStatus } from './whatsappMessageDeliveryStatus';
 import type { WhatsappMessageDirection } from './whatsappMessageDirection';
 
 export interface WhatsappMessage {
@@ -13,5 +14,8 @@ export interface WhatsappMessage {
   body: string;
   /** @nullable */
   actor?: string | null;
+  deliveryStatus: WhatsappMessageDeliveryStatus;
+  /** @nullable */
+  deliveryError?: string | null;
   createdAt: Date;
 }

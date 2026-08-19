@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import crypto from "node:crypto";
-import { and, eq, notInArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import {
   db,
   callLogsTable,
@@ -9,11 +9,12 @@ import {
   timelineEventsTable,
   usersTable,
   dealerUsersTable,
+  emailLogsTable,
   webhookEventsTable,
   erpnextWebhookEventsTable,
 } from "@workspace/db";
 import { mapTwilioDialStatus, twilioVoiceConfig } from "../lib/telephony";
-import { notifyUser } from "../lib/email";
+import { enqueueWhatsapp, notifyUser } from "../lib/email";
 import { logger } from "../lib/logger";
 import { autoAnalyzeCall } from "../lib/call-analysis";
 import { autoTranscribeCall } from "../lib/call-transcription";
@@ -21,12 +22,9 @@ import {
   createInboundLead,
   matchVehicleByText,
 } from "../lib/lead-intake";
-import { defaultDealerId } from "../lib/tenancy";
 import {
-  captureTransport,
-  metaTransport,
   whatsappConfig,
-  whatsappProvider,
+  type WhatsappTransport,
 } from "../lib/whatsapp";
 import { getChannelByPhoneNumberId } from "../lib/whatsapp-channel";
 import {
@@ -34,6 +32,10 @@ import {
   handleWhatsappOneShot,
   type InboundWhatsappMessage,
 } from "../lib/whatsapp-flow";
+import {
+  allowedWhatsappDeliverySources,
+  updateWhatsappDeliveryStatus,
+} from "../lib/whatsapp-log";
 
 const router: IRouter = Router();
 
@@ -398,6 +400,63 @@ type WhatsappWebhookMessage = {
   button?: { text?: string };
 };
 
+type WhatsappWebhookStatus = {
+  id?: string;
+  status?: "sent" | "delivered" | "read" | "failed";
+  timestamp?: string;
+  biz_opaque_callback_data?: string;
+  errors?: {
+    code?: number;
+    title?: string;
+    message?: string;
+    error_data?: { details?: string };
+  }[];
+};
+
+function durableMetaBotTransport(
+  dealerId: number,
+  inboundMessageId: string,
+): WhatsappTransport {
+  let sequence = 0;
+  const queue = async (
+    to: string,
+    body: string,
+    interactive?: Parameters<typeof enqueueWhatsapp>[0]["interactive"],
+    allowOptOutConfirmation = false,
+  ): Promise<void> => {
+    sequence += 1;
+    const row = await enqueueWhatsapp({
+      kind: "whatsapp_message",
+      to,
+      body,
+      dealerId,
+      actor: "AURA WhatsApp Bot",
+      interactive,
+      allowOptOutConfirmation,
+      dedupeKey: `whatsapp:concierge:${dealerId}:${inboundMessageId}:${sequence}`,
+    });
+    if (row.status === "cancelled" || row.status === "failed") {
+      throw new Error(row.lastError ?? "WhatsApp concierge reply was blocked");
+    }
+  };
+  return {
+    interactive: true,
+    durable: true,
+    sendText: (to, body) => queue(to, body),
+    sendComplianceText: (to, body) =>
+      queue(to, body, undefined, true),
+    sendButtons: (to, body, buttons) =>
+      queue(to, body, { type: "buttons", buttons }),
+    sendList: (to, opts) =>
+      queue(to, opts.body, {
+        type: "list",
+        buttonLabel: opts.buttonLabel,
+        sectionTitle: opts.sectionTitle,
+        rows: opts.rows,
+      }),
+  };
+}
+
 // Receiver. Mounted with express.raw() (see app.ts) so the X-Hub-Signature-256
 // can be verified over the exact bytes Meta sent.
 // Signature verification is platform-level (global META_APP_SECRET).
@@ -427,6 +486,7 @@ router.post("/webhooks/whatsapp", async (req, res): Promise<void> => {
             phone_number_id?: string;
           };
           messages?: WhatsappWebhookMessage[];
+           statuses?: WhatsappWebhookStatus[];
           contacts?: { wa_id?: string; profile?: { name?: string } }[];
         };
       }[];
@@ -460,6 +520,136 @@ router.post("/webhooks/whatsapp", async (req, res): Promise<void> => {
       }
 
       const contacts = change.value?.contacts ?? [];
+      for (const status of change.value?.statuses ?? []) {
+        if (!status.id || !status.status) continue;
+        const deliveryStatus =
+          status.status === "sent" ? "accepted" : status.status;
+        const eventKey = `${status.id}:${status.status}:${status.timestamp ?? ""}`;
+        try {
+          const [seen] = await db
+            .select({ id: webhookEventsTable.id })
+            .from(webhookEventsTable)
+            .where(
+              and(
+                eq(webhookEventsTable.channel, "meta_whatsapp_status"),
+                eq(webhookEventsTable.externalId, eventKey),
+              ),
+            );
+          if (seen) continue;
+
+          const callbackMatch =
+            /^aura-outbox:(\d+)$/.exec(
+              status.biz_opaque_callback_data ?? "",
+            );
+          const callbackOutboxId = callbackMatch
+            ? Number(callbackMatch[1])
+            : null;
+          const [outbox] = await db
+            .select({
+              id: emailLogsTable.id,
+              deliveryStatus: emailLogsTable.deliveryStatus,
+            })
+            .from(emailLogsTable)
+            .where(
+              and(
+                eq(emailLogsTable.dealerId, channel.dealerId),
+                eq(emailLogsTable.channel, "whatsapp"),
+                callbackOutboxId != null
+                  ? or(
+                      eq(emailLogsTable.providerMessageId, status.id),
+                      eq(emailLogsTable.id, callbackOutboxId),
+                    )
+                  : eq(emailLogsTable.providerMessageId, status.id),
+              ),
+            );
+          if (!outbox) continue;
+          await db.insert(webhookEventsTable).values({
+            dealerId: channel.dealerId,
+            channel: "meta_whatsapp_status",
+            externalId: eventKey,
+          });
+
+          const occurredAt =
+            status.timestamp && /^\d+$/.test(status.timestamp)
+              ? new Date(Number(status.timestamp) * 1000)
+              : new Date();
+          const providerError = (status.errors ?? [])
+            .map(
+              (error) =>
+                error.error_data?.details ??
+                error.message ??
+                error.title ??
+                (error.code != null ? `Meta error ${error.code}` : ""),
+            )
+            .filter(Boolean)
+            .join("; ")
+            .slice(0, 1000);
+
+          const [advanced] = await db
+            .update(emailLogsTable)
+            .set({
+              deliveryStatus,
+              providerMessageId: status.id,
+              nextAttemptAt: null,
+              status: deliveryStatus === "failed" ? "cancelled" : "sent",
+              ...(deliveryStatus !== "failed"
+                ? { lastError: null, sentAt: occurredAt }
+                : {}),
+              ...(deliveryStatus === "delivered" || deliveryStatus === "read"
+                ? { deliveredAt: occurredAt }
+                : {}),
+              ...(deliveryStatus === "read" ? { readAt: occurredAt } : {}),
+              ...(deliveryStatus === "failed"
+                ? {
+                    // Provider receipt failures are terminal. Do not put an
+                    // accepted send back into the retry queue: doing so could
+                    // deliver the same customer message twice.
+                    status: "cancelled",
+                    lastError:
+                      providerError || "Meta reported that delivery failed.",
+                  }
+                : {}),
+            })
+            .where(
+              and(
+                eq(emailLogsTable.id, outbox.id),
+                eq(emailLogsTable.dealerId, channel.dealerId),
+                inArray(
+                  emailLogsTable.deliveryStatus,
+                  allowedWhatsappDeliverySources(deliveryStatus),
+                ),
+              ),
+            )
+            .returning({ id: emailLogsTable.id });
+          if (!advanced) {
+            logger.warn(
+              {
+                providerMessageId: status.id,
+                currentStatus: outbox.deliveryStatus,
+                incomingStatus: deliveryStatus,
+              },
+              "Ignored non-monotonic WhatsApp delivery receipt",
+            );
+            continue;
+          }
+          await updateWhatsappDeliveryStatus({
+            dealerId: channel.dealerId,
+            outboxId: outbox.id,
+            providerMessageId: status.id,
+            status: deliveryStatus,
+            error:
+              deliveryStatus === "failed"
+                ? providerError || "Meta reported that delivery failed."
+                : null,
+            recordedAt: occurredAt,
+          });
+        } catch (err) {
+          logger.error(
+            { err, providerMessageId: status.id, dealerId: channel.dealerId },
+            "Failed to process WhatsApp delivery receipt",
+          );
+        }
+      }
       for (const m of change.value?.messages ?? []) {
         if (!m.from || !m.id) continue;
         const messageId = m.id;
@@ -495,7 +685,7 @@ router.post("/webhooks/whatsapp", async (req, res): Promise<void> => {
             replyTitle: reply?.title ?? null,
           };
 
-          const transport = metaTransport(channel);
+          const transport = durableMetaBotTransport(dealerId, messageId);
           await handleWhatsappMessage(transport, msg, dealerId);
         } catch (err) {
           logger.error(
@@ -547,10 +737,6 @@ function publicUrl(req: {
   return `${proto}://${host}${req.originalUrl}`;
 }
 
-const digits = (s: string): string => s.replace(/\D/g, "");
-
-const OPEN_EXCLUDED_PHASES = ["won", "lost"];
-
 router.post("/webhooks/twilio/whatsapp", async (req, res): Promise<void> => {
   const authToken = twilioAuthToken();
   if (!authToken) {
@@ -569,155 +755,18 @@ router.post("/webhooks/twilio/whatsapp", async (req, res): Promise<void> => {
     return;
   }
 
-  const from = params["From"] ?? ""; // "whatsapp:+15551234567"
-  const phone = from.replace(/^whatsapp:/i, "").trim();
-  const profileName = params["ProfileName"]?.trim() || "";
-  const body = (params["Body"] ?? "").trim();
-  const messageSid = params["MessageSid"] ?? params["SmsMessageSid"] ?? "";
-
-  const twiml = (message: string): void => {
-    res
-      .status(200)
-      .type("text/xml")
-      .send(
-        `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${message
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")}</Message></Response>`,
-      );
-  };
-
-  if (!phone) {
-    res.status(400).json({ error: "Missing sender" });
-    return;
-  }
-
-  try {
-    // Idempotency: Twilio can redeliver the same MessageSid.
-    if (messageSid) {
-      const [seen] = await db
-        .select()
-        .from(webhookEventsTable)
-        .where(
-          and(
-            eq(webhookEventsTable.channel, "twilio_whatsapp"),
-            eq(webhookEventsTable.externalId, messageSid),
-          ),
-        );
-      if (seen) {
-        res.status(200).type("text/xml").send('<?xml version="1.0" encoding="UTF-8"?><Response/>');
-        return;
-      }
-    }
-
-    const dealerId = await defaultDealerId();
-
-    // Guided-bot mode: when Twilio is the selected WhatsApp provider, the
-    // shared conversation engine drives the reply (numbered text menus in
-    // place of Meta's interactive buttons/lists), returned as TwiML.
-    if (whatsappProvider() === "twilio") {
-      const { transport, messages } = captureTransport();
-      await handleWhatsappMessage(transport, {
-        from: digits(phone),
-        profileName,
-        text: body || null,
-        replyId: null,
-        replyTitle: null,
-      }, dealerId);
-      if (messageSid) {
-        await db.insert(webhookEventsTable).values({
-          channel: "twilio_whatsapp",
-          externalId: messageSid,
-        });
-      }
-      twiml(
-        messages.length
-          ? messages.join("\n\n")
-          : "Thank you for contacting AURA Motors. One of our advisors will be in touch shortly.",
-      );
-      return;
-    }
-
-    // Legacy one-shot intake (Meta is the guided-bot provider).
-    // Dedupe against open leads by phone number (digit-suffix match).
-    const needle = digits(phone);
-    const candidates = await db
-      .select()
-      .from(leadsTable)
-      .where(
-        and(
-          eq(leadsTable.dealerId, dealerId),
-          isNotNull(leadsTable.phone),
-          notInArray(leadsTable.phase, OPEN_EXCLUDED_PHASES),
-        ),
-      );
-    const existing = candidates.find((l) => {
-      const d = digits(l.phone ?? "");
-      if (!d || !needle) return false;
-      const a = d.slice(-10);
-      const b = needle.slice(-10);
-      return a === b || d === needle;
-    });
-
-    let leadId: number;
-    if (existing) {
-      leadId = existing.id;
-      await db.insert(timelineEventsTable).values({
-        dealerId: existing.dealerId,
-        customerId: existing.customerId,
-        domain: "leads",
-        kind: "whatsapp_message",
-        title: `WhatsApp message from ${existing.name}`,
-        detail: body || "(no text)",
-        actor: "WhatsApp",
-        isAgent: true,
-        refType: "lead",
-        refId: existing.id,
-      });
-      if (existing.ownerUserId) {
-        await notifyUser({
-          userId: existing.ownerUserId,
-          dealerId: existing.dealerId,
-          type: "system",
-          title: `WhatsApp: ${existing.name}`,
-          body: body ? body.slice(0, 180) : "New WhatsApp message received.",
-          link: "/pipeline",
-        });
-      }
-    } else {
-      const noteParts: string[] = [];
-      if (body) noteParts.push(`WhatsApp message: ${body}`);
-      const lead = await createInboundLead({
-        dealerId,
-        name: profileName || `WhatsApp ${phone}`,
-        phone,
-        channel: "social",
-        source: "whatsapp",
-        notes: noteParts.length ? noteParts.join("\n") : null,
-        vehicle: await matchVehicleByText(body, dealerId),
-        channelLabel: "WhatsApp",
-        actor: "WhatsApp",
-      });
-      leadId = lead.id;
-    }
-
-    if (messageSid) {
-      await db.insert(webhookEventsTable).values({
-        channel: "twilio_whatsapp",
-        externalId: messageSid,
-        leadId,
-      });
-    }
-
-    twiml(
-      existing
-        ? "Thanks — your message has been added to your file. Your advisor will follow up shortly."
-        : "Thank you for contacting AURA Motors. We've received your message and one of our advisors will be in touch shortly.",
-    );
-  } catch (err) {
-    req.log.error({ err }, "Failed to process WhatsApp message");
-    res.status(500).json({ error: "Failed to process message" });
-  }
+  // Fail closed. A global Twilio number cannot be attributed to a dealership
+  // safely, and TwiML replies bypass the durable, policy-governed Meta outbox.
+  // Twilio Voice remains supported below; WhatsApp messaging is Meta-only
+  // until Twilio sender numbers have an explicit per-dealer channel mapping.
+  req.log.warn(
+    { messageSid: params["MessageSid"] ?? params["SmsMessageSid"] ?? null },
+    "Twilio WhatsApp inbound ignored: no dealer-safe channel mapping",
+  );
+  res
+    .status(200)
+    .type("text/xml")
+    .send('<?xml version="1.0" encoding="UTF-8"?><Response/>');
 });
 
 // ---------------------------------------------------------------------------

@@ -2271,6 +2271,64 @@ paths:
                   gate: { type: string }
                   gateId: { type: integer }
 
+  /deals/{id}/whatsapp:
+    get:
+      operationId: getDealWhatsappThread
+      tags: [deals]
+      summary: WhatsApp conversation for the lead linked to this deal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Linked lead conversation, or an attach-lead prompt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappThread"
+        "404":
+          description: Deal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: sendDealWhatsappReply
+      tags: [deals]
+      summary: Queue a staff WhatsApp reply for the lead linked to this deal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WhatsappReplyInput"
+      responses:
+        "201":
+          description: Reply queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappMessage"
+        "404":
+          description: Deal or linked lead not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Cannot send because the lead is not linked or WhatsApp is restricted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /deals/{id}/bank-letters:
     post:
       operationId: uploadDealBankLetter
@@ -7352,7 +7410,7 @@ components:
   schemas:
     WhatsappSettings:
       type: object
-      required: [configured, enabled, hasAccessToken]
+      required: [configured, enabled, hasAccessToken, serviceTemplateLanguage]
       properties:
         configured: { type: boolean }
         enabled: { type: boolean }
@@ -7360,6 +7418,8 @@ components:
         phoneNumberId: { type: ["string", "null"] }
         displayPhoneNumber: { type: ["string", "null"] }
         verifiedName: { type: ["string", "null"] }
+        serviceTemplateName: { type: ["string", "null"] }
+        serviceTemplateLanguage: { type: string }
         hasAccessToken: { type: boolean }
         lastStatus: { type: ["string", "null"] }
         lastError: { type: ["string", "null"] }
@@ -7371,6 +7431,8 @@ components:
         phoneNumberId: { type: string, minLength: 5, maxLength: 64, pattern: "^[0-9]+$" }
         accessToken: { type: string, minLength: 20, maxLength: 4096, description: "Meta access token — stored encrypted; omit to preserve the existing token" }
         enabled: { type: boolean }
+        serviceTemplateName: { type: ["string", "null"], minLength: 1, maxLength: 512, pattern: "^[a-z0-9_]+$" }
+        serviceTemplateLanguage: { type: string, minLength: 2, maxLength: 12, pattern: "^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$" }
     WhatsappTestResult:
       type: object
       required: [ok]
@@ -8744,12 +8806,14 @@ components:
         text: { type: string, minLength: 1, maxLength: 2000 }
     WhatsappMessage:
       type: object
-      required: [id, direction, body, createdAt]
+      required: [id, direction, body, deliveryStatus, createdAt]
       properties:
         id: { type: integer }
         direction: { type: string, enum: [in, out] }
         body: { type: string }
         actor: { type: ["string", "null"] }
+        deliveryStatus: { type: string, enum: [received, queued, accepted, delivered, read, failed, cancelled] }
+        deliveryError: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
     WhatsappThread:
       type: object

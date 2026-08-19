@@ -65,6 +65,8 @@ async function settingsPayload(dealerId: number) {
         phoneNumberId: legacy.phoneNumberId,
         displayPhoneNumber: legacy.displayPhoneNumber,
         verifiedName: legacy.verifiedName,
+        serviceTemplateName: legacy.serviceTemplateName,
+        serviceTemplateLanguage: legacy.serviceTemplateLanguage,
         hasAccessToken: true,
         lastStatus: null,
         lastError: null,
@@ -78,6 +80,8 @@ async function settingsPayload(dealerId: number) {
       phoneNumberId: null,
       displayPhoneNumber: null,
       verifiedName: null,
+      serviceTemplateName: null,
+      serviceTemplateLanguage: "en_US",
       hasAccessToken: false,
       lastStatus: null,
       lastError: null,
@@ -91,6 +95,8 @@ async function settingsPayload(dealerId: number) {
     phoneNumberId: row.phoneNumberId,
     displayPhoneNumber: row.displayPhoneNumber ?? null,
     verifiedName: row.verifiedName ?? null,
+    serviceTemplateName: row.serviceTemplateName ?? null,
+    serviceTemplateLanguage: row.serviceTemplateLanguage || "en_US",
     hasAccessToken: Boolean(row.accessTokenCiphertext),
     lastStatus: row.lastStatus ?? null,
     lastError: row.lastError ?? null,
@@ -174,6 +180,10 @@ router.put("/whatsapp/settings", async (req, res): Promise<void> => {
   if (body.data.wabaId !== undefined) updates["wabaId"] = body.data.wabaId;
   if (body.data.phoneNumberId !== undefined) updates["phoneNumberId"] = body.data.phoneNumberId;
   if (body.data.enabled !== undefined) updates["enabled"] = body.data.enabled;
+  if (body.data.serviceTemplateName !== undefined)
+    updates["serviceTemplateName"] = body.data.serviceTemplateName;
+  if (body.data.serviceTemplateLanguage !== undefined)
+    updates["serviceTemplateLanguage"] = body.data.serviceTemplateLanguage;
 
   // Encrypt the token when provided; preserve existing ciphertext when omitted.
   const accessTokenToStore = isInitial
@@ -209,6 +219,8 @@ router.put("/whatsapp/settings", async (req, res): Promise<void> => {
         wabaId: initialWabaId!,
         phoneNumberId: initialPhoneNumberId!,
         enabled: body.data.enabled ?? true,
+        serviceTemplateName: body.data.serviceTemplateName ?? null,
+        serviceTemplateLanguage: body.data.serviceTemplateLanguage ?? "en_US",
         accessTokenCiphertext: updates["accessTokenCiphertext"] as string,
         createdAt: now,
         updatedAt: now,

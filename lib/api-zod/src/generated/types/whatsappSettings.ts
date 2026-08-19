@@ -17,6 +17,9 @@ export interface WhatsappSettings {
   displayPhoneNumber?: string | null;
   /** @nullable */
   verifiedName?: string | null;
+  /** @nullable */
+  serviceTemplateName?: string | null;
+  serviceTemplateLanguage: string;
   hasAccessToken: boolean;
   /** @nullable */
   lastStatus?: string | null;

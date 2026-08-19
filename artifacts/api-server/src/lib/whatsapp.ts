@@ -13,6 +13,33 @@ const GRAPH_BASE =
 
 export type WhatsappProvider = "meta" | "twilio";
 
+export type WhatsappSendResult = {
+  providerMessageId: string;
+};
+
+export type WhatsappSendFailureDisposition =
+  | "retryable_rejection"
+  | "terminal_rejection"
+  | "uncertain";
+
+export class WhatsappProviderSendError extends Error {
+  constructor(
+    message: string,
+    readonly disposition: WhatsappSendFailureDisposition,
+  ) {
+    super(message);
+    this.name = "WhatsappProviderSendError";
+  }
+}
+
+export function whatsappSendFailureDisposition(
+  error: unknown,
+): WhatsappSendFailureDisposition | null {
+  return error instanceof WhatsappProviderSendError
+    ? error.disposition
+    : null;
+}
+
 /**
  * Which channel runs the guided lead-capture bot. Explicit WHATSAPP_PROVIDER
  * env wins ("meta" | "twilio"); otherwise auto-detect: Meta when its
@@ -92,39 +119,108 @@ async function send(
   cfg: { accessToken: string; phoneNumberId: string },
   to: string,
   payload: Record<string, unknown>,
-): Promise<void> {
-  const resp = await fetch(
-    `${GRAPH_BASE}/${encodeURIComponent(cfg.phoneNumberId)}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${cfg.accessToken}`,
-        "Content-Type": "application/json",
+  correlationId?: string,
+): Promise<WhatsappSendResult> {
+  let resp: Response;
+  try {
+    resp = await fetch(
+      `${GRAPH_BASE}/${encodeURIComponent(cfg.phoneNumberId)}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${cfg.accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to,
+          ...(correlationId
+            ? { biz_opaque_callback_data: correlationId.slice(0, 512) }
+            : {}),
+          ...payload,
+        }),
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to,
-        ...payload,
-      }),
-    },
-  );
+    );
+  } catch {
+    throw new WhatsappProviderSendError(
+      "WhatsApp provider request outcome is unknown",
+      "uncertain",
+    );
+  }
   if (!resp.ok) {
-    const text = await resp.text();
+    const text = await resp.text().catch(() => "");
     logger.error(
       { status: resp.status, body: text.slice(0, 400), to },
       "WhatsApp send failed",
     );
-    throw new Error(`WhatsApp Graph API ${resp.status}`);
+    const disposition: WhatsappSendFailureDisposition =
+      resp.status === 429
+        ? "retryable_rejection"
+        : resp.status >= 400 && resp.status < 500
+          ? "terminal_rejection"
+          : "uncertain";
+    throw new WhatsappProviderSendError(
+      `WhatsApp Graph API ${resp.status}`,
+      disposition,
+    );
   }
+  let data: { messages?: { id?: string }[] };
+  try {
+    data = (await resp.json()) as { messages?: { id?: string }[] };
+  } catch {
+    throw new WhatsappProviderSendError(
+      "WhatsApp provider response could not be correlated",
+      "uncertain",
+    );
+  }
+  const providerMessageId = data.messages?.[0]?.id;
+  if (!providerMessageId) {
+    throw new WhatsappProviderSendError(
+      "WhatsApp Graph API accepted the request without a message id",
+      "uncertain",
+    );
+  }
+  return { providerMessageId };
 }
 
 export async function sendWhatsappText(
   cfg: { accessToken: string; phoneNumberId: string },
   to: string,
   body: string,
-): Promise<void> {
-  await send(cfg, to, { type: "text", text: { body, preview_url: false } });
+  correlationId?: string,
+): Promise<WhatsappSendResult> {
+  return send(
+    cfg,
+    to,
+    { type: "text", text: { body, preview_url: false } },
+    correlationId,
+  );
+}
+
+/**
+ * Send an approved Meta template. AURA's configured service template must
+ * contain one body text variable; the intended message is supplied to it.
+ */
+export async function sendWhatsappTemplate(
+  cfg: { accessToken: string; phoneNumberId: string },
+  to: string,
+  opts: { name: string; language: string; body: string },
+  correlationId?: string,
+): Promise<WhatsappSendResult> {
+  return send(cfg, to, {
+    type: "template",
+    template: {
+      name: opts.name,
+      language: { code: opts.language },
+      components: [
+        {
+          type: "body",
+          parameters: [{ type: "text", text: opts.body }],
+        },
+      ],
+    },
+  }, correlationId);
 }
 
 export type WhatsappButton = { id: string; title: string };
@@ -135,8 +231,9 @@ export async function sendWhatsappButtons(
   to: string,
   body: string,
   buttons: WhatsappButton[],
-): Promise<void> {
-  await send(cfg, to, {
+  correlationId?: string,
+): Promise<WhatsappSendResult> {
+  return send(cfg, to, {
     type: "interactive",
     interactive: {
       type: "button",
@@ -148,7 +245,7 @@ export async function sendWhatsappButtons(
         })),
       },
     },
-  });
+  }, correlationId);
 }
 
 export type WhatsappListRow = {
@@ -161,7 +258,11 @@ export type WhatsappListRow = {
 export type WhatsappTransport = {
   /** True when the channel supports reply buttons + interactive lists. */
   interactive: boolean;
+  /** True when sends are already persisted by the transport itself. */
+  durable?: boolean;
   sendText(to: string, body: string): Promise<void>;
+  /** Narrow STOP/START acknowledgement path allowed after an opt keyword. */
+  sendComplianceText?(to: string, body: string): Promise<void>;
   sendButtons(
     to: string,
     body: string,
@@ -185,10 +286,18 @@ export function metaTransport(cfg: {
 }): WhatsappTransport {
   return {
     interactive: true,
-    sendText: (to, body) => sendWhatsappText(cfg, to, body),
-    sendButtons: (to, body, buttons) =>
-      sendWhatsappButtons(cfg, to, body, buttons),
-    sendList: (to, opts) => sendWhatsappList(cfg, to, opts),
+    sendText: async (to, body) => {
+      await sendWhatsappText(cfg, to, body);
+    },
+    sendComplianceText: async (to, body) => {
+      await sendWhatsappText(cfg, to, body);
+    },
+    sendButtons: async (to, body, buttons) => {
+      await sendWhatsappButtons(cfg, to, body, buttons);
+    },
+    sendList: async (to, opts) => {
+      await sendWhatsappList(cfg, to, opts);
+    },
   };
 }
 
@@ -210,6 +319,7 @@ export function captureTransport(): {
     transport: {
       interactive: false,
       sendText: push,
+      sendComplianceText: push,
       // Never called when interactive=false; safe text fallbacks anyway.
       sendButtons: (to, body) => push(to, body),
       sendList: (to, opts) => push(to, opts.body),
@@ -227,8 +337,9 @@ export async function sendWhatsappList(
     sectionTitle: string;
     rows: WhatsappListRow[];
   },
-): Promise<void> {
-  await send(cfg, to, {
+  correlationId?: string,
+): Promise<WhatsappSendResult> {
+  return send(cfg, to, {
     type: "interactive",
     interactive: {
       type: "list",
@@ -249,5 +360,5 @@ export async function sendWhatsappList(
         ],
       },
     },
-  });
+  }, correlationId);
 }

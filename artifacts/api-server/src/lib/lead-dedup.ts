@@ -7,6 +7,7 @@ import {
   activityTable,
   type Lead,
 } from "@workspace/db";
+import { normalizeWhatsappPhone } from "./whatsapp-phone";
 
 // ---------------------------------------------------------------------------
 // Dedup agent (A1) — deterministic duplicate detection at lead creation.
@@ -22,7 +23,7 @@ const AGENT_ACTOR = "AURA Dedup Agent";
 
 const normName = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, " ");
 const normPhone = (s: string | null | undefined): string =>
-  (s ?? "").replace(/\D/g, "");
+  normalizeWhatsappPhone(s ?? "") ?? "";
 const normEmail = (s: string | null | undefined): string =>
   (s ?? "").trim().toLowerCase();
 
@@ -81,9 +82,7 @@ export async function findOpenDuplicate(
     open.find((l) => {
       if (!opts?.contactOnly && normName(l.name) !== name) return false;
       const lp = normPhone(l.phone);
-      // Digit-suffix match tolerates +592 prefix vs local formats.
-      const phoneHit =
-        !!phone && !!lp && (lp === phone || lp.slice(-10) === phone.slice(-10));
+      const phoneHit = !!phone && !!lp && lp === phone;
       const emailHit = !!email && normEmail(l.email) === email;
       return phoneHit || emailHit;
     }) ?? null

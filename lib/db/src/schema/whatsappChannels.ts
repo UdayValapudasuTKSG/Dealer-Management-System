@@ -32,6 +32,15 @@ export const whatsappChannelsTable = pgTable(
     /** Master switch: false pauses all sends without losing config. */
     enabled: boolean("enabled").notNull().default(true),
     /**
+     * Optional approved Meta template used when a free-form reply is outside
+     * the 24-hour customer-service window. The template must have exactly one
+     * body text variable; AURA supplies the intended message as that variable.
+     */
+    serviceTemplateName: text("service_template_name"),
+    serviceTemplateLanguage: text("service_template_language")
+      .notNull()
+      .default("en_US"),
+    /**
      * AES-256-GCM ciphertext of the access token, base64-encoded.
      * Format: <iv_b64>:<tag_b64>:<ciphertext_b64>
      * Never returned to the client; only hasAccessToken is exposed.

@@ -99,6 +99,12 @@ export const emailLogsTable = pgTable("email_logs", {
   nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
   /** Idempotency key — a second enqueue with the same key is a no-op. */
   dedupeKey: text("dedupe_key").unique(),
+  /** Provider message id (Meta wamid) for delivery receipt correlation. */
+  providerMessageId: text("provider_message_id"),
+  /** queued | accepted | delivered | read | failed | cancelled */
+  deliveryStatus: text("delivery_status"),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  readAt: timestamp("read_at", { withTimezone: true }),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

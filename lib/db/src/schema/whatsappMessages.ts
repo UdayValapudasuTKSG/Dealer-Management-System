@@ -5,6 +5,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // Full WhatsApp chat transcript: every inbound customer message and every
@@ -24,6 +25,19 @@ export const whatsappMessagesTable = pgTable(
     body: text("body").notNull(),
     /** Sender label for outbound ("AURA WhatsApp Bot" or staff name); null inbound. */
     actor: text("actor"),
+    /** Shared outbox row for queued staff/automation messages; null for inbound and live bot replies. */
+    outboxId: integer("outbox_id"),
+    /** Provider message id returned by Meta after it accepts the send. */
+    providerMessageId: text("provider_message_id"),
+    /** received | queued | accepted | delivered | read | failed | cancelled */
+    deliveryStatus: text("delivery_status").notNull().default("received"),
+    /** Human-readable terminal provider/window/opt-out failure for staff. */
+    deliveryError: text("delivery_error"),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -33,6 +47,8 @@ export const whatsappMessagesTable = pgTable(
     index("whatsapp_messages_dealer_phone_idx").on(t.dealerId, t.phone),
     index("whatsapp_messages_phone_idx").on(t.phone),
     index("whatsapp_messages_lead_idx").on(t.leadId),
+    uniqueIndex("whatsapp_messages_outbox_uq").on(t.outboxId),
+    uniqueIndex("whatsapp_messages_provider_message_uq").on(t.providerMessageId),
   ],
 );
 

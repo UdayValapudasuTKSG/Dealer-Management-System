@@ -57,7 +57,7 @@ export async function matchVehicleByText(
   };
 }
 
-export async function createInboundLead(opts: {
+export type InboundLeadOptions = {
   dealerId: number;
   name: string;
   email?: string | null;
@@ -76,31 +76,73 @@ export async function createInboundLead(opts: {
   > | null;
   /** Timeline actor name ("Meta Lead Ads" / "WhatsApp") */
   actor: string;
-}): Promise<Lead> {
-  // R10.3: an inbound WhatsApp contact is an explicit opt-in for the
-  // WhatsApp channel ONLY (never inferred for email). Other channels must
-  // pass consent explicitly.
-  function intakeConsent(o: {
-    channel: string;
-    phone?: string | null;
-    marketingConsent?: Record<
-      string,
-      { granted: boolean; basis: string; capturedAt: string; sourceEvent: string }
-    > | null;
-  }) {
-    if (o.marketingConsent) return o.marketingConsent;
-    if (o.channel === "whatsapp" && o.phone) {
-      return {
-        whatsapp: {
-          granted: true,
-          basis: "whatsapp_inbound_optin",
-          capturedAt: new Date().toISOString(),
-          sourceEvent: `whatsapp:${o.phone}`,
-        },
-      };
-    }
-    return null;
+};
+
+// R10.3: an inbound WhatsApp contact is an explicit opt-in for the WhatsApp
+// channel only (never inferred for email).
+function intakeConsent(opts: InboundLeadOptions) {
+  if (opts.marketingConsent) return opts.marketingConsent;
+  if (opts.channel === "whatsapp" && opts.phone) {
+    return {
+      whatsapp: {
+        granted: true,
+        basis: "whatsapp_inbound_optin",
+        capturedAt: new Date().toISOString(),
+        sourceEvent: `whatsapp:${opts.phone}`,
+      },
+    };
   }
+  return null;
+}
+
+async function createNewInboundLead(opts: InboundLeadOptions): Promise<Lead> {
+  const [lead] = await db
+    .insert(leadsTable)
+    .values({
+      dealerId: opts.dealerId,
+      name: opts.name,
+      email: opts.email ?? null,
+      phone: opts.phone ?? null,
+      address: opts.address ?? null,
+      channel: opts.channel,
+      source: opts.source,
+      priority: "medium",
+      phase: "new",
+      status: "new",
+      interestedVehicleId: opts.vehicle?.id ?? null,
+      variant: opts.vehicle?.variant ?? null,
+      color: opts.vehicle?.color ?? null,
+      notes: opts.notes ?? null,
+      marketingConsent: intakeConsent(opts),
+    })
+    .returning();
+
+  await db.insert(timelineEventsTable).values({
+    dealerId: opts.dealerId,
+    customerId: lead!.customerId,
+    domain: "leads",
+    kind: "enquiry_received",
+    title: `Enquiry received from ${opts.name}`,
+    detail: opts.vehicle
+      ? `${opts.channelLabel} enquiry for the ${opts.vehicle.label}. Awaiting coordinator review.`
+      : `${opts.channelLabel} enquiry captured. Awaiting coordinator review.`,
+    actor: opts.actor,
+    isAgent: true,
+    refType: "lead",
+    refId: lead!.id,
+  });
+
+  onLeadCreated(lead!);
+  autoQuoteOnLeadCreated(lead!);
+  const assigned = await autoAssignLead(lead!);
+  runIntakeOrchestration(assigned ?? lead!);
+  notifyLeadNew(lead!);
+  return assigned ?? lead!;
+}
+
+export async function createInboundLead(
+  opts: InboundLeadOptions,
+): Promise<Lead> {
   // Dedup agent (A1): a matching open lead (normalized email OR phone within
   // this dealer) absorbs the enquiry instead of creating a duplicate.
   const duplicate = await findOpenDuplicate(
@@ -150,56 +192,40 @@ export async function createInboundLead(opts: {
     return merged;
   }
 
-  const [lead] = await db
-    .insert(leadsTable)
-    .values({
-      dealerId: opts.dealerId,
-      name: opts.name,
-      email: opts.email ?? null,
-      phone: opts.phone ?? null,
-      address: opts.address ?? null,
-      channel: opts.channel,
-      source: opts.source,
-      priority: "medium",
-      phase: "new",
-      status: "new",
-      interestedVehicleId: opts.vehicle?.id ?? null,
-      variant: opts.vehicle?.variant ?? null,
-      color: opts.vehicle?.color ?? null,
-      notes: opts.notes ?? null,
-      marketingConsent: intakeConsent(opts),
-    })
-    .returning();
+  return createNewInboundLead(opts);
+}
 
+/**
+ * Narrow bypass for the repeat-customer concierge after its explicit final
+ * confirmation. Ordinary intake must continue through createInboundLead so
+ * contact deduplication remains mandatory everywhere else.
+ */
+export async function createConfirmedRepeatInboundLead(
+  opts: InboundLeadOptions,
+  originLeadId: number,
+): Promise<Lead> {
+  const [origin] = await db
+    .select({ id: leadsTable.id })
+    .from(leadsTable)
+    .where(
+      and(
+        eq(leadsTable.id, originLeadId),
+        eq(leadsTable.dealerId, opts.dealerId),
+      ),
+    );
+  if (!origin) throw new Error("Origin lead is unavailable for repeat enquiry");
+  const lead = await createNewInboundLead(opts);
   await db.insert(timelineEventsTable).values({
     dealerId: opts.dealerId,
-    customerId: lead!.customerId,
+    customerId: lead.customerId,
     domain: "leads",
-    kind: "enquiry_received",
-    title: `Enquiry received from ${opts.name}`,
-    detail: opts.vehicle
-      ? `${opts.channelLabel} enquiry for the ${opts.vehicle.label}. Awaiting coordinator review.`
-      : `${opts.channelLabel} enquiry captured. Awaiting coordinator review.`,
+    kind: "confirmed_repeat_enquiry",
+    title: "Separate enquiry confirmed by customer",
+    detail: `Customer explicitly confirmed a separate WhatsApp enquiry from lead #${originLeadId}.`,
     actor: opts.actor,
     isAgent: true,
     refType: "lead",
-    refId: lead!.id,
+    refId: lead.id,
   });
-
-  // Quote (when a vehicle was matched to inventory) or welcome email.
-  onLeadCreated(lead!);
-  // Quote agent (A3): auto-generate the versioned Code.
-  autoQuoteOnLeadCreated(lead!);
-
-  // Sales agent routes the lead to the least-loaded advisor automatically.
-  const assigned = await autoAssignLead(lead!);
-
-  // Intake agent: nearest showroom + WhatsApp quote share (fire-and-forget).
-  runIntakeOrchestration(assigned ?? lead!);
-
-  // R6.2 #1 New Lead → division sales managers (In-App + Email, deduped on
-  // the lead) — replaces the old ad-hoc coordinator broadcast.
-  notifyLeadNew(lead!);
-
-  return assigned ?? lead!;
+  return lead;
 }

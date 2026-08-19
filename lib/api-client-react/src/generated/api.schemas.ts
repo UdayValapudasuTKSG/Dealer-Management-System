@@ -16,6 +16,9 @@ export interface WhatsappSettings {
   displayPhoneNumber?: string | null;
   /** @nullable */
   verifiedName?: string | null;
+  /** @nullable */
+  serviceTemplateName?: string | null;
+  serviceTemplateLanguage: string;
   hasAccessToken: boolean;
   /** @nullable */
   lastStatus?: string | null;
@@ -45,6 +48,19 @@ export interface UpdateWhatsappSettingsRequest {
      */
   accessToken?: string;
   enabled?: boolean;
+  /**
+     * @minLength 1
+     * @maxLength 512
+     * @nullable
+     * @pattern ^[a-z0-9_]+$
+     */
+  serviceTemplateName?: string | null;
+  /**
+     * @minLength 2
+     * @maxLength 12
+     * @pattern ^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$
+     */
+  serviceTemplateLanguage?: string;
 }
 
 export interface WhatsappTestResult {
@@ -2371,12 +2387,28 @@ export const WhatsappMessageDirection = {
   out: 'out',
 } as const;
 
+export type WhatsappMessageDeliveryStatus = typeof WhatsappMessageDeliveryStatus[keyof typeof WhatsappMessageDeliveryStatus];
+
+
+export const WhatsappMessageDeliveryStatus = {
+  received: 'received',
+  queued: 'queued',
+  accepted: 'accepted',
+  delivered: 'delivered',
+  read: 'read',
+  failed: 'failed',
+  cancelled: 'cancelled',
+} as const;
+
 export interface WhatsappMessage {
   id: number;
   direction: WhatsappMessageDirection;
   body: string;
   /** @nullable */
   actor?: string | null;
+  deliveryStatus: WhatsappMessageDeliveryStatus;
+  /** @nullable */
+  deliveryError?: string | null;
   createdAt: string;
 }
 

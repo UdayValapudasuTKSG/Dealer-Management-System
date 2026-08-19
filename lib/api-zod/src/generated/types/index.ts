@@ -597,6 +597,7 @@ export * from './vehicleUpdatePowertrain';
 export * from './vehicleUpdateStatus';
 export * from './verifyMetaWebhookParams';
 export * from './whatsappMessage';
+export * from './whatsappMessageDeliveryStatus';
 export * from './whatsappMessageDirection';
 export * from './whatsappReplyInput';
 export * from './whatsappSettings';
