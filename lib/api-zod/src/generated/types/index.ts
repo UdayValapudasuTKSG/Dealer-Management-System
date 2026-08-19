@@ -501,6 +501,8 @@ export * from './sendDeliveryWarrantyEmail200';
 export * from './sendQuoteInput';
 export * from './sendQuoteInputChannel';
 export * from './sendQuoteResult';
+export * from './sendQuoteResultChannel';
+export * from './sendQuoteResultWhatsappStatus';
 export * from './sentimentAnalysis';
 export * from './sentimentAnalysisOverallLabel';
 export * from './sentimentDistribution';

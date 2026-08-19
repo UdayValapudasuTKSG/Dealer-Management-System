@@ -2601,15 +2601,39 @@ export type SendQuoteInputChannel = typeof SendQuoteInputChannel[keyof typeof Se
 export const SendQuoteInputChannel = {
   email: 'email',
   whatsapp: 'whatsapp',
+  both: 'both',
 } as const;
 
 export interface SendQuoteInput {
   channel: SendQuoteInputChannel;
 }
 
+export type SendQuoteResultChannel = typeof SendQuoteResultChannel[keyof typeof SendQuoteResultChannel];
+
+
+export const SendQuoteResultChannel = {
+  email: 'email',
+  whatsapp: 'whatsapp',
+  both: 'both',
+} as const;
+
+export type SendQuoteResultWhatsappStatus = typeof SendQuoteResultWhatsappStatus[keyof typeof SendQuoteResultWhatsappStatus];
+
+
+export const SendQuoteResultWhatsappStatus = {
+  not_requested: 'not_requested',
+  queued: 'queued',
+  already_sent: 'already_sent',
+  blocked: 'blocked',
+} as const;
+
 export interface SendQuoteResult {
   ok: boolean;
-  channel: string;
+  channel: SendQuoteResultChannel;
+  emailQueued: boolean;
+  whatsappStatus: SendQuoteResultWhatsappStatus;
+  /** @nullable */
+  whatsappBlockedReason?: string | null;
 }
 
 export interface EnquiryInput {

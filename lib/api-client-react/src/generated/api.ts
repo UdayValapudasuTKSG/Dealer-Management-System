@@ -5432,7 +5432,7 @@ export const getSendLeadQuoteUrl = (id: number,
 }
 
 /**
- * @summary Send or re-send a Code version to the customer (email or WhatsApp)
+ * @summary Send or re-send a Code version to the customer by email, WhatsApp PDF, or both
  */
 export const sendLeadQuote = async (id: number,
     quoteId: number,
@@ -5483,7 +5483,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SendLeadQuoteMutationError = ErrorType<Error>
 
     /**
- * @summary Send or re-send a Code version to the customer (email or WhatsApp)
+ * @summary Send or re-send a Code version to the customer by email, WhatsApp PDF, or both
  */
 export const useSendLeadQuote = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendLeadQuote>>, TError,{id: number;quoteId: number;data: BodyType<SendQuoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}

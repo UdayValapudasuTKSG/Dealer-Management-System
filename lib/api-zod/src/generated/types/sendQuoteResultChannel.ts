@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type SendQuoteInputChannel = typeof SendQuoteInputChannel[keyof typeof SendQuoteInputChannel];
+export type SendQuoteResultChannel = typeof SendQuoteResultChannel[keyof typeof SendQuoteResultChannel];
 
 
-export const SendQuoteInputChannel = {
+export const SendQuoteResultChannel = {
   email: 'email',
   whatsapp: 'whatsapp',
   both: 'both',

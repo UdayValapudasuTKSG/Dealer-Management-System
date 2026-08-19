@@ -1820,7 +1820,7 @@ paths:
     post:
       operationId: sendLeadQuote
       tags: [leads]
-      summary: Send or re-send a Code version to the customer (email or WhatsApp)
+      summary: Send or re-send a Code version to the customer by email, WhatsApp PDF, or both
       parameters:
         - name: id
           in: path
@@ -8945,13 +8945,16 @@ components:
       type: object
       required: [channel]
       properties:
-        channel: { type: string, enum: [email, whatsapp] }
+        channel: { type: string, enum: [email, whatsapp, both] }
     SendQuoteResult:
       type: object
-      required: [ok, channel]
+      required: [ok, channel, emailQueued, whatsappStatus]
       properties:
         ok: { type: boolean }
-        channel: { type: string }
+        channel: { type: string, enum: [email, whatsapp, both] }
+        emailQueued: { type: boolean }
+        whatsappStatus: { type: string, enum: [not_requested, queued, already_sent, blocked] }
+        whatsappBlockedReason: { type: ["string", "null"] }
     EnquiryInput:
       type: object
       required: [name]

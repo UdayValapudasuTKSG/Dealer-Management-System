@@ -5,8 +5,14 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { SendQuoteResultChannel } from './sendQuoteResultChannel';
+import type { SendQuoteResultWhatsappStatus } from './sendQuoteResultWhatsappStatus';
 
 export interface SendQuoteResult {
   ok: boolean;
-  channel: string;
+  channel: SendQuoteResultChannel;
+  emailQueued: boolean;
+  whatsappStatus: SendQuoteResultWhatsappStatus;
+  /** @nullable */
+  whatsappBlockedReason?: string | null;
 }

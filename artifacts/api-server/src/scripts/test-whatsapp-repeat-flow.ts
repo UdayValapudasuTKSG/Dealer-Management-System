@@ -17,9 +17,14 @@ import {
 import {
   captureTransport,
   WhatsappProviderSendError,
+  whatsappDocumentMessagePayload,
   whatsappSendFailureDisposition,
 } from "../lib/whatsapp";
-import { claimWhatsappOutboxItem } from "../lib/email";
+import {
+  claimWhatsappOutboxItem,
+  enqueueWhatsapp,
+  whatsappOutboxDisposition,
+} from "../lib/email";
 import { handleWhatsappMessage } from "../lib/whatsapp-flow";
 import {
   allowedWhatsappDeliverySources,
@@ -123,6 +128,58 @@ try {
     "retryable_rejection",
   );
   assert.equal(whatsappSendFailureDisposition(new Error("local")), null);
+  const documentPayload = whatsappDocumentMessagePayload({
+    mediaId: "media-quote-123",
+    filename: `${"Q".repeat(300)}.pdf`,
+    caption: "C".repeat(1100),
+  }) as {
+    type: string;
+    document: { id: string; filename: string; caption: string };
+  };
+  assert.equal(documentPayload.type, "document");
+  assert.equal(documentPayload.document.id, "media-quote-123");
+  assert.equal(documentPayload.document.filename.length, 240);
+  assert.equal(documentPayload.document.caption.length, 1024);
+  assert.equal(
+    whatsappOutboxDisposition({
+      status: "queued",
+      attempts: 0,
+      nextAttemptAt: null,
+    }),
+    "queued",
+  );
+  assert.equal(
+    whatsappOutboxDisposition({
+      status: "failed",
+      attempts: 1,
+      nextAttemptAt: new Date(),
+    }),
+    "queued",
+  );
+  assert.equal(
+    whatsappOutboxDisposition({
+      status: "failed",
+      attempts: 3,
+      nextAttemptAt: null,
+    }),
+    "blocked",
+  );
+  assert.equal(
+    whatsappOutboxDisposition({
+      status: "cancelled",
+      attempts: 0,
+      nextAttemptAt: null,
+    }),
+    "blocked",
+  );
+  assert.equal(
+    whatsappOutboxDisposition({
+      status: "sent",
+      attempts: 1,
+      nextAttemptAt: null,
+    }),
+    "already_sent",
+  );
   const dealReplyPermission = routePermission({
     method: "POST",
     path: "/deals/42/whatsapp",
@@ -177,6 +234,23 @@ try {
     .values({ name: dealerName })
     .returning({ id: dealersTable.id });
   dealerId = dealer!.id;
+
+  const documentDedupeKey = `quote-document-${suffix}`;
+  const blockedDocument = await enqueueWhatsapp({
+    kind: "whatsapp_message",
+    to: phone,
+    body: "Your quote PDF is attached.",
+    dealerId,
+    document: {
+      kind: "quote_pdf",
+      filename: "Quote-Q-TEST.pdf",
+      data: { quoteRef: "Q-TEST" },
+    },
+    dedupeKey: documentDedupeKey,
+  });
+  assert.equal(blockedDocument.status, "cancelled");
+  assert.match(blockedDocument.lastError ?? "", /24-hour WhatsApp reply window/);
+  assert.equal(blockedDocument.dedupeKey, `${documentDedupeKey}:blocked`);
 
   const [outbox] = await db
     .insert(emailLogsTable)
@@ -283,6 +357,23 @@ try {
     body: "Earlier enquiry question",
     deliveryStatus: "received",
   });
+  const reopenedDocument = await enqueueWhatsapp({
+    kind: "whatsapp_message",
+    to: phone,
+    body: "Your quote PDF is attached.",
+    dealerId,
+    document: {
+      kind: "quote_pdf",
+      filename: "Quote-Q-TEST.pdf",
+      data: { quoteRef: "Q-TEST" },
+    },
+    dedupeKey: documentDedupeKey,
+    // Keep this regression row away from the live worker while still proving
+    // that it is eligible inside the customer's 24-hour service window.
+    sendAt: new Date(Date.now() + 60 * 60 * 1000),
+  });
+  assert.equal(reopenedDocument.status, "queued");
+  assert.equal(reopenedDocument.dedupeKey, documentDedupeKey);
 
   await db.insert(whatsappConversationsTable).values({
     dealerId,
@@ -372,7 +463,7 @@ try {
     ),
   );
 
-  console.log("WhatsApp repeat-customer flow: 29 assertions passed");
+  console.log("WhatsApp repeat-customer flow: 43 assertions passed");
 } finally {
   if (dealerId != null) {
     await db

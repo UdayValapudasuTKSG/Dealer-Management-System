@@ -46,3 +46,4 @@
 - [Orval inline body collision](orval-inline-body-collision.md) — request bodies must be named component schemas ($ref), and api-zod index.ts must stay single-quoted or codegen appends duplicate exports.
 - [Regression suite fixture users](regression-suite-fixture-users.md) — isolation suites must seed ephemeral single-dealer test users; shared demo account memberships drift and break "non-member → 403" checks.
 - [Parallel completion validations](parallel-completion-validations.md) — completion checks run concurrently; suites mutating shared DB fixtures must coordinate or use isolated data.
+- [WhatsApp quote documents](whatsapp-quote-documents.md) — rebuild from the outbox snapshot, upload privately to Meta, require an open 24h window, and report dedupe state honestly.

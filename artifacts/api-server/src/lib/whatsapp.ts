@@ -3,7 +3,7 @@ import { logger } from "./logger";
 
 // ---------------------------------------------------------------------------
 // Meta WhatsApp Business Platform (Cloud API) — outbound send helper.
-// Sends text, reply-button, and interactive-list messages from the
+// Sends text, document, reply-button, and interactive-list messages from the
 // dealership's WhatsApp number via the Graph API.
 // ---------------------------------------------------------------------------
 
@@ -194,6 +194,105 @@ export async function sendWhatsappText(
     cfg,
     to,
     { type: "text", text: { body, preview_url: false } },
+    correlationId,
+  );
+}
+
+export function whatsappDocumentMessagePayload(opts: {
+  mediaId: string;
+  filename: string;
+  caption?: string;
+}): Record<string, unknown> {
+  return {
+    type: "document",
+    document: {
+      id: opts.mediaId,
+      filename: opts.filename.slice(0, 240),
+      ...(opts.caption?.trim()
+        ? { caption: opts.caption.trim().slice(0, 1024) }
+        : {}),
+    },
+  };
+}
+
+/**
+ * Upload a private document to Meta before sending it. A failed upload is
+ * always safe to retry because no customer-visible message has been created.
+ */
+export async function uploadWhatsappDocument(
+  cfg: { accessToken: string; phoneNumberId: string },
+  opts: { bytes: Uint8Array; filename: string; mimeType: string },
+): Promise<string> {
+  const form = new FormData();
+  const fileBytes = new ArrayBuffer(opts.bytes.byteLength);
+  new Uint8Array(fileBytes).set(opts.bytes);
+  form.set("messaging_product", "whatsapp");
+  form.set(
+    "file",
+    new Blob([fileBytes], { type: opts.mimeType }),
+    opts.filename.slice(0, 240),
+  );
+
+  let resp: Response;
+  try {
+    resp = await fetch(
+      `${GRAPH_BASE}/${encodeURIComponent(cfg.phoneNumberId)}/media`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${cfg.accessToken}` },
+        body: form,
+      },
+    );
+  } catch {
+    throw new WhatsappProviderSendError(
+      "WhatsApp document upload failed before the customer message was sent",
+      "retryable_rejection",
+    );
+  }
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    logger.error(
+      { status: resp.status, body: text.slice(0, 400) },
+      "WhatsApp document upload failed",
+    );
+    throw new WhatsappProviderSendError(
+      `WhatsApp media upload API ${resp.status}`,
+      resp.status === 429 || resp.status >= 500
+        ? "retryable_rejection"
+        : "terminal_rejection",
+    );
+  }
+
+  let data: { id?: string };
+  try {
+    data = (await resp.json()) as { id?: string };
+  } catch {
+    throw new WhatsappProviderSendError(
+      "WhatsApp document upload response was invalid",
+      "retryable_rejection",
+    );
+  }
+  if (!data.id) {
+    throw new WhatsappProviderSendError(
+      "WhatsApp document upload returned no media id",
+      "retryable_rejection",
+    );
+  }
+  return data.id;
+}
+
+/** Send a previously uploaded Meta media document to a WhatsApp recipient. */
+export async function sendWhatsappDocument(
+  cfg: { accessToken: string; phoneNumberId: string },
+  to: string,
+  opts: { mediaId: string; filename: string; caption?: string },
+  correlationId?: string,
+): Promise<WhatsappSendResult> {
+  return send(
+    cfg,
+    to,
+    whatsappDocumentMessagePayload(opts),
     correlationId,
   );
 }

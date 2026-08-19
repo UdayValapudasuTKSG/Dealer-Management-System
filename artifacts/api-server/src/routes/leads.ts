@@ -116,6 +116,7 @@ import { telephonyAdapter } from "../lib/telephony";
 import {
   enqueueEmail,
   enqueueWhatsapp,
+  whatsappOutboxDisposition,
   isWhatsappOptedOut,
   notifyUser,
 } from "../lib/email";
@@ -1330,7 +1331,19 @@ router.post(
     }
 
     const channel = body.data.channel;
-    if (channel === "email") {
+    const emailRequested = channel === "email" || channel === "both";
+    const whatsappRequested = channel === "whatsapp" || channel === "both";
+    const quotePayload = await quotePdfPayload(quote);
+    let emailQueued = false;
+    let whatsappStatus:
+      | "not_requested"
+      | "queued"
+      | "already_sent"
+      | "blocked" =
+      whatsappRequested ? "blocked" : "not_requested";
+    let whatsappBlockedReason: string | null = null;
+
+    if (emailRequested) {
       if (!lead.email) {
         res
           .status(422)
@@ -1343,58 +1356,87 @@ router.post(
         to: lead.email,
         dealerId: lead.dealerId,
         customerId: lead.customerId,
-        data: await quotePdfPayload(quote),
+        data: quotePayload,
       });
-    } else {
+      emailQueued = true;
+    }
+
+    if (whatsappRequested) {
       const to = waDigits(lead.phone ?? "");
       if (!to) {
-        res
-          .status(422)
-          .json({ error: "This lead has no phone number for WhatsApp." });
-        return;
+        whatsappBlockedReason =
+          "This lead has no phone number for WhatsApp.";
+      } else {
+        const whatsappChannel = await getChannelByDealerId(lead.dealerId);
+        if (!whatsappChannel) {
+          whatsappBlockedReason =
+            "WhatsApp sending is not configured for this dealership.";
+        } else {
+          const taxText =
+            quote.taxLines.length > 0
+              ? quote.taxLines
+                  .map(
+                    (line) =>
+                      `• ${line.name}: GY$${line.amount.toLocaleString("en-US")}`,
+                  )
+                  .join("\n")
+              : "• No taxes applicable";
+          const text =
+            `Hi ${quote.customerName}, your estimate ${quote.quoteNumber} (rev ${quote.version}) from AURA is attached as a PDF.\n\n` +
+            `${quote.modelYear} ${quote.vehicleLine}${quote.color ? ` — ${quote.color}` : ""}\n` +
+            `Base price: GY$${quote.basePrice.toLocaleString("en-US")}\n${taxText}\n` +
+            `Total: GY$${quote.total.toLocaleString("en-US")}\n\n` +
+            `Valid until ${quote.validUntil}. Reply here with any questions!`;
+          const queued = await enqueueWhatsapp({
+            kind: "whatsapp_message",
+            to,
+            body: text,
+            dealerId: lead.dealerId,
+            leadId: lead.id,
+            customerId: lead.customerId,
+            summary: `Quote PDF ${quote.quoteNumber} for ${lead.name}`,
+            actor: actorName(res),
+            document: {
+              kind: "quote_pdf",
+              filename: `${quote.quoteNumber}-R${quote.version}.pdf`.replace(
+                /[^A-Za-z0-9_.-]/g,
+                "",
+              ),
+              data: quotePayload,
+            },
+            dedupeKey: `lead:${lead.id}:quote:${quote.id}:whatsapp-document:v1`,
+          });
+          const disposition = whatsappOutboxDisposition(queued);
+          if (disposition === "blocked") {
+            whatsappBlockedReason =
+              queued.lastError ??
+              "The quote PDF could not be sent on WhatsApp.";
+          } else {
+            whatsappStatus = disposition;
+          }
+        }
       }
-      const whatsappChannel = await getChannelByDealerId(lead.dealerId);
-      if (!whatsappChannel) {
-        res.status(422).json({
-          error: "WhatsApp sending is not configured for this dealership.",
-        });
-        return;
-      }
-      const taxText =
-        quote.taxLines.length > 0
-          ? quote.taxLines
-              .map((l) => `• ${l.name}: $${l.amount.toLocaleString("en-US")}`)
-              .join("\n")
-          : "• No taxes applicable";
-      const text =
-        `Hi ${quote.customerName}, here is your estimate ${quote.quoteNumber} (rev ${quote.version}) from AURA:\n\n` +
-        `${quote.modelYear} ${quote.vehicleLine}${quote.color ? ` — ${quote.color}` : ""}\n` +
-        `Base price: $${quote.basePrice.toLocaleString("en-US")}\n${taxText}\n` +
-        `Total: $${quote.total.toLocaleString("en-US")}\n\n` +
-        `Valid until ${quote.validUntil}. Reply here with any questions!`;
-      const queued = await enqueueWhatsapp({
-        kind: "whatsapp_message",
-        to,
-        body: text,
-        dealerId: lead.dealerId,
-        leadId: lead.id,
-        customerId: lead.customerId,
-        summary: `Quote ${quote.quoteNumber} for ${lead.name}`,
-        actor: actorName(res),
-        dedupeKey: `lead:${lead.id}:quote:${quote.id}:whatsapp`,
-      });
-      if (queued.status === "cancelled") {
+
+      if (channel === "whatsapp" && whatsappStatus === "blocked") {
         res.status(422).json({
           error:
-            "This customer has opted out of WhatsApp for this dealership. Use email or contact them manually.",
+            whatsappBlockedReason ??
+            "The quote PDF could not be sent on WhatsApp.",
         });
         return;
       }
     }
 
+    const sentVia =
+      emailQueued &&
+      (whatsappStatus === "queued" || whatsappStatus === "already_sent")
+        ? "email and WhatsApp PDF"
+        : emailQueued
+          ? "email"
+          : "WhatsApp PDF";
     await db
       .update(quotesTable)
-      .set({ sentAt: new Date(), sentVia: channel })
+      .set({ sentAt: new Date(), sentVia })
       .where(eq(quotesTable.id, quote.id));
     await db
       .update(leadsTable)
@@ -1405,11 +1447,23 @@ router.post(
     await logLeadEvent(
       lead,
       "quote_sent",
-      `Code ${quote.quoteNumber} sent via ${channel === "email" ? "email" : "WhatsApp"}`,
-      `Rev ${quote.version} — total $${quote.total.toLocaleString("en-US")} sent to the customer.`,
+      `Code ${quote.quoteNumber} sent via ${sentVia}`,
+      `Rev ${quote.version} — total GY$${quote.total.toLocaleString("en-US")} sent to the customer.${
+        whatsappBlockedReason
+          ? ` WhatsApp PDF skipped: ${whatsappBlockedReason}`
+          : ""
+      }`,
       actorName(res),
     );
-    res.json(SendLeadQuoteResponse.parse({ ok: true, channel }));
+    res.json(
+      SendLeadQuoteResponse.parse({
+        ok: true,
+        channel,
+        emailQueued,
+        whatsappStatus,
+        whatsappBlockedReason,
+      }),
+    );
   },
 );
 

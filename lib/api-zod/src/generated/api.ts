@@ -2736,7 +2736,7 @@ export const DownloadLeadQuoteVersionPdfResponse = zod.unknown()
 
 
 /**
- * @summary Send or re-send a Code version to the customer (email or WhatsApp)
+ * @summary Send or re-send a Code version to the customer by email, WhatsApp PDF, or both
  */
 export const SendLeadQuoteParams = zod.object({
   "id": zod.coerce.number(),
@@ -2744,12 +2744,15 @@ export const SendLeadQuoteParams = zod.object({
 })
 
 export const SendLeadQuoteBody = zod.object({
-  "channel": zod.enum(['email', 'whatsapp'])
+  "channel": zod.enum(['email', 'whatsapp', 'both'])
 })
 
 export const SendLeadQuoteResponse = zod.object({
   "ok": zod.boolean(),
-  "channel": zod.string()
+  "channel": zod.enum(['email', 'whatsapp', 'both']),
+  "emailQueued": zod.boolean(),
+  "whatsappStatus": zod.enum(['not_requested', 'queued', 'already_sent', 'blocked']),
+  "whatsappBlockedReason": zod.string().nullish()
 })
 
 

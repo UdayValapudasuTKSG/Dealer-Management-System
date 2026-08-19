@@ -32,10 +32,13 @@ import { buildWarrantyBookletForDelivery } from "./warranty-doc";
 import { testDriveIcsFromPayload } from "./calendar";
 import {
   sendWhatsappButtons,
+  sendWhatsappDocument,
   sendWhatsappList,
   sendWhatsappText,
   sendWhatsappTemplate,
+  uploadWhatsappDocument,
   whatsappSendFailureDisposition,
+  WhatsappProviderSendError,
   type WhatsappButton,
   type WhatsappListRow,
 } from "./whatsapp";
@@ -943,6 +946,15 @@ export type EnqueueWhatsappOptions = {
         sectionTitle: string;
         rows: WhatsappListRow[];
       };
+  /**
+   * A private document rebuilt by the worker and uploaded directly to Meta.
+   * Quote PDFs intentionally never receive a public object-storage URL.
+   */
+  document?: {
+    kind: "quote_pdf";
+    filename: string;
+    data: TemplateData;
+  };
   dedupeKey?: string;
   sendAt?: Date;
   /**
@@ -959,6 +971,32 @@ export type EnqueueWhatsappOptions = {
   /** Internal user notified In-App if every channel terminally fails. */
   notifyUserId?: number;
 };
+
+export type WhatsappOutboxDisposition =
+  | "queued"
+  | "already_sent"
+  | "blocked";
+
+/**
+ * Translate a deduped outbox row into an honest API result. A retryable failed
+ * row is still active; terminal failures and cancellations are blocked.
+ */
+export function whatsappOutboxDisposition(
+  row: Pick<EmailLog, "status" | "attempts" | "nextAttemptAt">,
+): WhatsappOutboxDisposition {
+  if (row.status === "sent") return "already_sent";
+  if (
+    row.status === "queued" ||
+    row.status === "processing" ||
+    row.status === "sending" ||
+    (row.status === "failed" &&
+      row.attempts < MAX_ATTEMPTS &&
+      row.nextAttemptAt != null)
+  ) {
+    return "queued";
+  }
+  return "blocked";
+}
 
 /** R6.4: true when the phone has an explicit WhatsApp opt-out on record. */
 export async function isWhatsappOptedOut(
@@ -1019,6 +1057,13 @@ async function cancelledWhatsappLog(
   recipient: string,
   reason: string,
 ): Promise<EmailLog> {
+  // A temporary document-policy block (for example, a closed reply window)
+  // must not consume the real send key forever. Once the customer replies,
+  // the same quote can be enqueued under the unsuffixed key.
+  const blockedDedupeKey =
+    opts.document && opts.dedupeKey
+      ? `${opts.dedupeKey}:blocked`
+      : (opts.dedupeKey ?? null);
   const [inserted] = await db
     .insert(emailLogsTable)
     .values({
@@ -1041,17 +1086,24 @@ async function cancelledWhatsappLog(
         ...(opts.allowOptOutConfirmation
           ? { allowOptOutConfirmation: "true" }
           : {}),
+        ...(opts.document
+          ? {
+              documentKind: opts.document.kind,
+              documentFileName: opts.document.filename,
+              documentDataJson: JSON.stringify(opts.document.data),
+            }
+          : {}),
       },
-      dedupeKey: opts.dedupeKey ?? null,
+      dedupeKey: blockedDedupeKey,
     })
     .onConflictDoNothing({ target: emailLogsTable.dedupeKey })
     .returning();
   let row = inserted;
-  if (!row && opts.dedupeKey) {
+  if (!row && blockedDedupeKey) {
     const [existing] = await db
       .select()
       .from(emailLogsTable)
-      .where(eq(emailLogsTable.dedupeKey, opts.dedupeKey));
+      .where(eq(emailLogsTable.dedupeKey, blockedDedupeKey));
     if (existing) return existing;
   }
   if (!row) {
@@ -1130,6 +1182,13 @@ export async function enqueueWhatsapp(
 
   const targetTime = opts.sendAt ?? new Date();
   if (!(await isWhatsappReplyWindowOpen(opts.dealerId, digits, targetTime))) {
+    if (opts.document) {
+      return cancelledWhatsappLog(
+        opts,
+        digits,
+        "The 24-hour WhatsApp reply window is closed. Meta only allows this quote PDF after the customer sends a new message.",
+      );
+    }
     const channel = await getChannelByDealerId(opts.dealerId);
     if (!channel?.serviceTemplateName) {
       return cancelledWhatsappLog(
@@ -1160,6 +1219,13 @@ export async function enqueueWhatsapp(
           : {}),
         ...(opts.allowOptOutConfirmation
           ? { allowOptOutConfirmation: "true" }
+          : {}),
+        ...(opts.document
+          ? {
+              documentKind: opts.document.kind,
+              documentFileName: opts.document.filename,
+              documentDataJson: JSON.stringify(opts.document.data),
+            }
           : {}),
         ...(opts.fallbackEmail
           ? {
@@ -1352,6 +1418,10 @@ async function markFailed(
 
 /** Cancel a queued message when policy changed after enqueue (STOP/window close). */
 async function cancelQueuedWhatsapp(item: EmailLog, reason: string): Promise<void> {
+  const releasedDedupeKey =
+    item.payload?.documentKind === "quote_pdf" && item.dedupeKey
+      ? `${item.dedupeKey}:blocked:${item.id}`
+      : item.dedupeKey;
   const [cancelled] = await db
     .update(emailLogsTable)
     .set({
@@ -1359,6 +1429,7 @@ async function cancelQueuedWhatsapp(item: EmailLog, reason: string): Promise<voi
       deliveryStatus: "cancelled",
       lastError: reason,
       nextAttemptAt: null,
+      dedupeKey: releasedDedupeKey,
     })
     .where(
       and(
@@ -1480,6 +1551,14 @@ async function processWhatsappQueue(): Promise<void> {
         item.dealerId,
         item.recipient,
       );
+      const isQuoteDocument = item.payload?.documentKind === "quote_pdf";
+      if (!insideReplyWindow && isQuoteDocument) {
+        await cancelQueuedWhatsapp(
+          item,
+          "The 24-hour WhatsApp reply window closed before the quote PDF could be delivered. Ask the customer to send a new message, then retry.",
+        );
+        continue;
+      }
       if (!insideReplyWindow && !dealerChannel.serviceTemplateName) {
         await cancelQueuedWhatsapp(
           item,
@@ -1498,6 +1577,42 @@ async function processWhatsappQueue(): Promise<void> {
         } catch {
           throw new Error("Queued WhatsApp interactive payload is invalid");
         }
+      }
+      let documentMediaId: string | null = null;
+      let documentFileName: string | null = null;
+      if (isQuoteDocument) {
+        if (!item.payload?.documentDataJson) {
+          throw new WhatsappProviderSendError(
+            "Queued WhatsApp quote PDF data is missing",
+            "terminal_rejection",
+          );
+        }
+        let quoteData: TemplateData;
+        try {
+          quoteData = JSON.parse(item.payload.documentDataJson) as TemplateData;
+        } catch {
+          throw new WhatsappProviderSendError(
+            "Queued WhatsApp quote PDF data is invalid",
+            "terminal_rejection",
+          );
+        }
+        const branding = await getDealerPdfBranding(item.dealerId);
+        const pdf = await buildQuotePdf(quoteData, branding.logo);
+        const fallbackRef = (quoteData.quoteRef ?? `Q-${item.id}`).replace(
+          /[^A-Za-z0-9-]/g,
+          "",
+        );
+        const filePrefix =
+          (branding.displayName ?? "AURA").replace(/[^A-Za-z0-9-]/g, "") ||
+          "AURA";
+        documentFileName =
+          item.payload.documentFileName ||
+          `${filePrefix}-Quote-${fallbackRef}.pdf`;
+        documentMediaId = await uploadWhatsappDocument(dealerChannel, {
+          bytes: new Uint8Array(pdf),
+          filename: documentFileName,
+          mimeType: "application/pdf",
+        });
       }
       const [sending] = await db
         .update(emailLogsTable)
@@ -1521,7 +1636,18 @@ async function processWhatsappQueue(): Promise<void> {
       item = sending;
       sendStarted = true;
       const correlationId = `aura-outbox:${item.id}`;
-      const result = !insideReplyWindow
+      const result = documentMediaId && documentFileName
+        ? await sendWhatsappDocument(
+            dealerChannel,
+            item.recipient,
+            {
+              mediaId: documentMediaId,
+              filename: documentFileName,
+              caption: body,
+            },
+            correlationId,
+          )
+        : !insideReplyWindow
         ? await sendWhatsappTemplate(dealerChannel, item.recipient, {
             name: dealerChannel.serviceTemplateName!,
             language: dealerChannel.serviceTemplateLanguage,
@@ -1574,7 +1700,11 @@ async function processWhatsappQueue(): Promise<void> {
         {
           id: item.id,
           kind: item.template,
-          mode: insideReplyWindow ? "text" : "template",
+          mode: documentMediaId
+            ? "document"
+            : insideReplyWindow
+              ? "text"
+              : "template",
         },
         "whatsapp accepted by provider",
       );

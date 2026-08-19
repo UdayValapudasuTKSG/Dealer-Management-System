@@ -1053,7 +1053,26 @@ export default function LeadDetail() {
         qc.invalidateQueries({ queryKey: getGetLeadTimelineQueryKey(id) });
         qc.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });
         toast({
-          title: r.channel === "email" ? "Code emailed" : "Code sent on WhatsApp",
+          title:
+            r.channel === "both"
+              ? r.whatsappStatus === "queued"
+                ? "Code emailed and queued on WhatsApp"
+                : r.whatsappStatus === "already_sent"
+                  ? "Code emailed; WhatsApp PDF was already sent"
+                : "Code emailed"
+              : r.channel === "email"
+                ? "Code emailed"
+                : r.whatsappStatus === "already_sent"
+                  ? "Code PDF was already sent on WhatsApp"
+                  : "Code PDF queued on WhatsApp",
+          description:
+            r.whatsappStatus === "blocked"
+              ? `WhatsApp PDF skipped: ${r.whatsappBlockedReason ?? "WhatsApp is unavailable."}`
+              : r.whatsappStatus === "queued"
+                ? "The customer will receive the quote as a PDF document."
+                : r.whatsappStatus === "already_sent"
+                  ? "A prior delivery for this quote is already recorded."
+                : undefined,
         });
       },
       onError: (err: unknown) =>
@@ -2682,6 +2701,24 @@ export default function LeadDetail() {
                                     </span>
                                   )}
                                   <Button
+                                    size="sm"
+                                    disabled={sendQuote.isPending || !lead.email}
+                                    onClick={() =>
+                                      sendQuote.mutate({
+                                        id: lead.id,
+                                        quoteId: q.id,
+                                        data: { channel: "both" },
+                                      })
+                                    }
+                                  >
+                                    {sendQuote.isPending ? (
+                                      <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                    ) : (
+                                      <Send className="w-3.5 h-3.5 mr-1.5" />
+                                    )}
+                                    Email + WhatsApp PDF
+                                  </Button>
+                                  <Button
                                     variant="outline"
                                     size="sm"
                                     disabled={sendQuote.isPending || !lead.email}
@@ -2694,7 +2731,7 @@ export default function LeadDetail() {
                                     }
                                   >
                                     <Mail className="w-3.5 h-3.5 mr-1.5" />
-                                    Email
+                                    Email only
                                   </Button>
                                   <Button
                                     variant="outline"
@@ -2709,7 +2746,7 @@ export default function LeadDetail() {
                                     }
                                   >
                                     <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
-                                    WhatsApp
+                                    WhatsApp PDF
                                   </Button>
                                 </>
                               )}
