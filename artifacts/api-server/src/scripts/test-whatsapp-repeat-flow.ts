@@ -24,6 +24,7 @@ import { handleWhatsappMessage } from "../lib/whatsapp-flow";
 import {
   allowedWhatsappDeliverySources,
   canApplyWhatsappDeliveryStatus,
+  listWhatsappMessagesForLead,
   updateWhatsappDeliveryStatus,
 } from "../lib/whatsapp-log";
 import { normalizeWhatsappPhone } from "../lib/whatsapp-phone";
@@ -274,6 +275,15 @@ try {
     })
     .returning({ id: leadsTable.id });
 
+  await db.insert(whatsappMessagesTable).values({
+    dealerId,
+    leadId: origin!.id,
+    phone,
+    direction: "in",
+    body: "Earlier enquiry question",
+    deliveryStatus: "received",
+  });
+
   await db.insert(whatsappConversationsTable).values({
     dealerId,
     phone,
@@ -345,6 +355,15 @@ try {
   const created = leads.find((lead) => lead.id !== origin!.id);
   assert.ok(created, "the confirmed enquiry must be a distinct lead");
   assert.match(created.notes ?? "", /Toyota Corolla Cross/);
+  const fullCustomerThread = await listWhatsappMessagesForLead(created);
+  assert.ok(
+    fullCustomerThread.some((message) => message.leadId === origin!.id),
+    "a repeat customer's earlier-enquiry messages must remain in the thread",
+  );
+  assert.ok(
+    fullCustomerThread.some((message) => message.leadId === created.id),
+    "a repeat customer's new-enquiry messages must appear in the same thread",
+  );
   assert.ok(
     [...first, ...second].some(
       (message) =>
@@ -353,7 +372,7 @@ try {
     ),
   );
 
-  console.log("WhatsApp repeat-customer flow: 27 assertions passed");
+  console.log("WhatsApp repeat-customer flow: 29 assertions passed");
 } finally {
   if (dealerId != null) {
     await db

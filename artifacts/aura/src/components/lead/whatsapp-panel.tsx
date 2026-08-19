@@ -140,8 +140,12 @@ function WhatsappThreadUI({
   let lastDay = "";
 
   return (
-    <div className="space-y-4 flex flex-col h-full min-h-[300px]">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto pr-1 space-y-2">
+    <div className="space-y-4 flex flex-col h-full min-h-0">
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-2 space-y-2 [scrollbar-gutter:stable]"
+        data-testid="whatsapp-message-history"
+      >
         {messages.map((m) => {
           const created = new Date(m.createdAt);
           const day = dayLabel(created);

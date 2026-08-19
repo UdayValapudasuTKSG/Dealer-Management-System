@@ -11,7 +11,6 @@ import {
   paymentsTable,
   timelineEventsTable,
   documentsTable,
-  whatsappMessagesTable,
   VIN_LENGTH,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
@@ -64,6 +63,7 @@ import {
 } from "../lib/email";
 import { getChannelByDealerId } from "../lib/whatsapp-channel";
 import { normalizeWhatsappPhone } from "../lib/whatsapp-phone";
+import { listWhatsappMessagesForLead } from "../lib/whatsapp-log";
 
 const router: IRouter = Router();
 
@@ -694,16 +694,7 @@ router.get("/deals/:id/whatsapp", async (req, res): Promise<void> => {
     return;
   }
 
-  const rows = await db
-    .select()
-    .from(whatsappMessagesTable)
-    .where(
-      and(
-        eq(whatsappMessagesTable.dealerId, dealerId),
-        eq(whatsappMessagesTable.leadId, lead.id),
-      ),
-    )
-    .orderBy(whatsappMessagesTable.createdAt, whatsappMessagesTable.id);
+  const rows = await listWhatsappMessagesForLead(lead);
   const window = dealWhatsappReplyWindow(rows);
   const channel = await getChannelByDealerId(dealerId);
   const configured = Boolean(channel);
@@ -779,16 +770,7 @@ router.post("/deals/:id/whatsapp", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Linked lead not found" });
     return;
   }
-  const rows = await db
-    .select()
-    .from(whatsappMessagesTable)
-    .where(
-      and(
-        eq(whatsappMessagesTable.dealerId, dealerId),
-        eq(whatsappMessagesTable.leadId, lead.id),
-      ),
-    )
-    .orderBy(whatsappMessagesTable.createdAt, whatsappMessagesTable.id);
+  const rows = await listWhatsappMessagesForLead(lead);
   const to =
     rows.at(-1)?.phone ?? normalizeWhatsappPhone(lead.phone ?? "") ?? "";
   if (!to) {

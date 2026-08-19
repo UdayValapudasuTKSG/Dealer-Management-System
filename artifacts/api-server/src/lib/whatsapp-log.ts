@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db, whatsappMessagesTable } from "@workspace/db";
 import type { WhatsappTransport } from "./whatsapp";
 import { logger } from "./logger";
@@ -164,6 +164,40 @@ export async function linkWhatsappMessagesToLead(
   } catch (err) {
     logger.error({ err, phone }, "Failed to link WhatsApp messages to lead");
   }
+}
+
+/**
+ * Return the dealer-scoped customer transcript for a lead.
+ *
+ * Repeat customers can have several enquiries, while WhatsApp remains one
+ * phone-number conversation. Include rows attached to any of those enquiries,
+ * plus not-yet-linked rows, by matching the normalized phone within the same
+ * dealership. Rows already attached to this lead remain visible if its phone
+ * number was later corrected.
+ */
+export async function listWhatsappMessagesForLead(lead: {
+  id: number;
+  dealerId: number;
+  phone?: string | null;
+}) {
+  const phone = normalizeWhatsappPhone(lead.phone ?? "");
+  const customerScope = phone
+    ? or(
+        eq(whatsappMessagesTable.leadId, lead.id),
+        eq(whatsappMessagesTable.phone, phone),
+      )
+    : eq(whatsappMessagesTable.leadId, lead.id);
+
+  return db
+    .select()
+    .from(whatsappMessagesTable)
+    .where(
+      and(
+        eq(whatsappMessagesTable.dealerId, lead.dealerId),
+        customerScope,
+      ),
+    )
+    .orderBy(whatsappMessagesTable.createdAt, whatsappMessagesTable.id);
 }
 
 /**

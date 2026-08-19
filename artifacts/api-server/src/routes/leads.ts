@@ -10,7 +10,6 @@ import {
   dealerUsersTable,
   timelineEventsTable,
   emailLogsTable,
-  whatsappMessagesTable,
   dealsTable,
   dealersTable,
   customersTable,
@@ -121,6 +120,7 @@ import {
   notifyUser,
 } from "../lib/email";
 import { normalizeWhatsappPhone } from "../lib/whatsapp-phone";
+import { listWhatsappMessagesForLead } from "../lib/whatsapp-log";
 import {
   notifyLeadNew,
   notifyLeadAssigned,
@@ -576,16 +576,6 @@ router.post(
 const REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const waDigits = (s: string): string => normalizeWhatsappPhone(s) ?? "";
 
-/** Fetch the lead's WhatsApp transcript (by lead id, plus phone fallback). */
-async function leadWhatsappMessages(lead: Lead) {
-  const rows = await db
-    .select()
-    .from(whatsappMessagesTable)
-    .where(eq(whatsappMessagesTable.leadId, lead.id))
-    .orderBy(whatsappMessagesTable.createdAt, whatsappMessagesTable.id);
-  return rows;
-}
-
 function replyWindow(rows: { direction: string; createdAt: Date }[]): {
   open: boolean;
   expiresAt: Date | null;
@@ -618,7 +608,7 @@ router.get("/leads/:id/whatsapp", async (req, res): Promise<void> => {
     return;
   }
 
-  const rows = await leadWhatsappMessages(lead);
+  const rows = await listWhatsappMessagesForLead(lead);
   const window = replyWindow(rows);
   const channel = await getChannelByDealerId(lead.dealerId);
   const configured = Boolean(channel);
@@ -686,7 +676,7 @@ router.post("/leads/:id/whatsapp", async (req, res): Promise<void> => {
     return;
   }
 
-  const rows = await leadWhatsappMessages(lead);
+  const rows = await listWhatsappMessagesForLead(lead);
   // Reply to the number the customer actually chats from (transcript phone),
   // falling back to the lead's stored mobile.
   const to = rows.length > 0 ? rows[rows.length - 1]!.phone : waDigits(lead.phone ?? "");

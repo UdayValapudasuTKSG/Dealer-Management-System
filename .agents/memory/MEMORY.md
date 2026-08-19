@@ -27,6 +27,7 @@
 - [Agent-run idempotency ledger](agent-run-idempotency-ledger.md) — dedupe via agent_runs needs a stable refType/refId across ALL outcome paths; downstream entities go in affectedEntities.
 - [Meta WhatsApp webhook attach](meta-whatsapp-webhook-attach.md) — webhook config alone isn't enough; app must be linked via POST /<WABA>/subscribed_apps or inbound is silently dropped.
 - [Dealer-scoped WhatsApp outbound](whatsapp-outbound-providers.md) — resolve an enabled channel only by dealer; never fall back to another dealer/global sender.
+- [WhatsApp transcript identity](whatsapp-transcript-identity.md) — repeat enquiries share one dealer-scoped, exactly normalized phone conversation; never merge suffix-only matches.
 - [Shared-proxy IP rate limiting](shared-proxy-rate-limit.md) — per-IP limits behind the shared proxy collapse into one bucket; scope them to public prefixes, never global. Startup auth races need error-query refetch; "not found" only on true 404.
 - [Payment & gate guard atomicity](payment-gate-atomicity.md) — monetary guards run inside applyPayment tx under invoice FOR UPDATE + advisory lock; gate resolve is compare-and-set on pending.
 - [Delivery advance gates](delivery-advance-gates.md) — body-supplied gated fields (signature, plate, deliveredAt) must merge into the gate-eval copy before computeUnmet, or valid advances 422.
