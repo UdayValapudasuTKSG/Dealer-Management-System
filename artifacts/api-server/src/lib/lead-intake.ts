@@ -62,6 +62,7 @@ export async function createInboundLead(opts: {
   name: string;
   email?: string | null;
   phone?: string | null;
+  address?: string | null;
   channel: string;
   source: string;
   notes?: string | null;
@@ -156,6 +157,7 @@ export async function createInboundLead(opts: {
       name: opts.name,
       email: opts.email ?? null,
       phone: opts.phone ?? null,
+      address: opts.address ?? null,
       channel: opts.channel,
       source: opts.source,
       priority: "medium",

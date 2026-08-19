@@ -31,14 +31,23 @@ export function whatsappConfig(): {
   verifyToken: string;
   accessToken: string;
   phoneNumberId: string;
+  dealerId: number;
 } | null {
   const appSecret = process.env["META_APP_SECRET"];
   const verifyToken = process.env["META_VERIFY_TOKEN"];
   const accessToken = process.env["WHATSAPP_ACCESS_TOKEN"];
   const phoneNumberId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
-  if (!appSecret || !verifyToken || !accessToken || !phoneNumberId)
+  const dealerId = Number(process.env["WHATSAPP_DEALER_ID"]);
+  if (
+    !appSecret ||
+    !verifyToken ||
+    !accessToken ||
+    !phoneNumberId ||
+    !Number.isSafeInteger(dealerId) ||
+    dealerId <= 0
+  )
     return null;
-  return { appSecret, verifyToken, accessToken, phoneNumberId };
+  return { appSecret, verifyToken, accessToken, phoneNumberId, dealerId };
 }
 
 /**

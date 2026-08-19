@@ -28,6 +28,7 @@ import {
   whatsappConfig,
   whatsappProvider,
 } from "../lib/whatsapp";
+import { getChannelByPhoneNumberId } from "../lib/whatsapp-channel";
 import {
   handleWhatsappMessage,
   handleWhatsappOneShot,
@@ -366,17 +367,18 @@ router.post("/webhooks/meta", async (req, res): Promise<void> => {
 // bot. Parallel first-party channel; the Twilio webhook below stays as-is.
 // ---------------------------------------------------------------------------
 
-// Verification handshake (same contract as the Lead Ads webhook).
+// Verification handshake — platform-level via global META_VERIFY_TOKEN.
+// The platform registers one webhook URL per app, not per dealer.
 router.get("/webhooks/whatsapp", (req, res): void => {
-  const cfg = whatsappConfig();
-  if (!cfg) {
+  const verifyToken = process.env["META_VERIFY_TOKEN"];
+  if (!verifyToken) {
     res.status(503).json({ error: "WhatsApp webhook is not configured" });
     return;
   }
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
-  if (mode === "subscribe" && token === cfg.verifyToken && typeof challenge === "string") {
+  if (mode === "subscribe" && token === verifyToken && typeof challenge === "string") {
     res.status(200).type("text/plain").send(challenge);
     return;
   }
@@ -398,15 +400,17 @@ type WhatsappWebhookMessage = {
 
 // Receiver. Mounted with express.raw() (see app.ts) so the X-Hub-Signature-256
 // can be verified over the exact bytes Meta sent.
+// Signature verification is platform-level (global META_APP_SECRET).
+// Channel resolution is per-dealer via metadata.phone_number_id → DB lookup.
 router.post("/webhooks/whatsapp", async (req, res): Promise<void> => {
-  const cfg = whatsappConfig();
-  if (!cfg) {
+  const appSecret = process.env["META_APP_SECRET"];
+  if (!appSecret) {
     res.status(503).json({ error: "WhatsApp webhook is not configured" });
     return;
   }
   const raw: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
   const signature = req.get("x-hub-signature-256");
-  if (!verifyMetaSignature(raw, signature ?? undefined, cfg.appSecret)) {
+  if (!verifyMetaSignature(raw, signature ?? undefined, appSecret)) {
     req.log.warn("WhatsApp webhook rejected: bad signature");
     res.status(403).json({ error: "Invalid signature" });
     return;
@@ -418,6 +422,10 @@ router.post("/webhooks/whatsapp", async (req, res): Promise<void> => {
       changes?: {
         field?: string;
         value?: {
+          metadata?: {
+            display_phone_number?: string;
+            phone_number_id?: string;
+          };
           messages?: WhatsappWebhookMessage[];
           contacts?: { wa_id?: string; profile?: { name?: string } }[];
         };
@@ -431,65 +439,71 @@ router.post("/webhooks/whatsapp", async (req, res): Promise<void> => {
     return;
   }
 
-  const inbound: InboundWhatsappMessage[] = [];
-  const messageIds: string[] = [];
+  // Acknowledge fast; Meta retries on non-200.
+  res.status(200).json({ ok: true });
+
+  // Process each messages change as an independent unit.
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
       if (change.field !== "messages") continue;
+      const receivingPhoneNumberId = change.value?.metadata?.phone_number_id;
+      if (!receivingPhoneNumberId) continue;
+
+      // Resolve the channel by phoneNumberId — DB first, env fallback.
+      const channel = await getChannelByPhoneNumberId(receivingPhoneNumberId);
+      if (!channel) {
+        req.log.warn(
+          { phoneNumberId: receivingPhoneNumberId },
+          "Ignoring WhatsApp event for an unknown/disabled phone number",
+        );
+        continue;
+      }
+
       const contacts = change.value?.contacts ?? [];
       for (const m of change.value?.messages ?? []) {
         if (!m.from || !m.id) continue;
-        const profile =
-          contacts.find((c) => c.wa_id === m.from)?.profile?.name ?? "";
-        const buttonReply = m.interactive?.button_reply;
-        const listReply = m.interactive?.list_reply;
-        const reply = listReply ?? buttonReply ?? null;
-        inbound.push({
-          from: m.from,
-          profileName: profile,
-          text: m.type === "text" ? (m.text?.body ?? "").trim() || null : null,
-          replyId: reply?.id ?? null,
-          replyTitle: reply?.title ?? null,
-        });
-        messageIds.push(m.id);
-      }
-    }
-  }
+        const messageId = m.id;
+        const dealerId = channel.dealerId;
+        try {
+          // Idempotency: Meta redelivers on timeout/retry.
+          const [seen] = await db
+            .select()
+            .from(webhookEventsTable)
+            .where(
+              and(
+                eq(webhookEventsTable.channel, "meta_whatsapp"),
+                eq(webhookEventsTable.externalId, messageId),
+              ),
+            );
+          if (seen) continue;
+          await db.insert(webhookEventsTable).values({
+            dealerId,
+            channel: "meta_whatsapp",
+            externalId: messageId,
+          });
 
-  // Acknowledge fast; Meta retries on non-200.
-  res.status(200).json({ received: inbound.length });
+          const profile =
+            contacts.find((c) => c.wa_id === m.from)?.profile?.name ?? "";
+          const buttonReply = m.interactive?.button_reply;
+          const listReply = m.interactive?.list_reply;
+          const reply = listReply ?? buttonReply ?? null;
+          const msg: InboundWhatsappMessage = {
+            from: m.from,
+            profileName: profile,
+            text: m.type === "text" ? (m.text?.body ?? "").trim() || null : null,
+            replyId: reply?.id ?? null,
+            replyTitle: reply?.title ?? null,
+          };
 
-  for (let i = 0; i < inbound.length; i++) {
-    const msg = inbound[i]!;
-    const messageId = messageIds[i]!;
-    try {
-      // Idempotency: Meta redelivers on timeout/retry.
-      const [seen] = await db
-        .select()
-        .from(webhookEventsTable)
-        .where(
-          and(
-            eq(webhookEventsTable.channel, "meta_whatsapp"),
-            eq(webhookEventsTable.externalId, messageId),
-          ),
-        );
-      if (seen) continue;
-      await db.insert(webhookEventsTable).values({
-        channel: "meta_whatsapp",
-        externalId: messageId,
-      });
-      const transport = metaTransport(cfg);
-      if (whatsappProvider() === "meta") {
-        await handleWhatsappMessage(transport, msg);
-      } else {
-        // Twilio is the guided-bot provider; Meta falls back to one-shot intake.
-        await handleWhatsappOneShot(transport, msg);
+          const transport = metaTransport(channel);
+          await handleWhatsappMessage(transport, msg, dealerId);
+        } catch (err) {
+          logger.error(
+            { err, messageId, dealerId },
+            "Failed to process WhatsApp Cloud API message",
+          );
+        }
       }
-    } catch (err) {
-      logger.error(
-        { err, messageId },
-        "Failed to process WhatsApp Cloud API message",
-      );
     }
   }
 });
@@ -609,7 +623,7 @@ router.post("/webhooks/twilio/whatsapp", async (req, res): Promise<void> => {
         text: body || null,
         replyId: null,
         replyTitle: null,
-      });
+      }, dealerId);
       if (messageSid) {
         await db.insert(webhookEventsTable).values({
           channel: "twilio_whatsapp",

@@ -30,12 +30,9 @@ import { getDealerPdfBranding } from "./dealer-branding";
 import { buildWarrantyBookletForDelivery } from "./warranty-doc";
 import { testDriveIcsFromPayload } from "./calendar";
 import {
-  whatsappConfig,
-  whatsappProvider,
   sendWhatsappText,
-  twilioWhatsappConfig,
-  sendTwilioWhatsappText,
 } from "./whatsapp";
+import { getChannelByDealerId } from "./whatsapp-channel";
 import { recordWhatsappMessage } from "./whatsapp-log";
 
 // ---------------------------------------------------------------------------
@@ -943,12 +940,20 @@ export type EnqueueWhatsappOptions = {
 };
 
 /** R6.4: true when the phone has an explicit WhatsApp opt-out on record. */
-export async function isWhatsappOptedOut(phone: string): Promise<boolean> {
+export async function isWhatsappOptedOut(
+  dealerId: number,
+  phone: string,
+): Promise<boolean> {
   const digits = phone.replace(/\D/g, "");
   const [row] = await db
     .select({ optedOutAt: whatsappConversationsTable.optedOutAt })
     .from(whatsappConversationsTable)
-    .where(eq(whatsappConversationsTable.phone, digits));
+    .where(
+      and(
+        eq(whatsappConversationsTable.dealerId, dealerId),
+        eq(whatsappConversationsTable.phone, digits),
+      ),
+    );
   return Boolean(row?.optedOutAt);
 }
 
@@ -965,7 +970,7 @@ export async function enqueueWhatsapp(
   // R6.4 opt-out enforcement at the enqueue boundary: a suppressed row is
   // still written (status "cancelled") so the outbox log shows WHY nothing
   // went out, then the cascade downgrades to Email (or In-App notice).
-  if (await isWhatsappOptedOut(digits)) {
+  if (await isWhatsappOptedOut(opts.dealerId, digits)) {
     const [row] = await db
       .insert(emailLogsTable)
       .values({
@@ -1165,31 +1170,28 @@ async function processWhatsappQueue(): Promise<void> {
     .limit(10);
   if (pending.length === 0) return;
 
-  const metaCfg = whatsappConfig();
-  const twilioCfg = twilioWhatsappConfig();
-  // Explicit WHATSAPP_PROVIDER wins; fall back to whichever is configured.
-  const preferTwilio = whatsappProvider() === "twilio" && twilioCfg !== null;
   for (const item of pending) {
     const attempts = item.attempts + 1;
     await db
       .update(emailLogsTable)
       .set({ status: "sending", attempts })
       .where(eq(emailLogsTable.id, item.id));
-    if (!metaCfg && !twilioCfg) {
+
+    // Resolve the Meta channel for this item's dealer (DB first, then env fallback).
+    const dealerChannel =
+      item.dealerId != null ? await getChannelByDealerId(item.dealerId) : null;
+
+    if (!dealerChannel) {
       await markFailed(
         item,
         attempts,
-        "WhatsApp sending is not configured (no Meta Cloud API or Twilio WhatsApp credentials).",
+        "WhatsApp is not configured or is paused for this dealership.",
       );
       continue;
     }
     try {
       const body = item.payload?.body ?? "";
-      if (!preferTwilio && metaCfg) {
-        await sendWhatsappText(metaCfg, item.recipient, body);
-      } else if (twilioCfg) {
-        await sendTwilioWhatsappText(twilioCfg, item.recipient, body);
-      }
+      await sendWhatsappText(dealerChannel, item.recipient, body);
       await db
         .update(emailLogsTable)
         .set({ status: "sent", sentAt: new Date(), lastError: null })

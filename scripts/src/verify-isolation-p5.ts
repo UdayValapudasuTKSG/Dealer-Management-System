@@ -10,6 +10,7 @@ import { pool } from "@workspace/db";
 
 const BASE = "http://localhost:80/api";
 const SUPER = "uday.valapudasu@theksquaregroup.com";
+const SHARED_FIXTURE_LOCK = "aura-security-validation-shared-fixtures-v1";
 
 let pass = 0;
 let fail = 0;
@@ -49,7 +50,7 @@ async function req(
   return { status: res.status, json };
 }
 
-async function main() {
+async function runSuite() {
   // Pick a dealer-1 member (non-super-admin) and dealer-2 foreign rows.
   // Ephemeral dealer-A identity: a General Manager who is a member of
   // dealer 2 ONLY. Never reuse a shared demo account — its memberships can
@@ -85,8 +86,7 @@ async function main() {
     console.log("Failures:");
     for (const f of failures) console.log(`  - ${f}`);
   }
-  await pool.end();
-  process.exit(fail > 0 ? 1 : 0);
+  process.exitCode = fail > 0 ? 1 : 0;
 }
 
 async function run(userA: string) {
@@ -376,6 +376,24 @@ async function run(userA: string) {
     check("P3 dealer user cannot read policies → 403", r.status === 403, `got ${r.status}`);
   }
 
+}
+
+async function main() {
+  // Completion validation runs suites concurrently. P0 temporarily changes
+  // dealer 2 and the global agent policy that this suite exercises.
+  const lockClient = await pool.connect();
+  await lockClient.query("SELECT pg_advisory_lock(hashtext($1))", [
+    SHARED_FIXTURE_LOCK,
+  ]);
+  try {
+    await runSuite();
+  } finally {
+    await lockClient.query("SELECT pg_advisory_unlock(hashtext($1))", [
+      SHARED_FIXTURE_LOCK,
+    ]);
+    lockClient.release();
+    await pool.end();
+  }
 }
 
 main().catch((err) => {

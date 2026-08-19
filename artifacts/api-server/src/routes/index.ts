@@ -44,6 +44,7 @@ import reviewsRouter from "./reviews";
 import casesRouter from "./cases";
 import telephonyRouter from "./telephony";
 import erpnextRouter from "./erpnext";
+import whatsappRouter from "./whatsapp";
 import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
 import { authedRateLimit, publicRateLimit } from "../middlewares/rate-limit";
 
@@ -117,5 +118,6 @@ router.use(storageRouter);
 router.use(documentsRouter);
 router.use(telephonyRouter);
 router.use(erpnextRouter);
+router.use(whatsappRouter);
 
 export default router;

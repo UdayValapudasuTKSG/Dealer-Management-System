@@ -9675,6 +9675,74 @@ export const GetStorageObjectResponse = zod.unknown()
 
 
 /**
+ * @summary WhatsApp channel settings for the active dealership (token masked)
+ */
+export const GetWhatsappSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "enabled": zod.boolean(),
+  "wabaId": zod.string().nullish(),
+  "phoneNumberId": zod.string().nullish(),
+  "displayPhoneNumber": zod.string().nullish(),
+  "verifiedName": zod.string().nullish(),
+  "hasAccessToken": zod.boolean(),
+  "lastStatus": zod.string().nullish(),
+  "lastError": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Create or update the WhatsApp channel for the active dealership
+ */
+export const updateWhatsappSettingsBodyWabaIdMin = 5;
+export const updateWhatsappSettingsBodyWabaIdMax = 64;
+
+
+export const updateWhatsappSettingsBodyWabaIdRegExp = new RegExp('^[0-9]+$');
+export const updateWhatsappSettingsBodyPhoneNumberIdMin = 5;
+export const updateWhatsappSettingsBodyPhoneNumberIdMax = 64;
+
+
+export const updateWhatsappSettingsBodyPhoneNumberIdRegExp = new RegExp('^[0-9]+$');
+export const updateWhatsappSettingsBodyAccessTokenMin = 20;
+export const updateWhatsappSettingsBodyAccessTokenMax = 4096;
+
+
+
+export const UpdateWhatsappSettingsBody = zod.object({
+  "wabaId": zod.string().min(updateWhatsappSettingsBodyWabaIdMin).max(updateWhatsappSettingsBodyWabaIdMax).regex(updateWhatsappSettingsBodyWabaIdRegExp).optional(),
+  "phoneNumberId": zod.string().min(updateWhatsappSettingsBodyPhoneNumberIdMin).max(updateWhatsappSettingsBodyPhoneNumberIdMax).regex(updateWhatsappSettingsBodyPhoneNumberIdRegExp).optional(),
+  "accessToken": zod.string().min(updateWhatsappSettingsBodyAccessTokenMin).max(updateWhatsappSettingsBodyAccessTokenMax).optional().describe('Meta access token — stored encrypted; omit to preserve the existing token'),
+  "enabled": zod.boolean().optional()
+})
+
+export const UpdateWhatsappSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "enabled": zod.boolean(),
+  "wabaId": zod.string().nullish(),
+  "phoneNumberId": zod.string().nullish(),
+  "displayPhoneNumber": zod.string().nullish(),
+  "verifiedName": zod.string().nullish(),
+  "hasAccessToken": zod.boolean(),
+  "lastStatus": zod.string().nullish(),
+  "lastError": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Verify the stored token against Meta Graph API and confirm Cloud API status
+ */
+export const TestWhatsappConnectionResponse = zod.object({
+  "ok": zod.boolean(),
+  "verifiedName": zod.string().nullish(),
+  "displayPhoneNumber": zod.string().nullish(),
+  "cloudApiStatus": zod.string().nullish(),
+  "error": zod.string().nullish()
+})
+
+
+/**
  * @summary ERPNext connection settings (credentials masked)
  */
 export const GetErpnextSettingsResponse = zod.object({

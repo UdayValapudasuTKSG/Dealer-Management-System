@@ -29,6 +29,8 @@ export const whatsappMessagesTable = pgTable(
       .defaultNow(),
   },
   (t) => [
+    // Dealer-scoped phone index for efficient per-dealer lookups.
+    index("whatsapp_messages_dealer_phone_idx").on(t.dealerId, t.phone),
     index("whatsapp_messages_phone_idx").on(t.phone),
     index("whatsapp_messages_lead_idx").on(t.leadId),
   ],

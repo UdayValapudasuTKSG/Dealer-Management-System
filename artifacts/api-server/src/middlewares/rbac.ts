@@ -758,6 +758,7 @@ const PATH_MODULES: Record<string, RouteRule> = {
     category: () => "admin",
   },
   "audit-logs": { module: "settings" },
+  whatsapp: { module: "settings" },
   // Test-drive capacity planning has its own permission module so it shows
   // as a distinct row in Roles & Permissions. Writes map to "edit" (not
   // create/delete) so a single edit grant covers block + unblock.

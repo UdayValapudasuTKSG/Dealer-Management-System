@@ -65,6 +65,8 @@ tags:
     description: Object storage upload and serving endpoints.
   - name: documents
     description: Typed, versioned documents on leads and vehicles with AI pre-fill review
+  - name: whatsapp
+    description: Per-dealer Meta WhatsApp Business channel settings
 paths:
   /anthropic/conversations:
     get:
@@ -7140,6 +7142,65 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /whatsapp/settings:
+    get:
+      operationId: getWhatsappSettings
+      tags: [whatsapp]
+      summary: WhatsApp channel settings for the active dealership (token masked)
+      responses:
+        "200":
+          description: WhatsApp channel settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappSettings"
+    put:
+      operationId: updateWhatsappSettings
+      tags: [whatsapp]
+      summary: Create or update the WhatsApp channel for the active dealership
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWhatsappSettingsRequest"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappSettings"
+        "400":
+          description: Missing required fields for a first-time configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /whatsapp/settings/test:
+    post:
+      operationId: testWhatsappConnection
+      tags: [whatsapp]
+      summary: Verify the stored token against Meta Graph API and confirm Cloud API status
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WhatsappTestResult"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /erpnext/settings:
     get:
       operationId: getErpnextSettings
@@ -7289,6 +7350,36 @@ paths:
                 $ref: "#/components/schemas/Error"
 components:
   schemas:
+    WhatsappSettings:
+      type: object
+      required: [configured, enabled, hasAccessToken]
+      properties:
+        configured: { type: boolean }
+        enabled: { type: boolean }
+        wabaId: { type: ["string", "null"] }
+        phoneNumberId: { type: ["string", "null"] }
+        displayPhoneNumber: { type: ["string", "null"] }
+        verifiedName: { type: ["string", "null"] }
+        hasAccessToken: { type: boolean }
+        lastStatus: { type: ["string", "null"] }
+        lastError: { type: ["string", "null"] }
+        lastCheckedAt: { type: ["string", "null"], format: date-time }
+    UpdateWhatsappSettingsRequest:
+      type: object
+      properties:
+        wabaId: { type: string, minLength: 5, maxLength: 64, pattern: "^[0-9]+$" }
+        phoneNumberId: { type: string, minLength: 5, maxLength: 64, pattern: "^[0-9]+$" }
+        accessToken: { type: string, minLength: 20, maxLength: 4096, description: "Meta access token — stored encrypted; omit to preserve the existing token" }
+        enabled: { type: boolean }
+    WhatsappTestResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        verifiedName: { type: ["string", "null"] }
+        displayPhoneNumber: { type: ["string", "null"] }
+        cloudApiStatus: { type: ["string", "null"] }
+        error: { type: ["string", "null"] }
     ErpnextSettings:
       type: object
       required: [configured, enabled]

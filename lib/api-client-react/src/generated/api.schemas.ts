@@ -5,6 +5,60 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+export interface WhatsappSettings {
+  configured: boolean;
+  enabled: boolean;
+  /** @nullable */
+  wabaId?: string | null;
+  /** @nullable */
+  phoneNumberId?: string | null;
+  /** @nullable */
+  displayPhoneNumber?: string | null;
+  /** @nullable */
+  verifiedName?: string | null;
+  hasAccessToken: boolean;
+  /** @nullable */
+  lastStatus?: string | null;
+  /** @nullable */
+  lastError?: string | null;
+  /** @nullable */
+  lastCheckedAt?: string | null;
+}
+
+export interface UpdateWhatsappSettingsRequest {
+  /**
+     * @minLength 5
+     * @maxLength 64
+     * @pattern ^[0-9]+$
+     */
+  wabaId?: string;
+  /**
+     * @minLength 5
+     * @maxLength 64
+     * @pattern ^[0-9]+$
+     */
+  phoneNumberId?: string;
+  /**
+     * Meta access token — stored encrypted; omit to preserve the existing token
+     * @minLength 20
+     * @maxLength 4096
+     */
+  accessToken?: string;
+  enabled?: boolean;
+}
+
+export interface WhatsappTestResult {
+  ok: boolean;
+  /** @nullable */
+  verifiedName?: string | null;
+  /** @nullable */
+  displayPhoneNumber?: string | null;
+  /** @nullable */
+  cloudApiStatus?: string | null;
+  /** @nullable */
+  error?: string | null;
+}
+
 /**
  * AURA payment method → ERPNext Mode of Payment
  * @nullable

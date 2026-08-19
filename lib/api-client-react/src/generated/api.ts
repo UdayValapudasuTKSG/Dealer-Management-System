@@ -297,6 +297,7 @@ import type {
   UnmetResponse,
   UpdateDeal422,
   UpdateErpnextSettingsRequest,
+  UpdateWhatsappSettingsRequest,
   UploadUrlRequest,
   UploadUrlResponse,
   Vehicle,
@@ -306,6 +307,8 @@ import type {
   VerifyMetaWebhookParams,
   WhatsappMessage,
   WhatsappReplyInput,
+  WhatsappSettings,
+  WhatsappTestResult,
   WhatsappThread
 } from './api.schemas';
 
@@ -21873,6 +21876,225 @@ export function useGetStorageObject<TData = Awaited<ReturnType<typeof getStorage
 
 
 
+
+export const getGetWhatsappSettingsUrl = () => {
+
+
+
+
+  return `/api/whatsapp/settings`
+}
+
+/**
+ * @summary WhatsApp channel settings for the active dealership (token masked)
+ */
+export const getWhatsappSettings = async ( options?: RequestInit): Promise<WhatsappSettings> => {
+
+  return customFetch<WhatsappSettings>(getGetWhatsappSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWhatsappSettingsQueryKey = () => {
+    return [
+    `/api/whatsapp/settings`
+    ] as const;
+    }
+
+
+export const getGetWhatsappSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getWhatsappSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWhatsappSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetWhatsappSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWhatsappSettings>>> = ({ signal }) => getWhatsappSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWhatsappSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetWhatsappSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getWhatsappSettings>>>
+export type GetWhatsappSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary WhatsApp channel settings for the active dealership (token masked)
+ */
+
+export function useGetWhatsappSettings<TData = Awaited<ReturnType<typeof getWhatsappSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWhatsappSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetWhatsappSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateWhatsappSettingsUrl = () => {
+
+
+
+
+  return `/api/whatsapp/settings`
+}
+
+/**
+ * @summary Create or update the WhatsApp channel for the active dealership
+ */
+export const updateWhatsappSettings = async (updateWhatsappSettingsRequest: UpdateWhatsappSettingsRequest, options?: RequestInit): Promise<WhatsappSettings> => {
+
+  return customFetch<WhatsappSettings>(getUpdateWhatsappSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateWhatsappSettingsRequest)
+  }
+);}
+
+
+
+
+
+export const getUpdateWhatsappSettingsMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWhatsappSettings>>, TError,{data: BodyType<UpdateWhatsappSettingsRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateWhatsappSettings>>, TError,{data: BodyType<UpdateWhatsappSettingsRequest>}, TContext> => {
+
+const mutationKey = ['updateWhatsappSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateWhatsappSettings>>, {data: BodyType<UpdateWhatsappSettingsRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateWhatsappSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateWhatsappSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateWhatsappSettings>>>
+    export type UpdateWhatsappSettingsMutationBody = BodyType<UpdateWhatsappSettingsRequest>
+    export type UpdateWhatsappSettingsMutationError = ErrorType<Error>
+
+    /**
+ * @summary Create or update the WhatsApp channel for the active dealership
+ */
+export const useUpdateWhatsappSettings = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateWhatsappSettings>>, TError,{data: BodyType<UpdateWhatsappSettingsRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateWhatsappSettings>>,
+        TError,
+        {data: BodyType<UpdateWhatsappSettingsRequest>},
+        TContext
+      > => {
+      return useMutation(getUpdateWhatsappSettingsMutationOptions(options));
+    }
+
+export const getTestWhatsappConnectionUrl = () => {
+
+
+
+
+  return `/api/whatsapp/settings/test`
+}
+
+/**
+ * @summary Verify the stored token against Meta Graph API and confirm Cloud API status
+ */
+export const testWhatsappConnection = async ( options?: RequestInit): Promise<WhatsappTestResult> => {
+
+  return customFetch<WhatsappTestResult>(getTestWhatsappConnectionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTestWhatsappConnectionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testWhatsappConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testWhatsappConnection>>, TError,void, TContext> => {
+
+const mutationKey = ['testWhatsappConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testWhatsappConnection>>, void> = () => {
+
+
+          return  testWhatsappConnection(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestWhatsappConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testWhatsappConnection>>>
+
+    export type TestWhatsappConnectionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Verify the stored token against Meta Graph API and confirm Cloud API status
+ */
+export const useTestWhatsappConnection = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testWhatsappConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testWhatsappConnection>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestWhatsappConnectionMutationOptions(options));
+    }
 
 export const getGetErpnextSettingsUrl = () => {
 

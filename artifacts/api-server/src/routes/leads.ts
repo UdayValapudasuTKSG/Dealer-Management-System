@@ -145,7 +145,7 @@ import {
   quoteById,
   quotePdfPayload,
 } from "../lib/quotes";
-import { sendWhatsappText, whatsappConfig } from "../lib/whatsapp";
+import { getChannelByDealerId } from "../lib/whatsapp-channel";
 import { ensureLeadSources } from "../lib/lead-sources";
 import { getActiveChecklist } from "../lib/stage-checklists";
 import {
@@ -614,7 +614,8 @@ router.get("/leads/:id/whatsapp", async (req, res): Promise<void> => {
 
   const rows = await leadWhatsappMessages(lead);
   const window = replyWindow(rows);
-  const configured = !!whatsappConfig();
+  const channel = await getChannelByDealerId(lead.dealerId);
+  const configured = Boolean(channel);
   let blocked: string | null = null;
   if (rows.length === 0) blocked = "No WhatsApp conversation on this lead yet.";
   else if (!configured)
@@ -674,8 +675,8 @@ router.post("/leads/:id/whatsapp", async (req, res): Promise<void> => {
       .json({ error: "This lead has no WhatsApp number to reply to." });
     return;
   }
-  const cfg = whatsappConfig();
-  if (!cfg) {
+  const channel = await getChannelByDealerId(lead.dealerId);
+  if (!channel) {
     res.status(422).json({
       error: "WhatsApp sending is not configured for this dealership.",
     });
@@ -1326,8 +1327,8 @@ router.post(
           .json({ error: "This lead has no phone number for WhatsApp." });
         return;
       }
-      const cfg = whatsappConfig();
-      if (!cfg) {
+      const whatsappChannel = await getChannelByDealerId(lead.dealerId);
+      if (!whatsappChannel) {
         res.status(422).json({
           error: "WhatsApp sending is not configured for this dealership.",
         });
@@ -1345,11 +1346,21 @@ router.post(
         `Base price: $${quote.basePrice.toLocaleString("en-US")}\n${taxText}\n` +
         `Total: $${quote.total.toLocaleString("en-US")}\n\n` +
         `Valid until ${quote.validUntil}. Reply here with any questions!`;
-      try {
-        await sendWhatsappText(cfg, to, text);
-      } catch {
-        res.status(502).json({
-          error: "WhatsApp could not deliver the message. Try again.",
+      const queued = await enqueueWhatsapp({
+        kind: "whatsapp_message",
+        to,
+        body: text,
+        dealerId: lead.dealerId,
+        leadId: lead.id,
+        customerId: lead.customerId,
+        summary: `Quote ${quote.quoteNumber} for ${lead.name}`,
+        actor: actorName(res),
+        dedupeKey: `lead:${lead.id}:quote:${quote.id}:whatsapp`,
+      });
+      if (queued.status === "cancelled") {
+        res.status(422).json({
+          error:
+            "This customer has opted out of WhatsApp for this dealership. Use email or contact them manually.",
         });
         return;
       }

@@ -1,4 +1,5 @@
 import {
+  integer,
   pgTable,
   serial,
   text,
@@ -7,20 +8,29 @@ import {
 } from "drizzle-orm/pg-core";
 
 // In-flight guided WhatsApp lead-capture conversations (Meta Cloud API bot).
-// One active session per phone; expired rows are replaced on next contact.
+// One active session per (dealer, phone); expired rows are replaced on next contact.
 export const whatsappConversationsTable = pgTable(
   "whatsapp_conversations",
   {
     id: serial("id").primaryKey(),
+    /**
+     * Owning dealership. NOT NULL — every conversation belongs to a dealer
+     * so that multi-tenant deployments stay isolated. Backfilled to dealer 2
+     * for pre-existing rows in the 2026-08-20 migration.
+     */
+    dealerId: integer("dealer_id").notNull(),
     /** WhatsApp sender id (E.164 digits, no "+" — as Meta sends it). */
     phone: text("phone").notNull(),
-    /** Current step: "name" | "mobile" | "email" | "brand" | "model" */
+    /** Current step: "name" | "mobile" | "email" | "address" | "brand" | "model" | "confirm" */
     step: text("step").notNull().default("name"),
     /** Selected vehicle make while on the "model" step. */
     brand: text("brand"),
     name: text("name"),
     mobile: text("mobile"),
     email: text("email"),
+    address: text("address"),
+    /** Available inventory unit selected during the AI-guided conversation. */
+    interestedVehicleId: integer("interested_vehicle_id"),
     /** WhatsApp profile name, kept as a fallback label. */
     profileName: text("profile_name"),
     /**
@@ -43,7 +53,10 @@ export const whatsappConversationsTable = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [uniqueIndex("whatsapp_conversations_phone_idx").on(t.phone)],
+  (t) => [
+    // Composite unique: one active session per (dealer, phone).
+    uniqueIndex("whatsapp_conversations_dealer_phone_idx").on(t.dealerId, t.phone),
+  ],
 );
 
 export type WhatsappConversation =

@@ -7,7 +7,7 @@ import {
   dealersTable,
   type Lead,
 } from "@workspace/db";
-import { whatsappConfig } from "./whatsapp";
+import { getChannelByDealerId } from "./whatsapp-channel";
 import { isAgentEnabled, recordAgentRun } from "./agent-governance";
 import { logger } from "./logger";
 
@@ -153,7 +153,8 @@ async function orchestrate(lead: Lead): Promise<void> {
   // message is ever auto-sent). The drafted message is held as a
   // needs_review outreach run; a human approves and sends it via the
   // Approve & Send flow.
-  if (fresh.phone && fresh.interestedVehicleId && whatsappConfig()) {
+  const dealerChannel = await getChannelByDealerId(fresh.dealerId);
+  if (fresh.phone && fresh.interestedVehicleId && dealerChannel) {
     const summary = await latestQuoteSummary(fresh);
     if (summary) {
       const dealer = await dealerName(fresh.dealerId);

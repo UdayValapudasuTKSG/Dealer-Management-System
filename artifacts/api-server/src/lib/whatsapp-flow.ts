@@ -5,6 +5,7 @@ import {
   timelineEventsTable,
   vehiclesTable,
   whatsappConversationsTable,
+  whatsappMessagesTable,
   type WhatsappConversation,
 } from "@workspace/db";
 import { ensureAccountForLead } from "./accounts";
@@ -25,6 +26,9 @@ import { logger } from "./logger";
 import { isAgentEnabled, recordAgentRun } from "./agent-governance";
 import { rescheduleLink } from "./test-drive-scheduler";
 import type { Lead } from "@workspace/db";
+import {
+  interpretWhatsappLeadMessage,
+} from "./whatsapp-ai-concierge";
 
 // ---------------------------------------------------------------------------
 // WhatsApp guided lead-capture bot — deterministic state machine, shared by
@@ -42,6 +46,7 @@ import type { Lead } from "@workspace/db";
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // half-finished chats expire after 24h
 const USE_THIS_NUMBER_ID = "use_this_number";
 const SKIP_EMAIL_ID = "skip_email";
+const SKIP_ADDRESS_ID = "skip_address";
 const OTHER_VEHICLE_ID = "veh_other";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const OPEN_EXCLUDED_PHASES = ["won", "lost"];
@@ -84,6 +89,7 @@ async function findOpenLeadByPhone(dealerId: number, phone: string) {
 }
 
 async function activeConversation(
+  dealerId: number,
   phone: string,
 ): Promise<WhatsappConversation | null> {
   const [row] = await db
@@ -91,6 +97,7 @@ async function activeConversation(
     .from(whatsappConversationsTable)
     .where(
       and(
+        eq(whatsappConversationsTable.dealerId, dealerId),
         eq(whatsappConversationsTable.phone, phone),
         gt(whatsappConversationsTable.expiresAt, new Date()),
       ),
@@ -99,12 +106,15 @@ async function activeConversation(
 }
 
 async function upsertConversation(
+  dealerId: number,
   phone: string,
   values: Partial<{
     step: string;
     name: string | null;
     mobile: string | null;
     email: string | null;
+    address: string | null;
+    interestedVehicleId: number | null;
     profileName: string | null;
     menu: string | null;
     brand: string | null;
@@ -113,30 +123,45 @@ async function upsertConversation(
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await db
     .insert(whatsappConversationsTable)
-    .values({ phone, step: "name", ...values, expiresAt })
+    .values({ dealerId, phone, step: "name", ...values, expiresAt })
     .onConflictDoUpdate({
-      target: whatsappConversationsTable.phone,
+      target: [whatsappConversationsTable.dealerId, whatsappConversationsTable.phone],
       set: { ...values, expiresAt, updatedAt: new Date() },
     });
 }
 
-async function endConversation(phone: string): Promise<void> {
+async function endConversation(dealerId: number, phone: string): Promise<void> {
   // Opt-out records live on this row (R6.4) — expire the session instead of
   // deleting when the phone has opted out, so the STOP preference survives.
   const [row] = await db
     .select({ optedOutAt: whatsappConversationsTable.optedOutAt })
     .from(whatsappConversationsTable)
-    .where(eq(whatsappConversationsTable.phone, phone));
+    .where(
+      and(
+        eq(whatsappConversationsTable.dealerId, dealerId),
+        eq(whatsappConversationsTable.phone, phone),
+      ),
+    );
   if (row?.optedOutAt) {
     await db
       .update(whatsappConversationsTable)
       .set({ expiresAt: new Date(), updatedAt: new Date() })
-      .where(eq(whatsappConversationsTable.phone, phone));
+      .where(
+        and(
+          eq(whatsappConversationsTable.dealerId, dealerId),
+          eq(whatsappConversationsTable.phone, phone),
+        ),
+      );
     return;
   }
   await db
     .delete(whatsappConversationsTable)
-    .where(eq(whatsappConversationsTable.phone, phone));
+    .where(
+      and(
+        eq(whatsappConversationsTable.dealerId, dealerId),
+        eq(whatsappConversationsTable.phone, phone),
+      ),
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +178,7 @@ const OPT_IN_KEYWORDS = new Set(["start", "unstop", "resume"]);
  * message was an opt keyword, null otherwise.
  */
 export async function handleOptKeyword(
+  dealerId: number,
   phone: string,
   text: string | null,
 ): Promise<string | null> {
@@ -164,16 +190,17 @@ export async function handleOptKeyword(
   await db
     .insert(whatsappConversationsTable)
     .values({
+      dealerId,
       phone,
       step: "done",
       optedOutAt: isOut ? now : null,
       expiresAt: now, // no active bot session — just the preference record
     })
     .onConflictDoUpdate({
-      target: whatsappConversationsTable.phone,
+      target: [whatsappConversationsTable.dealerId, whatsappConversationsTable.phone],
       set: { optedOutAt: isOut ? now : null, updatedAt: now },
     });
-  logger.info({ phone, optOut: isOut }, "whatsapp opt keyword processed");
+  logger.info({ dealerId, phone, optOut: isOut }, "whatsapp opt keyword processed");
   return isOut
     ? "You've been unsubscribed from WhatsApp updates. We won't message you here again — important updates will reach you by email instead. Reply START to re-subscribe."
     : "Welcome back — WhatsApp updates are switched on again.";
@@ -208,6 +235,223 @@ async function availableVehicles(dealerId: number) {
         isNull(vehiclesTable.deletedAt),
       ),
     );
+}
+
+const STEP_RANK: Record<string, number> = {
+  name: 0,
+  mobile: 1,
+  email: 2,
+  address: 3,
+  brand: 4,
+  model: 4,
+  confirm: 5,
+};
+
+function validAiName(name: string | null): string | null {
+  if (!name || name.length < 2 || name.length > 80 || /^\d+$/.test(name)) return null;
+  return name;
+}
+
+function validAiEmail(email: string | null): string | null {
+  return email && EMAIL_RE.test(email) ? email : null;
+}
+
+function validAiAddress(address: string | null): string | null {
+  return address && address.length >= 3 && address.length <= 300 ? address : null;
+}
+
+async function handleAiLeadCapture(
+  t: WhatsappTransport,
+  dealerId: number,
+  convo: WhatsappConversation,
+  msg: InboundWhatsappMessage,
+): Promise<boolean> {
+  const customerMessage = (msg.text ?? "").trim();
+  if (!customerMessage || customerMessage.length > 1500 || /^\d{1,2}[.)]?$/.test(customerMessage)) {
+    return false;
+  }
+
+  if (convo.step === "confirm") {
+    if (/^(yes|y|confirm|confirmed|correct|looks good|go ahead)\s*[.!]*$/i.test(customerMessage)) {
+      const freshInventory = await availableVehicles(dealerId);
+      const selectedVehicle =
+        freshInventory.find((vehicle) => vehicle.id === convo.interestedVehicleId) ??
+        null;
+      if (!selectedVehicle) {
+        await upsertConversation(dealerId, convo.phone, {
+          step: "model",
+          interestedVehicleId: null,
+        });
+        await t.sendText(
+          convo.phone,
+          "That vehicle is no longer marked available. Please choose another model from our current inventory.",
+        );
+        await promptBrand(
+          t,
+          dealerId,
+          convo.phone,
+          (convo.name || "there").split(/\s+/)[0]!,
+        );
+        return true;
+      }
+      await completeFlow(
+        t,
+        dealerId,
+        convo,
+        {
+          id: selectedVehicle.id,
+          label: [selectedVehicle.year, selectedVehicle.make, selectedVehicle.model]
+            .filter(Boolean)
+            .join(" "),
+          variant: selectedVehicle.trim || selectedVehicle.variant || null,
+          color: selectedVehicle.exteriorColor || null,
+        },
+        null,
+      );
+      return true;
+    }
+    if (/^(no|n|incorrect|change it)\s*[.!]*$/i.test(customerMessage)) {
+      await t.sendText(
+        convo.phone,
+        "No problem. Tell me which detail you want to change—for example, your email, address, or vehicle.",
+      );
+      return true;
+    }
+  }
+
+  // Durable per-customer budget: Meta deliveries often share provider IPs, so
+  // rate AI usage by sender rather than relying on public-IP middleware.
+  const recentInbound = await db
+    .select({ id: whatsappMessagesTable.id })
+    .from(whatsappMessagesTable)
+    .where(
+      and(
+        eq(whatsappMessagesTable.dealerId, dealerId),
+        eq(whatsappMessagesTable.phone, convo.phone),
+        eq(whatsappMessagesTable.direction, "in"),
+        gt(
+          whatsappMessagesTable.createdAt,
+          new Date(Date.now() - 60 * 1000),
+        ),
+      ),
+    )
+    .limit(6);
+  if (recentInbound.length > 5) return false;
+
+  const inventory = await availableVehicles(dealerId);
+  const rank = STEP_RANK[convo.step] ?? 0;
+  const explicitSkip = /^(skip|no|none|prefer not|rather not)\s*[.!]*$/i.test(
+    customerMessage,
+  );
+  const skipEmail = convo.step === "email" && explicitSkip;
+  const skipAddress = convo.step === "address" && explicitSkip;
+  const interpretation =
+    skipEmail || skipAddress
+      ? {
+          name: null,
+          email: null,
+          address: null,
+          vehicleId: null,
+          confidence: 1,
+        }
+      : await interpretWhatsappLeadMessage({
+          dealerId,
+          customerMessage,
+          profileName: convo.profileName,
+          facts: {
+            name: convo.name,
+            email: convo.email,
+            address: convo.address,
+            vehicleId: convo.interestedVehicleId,
+            emailAlreadyPassed: rank > STEP_RANK.email,
+            addressAlreadyPassed: rank > STEP_RANK.address,
+          },
+          inventory: inventory.map((vehicle) => ({
+            id: vehicle.id,
+            label: [
+              vehicle.year,
+              vehicle.make,
+              vehicle.model,
+              vehicle.trim || vehicle.variant,
+            ]
+              .filter(Boolean)
+              .join(" "),
+          })),
+        });
+  if (!interpretation || interpretation.confidence < 0.75) return false;
+
+  const name = validAiName(interpretation.name) ?? convo.name;
+  const email = validAiEmail(interpretation.email) ?? convo.email;
+  const address = validAiAddress(interpretation.address) ?? convo.address;
+  const selectedVehicle =
+    inventory.find(
+      (vehicle) =>
+        vehicle.id === (interpretation.vehicleId ?? convo.interestedVehicleId),
+    ) ?? null;
+  const emailPassed =
+    Boolean(email) || rank > STEP_RANK.email || skipEmail;
+  const addressPassed =
+    Boolean(address) || rank > STEP_RANK.address || skipAddress;
+  const expectedQuestion: "name" | "email" | "address" | "vehicle" | "none" = !name
+    ? "name"
+    : !emailPassed
+      ? "email"
+      : !addressPassed
+        ? "address"
+        : !selectedVehicle
+          ? "vehicle"
+          : "none";
+  const step =
+    expectedQuestion === "name"
+      ? "name"
+      : expectedQuestion === "email"
+        ? "email"
+        : expectedQuestion === "address"
+          ? "address"
+          : expectedQuestion === "vehicle"
+            ? "model"
+            : "confirm";
+
+  await upsertConversation(dealerId, convo.phone, {
+    step,
+    name,
+    mobile: convo.mobile || `+${digits(convo.phone)}`,
+    email,
+    address,
+    interestedVehicleId: selectedVehicle?.id ?? convo.interestedVehicleId,
+    menu: null,
+  });
+
+  if (expectedQuestion === "none" && selectedVehicle) {
+    await t.sendText(
+      convo.phone,
+      `Please confirm these enquiry details:\n\nName: ${name}\nEmail: ${
+        email || "Not provided"
+      }\nAddress: ${address || "Not provided"}\nVehicle: ${[
+        selectedVehicle.year,
+        selectedVehicle.make,
+        selectedVehicle.model,
+      ]
+        .filter(Boolean)
+        .join(" ")}\n\nReply YES to create your enquiry, or tell me what to change.`,
+    );
+    return true;
+  }
+
+  const firstName = (name || "there").split(/\s+/)[0]!;
+  if (expectedQuestion === "name") {
+    await t.sendText(
+      convo.phone,
+      "Welcome to AURA Motors! I'm the virtual sales concierge. What's your name?",
+    );
+  } else if (expectedQuestion === "email") {
+    await promptEmail(t, dealerId, convo.phone, firstName, false);
+  } else if (expectedQuestion === "address") {
+    await promptAddress(t, dealerId, convo.phone, firstName);
+  } else {
+    await promptBrand(t, dealerId, convo.phone, firstName);
+  }
+  return true;
 }
 
 /** Distinct makes with available stock — first menu level. */
@@ -258,11 +502,12 @@ async function buildModelRows(
 
 async function promptMobile(
   t: WhatsappTransport,
+  dealerId: number,
   phone: string,
   firstName: string,
   retry: boolean,
 ): Promise<void> {
-  await upsertConversation(phone, {
+  await upsertConversation(dealerId, phone, {
     menu: JSON.stringify([USE_THIS_NUMBER_ID]),
   });
   if (t.interactive) {
@@ -285,11 +530,12 @@ async function promptMobile(
 
 async function promptEmail(
   t: WhatsappTransport,
+  dealerId: number,
   phone: string,
   firstName: string,
   retry: boolean,
 ): Promise<void> {
-  await upsertConversation(phone, {
+  await upsertConversation(dealerId, phone, {
     menu: JSON.stringify([SKIP_EMAIL_ID]),
   });
   if (t.interactive) {
@@ -310,6 +556,30 @@ async function promptEmail(
   );
 }
 
+async function promptAddress(
+  t: WhatsappTransport,
+  dealerId: number,
+  phone: string,
+  firstName: string,
+): Promise<void> {
+  await upsertConversation(dealerId, phone, {
+    step: "address",
+    menu: JSON.stringify([SKIP_ADDRESS_ID]),
+  });
+  if (t.interactive) {
+    await t.sendButtons(
+      phone,
+      `Thanks ${firstName}! What's your address? This helps us assign the nearest advisor.\n\nType it below, or tap Skip.`,
+      [{ id: SKIP_ADDRESS_ID, title: "Skip" }],
+    );
+    return;
+  }
+  await t.sendText(
+    phone,
+    `Thanks ${firstName}! What's your address? This helps us assign the nearest advisor.\n\nType it below, or reply 1 to skip.`,
+  );
+}
+
 async function promptBrand(
   t: WhatsappTransport,
   dealerId: number,
@@ -319,7 +589,7 @@ async function promptBrand(
   const rows = await buildBrandRows(dealerId);
   if (rows.length === 0) {
     // No inventory to list — fall back to free text.
-    await upsertConversation(phone, { step: "model", brand: null, menu: null });
+    await upsertConversation(dealerId, phone, { step: "model", brand: null, menu: null });
     await t.sendText(
       phone,
       `Thanks ${firstName}! Which model are you interested in? Just type the make and model.`,
@@ -331,7 +601,7 @@ async function promptBrand(
     title: "Other / not listed",
     description: "Tell us what you're looking for",
   });
-  await upsertConversation(phone, {
+  await upsertConversation(dealerId, phone, {
     step: "brand",
     brand: null,
     menu: JSON.stringify(rows.map((r) => r.id)),
@@ -366,7 +636,7 @@ async function promptModel(
 ): Promise<void> {
   const rows = await buildModelRows(dealerId, make);
   if (rows.length === 0) {
-    await upsertConversation(phone, { step: "model", brand: make, menu: null });
+    await upsertConversation(dealerId, phone, { step: "model", brand: make, menu: null });
     await t.sendText(
       phone,
       `We don't have ${make} models in stock right now — just type the model you're looking for and we'll note it.`,
@@ -378,7 +648,7 @@ async function promptModel(
     title: "Other / not listed",
     description: "Tell us what you're looking for",
   });
-  await upsertConversation(phone, {
+  await upsertConversation(dealerId, phone, {
     step: "model",
     brand: make,
     menu: JSON.stringify(rows.map((r) => r.id)),
@@ -423,6 +693,7 @@ async function completeFlow(
     name,
     phone: mobile,
     email: convo.email || null,
+    address: convo.address || null,
     channel: "social",
     source: "whatsapp",
     notes: noteParts.join("\n"),
@@ -446,7 +717,7 @@ async function completeFlow(
     mutation: true,
     changeSummary: `Guided WhatsApp flow completed → lead #${lead.id} created (deterministic state machine, no model output applied)`,
   });
-  await endConversation(convo.phone);
+  await endConversation(dealerId, convo.phone);
 
   const firstName = name.split(/\s+/)[0];
   await t.sendText(
@@ -603,13 +874,13 @@ async function appendToOpenLead(
 export async function handleWhatsappMessage(
   rawTransport: WhatsappTransport,
   msg: InboundWhatsappMessage,
+  dealerId: number,
 ): Promise<void> {
   const phone = msg.from;
-  const t = recordingTransport(rawTransport);
+  const t = recordingTransport(rawTransport, "AURA WhatsApp Bot", dealerId);
   try {
-    const dealerId = await defaultDealerId();
     // R6.4: STOP/START must always work — even when the bot is paused.
-    const optReply = await handleOptKeyword(phone, msg.text);
+    const optReply = await handleOptKeyword(dealerId, phone, msg.text);
     if (optReply) {
       await recordWhatsappMessage({
         phone,
@@ -646,7 +917,8 @@ export async function handleWhatsappMessage(
       body: msg.text || msg.replyTitle || "",
       dealerId,
     });
-    const convo = await activeConversation(phone);
+    let convo = await activeConversation(dealerId, phone);
+    let startedNewConversation = false;
 
     if (!convo) {
       // Repeat message from someone with an open lead: append to their file
@@ -658,14 +930,26 @@ export async function handleWhatsappMessage(
         return;
       }
 
-      // Fresh conversation: greet and ask for the name.
-      await upsertConversation(phone, {
+      // Fresh conversation: seed the session. The AI concierge can extract
+      // multiple facts from the customer's opening message; the deterministic
+      // flow remains the fallback when AI is unavailable.
+      startedNewConversation = true;
+      await upsertConversation(dealerId, phone, {
         step: "name",
         name: null,
-        mobile: null,
+        mobile: `+${digits(phone)}`,
+        email: null,
+        address: null,
+        interestedVehicleId: null,
         menu: null,
         profileName: msg.profileName || null,
       });
+      convo = await activeConversation(dealerId, phone);
+      if (!convo) throw new Error("Failed to start WhatsApp conversation");
+    }
+
+    if (await handleAiLeadCapture(t, dealerId, convo, msg)) return;
+    if (startedNewConversation) {
       await t.sendText(
         phone,
         "Welcome to AURA Motors! I can connect you with one of our advisors in under a minute.\n\nFirst — what's your name?",
@@ -682,8 +966,12 @@ export async function handleWhatsappMessage(
         );
         return;
       }
-      await upsertConversation(phone, { step: "mobile", name });
-      await promptMobile(t, phone, name.split(/\s+/)[0]!, false);
+      await upsertConversation(dealerId, phone, {
+        step: "email",
+        name,
+        mobile: `+${digits(phone)}`,
+      });
+      await promptEmail(t, dealerId, phone, name.split(/\s+/)[0]!, false);
       return;
     }
 
@@ -697,12 +985,13 @@ export async function handleWhatsappMessage(
         if (d.length >= 7 && d.length <= 15) mobile = `+${d}`;
       }
       if (!mobile) {
-        await promptMobile(t, phone, (convo.name || "there").split(/\s+/)[0]!, true);
+        await promptMobile(t, dealerId, phone, (convo.name || "there").split(/\s+/)[0]!, true);
         return;
       }
-      await upsertConversation(phone, { step: "email", mobile });
+      await upsertConversation(dealerId, phone, { step: "email", mobile });
       await promptEmail(
         t,
+        dealerId,
         phone,
         (convo.name || "there").split(/\s+/)[0]!,
         false,
@@ -722,11 +1011,32 @@ export async function handleWhatsappMessage(
         email = raw.toLowerCase();
       }
       if (!email && !skipped) {
-        await promptEmail(t, phone, firstName, true);
+        await promptEmail(t, dealerId, phone, firstName, true);
         return;
       }
-      await upsertConversation(phone, { email });
-      await promptBrand(t, dealerId, phone, firstName);
+      await upsertConversation(dealerId, phone, { email });
+      await promptAddress(t, dealerId, phone, firstName);
+      return;
+    }
+
+    if (convo.step === "address") {
+      const replyId = resolveMenuReply(convo, msg);
+      const firstNameA = (convo.name || "there").split(/\s+/)[0]!;
+      const raw = (msg.text ?? "").trim();
+      let address: string | null = null;
+      if (replyId !== SKIP_ADDRESS_ID && !/^(skip|no|none)$/i.test(raw)) {
+        if (raw.length >= 3) {
+          address = raw.slice(0, 300);
+        } else {
+          await t.sendText(
+            phone,
+            "Sorry, I didn't catch that — could you type your address? Or reply Skip.",
+          );
+          return;
+        }
+      }
+      await upsertConversation(dealerId, phone, { address });
+      await promptBrand(t, dealerId, phone, firstNameA);
       return;
     }
 
@@ -735,7 +1045,7 @@ export async function handleWhatsappMessage(
     if (convo.step === "brand") {
       const replyId = resolveMenuReply(convo, msg);
       if (replyId === OTHER_VEHICLE_ID) {
-        await upsertConversation(phone, { step: "model", brand: null, menu: null });
+        await upsertConversation(dealerId, phone, { step: "model", brand: null, menu: null });
         await t.sendText(
           phone,
           "No problem — just type the make and model you're looking for.",
@@ -779,7 +1089,7 @@ export async function handleWhatsappMessage(
     // step === "model"
     const replyId = resolveMenuReply(convo, msg);
     if (replyId === OTHER_VEHICLE_ID) {
-      await upsertConversation(phone, { menu: null });
+      await upsertConversation(dealerId, phone, { menu: null });
       await t.sendText(
         phone,
         "No problem — just type the make and model you're looking for.",
@@ -841,16 +1151,19 @@ export async function handleWhatsappMessage(
  * provider: open lead → timeline note + owner notification; otherwise a lead
  * is created straight from the first message (free text matched against
  * inventory). Mirrors the original Twilio webhook behavior. Never throws.
+ *
+ * dealerId must be passed from the resolved channel — never falls back to
+ * defaultDealerId for Meta inbound messages.
  */
 export async function handleWhatsappOneShot(
   rawTransport: WhatsappTransport,
   msg: InboundWhatsappMessage,
+  dealerId: number,
 ): Promise<void> {
-  const t = recordingTransport(rawTransport);
+  const t = recordingTransport(rawTransport, "AURA WhatsApp Bot", dealerId);
   try {
-    const dealerId = await defaultDealerId();
     // R6.4: STOP/START must always work — even when the bot is paused.
-    const optReply = await handleOptKeyword(msg.from, msg.text);
+    const optReply = await handleOptKeyword(dealerId, msg.from, msg.text);
     if (optReply) {
       await recordWhatsappMessage({
         phone: msg.from,

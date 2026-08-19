@@ -15,6 +15,7 @@ import {
 //      read-only blocks writes (403), elevated still hard-blocks money (403)
 
 const BASE = process.env.API_BASE ?? "http://localhost:80/api";
+const SHARED_FIXTURE_LOCK = "aura-security-validation-shared-fixtures-v1";
 // Dedicated ephemeral GM identity: created at startup as a dealer-2 member
 // with NO dealer-1 membership (the tenant-isolation tests depend on that),
 // deleted again in the finally block. Never reuse a shared demo account here
@@ -78,7 +79,7 @@ async function clearGrants(userEmail: string) {
   );
 }
 
-async function main() {
+async function runSuite() {
   // The impersonation tests need a super admin WITHOUT a real dealer_users
   // membership (a direct membership legitimately bypasses impersonation).
   const superRow = await pool
@@ -435,7 +436,25 @@ async function main() {
     console.log(failures.map((f) => `  - ${f}`).join("\n"));
     process.exitCode = 1;
   }
-  await pool.end();
+}
+
+async function main() {
+  // Completion validation runs suites concurrently. This suite temporarily
+  // suspends dealer 2 and toggles global agent policy while isolation-p5 uses
+  // the same fixtures, so serialize those shared-fixture suites.
+  const lockClient = await pool.connect();
+  await lockClient.query("SELECT pg_advisory_lock(hashtext($1))", [
+    SHARED_FIXTURE_LOCK,
+  ]);
+  try {
+    await runSuite();
+  } finally {
+    await lockClient.query("SELECT pg_advisory_unlock(hashtext($1))", [
+      SHARED_FIXTURE_LOCK,
+    ]);
+    lockClient.release();
+    await pool.end();
+  }
 }
 
 main().catch((err) => {

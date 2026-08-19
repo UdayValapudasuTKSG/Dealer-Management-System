@@ -9,6 +9,7 @@ import {
   Mail,
   Paintbrush,
   Plug,
+  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -81,6 +82,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     href: "/settings/erpnext",
     icon: Plug,
     description: "Connect an ERPNext instance for accounting and inventory sync.",
+    module: "settings",
+  },
+  {
+    name: "WhatsApp",
+    href: "/settings/whatsapp",
+    icon: MessageSquare,
+    description: "Connect your Meta WhatsApp Business account for messaging.",
     module: "settings",
   },
   {

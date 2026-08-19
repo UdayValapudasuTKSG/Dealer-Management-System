@@ -35,7 +35,7 @@ export async function recordWhatsappMessage(opts: {
   }
 }
 
-/** Attach any not-yet-linked messages for this phone to the lead. */
+/** Attach any not-yet-linked messages for this (dealer, phone) to the lead. */
 export async function linkWhatsappMessagesToLead(
   phone: string,
   lead: { id: number; dealerId: number },
@@ -47,6 +47,7 @@ export async function linkWhatsappMessagesToLead(
       .where(
         and(
           eq(whatsappMessagesTable.phone, digits(phone)),
+          eq(whatsappMessagesTable.dealerId, lead.dealerId),
           isNull(whatsappMessagesTable.leadId),
         ),
       );
@@ -58,13 +59,15 @@ export async function linkWhatsappMessagesToLead(
 /**
  * Wrap a transport so every outbound send is also written to the transcript.
  * Recording happens after a successful send only.
+ * dealerId is carried so transcript rows are dealer-scoped.
  */
 export function recordingTransport(
   t: WhatsappTransport,
   actor = "AURA WhatsApp Bot",
+  dealerId?: number | null,
 ): WhatsappTransport {
   const log = (to: string, body: string) =>
-    recordWhatsappMessage({ phone: to, direction: "out", body, actor });
+    recordWhatsappMessage({ phone: to, direction: "out", body, actor, dealerId });
   return {
     interactive: t.interactive,
     sendText: async (to, body) => {
