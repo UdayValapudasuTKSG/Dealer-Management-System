@@ -3,3 +3,14 @@
 
 # No need to store the pnpm store twice.
 .local
+
+# Source/reference material is useful in the workspace but is not used by the
+# production services. Keeping it out of the deployment image avoids oversized
+# layer uploads while runtime assets remain under artifacts/*/public.
+attached_assets
+.agents
+backups
+Dealer_Spec
+docs
+dms_replit_bundle
+exports
