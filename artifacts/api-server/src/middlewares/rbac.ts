@@ -688,19 +688,38 @@ const METHOD_CATEGORY: Record<string, string> = {
   DELETE: "delete",
 };
 
+function isWhatsappReplyPath(req: Pick<Request, "method" | "path">): boolean {
+  return (
+    req.method === "POST" &&
+    /^\/(?:leads|deals)\/\d+\/whatsapp\/?$/.test(req.path)
+  );
+}
+
 // Maps the first path segment after /api to a permission module.
 const PATH_MODULES: Record<string, RouteRule> = {
   vehicles: { module: "inventory" },
   bookings: { module: "inventory" },
   deliveries: { module: "deliveries" },
   "delivery-advisors": { module: "deliveries" },
-  leads: { module: "leads" },
+  leads: {
+    module: "leads",
+    category: (req) =>
+      isWhatsappReplyPath(req)
+        ? "edit"
+        : (METHOD_CATEGORY[req.method] ?? "view"),
+  },
   pipeline: { module: "leads" },
   "test-drives": { module: "leads" },
   customers: { module: "customers" },
   reviews: { module: "customers" },
   cases: { module: "customers" },
-  deals: { module: "deals" },
+  deals: {
+    module: "deals",
+    category: (req) =>
+      isWhatsappReplyPath(req)
+        ? "edit"
+        : (METHOD_CATEGORY[req.method] ?? "view"),
+  },
   appraisals: { module: "appraisals" },
   "finance-applications": { module: "finance" },
   "finance-connector": { module: "finance" },
@@ -827,6 +846,14 @@ const IMPERSONATION_HARD_BLOCKED_SEGMENTS = new Set([
   "enquiries",
 ]);
 
+export function isImpersonationHardBlocked(req: Request): boolean {
+  const segment = req.path.replace(/^\/+/, "").split("/")[0] ?? "";
+  return (
+    IMPERSONATION_HARD_BLOCKED_SEGMENTS.has(segment) ||
+    isWhatsappReplyPath(req)
+  );
+}
+
 export const authorize: RequestHandler = (req, res, next) => {
   const user = res.locals.user;
   if (!user) {
@@ -905,7 +932,7 @@ export const authorize: RequestHandler = (req, res, next) => {
       });
       return;
     }
-    if (IMPERSONATION_HARD_BLOCKED_SEGMENTS.has(segment)) {
+    if (isImpersonationHardBlocked(req)) {
       res.status(403).json({
         error:
           "Money-posting, gate resolution, and customer sends are never permitted while impersonating",

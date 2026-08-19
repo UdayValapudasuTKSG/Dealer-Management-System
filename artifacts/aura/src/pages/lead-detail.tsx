@@ -105,7 +105,10 @@ import {
   CreateRecordDialog,
   type FieldDef,
 } from "@/components/create-record-dialog";
-import { WhatsappPanel } from "@/components/lead/whatsapp-panel";
+import {
+  DealWhatsappPanel,
+  WhatsappPanel,
+} from "@/components/lead/whatsapp-panel";
 import {
   DocumentsCard,
   DocumentPrefillBanner,
@@ -932,6 +935,7 @@ export default function LeadDetail() {
   const { can, isLoading: authLoading } = useAuthz();
   const canEdit = can("leads", "edit");
   const canDeskDeal = can("deals", "create");
+  const canReplyToDeal = can("deals", "edit");
   const canDelete = can("leads", "delete");
   const canFinance = can("finance", "create");
   // Quick finance actions against the lead's linked deal (header CTAs).
@@ -1809,6 +1813,33 @@ export default function LeadDetail() {
                         outstandingBalances={outstandingBalances}
                       />
                     </div>
+                  )}
+
+                  {linkedDeal && (
+                    <section
+                      className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5"
+                      data-testid="deal-detail-whatsapp"
+                    >
+                      <div className="flex items-start gap-3 mb-4">
+                        <span className="w-8 h-8 rounded-full bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+                          <MessageSquare className="w-4 h-4" />
+                        </span>
+                        <div>
+                          <h2 className="text-sm font-semibold tracking-tight">
+                            WhatsApp conversation
+                          </h2>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Deal #{linkedDeal.id} · Message history and replies
+                          </p>
+                        </div>
+                      </div>
+                      <div className="h-[440px] min-h-[340px]">
+                        <DealWhatsappPanel
+                          dealId={linkedDeal.id}
+                          canReply={canReplyToDeal}
+                        />
+                      </div>
+                    </section>
                   )}
 
                   <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-5">

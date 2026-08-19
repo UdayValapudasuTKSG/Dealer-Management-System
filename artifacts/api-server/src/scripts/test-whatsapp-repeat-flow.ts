@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import type {
+  Request as ExpressRequest,
+  Response as ExpressResponse,
+} from "express";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   agentRunsTable,
@@ -23,6 +27,44 @@ import {
   updateWhatsappDeliveryStatus,
 } from "../lib/whatsapp-log";
 import { normalizeWhatsappPhone } from "../lib/whatsapp-phone";
+import {
+  authorize,
+  hasPermission,
+  isImpersonationHardBlocked,
+  routePermission,
+  type AuthedUser,
+} from "../middlewares/rbac";
+
+function checkWhatsappReplyAuthorization(user: AuthedUser): {
+  nextCalled: boolean;
+  statusCode: number | null;
+} {
+  let nextCalled = false;
+  let statusCode: number | null = null;
+  const req = {
+    method: "POST",
+    path: "/deals/42/whatsapp",
+  } as unknown as ExpressRequest;
+  const res = {
+    locals: {
+      user,
+      dealerId: 1,
+      dealerLifecycleStatus: "active",
+      dealerEntitlements: {},
+    },
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json() {
+      return this;
+    },
+  } as unknown as ExpressResponse;
+  authorize(req, res, () => {
+    nextCalled = true;
+  });
+  return { nextCalled, statusCode };
+}
 
 const suffix = String(Date.now()).slice(-6);
 const phone = `5926${suffix}`;
@@ -80,6 +122,54 @@ try {
     "retryable_rejection",
   );
   assert.equal(whatsappSendFailureDisposition(new Error("local")), null);
+  const dealReplyPermission = routePermission({
+    method: "POST",
+    path: "/deals/42/whatsapp",
+  } as unknown as ExpressRequest);
+  assert.deepEqual(dealReplyPermission, { module: "deals", category: "edit" });
+  const editOnlyUser = {
+    dealerId: 1,
+    isSuperAdmin: false,
+    dealers: [],
+    permissions: [{ module: "deals", category: "edit" }],
+  } as unknown as AuthedUser;
+  const createOnlyUser = {
+    dealerId: 1,
+    isSuperAdmin: false,
+    dealers: [],
+    permissions: [{ module: "deals", category: "create" }],
+  } as unknown as AuthedUser;
+  assert.equal(
+    hasPermission(
+      editOnlyUser,
+      dealReplyPermission!.module,
+      dealReplyPermission!.category,
+    ),
+    true,
+  );
+  assert.equal(
+    hasPermission(
+      createOnlyUser,
+      dealReplyPermission!.module,
+      dealReplyPermission!.category,
+    ),
+    false,
+  );
+  assert.equal(
+    isImpersonationHardBlocked({
+      method: "POST",
+      path: "/deals/42/whatsapp",
+    } as unknown as ExpressRequest),
+    true,
+  );
+  assert.deepEqual(checkWhatsappReplyAuthorization(editOnlyUser), {
+    nextCalled: true,
+    statusCode: null,
+  });
+  assert.deepEqual(checkWhatsappReplyAuthorization(createOnlyUser), {
+    nextCalled: false,
+    statusCode: 403,
+  });
 
   const [dealer] = await db
     .insert(dealersTable)
@@ -263,7 +353,7 @@ try {
     ),
   );
 
-  console.log("WhatsApp repeat-customer flow: 21 assertions passed");
+  console.log("WhatsApp repeat-customer flow: 27 assertions passed");
 } finally {
   if (dealerId != null) {
     await db
