@@ -150,6 +150,7 @@ import type {
   HealthStatus,
   ImpersonationGrant,
   ImpersonationRequest,
+  ImportVehiclesParams,
   InventoryBreakdown,
   Invoice,
   InvoiceInput,
@@ -1596,20 +1597,27 @@ export const useRestoreVehicle = <TError = ErrorType<Error>,
       return useMutation(getRestoreVehicleMutationOptions(options));
     }
 
-export const getImportVehiclesUrl = () => {
+export const getImportVehiclesUrl = (params?: ImportVehiclesParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/vehicles/import`
+  return stringifiedParams.length > 0 ? `/api/vehicles/import?${stringifiedParams}` : `/api/vehicles/import`
 }
 
 /**
- * @summary Bulk import vehicles from an Excel (.xlsx) file
+ * @summary Preview or apply a bulk vehicle import from an Excel (.xlsx) file
  */
-export const importVehicles = async ( options?: RequestInit): Promise<VehicleImportResult> => {
+export const importVehicles = async (params?: ImportVehiclesParams, options?: RequestInit): Promise<VehicleImportResult> => {
 
-  return customFetch<VehicleImportResult>(getImportVehiclesUrl(),
+  return customFetch<VehicleImportResult>(getImportVehiclesUrl(params),
   {
     ...options,
     method: 'POST'
@@ -1623,8 +1631,8 @@ export const importVehicles = async ( options?: RequestInit): Promise<VehicleImp
 
 
 export const getImportVehiclesMutationOptions = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importVehicles>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof importVehicles>>, TError,void, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importVehicles>>, TError,{params?: ImportVehiclesParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importVehicles>>, TError,{params?: ImportVehiclesParams}, TContext> => {
 
 const mutationKey = ['importVehicles'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -1636,10 +1644,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importVehicles>>, void> = () => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importVehicles>>, {params?: ImportVehiclesParams}> = (props) => {
+          const {params} = props ?? {};
 
-
-          return  importVehicles(requestOptions)
+          return  importVehicles(params,requestOptions)
         }
 
 
@@ -1654,14 +1662,14 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ImportVehiclesMutationError = ErrorType<Error>
 
     /**
- * @summary Bulk import vehicles from an Excel (.xlsx) file
+ * @summary Preview or apply a bulk vehicle import from an Excel (.xlsx) file
  */
 export const useImportVehicles = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importVehicles>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importVehicles>>, TError,{params?: ImportVehiclesParams}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof importVehicles>>,
         TError,
-        void,
+        {params?: ImportVehiclesParams},
         TContext
       > => {
       return useMutation(getImportVehiclesMutationOptions(options));
@@ -1732,6 +1740,83 @@ export function useDownloadVehicleImportTemplate<TData = Awaited<ReturnType<type
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getDownloadVehicleImportTemplateQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDownloadVehicleInventoryUrl = () => {
+
+
+
+
+  return `/api/vehicles/export`
+}
+
+/**
+ * @summary Download the active dealer's current vehicle inventory as Excel
+ */
+export const downloadVehicleInventory = async ( options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadVehicleInventoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadVehicleInventoryQueryKey = () => {
+    return [
+    `/api/vehicles/export`
+    ] as const;
+    }
+
+
+export const getDownloadVehicleInventoryQueryOptions = <TData = Awaited<ReturnType<typeof downloadVehicleInventory>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadVehicleInventory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadVehicleInventoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadVehicleInventory>>> = ({ signal }) => downloadVehicleInventory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadVehicleInventory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadVehicleInventoryQueryResult = NonNullable<Awaited<ReturnType<typeof downloadVehicleInventory>>>
+export type DownloadVehicleInventoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Download the active dealer's current vehicle inventory as Excel
+ */
+
+export function useDownloadVehicleInventory<TData = Awaited<ReturnType<typeof downloadVehicleInventory>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadVehicleInventory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadVehicleInventoryQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

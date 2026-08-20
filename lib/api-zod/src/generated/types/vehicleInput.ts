@@ -43,6 +43,11 @@ export interface VehicleInput {
   engine?: string;
   transmission?: string;
   price: number;
+  /**
+     * Stored GYD duty-free amount; defaults to zero
+     * @minimum 0
+     */
+  dutyFreeAmount?: number;
   powertrain: VehicleInputPowertrain;
   rangeKm?: number;
   mileageKm: number;

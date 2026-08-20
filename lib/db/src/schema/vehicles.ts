@@ -62,6 +62,7 @@ export const vehiclesTable = pgTable("vehicles", {
   engine: text("engine"),
   transmission: text("transmission"),
   price: doublePrecision("price").notNull(),
+  dutyFreeAmount: doublePrecision("duty_free_amount").notNull().default(0),
   powertrain: text("powertrain").notNull(),
   rangeKm: integer("range_km"),
   mileageKm: integer("mileage_km").notNull(),
@@ -93,6 +94,7 @@ export const vehiclesTable = pgTable("vehicles", {
 
 export const insertVehicleSchema = createInsertSchema(vehiclesTable, {
   status: z.enum(VEHICLE_STATUSES),
+  dutyFreeAmount: z.number().finite().nonnegative(),
   images: z.array(z.string()),
   accessories: z.array(z.string()),
   documents: z.array(vehicleDocumentSchema),

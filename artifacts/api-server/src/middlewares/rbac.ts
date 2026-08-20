@@ -695,9 +695,22 @@ function isWhatsappReplyPath(req: Pick<Request, "method" | "path">): boolean {
   );
 }
 
+/** Returns true when the request is the bulk-import endpoint that performs
+ * its own fine-grained create/edit checks per-row (must be reachable with
+ * inventory:view so the route can run validation in preview mode). */
+function isVehicleImportPath(req: Pick<Request, "method" | "path">): boolean {
+  return req.method === "POST" && /^\/vehicles\/import\/?$/.test(req.path);
+}
+
 // Maps the first path segment after /api to a permission module.
 const PATH_MODULES: Record<string, RouteRule> = {
-  vehicles: { module: "inventory" },
+  vehicles: {
+    module: "inventory",
+    category: (req) =>
+      isVehicleImportPath(req)
+        ? "view" // Import self-checks create/edit per row; RBAC only needs view.
+        : (METHOD_CATEGORY[req.method] ?? "view"),
+  },
   bookings: { module: "inventory" },
   deliveries: { module: "deliveries" },
   "delivery-advisors": { module: "deliveries" },

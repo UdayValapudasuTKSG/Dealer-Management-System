@@ -32,6 +32,11 @@ export interface Vehicle {
   /** @nullable */
   transmission?: string | null;
   price: number;
+  /**
+     * Stored GYD duty-free amount
+     * @minimum 0
+     */
+  dutyFreeAmount: number;
   powertrain: VehiclePowertrain;
   /** @nullable */
   rangeKm?: number | null;

@@ -449,7 +449,16 @@ paths:
     post:
       operationId: importVehicles
       tags: [vehicles]
-      summary: Bulk import vehicles from an Excel (.xlsx) file
+      summary: Preview or apply a bulk vehicle import from an Excel (.xlsx) file
+      parameters:
+        - name: mode
+          in: query
+          required: false
+          description: "Preview validates without writing; apply revalidates and persists valid rows"
+          schema:
+            type: string
+            enum: [preview, apply]
+            default: preview
       requestBody:
         required: true
         description: "multipart/form-data with a single `file` field containing the .xlsx"
@@ -482,6 +491,19 @@ paths:
       responses:
         "200":
           description: XLSX template file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+  /vehicles/export:
+    get:
+      operationId: downloadVehicleInventory
+      tags: [vehicles]
+      summary: Download the active dealer's current vehicle inventory as Excel
+      responses:
+        "200":
+          description: XLSX inventory workbook
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
@@ -8137,7 +8159,7 @@ components:
 
     Vehicle:
       type: object
-      required: [id, make, model, year, price, powertrain, mileageKm, exteriorColor, status, bodyType, featured, createdAt]
+      required: [id, make, model, year, price, dutyFreeAmount, powertrain, mileageKm, exteriorColor, status, bodyType, featured, createdAt]
       properties:
         id: { type: integer }
         divisionId: { type: ["integer", "null"] }
@@ -8152,6 +8174,7 @@ components:
         engine: { type: ["string", "null"] }
         transmission: { type: ["string", "null"] }
         price: { type: number }
+        dutyFreeAmount: { type: number, minimum: 0, default: 0, description: "Stored GYD duty-free amount" }
         powertrain: { type: string, enum: [EV, Hybrid, Petrol, Diesel] }
         rangeKm: { type: ["integer", "null"] }
         mileageKm: { type: integer }
@@ -8213,6 +8236,7 @@ components:
         engine: { type: string, minLength: 17, maxLength: 17, description: "Engine number — exactly 17 characters" }
         transmission: { type: string }
         price: { type: number }
+        dutyFreeAmount: { type: number, minimum: 0, default: 0, description: "Stored GYD duty-free amount; defaults to zero" }
         powertrain: { type: string, enum: [EV, Hybrid, Petrol, Diesel] }
         rangeKm: { type: integer }
         mileageKm: { type: integer }
@@ -8247,6 +8271,7 @@ components:
         engine: { type: string, minLength: 17, maxLength: 17, description: "Engine number — exactly 17 characters" }
         transmission: { type: string }
         price: { type: number }
+        dutyFreeAmount: { type: number, minimum: 0, description: "Stored GYD duty-free amount" }
         powertrain: { type: string, enum: [EV, Hybrid, Petrol, Diesel] }
         rangeKm: { type: integer }
         mileageKm: { type: integer }
@@ -8277,12 +8302,14 @@ components:
         message: { type: string }
     VehicleImportResult:
       type: object
-      required: [total, inserted, updated, skipped, errors]
+      required: [mode, total, inserted, updated, unchanged, skipped, errors]
       properties:
+        mode: { type: string, enum: [preview, apply], description: "Whether the workbook was only validated or also persisted" }
         total: { type: integer, description: "Data rows found in the sheet" }
-        inserted: { type: integer, description: "New vehicles created" }
-        updated: { type: integer, description: "Existing vehicles updated (upsert by dealer + VIN)" }
-        skipped: { type: integer, description: "Rows not applied (validation errors, in-file duplicates, row cap)" }
+        inserted: { type: integer, description: "New vehicles that would be or were created" }
+        updated: { type: integer, description: "Existing vehicles that would be or were updated (Inventory ID first, dealer-scoped VIN fallback)" }
+        unchanged: { type: integer, description: "Existing vehicles whose imported values already match" }
+        skipped: { type: integer, description: "Rejected rows (validation errors, duplicates, unavailable IDs, row cap)" }
         errors:
           type: array
           items:

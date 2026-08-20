@@ -78,7 +78,7 @@ export const FIELD_GROUPS: readonly FieldGroupDef[] = [
     key: "vehicle_pricing",
     label: "Vehicle · Pricing",
     module: "inventory",
-    fields: ["price"],
+    fields: ["price", "dutyFreeAmount"],
     redactable: [],
   },
   {

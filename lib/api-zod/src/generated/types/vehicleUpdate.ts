@@ -39,6 +39,11 @@ export interface VehicleUpdate {
   engine?: string;
   transmission?: string;
   price?: number;
+  /**
+     * Stored GYD duty-free amount
+     * @minimum 0
+     */
+  dutyFreeAmount?: number;
   powertrain?: VehicleUpdatePowertrain;
   rangeKm?: number;
   mileageKm?: number;

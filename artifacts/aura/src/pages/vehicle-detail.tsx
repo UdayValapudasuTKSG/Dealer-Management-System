@@ -242,13 +242,23 @@ export default function VehicleDetailPage() {
             <p className="text-muted-foreground mt-2">{vehicle.trim}</p>
           )}
 
-          <div className="flex items-baseline gap-2 mt-6">
-            <span className="text-3xl font-light tracking-tight">
-              {money.dual(vehicle.price)}
-            </span>
-            <span className="text-xs uppercase tracking-widest text-muted-foreground">
-              OTD est.
-            </span>
+          <div className="flex flex-col gap-1 mt-6">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-light tracking-tight">
+                {money.gyd(vehicle.price)}
+              </span>
+              <span className="text-xs uppercase tracking-widest text-muted-foreground">
+                OTD est.
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-lg font-light tracking-tight text-primary">
+                {money.gyd(vehicle.dutyFreeAmount)}
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-primary/70">
+                Duty-Free
+              </span>
+            </div>
           </div>
 
           {vehicle.description && (

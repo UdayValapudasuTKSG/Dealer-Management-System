@@ -156,6 +156,9 @@ export const ListVehiclesQueryParams = zod.object({
   "includeDeleted": zod.coerce.boolean().optional()
 })
 
+export const listVehiclesResponseDutyFreeAmountDefault = 0;
+export const listVehiclesResponseDutyFreeAmountMin = 0;
+
 
 
 
@@ -174,6 +177,7 @@ export const ListVehiclesResponseItem = zod.object({
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
   "price": zod.number(),
+  "dutyFreeAmount": zod.number().min(listVehiclesResponseDutyFreeAmountMin).default(listVehiclesResponseDutyFreeAmountDefault).describe('Stored GYD duty-free amount'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
@@ -221,6 +225,9 @@ export const createVehicleBodyRegistrationRegExp = new RegExp('^[A-Z]{3}[0-9]{1,
 export const createVehicleBodyEngineMin = 17;
 export const createVehicleBodyEngineMax = 17;
 
+export const createVehicleBodyDutyFreeAmountDefault = 0;
+export const createVehicleBodyDutyFreeAmountMin = 0;
+
 
 
 
@@ -238,6 +245,7 @@ export const CreateVehicleBody = zod.object({
   "engine": zod.string().min(createVehicleBodyEngineMin).max(createVehicleBodyEngineMax).optional().describe('Engine number — exactly 17 characters'),
   "transmission": zod.string().optional(),
   "price": zod.number(),
+  "dutyFreeAmount": zod.number().min(createVehicleBodyDutyFreeAmountMin).default(createVehicleBodyDutyFreeAmountDefault).describe('Stored GYD duty-free amount; defaults to zero'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().optional(),
   "mileageKm": zod.number(),
@@ -254,6 +262,9 @@ export const CreateVehicleBody = zod.object({
   "description": zod.string().optional(),
   "featured": zod.boolean().optional()
 })
+
+export const createVehicleResponseDutyFreeAmountDefault = 0;
+export const createVehicleResponseDutyFreeAmountMin = 0;
 
 
 
@@ -273,6 +284,7 @@ export const CreateVehicleResponse = zod.object({
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
   "price": zod.number(),
+  "dutyFreeAmount": zod.number().min(createVehicleResponseDutyFreeAmountMin).default(createVehicleResponseDutyFreeAmountDefault).describe('Stored GYD duty-free amount'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
@@ -308,6 +320,9 @@ export const GetVehicleParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getVehicleResponseDutyFreeAmountDefault = 0;
+export const getVehicleResponseDutyFreeAmountMin = 0;
+
 
 
 
@@ -326,6 +341,7 @@ export const GetVehicleResponse = zod.object({
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
   "price": zod.number(),
+  "dutyFreeAmount": zod.number().min(getVehicleResponseDutyFreeAmountMin).default(getVehicleResponseDutyFreeAmountDefault).describe('Stored GYD duty-free amount'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
@@ -373,6 +389,8 @@ export const updateVehicleBodyRegistrationRegExp = new RegExp('^[A-Z]{3}[0-9]{1,
 export const updateVehicleBodyEngineMin = 17;
 export const updateVehicleBodyEngineMax = 17;
 
+export const updateVehicleBodyDutyFreeAmountMin = 0;
+
 
 
 
@@ -390,6 +408,7 @@ export const UpdateVehicleBody = zod.object({
   "engine": zod.string().min(updateVehicleBodyEngineMin).max(updateVehicleBodyEngineMax).optional().describe('Engine number — exactly 17 characters'),
   "transmission": zod.string().optional(),
   "price": zod.number().optional(),
+  "dutyFreeAmount": zod.number().min(updateVehicleBodyDutyFreeAmountMin).optional().describe('Stored GYD duty-free amount'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']).optional(),
   "rangeKm": zod.number().optional(),
   "mileageKm": zod.number().optional(),
@@ -409,6 +428,9 @@ export const UpdateVehicleBody = zod.object({
   "featured": zod.boolean().optional()
 })
 
+export const updateVehicleResponseDutyFreeAmountDefault = 0;
+export const updateVehicleResponseDutyFreeAmountMin = 0;
+
 
 
 
@@ -427,6 +449,7 @@ export const UpdateVehicleResponse = zod.object({
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
   "price": zod.number(),
+  "dutyFreeAmount": zod.number().min(updateVehicleResponseDutyFreeAmountMin).default(updateVehicleResponseDutyFreeAmountDefault).describe('Stored GYD duty-free amount'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
@@ -472,6 +495,9 @@ export const RestoreVehicleParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const restoreVehicleResponseDutyFreeAmountDefault = 0;
+export const restoreVehicleResponseDutyFreeAmountMin = 0;
+
 
 
 
@@ -490,6 +516,7 @@ export const RestoreVehicleResponse = zod.object({
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
   "price": zod.number(),
+  "dutyFreeAmount": zod.number().min(restoreVehicleResponseDutyFreeAmountMin).default(restoreVehicleResponseDutyFreeAmountDefault).describe('Stored GYD duty-free amount'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
@@ -522,13 +549,21 @@ export const RestoreVehicleResponse = zod.object({
 
 
 /**
- * @summary Bulk import vehicles from an Excel (.xlsx) file
+ * @summary Preview or apply a bulk vehicle import from an Excel (.xlsx) file
  */
+export const importVehiclesQueryModeDefault = `preview`;
+
+export const ImportVehiclesQueryParams = zod.object({
+  "mode": zod.enum(['preview', 'apply']).default(importVehiclesQueryModeDefault).describe('Preview validates without writing; apply revalidates and persists valid rows')
+})
+
 export const ImportVehiclesResponse = zod.object({
+  "mode": zod.enum(['preview', 'apply']).describe('Whether the workbook was only validated or also persisted'),
   "total": zod.number().describe('Data rows found in the sheet'),
-  "inserted": zod.number().describe('New vehicles created'),
-  "updated": zod.number().describe('Existing vehicles updated (upsert by dealer + VIN)'),
-  "skipped": zod.number().describe('Rows not applied (validation errors, in-file duplicates, row cap)'),
+  "inserted": zod.number().describe('New vehicles that would be or were created'),
+  "updated": zod.number().describe('Existing vehicles that would be or were updated (Inventory ID first, dealer-scoped VIN fallback)'),
+  "unchanged": zod.number().describe('Existing vehicles whose imported values already match'),
+  "skipped": zod.number().describe('Rejected rows (validation errors, duplicates, unavailable IDs, row cap)'),
   "errors": zod.array(zod.object({
   "row": zod.number().describe('Spreadsheet row number (1-based, including header)'),
   "field": zod.string().nullish().describe('Offending field, when attributable'),
@@ -541,6 +576,12 @@ export const ImportVehiclesResponse = zod.object({
  * @summary Download the Excel import template
  */
 export const DownloadVehicleImportTemplateResponse = zod.unknown()
+
+
+/**
+ * @summary Download the active dealer's current vehicle inventory as Excel
+ */
+export const DownloadVehicleInventoryResponse = zod.unknown()
 
 
 /**
@@ -6338,7 +6379,13 @@ export const GetCustomerOverviewParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getCustomerOverviewResponsePersonaOneAiRecommendedVehicleOneDutyFreeAmountDefault = 0;
+export const getCustomerOverviewResponsePersonaOneAiRecommendedVehicleOneDutyFreeAmountMin = 0;
 
+
+
+export const getCustomerOverviewResponseOwnedVehiclesItemDutyFreeAmountDefault = 0;
+export const getCustomerOverviewResponseOwnedVehiclesItemDutyFreeAmountMin = 0;
 
 
 
@@ -6456,6 +6503,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
   "price": zod.number(),
+  "dutyFreeAmount": zod.number().min(getCustomerOverviewResponsePersonaOneAiRecommendedVehicleOneDutyFreeAmountMin).default(getCustomerOverviewResponsePersonaOneAiRecommendedVehicleOneDutyFreeAmountDefault).describe('Stored GYD duty-free amount'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
@@ -6519,6 +6567,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
   "price": zod.number(),
+  "dutyFreeAmount": zod.number().min(getCustomerOverviewResponseOwnedVehiclesItemDutyFreeAmountMin).default(getCustomerOverviewResponseOwnedVehiclesItemDutyFreeAmountDefault).describe('Stored GYD duty-free amount'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
@@ -6940,6 +6989,9 @@ export const GetCustomerPersonaParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountDefault = 0;
+export const getCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountMin = 0;
+
 
 
 
@@ -6979,6 +7031,7 @@ export const GetCustomerPersonaResponse = zod.object({
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
   "price": zod.number(),
+  "dutyFreeAmount": zod.number().min(getCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountMin).default(getCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountDefault).describe('Stored GYD duty-free amount'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
@@ -7039,6 +7092,9 @@ export const UpsertCustomerPersonaBody = zod.object({
   "marketingConsent": zod.boolean().nullish()
 })
 
+export const upsertCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountDefault = 0;
+export const upsertCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountMin = 0;
+
 
 
 
@@ -7078,6 +7134,7 @@ export const UpsertCustomerPersonaResponse = zod.object({
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
   "price": zod.number(),
+  "dutyFreeAmount": zod.number().min(upsertCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountMin).default(upsertCustomerPersonaResponseAiRecommendedVehicleOneDutyFreeAmountDefault).describe('Stored GYD duty-free amount'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),
@@ -7119,6 +7176,9 @@ export const RecommendCustomerVehicleParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const recommendCustomerVehicleResponseAiRecommendedVehicleOneDutyFreeAmountDefault = 0;
+export const recommendCustomerVehicleResponseAiRecommendedVehicleOneDutyFreeAmountMin = 0;
+
 
 
 
@@ -7158,6 +7218,7 @@ export const RecommendCustomerVehicleResponse = zod.object({
   "engine": zod.string().nullish(),
   "transmission": zod.string().nullish(),
   "price": zod.number(),
+  "dutyFreeAmount": zod.number().min(recommendCustomerVehicleResponseAiRecommendedVehicleOneDutyFreeAmountMin).default(recommendCustomerVehicleResponseAiRecommendedVehicleOneDutyFreeAmountDefault).describe('Stored GYD duty-free amount'),
   "powertrain": zod.enum(['EV', 'Hybrid', 'Petrol', 'Diesel']),
   "rangeKm": zod.number().nullish(),
   "mileageKm": zod.number(),

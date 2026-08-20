@@ -6,15 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { VehicleImportError } from './vehicleImportError';
+import type { VehicleImportResultMode } from './vehicleImportResultMode';
 
 export interface VehicleImportResult {
+  /** Whether the workbook was only validated or also persisted */
+  mode: VehicleImportResultMode;
   /** Data rows found in the sheet */
   total: number;
-  /** New vehicles created */
+  /** New vehicles that would be or were created */
   inserted: number;
-  /** Existing vehicles updated (upsert by dealer + VIN) */
+  /** Existing vehicles that would be or were updated (Inventory ID first, dealer-scoped VIN fallback) */
   updated: number;
-  /** Rows not applied (validation errors, in-file duplicates, row cap) */
+  /** Existing vehicles whose imported values already match */
+  unchanged: number;
+  /** Rejected rows (validation errors, duplicates, unavailable IDs, row cap) */
   skipped: number;
   errors: VehicleImportError[];
 }

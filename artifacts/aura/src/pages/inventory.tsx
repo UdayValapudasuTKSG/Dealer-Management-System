@@ -11,7 +11,11 @@ import {
   getListVehiclesQueryKey,
   getListBookingsQueryKey,
 } from "@workspace/api-client-react";
-import type { Vehicle, Division } from "@workspace/api-client-react";
+import type {
+  Vehicle,
+  Division,
+  VehicleInput,
+} from "@workspace/api-client-react";
 import { CreateRecordDialog, type FieldDef } from "@/components/create-record-dialog";
 import { ImportVehiclesDialog } from "@/components/inventory/import-vehicles-dialog";
 import { Button } from "@/components/ui/button";
@@ -65,6 +69,7 @@ import {
   Plus,
   X,
   ImagePlus,
+  Download,
 } from "lucide-react";
 import { useUpload } from "@workspace/object-storage-web";
 import { motion, AnimatePresence } from "framer-motion";
@@ -160,6 +165,56 @@ function vehicleIdentifierError(values: Record<string, unknown>): string | null 
   return null;
 }
 
+function toVehicleInput(values: Record<string, unknown>): VehicleInput {
+  const optionalString = (name: string) => {
+    const value = values[name];
+    return value == null || String(value).trim() === ""
+      ? undefined
+      : String(value).trim();
+  };
+  const optionalNumber = (name: string) => {
+    const value = values[name];
+    return value == null || value === "" ? undefined : Number(value);
+  };
+  const status = optionalString("status");
+
+  return {
+    make: String(values.make ?? "").trim(),
+    model: String(values.model ?? "").trim(),
+    year: Number(values.year),
+    price: Number(values.price),
+    dutyFreeAmount: optionalNumber("dutyFreeAmount") ?? 0,
+    powertrain: String(values.powertrain) as VehicleInput["powertrain"],
+    mileageKm: Number(values.mileageKm),
+    exteriorColor: String(values.exteriorColor ?? "").trim(),
+    bodyType: String(values.bodyType ?? "").trim(),
+    ...(optionalNumber("divisionId") != null
+      ? { divisionId: optionalNumber("divisionId") }
+      : {}),
+    ...(optionalString("trim") ? { trim: optionalString("trim") } : {}),
+    ...(optionalString("vin") ? { vin: optionalString("vin") } : {}),
+    ...(optionalString("engineNumber")
+      ? { engineNumber: optionalString("engineNumber") }
+      : {}),
+    ...(optionalString("registration")
+      ? { registration: optionalString("registration") }
+      : {}),
+    ...(optionalString("engine") ? { engine: optionalString("engine") } : {}),
+    ...(optionalString("transmission")
+      ? { transmission: optionalString("transmission") }
+      : {}),
+    ...(optionalNumber("rangeKm") != null
+      ? { rangeKm: optionalNumber("rangeKm") }
+      : {}),
+    ...(status
+      ? { status: status as VehicleInput["status"] }
+      : {}),
+    ...(optionalString("imageUrl")
+      ? { imageUrl: optionalString("imageUrl") }
+      : {}),
+  };
+}
+
 function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
   const bodyOptions = Array.from(
     new Set([...BODY_TYPES, ...(existing?.bodyType ? [existing.bodyType] : [])]),
@@ -199,7 +254,8 @@ function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
       : []),
     { name: "engineNumber", label: "Engine Number (17 characters)", type: "text", span: "half", placeholder: "ENG1234567890ABCD", defaultValue: existing?.engineNumber ?? undefined, validate: (v) => (v.length === 17 ? null : "Engine number must be exactly 17 characters") },
     { name: "registration", label: "Registration (e.g. PAB1234)", type: "text", span: "half", placeholder: "PAB1234", defaultValue: existing?.registration ?? undefined, validate: (v) => (/^[A-Z]{3}[0-9]{1,4}$/.test(v) ? null : "Format: 3 letters + 1–4 digits, e.g. PAB1234") },
-    { name: "price", label: "Price ($)", type: "number", required: true, span: "half", placeholder: "125000", defaultValue: existing ? String(existing.price) : undefined },
+    { name: "price", label: "Price (GYD)", type: "number", required: true, span: "half", placeholder: "25000000", defaultValue: existing ? String(existing.price) : undefined },
+    { name: "dutyFreeAmount", label: "Duty-free amount (GYD)", type: "number", span: "half", placeholder: "0", defaultValue: existing?.dutyFreeAmount != null ? String(existing.dutyFreeAmount) : "0", validate: (v) => (!v || Number(v) >= 0 ? null : "Must be non-negative") },
     {
       name: "powertrain",
       label: "Powertrain",
@@ -244,7 +300,6 @@ export default function Inventory() {
   const { data: vehicles, isLoading } = useListVehicles();
   const { data: divisions } = useListDivisions();
   const { can } = useAuthz();
-  const { gyd } = useMoney();
   const qc = useQueryClient();
   const { toast } = useToast();
   const createVehicle = useCreateVehicle();
@@ -330,9 +385,10 @@ export default function Inventory() {
       });
       throw new Error(idError);
     }
-    if (values.divisionId != null) values.divisionId = Number(values.divisionId);
     try {
-      const created = await createVehicle.mutateAsync({ data: values as never });
+      const created = await createVehicle.mutateAsync({
+        data: toVehicleInput(values),
+      });
       qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
       toast({
         title: "Vehicle added",
@@ -472,35 +528,47 @@ export default function Inventory() {
               density={density}
               onDensityChange={setDensity}
             />
-          {can("inventory", "create") && (
-            <div className="flex flex-wrap items-center gap-3">
-            <ImportVehiclesDialog
-              trigger={
-                <Button
-                  variant="outline"
-                  className="rounded-full px-6 h-12 gap-2 font-medium tracking-wide border-white/15 bg-foreground/[0.03] hover:bg-foreground/[0.07]"
-                >
-                  <FileSpreadsheet className="w-5 h-5 text-primary" />
-                  Import Excel
-                </Button>
-              }
-            />
-            <CreateRecordDialog
-              title="Add Vehicle"
-              description="Add a new car to the showroom inventory."
-              pending={createVehicle.isPending}
-              submitLabel="Add to inventory"
-              trigger={
-                <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
-                  <Plus className="w-5 h-5" />
-                  Add Vehicle
-                </Button>
-              }
-              fields={vehicleFields(undefined, divisions)}
-              onSubmit={submitVehicle}
-            />
-            </div>
-          )}
+            {can("inventory", "view") && (
+              <a
+                href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/vehicles/export`}
+                download="aura-current-inventory.xlsx"
+                className="inline-flex items-center justify-center rounded-full px-6 h-12 gap-2 font-medium tracking-wide border border-white/15 bg-foreground/[0.03] hover:bg-foreground/[0.07] transition-colors text-sm"
+              >
+                <Download className="w-5 h-5 text-primary" />
+                Download Excel
+              </a>
+            )}
+            {(can("inventory", "create") || can("inventory", "edit")) && (
+              <div className="flex flex-wrap items-center gap-3">
+                <ImportVehiclesDialog
+                  trigger={
+                    <Button
+                      variant="outline"
+                      className="rounded-full px-6 h-12 gap-2 font-medium tracking-wide border-white/15 bg-foreground/[0.03] hover:bg-foreground/[0.07]"
+                    >
+                      <FileSpreadsheet className="w-5 h-5 text-primary" />
+                      Import / update
+                    </Button>
+                  }
+                />
+                {can("inventory", "create") && (
+                  <CreateRecordDialog
+                    title="Add Vehicle"
+                    description="Add a new car to the showroom inventory."
+                    pending={createVehicle.isPending}
+                    submitLabel="Add to inventory"
+                    trigger={
+                      <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2 font-medium tracking-wide">
+                        <Plus className="w-5 h-5" />
+                        Add Vehicle
+                      </Button>
+                    }
+                    fields={vehicleFields(undefined, divisions)}
+                    onSubmit={submitVehicle}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -526,6 +594,9 @@ export default function Inventory() {
                   <th className="px-4 py-3 font-semibold hidden md:table-cell">Body</th>
                   <th className="px-4 py-3 font-semibold hidden lg:table-cell">Colour</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold text-right hidden xl:table-cell">
+                    Duty-free
+                  </th>
                   <th className="px-4 py-3 font-semibold text-right">Price</th>
                 </tr>
               </thead>
@@ -538,6 +609,9 @@ export default function Inventory() {
                   ).length;
                   const colours = new Set(
                     g.units.map((u) => u.exteriorColor).filter(Boolean),
+                  );
+                  const dutyFreeAmounts = new Set(
+                    g.units.map((u) => u.dutyFreeAmount),
                   );
                   return (
                     <tr
@@ -581,6 +655,11 @@ export default function Inventory() {
                             {vehicle.status.replace(/_/g, " ")}
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-muted-foreground hidden xl:table-cell">
+                        {dutyFreeAmounts.size > 1
+                          ? "Varies"
+                          : money.gyd(vehicle.dutyFreeAmount)}
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums font-semibold">
                         {money.gyd(vehicle.price)}
@@ -689,8 +768,13 @@ export default function Inventory() {
                     <span className="shrink-0 rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[11px] font-semibold capitalize">
                       {u.status.replace(/_/g, " ")}
                     </span>
-                    <span className="shrink-0 tabular-nums font-semibold text-sm">
-                      {money.gyd(u.price)}
+                    <span className="shrink-0 text-right">
+                      <span className="block tabular-nums font-semibold text-sm">
+                        {money.gyd(u.price)}
+                      </span>
+                      <span className="block tabular-nums text-[10px] text-muted-foreground">
+                        Duty-free {money.gyd(u.dutyFreeAmount)}
+                      </span>
                     </span>
                     <ArrowRight className="shrink-0 w-4 h-4 text-muted-foreground" />
                   </button>
@@ -867,7 +951,6 @@ function VehicleDetail({
   const [, navigate] = useLocation();
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { gyd, usd } = useMoney();
   const updateVehicle = useUpdateVehicle();
   const { uploadFile } = useUpload();
 
@@ -1095,13 +1178,23 @@ function VehicleDetail({
                 <p className="text-muted-foreground mt-2">{vehicle.trim}</p>
               )}
 
-              <div className="flex items-baseline gap-2 mt-6">
-                <span className="text-3xl font-light tracking-tight">
-                  {money.dual(vehicle.price)}
-                </span>
-                <span className="text-xs uppercase tracking-widest text-muted-foreground">
-                  {usd(vehicle.price)} OTD est.
-                </span>
+              <div className="flex flex-col gap-1 mt-6">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-light tracking-tight">
+                    {money.gyd(vehicle.price)}
+                  </span>
+                  <span className="text-xs uppercase tracking-widest text-muted-foreground">
+                    OTD est.
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-lg font-light tracking-tight text-primary">
+                    {money.gyd(vehicle.dutyFreeAmount)}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-primary/70">
+                    Duty-Free
+                  </span>
+                </div>
               </div>
 
               {vehicle.description && (
@@ -1219,12 +1312,10 @@ function VehicleDetail({
                         });
                         throw new Error(idError);
                       }
-                      if (values.divisionId != null)
-                        values.divisionId = Number(values.divisionId);
                       try {
                         const updated = await updateVehicle.mutateAsync({
                           id: vehicle.id,
-                          data: values as never,
+                          data: toVehicleInput(values),
                         });
                         qc.invalidateQueries({
                           queryKey: getListVehiclesQueryKey(),

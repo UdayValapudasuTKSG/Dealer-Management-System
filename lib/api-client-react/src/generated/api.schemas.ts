@@ -1083,6 +1083,11 @@ export interface Vehicle {
   /** @nullable */
   transmission?: string | null;
   price: number;
+  /**
+     * Stored GYD duty-free amount
+     * @minimum 0
+     */
+  dutyFreeAmount: number;
   powertrain: VehiclePowertrain;
   /** @nullable */
   rangeKm?: number | null;
@@ -1174,6 +1179,11 @@ export interface VehicleInput {
   engine?: string;
   transmission?: string;
   price: number;
+  /**
+     * Stored GYD duty-free amount; defaults to zero
+     * @minimum 0
+     */
+  dutyFreeAmount?: number;
   powertrain: VehicleInputPowertrain;
   rangeKm?: number;
   mileageKm: number;
@@ -1242,6 +1252,11 @@ export interface VehicleUpdate {
   engine?: string;
   transmission?: string;
   price?: number;
+  /**
+     * Stored GYD duty-free amount
+     * @minimum 0
+     */
+  dutyFreeAmount?: number;
   powertrain?: VehicleUpdatePowertrain;
   rangeKm?: number;
   mileageKm?: number;
@@ -1269,14 +1284,29 @@ export interface VehicleImportError {
   message: string;
 }
 
+/**
+ * Whether the workbook was only validated or also persisted
+ */
+export type VehicleImportResultMode = typeof VehicleImportResultMode[keyof typeof VehicleImportResultMode];
+
+
+export const VehicleImportResultMode = {
+  preview: 'preview',
+  apply: 'apply',
+} as const;
+
 export interface VehicleImportResult {
+  /** Whether the workbook was only validated or also persisted */
+  mode: VehicleImportResultMode;
   /** Data rows found in the sheet */
   total: number;
-  /** New vehicles created */
+  /** New vehicles that would be or were created */
   inserted: number;
-  /** Existing vehicles updated (upsert by dealer + VIN) */
+  /** Existing vehicles that would be or were updated (Inventory ID first, dealer-scoped VIN fallback) */
   updated: number;
-  /** Rows not applied (validation errors, in-file duplicates, row cap) */
+  /** Existing vehicles whose imported values already match */
+  unchanged: number;
+  /** Rejected rows (validation errors, duplicates, unavailable IDs, row cap) */
   skipped: number;
   errors: VehicleImportError[];
 }
@@ -6616,6 +6646,21 @@ powertrain?: string;
 search?: string;
 includeDeleted?: boolean;
 };
+
+export type ImportVehiclesParams = {
+/**
+ * Preview validates without writing; apply revalidates and persists valid rows
+ */
+mode?: ImportVehiclesMode;
+};
+
+export type ImportVehiclesMode = typeof ImportVehiclesMode[keyof typeof ImportVehiclesMode];
+
+
+export const ImportVehiclesMode = {
+  preview: 'preview',
+  apply: 'apply',
+} as const;
 
 export type ListBookingsParams = {
 status?: string;

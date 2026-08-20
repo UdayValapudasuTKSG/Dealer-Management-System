@@ -25,9 +25,11 @@ import {
 const apiBase = () => `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
 
 type ImportResult = {
+  mode: "preview" | "apply";
   total: number;
   inserted: number;
   updated: number;
+  unchanged: number;
   skipped: number;
   errors: { row: number; field?: string | null; message: string }[];
 };
@@ -64,13 +66,21 @@ export function ImportVehiclesDialog({ trigger }: { trigger: React.ReactNode }) 
     setFile(f);
   };
 
-  const onImport = async () => {
+  const onImport = async (mode: "preview" | "apply") => {
     if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Maximum file size is 10 MB.",
+        variant: "destructive",
+      });
+      return;
+    }
     setUploading(true);
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`${apiBase()}/vehicles/import`, {
+      const res = await fetch(`${apiBase()}/vehicles/import?mode=${mode}`, {
         method: "POST",
         body: form,
         credentials: "include",
@@ -79,21 +89,29 @@ export function ImportVehiclesDialog({ trigger }: { trigger: React.ReactNode }) 
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error ?? `Import failed (${res.status})`);
       }
-      const summary = (await res.json()) as ImportResult;
+      const summary = (await res.json()) as ImportResult & { mode?: string };
       setResult(summary);
-      const applied = summary.inserted + summary.updated;
-      if (applied > 0) {
-        qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
-        toast({
-          title: "Inventory imported",
-          description: `${summary.inserted} added, ${summary.updated} updated of ${summary.total} row${summary.total === 1 ? "" : "s"}.`,
-        });
-      } else {
-        toast({
-          title: "Nothing imported",
-          description: "No rows passed validation — review the issues listed in the dialog.",
-          variant: "destructive",
-        });
+
+      if (mode === "apply") {
+        const applied = summary.inserted + summary.updated;
+        if (applied > 0) {
+          qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
+          toast({
+            title: "Inventory imported",
+            description: `${summary.inserted} added, ${summary.updated} updated, ${summary.unchanged} unchanged.`,
+          });
+        } else if (summary.unchanged > 0 && summary.skipped === 0) {
+          toast({
+            title: "Inventory already up to date",
+            description: `${summary.unchanged} row${summary.unchanged === 1 ? "" : "s"} matched without changes.`,
+          });
+        } else {
+          toast({
+            title: "No changes applied",
+            description: "Review the rejected rows before trying again.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (err) {
       toast({
@@ -119,7 +137,9 @@ export function ImportVehiclesDialog({ trigger }: { trigger: React.ReactNode }) 
         <DialogHeader>
           <DialogTitle className="text-xl tracking-tight">Import inventory from Excel</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Upload an .xlsx stock sheet — each row becomes a vehicle in the showroom.
+            Upload an .xlsx stock sheet to add vehicles or update existing stock.
+            Keep exported Inventory IDs unchanged; a blank ID uses VIN matching or creates a new vehicle.
+            (Max 1,000 rows, 10 MB).
           </DialogDescription>
         </DialogHeader>
 
@@ -190,24 +210,24 @@ export function ImportVehiclesDialog({ trigger }: { trigger: React.ReactNode }) 
         )}
 
         {result && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-4 rounded-xl bg-foreground/[0.03] border border-white/10 px-4 py-3 text-sm">
+          <div className="space-y-3" aria-live="polite">
+            <div className="flex flex-wrap items-center gap-4 rounded-xl bg-foreground/[0.03] border border-white/10 px-4 py-3 text-sm">
               <span className="flex items-center gap-1.5 text-emerald-400">
                 <CheckCircle2 className="w-4 h-4" />
-                {result.inserted} added
+                {result.inserted} {result.mode === "preview" ? "will be added" : "added"}
               </span>
-              {result.updated > 0 && (
-                <span className="flex items-center gap-1.5 text-sky-400">
-                  <CheckCircle2 className="w-4 h-4" />
-                  {result.updated} updated
-                </span>
-              )}
-              {result.skipped > 0 && (
-                <span className="flex items-center gap-1.5 text-amber-400">
-                  <AlertTriangle className="w-4 h-4" />
-                  {result.skipped} skipped
-                </span>
-              )}
+              <span className="flex items-center gap-1.5 text-sky-400">
+                <CheckCircle2 className="w-4 h-4" />
+                {result.updated} {result.mode === "preview" ? "will be updated" : "updated"}
+              </span>
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <CheckCircle2 className="w-4 h-4" />
+                {result.unchanged} unchanged
+              </span>
+              <span className="flex items-center gap-1.5 text-amber-400">
+                <AlertTriangle className="w-4 h-4" />
+                {result.skipped} {result.mode === "preview" ? "will be rejected" : "rejected"}
+              </span>
               <span className="text-muted-foreground ml-auto">{result.total} rows</span>
             </div>
             {result.errors.length > 0 && (
@@ -226,30 +246,53 @@ export function ImportVehiclesDialog({ trigger }: { trigger: React.ReactNode }) 
           </div>
         )}
 
-        <DialogFooter>
-          {result ? (
+        <DialogFooter className="mt-4 flex-row justify-end gap-2">
+          {result?.mode === "preview" ? (
+            <>
+              <Button
+                onClick={reset}
+                variant="outline"
+                className="rounded-full px-6 border-white/15 mr-auto"
+                disabled={uploading}
+              >
+                Choose a different file
+              </Button>
+              <Button
+                onClick={() => onImport("apply")}
+                disabled={uploading || result.inserted + result.updated === 0}
+                className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
+              >
+                {uploading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                Confirm and apply
+              </Button>
+            </>
+          ) : result?.mode === "apply" ? (
             <Button
               onClick={reset}
               variant="outline"
               className="rounded-full px-6 border-white/15"
             >
-              Import another file
+              Start over
             </Button>
           ) : (
             <Button
-              onClick={onImport}
+              onClick={() => onImport("preview")}
               disabled={!file || uploading}
               className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
             >
               {uploading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Importing…
+                  Previewing…
                 </>
               ) : (
                 <>
                   <Upload className="w-4 h-4" />
-                  Import vehicles
+                  Preview import
                 </>
               )}
             </Button>
