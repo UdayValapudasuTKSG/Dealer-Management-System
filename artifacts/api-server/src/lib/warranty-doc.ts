@@ -12,6 +12,7 @@ import {
 } from "@workspace/db";
 import { getDealerPdfBranding } from "./dealer-branding";
 import { buildWarrantyPdf } from "./warranty-pdf";
+import { resolveDeliveryOwnerContact } from "./delivery-owner-contact";
 
 /**
  * Assembles the autofilled BYD warranty booklet for a delivery. Shared by the
@@ -73,6 +74,7 @@ export async function buildWarrantyBookletForDelivery(
           name: customersTable.name,
           email: customersTable.email,
           phone: customersTable.phone,
+          address: customersTable.address,
           location: customersTable.location,
           city: customersTable.city,
           country: customersTable.country,
@@ -98,7 +100,7 @@ export async function buildWarrantyBookletForDelivery(
     .where(eq(dealersTable.id, delivery.dealerId));
   // Lead fallback for owner contact details — many deals carry only a lead.
   const [lead] =
-    !customer && warrantyLeadId
+    warrantyLeadId
       ? await db
           .select({
             name: leadsTable.name,
@@ -156,14 +158,11 @@ export async function buildWarrantyBookletForDelivery(
           day: "numeric",
         })
       : null;
-  const address =
-    customer?.location ??
-    ([customer?.city, customer?.country].filter(Boolean).join(", ") || null) ??
-    lead?.address ??
-    null;
-  const ownerPhone = customer?.phone ?? lead?.phone ?? null;
+  const ownerContact = resolveDeliveryOwnerContact(customer, lead);
+  const address = ownerContact.address;
+  const ownerPhone = ownerContact.phone;
   const ownerName = customer?.name ?? delivery.customerName ?? lead?.name ?? null;
-  const ownerEmail = customer?.email ?? lead?.email ?? null;
+  const ownerEmail = ownerContact.email;
   const pdf = await buildWarrantyPdf({
     ownerName,
     ownerEmail,

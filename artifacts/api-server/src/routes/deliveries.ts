@@ -60,6 +60,7 @@ import {
 } from "../lib/handover-verify";
 import { buildHandoverPdf } from "../lib/document-pdfs";
 import { buildWarrantyBookletForDelivery } from "../lib/warranty-doc";
+import { resolveDeliveryOwnerContact } from "../lib/delivery-owner-contact";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import {
   onDealStageChanged,
@@ -1511,6 +1512,7 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
   const [deal] = await db
     .select({
       salesAdvisor: dealsTable.salesAdvisor,
+      customerId: dealsTable.customerId,
       leadId: dealsTable.leadId,
     })
     .from(dealsTable)
@@ -1520,11 +1522,14 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
         eq(dealsTable.dealerId, delivery.dealerId),
       ),
     );
-  const [customer] = delivery.customerId
+  const handoverCustomerId = delivery.customerId ?? deal?.customerId ?? null;
+  const [customer] = handoverCustomerId
     ? await db
         .select({
+          name: customersTable.name,
           email: customersTable.email,
           phone: customersTable.phone,
+          address: customersTable.address,
           location: customersTable.location,
           city: customersTable.city,
           country: customersTable.country,
@@ -1532,11 +1537,28 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
         .from(customersTable)
         .where(
           and(
-            eq(customersTable.id, delivery.customerId),
+            eq(customersTable.id, handoverCustomerId),
             eq(customersTable.dealerId, delivery.dealerId),
           ),
         )
     : [];
+  const [lead] = deal?.leadId
+    ? await db
+        .select({
+          name: leadsTable.name,
+          email: leadsTable.email,
+          phone: leadsTable.phone,
+          address: leadsTable.address,
+        })
+        .from(leadsTable)
+        .where(
+          and(
+            eq(leadsTable.id, deal.leadId),
+            eq(leadsTable.dealerId, delivery.dealerId),
+          ),
+        )
+    : [];
+  const ownerContact = resolveDeliveryOwnerContact(customer, lead);
   const [dealer] = await db
     .select({
       name: dealersTable.name,
@@ -1564,12 +1586,9 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
     dealerName: handoverBranding.displayName ?? dealer?.name ?? null,
     logo: handoverBranding.logo,
     dealerAddress: [dealer?.city, dealer?.country].filter(Boolean).join(", "),
-    customerAddress:
-      customer?.location ??
-      [customer?.city, customer?.country].filter(Boolean).join(", ") ??
-      null,
-    customerEmail: customer?.email ?? null,
-    customerPhone: customer?.phone ?? null,
+    customerAddress: ownerContact.address,
+    customerEmail: ownerContact.email,
+    customerPhone: ownerContact.phone,
     invoiceNumber,
     overrides: delivery.handoverOverrides ?? {},
   });

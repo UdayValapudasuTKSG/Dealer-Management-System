@@ -9,6 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify:lead-call-sla": "tsx src/scripts/test-lead-call-sla.ts",
+    "verify:delivery-owner-contact": "tsx src/scripts/test-delivery-owner-contact.ts",
     "verify:erpnext-entities": "tsx src/scripts/verify-erpnext-entity-sync.ts"
   },
   "dependencies": {
