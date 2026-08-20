@@ -186,6 +186,10 @@ import {
   scheduleCadenceAfterCall,
   completeCadenceTasks,
 } from "../lib/call-cadence";
+import {
+  markLeadContactFromCall,
+  withEffectiveContactDates,
+} from "../lib/lead-contact";
 
 const router: IRouter = Router();
 
@@ -236,7 +240,8 @@ router.get("/leads", async (req, res): Promise<void> => {
     return;
   }
 
-  const filters: SQL[] = [eq(leadsTable.dealerId, activeDealerId(res))];
+  const dealerId = activeDealerId(res);
+  const filters: SQL[] = [eq(leadsTable.dealerId, dealerId)];
   // Soft delete (R4.8): default reads exclude deleted rows.
   if (!query.data.includeDeleted) filters.push(isNull(leadsTable.deletedAt));
   if (query.data.divisionId)
@@ -257,7 +262,8 @@ router.get("/leads", async (req, res): Promise<void> => {
     .where(filters.length ? and(...filters) : undefined)
     .orderBy(desc(leadsTable.aiScore), desc(leadsTable.createdAt));
 
-  const visible = await redactHiddenFields(user, "leads", rows);
+  const effectiveRows = await withEffectiveContactDates(dealerId, rows);
+  const visible = await redactHiddenFields(user, "leads", effectiveRows);
   res.json(ListLeadsResponse.parse(visible));
 });
 
@@ -406,13 +412,14 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const dealerId = activeDealerId(res);
   const [lead] = await db
     .select()
     .from(leadsTable)
     .where(
       and(
         eq(leadsTable.id, params.data.id),
-        eq(leadsTable.dealerId, activeDealerId(res)),
+        eq(leadsTable.dealerId, dealerId),
         isNull(leadsTable.deletedAt),
       ),
     );
@@ -422,7 +429,12 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [visible] = await redactHiddenFields(res.locals.user, "leads", [lead]);
+  const effectiveLeads = await withEffectiveContactDates(dealerId, [lead]);
+  const [visible] = await redactHiddenFields(
+    res.locals.user,
+    "leads",
+    effectiveLeads,
+  );
   res.json(GetLeadResponse.parse(visible));
 });
 
@@ -1574,14 +1586,15 @@ router.get("/leads/:id/review", async (req, res): Promise<void> => {
   }
 
   const dealerId = activeDealerId(res);
-  const [lead] = await db
+  const [storedLead] = await db
     .select()
     .from(leadsTable)
     .where(and(eq(leadsTable.id, params.data.id), eq(leadsTable.dealerId, dealerId)));
-  if (!lead) {
+  if (!storedLead) {
     res.status(404).json({ error: "Lead not found" });
     return;
   }
+  const lead = (await withEffectiveContactDates(dealerId, [storedLead]))[0]!;
 
   const leadDeals = await db
     .select()
@@ -1714,6 +1727,7 @@ router.get("/leads/:id/review", async (req, res): Promise<void> => {
     null;
   if (
     (lead.phase === "new" || lead.phase === "contacted") &&
+    !lead.contactedDate &&
     lead.status !== "lost" &&
     lead.status !== "converted"
   ) {
@@ -3413,6 +3427,8 @@ router.post("/leads/:id/calls", async (req, res): Promise<void> => {
       actor: actorName(res),
     })
     .returning();
+
+  await markLeadContactFromCall(call!);
 
   // Exactly ONE activity record per call: the call log row above plus a
   // single timeline event that carries outcome + sentiment into the feed.

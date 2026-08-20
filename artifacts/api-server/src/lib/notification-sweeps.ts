@@ -33,6 +33,7 @@ import {
 import { divisionSalesManagers } from "./notify-matrix";
 import { autoAssignLead } from "./lead-assignment";
 import { logger } from "./logger";
+import { withEffectiveContactDates } from "./lead-contact";
 
 /**
  * R6.2 scheduled-sweep triggers (#3, #4a/4b, #5, #17). Each sweep is
@@ -50,7 +51,7 @@ const HOUR = 60 * 60 * 1000;
 // ---------------------------------------------------------------------------
 async function sweepLeadSla(): Promise<void> {
   const now = Date.now();
-  const rows = await db
+  const candidates = await db
     .select({
       id: leadsTable.id,
       dealerId: leadsTable.dealerId,
@@ -58,6 +59,7 @@ async function sweepLeadSla(): Promise<void> {
       ownerUserId: leadsTable.ownerUserId,
       divisionId: leadsTable.divisionId,
       stageEnteredAt: leadsTable.stageEnteredAt,
+      contactedDate: leadsTable.contactedDate,
       createdAt: leadsTable.createdAt,
     })
     .from(leadsTable)
@@ -67,8 +69,22 @@ async function sweepLeadSla(): Promise<void> {
         isNotNull(leadsTable.ownerUserId),
       ),
     );
+  const rowsByDealer = new Map<number, typeof candidates>();
+  for (const lead of candidates) {
+    const dealerRows = rowsByDealer.get(lead.dealerId) ?? [];
+    dealerRows.push(lead);
+    rowsByDealer.set(lead.dealerId, dealerRows);
+  }
+  const rows = (
+    await Promise.all(
+      [...rowsByDealer.entries()].map(([dealerId, dealerLeads]) =>
+        withEffectiveContactDates(dealerId, dealerLeads),
+      ),
+    )
+  ).flat();
 
   for (const lead of rows) {
+    if (lead.contactedDate) continue;
     const advisorId = lead.ownerUserId;
     if (!advisorId) continue;
     const start = (lead.stageEnteredAt ?? lead.createdAt).getTime();

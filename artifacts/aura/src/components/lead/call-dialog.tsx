@@ -5,7 +5,10 @@ import {
   useSuggestCallSentiment,
   useGetTelephonyConfig,
   useCreateTelephonyToken,
+  getGetLeadQueryKey,
+  getGetLeadReviewQueryKey,
   getGetLeadTimelineQueryKey,
+  getListLeadsQueryKey,
   getListLeadCallsQueryKey,
   listLeadCalls,
 } from "@workspace/api-client-react";
@@ -134,6 +137,15 @@ export function CallDialog({
   };
 
   const refreshCallData = () => {
+    queryClient.invalidateQueries({
+      queryKey: getGetLeadQueryKey(leadId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: getGetLeadReviewQueryKey(leadId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: getListLeadsQueryKey(),
+    });
     queryClient.invalidateQueries({
       queryKey: getGetLeadTimelineQueryKey(leadId),
     });

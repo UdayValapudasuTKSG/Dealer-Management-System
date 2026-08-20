@@ -17,6 +17,7 @@ import { mapTwilioDialStatus, twilioVoiceConfig } from "../lib/telephony";
 import { enqueueWhatsapp, notifyUser } from "../lib/email";
 import { logger } from "../lib/logger";
 import { autoAnalyzeCall } from "../lib/call-analysis";
+import { markLeadContactFromCall } from "../lib/lead-contact";
 import { autoTranscribeCall } from "../lib/call-transcription";
 import {
   createInboundLead,
@@ -952,6 +953,7 @@ router.post(
 
         // One activity record per call, written once the outcome is known.
         if (call) {
+          await markLeadContactFromCall(call);
           const [lead] = await db
             .select()
             .from(leadsTable)

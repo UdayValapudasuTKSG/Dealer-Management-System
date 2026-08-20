@@ -9,6 +9,7 @@ import {
 } from "./stage-review";
 import { getActiveChecklist } from "./stage-checklists";
 import type { ChecklistStage } from "@workspace/db";
+import { withEffectiveContactDates } from "./lead-contact";
 
 // ---------------------------------------------------------------------------
 // Deterministic lead brief — the "AURA Recommends" panel.
@@ -274,8 +275,13 @@ export async function computeLeadBrief(
     }
   }
 
-  // First contact is the overriding priority on a brand-new lead.
-  const contactLogged = Boolean(lead.contactedDate);
+  // First contact is the overriding priority on a brand-new lead. Historical
+  // calls can predate the denormalized contactedDate stamp, so consult the
+  // durable call log as a fallback.
+  const effectiveLead = (
+    await withEffectiveContactDates(dealerId, [lead])
+  )[0]!;
+  const contactLogged = Boolean(effectiveLead.contactedDate);
   const ageHours = hoursSince(lead.createdAt) ?? 0;
   if (lead.phase === "new" && !contactLogged) {
     const overdue = ageHours > FIRST_CONTACT_SLA_HOURS;
