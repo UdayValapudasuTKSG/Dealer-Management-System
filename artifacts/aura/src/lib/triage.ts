@@ -1,6 +1,6 @@
 export const SLA_DAYS = 5;
-/** Leads must be contacted within 24 hours of showing interest. */
-export const CONTACT_SLA_HOURS = 24;
+/** Leads must be contacted within 48 hours of showing interest. */
+export const CONTACT_SLA_HOURS = 48;
 
 export type TriageKind =
   | "gate"
@@ -24,7 +24,7 @@ export type TriageItem = {
   subContext: string;
   /** Assigned advisor / technician, when known. */
   assignee?: string | null;
-  /** Hours remaining on the 24h contact SLA (negative = overdue). Only for kind "contact". */
+  /** Hours remaining on the 48h contact SLA (negative = overdue). Only for kind "contact". */
   slaHoursLeft?: number;
   href: string;
   rank: number;

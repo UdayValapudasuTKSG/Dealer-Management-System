@@ -11,8 +11,8 @@ import {
 } from "@workspace/db";
 
 // ---------------------------------------------------------------------------
-// Layer 2 follow-up cadence — 24h → +3d → +3d → +7d.
-// Attempt 1 is the first-contact SLA call (stageEnteredAt + 24h, surfaced by
+// Layer 2 follow-up cadence — 48h → +3d → +3d → +7d.
+// Attempt 1 is the first-contact SLA call (stageEnteredAt + 48h, surfaced by
 // the SLA countdown). Every UNCONNECTED outbound attempt schedules the next
 // cadence task; after 4 attempts with no connect the system stops scheduling
 // and suggests closing the lead with reason "no_contact".

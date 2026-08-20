@@ -159,7 +159,7 @@ const PRIORITY_STYLE: Record<string, string> = {
 const GUIDANCE: Record<string, { headline: string; steps: string[] }> = {
   new: {
     headline:
-      "This is a newly captured lead. Your goal is to reach out within 24 hours.",
+      "This is a newly captured lead. Your goal is to reach out within 48 hours.",
     steps: [
       "Review lead source and contact information.",
       "Prepare a personalized intro message.",

@@ -160,7 +160,7 @@ export function notifyLeadAssigned(lead: {
       type: "lead.assigned",
       template: "lead.assigned",
       title: `Lead assigned to you — ${lead.name}`,
-      body: "You are now the owner. First contact is due within 24 hours.",
+      body: "You are now the owner. First contact is due within 48 hours.",
       link: `/pipeline/${lead.id}`,
       entityType: "lead",
       entityId: lead.id,

@@ -47,7 +47,7 @@ import { useViewMode } from "@/hooks/use-view-mode";
 import { Pagination } from "@/components/pagination";
 import { ViewControls } from "@/components/view-controls";
 import { useAuthz } from "@/lib/auth";
-import { hoursSince, humanHours } from "@/lib/triage";
+import { CONTACT_SLA_HOURS, hoursSince, humanHours } from "@/lib/triage";
 
 const STAGES = [
   "new_lead",
@@ -128,9 +128,6 @@ const STATUS_LABEL: Record<string, string> = {
   lost: "Lost",
 };
 
-/** The pipeline follows the server's 48-hour first-contact SLA. */
-const PIPELINE_CONTACT_SLA_HOURS = 48;
-
 const PRIORITY_STYLE: Record<string, string> = {
   high: "bg-primary/15 text-primary ring-primary/30",
   medium: "bg-amber-500/15 text-amber-400 ring-amber-500/30",
@@ -140,7 +137,7 @@ const PRIORITY_STYLE: Record<string, string> = {
 const withBase = (url: string) =>
   `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`;
 
-/** Contact SLA: 48h from createdAt until the lead is contacted. Null once
+/** Contact SLA: shared 48h window from createdAt until the lead is contacted. Null once
  * contacted (or past the contacted status). */
 function contactSla(lead: {
   status: string;
@@ -152,7 +149,7 @@ function contactSla(lead: {
     (lead.status !== "new" && lead.status !== "assigned");
   if (contacted) return null;
   const elapsed = hoursSince(String(lead.createdAt));
-  const left = PIPELINE_CONTACT_SLA_HOURS - elapsed;
+  const left = CONTACT_SLA_HOURS - elapsed;
   return { left, overdue: left <= 0 };
 }
 
