@@ -26,6 +26,8 @@ export type TriageItem = {
   assignee?: string | null;
   /** Hours remaining on the 48h contact SLA (negative = overdue). Only for kind "contact". */
   slaHoursLeft?: number;
+  /** Gate subtype, used for in-context approval experiences. */
+  gateType?: string;
   href: string;
   rank: number;
 };
@@ -52,6 +54,7 @@ type DealLike = {
 
 type GateLike = {
   id: number;
+  type?: string;
   title: string;
   priority: string;
   refType?: string | null;
@@ -149,6 +152,7 @@ export function buildTriage(
       subContext: "Awaiting your approval",
       href: gateHref(g),
       rank: g.priority === "high" ? 0 : 2,
+      gateType: g.type,
     });
   }
 

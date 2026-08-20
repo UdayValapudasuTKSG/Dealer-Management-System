@@ -116,15 +116,9 @@ async function runSuite() {
 
   // Ephemeral GM: a dealer-2 member with no other memberships.
   const gmRole = await pool
-    .query(
-      `SELECT du.role_id FROM dealer_users du
-       JOIN roles r ON r.id = du.role_id
-       WHERE du.dealer_id = 2
-       ORDER BY (r.name ILIKE '%manager%') DESC
-       LIMIT 1`,
-    )
-    .then((r) => r.rows[0]?.role_id as number | undefined);
-  if (!gmRole) throw new Error("No dealer-2 role found to seed the test GM");
+    .query(`SELECT id FROM roles WHERE name = 'General Manager' LIMIT 1`)
+    .then((r) => r.rows[0]?.id as number | undefined);
+  if (!gmRole) throw new Error("General Manager role not found");
   await pool.query(`DELETE FROM users WHERE lower(email) = $1`, [GM]);
   const gmUserId = await pool
     .query(

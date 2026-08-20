@@ -16,7 +16,9 @@ import type {
   CalendarEvent,
   CalendarEventKind,
   Task,
+  Gate,
 } from "@workspace/api-client-react";
+import { QuoteDiscountDialog } from "@/components/quote-discount-dialog";
 import {
   ArrowRight,
   Zap,
@@ -89,7 +91,13 @@ function getInitials(name: string) {
   return name.slice(0, 2).toUpperCase();
 }
 
-function TriageRow({ item }: { item: TriageItem }) {
+function TriageRow({
+  item,
+  onSelect,
+}: {
+  item: TriageItem;
+  onSelect?: (item: TriageItem) => void;
+}) {
   const [, navigate] = useLocation();
   const ui = KIND_UI[item.kind] || KIND_UI.stalled;
   const Icon = ui.icon;
@@ -101,7 +109,11 @@ function TriageRow({ item }: { item: TriageItem }) {
 
   return (
     <button
-      onClick={() => navigate(item.href)}
+      onClick={() => {
+        if (onSelect) onSelect(item);
+        else navigate(item.href);
+      }}
+      data-testid={`triage-row-${item.key}`}
       className="group w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-left transition-all bg-card border border-border/60 hover:border-foreground/20 hover:shadow-md hover:-translate-y-px"
     >
       <div
@@ -385,6 +397,23 @@ function DashboardInner() {
 
   const [severityFilter, setSeverityFilter] = useState<TriageBucket | null>(null);
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [selectedGate, setSelectedGate] = useState<Gate | null>(null);
+  const [, navigate] = useLocation();
+
+  const handleSelectTriage = (item: TriageItem) => {
+    if (item.kind === "gate" && item.gateType === "quote_discount") {
+      const gate = (gates ?? []).find(
+        (candidate) => candidate.id === Number(item.id),
+      );
+      if (gate) {
+        setSelectedGate(gate);
+        return;
+      }
+      navigate("/deals");
+    } else {
+      navigate(item.href);
+    }
+  };
 
   // Permission-gated fetches: roles without approvals/service access skip
   // these queries entirely instead of hammering 403s.
@@ -542,6 +571,11 @@ function DashboardInner() {
 
   return (
     <div className="min-h-[100dvh] pb-20">
+      <QuoteDiscountDialog
+        gate={selectedGate}
+        open={!!selectedGate}
+        onClose={() => setSelectedGate(null)}
+      />
       <div className="px-5 md:px-8 pt-2 space-y-8">
         {/* Greeting header: personal, stateful, dealership identity */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
@@ -673,7 +707,11 @@ function DashboardInner() {
                   </div>
                   <div className="space-y-2">
                     {s.items.map((item) => (
-                      <TriageRow key={item.key} item={item} />
+                      <TriageRow
+                        key={item.key}
+                        item={item}
+                        onSelect={handleSelectTriage}
+                      />
                     ))}
                   </div>
                 </motion.div>

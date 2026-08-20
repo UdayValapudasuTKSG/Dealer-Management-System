@@ -592,7 +592,18 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
     return;
   }
 
-  const { action, note, adjustedAmount, resolvedBy } = parsed.data;
+  const { action, note, adjustedAmount } = parsed.data;
+  const resolutionNote = note?.trim();
+  const resolvedBy =
+    res.locals.user?.name ?? res.locals.user?.email ?? "Manager";
+
+  if (gate.type === "quote_discount" && !resolutionNote) {
+    res.status(422).json({
+      error:
+        "A decision justification is required to approve or reject a quote discount.",
+    });
+    return;
+  }
 
   // GRA filings can only be approved when the snapshot still passes the real
   // GRA rule engine: no missing inputs, no unresolved rule-gap flags, and the
@@ -645,8 +656,11 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
       .update(gatesTable)
       .set({
         status,
-        resolution: note ?? null,
-        resolvedBy: resolvedBy ?? "Manager",
+        resolution: resolutionNote ?? null,
+        // The resolver is always derived from the authenticated session.
+        // Ignore the optional legacy request field so callers cannot forge
+        // another staff member's name in the gate/timeline audit history.
+        resolvedBy,
         resolvedAt: new Date(),
         ...(action === "adjust" && adjustedAmount !== undefined
           ? { amount: adjustedAmount }
@@ -696,7 +710,7 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
         tx,
         row,
         "Gate dismissed",
-        note ?? "Decision deferred by the manager.",
+        resolutionNote ?? "Decision deferred by the manager.",
       );
     }
 

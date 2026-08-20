@@ -44,16 +44,20 @@ function check(name: string, condition: boolean, detail: string) {
 }
 
 async function resolveGate(id: number, body: ResolveBody) {
-  const res = await fetch(`${BASE}/gates/${id}/resolve`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const res = await requestGateResolution(id, body);
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`resolve ${id} failed: ${res.status} ${text}`);
   }
   return res.json();
+}
+
+async function requestGateResolution(id: number, body: ResolveBody) {
+  return fetch(`${BASE}/gates/${id}/resolve`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 // Returns the receipt row written for this gate resolution, if any. Scoped by
@@ -529,6 +533,102 @@ async function testRefundReleaseDeal() {
   });
 }
 
+// --- quote_discount: audit rationale and actor are authoritative ------------
+async function testQuoteDiscountAudit() {
+  const label = "quote_discount (audit integrity)";
+  console.log(`\n${label}`);
+  const [gate] = await db
+    .insert(gatesTable)
+    .values({
+      dealerId: DEALER_ID,
+      type: "quote_discount",
+      status: "pending",
+      priority: "high",
+      refType: "quote",
+      title: "Cascade test quote-discount audit",
+      summary: "test",
+      recommendation: "test",
+      amount: 5000,
+      evidence: [],
+    })
+    .returning();
+
+  const omitted = await requestGateResolution(gate.id, { action: "approve" });
+  check(
+    `${label}: omitted justification is rejected`,
+    omitted.status === 422,
+    `got HTTP ${omitted.status}`,
+  );
+
+  const blank = await requestGateResolution(gate.id, {
+    action: "dismiss",
+    note: "   ",
+  });
+  check(
+    `${label}: whitespace-only justification is rejected`,
+    blank.status === 422,
+    `got HTTP ${blank.status}`,
+  );
+
+  const [stillPending] = await db
+    .select()
+    .from(gatesTable)
+    .where(eq(gatesTable.id, gate.id));
+  check(
+    `${label}: rejected requests leave the gate pending`,
+    stillPending.status === "pending",
+    `got ${stillPending.status}`,
+  );
+
+  const since = new Date();
+  await resolveGate(gate.id, {
+    action: "approve",
+    note: "  Audit rationale verified.  ",
+    resolvedBy: "Forged Client Name",
+  });
+
+  const [resolved] = await db
+    .select()
+    .from(gatesTable)
+    .where(eq(gatesTable.id, gate.id));
+  check(
+    `${label}: valid decision resolves the gate`,
+    resolved.status === "approved",
+    `got ${resolved.status}`,
+  );
+  check(
+    `${label}: justification is trimmed and persisted`,
+    resolved.resolution === "Audit rationale verified.",
+    `got ${resolved.resolution}`,
+  );
+  check(
+    `${label}: client cannot forge resolver identity`,
+    resolved.resolvedBy === "Test Harness",
+    `got ${resolved.resolvedBy}`,
+  );
+
+  const [receipt] = await db
+    .select()
+    .from(timelineEventsTable)
+    .where(
+      and(
+        eq(timelineEventsTable.cause, gate.title),
+        eq(timelineEventsTable.kind, "gate_quote_discount"),
+        gt(timelineEventsTable.createdAt, since),
+      ),
+    );
+  check(
+    `${label}: timeline receipt uses authenticated actor`,
+    receipt?.actor === "Test Harness",
+    `got ${receipt?.actor ?? "no receipt"}`,
+  );
+
+  await cleanup({
+    receiptIds: receipt ? [receipt.id] : [],
+    gateIds: [gate.id],
+  });
+}
+
 async function main() {
   console.log(`Verifying gate cascades against ${BASE} ...`);
 
@@ -554,6 +654,7 @@ async function main() {
   await testGraFiling();
   await testRefundReleaseVehicle();
   await testRefundReleaseDeal();
+  await testQuoteDiscountAudit();
 
   console.log(`\n${"=".repeat(48)}`);
   console.log(`Results: ${passed} passed, ${failed} failed`);
