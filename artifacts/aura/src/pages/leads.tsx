@@ -47,7 +47,7 @@ import { useViewMode } from "@/hooks/use-view-mode";
 import { Pagination } from "@/components/pagination";
 import { ViewControls } from "@/components/view-controls";
 import { useAuthz } from "@/lib/auth";
-import { CONTACT_SLA_HOURS, hoursSince, humanHours } from "@/lib/triage";
+import { hoursSince, humanHours } from "@/lib/triage";
 
 const STAGES = [
   "new_lead",
@@ -128,6 +128,9 @@ const STATUS_LABEL: Record<string, string> = {
   lost: "Lost",
 };
 
+/** The pipeline follows the server's 48-hour first-contact SLA. */
+const PIPELINE_CONTACT_SLA_HOURS = 48;
+
 const PRIORITY_STYLE: Record<string, string> = {
   high: "bg-primary/15 text-primary ring-primary/30",
   medium: "bg-amber-500/15 text-amber-400 ring-amber-500/30",
@@ -137,7 +140,7 @@ const PRIORITY_STYLE: Record<string, string> = {
 const withBase = (url: string) =>
   `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`;
 
-/** Contact SLA: 24h from createdAt until the lead is contacted. Null once
+/** Contact SLA: 48h from createdAt until the lead is contacted. Null once
  * contacted (or past the contacted status). */
 function contactSla(lead: {
   status: string;
@@ -149,7 +152,7 @@ function contactSla(lead: {
     (lead.status !== "new" && lead.status !== "assigned");
   if (contacted) return null;
   const elapsed = hoursSince(String(lead.createdAt));
-  const left = CONTACT_SLA_HOURS - elapsed;
+  const left = PIPELINE_CONTACT_SLA_HOURS - elapsed;
   return { left, overdue: left <= 0 };
 }
 
@@ -166,6 +169,15 @@ export default function Leads() {
   const { me } = useAuthz();
   const { density, setDensity, layout, setLayout } = useViewMode("pipeline");
   const [, navigate] = useLocation();
+  const [slaClock, setSlaClock] = useState(() => Date.now());
+
+  // The data query need not refetch just to tick a visual countdown. Rebuild
+  // the derived rows once a minute so the displayed value and SLA sort remain
+  // accurate while a user keeps the pipeline open.
+  useEffect(() => {
+    const timer = window.setInterval(() => setSlaClock(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Social sub-platform lives outside the dialog's own field state because
   // its visibility depends on the selected source (config-driven).
@@ -289,7 +301,7 @@ export default function Leads() {
           (l.assignedTo ?? "").toLowerCase().includes(q)
         );
       });
-  }, [leads, vehicles, stageOf, search]);
+  }, [leads, vehicles, stageOf, search, slaClock]);
 
   const counts = useMemo(() => {
     const c: Record<TabKey, number> = {
