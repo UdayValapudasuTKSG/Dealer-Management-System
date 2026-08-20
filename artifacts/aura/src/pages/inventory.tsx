@@ -319,9 +319,15 @@ export default function Inventory() {
   const downloadInventoryExcel = async () => {
     setIsDownloadingExcel(true);
     try {
-      const response = await fetch(`${apiBase()}/vehicles/export`, {
-        credentials: "include",
-      });
+      const cacheBuster = Date.now();
+      const response = await fetch(
+        `${apiBase()}/vehicles/export?download=${cacheBuster}`,
+        {
+          cache: "no-store",
+          credentials: "include",
+          headers: { "Cache-Control": "no-cache" },
+        },
+      );
       if (!response.ok) {
         throw new Error(`Export failed (HTTP ${response.status})`);
       }

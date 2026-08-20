@@ -326,6 +326,16 @@ function buildInstructionsSheet(workbook: ExcelJS.Workbook): void {
 router.get("/vehicles/export", async (req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
 
+  // This workbook is generated from live, dealer-scoped, permission-redacted
+  // data. Never let a browser or reverse proxy satisfy it with a bodyless 304.
+  res.setHeader(
+    "Cache-Control",
+    "private, no-store, no-cache, max-age=0, must-revalidate",
+  );
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.removeHeader("ETag");
+
   // Fetch active, non-deleted vehicles for this dealer.
   const rows = await db
     .select()
@@ -403,6 +413,7 @@ router.get("/vehicles/export", async (req, res): Promise<void> => {
     'attachment; filename="aura-current-inventory.xlsx"',
   );
   const buffer = await workbook.xlsx.writeBuffer();
+  res.setHeader("Content-Length", String(buffer.byteLength));
   req.log.info(
     { dealerId, rowCount: visible.length },
     "vehicle inventory exported",

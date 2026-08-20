@@ -193,6 +193,23 @@ async function main(): Promise<void> {
       headers: { "x-dealer-id": String(dealerId) },
     });
     assert.equal(exportResponse.status, 200);
+    assert.match(
+      exportResponse.headers.get("cache-control") ?? "",
+      /no-store/,
+    );
+    const conditionalExportResponse = await fetch(
+      `${baseUrl}/vehicles/export`,
+      {
+        headers: {
+          "x-dealer-id": String(dealerId),
+          "if-none-match": exportResponse.headers.get("etag") ?? "*",
+        },
+      },
+    );
+    test("export never returns a bodyless 304", () => {
+      assert.equal(conditionalExportResponse.status, 200);
+    });
+    assert.ok((await conditionalExportResponse.arrayBuffer()).byteLength > 0);
     const exported = new ExcelJS.Workbook();
     const exportBuffer = Buffer.from(await exportResponse.arrayBuffer());
     await exported.xlsx.load(
