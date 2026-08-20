@@ -325,13 +325,23 @@ export default function Inventory() {
       if (!response.ok) {
         throw new Error(`Export failed (HTTP ${response.status})`);
       }
-      const contentType = response.headers.get("content-type") ?? "";
-      if (!contentType.includes(XLSX_MIME)) {
-        throw new Error("The server did not return an Excel workbook.");
-      }
       const bytes = await response.blob();
       if (bytes.size === 0) {
         throw new Error("The downloaded workbook is empty.");
+      }
+      // Replit's reverse proxy can rewrite a download's Content-Type. XLSX
+      // files are ZIP containers, so validate their stable binary signature
+      // instead of rejecting a valid workbook solely due to that header.
+      const signature = new Uint8Array(
+        await bytes.slice(0, 4).arrayBuffer(),
+      );
+      const isXlsxZip =
+        signature[0] === 0x50 &&
+        signature[1] === 0x4b &&
+        signature[2] === 0x03 &&
+        signature[3] === 0x04;
+      if (!isXlsxZip) {
+        throw new Error("The server did not return an Excel workbook.");
       }
 
       const disposition = response.headers.get("content-disposition") ?? "";
