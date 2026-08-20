@@ -163,6 +163,7 @@ export default function Leads() {
   const { data: vehicles } = useListVehicles();
   const { data: deals } = useListDeals();
   const { data: leadSources } = useListLeadSources();
+  const { data: accounts } = useListCustomers();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createLead = useCreateLead();
@@ -274,9 +275,13 @@ export default function Leads() {
       myName != null &&
       (l.assignedTo ?? "").trim().toLowerCase() === myName);
 
-  // Enrich every lead once with its stage, macro phase, vehicle and SLA.
+  // Enrich every lead once with its stage, macro phase, vehicle, customer
+  // location, preferred branch and SLA.
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const customerById = new Map(
+      (accounts ?? []).map((customer) => [customer.id, customer]),
+    );
     return (leads ?? [])
       .map((lead) => {
         const stage = stageOf(lead);
@@ -287,8 +292,41 @@ export default function Leads() {
         const model = vehicle
           ? `${vehicle.make} ${vehicle.model}`
           : lead.selectedModel ?? null;
+        const customer =
+          lead.customerId != null ? customerById.get(lead.customerId) : null;
+        const locationParts = [
+          customer?.location,
+          customer?.city,
+          customer?.country,
+        ].reduce<string[]>((parts, value) => {
+          const normalized = value?.trim();
+          if (
+            normalized &&
+            !parts.some(
+              (part) => part.toLowerCase() === normalized.toLowerCase(),
+            )
+          ) {
+            parts.push(normalized);
+          }
+          return parts;
+        }, []);
+        const customerLocation =
+          locationParts.join(", ") ||
+          customer?.address?.trim() ||
+          lead.address?.trim() ||
+          null;
+        const preferredBranch = lead.preferredBranch?.trim() || null;
         const sla = contactSla(lead);
-        return { lead, stage, macro, vehicle, model, sla };
+        return {
+          lead,
+          stage,
+          macro,
+          vehicle,
+          model,
+          customerLocation,
+          preferredBranch,
+          sla,
+        };
       })
       .filter((r) => {
         if (!q) return true;
@@ -296,12 +334,14 @@ export default function Leads() {
         return (
           l.name.toLowerCase().includes(q) ||
           (r.model ?? "").toLowerCase().includes(q) ||
+          (r.customerLocation ?? "").toLowerCase().includes(q) ||
+          (r.preferredBranch ?? "").toLowerCase().includes(q) ||
           (l.phone ?? "").toLowerCase().includes(q) ||
           (l.email ?? "").toLowerCase().includes(q) ||
           (l.assignedTo ?? "").toLowerCase().includes(q)
         );
       });
-  }, [leads, vehicles, stageOf, search, slaClock]);
+  }, [leads, vehicles, accounts, stageOf, search, slaClock]);
 
   const counts = useMemo(() => {
     const c: Record<TabKey, number> = {
@@ -365,10 +405,14 @@ export default function Leads() {
     if (!sortKey) return visible;
     const dir = sortDir === "asc" ? 1 : -1;
     const stageOrder: readonly string[] = STAGES;
-    const val = (r: (typeof visible)[number]): string | number => {
+    const val = (
+      r: (typeof visible)[number],
+    ): string | number | null => {
       switch (sortKey) {
         case "client": return r.lead.name.toLowerCase();
-        case "model": return (r.model ?? "").toLowerCase();
+        case "model": return r.model?.toLowerCase() ?? null;
+        case "location": return r.customerLocation?.toLowerCase() ?? null;
+        case "branch": return r.preferredBranch?.toLowerCase() ?? null;
         case "phase": {
           if (!r.stage) return stageOrder.length; // Lost sorts last
           const idx = stageOrder.indexOf(r.stage);
@@ -384,6 +428,10 @@ export default function Leads() {
     return [...visible].sort((a, b) => {
       const av = val(a);
       const bv = val(b);
+      const aEmpty = av == null || av === "";
+      const bEmpty = bv == null || bv === "";
+      if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
+      if (av == null || bv == null) return 0;
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
       return 0;
@@ -399,7 +447,6 @@ export default function Leads() {
   // Link-account dialog: pick an existing account or create one from the lead.
   const [linkTarget, setLinkTarget] = useState<Lead | null>(null);
   const [accountSearch, setAccountSearch] = useState("");
-  const { data: accounts } = useListCustomers();
   const linkAccount = useLinkLeadAccount();
   const createCustomer = useCreateCustomer();
   const linkBusy = linkAccount.isPending || createCustomer.isPending;
@@ -691,7 +738,7 @@ export default function Leads() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search name, model, phone or email…"
+              placeholder="Search name, model, location, branch, phone or email…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full h-9 rounded-full bg-foreground/[0.04] border border-white/10 pl-9 pr-4 text-sm focus:outline-none focus:border-primary/50"
@@ -756,6 +803,8 @@ export default function Leads() {
                     [
                       ["Client", "client"],
                       ["Model", "model"],
+                      ["Customer location", "location"],
+                      ["Preferred branch", "branch"],
                       ["Phase", "phase"],
                       ["Advisor", "advisor"],
                       ["Contact SLA", "sla"],
@@ -808,6 +857,22 @@ export default function Leads() {
                     </td>
                     <td className="px-4 py-2 text-muted-foreground truncate max-w-[180px]">
                       {r.model ?? SOURCE_LABEL[r.lead.source] ?? r.lead.source}
+                    </td>
+                    <td
+                      className="px-4 py-2 text-muted-foreground truncate max-w-[190px]"
+                      title={r.customerLocation ?? "No customer location"}
+                    >
+                      {r.customerLocation ?? (
+                        <span className="text-muted-foreground/50">Not provided</span>
+                      )}
+                    </td>
+                    <td
+                      className="px-4 py-2 text-muted-foreground truncate max-w-[160px]"
+                      title={r.preferredBranch ?? "No preferred branch"}
+                    >
+                      {r.preferredBranch ?? (
+                        <span className="text-muted-foreground/50">Not provided</span>
+                      )}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap">
                       {r.stage ? (
