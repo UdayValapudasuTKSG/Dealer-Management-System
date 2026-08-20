@@ -111,6 +111,10 @@ function galleryImg(url?: string | null) {
   return img(url);
 }
 
+const apiBase = () => `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
+const XLSX_MIME =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
 function powertrainIcon(pt: string) {
   if (pt === "EV") return <Zap className="w-4 h-4" />;
   if (pt === "Hybrid") return <Activity className="w-4 h-4" />;
@@ -309,7 +313,53 @@ export default function Inventory() {
   const [powertrain, setPowertrain] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Vehicle | null>(null);
+  const [isDownloadingExcel, setIsDownloadingExcel] = useState(false);
   const { density, setDensity, layout, setLayout } = useViewMode("inventory");
+
+  const downloadInventoryExcel = async () => {
+    setIsDownloadingExcel(true);
+    try {
+      const response = await fetch(`${apiBase()}/vehicles/export`, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error(`Export failed (HTTP ${response.status})`);
+      }
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes(XLSX_MIME)) {
+        throw new Error("The server did not return an Excel workbook.");
+      }
+      const bytes = await response.blob();
+      if (bytes.size === 0) {
+        throw new Error("The downloaded workbook is empty.");
+      }
+
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const filename =
+        disposition.match(/filename="?([^";]+)"?/i)?.[1] ??
+        "aura-current-inventory.xlsx";
+      const url = URL.createObjectURL(new Blob([bytes], { type: XLSX_MIME }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      toast({ title: "Excel download started" });
+    } catch (error) {
+      toast({
+        title: "Excel download failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingExcel(false);
+    }
+  };
 
   const bodyTypes = useMemo(() => {
     const set = new Set((vehicles ?? []).map((v) => v.bodyType));
@@ -529,14 +579,20 @@ export default function Inventory() {
               onDensityChange={setDensity}
             />
             {can("inventory", "view") && (
-              <a
-                href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/vehicles/export`}
-                download="aura-current-inventory.xlsx"
-                className="inline-flex items-center justify-center rounded-full px-6 h-12 gap-2 font-medium tracking-wide border border-white/15 bg-foreground/[0.03] hover:bg-foreground/[0.07] transition-colors text-sm"
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void downloadInventoryExcel()}
+                disabled={isDownloadingExcel}
+                className="rounded-full px-6 h-12 gap-2 font-medium tracking-wide border-white/15 bg-foreground/[0.03] hover:bg-foreground/[0.07]"
               >
-                <Download className="w-5 h-5 text-primary" />
-                Download Excel
-              </a>
+                {isDownloadingExcel ? (
+                  <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                ) : (
+                  <Download className="w-5 h-5 text-primary" />
+                )}
+                {isDownloadingExcel ? "Preparing Excel…" : "Download Excel"}
+              </Button>
             )}
             {(can("inventory", "create") || can("inventory", "edit")) && (
               <div className="flex flex-wrap items-center gap-3">
@@ -1151,14 +1207,6 @@ function VehicleDetail({
 
             {/* Details */}
             <div className="p-8 overflow-y-auto">
-              <button
-                onClick={onClose}
-                className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
               <div className="text-[11px] font-bold uppercase tracking-widest text-primary mb-2">
                 {vehicle.bodyType} · {vehicle.year}
                 {vehicle.divisionId != null && divisions && (
