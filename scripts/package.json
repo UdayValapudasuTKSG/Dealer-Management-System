@@ -23,7 +23,8 @@
     "verify-gra-duty": "tsx ./src/verify-gra-duty.ts",
     "backfill-pdi-status": "tsx ./src/backfill-pdi-status.ts",
     "migrate-gt-salesforce": "tsx ./src/migrate-gt-salesforce.ts",
-    "verify-smtp-email": "tsx ./src/verify-smtp-email.ts"
+    "verify-smtp-email": "tsx ./src/verify-smtp-email.ts",
+    "seed-atl-uat": "tsx ./src/seed-atl-uat.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
