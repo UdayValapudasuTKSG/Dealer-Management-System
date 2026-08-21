@@ -71,6 +71,10 @@ function fail(step: string, r: { status: number; json: any }): never {
 // ---------------------------------------------------------------------------
 
 const uatVin = (n: number) => `UATATL${String(n).padStart(11, "0")}`;
+// Synthetic 17-character engine numbers. These are UAT identifiers, never
+// copied from ATL inventory, and satisfy allocation's vehicle-identity guard.
+const uatEngineNumber = (n: number) =>
+  `UATATLENG${String(n).padStart(8, "0")}`;
 
 type Row = {
   make: string;
@@ -221,7 +225,7 @@ async function ensureDealer(): Promise<void> {
 }
 
 const IMPORT_HEADERS = [
-  "Make", "Model", "Trim", "Year", "VIN", "Price", "Powertrain",
+  "Make", "Model", "Trim", "Year", "VIN", "Engine Number", "Price", "Powertrain",
   "Mileage km", "Exterior Color", "Body Type", "Transmission",
   "Range km", "Description",
 ];
@@ -230,8 +234,9 @@ function buildWorkbook(rows: { row: Row; vinIndex: number }[]): Buffer {
   const data: (string | number)[][] = [IMPORT_HEADERS];
   for (const { row: r, vinIndex } of rows) {
     data.push([
-      r.make, r.model, r.trim ?? "", r.year, uatVin(vinIndex), r.price,
-      r.powertrain, r.mileageKm, r.exteriorColor, r.bodyType,
+      r.make, r.model, r.trim ?? "", r.year, uatVin(vinIndex),
+      uatEngineNumber(vinIndex), r.price, r.powertrain, r.mileageKm,
+      r.exteriorColor, r.bodyType,
       r.transmission ?? "", r.rangeKm ?? "", r.description ?? "",
     ]);
   }
@@ -243,13 +248,19 @@ function buildWorkbook(rows: { row: Row; vinIndex: number }[]): Buffer {
 async function importVehicles(): Promise<void> {
   const existing = await api("GET", "/vehicles", { dealer: true });
   if (existing.status !== 200) fail("list vehicles", existing);
-  const existingVins = new Set(
-    (existing.json as any[]).map((v) => (v.vin ?? "").toUpperCase()),
+  const existingByVin = new Map(
+    (existing.json as any[]).map((v) => [(v.vin ?? "").toUpperCase(), v]),
   );
-  // Keep VIN assignment stable across runs: vehicle i always gets VIN i+1.
+  // Keep VIN/engine assignment stable across runs. Existing ATL UAT vehicles
+  // missing a valid engine number are deliberately re-imported as updates.
   const pending: { row: Row; vinIndex: number }[] = [];
   VEHICLES.forEach((row, i) => {
-    if (!existingVins.has(uatVin(i + 1))) pending.push({ row, vinIndex: i + 1 });
+    const current = existingByVin.get(uatVin(i + 1));
+    if (
+      !current ||
+      current.engineNumber?.trim()?.toUpperCase() !== uatEngineNumber(i + 1)
+    )
+      pending.push({ row, vinIndex: i + 1 });
   });
   if (pending.length === 0) {
     console.log(`✓ all ${VEHICLES.length} UAT vehicles already imported`);
@@ -290,6 +301,90 @@ async function importVehicles(): Promise<void> {
   });
   if (apply.status !== 200 && apply.status !== 201) fail("import apply", apply);
   console.log(`✓ import applied: ${JSON.stringify(apply.json?.summary ?? apply.json)}`);
+}
+
+async function repairEngineNumbersOnly(): Promise<void> {
+  const list = await api("GET", "/platform/dealers");
+  if (list.status !== 200) fail("list dealers", list);
+  const matches = (list.json as any[]).filter(
+    (d) => d.name?.trim().toLowerCase() === DEALER_NAME.toLowerCase(),
+  );
+  if (matches.length !== 1) {
+    console.error(
+      `✗ expected exactly one "${DEALER_NAME}" dealer, found ${matches.length}`,
+    );
+    process.exit(1);
+  }
+  const dealer = matches[0]!;
+  if (dealer.status !== "active") {
+    console.error(
+      `✗ "${DEALER_NAME}" is ${dealer.status}, not active — refusing repair`,
+    );
+    process.exit(1);
+  }
+  dealerId = dealer.id;
+  console.log(`✓ repair target: ${DEALER_NAME} #${dealerId}`);
+
+  await startImpersonation();
+
+  const listed = await api("GET", "/vehicles", { dealer: true });
+  if (listed.status !== 200) fail("list ATL vehicles for repair", listed);
+  const byVin = new Map(
+    (listed.json as any[]).map((v) => [(v.vin ?? "").trim().toUpperCase(), v]),
+  );
+
+  // The synthetic VIN plus expected make/model is the immutable UAT identity.
+  // Refuse a missing or repurposed record; repair mode never inserts vehicles
+  // and PATCH sends only engineNumber, so no other vehicle field can change.
+  let updated = 0;
+  for (const [index, expectedVehicle] of VEHICLES.entries()) {
+    const vin = uatVin(index + 1);
+    const expectedEngine = uatEngineNumber(index + 1);
+    const current = byVin.get(vin);
+    if (
+      !current ||
+      current.make !== expectedVehicle.make ||
+      current.model !== expectedVehicle.model
+    ) {
+      console.error(
+        `✗ ${vin} is missing or no longer matches ${expectedVehicle.make} ${expectedVehicle.model} — refusing repair`,
+      );
+      process.exit(1);
+    }
+    if (current.engineNumber?.trim()?.toUpperCase() === expectedEngine) continue;
+
+    const patched = await api("PATCH", `/vehicles/${current.id}`, {
+      dealer: true,
+      body: { engineNumber: expectedEngine },
+    });
+    if (patched.status !== 200) fail(`repair engine number for ${vin}`, patched);
+    if (patched.json?.engineNumber !== expectedEngine) {
+      console.error(`✗ ${vin} PATCH did not return the expected engine number`);
+      process.exit(1);
+    }
+    updated += 1;
+  }
+
+  const checked = await api("GET", "/vehicles", { dealer: true });
+  if (checked.status !== 200) fail("verify repaired vehicles", checked);
+  const repairedByVin = new Map(
+    (checked.json as any[]).map((v) => [
+      (v.vin ?? "").trim().toUpperCase(),
+      v.engineNumber?.trim()?.toUpperCase(),
+    ]),
+  );
+  const invalid = VEHICLES.flatMap((_, index) => {
+    const vin = uatVin(index + 1);
+    return repairedByVin.get(vin) === uatEngineNumber(index + 1) ? [] : [vin];
+  });
+  if (invalid.length > 0) {
+    console.error(`✗ exact engine-number verification failed: ${invalid.join(", ")}`);
+    process.exit(1);
+  }
+  console.log(`✓ engine-number repair updated ${updated} vehicle(s)`);
+  console.log(
+    `✓ verified exact VIN→engine mapping for all ${VEHICLES.length} ATL UAT vehicles`,
+  );
 }
 
 async function seedLeads(): Promise<Map<string, number>> {
@@ -403,6 +498,11 @@ async function startImpersonation(): Promise<void> {
 }
 
 async function main() {
+  if (process.argv.includes("--repair-engine-numbers")) {
+    await repairEngineNumbersOnly();
+    console.log("\nDone — ATL Automotive vehicle identities are allocation-ready.");
+    return;
+  }
   await ensureDealer();
   await startImpersonation();
   await importVehicles();

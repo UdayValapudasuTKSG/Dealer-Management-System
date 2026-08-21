@@ -24,7 +24,8 @@
     "backfill-pdi-status": "tsx ./src/backfill-pdi-status.ts",
     "migrate-gt-salesforce": "tsx ./src/migrate-gt-salesforce.ts",
     "verify-smtp-email": "tsx ./src/verify-smtp-email.ts",
-    "seed-atl-uat": "tsx ./src/seed-atl-uat.ts"
+    "seed-atl-uat": "tsx ./src/seed-atl-uat.ts",
+    "repair-atl-engine-numbers": "tsx ./src/seed-atl-uat.ts --repair-engine-numbers"
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
