@@ -303,7 +303,7 @@ function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
 export default function Inventory() {
   const { data: vehicles, isLoading } = useListVehicles();
   const { data: divisions } = useListDivisions();
-  const { can } = useAuthz();
+  const { can, activeDealer } = useAuthz();
   const qc = useQueryClient();
   const { toast } = useToast();
   const createVehicle = useCreateVehicle();
@@ -320,12 +320,24 @@ export default function Inventory() {
     setIsDownloadingExcel(true);
     try {
       const cacheBuster = Date.now();
+      const headers = new Headers({ "Cache-Control": "no-cache" });
+      if (activeDealer?.dealerId != null) {
+        headers.set("x-dealer-id", String(activeDealer.dealerId));
+      }
+      // Keep raw downloads aligned with the shared API client, including its
+      // development-only persona header used by automated role testing.
+      try {
+        const testEmail = localStorage.getItem("aura-test-user-email");
+        if (testEmail) headers.set("x-test-user-email", testEmail);
+      } catch {
+        // localStorage can be unavailable in privacy-restricted browsers.
+      }
       const response = await fetch(
         `${apiBase()}/vehicles/export?download=${cacheBuster}`,
         {
           cache: "no-store",
           credentials: "include",
-          headers: { "Cache-Control": "no-cache" },
+          headers,
         },
       );
       if (!response.ok) {
@@ -347,7 +359,25 @@ export default function Inventory() {
         signature[2] === 0x03 &&
         signature[3] === 0x04;
       if (!isXlsxZip) {
-        throw new Error("The server did not return an Excel workbook.");
+        const text = await bytes.text();
+        try {
+          const problem = JSON.parse(text) as {
+            code?: string;
+            error?: string;
+            message?: string;
+          };
+          if (problem.code === "dealer_selection_required") {
+            throw new Error("Select a dealership, then try the download again.");
+          }
+          throw new Error(
+            problem.message ?? problem.error ?? "The Excel export failed.",
+          );
+        } catch (error) {
+          if (error instanceof SyntaxError) {
+            throw new Error("The server did not return an Excel workbook.");
+          }
+          throw error;
+        }
       }
 
       const disposition = response.headers.get("content-disposition") ?? "";
