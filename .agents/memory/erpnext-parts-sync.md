@@ -15,3 +15,6 @@ description: Durable invariants of the parts/stock/PO sync — double-count trap
 - **AURA models exactly ONE warehouse per dealer.** Inbound movements/reconciliations only count rows touching the configured default warehouse (all rows only when none is configured); transfers between foreign warehouses must not move AURA stock.
 - **Backordered issues move no stock at issue time** — the Material Issue posts only when the backorder fills, keyed by the job-card line id (fills exactly once), enqueued after the transaction commits.
 - **Movement handlers self-heal ordering:** they resolve-or-create the Item/Supplier (ref → SKU/name match → create) so movement jobs never dead-letter on missing masters, and backfills stay duplicate-free.
+
+## Fire-and-forget enqueue race
+Parts import responds before its ERPNext part/supplier sync jobs are (re)enqueued — a job can flip back to queued moments after the HTTP response. Any cleanup/suppression sweep must loop until a full pass finds nothing (see scripts/src/expand-atl-uat.ts suppressUatErpJobs). Re-enqueue with the same dedupe key also resurrects dead jobs back to queued.
