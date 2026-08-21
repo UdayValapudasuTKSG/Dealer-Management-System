@@ -6529,6 +6529,140 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EmailSettings"
+  /emails/connection:
+    put:
+      operationId: updateSmtpConnection
+      tags: [emails]
+      summary: Create or update this dealership's SMTP connection (GM only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSmtpConnectionRequest"
+      responses:
+        "200":
+          description: Updated settings (safe metadata only)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailSettings"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteSmtpConnection
+      tags: [emails]
+      summary: Remove this dealership's SMTP connection (GM only)
+      responses:
+        "200":
+          description: Updated settings after removal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailSettings"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /emails/connection/test:
+    post:
+      operationId: testSmtpConnection
+      tags: [emails]
+      summary: Verify the dealership's SMTP connection by logging in (GM only)
+      responses:
+        "200":
+          description: Result of the connection test
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmtpConnectionTestResult"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /emails/templates/{key}/override:
+    put:
+      operationId: updateEmailTemplateOverride
+      tags: [emails]
+      summary: Save this dealership's custom copy for a template (GM only)
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailTemplateOverrideRequest"
+      responses:
+        "200":
+          description: Updated template info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTemplateInfo"
+        "400":
+          description: Invalid request (e.g. unknown merge fields)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Unknown template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteEmailTemplateOverride
+      tags: [emails]
+      summary: Reset a template back to the built-in default copy (GM only)
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated template info after reset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTemplateInfo"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Unknown template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /emails/test-send:
     post:
       operationId: sendTestEmail
@@ -11300,11 +11434,66 @@ components:
 
     EmailSettings:
       type: object
-      required: [configured, fromAddress, queueDepth]
+      required:
+        [
+          configured,
+          enabled,
+          fromAddress,
+          queueDepth,
+          canManage,
+          host,
+          port,
+          security,
+          username,
+          fromName,
+          replyTo,
+          hasPassword,
+          lastStatus,
+          lastError,
+          lastCheckedAt,
+        ]
       properties:
         configured: { type: boolean }
+        enabled: { type: boolean }
         fromAddress: { type: ["string", "null"] }
         queueDepth: { type: integer }
+        canManage: { type: boolean }
+        host: { type: ["string", "null"] }
+        port: { type: ["integer", "null"] }
+        security: { type: ["string", "null"], enum: ["ssl", "starttls", "none", null] }
+        username: { type: ["string", "null"] }
+        fromName: { type: ["string", "null"] }
+        replyTo: { type: ["string", "null"] }
+        hasPassword: { type: boolean }
+        lastStatus: { type: ["string", "null"] }
+        lastError: { type: ["string", "null"] }
+        lastCheckedAt: { type: ["string", "null"], format: date-time }
+    UpdateSmtpConnectionRequest:
+      type: object
+      properties:
+        host: { type: string, minLength: 1 }
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        security: { type: string, enum: ["ssl", "starttls", "none"] }
+        username: { type: string, minLength: 1 }
+        password: { type: string, minLength: 1 }
+        fromEmail: { type: string, minLength: 3 }
+        fromName: { type: ["string", "null"] }
+        replyTo: { type: ["string", "null"] }
+        enabled: { type: boolean }
+    SmtpConnectionTestResult:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { type: boolean }
+        error: { type: ["string", "null"] }
+    EmailTemplateOverrideRequest:
+      type: object
+      properties:
+        subject: { type: ["string", "null"], maxLength: 500 }
+        heading: { type: ["string", "null"], maxLength: 500 }
+        body: { type: ["string", "null"], maxLength: 10000 }
+        ctaLabel: { type: ["string", "null"], maxLength: 120 }
+        enabled: { type: boolean }
     TestEmailRequest:
       type: object
       required: [to]
@@ -11318,11 +11507,40 @@ components:
         error: { type: ["string", "null"] }
     EmailTemplateInfo:
       type: object
-      required: [key, label, description]
+      required:
+        [
+          key,
+          label,
+          description,
+          mergeFields,
+          hasOverride,
+          overrideEnabled,
+          overrideSubject,
+          overrideHeading,
+          overrideBody,
+          overrideCtaLabel,
+          defaultSubject,
+          defaultHeading,
+          defaultBody,
+          defaultCtaLabel,
+        ]
       properties:
         key: { type: string }
         label: { type: string }
         description: { type: string }
+        mergeFields:
+          type: array
+          items: { type: string }
+        hasOverride: { type: boolean }
+        overrideEnabled: { type: boolean }
+        overrideSubject: { type: ["string", "null"] }
+        overrideHeading: { type: ["string", "null"] }
+        overrideBody: { type: ["string", "null"] }
+        overrideCtaLabel: { type: ["string", "null"] }
+        defaultSubject: { type: string }
+        defaultHeading: { type: string }
+        defaultBody: { type: string }
+        defaultCtaLabel: { type: ["string", "null"] }
     EmailTemplatePreview:
       type: object
       required: [key, subject, html]

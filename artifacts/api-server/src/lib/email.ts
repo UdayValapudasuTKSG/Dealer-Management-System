@@ -1,10 +1,10 @@
-import nodemailer from "nodemailer";
 import { and, desc, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
 import {
   db,
   customersTable,
   dealersTable,
   emailLogsTable,
+  emailTemplateOverridesTable,
   leadsTable,
   notificationsTable,
   receiptsTable,
@@ -16,11 +16,17 @@ import {
   EMAIL_TEMPLATES,
   type EmailTemplate,
   type EmailLog,
+  type EmailTemplateOverride,
   type WhatsappKind,
   type NotificationType,
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { logger } from "./logger";
+import {
+  resolveDealerSmtp,
+  smtpSkipMessage,
+  sanitizeSmtpError,
+} from "./smtp-connection";
 import { buildQuotePdf } from "./quote-pdf";
 import {
   buildInvoicePdfFromPayload,
@@ -61,35 +67,8 @@ import { normalizeWhatsappPhone } from "./whatsapp-phone";
  */
 export const SYSTEM_MAIL_HEADER = "X-AURA-System";
 
-export function smtpConfigured(): boolean {
-  return Boolean(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD);
-}
-
-export function fromAddress(): string | null {
-  return process.env.GMAIL_USER ?? null;
-}
-
-function makeTransport() {
-  return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
-    // Pooled connections: reuse one authenticated session for many messages
-    // instead of a fresh SMTP login per email. A mass enqueue once tripped
-    // Gmail's "454 too many login attempts" throttle because every send
-    // opened its own connection — pooling keeps logins rare and throttles
-    // the send rate to stay inside Gmail's limits.
-    pool: true,
-    maxConnections: 1,
-    maxMessages: 50,
-    rateDelta: 1000,
-    rateLimit: 1,
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
-    },
-  });
-}
+// Email is sent exclusively through each dealer's own SMTP connection
+// (see ./smtp-connection). There is NO global/shared sender fallback.
 
 // ---------------------------------------------------------------------------
 // Templates — premium automotive-branded HTML
@@ -686,10 +665,81 @@ export function sniffImageMime(buf: Buffer): { mime: string; ext: string } {
   return { mime: "image/png", ext: "png" };
 }
 
+// ---------------------------------------------------------------------------
+// Per-dealer template overrides — {{field}} merge tokens
+// ---------------------------------------------------------------------------
+
+/**
+ * The approved merge fields for a template: the keys of its sample data plus
+ * the special `brand` token (the dealership's display name).
+ */
+export function templateMergeFields(template: EmailTemplate): string[] {
+  return ["brand", ...Object.keys(TEMPLATE_DEFS[template].sample)];
+}
+
+/**
+ * Returns the {{tokens}} referenced by `text` that are NOT in the approved
+ * merge-field list for the template. Empty array = valid.
+ */
+export function invalidMergeTokens(
+  template: EmailTemplate,
+  text: string,
+): string[] {
+  const allowed = new Set(templateMergeFields(template));
+  const bad = new Set<string>();
+  for (const m of text.matchAll(/\{\{\s*([\w.-]+)\s*\}\}/g)) {
+    const token = m[1] ?? "";
+    if (!allowed.has(token)) bad.add(token);
+  }
+  return [...bad];
+}
+
+/** Substitute {{field}} tokens from the render data ({{brand}} = __brand). */
+function applyMergeTokens(text: string, x: TemplateData): string {
+  return text.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_, token: string) => {
+    if (token === "brand") return x["__brand"] ?? "AURA";
+    return x[token] ?? "";
+  });
+}
+
+/**
+ * Customized copy for a template. Any null field falls back to the built-in
+ * default. Values may contain approved {{field}} merge tokens.
+ */
+export type TemplateOverrideCopy = {
+  subject?: string | null;
+  heading?: string | null;
+  body?: string | null;
+  ctaLabel?: string | null;
+};
+
+/**
+ * Load a dealer's enabled override for a template (null when none).
+ * Never falls back to another dealer.
+ */
+export async function getTemplateOverride(
+  dealerId: number,
+  template: string,
+): Promise<EmailTemplateOverride | null> {
+  const [row] = await db
+    .select()
+    .from(emailTemplateOverridesTable)
+    .where(
+      and(
+        eq(emailTemplateOverridesTable.dealerId, dealerId),
+        eq(emailTemplateOverridesTable.templateKey, template),
+        eq(emailTemplateOverridesTable.enabled, true),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 export function renderEmail(
   template: EmailTemplate,
   data: TemplateData,
   branding?: EmailBranding,
+  override?: TemplateOverrideCopy | null,
 ): { subject: string; html: string } {
   const def = TEMPLATE_DEFS[template];
   // Strip markup characters — `__brand` flows into raw HTML template copy
@@ -697,14 +747,30 @@ export function renderEmail(
   const brandName = (branding?.name?.trim() || "").replace(/[<>]/g, "");
   // Templates reference the dealership via the `__brand` key; default AURA.
   const x: TemplateData = { ...data, __brand: brandName || "AURA" };
-  const subject = def.subject(x);
+  // Dealer overrides: any non-empty override field replaces the default copy
+  // (with {{field}} merge tokens substituted); empty/null falls back.
+  const ovSubject = override?.subject?.trim();
+  const ovHeading = override?.heading?.trim();
+  const ovBody = override?.body?.trim();
+  const ovCtaLabel = override?.ctaLabel?.trim();
+  const subject = ovSubject ? applyMergeTokens(ovSubject, x) : def.subject(x);
   // Headings always end with a full stop for consistent punctuation.
-  const headingRaw = def.heading(x).trim();
+  const headingRaw = (
+    ovHeading ? applyMergeTokens(ovHeading, x) : def.heading(x)
+  ).trim();
   const heading = /[.!?…]$/.test(headingRaw) ? headingRaw : `${headingRaw}.`;
-  const body = def.body(x);
+  const body = ovBody ? applyMergeTokens(ovBody, x) : def.body(x);
   const ctaRaw = def.cta?.(x);
   // Button/CTA text is always upper-case.
-  const cta = ctaRaw ? { ...ctaRaw, label: ctaRaw.label.toUpperCase() } : undefined;
+  const cta = ctaRaw
+    ? {
+        ...ctaRaw,
+        label: (ovCtaLabel
+          ? applyMergeTokens(ovCtaLabel, x)
+          : ctaRaw.label
+        ).toUpperCase(),
+      }
+    : undefined;
   const safeName = escapeHtml(brandName || "AURA Dealership");
   const headerHtml = branding?.logoSrc
     ? `<img src="${branding.logoSrc}" alt="${safeName}" style="display:block;max-height:56px;max-width:240px;height:auto;width:auto;border:0;" />`
@@ -859,9 +925,12 @@ async function isRecipientEmailOptedOut(
 }
 
 export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
-  const { subject } = renderEmail(opts.template, opts.data ?? {}, {
-    name: await getDealerBrandName(opts.dealerId),
-  });
+  const { subject } = renderEmail(
+    opts.template,
+    opts.data ?? {},
+    { name: await getDealerBrandName(opts.dealerId) },
+    await getTemplateOverride(opts.dealerId, opts.template),
+  );
   // Per-lead email kill switch: log the suppression for audit, never send.
   if (await isRecipientEmailOptedOut(opts.dealerId, opts.to)) {
     const [suppressed] = await db
@@ -1761,7 +1830,6 @@ export async function processQueue(): Promise<void> {
     logger.error({ err }, "whatsapp outbox pass failed");
   }
   try {
-    if (!smtpConfigured()) return;
     const pending = await db
       .select()
       .from(emailLogsTable)
@@ -1769,7 +1837,19 @@ export async function processQueue(): Promise<void> {
       .limit(10);
     if (pending.length === 0) return;
 
-    const transport = makeTransport();
+    // Per-dealer SMTP resolution cached per pass. NO global fallback: a
+    // dealer without a working connection has its items terminally skipped.
+    const smtpCache = new Map<
+      number,
+      Awaited<ReturnType<typeof resolveDealerSmtp>>
+    >();
+    const smtpFor = async (dealerId: number) => {
+      const hit = smtpCache.get(dealerId);
+      if (hit) return hit;
+      const r = await resolveDealerSmtp(dealerId);
+      smtpCache.set(dealerId, r);
+      return r;
+    };
     // Branding (incl. logo bytes from object storage) cached per pass so a
     // burst of emails for the same dealer doesn't re-download the logo.
     const brandCache = new Map<
@@ -1783,7 +1863,23 @@ export async function processQueue(): Promise<void> {
       brandCache.set(dealerId, b);
       return b;
     };
-    for (const item of pending) {
+    for (const selected of pending) {
+      // Cross-process compare-and-set claim (same pattern as the WhatsApp
+      // worker): only the worker that moves the row queued/failed→sending
+      // owns it. A second process selecting the same row gets 0 updates and
+      // skips — no duplicate sends through the dealer transport.
+      const [item] = await db
+        .update(emailLogsTable)
+        .set({ status: "sending", attempts: selected.attempts + 1 })
+        .where(
+          and(
+            eq(emailLogsTable.id, selected.id),
+            eq(emailLogsTable.status, selected.status),
+            eq(emailLogsTable.attempts, selected.attempts),
+          ),
+        )
+        .returning();
+      if (!item) continue; // another worker claimed it
       // Consent recheck at send time: opt-out may have been enabled after
       // this row was queued (or between scheduled retries) — never deliver.
       if (await isRecipientEmailOptedOut(item.dealerId, item.recipient)) {
@@ -1797,10 +1893,24 @@ export async function processQueue(): Promise<void> {
           .where(eq(emailLogsTable.id, item.id));
         continue;
       }
-      await db
-        .update(emailLogsTable)
-        .set({ status: "sending", attempts: item.attempts + 1 })
-        .where(eq(emailLogsTable.id, item.id));
+      // Resolve the OWNING dealer's SMTP connection. Unconfigured/disabled
+      // dealers get a terminal, non-retrying skip — never another dealer's
+      // sender, never a global credential.
+      const smtp = await smtpFor(item.dealerId);
+      if (!smtp.ok) {
+        await db
+          .update(emailLogsTable)
+          .set({
+            status: "cancelled",
+            lastError: smtpSkipMessage(smtp.reason),
+          })
+          .where(eq(emailLogsTable.id, item.id));
+        logger.info(
+          { id: item.id, dealerId: item.dealerId, reason: smtp.reason },
+          "email skipped: dealer SMTP unavailable",
+        );
+        continue;
+      }
       try {
         // Per-dealer white-label branding: header logo (inline CID), display
         // name in copy/from-line. Falls back to AURA when unconfigured.
@@ -1809,10 +1919,15 @@ export async function processQueue(): Promise<void> {
         // White-label attachment filename prefix (e.g. "GTAutomotive-Invoice-…").
         const filePrefix =
           (branding.displayName ?? "").replace(/[^A-Za-z0-9]/g, "") || "AURA";
+        const override = await getTemplateOverride(
+          item.dealerId,
+          item.template,
+        );
         const { subject, html } = renderEmail(
           item.template as EmailTemplate,
           item.payload ?? {},
           { name: branding.displayName, logoSrc: logo ? "cid:dealer-logo" : null },
+          override,
         );
         let attachments:
           | { filename: string; content: Buffer; contentType: string; cid?: string }[]
@@ -1949,8 +2064,9 @@ export async function processQueue(): Promise<void> {
           /"/g,
           "",
         );
-        await transport.sendMail({
-          from: `"${fromName}" <${process.env.GMAIL_USER}>`,
+        await smtp.transport.sendMail({
+          from: `"${(smtp.fromName ?? fromName).replace(/"/g, "")}" <${smtp.fromEmail}>`,
+          ...(smtp.replyTo ? { replyTo: smtp.replyTo } : {}),
           to: item.recipient,
           subject,
           html,
@@ -1980,9 +2096,14 @@ export async function processQueue(): Promise<void> {
         }
         logger.info({ id: item.id, template: item.template }, "email sent");
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await markFailed(item, item.attempts + 1, message);
-        logger.error({ err, id: item.id }, "email send failed");
+        // Never persist or log raw SMTP error text — server responses can
+        // echo credential material. Store/log only the classified message.
+        const safe = sanitizeSmtpError(err);
+        await markFailed(item, item.attempts, safe.message);
+        logger.error(
+          { id: item.id, dealerId: item.dealerId, smtpErrorCode: safe.code },
+          "email send failed",
+        );
       }
     }
   } finally {

@@ -10,4 +10,20 @@ export interface EmailTemplateInfo {
   key: string;
   label: string;
   description: string;
+  mergeFields: string[];
+  hasOverride: boolean;
+  overrideEnabled: boolean;
+  /** @nullable */
+  overrideSubject: string | null;
+  /** @nullable */
+  overrideHeading: string | null;
+  /** @nullable */
+  overrideBody: string | null;
+  /** @nullable */
+  overrideCtaLabel: string | null;
+  defaultSubject: string;
+  defaultHeading: string;
+  defaultBody: string;
+  /** @nullable */
+  defaultCtaLabel: string | null;
 }

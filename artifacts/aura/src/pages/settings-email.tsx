@@ -12,14 +12,32 @@ import {
   useRetryEmailLog,
   getListEmailLogsQueryKey,
   getGetEmailSettingsQueryKey,
+  getListEmailTemplatesQueryKey,
   useGetServiceSettings,
   useUpdateServiceSettings,
   getGetServiceSettingsQueryKey,
+  useUpdateSmtpConnection,
+  useDeleteSmtpConnection,
+  useTestSmtpConnection,
+  useUpdateEmailTemplateOverride,
+  useDeleteEmailTemplateOverride,
+  type EmailSettings,
+  type EmailTemplateInfo,
 } from "@workspace/api-client-react";
 import { Page } from "@/components/layout/page";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +54,9 @@ import {
   XCircle,
   Eye,
   RefreshCw,
+  Pencil,
+  Trash2,
+  Plug,
 } from "lucide-react";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -56,6 +77,10 @@ export default function SettingsEmail() {
   );
   const [testTo, setTestTo] = useState("");
   const [previewKey, setPreviewKey] = useState<string | null>(null);
+  const [editTemplate, setEditTemplate] = useState<EmailTemplateInfo | null>(
+    null,
+  );
+  const canManage = settings?.canManage ?? false;
 
   const retryLog = useRetryEmailLog({
     mutation: {
@@ -138,26 +163,32 @@ export default function SettingsEmail() {
     <SettingsTabs />
     <Page className="space-y-5 pt-0">
 
-      {/* Status + test send */}
+      {/* Connection + test send */}
+      <SmtpConnectionCard settings={settings} />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
           <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
-            Configuration
+            Delivery status
           </div>
           <div className="flex items-center gap-3">
-            {settings?.configured ? (
+            {settings?.configured && settings.enabled ? (
               <CheckCircle2 className="h-8 w-8 text-emerald-400" />
             ) : (
               <XCircle className="h-8 w-8 text-red-400" />
             )}
             <div>
               <div className="font-semibold">
-                {settings?.configured ? "SMTP connected" : "SMTP not configured"}
+                {!settings?.configured
+                  ? "No email connection"
+                  : !settings.enabled
+                    ? "Sending paused"
+                    : "Ready to send"}
               </div>
               <div className="text-xs text-muted-foreground">
-                {settings?.configured
+                {settings?.configured && settings.fromAddress
                   ? `Sending as ${settings.fromAddress}`
-                  : "Add GMAIL_USER and GMAIL_APP_PASSWORD secrets to enable delivery."}
+                  : "This dealership sends no email until its own connection is set up."}
               </div>
             </div>
           </div>
@@ -219,34 +250,58 @@ export default function SettingsEmail() {
               className="cursor-pointer text-left rounded-xl border border-white/10 bg-foreground/[0.03] hover:bg-foreground/[0.06] p-4 transition-colors group"
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold">{t.label}</span>
+                <span className="text-sm font-semibold flex items-center gap-2">
+                  {t.label}
+                  {t.hasOverride && t.overrideEnabled && (
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] uppercase border-primary/40 text-primary"
+                    >
+                      Customized
+                    </Badge>
+                  )}
+                </span>
                 <Eye className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary transition-colors" />
               </div>
               <p className="mt-1 text-xs text-muted-foreground">{t.description}</p>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  templateTest.mutate({
-                    key: t.key,
-                    data: { to: testTo.trim() },
-                  });
-                }}
-                disabled={templateTest.isPending || testTo.trim().length < 3}
-                title={
-                  testTo.trim().length < 3
-                    ? "Enter a recipient in the “Send a test email” box above first"
-                    : `Send a "${t.label}" test to ${testTo.trim()}`
-                }
-                className="mt-3 flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
-              >
-                {templateTest.isPending &&
-                templateTest.variables?.key === t.key ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Send className="h-3 w-3" />
+              <div className="mt-3 flex items-center gap-4">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    templateTest.mutate({
+                      key: t.key,
+                      data: { to: testTo.trim() },
+                    });
+                  }}
+                  disabled={templateTest.isPending || testTo.trim().length < 3}
+                  title={
+                    testTo.trim().length < 3
+                      ? "Enter a recipient in the “Send a test email” box above first"
+                      : `Send a "${t.label}" test to ${testTo.trim()}`
+                  }
+                  className="flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed"
+                >
+                  {templateTest.isPending &&
+                  templateTest.variables?.key === t.key ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Send className="h-3 w-3" />
+                  )}
+                  Send test
+                </button>
+                {canManage && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditTemplate(t);
+                    }}
+                    className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Customize
+                  </button>
                 )}
-                Send test
-              </button>
+              </div>
             </div>
           ))}
         </div>
@@ -360,8 +415,514 @@ export default function SettingsEmail() {
         templateKey={previewKey}
         onClose={() => setPreviewKey(null)}
       />
+      <TemplateEditDialog
+        template={editTemplate}
+        onClose={() => setEditTemplate(null)}
+      />
     </Page>
     </>
+  );
+}
+
+function SmtpConnectionCard({
+  settings,
+}: {
+  settings: EmailSettings | undefined;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const canManage = settings?.canManage ?? false;
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    host: "",
+    port: "587",
+    security: "starttls",
+    username: "",
+    password: "",
+    fromEmail: "",
+    fromName: "",
+    replyTo: "",
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: getGetEmailSettingsQueryKey() });
+  };
+
+  const openEditor = () => {
+    setForm({
+      host: settings?.host ?? "",
+      port: String(settings?.port ?? 587),
+      security: settings?.security ?? "starttls",
+      username: settings?.username ?? "",
+      password: "",
+      fromEmail: settings?.fromAddress ?? "",
+      fromName: settings?.fromName ?? "",
+      replyTo: settings?.replyTo ?? "",
+    });
+    setEditing(true);
+  };
+
+  const save = useUpdateSmtpConnection({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Email connection saved" });
+        setEditing(false);
+        invalidate();
+      },
+      onError: (e) =>
+        toast({
+          title: "Could not save",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+  const remove = useDeleteSmtpConnection({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Email connection removed", description: "This dealership will send no email until a new connection is configured." });
+        invalidate();
+      },
+      onError: (e) =>
+        toast({
+          title: "Could not remove",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+  const test = useTestSmtpConnection({
+    mutation: {
+      onSuccess: (res) => {
+        if (res.ok) {
+          toast({ title: "Connection verified", description: "The SMTP server accepted the login." });
+        } else {
+          toast({
+            title: "Connection failed",
+            description: res.error ?? undefined,
+            variant: "destructive",
+          });
+        }
+        invalidate();
+      },
+      onError: (e) =>
+        toast({
+          title: "Test failed",
+          description: e instanceof Error ? e.message : String(e),
+          variant: "destructive",
+        }),
+    },
+  });
+  const toggleEnabled = useUpdateSmtpConnection({
+    mutation: {
+      onSuccess: invalidate,
+      onError: (e) =>
+        toast({
+          title: "Could not update",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+
+  const submit = () => {
+    const port = Number(form.port);
+    if (!form.host.trim() || !Number.isInteger(port) || port < 1 || port > 65535) {
+      toast({ title: "Enter a valid host and port", variant: "destructive" });
+      return;
+    }
+    if (!form.username.trim() || !form.fromEmail.trim()) {
+      toast({ title: "Username and sender address are required", variant: "destructive" });
+      return;
+    }
+    if (!settings?.configured && !form.password) {
+      toast({ title: "A password is required for the initial setup", variant: "destructive" });
+      return;
+    }
+    save.mutate({
+      data: {
+        host: form.host.trim(),
+        port,
+        security: form.security as "ssl" | "starttls" | "none",
+        username: form.username.trim(),
+        ...(form.password ? { password: form.password } : {}),
+        fromEmail: form.fromEmail.trim(),
+        fromName: form.fromName.trim() || null,
+        replyTo: form.replyTo.trim() || null,
+      },
+    });
+  };
+
+  if (!canManage) {
+    return null; // Non-managers see the read-only delivery status card below.
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+            Dealership email connection
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Every email this dealership sends goes through its own SMTP
+            server. Nothing is sent until this is configured.
+          </p>
+        </div>
+        {settings?.configured && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              {settings.enabled ? "Sending on" : "Paused"}
+            </span>
+            <Switch
+              checked={settings.enabled}
+              disabled={toggleEnabled.isPending}
+              onCheckedChange={(v) =>
+                toggleEnabled.mutate({ data: { enabled: v } })
+              }
+            />
+          </div>
+        )}
+      </div>
+
+      {settings?.configured && !editing ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Server</div>
+              <div className="font-medium">{settings.host}:{settings.port}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Security</div>
+              <div className="font-medium uppercase">{settings.security}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Sender</div>
+              <div className="font-medium truncate">{settings.fromAddress}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Health</div>
+              <div className={cn("font-medium", settings.lastStatus === "connected" ? "text-emerald-400" : settings.lastStatus === "error" ? "text-red-400" : "text-muted-foreground")}>
+                {settings.lastStatus === "connected"
+                  ? "Connected"
+                  : settings.lastStatus === "error"
+                    ? "Error"
+                    : "Not tested"}
+              </div>
+            </div>
+          </div>
+          {settings.lastStatus === "error" && settings.lastError && (
+            <div className="text-xs text-red-400/90">{settings.lastError}</div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={openEditor}>
+              <Pencil className="h-3.5 w-3.5" /> Edit connection
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              disabled={test.isPending}
+              onClick={() => test.mutate()}
+            >
+              {test.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Plug className="h-3.5 w-3.5" />
+              )}
+              Test connection
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5 text-red-400 hover:text-red-300"
+              disabled={remove.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    "Remove this email connection? The dealership will send no email until a new one is configured.",
+                  )
+                ) {
+                  remove.mutate();
+                }
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Remove
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {!editing ? (
+            <Button size="sm" className="gap-1.5" onClick={openEditor}>
+              <Plug className="h-3.5 w-3.5" /> Set up email connection
+            </Button>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1.5 md:col-span-1">
+                  <Label className="text-xs">SMTP host</Label>
+                  <Input
+                    placeholder="smtp.example.com"
+                    value={form.host}
+                    onChange={(e) => setForm({ ...form, host: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Port</Label>
+                  <Input
+                    placeholder="587"
+                    inputMode="numeric"
+                    value={form.port}
+                    onChange={(e) => setForm({ ...form, port: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Security</Label>
+                  <Select
+                    value={form.security}
+                    onValueChange={(v) => setForm({ ...form, security: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ssl">SSL/TLS (465)</SelectItem>
+                      <SelectItem value="starttls">STARTTLS (587)</SelectItem>
+                      <SelectItem value="none">None (not recommended)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Username</Label>
+                  <Input
+                    placeholder="mailbox@example.com"
+                    autoComplete="off"
+                    value={form.username}
+                    onChange={(e) => setForm({ ...form, username: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">
+                    Password{" "}
+                    {settings?.hasPassword && (
+                      <span className="text-muted-foreground">(leave blank to keep current)</span>
+                    )}
+                  </Label>
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={settings?.hasPassword ? "••••••••" : "App password"}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Sender address (From)</Label>
+                  <Input
+                    placeholder="sales@yourdealership.com"
+                    value={form.fromEmail}
+                    onChange={(e) => setForm({ ...form, fromEmail: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Sender name (optional)</Label>
+                  <Input
+                    placeholder="Your Dealership"
+                    value={form.fromName}
+                    onChange={(e) => setForm({ ...form, fromName: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Reply-To (optional)</Label>
+                  <Input
+                    placeholder="replies@yourdealership.com"
+                    value={form.replyTo}
+                    onChange={(e) => setForm({ ...form, replyTo: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={submit} disabled={save.isPending} className="gap-1.5">
+                  {save.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  )}
+                  Save connection
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The password is stored encrypted and never shown again. After
+                saving, run “Test connection” to verify the login.
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function TemplateEditDialog({
+  template,
+  onClose,
+}: {
+  template: EmailTemplateInfo | null;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    subject: "",
+    heading: "",
+    body: "",
+    ctaLabel: "",
+  });
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  if (template && loadedKey !== template.key) {
+    setForm({
+      subject: template.overrideSubject ?? "",
+      heading: template.overrideHeading ?? "",
+      body: template.overrideBody ?? "",
+      ctaLabel: template.overrideCtaLabel ?? "",
+    });
+    setLoadedKey(template.key);
+  }
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: getListEmailTemplatesQueryKey() });
+  };
+
+  const save = useUpdateEmailTemplateOverride({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Template customized" });
+        invalidate();
+        onClose();
+      },
+      onError: (e) =>
+        toast({
+          title: "Could not save",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+  const reset = useDeleteEmailTemplateOverride({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Template reset to default" });
+        invalidate();
+        onClose();
+      },
+      onError: (e) =>
+        toast({
+          title: "Could not reset",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+
+  if (!template) return null;
+  return (
+    <Dialog open={!!template} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Customize “{template.label}”</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-lg border border-white/10 bg-foreground/[0.03] p-3 text-xs text-muted-foreground">
+            Leave a field blank to keep the default. You can insert these
+            merge fields:{" "}
+            {template.mergeFields.map((f) => (
+              <code key={f} className="mx-0.5 rounded bg-foreground/10 px-1 py-0.5 text-[11px] text-foreground">
+                {`{{${f}}}`}
+              </code>
+            ))}
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Subject</Label>
+            <Input
+              placeholder={template.defaultSubject}
+              value={form.subject}
+              onChange={(e) => setForm({ ...form, subject: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Heading</Label>
+            <Input
+              placeholder={template.defaultHeading}
+              value={form.heading}
+              onChange={(e) => setForm({ ...form, heading: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Body</Label>
+            <Textarea
+              rows={6}
+              placeholder={template.defaultBody.replace(/<[^>]+>/g, "")}
+              value={form.body}
+              onChange={(e) => setForm({ ...form, body: e.target.value })}
+            />
+          </div>
+          {template.defaultCtaLabel && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Button label</Label>
+              <Input
+                placeholder={template.defaultCtaLabel}
+                value={form.ctaLabel}
+                onChange={(e) => setForm({ ...form, ctaLabel: e.target.value })}
+              />
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button
+              size="sm"
+              disabled={save.isPending}
+              className="gap-1.5"
+              onClick={() =>
+                save.mutate({
+                  key: template.key,
+                  data: {
+                    subject: form.subject.trim() || null,
+                    heading: form.heading.trim() || null,
+                    body: form.body.trim() || null,
+                    ctaLabel: form.ctaLabel.trim() || null,
+                    enabled: true,
+                  },
+                })
+              }
+            >
+              {save.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              Save
+            </Button>
+            {template.hasOverride && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={reset.isPending}
+                className="gap-1.5"
+                onClick={() => reset.mutate({ key: template.key })}
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Reset to default
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

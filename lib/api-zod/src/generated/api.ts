@@ -9130,8 +9130,162 @@ export const ListAuditLogsResponse = zod.array(ListAuditLogsResponseItem)
  */
 export const GetEmailSettingsResponse = zod.object({
   "configured": zod.boolean(),
+  "enabled": zod.boolean(),
   "fromAddress": zod.string().nullable(),
-  "queueDepth": zod.number()
+  "queueDepth": zod.number(),
+  "canManage": zod.boolean(),
+  "host": zod.string().nullable(),
+  "port": zod.number().nullable(),
+  "security": zod.union([zod.literal('ssl'),zod.literal('starttls'),zod.literal('none'),zod.literal(null)]).nullable(),
+  "username": zod.string().nullable(),
+  "fromName": zod.string().nullable(),
+  "replyTo": zod.string().nullable(),
+  "hasPassword": zod.boolean(),
+  "lastStatus": zod.string().nullable(),
+  "lastError": zod.string().nullable(),
+  "lastCheckedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Create or update this dealership's SMTP connection (GM only)
+ */
+
+export const updateSmtpConnectionBodyPortMax = 65535;
+
+
+
+export const updateSmtpConnectionBodyFromEmailMin = 3;
+
+
+
+export const UpdateSmtpConnectionBody = zod.object({
+  "host": zod.string().min(1).optional(),
+  "port": zod.number().min(1).max(updateSmtpConnectionBodyPortMax).optional(),
+  "security": zod.enum(['ssl', 'starttls', 'none']).optional(),
+  "username": zod.string().min(1).optional(),
+  "password": zod.string().min(1).optional(),
+  "fromEmail": zod.string().min(updateSmtpConnectionBodyFromEmailMin).optional(),
+  "fromName": zod.string().nullish(),
+  "replyTo": zod.string().nullish(),
+  "enabled": zod.boolean().optional()
+})
+
+export const UpdateSmtpConnectionResponse = zod.object({
+  "configured": zod.boolean(),
+  "enabled": zod.boolean(),
+  "fromAddress": zod.string().nullable(),
+  "queueDepth": zod.number(),
+  "canManage": zod.boolean(),
+  "host": zod.string().nullable(),
+  "port": zod.number().nullable(),
+  "security": zod.union([zod.literal('ssl'),zod.literal('starttls'),zod.literal('none'),zod.literal(null)]).nullable(),
+  "username": zod.string().nullable(),
+  "fromName": zod.string().nullable(),
+  "replyTo": zod.string().nullable(),
+  "hasPassword": zod.boolean(),
+  "lastStatus": zod.string().nullable(),
+  "lastError": zod.string().nullable(),
+  "lastCheckedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Remove this dealership's SMTP connection (GM only)
+ */
+export const DeleteSmtpConnectionResponse = zod.object({
+  "configured": zod.boolean(),
+  "enabled": zod.boolean(),
+  "fromAddress": zod.string().nullable(),
+  "queueDepth": zod.number(),
+  "canManage": zod.boolean(),
+  "host": zod.string().nullable(),
+  "port": zod.number().nullable(),
+  "security": zod.union([zod.literal('ssl'),zod.literal('starttls'),zod.literal('none'),zod.literal(null)]).nullable(),
+  "username": zod.string().nullable(),
+  "fromName": zod.string().nullable(),
+  "replyTo": zod.string().nullable(),
+  "hasPassword": zod.boolean(),
+  "lastStatus": zod.string().nullable(),
+  "lastError": zod.string().nullable(),
+  "lastCheckedAt": zod.coerce.date().nullable()
+})
+
+
+/**
+ * @summary Verify the dealership's SMTP connection by logging in (GM only)
+ */
+export const TestSmtpConnectionResponse = zod.object({
+  "ok": zod.boolean(),
+  "error": zod.string().nullable()
+})
+
+
+/**
+ * @summary Save this dealership's custom copy for a template (GM only)
+ */
+export const UpdateEmailTemplateOverrideParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const updateEmailTemplateOverrideBodySubjectMax = 500;
+
+export const updateEmailTemplateOverrideBodyHeadingMax = 500;
+
+export const updateEmailTemplateOverrideBodyBodyMax = 10000;
+
+export const updateEmailTemplateOverrideBodyCtaLabelMax = 120;
+
+
+
+export const UpdateEmailTemplateOverrideBody = zod.object({
+  "subject": zod.string().max(updateEmailTemplateOverrideBodySubjectMax).nullish(),
+  "heading": zod.string().max(updateEmailTemplateOverrideBodyHeadingMax).nullish(),
+  "body": zod.string().max(updateEmailTemplateOverrideBodyBodyMax).nullish(),
+  "ctaLabel": zod.string().max(updateEmailTemplateOverrideBodyCtaLabelMax).nullish(),
+  "enabled": zod.boolean().optional()
+})
+
+export const UpdateEmailTemplateOverrideResponse = zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "mergeFields": zod.array(zod.string()),
+  "hasOverride": zod.boolean(),
+  "overrideEnabled": zod.boolean(),
+  "overrideSubject": zod.string().nullable(),
+  "overrideHeading": zod.string().nullable(),
+  "overrideBody": zod.string().nullable(),
+  "overrideCtaLabel": zod.string().nullable(),
+  "defaultSubject": zod.string(),
+  "defaultHeading": zod.string(),
+  "defaultBody": zod.string(),
+  "defaultCtaLabel": zod.string().nullable()
+})
+
+
+/**
+ * @summary Reset a template back to the built-in default copy (GM only)
+ */
+export const DeleteEmailTemplateOverrideParams = zod.object({
+  "key": zod.coerce.string()
+})
+
+export const DeleteEmailTemplateOverrideResponse = zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "mergeFields": zod.array(zod.string()),
+  "hasOverride": zod.boolean(),
+  "overrideEnabled": zod.boolean(),
+  "overrideSubject": zod.string().nullable(),
+  "overrideHeading": zod.string().nullable(),
+  "overrideBody": zod.string().nullable(),
+  "overrideCtaLabel": zod.string().nullable(),
+  "defaultSubject": zod.string(),
+  "defaultHeading": zod.string(),
+  "defaultBody": zod.string(),
+  "defaultCtaLabel": zod.string().nullable()
 })
 
 
@@ -9158,7 +9312,18 @@ export const SendTestEmailResponse = zod.object({
 export const ListEmailTemplatesResponseItem = zod.object({
   "key": zod.string(),
   "label": zod.string(),
-  "description": zod.string()
+  "description": zod.string(),
+  "mergeFields": zod.array(zod.string()),
+  "hasOverride": zod.boolean(),
+  "overrideEnabled": zod.boolean(),
+  "overrideSubject": zod.string().nullable(),
+  "overrideHeading": zod.string().nullable(),
+  "overrideBody": zod.string().nullable(),
+  "overrideCtaLabel": zod.string().nullable(),
+  "defaultSubject": zod.string(),
+  "defaultHeading": zod.string(),
+  "defaultBody": zod.string(),
+  "defaultCtaLabel": zod.string().nullable()
 })
 export const ListEmailTemplatesResponse = zod.array(ListEmailTemplatesResponseItem)
 

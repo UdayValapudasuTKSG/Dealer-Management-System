@@ -6267,11 +6267,105 @@ export interface Customer360 {
   openGates: Gate[];
 }
 
+/**
+ * @nullable
+ */
+export type EmailSettingsSecurity = typeof EmailSettingsSecurity[keyof typeof EmailSettingsSecurity] | null;
+
+
+export const EmailSettingsSecurity = {
+  ssl: 'ssl',
+  starttls: 'starttls',
+  none: 'none',
+} as const;
+
 export interface EmailSettings {
   configured: boolean;
+  enabled: boolean;
   /** @nullable */
   fromAddress: string | null;
   queueDepth: number;
+  canManage: boolean;
+  /** @nullable */
+  host: string | null;
+  /** @nullable */
+  port: number | null;
+  /** @nullable */
+  security: EmailSettingsSecurity;
+  /** @nullable */
+  username: string | null;
+  /** @nullable */
+  fromName: string | null;
+  /** @nullable */
+  replyTo: string | null;
+  hasPassword: boolean;
+  /** @nullable */
+  lastStatus: string | null;
+  /** @nullable */
+  lastError: string | null;
+  /** @nullable */
+  lastCheckedAt: string | null;
+}
+
+export type UpdateSmtpConnectionRequestSecurity = typeof UpdateSmtpConnectionRequestSecurity[keyof typeof UpdateSmtpConnectionRequestSecurity];
+
+
+export const UpdateSmtpConnectionRequestSecurity = {
+  ssl: 'ssl',
+  starttls: 'starttls',
+  none: 'none',
+} as const;
+
+export interface UpdateSmtpConnectionRequest {
+  /** @minLength 1 */
+  host?: string;
+  /**
+     * @minimum 1
+     * @maximum 65535
+     */
+  port?: number;
+  security?: UpdateSmtpConnectionRequestSecurity;
+  /** @minLength 1 */
+  username?: string;
+  /** @minLength 1 */
+  password?: string;
+  /** @minLength 3 */
+  fromEmail?: string;
+  /** @nullable */
+  fromName?: string | null;
+  /** @nullable */
+  replyTo?: string | null;
+  enabled?: boolean;
+}
+
+export interface SmtpConnectionTestResult {
+  ok: boolean;
+  /** @nullable */
+  error: string | null;
+}
+
+export interface EmailTemplateOverrideRequest {
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  subject?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  heading?: string | null;
+  /**
+     * @maxLength 10000
+     * @nullable
+     */
+  body?: string | null;
+  /**
+     * @maxLength 120
+     * @nullable
+     */
+  ctaLabel?: string | null;
+  enabled?: boolean;
 }
 
 export interface TestEmailRequest {
@@ -6289,6 +6383,22 @@ export interface EmailTemplateInfo {
   key: string;
   label: string;
   description: string;
+  mergeFields: string[];
+  hasOverride: boolean;
+  overrideEnabled: boolean;
+  /** @nullable */
+  overrideSubject: string | null;
+  /** @nullable */
+  overrideHeading: string | null;
+  /** @nullable */
+  overrideBody: string | null;
+  /** @nullable */
+  overrideCtaLabel: string | null;
+  defaultSubject: string;
+  defaultHeading: string;
+  defaultBody: string;
+  /** @nullable */
+  defaultCtaLabel: string | null;
 }
 
 export interface EmailTemplatePreview {

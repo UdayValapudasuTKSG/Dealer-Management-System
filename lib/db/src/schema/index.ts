@@ -56,3 +56,4 @@ export * from "./provisioningSteps";
 export * from "./agentPolicies";
 export * from "./erpnext";
 export * from "./whatsappChannels";
+export * from "./smtpConnections";

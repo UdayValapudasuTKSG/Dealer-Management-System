@@ -116,6 +116,7 @@ import type {
   EmailLog,
   EmailSettings,
   EmailTemplateInfo,
+  EmailTemplateOverrideRequest,
   EmailTemplatePreview,
   EnqueueEmailRequest,
   EnquiryInput,
@@ -273,6 +274,7 @@ import type {
   ServiceOrderUpdate,
   ServiceSettings,
   ServiceSettingsUpdate,
+  SmtpConnectionTestResult,
   StageChecklistConfig,
   StageChecklistInput,
   Supplier,
@@ -298,6 +300,7 @@ import type {
   UnmetResponse,
   UpdateDeal422,
   UpdateErpnextSettingsRequest,
+  UpdateSmtpConnectionRequest,
   UpdateWhatsappSettingsRequest,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -20111,6 +20114,362 @@ export function useGetEmailSettings<TData = Awaited<ReturnType<typeof getEmailSe
 
 
 
+
+export const getUpdateSmtpConnectionUrl = () => {
+
+
+
+
+  return `/api/emails/connection`
+}
+
+/**
+ * @summary Create or update this dealership's SMTP connection (GM only)
+ */
+export const updateSmtpConnection = async (updateSmtpConnectionRequest: UpdateSmtpConnectionRequest, options?: RequestInit): Promise<EmailSettings> => {
+
+  return customFetch<EmailSettings>(getUpdateSmtpConnectionUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateSmtpConnectionRequest)
+  }
+);}
+
+
+
+
+
+export const getUpdateSmtpConnectionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSmtpConnection>>, TError,{data: BodyType<UpdateSmtpConnectionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSmtpConnection>>, TError,{data: BodyType<UpdateSmtpConnectionRequest>}, TContext> => {
+
+const mutationKey = ['updateSmtpConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSmtpConnection>>, {data: BodyType<UpdateSmtpConnectionRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateSmtpConnection(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSmtpConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof updateSmtpConnection>>>
+    export type UpdateSmtpConnectionMutationBody = BodyType<UpdateSmtpConnectionRequest>
+    export type UpdateSmtpConnectionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Create or update this dealership's SMTP connection (GM only)
+ */
+export const useUpdateSmtpConnection = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSmtpConnection>>, TError,{data: BodyType<UpdateSmtpConnectionRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSmtpConnection>>,
+        TError,
+        {data: BodyType<UpdateSmtpConnectionRequest>},
+        TContext
+      > => {
+      return useMutation(getUpdateSmtpConnectionMutationOptions(options));
+    }
+
+export const getDeleteSmtpConnectionUrl = () => {
+
+
+
+
+  return `/api/emails/connection`
+}
+
+/**
+ * @summary Remove this dealership's SMTP connection (GM only)
+ */
+export const deleteSmtpConnection = async ( options?: RequestInit): Promise<EmailSettings> => {
+
+  return customFetch<EmailSettings>(getDeleteSmtpConnectionUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteSmtpConnectionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSmtpConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSmtpConnection>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteSmtpConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSmtpConnection>>, void> = () => {
+
+
+          return  deleteSmtpConnection(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSmtpConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSmtpConnection>>>
+
+    export type DeleteSmtpConnectionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Remove this dealership's SMTP connection (GM only)
+ */
+export const useDeleteSmtpConnection = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSmtpConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSmtpConnection>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteSmtpConnectionMutationOptions(options));
+    }
+
+export const getTestSmtpConnectionUrl = () => {
+
+
+
+
+  return `/api/emails/connection/test`
+}
+
+/**
+ * @summary Verify the dealership's SMTP connection by logging in (GM only)
+ */
+export const testSmtpConnection = async ( options?: RequestInit): Promise<SmtpConnectionTestResult> => {
+
+  return customFetch<SmtpConnectionTestResult>(getTestSmtpConnectionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTestSmtpConnectionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testSmtpConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testSmtpConnection>>, TError,void, TContext> => {
+
+const mutationKey = ['testSmtpConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testSmtpConnection>>, void> = () => {
+
+
+          return  testSmtpConnection(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestSmtpConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testSmtpConnection>>>
+
+    export type TestSmtpConnectionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Verify the dealership's SMTP connection by logging in (GM only)
+ */
+export const useTestSmtpConnection = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testSmtpConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testSmtpConnection>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestSmtpConnectionMutationOptions(options));
+    }
+
+export const getUpdateEmailTemplateOverrideUrl = (key: string,) => {
+
+
+
+
+  return `/api/emails/templates/${key}/override`
+}
+
+/**
+ * @summary Save this dealership's custom copy for a template (GM only)
+ */
+export const updateEmailTemplateOverride = async (key: string,
+    emailTemplateOverrideRequest: EmailTemplateOverrideRequest, options?: RequestInit): Promise<EmailTemplateInfo> => {
+
+  return customFetch<EmailTemplateInfo>(getUpdateEmailTemplateOverrideUrl(key),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(emailTemplateOverrideRequest)
+  }
+);}
+
+
+
+
+
+export const getUpdateEmailTemplateOverrideMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEmailTemplateOverride>>, TError,{key: string;data: BodyType<EmailTemplateOverrideRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateEmailTemplateOverride>>, TError,{key: string;data: BodyType<EmailTemplateOverrideRequest>}, TContext> => {
+
+const mutationKey = ['updateEmailTemplateOverride'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEmailTemplateOverride>>, {key: string;data: BodyType<EmailTemplateOverrideRequest>}> = (props) => {
+          const {key,data} = props ?? {};
+
+          return  updateEmailTemplateOverride(key,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateEmailTemplateOverrideMutationResult = NonNullable<Awaited<ReturnType<typeof updateEmailTemplateOverride>>>
+    export type UpdateEmailTemplateOverrideMutationBody = BodyType<EmailTemplateOverrideRequest>
+    export type UpdateEmailTemplateOverrideMutationError = ErrorType<Error>
+
+    /**
+ * @summary Save this dealership's custom copy for a template (GM only)
+ */
+export const useUpdateEmailTemplateOverride = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEmailTemplateOverride>>, TError,{key: string;data: BodyType<EmailTemplateOverrideRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateEmailTemplateOverride>>,
+        TError,
+        {key: string;data: BodyType<EmailTemplateOverrideRequest>},
+        TContext
+      > => {
+      return useMutation(getUpdateEmailTemplateOverrideMutationOptions(options));
+    }
+
+export const getDeleteEmailTemplateOverrideUrl = (key: string,) => {
+
+
+
+
+  return `/api/emails/templates/${key}/override`
+}
+
+/**
+ * @summary Reset a template back to the built-in default copy (GM only)
+ */
+export const deleteEmailTemplateOverride = async (key: string, options?: RequestInit): Promise<EmailTemplateInfo> => {
+
+  return customFetch<EmailTemplateInfo>(getDeleteEmailTemplateOverrideUrl(key),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteEmailTemplateOverrideMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEmailTemplateOverride>>, TError,{key: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteEmailTemplateOverride>>, TError,{key: string}, TContext> => {
+
+const mutationKey = ['deleteEmailTemplateOverride'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEmailTemplateOverride>>, {key: string}> = (props) => {
+          const {key} = props ?? {};
+
+          return  deleteEmailTemplateOverride(key,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteEmailTemplateOverrideMutationResult = NonNullable<Awaited<ReturnType<typeof deleteEmailTemplateOverride>>>
+
+    export type DeleteEmailTemplateOverrideMutationError = ErrorType<Error>
+
+    /**
+ * @summary Reset a template back to the built-in default copy (GM only)
+ */
+export const useDeleteEmailTemplateOverride = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEmailTemplateOverride>>, TError,{key: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteEmailTemplateOverride>>,
+        TError,
+        {key: string},
+        TContext
+      > => {
+      return useMutation(getDeleteEmailTemplateOverrideMutationOptions(options));
+    }
 
 export const getSendTestEmailUrl = () => {
 

@@ -5,10 +5,32 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { EmailSettingsSecurity } from './emailSettingsSecurity';
 
 export interface EmailSettings {
   configured: boolean;
+  enabled: boolean;
   /** @nullable */
   fromAddress: string | null;
   queueDepth: number;
+  canManage: boolean;
+  /** @nullable */
+  host: string | null;
+  /** @nullable */
+  port: number | null;
+  /** @nullable */
+  security: EmailSettingsSecurity;
+  /** @nullable */
+  username: string | null;
+  /** @nullable */
+  fromName: string | null;
+  /** @nullable */
+  replyTo: string | null;
+  hasPassword: boolean;
+  /** @nullable */
+  lastStatus: string | null;
+  /** @nullable */
+  lastError: string | null;
+  /** @nullable */
+  lastCheckedAt: Date | null;
 }

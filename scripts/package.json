@@ -22,7 +22,8 @@
     "seed-payment-demo": "tsx ./src/seed-payment-demo.ts",
     "verify-gra-duty": "tsx ./src/verify-gra-duty.ts",
     "backfill-pdi-status": "tsx ./src/backfill-pdi-status.ts",
-    "migrate-gt-salesforce": "tsx ./src/migrate-gt-salesforce.ts"
+    "migrate-gt-salesforce": "tsx ./src/migrate-gt-salesforce.ts",
+    "verify-smtp-email": "tsx ./src/verify-smtp-email.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "1.9.1",
