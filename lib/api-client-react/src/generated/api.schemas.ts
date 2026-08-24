@@ -20,6 +20,7 @@ export interface WhatsappSettings {
   serviceTemplateName?: string | null;
   serviceTemplateLanguage: string;
   hasAccessToken: boolean;
+  hasAppSecret: boolean;
   /** @nullable */
   lastStatus?: string | null;
   /** @nullable */
@@ -47,6 +48,13 @@ export interface UpdateWhatsappSettingsRequest {
      * @maxLength 4096
      */
   accessToken?: string;
+  /**
+     * Meta app secret used to verify inbound webhook signatures — stored encrypted; omit to preserve the existing secret
+     * @minLength 16
+     * @maxLength 128
+     * @pattern ^[0-9a-fA-F]+$
+     */
+  appSecret?: string;
   enabled?: boolean;
   /**
      * @minLength 1

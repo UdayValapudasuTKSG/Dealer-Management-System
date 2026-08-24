@@ -51,6 +51,10 @@ const formSchema = z.object({
     .max(64)
     .regex(/^\d+$/, "Use the numeric Phone Number ID from Meta"),
   accessToken: z.string().optional(),
+  appSecret: z
+    .string()
+    .regex(/^[0-9a-fA-F]*$/, "The app secret is a hexadecimal value from Meta → App settings → Basic")
+    .optional(),
   serviceTemplateName: z
     .string()
     .regex(/^[a-z0-9_]*$/, "Use lowercase letters, numbers, and underscores only")
@@ -93,6 +97,7 @@ export default function SettingsWhatsapp() {
       wabaId: "",
       phoneNumberId: "",
       accessToken: "",
+      appSecret: "",
       serviceTemplateName: "",
       serviceTemplateLanguage: "en_US",
     },
@@ -104,6 +109,7 @@ export default function SettingsWhatsapp() {
         wabaId: settings.wabaId ?? "",
         phoneNumberId: settings.phoneNumberId ?? "",
         accessToken: "",
+        appSecret: "",
         serviceTemplateName: settings.serviceTemplateName ?? "",
         serviceTemplateLanguage: settings.serviceTemplateLanguage ?? "en_US",
       });
@@ -118,6 +124,7 @@ export default function SettingsWhatsapp() {
       onSuccess: () => {
         toast({ title: "WhatsApp connection saved" });
         form.setValue("accessToken", "");
+        form.setValue("appSecret", "");
         refreshSettings();
       },
       onError: (e) =>
@@ -168,6 +175,7 @@ export default function SettingsWhatsapp() {
         wabaId: values.wabaId.trim(),
         phoneNumberId: values.phoneNumberId.trim(),
         accessToken: values.accessToken?.trim() || undefined,
+        appSecret: values.appSecret?.trim() || undefined,
         serviceTemplateName: values.serviceTemplateName?.trim() || null,
         serviceTemplateLanguage:
           values.serviceTemplateLanguage?.trim() || "en_US",
@@ -336,6 +344,35 @@ export default function SettingsWhatsapp() {
                           {...field}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="appSecret"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>App Secret</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          autoComplete="new-password"
+                          placeholder={
+                            settings?.hasAppSecret
+                              ? "Saved — leave blank to keep existing secret"
+                              : "32-character hex from Meta → App settings → Basic"
+                          }
+                          disabled={!isGm}
+                          data-testid="input-app-secret"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Used to verify that inbound webhook messages really come
+                        from your Meta app. Find it in the Meta developer console
+                        under App settings → Basic → App secret.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

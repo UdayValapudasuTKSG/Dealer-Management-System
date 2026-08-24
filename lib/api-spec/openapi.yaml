@@ -7702,7 +7702,7 @@ components:
   schemas:
     WhatsappSettings:
       type: object
-      required: [configured, enabled, hasAccessToken, serviceTemplateLanguage]
+      required: [configured, enabled, hasAccessToken, hasAppSecret, serviceTemplateLanguage]
       properties:
         configured: { type: boolean }
         enabled: { type: boolean }
@@ -7713,6 +7713,7 @@ components:
         serviceTemplateName: { type: ["string", "null"] }
         serviceTemplateLanguage: { type: string }
         hasAccessToken: { type: boolean }
+        hasAppSecret: { type: boolean }
         lastStatus: { type: ["string", "null"] }
         lastError: { type: ["string", "null"] }
         lastCheckedAt: { type: ["string", "null"], format: date-time }
@@ -7722,6 +7723,7 @@ components:
         wabaId: { type: string, minLength: 5, maxLength: 64, pattern: "^[0-9]+$" }
         phoneNumberId: { type: string, minLength: 5, maxLength: 64, pattern: "^[0-9]+$" }
         accessToken: { type: string, minLength: 20, maxLength: 4096, description: "Meta access token — stored encrypted; omit to preserve the existing token" }
+        appSecret: { type: string, minLength: 16, maxLength: 128, pattern: "^[0-9a-fA-F]+$", description: "Meta app secret used to verify inbound webhook signatures — stored encrypted; omit to preserve the existing secret" }
         enabled: { type: boolean }
         serviceTemplateName: { type: ["string", "null"], minLength: 1, maxLength: 512, pattern: "^[a-z0-9_]+$" }
         serviceTemplateLanguage: { type: string, minLength: 2, maxLength: 12, pattern: "^[A-Za-z]{2,3}(?:_[A-Za-z]{2})?$" }

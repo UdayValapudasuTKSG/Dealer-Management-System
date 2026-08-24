@@ -27,7 +27,10 @@ import {
   whatsappConfig,
   type WhatsappTransport,
 } from "../lib/whatsapp";
-import { getChannelByPhoneNumberId } from "../lib/whatsapp-channel";
+import {
+  allWhatsappAppSecrets,
+  getChannelByPhoneNumberId,
+} from "../lib/whatsapp-channel";
 import {
   allMetaAppSecrets,
   allMetaVerifyTokens,
@@ -476,17 +479,22 @@ function durableMetaBotTransport(
 
 // Receiver. Mounted with express.raw() (see app.ts) so the X-Hub-Signature-256
 // can be verified over the exact bytes Meta sent.
-// Signature verification is platform-level (global META_APP_SECRET).
+// Signature verification tries every stored per-channel app secret plus the
+// global META_APP_SECRET env fallback (no dealer context before parsing).
 // Channel resolution is per-dealer via metadata.phone_number_id → DB lookup.
 router.post("/webhooks/whatsapp", async (req, res): Promise<void> => {
-  const appSecret = process.env["META_APP_SECRET"];
-  if (!appSecret) {
+  const appSecrets = await allWhatsappAppSecrets();
+  if (appSecrets.length === 0) {
     res.status(503).json({ error: "WhatsApp webhook is not configured" });
     return;
   }
   const raw: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
   const signature = req.get("x-hub-signature-256");
-  if (!verifyMetaSignature(raw, signature ?? undefined, appSecret)) {
+  if (
+    !appSecrets.some((secret) =>
+      verifyMetaSignature(raw, signature ?? undefined, secret),
+    )
+  ) {
     req.log.warn("WhatsApp webhook rejected: bad signature");
     res.status(403).json({ error: "Invalid signature" });
     return;

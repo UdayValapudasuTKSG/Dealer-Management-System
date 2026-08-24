@@ -10042,6 +10042,7 @@ export const GetWhatsappSettingsResponse = zod.object({
   "serviceTemplateName": zod.string().nullish(),
   "serviceTemplateLanguage": zod.string(),
   "hasAccessToken": zod.boolean(),
+  "hasAppSecret": zod.boolean(),
   "lastStatus": zod.string().nullish(),
   "lastError": zod.string().nullish(),
   "lastCheckedAt": zod.coerce.date().nullish()
@@ -10064,6 +10065,11 @@ export const updateWhatsappSettingsBodyPhoneNumberIdRegExp = new RegExp('^[0-9]+
 export const updateWhatsappSettingsBodyAccessTokenMin = 20;
 export const updateWhatsappSettingsBodyAccessTokenMax = 4096;
 
+export const updateWhatsappSettingsBodyAppSecretMin = 16;
+export const updateWhatsappSettingsBodyAppSecretMax = 128;
+
+
+export const updateWhatsappSettingsBodyAppSecretRegExp = new RegExp('^[0-9a-fA-F]+$');
 export const updateWhatsappSettingsBodyServiceTemplateNameMax = 512;
 
 
@@ -10079,6 +10085,7 @@ export const UpdateWhatsappSettingsBody = zod.object({
   "wabaId": zod.string().min(updateWhatsappSettingsBodyWabaIdMin).max(updateWhatsappSettingsBodyWabaIdMax).regex(updateWhatsappSettingsBodyWabaIdRegExp).optional(),
   "phoneNumberId": zod.string().min(updateWhatsappSettingsBodyPhoneNumberIdMin).max(updateWhatsappSettingsBodyPhoneNumberIdMax).regex(updateWhatsappSettingsBodyPhoneNumberIdRegExp).optional(),
   "accessToken": zod.string().min(updateWhatsappSettingsBodyAccessTokenMin).max(updateWhatsappSettingsBodyAccessTokenMax).optional().describe('Meta access token — stored encrypted; omit to preserve the existing token'),
+  "appSecret": zod.string().min(updateWhatsappSettingsBodyAppSecretMin).max(updateWhatsappSettingsBodyAppSecretMax).regex(updateWhatsappSettingsBodyAppSecretRegExp).optional().describe('Meta app secret used to verify inbound webhook signatures — stored encrypted; omit to preserve the existing secret'),
   "enabled": zod.boolean().optional(),
   "serviceTemplateName": zod.string().min(1).max(updateWhatsappSettingsBodyServiceTemplateNameMax).regex(updateWhatsappSettingsBodyServiceTemplateNameRegExp).nullish(),
   "serviceTemplateLanguage": zod.string().min(updateWhatsappSettingsBodyServiceTemplateLanguageMin).max(updateWhatsappSettingsBodyServiceTemplateLanguageMax).regex(updateWhatsappSettingsBodyServiceTemplateLanguageRegExp).optional()
@@ -10094,6 +10101,7 @@ export const UpdateWhatsappSettingsResponse = zod.object({
   "serviceTemplateName": zod.string().nullish(),
   "serviceTemplateLanguage": zod.string(),
   "hasAccessToken": zod.boolean(),
+  "hasAppSecret": zod.boolean(),
   "lastStatus": zod.string().nullish(),
   "lastError": zod.string().nullish(),
   "lastCheckedAt": zod.coerce.date().nullish()

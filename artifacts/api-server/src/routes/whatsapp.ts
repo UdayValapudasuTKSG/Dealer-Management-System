@@ -68,6 +68,7 @@ async function settingsPayload(dealerId: number) {
         serviceTemplateName: legacy.serviceTemplateName,
         serviceTemplateLanguage: legacy.serviceTemplateLanguage,
         hasAccessToken: true,
+        hasAppSecret: false,
         lastStatus: null,
         lastError: null,
         lastCheckedAt: null,
@@ -83,6 +84,7 @@ async function settingsPayload(dealerId: number) {
       serviceTemplateName: null,
       serviceTemplateLanguage: "en_US",
       hasAccessToken: false,
+      hasAppSecret: false,
       lastStatus: null,
       lastError: null,
       lastCheckedAt: null,
@@ -98,6 +100,7 @@ async function settingsPayload(dealerId: number) {
     serviceTemplateName: row.serviceTemplateName ?? null,
     serviceTemplateLanguage: row.serviceTemplateLanguage || "en_US",
     hasAccessToken: Boolean(row.accessTokenCiphertext),
+    hasAppSecret: Boolean(row.appSecretCiphertext),
     lastStatus: row.lastStatus ?? null,
     lastError: row.lastError ?? null,
     lastCheckedAt: row.lastCheckedAt ?? null,
@@ -202,6 +205,21 @@ router.put("/whatsapp/settings", async (req, res): Promise<void> => {
     }
   }
 
+  // Encrypt the app secret when provided; preserve existing ciphertext when
+  // omitted. Used to verify inbound webhook signatures for this channel's app.
+  if (body.data.appSecret) {
+    try {
+      updates["appSecretCiphertext"] = encryptToken(
+        body.data.appSecret,
+        dealerId,
+      );
+    } catch (err) {
+      logger.error({ dealerId, err: (err as Error).message }, "Failed to encrypt WhatsApp app secret");
+      res.status(500).json({ error: "Failed to secure the app secret" });
+      return;
+    }
+  }
+
   if (
     body.data.wabaId !== undefined ||
     body.data.phoneNumberId !== undefined ||
@@ -222,6 +240,8 @@ router.put("/whatsapp/settings", async (req, res): Promise<void> => {
         serviceTemplateName: body.data.serviceTemplateName ?? null,
         serviceTemplateLanguage: body.data.serviceTemplateLanguage ?? "en_US",
         accessTokenCiphertext: updates["accessTokenCiphertext"] as string,
+        appSecretCiphertext:
+          (updates["appSecretCiphertext"] as string | undefined) ?? null,
         createdAt: now,
         updatedAt: now,
       });

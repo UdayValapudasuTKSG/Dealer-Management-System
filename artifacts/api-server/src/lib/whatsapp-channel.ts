@@ -57,6 +57,36 @@ function legacyEnvChannel(): ResolvedChannel | null {
 }
 
 /**
+ * All app secrets that may legitimately sign an incoming WhatsApp webhook:
+ * every channel's stored secret plus the global env secret. The webhook has
+ * no dealer context until the payload is parsed, so signature verification
+ * tries each candidate (the set is tiny — at most one per configured dealer).
+ */
+export async function allWhatsappAppSecrets(): Promise<string[]> {
+  const rows = await db
+    .select({
+      dealerId: whatsappChannelsTable.dealerId,
+      appSecretCiphertext: whatsappChannelsTable.appSecretCiphertext,
+    })
+    .from(whatsappChannelsTable);
+  const secrets = new Set<string>();
+  for (const row of rows) {
+    if (!row.appSecretCiphertext) continue;
+    try {
+      secrets.add(decryptToken(row.appSecretCiphertext, row.dealerId));
+    } catch (err) {
+      logger.error(
+        { err, dealerId: row.dealerId },
+        "Failed to decrypt WhatsApp app secret",
+      );
+    }
+  }
+  const env = process.env["META_APP_SECRET"];
+  if (env) secrets.add(env);
+  return [...secrets];
+}
+
+/**
  * Look up the active channel for a dealer.
  * Returns null when the dealer has no enabled channel with a token.
  */

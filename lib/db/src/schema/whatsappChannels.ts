@@ -46,6 +46,13 @@ export const whatsappChannelsTable = pgTable(
      * Never returned to the client; only hasAccessToken is exposed.
      */
     accessTokenCiphertext: text("access_token_ciphertext"),
+    /**
+     * AES-256-GCM ciphertext of the Meta app secret used to verify inbound
+     * webhook signatures for this channel's app. Same wire format as the
+     * access token. Optional: when absent, the platform-level META_APP_SECRET
+     * env fallback is used. Never returned to the client; only hasAppSecret.
+     */
+    appSecretCiphertext: text("app_secret_ciphertext"),
     /** Last health check result: "connected" | "error" | null (never tested). */
     lastStatus: text("last_status"),
     /** Human-readable error from the last test call, if any. */
