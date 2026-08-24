@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import {
+  UserCircle,
   UserCog,
   ShieldCheck,
   Megaphone,
@@ -20,13 +21,21 @@ export type SettingsSection = {
   href: string;
   icon: LucideIcon;
   description: string;
-  /** RBAC module gating this section (mirrors the old sidebar gating). */
-  module: string;
+  /** RBAC module gating this section (mirrors the old sidebar gating).
+   *  Null = personal section, visible to every signed-in user. */
+  module: string | null;
   /** Restricted to the active dealership's general manager. */
   gmOnly?: boolean;
 };
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
+  {
+    name: "Profile",
+    href: "/settings/profile",
+    icon: UserCircle,
+    description: "Your own name, phone and account details.",
+    module: null,
+  },
   {
     name: "Users",
     href: "/settings/users",

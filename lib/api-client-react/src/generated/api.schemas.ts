@@ -293,6 +293,8 @@ export interface CurrentUser {
   /** @nullable */
   name?: string | null;
   /** @nullable */
+  phone?: string | null;
+  /** @nullable */
   imageUrl?: string | null;
   /** @nullable */
   roleId?: number | null;
@@ -305,6 +307,31 @@ export interface CurrentUser {
   entitlements?: Entitlements;
   dealers: DealerMembershipInfo[];
   permissions: PermissionGrant[];
+}
+
+export interface UpdateMyProfileRequest {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name?: string;
+  /**
+     * @maxLength 32
+     * @nullable
+     */
+  phone?: string | null;
+}
+
+export interface MyProfile {
+  id: number;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  imageUrl?: string | null;
 }
 
 export interface DealerBranding {

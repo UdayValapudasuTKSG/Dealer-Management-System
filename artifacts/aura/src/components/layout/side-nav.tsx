@@ -78,7 +78,9 @@ const CLUSTERS: Cluster[] = [
   {
     label: "Settings",
     items: [
-      { name: "Settings", href: "/settings", module: "settings", icon: Settings },
+      // Module-less: every signed-in user has a personal Profile section;
+      // admin settings sections remain gated inside /settings itself.
+      { name: "Settings", href: "/settings", module: "", icon: Settings },
     ],
   },
 ];
@@ -338,6 +340,12 @@ function useNavClusters() {
         {
           label: "Workspace",
           items: [...base, ...extras],
+        },
+        {
+          label: "Settings",
+          items: [
+            { name: "Settings", href: "/settings", module: "", icon: Settings },
+          ],
         },
       ];
 

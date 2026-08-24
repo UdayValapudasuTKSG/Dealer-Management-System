@@ -17,6 +17,8 @@ export interface CurrentUser {
   /** @nullable */
   name?: string | null;
   /** @nullable */
+  phone?: string | null;
+  /** @nullable */
   imageUrl?: string | null;
   /** @nullable */
   roleId?: number | null;

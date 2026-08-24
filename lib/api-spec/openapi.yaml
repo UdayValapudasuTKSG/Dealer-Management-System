@@ -5424,6 +5424,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateMyProfile
+      tags: [auth]
+      summary: Update the signed-in user's own basic profile info
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMyProfileRequest"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyProfile"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Blocked (e.g. impersonation session)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /auth/logout-event:
     post:
       operationId: recordLogoutEvent
@@ -7694,6 +7729,7 @@ components:
         clerkId: { type: string }
         email: { type: ["string", "null"] }
         name: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
         imageUrl: { type: ["string", "null"] }
         roleId: { type: ["integer", "null"] }
         roleName: { type: ["string", "null"] }
@@ -7710,6 +7746,20 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PermissionGrant"
+    UpdateMyProfileRequest:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        phone: { type: ["string", "null"], maxLength: 32 }
+    MyProfile:
+      type: object
+      required: [id]
+      properties:
+        id: { type: integer }
+        name: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        imageUrl: { type: ["string", "null"] }
     DealerMembershipInfo:
       type: object
       required: [dealerId, dealerName]

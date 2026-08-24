@@ -7802,6 +7802,7 @@ export const GetCurrentUserResponse = zod.object({
   "clerkId": zod.string(),
   "email": zod.string().nullish(),
   "name": zod.string().nullish(),
+  "phone": zod.string().nullish(),
   "imageUrl": zod.string().nullish(),
   "roleId": zod.number().nullish(),
   "roleName": zod.string().nullable(),
@@ -7824,6 +7825,29 @@ export const GetCurrentUserResponse = zod.object({
   "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 }))
+})
+
+
+/**
+ * @summary Update the signed-in user's own basic profile info
+ */
+export const updateMyProfileBodyNameMax = 120;
+
+export const updateMyProfileBodyPhoneMax = 32;
+
+
+
+export const UpdateMyProfileBody = zod.object({
+  "name": zod.string().min(1).max(updateMyProfileBodyNameMax).optional(),
+  "phone": zod.string().max(updateMyProfileBodyPhoneMax).nullish()
+})
+
+export const UpdateMyProfileResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "imageUrl": zod.string().nullish()
 })
 
 

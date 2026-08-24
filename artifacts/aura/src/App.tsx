@@ -35,6 +35,7 @@ import SettingsUsers from "@/pages/settings-users";
 import SettingsEmail from "@/pages/settings-email";
 import SettingsErpnext from "@/pages/settings-erpnext";
 import SettingsWhatsapp from "@/pages/settings-whatsapp";
+import SettingsProfile from "@/pages/settings-profile";
 import SettingsBranding from "@/pages/settings-branding";
 import SettingsRoles from "@/pages/settings-roles";
 import SettingsSources from "@/pages/settings-sources";
@@ -295,6 +296,9 @@ function AppRoutes() {
                 <Route path="/gra">
                   <Redirect to="/pipeline" />
                 </Route>
+                <Route path="/settings/profile">
+                  <SettingsProfile />
+                </Route>
                 <Route path="/settings/users">
                   <RequireSettings>
                     <SettingsUsers />
@@ -346,7 +350,7 @@ function AppRoutes() {
                   </RequireSettings>
                 </Route>
                 <Route path="/settings">
-                  <Redirect to="/settings/users" replace />
+                  <Redirect to="/settings/profile" replace />
                 </Route>
                 <Route component={NotFound} />
               </Switch>
