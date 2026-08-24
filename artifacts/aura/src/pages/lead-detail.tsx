@@ -929,6 +929,15 @@ export default function LeadDetail() {
   const [lostOpen, setLostOpen] = useState(false);
   const [lostReason, setLostReason] = useState("");
   const [lostReasonKey, setLostReasonKey] = useState("");
+  // Reopen a lost lead into an active stage (phase + matching status).
+  const REOPEN_STAGES = [
+    { value: "contacted", label: "Contacted", status: "contacted" },
+    { value: "qualified", label: "Qualified", status: "qualified" },
+    { value: "proposal", label: "Proposal", status: "engaged" },
+    { value: "negotiation", label: "Negotiation", status: "engaged" },
+  ];
+  const [reopenOpen, setReopenOpen] = useState(false);
+  const [reopenStage, setReopenStage] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [, navigate] = useLocation();
 
@@ -1592,6 +1601,12 @@ export default function LeadDetail() {
                     <DropdownMenuItem onClick={() => setLostOpen(true)}>
                       <XCircle className="w-3.5 h-3.5 mr-2" />
                       Mark as Lost…
+                    </DropdownMenuItem>
+                  )}
+                  {canEdit && lead.phase === "lost" && (
+                    <DropdownMenuItem onClick={() => setReopenOpen(true)}>
+                      <ClipboardList className="w-3.5 h-3.5 mr-2" />
+                      Reopen lead…
                     </DropdownMenuItem>
                   )}
                   {canDelete && (
@@ -3688,6 +3703,87 @@ export default function LeadDetail() {
               }}
             >
               Mark as Lost
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={reopenOpen}
+        onOpenChange={(open) => {
+          setReopenOpen(open);
+          if (!open) setReopenStage("");
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reopen this lead?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The lead leaves the Lost column and returns to the pipeline at
+              the stage you pick. The closure reason is cleared.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div>
+            <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1.5">
+              Return to stage (required)
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {REOPEN_STAGES.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => setReopenStage(s.value)}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition-colors",
+                    reopenStage === s.value
+                      ? "bg-primary text-white ring-primary"
+                      : "bg-foreground/[0.04] text-muted-foreground ring-white/10 hover:text-foreground",
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={updateLead.isPending || !reopenStage}
+              onClick={async () => {
+                const target = REOPEN_STAGES.find(
+                  (s) => s.value === reopenStage,
+                )!;
+                try {
+                  await updateLead.mutateAsync({
+                    id: lead.id,
+                    data: {
+                      phase: target.value as never,
+                      status: target.status as never,
+                    },
+                  });
+                } catch {
+                  toast({
+                    title: "Could not reopen the lead",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                try {
+                  await createNote.mutateAsync({
+                    id: lead.id,
+                    data: {
+                      text: `Lead reopened — returned to ${target.label}.`,
+                    },
+                  });
+                } catch {
+                  // The reopen itself succeeded and is audited server-side;
+                  // the note is a nicety.
+                }
+                setReopenStage("");
+                setReopenOpen(false);
+              }}
+            >
+              Reopen lead
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -307,7 +307,12 @@ export function LeadWorkflowDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(STATUS_LABEL).map(([value, label]) => (
+                    {/* "Lost" is deliberately excluded — closing a lead happens
+                        only via the explicit Mark as Lost flow on the lead
+                        detail page, which requires a closure reason. */}
+                    {Object.entries(STATUS_LABEL)
+                      .filter(([value]) => value !== "lost")
+                      .map(([value, label]) => (
                       <SelectItem key={value} value={value}>
                         {label}
                       </SelectItem>

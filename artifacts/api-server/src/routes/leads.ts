@@ -4,6 +4,7 @@ import { eq, desc, and, or, isNull, isNotNull, ne, ilike, gte, lte, sql, inArray
 import {
   db,
   leadsTable,
+  tasksTable,
   vehiclesTable,
   usersTable,
   rolesTable,
@@ -2671,6 +2672,30 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  // Reopening a lost lead: leaving lost (by phase and/or status) clears the
+  // closure reason so the record no longer looks closed, and is audited as a
+  // reopen below. Resulting state is computed field-by-field so status-only
+  // or phase-only patches are both handled.
+  const resultPhase = parsed.data.phase ?? before.phase;
+  const resultStatus = parsed.data.status ?? before.status;
+  const wasLost = before.phase === "lost" || before.status === "lost";
+  const resultingLost = resultPhase === "lost" || resultStatus === "lost";
+  const reopening = wasLost && !resultingLost;
+
+  // While a lead remains lost its closure reason cannot be blanked out —
+  // every closed lead must carry a reason.
+  if (
+    resultingLost &&
+    "closureReason" in (req.body ?? {}) &&
+    !parsed.data.closureReason?.trim()
+  ) {
+    res.status(422).json({
+      error: "A lost lead must keep a closure reason",
+      unmet: ["closure_reason_required"],
+    });
+    return;
+  }
+
   // Vehicle swap + lead update run as ONE transaction with the lead row
   // locked, so concurrent swaps serialize instead of orphaning reservations:
   // reserve the replacement (when the fee is/becomes paid) BEFORE the lead
@@ -2774,6 +2799,7 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
           ...(parsed.data.phase && parsed.data.phase !== locked.phase
             ? { stageEnteredAt: new Date() }
             : {}),
+          ...(reopening ? { closureReason: null } : {}),
         })
         .where(
           and(
@@ -2920,6 +2946,22 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     // Closing the lead ends the follow-up cadence.
     await completeCadenceTasks(lead!, "Lead closed — cadence stopped.");
   }
+  if (reopening) {
+    // A reopened lead must not sit dormant: give the owner a fresh follow-up
+    // task (independent of the historical miss count, which stays archived).
+    const due = new Date(Date.now() + 86_400_000);
+    await db.insert(tasksTable).values({
+      dealerId: lead!.dealerId,
+      leadId: lead!.id,
+      kind: "cadence",
+      title: `Follow-up call — reopened lead: ${lead!.name}`,
+      description: `This lead was reopened from Lost into ${resultPhase}. Reach out to restart the conversation.`,
+      assigneeUserId: lead!.ownerUserId ?? null,
+      dueDate: due.toLocaleDateString("en-CA", { timeZone: "America/Guyana" }),
+      dueAt: due,
+      priority: "high",
+    });
+  }
   if (parsed.data.status && parsed.data.status !== before.status) {
     await logLeadEvent(
       lead!,
@@ -2932,9 +2974,11 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
   if (parsed.data.phase && parsed.data.phase !== before.phase) {
     await logLeadEvent(
       lead!,
-      "phase_updated",
-      `Stage advanced`,
-      `${actorName(res)} moved the lead from ${before.phase} to ${parsed.data.phase}.`,
+      reopening ? "lead_reopened" : "phase_updated",
+      reopening ? "Lead reopened" : `Stage advanced`,
+      reopening
+        ? `${actorName(res)} reopened this lost lead and moved it to ${parsed.data.phase}.`
+        : `${actorName(res)} moved the lead from ${before.phase} to ${parsed.data.phase}.`,
       actorName(res),
     );
   }
