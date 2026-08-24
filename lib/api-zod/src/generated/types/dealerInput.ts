@@ -27,6 +27,11 @@ export interface DealerInput {
      * @pattern ^#[0-9a-fA-F]{6}$
      */
   themeColor?: string | null;
+  /**
+     * Facebook Page ID for Meta Lead Ads routing; must be unique across dealers; null/empty clears the mapping
+     * @nullable
+     */
+  metaPageId?: string | null;
   entitlements?: Entitlements;
   /**
      * First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)

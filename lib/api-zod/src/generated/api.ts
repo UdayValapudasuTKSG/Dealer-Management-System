@@ -7904,6 +7904,7 @@ export const ListDealersResponseItem = zod.object({
   "retentionUntil": zod.coerce.date().nullish(),
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(listDealersResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
   "createdAt": zod.coerce.date()
 })
 export const ListDealersResponse = zod.array(ListDealersResponseItem)
@@ -7926,6 +7927,7 @@ export const CreateDealerBody = zod.object({
   "legalHold": zod.boolean().optional().describe('Legal hold — blocks close\/purge while true'),
   "usdExchangeRate": zod.number().gt(createDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
   "themeColor": zod.string().regex(createDealerBodyThemeColorRegExp).nullish().describe('Theme accent hex applied to the dealer\'s workspace in light mode; null clears to default'),
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID for Meta Lead Ads routing; must be unique across dealers; null\/empty clears the mapping'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "ownerEmail": zod.string().regex(createDealerBodyOwnerEmailRegExp).optional().describe('First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)')
 })
@@ -7948,6 +7950,7 @@ export const CreateDealerResponse = zod.object({
   "retentionUntil": zod.coerce.date().nullish(),
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(createDealerResponseDealerThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
   "createdAt": zod.coerce.date()
 }),
   "saga": zod.object({
@@ -7966,6 +7969,31 @@ export const CreateDealerResponse = zod.object({
   "resumableFrom": zod.string().nullish().describe('First non-done step key'),
   "unmet": zod.array(zod.string()).optional().describe('Go-live checklist items still outstanding')
 })
+})
+
+
+/**
+ * @summary Meta Lead Ads connection status (super admin only) — credential presence, per-dealer page mapping, last received lead. Never returns secret values.
+ */
+export const GetMetaConnectionStatusResponse = zod.object({
+  "configured": zod.boolean().describe('True when META_APP_SECRET, META_PAGE_ACCESS_TOKEN and META_VERIFY_TOKEN are all set'),
+  "missing": zod.array(zod.string()).describe('Names (never values) of the Meta env keys still unset'),
+  "callbackUrl": zod.string().describe('Webhook callback URL to paste into the Meta App dashboard'),
+  "dealers": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "status": zod.string(),
+  "metaPageId": zod.string().nullable()
+})),
+  "lastEvent": zod.object({
+  "externalId": zod.string().describe('Meta leadgen id'),
+  "dealerId": zod.number().nullish(),
+  "dealerName": zod.string().nullish(),
+  "leadId": zod.number().nullish(),
+  "leadName": zod.string().nullish(),
+  "leadSource": zod.string().nullish().describe('facebook | instagram'),
+  "createdAt": zod.coerce.date()
+}).nullable().describe('Most recent processed Meta leadgen webhook event, or null if none yet')
 })
 
 
@@ -8076,6 +8104,7 @@ export const ActivateDealerResponse = zod.object({
   "retentionUntil": zod.coerce.date().nullish(),
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(activateDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
   "createdAt": zod.coerce.date()
 })
 
@@ -8113,6 +8142,7 @@ export const SuspendDealerResponse = zod.object({
   "retentionUntil": zod.coerce.date().nullish(),
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(suspendDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
   "createdAt": zod.coerce.date()
 })
 
@@ -8141,6 +8171,7 @@ export const ResumeDealerResponse = zod.object({
   "retentionUntil": zod.coerce.date().nullish(),
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(resumeDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
   "createdAt": zod.coerce.date()
 })
 
@@ -8177,6 +8208,7 @@ export const OffboardDealerResponse = zod.object({
   "retentionUntil": zod.coerce.date().nullish(),
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(offboardDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
   "createdAt": zod.coerce.date()
 })
 
@@ -8205,6 +8237,7 @@ export const RetryOffboardingResponse = zod.object({
   "retentionUntil": zod.coerce.date().nullish(),
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(retryOffboardingResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
   "createdAt": zod.coerce.date()
 })
 
@@ -8233,6 +8266,7 @@ export const CloseDealerResponse = zod.object({
   "retentionUntil": zod.coerce.date().nullish(),
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(closeDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
   "createdAt": zod.coerce.date()
 })
 
@@ -8289,6 +8323,7 @@ export const UpdateDealerBody = zod.object({
   "legalHold": zod.boolean().optional().describe('Legal hold — blocks close\/purge while true'),
   "usdExchangeRate": zod.number().gt(updateDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
   "themeColor": zod.string().regex(updateDealerBodyThemeColorRegExp).nullish().describe('Theme accent hex applied to the dealer\'s workspace in light mode; null clears to default'),
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID for Meta Lead Ads routing; must be unique across dealers; null\/empty clears the mapping'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "ownerEmail": zod.string().regex(updateDealerBodyOwnerEmailRegExp).optional().describe('First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)')
 })
@@ -8310,6 +8345,7 @@ export const UpdateDealerResponse = zod.object({
   "retentionUntil": zod.coerce.date().nullish(),
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(updateDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
   "createdAt": zod.coerce.date()
 })
 
@@ -10073,6 +10109,85 @@ export const TestWhatsappConnectionResponse = zod.object({
   "displayPhoneNumber": zod.string().nullish(),
   "cloudApiStatus": zod.string().nullish(),
   "error": zod.string().nullish()
+})
+
+
+/**
+ * @summary Meta Lead Ads connection for the active dealership — credential presence (never values), callback URL, this dealer's page mapping and last received lead
+ */
+export const GetMetaSettingsResponse = zod.object({
+  "configured": zod.boolean().describe('True when a page token, app secret and verify token are all available for this dealer (stored or platform env)'),
+  "missing": zod.array(zod.string()).describe('Names (never values) of the platform Meta env keys still unset'),
+  "callbackUrl": zod.string().describe('Webhook callback URL to paste into the Meta App dashboard'),
+  "metaPageId": zod.string().nullable().describe('This dealership\'s Facebook Page ID; null = not connected'),
+  "hasPageAccessToken": zod.boolean().describe('True when this dealer has its own stored Page access token'),
+  "hasAppSecret": zod.boolean().describe('True when this dealer has its own stored app secret'),
+  "verifyToken": zod.string().nullable().describe('This dealer\'s webhook verify token (GM-readable — it must be pasted into the Meta dashboard); null for non-managers or when unset'),
+  "usingPlatformCredentials": zod.boolean().describe('True when the dealer has no stored token and the platform env credentials are in effect'),
+  "lastStatus": zod.string().nullable().describe('connected | error | null (never tested)'),
+  "lastError": zod.string().nullable(),
+  "lastCheckedAt": zod.coerce.date().nullable(),
+  "lastEvent": zod.object({
+  "externalId": zod.string().describe('Meta leadgen id'),
+  "leadId": zod.number().nullish(),
+  "leadName": zod.string().nullish(),
+  "leadSource": zod.string().nullish().describe('facebook | instagram'),
+  "createdAt": zod.coerce.date()
+}).nullable().describe('Most recent Meta campaign lead received for THIS dealership, or null if none yet')
+})
+
+
+/**
+ * @summary Set or clear the active dealership's Facebook Page ID for Meta Lead Ads routing (GM only)
+ */
+export const UpdateMetaSettingsBody = zod.object({
+  "metaPageId": zod.string().nullish().describe('Facebook Page ID (5-20 digits); null or empty clears the mapping. Omit to leave unchanged.'),
+  "pageAccessToken": zod.string().nullish().describe('Page access token (write-only, stored encrypted); null\/empty clears. Omit to leave unchanged.'),
+  "appSecret": zod.string().nullish().describe('Meta app secret (write-only, stored encrypted); null\/empty clears. Omit to leave unchanged.'),
+  "verifyToken": zod.string().nullish().describe('Webhook verify token; null\/empty clears. Omit to leave unchanged.')
+})
+
+export const UpdateMetaSettingsResponse = zod.object({
+  "configured": zod.boolean().describe('True when a page token, app secret and verify token are all available for this dealer (stored or platform env)'),
+  "missing": zod.array(zod.string()).describe('Names (never values) of the platform Meta env keys still unset'),
+  "callbackUrl": zod.string().describe('Webhook callback URL to paste into the Meta App dashboard'),
+  "metaPageId": zod.string().nullable().describe('This dealership\'s Facebook Page ID; null = not connected'),
+  "hasPageAccessToken": zod.boolean().describe('True when this dealer has its own stored Page access token'),
+  "hasAppSecret": zod.boolean().describe('True when this dealer has its own stored app secret'),
+  "verifyToken": zod.string().nullable().describe('This dealer\'s webhook verify token (GM-readable — it must be pasted into the Meta dashboard); null for non-managers or when unset'),
+  "usingPlatformCredentials": zod.boolean().describe('True when the dealer has no stored token and the platform env credentials are in effect'),
+  "lastStatus": zod.string().nullable().describe('connected | error | null (never tested)'),
+  "lastError": zod.string().nullable(),
+  "lastCheckedAt": zod.coerce.date().nullable(),
+  "lastEvent": zod.object({
+  "externalId": zod.string().describe('Meta leadgen id'),
+  "leadId": zod.number().nullish(),
+  "leadName": zod.string().nullish(),
+  "leadSource": zod.string().nullish().describe('facebook | instagram'),
+  "createdAt": zod.coerce.date()
+}).nullable().describe('Most recent Meta campaign lead received for THIS dealership, or null if none yet')
+})
+
+
+/**
+ * @summary Verify the stored Page access token against the Meta Graph API (GM only) — reports token type and Page access, never the token itself
+ */
+export const TestMetaConnectionResponse = zod.object({
+  "ok": zod.boolean().describe('True when the token is a PAGE token with access to the configured Page'),
+  "tokenType": zod.union([zod.literal('page'),zod.literal('user'),zod.literal(null)]).nullable().describe('What the token identifies as'),
+  "tokenIdentity": zod.string().nullable().describe('Name the token identifies as (Page name or person)'),
+  "pageOk": zod.boolean().describe('Whether the token can read the configured Page'),
+  "pageName": zod.string().nullable(),
+  "error": zod.string().nullable()
+})
+
+
+/**
+ * @summary Subscribe the configured Facebook Page to the app's leadgen webhook (GM only)
+ */
+export const SubscribeMetaPageResponse = zod.object({
+  "ok": zod.boolean(),
+  "error": zod.string().nullable()
 })
 
 

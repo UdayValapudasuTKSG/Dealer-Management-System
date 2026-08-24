@@ -45,6 +45,7 @@ import casesRouter from "./cases";
 import telephonyRouter from "./telephony";
 import erpnextRouter from "./erpnext";
 import whatsappRouter from "./whatsapp";
+import metaRouter from "./meta";
 import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
 import { authedRateLimit, publicRateLimit } from "../middlewares/rate-limit";
 
@@ -119,5 +120,6 @@ router.use(documentsRouter);
 router.use(telephonyRouter);
 router.use(erpnextRouter);
 router.use(whatsappRouter);
+router.use(metaRouter);
 
 export default router;

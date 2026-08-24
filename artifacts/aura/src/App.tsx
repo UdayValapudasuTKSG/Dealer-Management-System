@@ -45,6 +45,7 @@ import SettingsAudit from "@/pages/settings-audit";
 import NotFound from "@/pages/not-found";
 import NoDealership from "@/pages/no-dealership";
 import DealerPicker, { DealerSuspended } from "@/pages/dealer-picker";
+import SettingsMeta from "@/pages/settings-meta";
 
 /* Live data: every visible query silently re-polls the server every 10s
    (paused when the tab is hidden), plus refetches on tab focus and page
@@ -342,6 +343,11 @@ function AppRoutes() {
                 <Route path="/settings/erpnext">
                   <RequireSettings>
                     <SettingsErpnext />
+                  </RequireSettings>
+                </Route>
+                <Route path="/settings/meta">
+                  <RequireSettings>
+                    <SettingsMeta />
                   </RequireSettings>
                 </Route>
                 <Route path="/settings/whatsapp">

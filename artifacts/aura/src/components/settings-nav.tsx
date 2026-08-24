@@ -94,6 +94,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     module: "settings",
   },
   {
+    name: "Meta Lead Ads",
+    href: "/settings/meta",
+    icon: Megaphone,
+    description: "Connect your Facebook Page so ad campaign leads flow into the pipeline.",
+    module: "settings",
+  },
+  {
     name: "WhatsApp",
     href: "/settings/whatsapp",
     icon: MessageSquare,

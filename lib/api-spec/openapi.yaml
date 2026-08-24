@@ -5522,6 +5522,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /platform/meta-connection:
+    get:
+      operationId: getMetaConnectionStatus
+      tags: [platform]
+      summary: Meta Lead Ads connection status (super admin only) — credential presence, per-dealer page mapping, last received lead. Never returns secret values.
+      responses:
+        "200":
+          description: Connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetaConnectionStatus"
   /platform/dealers/{id}/provisioning:
     get:
       operationId: getDealerProvisioning
@@ -7450,6 +7462,95 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /meta/settings:
+    get:
+      operationId: getMetaSettings
+      tags: [meta]
+      summary: Meta Lead Ads connection for the active dealership — credential presence (never values), callback URL, this dealer's page mapping and last received lead
+      responses:
+        "200":
+          description: Meta Lead Ads settings for the active dealership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetaSettings"
+    put:
+      operationId: updateMetaSettings
+      tags: [meta]
+      summary: Set or clear the active dealership's Facebook Page ID for Meta Lead Ads routing (GM only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMetaSettingsRequest"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetaSettings"
+        "400":
+          description: Invalid page ID format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Page ID already mapped to another dealership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /meta/settings/test:
+    post:
+      operationId: testMetaConnection
+      tags: [meta]
+      summary: Verify the stored Page access token against the Meta Graph API (GM only) — reports token type and Page access, never the token itself
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetaTestResult"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /meta/settings/subscribe:
+    post:
+      operationId: subscribeMetaPage
+      tags: [meta]
+      summary: Subscribe the configured Facebook Page to the app's leadgen webhook (GM only)
+      responses:
+        "200":
+          description: Subscribe attempt result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetaSubscribeResult"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Page ID or token not saved yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /erpnext/settings:
     get:
       operationId: getErpnextSettings
@@ -7633,6 +7734,84 @@ components:
         displayPhoneNumber: { type: ["string", "null"] }
         cloudApiStatus: { type: ["string", "null"] }
         error: { type: ["string", "null"] }
+    MetaSettings:
+      type: object
+      required: [configured, missing, callbackUrl, metaPageId, hasPageAccessToken, hasAppSecret, verifyToken, usingPlatformCredentials, lastStatus, lastError, lastCheckedAt, lastEvent]
+      properties:
+        configured:
+          type: boolean
+          description: "True when a page token, app secret and verify token are all available for this dealer (stored or platform env)"
+        missing:
+          type: array
+          items: { type: string }
+          description: "Names (never values) of the platform Meta env keys still unset"
+        callbackUrl:
+          type: string
+          description: "Webhook callback URL to paste into the Meta App dashboard"
+        metaPageId:
+          type: ["string", "null"]
+          description: "This dealership's Facebook Page ID; null = not connected"
+        hasPageAccessToken:
+          type: boolean
+          description: "True when this dealer has its own stored Page access token"
+        hasAppSecret:
+          type: boolean
+          description: "True when this dealer has its own stored app secret"
+        verifyToken:
+          type: ["string", "null"]
+          description: "This dealer's webhook verify token (GM-readable — it must be pasted into the Meta dashboard); null for non-managers or when unset"
+        usingPlatformCredentials:
+          type: boolean
+          description: "True when the dealer has no stored token and the platform env credentials are in effect"
+        lastStatus:
+          type: ["string", "null"]
+          description: "connected | error | null (never tested)"
+        lastError:
+          type: ["string", "null"]
+        lastCheckedAt:
+          type: ["string", "null"]
+          format: date-time
+        lastEvent:
+          type: ["object", "null"]
+          required: [externalId, createdAt]
+          properties:
+            externalId: { type: string, description: "Meta leadgen id" }
+            leadId: { type: ["integer", "null"] }
+            leadName: { type: ["string", "null"] }
+            leadSource: { type: ["string", "null"], description: "facebook | instagram" }
+            createdAt: { type: string, format: date-time }
+          description: "Most recent Meta campaign lead received for THIS dealership, or null if none yet"
+    UpdateMetaSettingsRequest:
+      type: object
+      properties:
+        metaPageId:
+          type: ["string", "null"]
+          description: "Facebook Page ID (5-20 digits); null or empty clears the mapping. Omit to leave unchanged."
+        pageAccessToken:
+          type: ["string", "null"]
+          description: "Page access token (write-only, stored encrypted); null/empty clears. Omit to leave unchanged."
+        appSecret:
+          type: ["string", "null"]
+          description: "Meta app secret (write-only, stored encrypted); null/empty clears. Omit to leave unchanged."
+        verifyToken:
+          type: ["string", "null"]
+          description: "Webhook verify token; null/empty clears. Omit to leave unchanged."
+    MetaTestResult:
+      type: object
+      required: [ok, tokenType, tokenIdentity, pageOk, pageName, error]
+      properties:
+        ok: { type: boolean, description: "True when the token is a PAGE token with access to the configured Page" }
+        tokenType: { type: ["string", "null"], enum: [page, user, null], description: "What the token identifies as" }
+        tokenIdentity: { type: ["string", "null"], description: "Name the token identifies as (Page name or person)" }
+        pageOk: { type: boolean, description: "Whether the token can read the configured Page" }
+        pageName: { type: ["string", "null"] }
+        error: { type: ["string", "null"] }
+    MetaSubscribeResult:
+      type: object
+      required: [ok, error]
+      properties:
+        ok: { type: boolean }
+        error: { type: ["string", "null"] }
     ErpnextSettings:
       type: object
       required: [configured, enabled]
@@ -7808,6 +7987,7 @@ components:
         retentionUntil: { type: ["string", "null"], format: date-time }
         exportUrl: { type: ["string", "null"], description: "Whole-tenant offboarding export bundle" }
         themeColor: { type: ["string", "null"], pattern: "^#[0-9a-fA-F]{6}$", description: "Super-admin theme accent hex — light mode only; null = default bronze" }
+        metaPageId: { type: ["string", "null"], description: "Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected" }
         createdAt: { type: string, format: date-time }
     DealerInput:
       type: object
@@ -7819,12 +7999,49 @@ components:
         legalHold: { type: boolean, description: "Legal hold — blocks close/purge while true" }
         usdExchangeRate: { type: number, exclusiveMinimum: 0, description: "GYD per 1 USD" }
         themeColor: { type: ["string", "null"], pattern: "^#[0-9a-fA-F]{6}$", description: "Theme accent hex applied to the dealer's workspace in light mode; null clears to default" }
+        metaPageId: { type: ["string", "null"], description: "Facebook Page ID for Meta Lead Ads routing; must be unique across dealers; null/empty clears the mapping" }
         entitlements:
           $ref: "#/components/schemas/Entitlements"
         ownerEmail:
           type: string
           pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
           description: "First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)"
+    MetaConnectionStatus:
+      type: object
+      required: [configured, missing, callbackUrl, dealers, lastEvent]
+      properties:
+        configured:
+          type: boolean
+          description: "True when META_APP_SECRET, META_PAGE_ACCESS_TOKEN and META_VERIFY_TOKEN are all set"
+        missing:
+          type: array
+          items: { type: string }
+          description: "Names (never values) of the Meta env keys still unset"
+        callbackUrl:
+          type: string
+          description: "Webhook callback URL to paste into the Meta App dashboard"
+        dealers:
+          type: array
+          items:
+            type: object
+            required: [id, name, status, metaPageId]
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              status: { type: string }
+              metaPageId: { type: ["string", "null"] }
+        lastEvent:
+          type: ["object", "null"]
+          required: [externalId, createdAt]
+          properties:
+            externalId: { type: string, description: "Meta leadgen id" }
+            dealerId: { type: ["integer", "null"] }
+            dealerName: { type: ["string", "null"] }
+            leadId: { type: ["integer", "null"] }
+            leadName: { type: ["string", "null"] }
+            leadSource: { type: ["string", "null"], description: "facebook | instagram" }
+            createdAt: { type: string, format: date-time }
+          description: "Most recent processed Meta leadgen webhook event, or null if none yet"
     ProvisioningStep:
       type: object
       required: [stepKey, status, attempts]

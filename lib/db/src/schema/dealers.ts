@@ -9,6 +9,7 @@ import {
   jsonb,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { rolesTable } from "./roles";
@@ -44,7 +45,9 @@ export const ENTITLEMENT_KEYS = [
 export type EntitlementKey = (typeof ENTITLEMENT_KEYS)[number];
 export type DealerEntitlements = Partial<Record<EntitlementKey, boolean>>;
 
-export const dealersTable = pgTable("dealers", {
+export const dealersTable = pgTable(
+  "dealers",
+  {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   city: text("city"),
@@ -93,7 +96,15 @@ export const dealersTable = pgTable("dealers", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+  },
+  // One Facebook Page routes to at most one dealer (deterministic tenant
+  // routing for Meta Lead Ads); partial so unmapped dealers stay free.
+  (t) => [
+    uniqueIndex("dealers_meta_page_id_idx")
+      .on(t.metaPageId)
+      .where(sql`${t.metaPageId} IS NOT NULL`),
+  ],
+);
 
 /**
  * Canonical lifecycle transition table (P3): every status change must be an

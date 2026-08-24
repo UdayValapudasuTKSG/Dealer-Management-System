@@ -6,6 +6,8 @@ import {
   dealerUsersTable,
   usersTable,
   rolesTable,
+  webhookEventsTable,
+  leadsTable,
   agentsTable,
   agentRunsTable,
   agentPoliciesTable,
@@ -18,6 +20,7 @@ import {
 } from "@workspace/db";
 import {
   ListDealersResponse,
+  GetMetaConnectionStatusResponse,
   CreateDealerBody,
   CreateDealerResponse,
   UpdateDealerParams,
@@ -164,6 +167,84 @@ router.get("/platform/dealers", async (_req, res): Promise<void> => {
     ListDealersResponse.parse(
       dealers.map((d) => ({ ...d, userCount: countMap.get(d.id) ?? 0 })),
     ),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Meta Lead Ads connection status — reports credential PRESENCE (never the
+// values), the webhook callback URL, per-dealer page mapping and the most
+// recent processed leadgen event so an admin can confirm the pipe is live.
+// ---------------------------------------------------------------------------
+router.get("/platform/meta-connection", async (req, res): Promise<void> => {
+  const META_KEYS = [
+    "META_APP_SECRET",
+    "META_PAGE_ACCESS_TOKEN",
+    "META_VERIFY_TOKEN",
+  ] as const;
+  const missing = META_KEYS.filter((k) => !process.env[k]);
+
+  // Public callback URL: prefer the published domain, fall back to the dev
+  // domain, then the request host (works when accessed through the proxy).
+  const domain =
+    process.env["REPLIT_DOMAINS"]?.split(",")[0]?.trim() ||
+    process.env["REPLIT_DEV_DOMAIN"] ||
+    req.get("host") ||
+    "";
+  const callbackUrl = `https://${domain}/api/webhooks/meta`;
+
+  const dealers = await db
+    .select({
+      id: dealersTable.id,
+      name: dealersTable.name,
+      status: dealersTable.status,
+      metaPageId: dealersTable.metaPageId,
+    })
+    .from(dealersTable)
+    .orderBy(asc(dealersTable.id));
+
+  const [last] = await db
+    .select({
+      externalId: webhookEventsTable.externalId,
+      dealerId: webhookEventsTable.dealerId,
+      leadId: webhookEventsTable.leadId,
+      createdAt: webhookEventsTable.createdAt,
+      leadName: leadsTable.name,
+      leadSource: leadsTable.source,
+      leadDealerId: leadsTable.dealerId,
+    })
+    .from(webhookEventsTable)
+    .leftJoin(leadsTable, eq(webhookEventsTable.leadId, leadsTable.id))
+    .where(eq(webhookEventsTable.channel, "meta_leadgen"))
+    .orderBy(desc(webhookEventsTable.createdAt))
+    .limit(1);
+
+  let lastEvent = null;
+  if (last) {
+    // Older ledger rows predate dealer stamping — fall back to the lead's dealer.
+    const dealerId = last.dealerId ?? last.leadDealerId ?? null;
+    const dealerName =
+      dealerId != null
+        ? (dealers.find((d) => d.id === dealerId)?.name ?? null)
+        : null;
+    lastEvent = {
+      externalId: last.externalId,
+      dealerId,
+      dealerName,
+      leadId: last.leadId,
+      leadName: last.leadName,
+      leadSource: last.leadSource,
+      createdAt: last.createdAt,
+    };
+  }
+
+  res.json(
+    GetMetaConnectionStatusResponse.parse({
+      configured: missing.length === 0,
+      missing,
+      callbackUrl,
+      dealers,
+      lastEvent,
+    }),
   );
 });
 
@@ -421,11 +502,40 @@ router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid input" });
     return;
   }
+  // Meta page mapping: normalize empty → null and enforce uniqueness across
+  // dealers, otherwise two dealers would silently compete for the same
+  // incoming leadgen events.
+  let metaPatch: { metaPageId: string | null } | undefined;
+  if (body.data.metaPageId !== undefined) {
+    const pageId = body.data.metaPageId?.trim() || null;
+    if (pageId != null) {
+      if (!/^\d{5,20}$/.test(pageId)) {
+        res.status(400).json({
+          error: "Facebook Page ID must be a numeric ID (5-20 digits)",
+        });
+        return;
+      }
+      const [conflict] = await db
+        .select({ id: dealersTable.id, name: dealersTable.name })
+        .from(dealersTable)
+        .where(eq(dealersTable.metaPageId, pageId));
+      if (conflict && conflict.id !== params.data.id) {
+        res.status(409).json({
+          error: `Page ID ${pageId} is already linked to ${conflict.name}`,
+        });
+        return;
+      }
+    }
+    metaPatch = { metaPageId: pageId };
+  }
+
   // Status is NOT patchable here — lifecycle moves go through the dedicated
   // suspend/resume/offboard/close endpoints with their own gates.
-  const [updated] = await db
-    .update(dealersTable)
-    .set({
+  let updated;
+  try {
+    [updated] = await db
+      .update(dealersTable)
+      .set({
       name: body.data.name.trim(),
       ...(body.data.city !== undefined ? { city: body.data.city } : {}),
       ...(body.data.country !== undefined
@@ -444,9 +554,22 @@ router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
       ...(body.data.themeColor !== undefined
         ? { themeColor: body.data.themeColor }
         : {}),
-    })
-    .where(eq(dealersTable.id, params.data.id))
-    .returning();
+        ...(metaPatch ?? {}),
+      })
+      .where(eq(dealersTable.id, params.data.id))
+      .returning();
+  } catch (err) {
+    // Unique partial index dealers_meta_page_id_idx: the pre-check above is
+    // advisory only — concurrent PATCHes race, so the index is the authority.
+    const pgCode = (err as { cause?: { code?: string }; code?: string });
+    if (pgCode.code === "23505" || pgCode.cause?.code === "23505") {
+      res.status(409).json({
+        error: "That Facebook Page ID is already linked to another dealership",
+      });
+      return;
+    }
+    throw err;
+  }
   if (!updated) {
     res.status(404).json({ error: "Dealer not found" });
     return;

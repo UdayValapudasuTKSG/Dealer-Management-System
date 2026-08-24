@@ -25,6 +25,7 @@
 - [GYD-only currency](gyd-only-currency.md) — system re-denominated Aug 2026: all money stored/displayed in GYD, rates pinned to 1; never reintroduce rate fallbacks or ×rate money paths.
 - [GRA duty engine conventions](gra-duty-engine.md) — dealer_taxes-driven, server-only duty; gate approve authorises, filing recomputes with LINE-LEVEL drift check; extract is allowlisted, identity fields human-keyed.
 - [Agent-run idempotency ledger](agent-run-idempotency-ledger.md) — dedupe via agent_runs needs a stable refType/refId across ALL outcome paths; downstream entities go in affectedEntities.
+- [Meta Lead Ads onboarding](meta-leadads-onboarding.md) — token page grants bake at issuance; find the real campaign page via ad creatives; backfill history via form leads, unassigned + deduped + ledgered.
 - [Meta WhatsApp webhook attach](meta-whatsapp-webhook-attach.md) — webhook config alone isn't enough; app must be linked via POST /<WABA>/subscribed_apps or inbound is silently dropped.
 - [Dealer-scoped WhatsApp outbound](whatsapp-outbound-providers.md) — resolve an enabled channel only by dealer; never fall back to another dealer/global sender.
 - [WhatsApp transcript identity](whatsapp-transcript-identity.md) — repeat enquiries share one dealer-scoped, exactly normalized phone conversation; never merge suffix-only matches.
@@ -44,6 +45,7 @@
 - [ERPNext integration foundation](erpnext-foundation.md) — all ERPNext I/O via the sync-job queue + refs table + handler registries; unconfigured dealers park jobs without burning attempts.
 - [ERPNext parts & purchasing sync](erpnext-parts-sync.md) — PO receive = Purchase Receipt ONLY (Stock Entry would double-count); inbound echoes skipped via Stock Entry refs; movement handlers auto-create Items.
 - [Orval inline body collision](orval-inline-body-collision.md) — request bodies must be named component schemas ($ref), and api-zod index.ts must stay single-quoted or codegen appends duplicate exports.
+- [DB uniqueness + migrations](db-uniqueness-and-migrations.md) — new columns need a tracked idempotent SQL migration; uniqueness rules need a partial unique index + 23505→409, app pre-checks race.
 - [Regression suite fixture users](regression-suite-fixture-users.md) — isolation suites must seed ephemeral single-dealer test users; shared demo account memberships drift and break "non-member → 403" checks.
 - [Parallel completion validations](parallel-completion-validations.md) — completion checks run concurrently; suites mutating shared DB fixtures must coordinate or use isolated data.
 - [WhatsApp quote documents](whatsapp-quote-documents.md) — rebuild from the outbox snapshot, upload privately to Meta, require an open 24h window, and report dedupe state honestly.

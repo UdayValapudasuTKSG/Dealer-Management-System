@@ -214,6 +214,10 @@ import type {
   ListVehiclesParams,
   MarkNotificationsReadRequest,
   MarkNotificationsReadResult,
+  MetaConnectionStatus,
+  MetaSettings,
+  MetaSubscribeResult,
+  MetaTestResult,
   MyProfile,
   Notification,
   NotifyOwnerInput,
@@ -301,6 +305,7 @@ import type {
   UnmetResponse,
   UpdateDeal422,
   UpdateErpnextSettingsRequest,
+  UpdateMetaSettingsRequest,
   UpdateMyProfileRequest,
   UpdateSmtpConnectionRequest,
   UpdateWhatsappSettingsRequest,
@@ -16662,6 +16667,83 @@ export const useCreateDealer = <TError = ErrorType<Error>,
       return useMutation(getCreateDealerMutationOptions(options));
     }
 
+export const getGetMetaConnectionStatusUrl = () => {
+
+
+
+
+  return `/api/platform/meta-connection`
+}
+
+/**
+ * @summary Meta Lead Ads connection status (super admin only) — credential presence, per-dealer page mapping, last received lead. Never returns secret values.
+ */
+export const getMetaConnectionStatus = async ( options?: RequestInit): Promise<MetaConnectionStatus> => {
+
+  return customFetch<MetaConnectionStatus>(getGetMetaConnectionStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMetaConnectionStatusQueryKey = () => {
+    return [
+    `/api/platform/meta-connection`
+    ] as const;
+    }
+
+
+export const getGetMetaConnectionStatusQueryOptions = <TData = Awaited<ReturnType<typeof getMetaConnectionStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMetaConnectionStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMetaConnectionStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMetaConnectionStatus>>> = ({ signal }) => getMetaConnectionStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMetaConnectionStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMetaConnectionStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getMetaConnectionStatus>>>
+export type GetMetaConnectionStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Meta Lead Ads connection status (super admin only) — credential presence, per-dealer page mapping, last received lead. Never returns secret values.
+ */
+
+export function useGetMetaConnectionStatus<TData = Awaited<ReturnType<typeof getMetaConnectionStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMetaConnectionStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMetaConnectionStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getGetDealerProvisioningUrl = (id: number,) => {
 
 
@@ -22760,6 +22842,296 @@ export const useTestWhatsappConnection = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getTestWhatsappConnectionMutationOptions(options));
+    }
+
+export const getGetMetaSettingsUrl = () => {
+
+
+
+
+  return `/api/meta/settings`
+}
+
+/**
+ * @summary Meta Lead Ads connection for the active dealership — credential presence (never values), callback URL, this dealer's page mapping and last received lead
+ */
+export const getMetaSettings = async ( options?: RequestInit): Promise<MetaSettings> => {
+
+  return customFetch<MetaSettings>(getGetMetaSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMetaSettingsQueryKey = () => {
+    return [
+    `/api/meta/settings`
+    ] as const;
+    }
+
+
+export const getGetMetaSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getMetaSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMetaSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMetaSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMetaSettings>>> = ({ signal }) => getMetaSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMetaSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMetaSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getMetaSettings>>>
+export type GetMetaSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Meta Lead Ads connection for the active dealership — credential presence (never values), callback URL, this dealer's page mapping and last received lead
+ */
+
+export function useGetMetaSettings<TData = Awaited<ReturnType<typeof getMetaSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMetaSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMetaSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateMetaSettingsUrl = () => {
+
+
+
+
+  return `/api/meta/settings`
+}
+
+/**
+ * @summary Set or clear the active dealership's Facebook Page ID for Meta Lead Ads routing (GM only)
+ */
+export const updateMetaSettings = async (updateMetaSettingsRequest: UpdateMetaSettingsRequest, options?: RequestInit): Promise<MetaSettings> => {
+
+  return customFetch<MetaSettings>(getUpdateMetaSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateMetaSettingsRequest)
+  }
+);}
+
+
+
+
+
+export const getUpdateMetaSettingsMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMetaSettings>>, TError,{data: BodyType<UpdateMetaSettingsRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMetaSettings>>, TError,{data: BodyType<UpdateMetaSettingsRequest>}, TContext> => {
+
+const mutationKey = ['updateMetaSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMetaSettings>>, {data: BodyType<UpdateMetaSettingsRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateMetaSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMetaSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateMetaSettings>>>
+    export type UpdateMetaSettingsMutationBody = BodyType<UpdateMetaSettingsRequest>
+    export type UpdateMetaSettingsMutationError = ErrorType<Error>
+
+    /**
+ * @summary Set or clear the active dealership's Facebook Page ID for Meta Lead Ads routing (GM only)
+ */
+export const useUpdateMetaSettings = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMetaSettings>>, TError,{data: BodyType<UpdateMetaSettingsRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMetaSettings>>,
+        TError,
+        {data: BodyType<UpdateMetaSettingsRequest>},
+        TContext
+      > => {
+      return useMutation(getUpdateMetaSettingsMutationOptions(options));
+    }
+
+export const getTestMetaConnectionUrl = () => {
+
+
+
+
+  return `/api/meta/settings/test`
+}
+
+/**
+ * @summary Verify the stored Page access token against the Meta Graph API (GM only) — reports token type and Page access, never the token itself
+ */
+export const testMetaConnection = async ( options?: RequestInit): Promise<MetaTestResult> => {
+
+  return customFetch<MetaTestResult>(getTestMetaConnectionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTestMetaConnectionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testMetaConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testMetaConnection>>, TError,void, TContext> => {
+
+const mutationKey = ['testMetaConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testMetaConnection>>, void> = () => {
+
+
+          return  testMetaConnection(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestMetaConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testMetaConnection>>>
+
+    export type TestMetaConnectionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Verify the stored Page access token against the Meta Graph API (GM only) — reports token type and Page access, never the token itself
+ */
+export const useTestMetaConnection = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testMetaConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testMetaConnection>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestMetaConnectionMutationOptions(options));
+    }
+
+export const getSubscribeMetaPageUrl = () => {
+
+
+
+
+  return `/api/meta/settings/subscribe`
+}
+
+/**
+ * @summary Subscribe the configured Facebook Page to the app's leadgen webhook (GM only)
+ */
+export const subscribeMetaPage = async ( options?: RequestInit): Promise<MetaSubscribeResult> => {
+
+  return customFetch<MetaSubscribeResult>(getSubscribeMetaPageUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSubscribeMetaPageMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof subscribeMetaPage>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof subscribeMetaPage>>, TError,void, TContext> => {
+
+const mutationKey = ['subscribeMetaPage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof subscribeMetaPage>>, void> = () => {
+
+
+          return  subscribeMetaPage(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubscribeMetaPageMutationResult = NonNullable<Awaited<ReturnType<typeof subscribeMetaPage>>>
+
+    export type SubscribeMetaPageMutationError = ErrorType<Error>
+
+    /**
+ * @summary Subscribe the configured Facebook Page to the app's leadgen webhook (GM only)
+ */
+export const useSubscribeMetaPage = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof subscribeMetaPage>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof subscribeMetaPage>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getSubscribeMetaPageMutationOptions(options));
     }
 
 export const getGetErpnextSettingsUrl = () => {

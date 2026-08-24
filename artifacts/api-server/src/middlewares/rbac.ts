@@ -791,6 +791,13 @@ const PATH_MODULES: Record<string, RouteRule> = {
   },
   "audit-logs": { module: "settings" },
   whatsapp: { module: "settings" },
+  // Meta Lead Ads settings: test/subscribe are POST actions but map to
+  // "edit" so a GM whose role has settings:edit (not create) can run them;
+  // the routes themselves enforce GM-or-super-admin.
+  meta: {
+    module: "settings",
+    category: (req) => (req.method === "GET" ? "view" : "edit"),
+  },
   // Test-drive capacity planning has its own permission module so it shows
   // as a distinct row in Roles & Permissions. Writes map to "edit" (not
   // create/delete) so a single edit grant covers block + unblock.

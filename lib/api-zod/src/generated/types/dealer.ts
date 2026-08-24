@@ -37,5 +37,10 @@ export interface Dealer {
      * @pattern ^#[0-9a-fA-F]{6}$
      */
   themeColor?: string | null;
+  /**
+     * Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected
+     * @nullable
+     */
+  metaPageId?: string | null;
   createdAt: Date;
 }

@@ -29,6 +29,11 @@ import {
 } from "../lib/whatsapp";
 import { getChannelByPhoneNumberId } from "../lib/whatsapp-channel";
 import {
+  allMetaAppSecrets,
+  allMetaVerifyTokens,
+  resolveMetaPageToken,
+} from "../lib/meta-connection";
+import {
   handleWhatsappMessage,
   handleWhatsappOneShot,
   type InboundWhatsappMessage,
@@ -152,30 +157,24 @@ router.post("/webhooks/erpnext/:dealerId", async (req, res): Promise<void> => {
 const GRAPH_BASE =
   process.env["META_GRAPH_BASE_URL"] || "https://graph.facebook.com/v21.0";
 
-function metaConfig(): {
-  appSecret: string;
-  pageToken: string;
-  verifyToken: string;
-} | null {
-  const appSecret = process.env["META_APP_SECRET"];
-  const pageToken = process.env["META_PAGE_ACCESS_TOKEN"];
-  const verifyToken = process.env["META_VERIFY_TOKEN"];
-  if (!appSecret || !pageToken || !verifyToken) return null;
-  return { appSecret, pageToken, verifyToken };
-}
-
 // Verification handshake: Meta calls GET with hub.mode/hub.verify_token and
-// expects the raw hub.challenge echoed back.
-router.get("/webhooks/meta", (req, res): void => {
-  const cfg = metaConfig();
-  if (!cfg) {
+// expects the raw hub.challenge echoed back. Accepts the platform env verify
+// token OR any dealer's stored verify token (per-dealer self-serve setup).
+router.get("/webhooks/meta", async (req, res): Promise<void> => {
+  const tokens = await allMetaVerifyTokens();
+  if (tokens.length === 0) {
     res.status(503).json({ error: "Meta webhook is not configured" });
     return;
   }
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
-  if (mode === "subscribe" && token === cfg.verifyToken && typeof challenge === "string") {
+  if (
+    mode === "subscribe" &&
+    typeof token === "string" &&
+    tokens.includes(token) &&
+    typeof challenge === "string"
+  ) {
     res.status(200).type("text/plain").send(challenge);
     return;
   }
@@ -214,7 +213,6 @@ async function dealerIdForMetaPage(pageId: string): Promise<number | null> {
 async function processLeadgenEvent(
   leadgenId: string,
   pageId: string,
-  pageToken: string,
 ): Promise<void> {
   // Idempotency: skip leadgen ids we've already processed (Meta retries).
   const [seen] = await db
@@ -234,6 +232,16 @@ async function processLeadgenEvent(
     logger.warn(
       { leadgenId, pageId },
       "Meta leadgen rejected: page_id is not mapped to any dealer",
+    );
+    return;
+  }
+
+  // Page token: the mapped dealer's stored token first, env fallback.
+  const pageToken = await resolveMetaPageToken(dealerId);
+  if (!pageToken) {
+    logger.warn(
+      { leadgenId, pageId, dealerId },
+      "Meta leadgen skipped: no page access token configured for this dealer",
     );
     return;
   }
@@ -305,6 +313,7 @@ async function processLeadgenEvent(
   await db.insert(webhookEventsTable).values({
     channel: "meta_leadgen",
     externalId: leadgenId,
+    dealerId,
     leadId: lead.id,
   });
 }
@@ -312,14 +321,21 @@ async function processLeadgenEvent(
 // Receiver. Mounted with express.raw() (see app.ts) so the signature can be
 // verified over the exact bytes Meta sent.
 router.post("/webhooks/meta", async (req, res): Promise<void> => {
-  const cfg = metaConfig();
-  if (!cfg) {
+  // Candidate signing secrets: every dealer's stored app secret + the env
+  // fallback. The payload carries no dealer context before parsing, so the
+  // signature is tried against each (the set is one per configured dealer).
+  const appSecrets = await allMetaAppSecrets();
+  if (appSecrets.length === 0) {
     res.status(503).json({ error: "Meta webhook is not configured" });
     return;
   }
   const raw: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
   const signature = req.get("x-hub-signature-256");
-  if (!verifyMetaSignature(raw, signature ?? undefined, cfg.appSecret)) {
+  if (
+    !appSecrets.some((secret) =>
+      verifyMetaSignature(raw, signature ?? undefined, secret),
+    )
+  ) {
     req.log.warn("Meta webhook rejected: bad signature");
     res.status(403).json({ error: "Invalid signature" });
     return;
@@ -358,7 +374,7 @@ router.post("/webhooks/meta", async (req, res): Promise<void> => {
 
   for (const { leadgenId, pageId } of leadgenIds) {
     try {
-      await processLeadgenEvent(leadgenId, pageId, cfg.pageToken);
+      await processLeadgenEvent(leadgenId, pageId);
     } catch (err) {
       logger.error({ err, leadgenId }, "Failed to process Meta leadgen event");
     }

@@ -76,6 +76,126 @@ export interface WhatsappTestResult {
 }
 
 /**
+ * Most recent Meta campaign lead received for THIS dealership, or null if none yet
+ * @nullable
+ */
+export type MetaSettingsLastEvent = {
+  /** Meta leadgen id */
+  externalId: string;
+  /** @nullable */
+  leadId?: number | null;
+  /** @nullable */
+  leadName?: string | null;
+  /**
+     * facebook | instagram
+     * @nullable
+     */
+  leadSource?: string | null;
+  createdAt: string;
+} | null;
+
+export interface MetaSettings {
+  /** True when a page token, app secret and verify token are all available for this dealer (stored or platform env) */
+  configured: boolean;
+  /** Names (never values) of the platform Meta env keys still unset */
+  missing: string[];
+  /** Webhook callback URL to paste into the Meta App dashboard */
+  callbackUrl: string;
+  /**
+     * This dealership's Facebook Page ID; null = not connected
+     * @nullable
+     */
+  metaPageId: string | null;
+  /** True when this dealer has its own stored Page access token */
+  hasPageAccessToken: boolean;
+  /** True when this dealer has its own stored app secret */
+  hasAppSecret: boolean;
+  /**
+     * This dealer's webhook verify token (GM-readable — it must be pasted into the Meta dashboard); null for non-managers or when unset
+     * @nullable
+     */
+  verifyToken: string | null;
+  /** True when the dealer has no stored token and the platform env credentials are in effect */
+  usingPlatformCredentials: boolean;
+  /**
+     * connected | error | null (never tested)
+     * @nullable
+     */
+  lastStatus: string | null;
+  /** @nullable */
+  lastError: string | null;
+  /** @nullable */
+  lastCheckedAt: string | null;
+  /**
+     * Most recent Meta campaign lead received for THIS dealership, or null if none yet
+     * @nullable
+     */
+  lastEvent: MetaSettingsLastEvent;
+}
+
+export interface UpdateMetaSettingsRequest {
+  /**
+     * Facebook Page ID (5-20 digits); null or empty clears the mapping. Omit to leave unchanged.
+     * @nullable
+     */
+  metaPageId?: string | null;
+  /**
+     * Page access token (write-only, stored encrypted); null/empty clears. Omit to leave unchanged.
+     * @nullable
+     */
+  pageAccessToken?: string | null;
+  /**
+     * Meta app secret (write-only, stored encrypted); null/empty clears. Omit to leave unchanged.
+     * @nullable
+     */
+  appSecret?: string | null;
+  /**
+     * Webhook verify token; null/empty clears. Omit to leave unchanged.
+     * @nullable
+     */
+  verifyToken?: string | null;
+}
+
+/**
+ * What the token identifies as
+ * @nullable
+ */
+export type MetaTestResultTokenType = typeof MetaTestResultTokenType[keyof typeof MetaTestResultTokenType] | null;
+
+
+export const MetaTestResultTokenType = {
+  page: 'page',
+  user: 'user',
+} as const;
+
+export interface MetaTestResult {
+  /** True when the token is a PAGE token with access to the configured Page */
+  ok: boolean;
+  /**
+     * What the token identifies as
+     * @nullable
+     */
+  tokenType: MetaTestResultTokenType;
+  /**
+     * Name the token identifies as (Page name or person)
+     * @nullable
+     */
+  tokenIdentity: string | null;
+  /** Whether the token can read the configured Page */
+  pageOk: boolean;
+  /** @nullable */
+  pageName: string | null;
+  /** @nullable */
+  error: string | null;
+}
+
+export interface MetaSubscribeResult {
+  ok: boolean;
+  /** @nullable */
+  error: string | null;
+}
+
+/**
  * AURA payment method → ERPNext Mode of Payment
  * @nullable
  */
@@ -397,6 +517,11 @@ export interface Dealer {
      * @pattern ^#[0-9a-fA-F]{6}$
      */
   themeColor?: string | null;
+  /**
+     * Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected
+     * @nullable
+     */
+  metaPageId?: string | null;
   createdAt: string;
 }
 
@@ -420,12 +545,63 @@ export interface DealerInput {
      * @pattern ^#[0-9a-fA-F]{6}$
      */
   themeColor?: string | null;
+  /**
+     * Facebook Page ID for Meta Lead Ads routing; must be unique across dealers; null/empty clears the mapping
+     * @nullable
+     */
+  metaPageId?: string | null;
   entitlements?: Entitlements;
   /**
      * First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)
      * @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$
      */
   ownerEmail?: string;
+}
+
+export type MetaConnectionStatusDealersItem = {
+  id: number;
+  name: string;
+  status: string;
+  /** @nullable */
+  metaPageId: string | null;
+};
+
+/**
+ * Most recent processed Meta leadgen webhook event, or null if none yet
+ * @nullable
+ */
+export type MetaConnectionStatusLastEvent = {
+  /** Meta leadgen id */
+  externalId: string;
+  /** @nullable */
+  dealerId?: number | null;
+  /** @nullable */
+  dealerName?: string | null;
+  /** @nullable */
+  leadId?: number | null;
+  /** @nullable */
+  leadName?: string | null;
+  /**
+     * facebook | instagram
+     * @nullable
+     */
+  leadSource?: string | null;
+  createdAt: string;
+} | null;
+
+export interface MetaConnectionStatus {
+  /** True when META_APP_SECRET, META_PAGE_ACCESS_TOKEN and META_VERIFY_TOKEN are all set */
+  configured: boolean;
+  /** Names (never values) of the Meta env keys still unset */
+  missing: string[];
+  /** Webhook callback URL to paste into the Meta App dashboard */
+  callbackUrl: string;
+  dealers: MetaConnectionStatusDealersItem[];
+  /**
+     * Most recent processed Meta leadgen webhook event, or null if none yet
+     * @nullable
+     */
+  lastEvent: MetaConnectionStatusLastEvent;
 }
 
 export type ProvisioningStepStatus = typeof ProvisioningStepStatus[keyof typeof ProvisioningStepStatus];

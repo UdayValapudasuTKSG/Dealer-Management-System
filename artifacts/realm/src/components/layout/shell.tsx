@@ -1,7 +1,7 @@
 import { ReactNode, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useClerk, useUser } from "@clerk/react";
-import { LayoutDashboard, Network, Users, FileText, LogOut, ChevronRight, Menu, X, Shield, Sparkles, Bot } from "lucide-react";
+import { LayoutDashboard, Network, Users, FileText, LogOut, ChevronRight, Menu, X, Shield, Sparkles, Bot, Facebook } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ const navItems = [
   { href: "/", label: "Overview", icon: LayoutDashboard, section: "Platform" },
   { href: "/network", label: "Dealerships", icon: Network, section: "Platform" },
   { href: "/agents", label: "AI Agents", icon: Bot, section: "Platform" },
+  { href: "/meta", label: "Meta Lead Ads", icon: Facebook, section: "Platform" },
   { href: "/users", label: "Users", icon: Users, section: "Administration" },
   { href: "/audit", label: "Audit Log", icon: FileText, section: "Administration" },
 ];
