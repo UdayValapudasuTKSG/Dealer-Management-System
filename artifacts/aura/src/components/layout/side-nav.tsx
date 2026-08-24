@@ -320,12 +320,24 @@ function useNavClusters() {
   const fullMenu =
     !!me && (me.isSuperAdmin || FULL_MENU_ROLES.has(me.roleName ?? ""));
 
+  /* Focused persona menu, extended with any additional modules the role has
+     been granted "view" on via RBAC (settings → roles). The persona list is
+     only a curated starting point — permission grants are the source of
+     truth, so granting e.g. deals:view to Sales Advisor surfaces Deals. */
+  const base = ROLE_WORKSPACE[me?.roleName ?? ""] ?? DEFAULT_WORKSPACE;
+  const extras = CLUSTERS.flatMap((c) => c.items).filter(
+    (i) =>
+      i.module !== "" &&
+      !base.some((b) => b.href === i.href) &&
+      can(i.module, "view"),
+  );
+
   const source = fullMenu
     ? CLUSTERS
     : [
         {
           label: "Workspace",
-          items: ROLE_WORKSPACE[me?.roleName ?? ""] ?? DEFAULT_WORKSPACE,
+          items: [...base, ...extras],
         },
       ];
 
