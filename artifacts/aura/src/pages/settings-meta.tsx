@@ -8,6 +8,8 @@ import {
   useTestMetaConnection,
   useSubscribeMetaPage,
   getGetMetaSettingsQueryKey,
+  type MetaSettingsTokenExchange,
+  type MetaTestResult,
 } from "@workspace/api-client-react";
 import { Page } from "@/components/layout/page";
 import { Button } from "@/components/ui/button";
@@ -57,14 +59,32 @@ export default function SettingsMeta() {
   const [pageToken, setPageToken] = useState("");
   const [appSecret, setAppSecret] = useState("");
   const [verifyDraft, setVerifyDraft] = useState<string | null>(null);
+  const [exchange, setExchange] = useState<MetaSettingsTokenExchange | null>(
+    null,
+  );
+  const [testResult, setTestResult] = useState<MetaTestResult | null>(null);
 
   const refresh = () =>
     qc.invalidateQueries({ queryKey: getGetMetaSettingsQueryKey() });
 
   const save = useUpdateMetaSettings({
     mutation: {
-      onSuccess: () => {
-        toast({ title: "Meta connection saved" });
+      onSuccess: (r) => {
+        setExchange(r.tokenExchange ?? null);
+        if (r.tokenExchange?.exchanged) {
+          toast({
+            title: "User token converted",
+            description: `Stored the Page token for ${r.tokenExchange.pageName ?? "your Page"} automatically.`,
+          });
+        } else if (r.tokenExchange?.error) {
+          toast({
+            title: "Saved, but check the token",
+            description: r.tokenExchange.error,
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "Meta connection saved" });
+        }
         setPageIdDraft(null);
         setPageToken("");
         setAppSecret("");
@@ -83,6 +103,7 @@ export default function SettingsMeta() {
   const test = useTestMetaConnection({
     mutation: {
       onSuccess: (r) => {
+        setTestResult(r);
         if (r.ok) {
           toast({
             title: "Connection OK",
@@ -312,6 +333,47 @@ export default function SettingsMeta() {
                     Only the general manager can change the Meta connection.
                   </p>
                 )}
+                {(() => {
+                  const required =
+                    testResult?.requiredScopes ??
+                    (exchange
+                      ? [
+                          ...(exchange.grantedScopes ?? []),
+                          ...(exchange.missingScopes ?? []),
+                        ]
+                      : []);
+                  const missing =
+                    testResult?.missingScopes ?? exchange?.missingScopes ?? null;
+                  if (!missing || required.length === 0) return null;
+                  const missingSet = new Set(missing);
+                  return (
+                    <div
+                      className="rounded-xl border border-border bg-muted/40 p-4 space-y-2"
+                      data-testid="panel-meta-scopes"
+                    >
+                      <div className="text-xs font-semibold text-muted-foreground">
+                        Token permissions
+                      </div>
+                      {required.map((s) => (
+                        <StatusRow
+                          key={s}
+                          ok={!missingSet.has(s)}
+                          label={<code className="text-xs">{s}</code>}
+                        />
+                      ))}
+                      {missing.length > 0 && (
+                        <p className="text-xs text-amber-600 pt-1">
+                          Permissions are baked in when a token is generated —
+                          they can't be added afterwards. Open Graph API
+                          Explorer, generate a new token with the missing
+                          permissions ticked (any token type works — user
+                          tokens are converted automatically), and paste it
+                          above.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -441,13 +503,14 @@ export default function SettingsMeta() {
               then subscribe the <code>leadgen</code> field.
             </li>
             <li>
-              <span className="font-medium text-foreground">Page token</span> —
-              Graph API Explorer: generate a token as an account that manages
+              <span className="font-medium text-foreground">Access token</span>{" "}
+              — Graph API Explorer: generate a token as an account that manages
               your Page (tick the Page in the popup), grant{" "}
-              <code>leads_retrieval</code>, <code>pages_show_list</code>,{" "}
-              <code>pages_manage_metadata</code>,{" "}
-              <code>pages_read_engagement</code>, then switch the dropdown to
-              the <em>Page</em> token and paste it above.
+              <code>leads_retrieval</code>, <code>pages_manage_ads</code>,{" "}
+              <code>pages_show_list</code>, <code>pages_manage_metadata</code>,{" "}
+              <code>pages_read_engagement</code>, then paste it above. A user
+              token is fine — it's converted to the Page token automatically
+              when you save.
             </li>
             <li>
               <span className="font-medium text-foreground">

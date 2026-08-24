@@ -27,6 +27,15 @@ const router: IRouter = Router();
 const GRAPH_BASE =
   process.env["META_GRAPH_BASE_URL"] || "https://graph.facebook.com/v21.0";
 
+/** Permissions Lead Ads intake needs — baked into a token at generation. */
+const REQUIRED_META_SCOPES = [
+  "leads_retrieval",
+  "pages_manage_ads",
+  "pages_manage_metadata",
+  "pages_show_list",
+  "pages_read_engagement",
+] as const;
+
 // ---------------------------------------------------------------------------
 // Settings → Meta Lead Ads (dealer-scoped, fully self-serve). Reads require
 // the settings module (global authorize middleware); writes are GM-only
@@ -127,6 +136,7 @@ async function settingsPayload(
           createdAt: last.createdAt,
         }
       : null,
+    tokenExchange: null,
   };
 }
 
@@ -201,9 +211,24 @@ router.put("/meta/settings", async (req, res): Promise<void> => {
 
   // --- Credentials (meta_connections row) ---
   const patch: Partial<typeof metaConnectionsTable.$inferInsert> = {};
+  let tokenExchange: TokenExchange | null = null;
   if (body.data.pageAccessToken !== undefined) {
     const t = body.data.pageAccessToken?.trim() || null;
-    patch.pageAccessTokenCiphertext = t ? encryptMetaSecret(t, dealerId) : null;
+    if (t) {
+      // Effective Page ID AFTER any mapping change above.
+      const [row] = await db
+        .select({ metaPageId: dealersTable.metaPageId })
+        .from(dealersTable)
+        .where(eq(dealersTable.id, dealerId));
+      const prepared = await prepareTokenForStorage(t, row?.metaPageId ?? null);
+      tokenExchange = prepared.exchange;
+      patch.pageAccessTokenCiphertext = encryptMetaSecret(
+        prepared.tokenToStore,
+        dealerId,
+      );
+    } else {
+      patch.pageAccessTokenCiphertext = null;
+    }
   }
   if (body.data.appSecret !== undefined) {
     const s = body.data.appSecret?.trim() || null;
@@ -224,9 +249,10 @@ router.put("/meta/settings", async (req, res): Promise<void> => {
   }
 
   res.json(
-    UpdateMetaSettingsResponse.parse(
-      await settingsPayload(dealerId, req.get("host"), true),
-    ),
+    UpdateMetaSettingsResponse.parse({
+      ...(await settingsPayload(dealerId, req.get("host"), true)),
+      tokenExchange,
+    }),
   );
 });
 
@@ -264,20 +290,148 @@ function graphErrorMessage(json: Record<string, unknown>): string {
   return err?.message ?? "Graph API request failed";
 }
 
-async function testMetaConnection(dealerId: number): Promise<{
+/**
+ * Inspect a token's granted scopes via /debug_token (the token debugs
+ * itself). Returns which REQUIRED scopes are granted/missing, or nulls when
+ * the inspection itself fails — never guesses.
+ */
+async function inspectTokenScopes(token: string): Promise<{
+  grantedScopes: string[] | null;
+  missingScopes: string[] | null;
+}> {
+  try {
+    const dbg = await graphGet(
+      `debug_token?input_token=${encodeURIComponent(token)}`,
+      token,
+    );
+    const data = dbg.json["data"] as
+      | { scopes?: unknown; granular_scopes?: unknown }
+      | undefined;
+    const raw = Array.isArray(data?.scopes) ? data.scopes : null;
+    if (!dbg.ok || !raw) return { grantedScopes: null, missingScopes: null };
+    const scopes = new Set(raw.filter((s): s is string => typeof s === "string"));
+    return {
+      grantedScopes: REQUIRED_META_SCOPES.filter((s) => scopes.has(s)),
+      missingScopes: REQUIRED_META_SCOPES.filter((s) => !scopes.has(s)),
+    };
+  } catch {
+    return { grantedScopes: null, missingScopes: null };
+  }
+}
+
+type TokenExchange = {
+  tokenType: "page" | "user" | null;
+  exchanged: boolean;
+  pageName: string | null;
+  missingScopes: string[] | null;
+  grantedScopes: string[] | null;
+  error: string | null;
+};
+
+/**
+ * Accept ANY pasted Facebook token: if it's a USER token and the dealer has
+ * a Page configured, exchange it for that Page's token
+ * (GET /<pageId>?fields=access_token) and store the Page token instead.
+ * Always reports scope status; on any Graph failure the pasted token is
+ * stored as-is with an explanatory message (never blocks the save).
+ */
+async function prepareTokenForStorage(
+  pastedToken: string,
+  pageId: string | null,
+): Promise<{ tokenToStore: string; exchange: TokenExchange }> {
+  const exchange: TokenExchange = {
+    tokenType: null,
+    exchanged: false,
+    pageName: null,
+    missingScopes: null,
+    grantedScopes: null,
+    error: null,
+  };
+  let tokenToStore = pastedToken;
+  try {
+    const scopeInfo = await inspectTokenScopes(pastedToken);
+    exchange.grantedScopes = scopeInfo.grantedScopes;
+    exchange.missingScopes = scopeInfo.missingScopes;
+
+    const me = await graphGet("me?fields=id,name", pastedToken);
+    if (!me.ok) {
+      exchange.error = `Token could not be verified with Meta: ${graphErrorMessage(me.json)}`;
+      return { tokenToStore, exchange };
+    }
+    const meId = String(me.json["id"] ?? "");
+    const meName = typeof me.json["name"] === "string" ? me.json["name"] : null;
+
+    if (pageId && meId === pageId) {
+      exchange.tokenType = "page";
+      exchange.pageName = meName;
+      return { tokenToStore, exchange };
+    }
+    exchange.tokenType = "user";
+    if (!pageId) {
+      exchange.error =
+        "This is a USER token and no Facebook Page ID is saved yet — save your Page ID, then paste the token again so it can be converted to the Page token.";
+      return { tokenToStore, exchange };
+    }
+    const page = await graphGet(
+      `${encodeURIComponent(pageId)}?fields=access_token,name`,
+      pastedToken,
+    );
+    const pageToken = page.json["access_token"];
+    if (!page.ok || typeof pageToken !== "string" || !pageToken) {
+      exchange.error = `This is a USER token for "${meName ?? "unknown"}" and Meta did not return a Page token for Page ${pageId} (${graphErrorMessage(page.json)}). Regenerate the token in Graph API Explorer and tick your Page in the popup.`;
+      return { tokenToStore, exchange };
+    }
+    tokenToStore = pageToken;
+    exchange.exchanged = true;
+    exchange.tokenType = "page";
+    exchange.pageName =
+      typeof page.json["name"] === "string" ? page.json["name"] : null;
+    return { tokenToStore, exchange };
+  } catch (err) {
+    logger.error({ err }, "Meta token exchange failed");
+    exchange.error =
+      "Could not reach the Meta Graph API to verify the token; it was stored as pasted.";
+    return { tokenToStore, exchange };
+  }
+}
+
+type MetaTestOutcome = {
   ok: boolean;
   tokenType: string | null;
   tokenIdentity: string | null;
   pageOk: boolean;
   pageName: string | null;
   error: string | null;
-}> {
+  requiredScopes: string[];
+  grantedScopes: string[] | null;
+  missingScopes: string[] | null;
+  scopesOk: boolean | null;
+};
+
+async function testMetaConnection(dealerId: number): Promise<MetaTestOutcome> {
   const [dealer] = await db
     .select({ metaPageId: dealersTable.metaPageId })
     .from(dealersTable)
     .where(eq(dealersTable.id, dealerId));
   const pageId = dealer?.metaPageId ?? null;
   const token = await resolveMetaPageToken(dealerId);
+
+  // Scope status is independent of page reachability — report it on every
+  // outcome so the UI can always show the permission checklist.
+  let scopeInfo: {
+    grantedScopes: string[] | null;
+    missingScopes: string[] | null;
+  } = { grantedScopes: null, missingScopes: null };
+  if (token) scopeInfo = await inspectTokenScopes(token);
+  const scopeFields = {
+    requiredScopes: [...REQUIRED_META_SCOPES],
+    grantedScopes: scopeInfo.grantedScopes,
+    missingScopes: scopeInfo.missingScopes,
+    scopesOk:
+      scopeInfo.missingScopes === null
+        ? null
+        : scopeInfo.missingScopes.length === 0,
+  };
 
   const finish = async (r: {
     ok: boolean;
@@ -286,7 +440,7 @@ async function testMetaConnection(dealerId: number): Promise<{
     pageOk: boolean;
     pageName: string | null;
     error: string | null;
-  }) => {
+  }): Promise<MetaTestOutcome> => {
     await db
       .insert(metaConnectionsTable)
       .values({
@@ -304,7 +458,7 @@ async function testMetaConnection(dealerId: number): Promise<{
           updatedAt: new Date(),
         },
       });
-    return r;
+    return { ...r, ...scopeFields };
   };
 
   if (!token) {
@@ -365,14 +519,16 @@ async function testMetaConnection(dealerId: number): Promise<{
     typeof page.json["name"] === "string" ? page.json["name"] : null;
 
   return finish({
-    ok: isPageToken,
+    ok: isPageToken && scopeFields.scopesOk !== false,
     tokenType: isPageToken ? "page" : "user",
     tokenIdentity: meName,
     pageOk: true,
     pageName,
     error: isPageToken
-      ? null
-      : `Token belongs to "${meName ?? "a user"}", not the Page. Leads may fail to fetch — switch to the PAGE token for "${pageName ?? pageId}" in Graph API Explorer.`,
+      ? scopeFields.missingScopes && scopeFields.missingScopes.length > 0
+        ? `Page token is missing permissions: ${scopeFields.missingScopes.join(", ")}. Regenerate the token in Graph API Explorer with these permissions ticked.`
+        : null
+      : `Token belongs to "${meName ?? "a user"}", not the Page. Save it again in the token field — it will be converted to the PAGE token for "${pageName ?? pageId}" automatically.`,
   });
 }
 

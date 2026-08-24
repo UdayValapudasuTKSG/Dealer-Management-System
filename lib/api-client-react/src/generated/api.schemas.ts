@@ -94,6 +94,52 @@ export type MetaSettingsLastEvent = {
   createdAt: string;
 } | null;
 
+/**
+ * What the pasted token identified as
+ * @nullable
+ */
+export type MetaSettingsTokenExchangeTokenType = typeof MetaSettingsTokenExchangeTokenType[keyof typeof MetaSettingsTokenExchangeTokenType] | null;
+
+
+export const MetaSettingsTokenExchangeTokenType = {
+  page: 'page',
+  user: 'user',
+} as const;
+
+/**
+ * Result of inspecting the token pasted in THIS save (PUT only); null on reads or when no token was submitted
+ * @nullable
+ */
+export type MetaSettingsTokenExchange = {
+  /**
+     * What the pasted token identified as
+     * @nullable
+     */
+  tokenType: MetaSettingsTokenExchangeTokenType;
+  /** True when a pasted USER token was automatically converted to the Page token before storing */
+  exchanged: boolean;
+  /**
+     * Name of the Page the stored token belongs to, when known
+     * @nullable
+     */
+  pageName: string | null;
+  /**
+     * Required Meta permissions the pasted token lacks; null when scopes could not be inspected
+     * @nullable
+     */
+  missingScopes: string[] | null;
+  /**
+     * Required Meta permissions the pasted token grants; null when scopes could not be inspected
+     * @nullable
+     */
+  grantedScopes: string[] | null;
+  /**
+     * Problem encountered while inspecting/converting the pasted token (the token is still stored)
+     * @nullable
+     */
+  error: string | null;
+} | null;
+
 export interface MetaSettings {
   /** True when a page token, app secret and verify token are all available for this dealer (stored or platform env) */
   configured: boolean;
@@ -131,6 +177,11 @@ export interface MetaSettings {
      * @nullable
      */
   lastEvent: MetaSettingsLastEvent;
+  /**
+     * Result of inspecting the token pasted in THIS save (PUT only); null on reads or when no token was submitted
+     * @nullable
+     */
+  tokenExchange?: MetaSettingsTokenExchange;
 }
 
 export interface UpdateMetaSettingsRequest {
@@ -187,6 +238,23 @@ export interface MetaTestResult {
   pageName: string | null;
   /** @nullable */
   error: string | null;
+  /** Meta permissions Lead Ads intake needs */
+  requiredScopes: string[];
+  /**
+     * Required permissions the stored token grants; null when scopes could not be inspected
+     * @nullable
+     */
+  grantedScopes: string[] | null;
+  /**
+     * Required permissions the stored token lacks; null when scopes could not be inspected
+     * @nullable
+     */
+  missingScopes: string[] | null;
+  /**
+     * True when all required permissions are granted; null when scopes could not be inspected
+     * @nullable
+     */
+  scopesOk: boolean | null;
 }
 
 export interface MetaSubscribeResult {

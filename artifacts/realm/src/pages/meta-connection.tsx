@@ -275,6 +275,9 @@ export default function MetaConnection() {
               </code>{" "}
               with the page access token), then enter that Page's ID in the mapping table above.
               Instagram Lead Ads run through the linked Facebook Page — no separate setup needed.
+              Dealership GMs can paste any Graph API Explorer token (user or Page) in their own
+              Meta settings — the server converts user tokens to the Page token automatically and
+              flags any missing permissions.
             </li>
             <li>
               Send a test lead with Meta's{" "}

@@ -26,4 +26,21 @@ export interface MetaTestResult {
   pageName: string | null;
   /** @nullable */
   error: string | null;
+  /** Meta permissions Lead Ads intake needs */
+  requiredScopes: string[];
+  /**
+     * Required permissions the stored token grants; null when scopes could not be inspected
+     * @nullable
+     */
+  grantedScopes: string[] | null;
+  /**
+     * Required permissions the stored token lacks; null when scopes could not be inspected
+     * @nullable
+     */
+  missingScopes: string[] | null;
+  /**
+     * True when all required permissions are granted; null when scopes could not be inspected
+     * @nullable
+     */
+  scopesOk: boolean | null;
 }

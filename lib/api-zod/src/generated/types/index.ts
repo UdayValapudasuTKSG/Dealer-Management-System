@@ -419,6 +419,8 @@ export * from './metaConnectionStatusDealersItem';
 export * from './metaConnectionStatusLastEvent';
 export * from './metaSettings';
 export * from './metaSettingsLastEvent';
+export * from './metaSettingsTokenExchange';
+export * from './metaSettingsTokenExchangeTokenType';
 export * from './metaSubscribeResult';
 export * from './metaTestResult';
 export * from './metaTestResultTokenType';

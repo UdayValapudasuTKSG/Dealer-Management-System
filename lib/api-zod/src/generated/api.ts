@@ -10133,7 +10133,15 @@ export const GetMetaSettingsResponse = zod.object({
   "leadName": zod.string().nullish(),
   "leadSource": zod.string().nullish().describe('facebook | instagram'),
   "createdAt": zod.coerce.date()
-}).nullable().describe('Most recent Meta campaign lead received for THIS dealership, or null if none yet')
+}).nullable().describe('Most recent Meta campaign lead received for THIS dealership, or null if none yet'),
+  "tokenExchange": zod.object({
+  "tokenType": zod.union([zod.literal('page'),zod.literal('user'),zod.literal(null)]).nullable().describe('What the pasted token identified as'),
+  "exchanged": zod.boolean().describe('True when a pasted USER token was automatically converted to the Page token before storing'),
+  "pageName": zod.string().nullable().describe('Name of the Page the stored token belongs to, when known'),
+  "missingScopes": zod.array(zod.string()).nullable().describe('Required Meta permissions the pasted token lacks; null when scopes could not be inspected'),
+  "grantedScopes": zod.array(zod.string()).nullable().describe('Required Meta permissions the pasted token grants; null when scopes could not be inspected'),
+  "error": zod.string().nullable().describe('Problem encountered while inspecting\/converting the pasted token (the token is still stored)')
+}).nullish().describe('Result of inspecting the token pasted in THIS save (PUT only); null on reads or when no token was submitted')
 })
 
 
@@ -10165,7 +10173,15 @@ export const UpdateMetaSettingsResponse = zod.object({
   "leadName": zod.string().nullish(),
   "leadSource": zod.string().nullish().describe('facebook | instagram'),
   "createdAt": zod.coerce.date()
-}).nullable().describe('Most recent Meta campaign lead received for THIS dealership, or null if none yet')
+}).nullable().describe('Most recent Meta campaign lead received for THIS dealership, or null if none yet'),
+  "tokenExchange": zod.object({
+  "tokenType": zod.union([zod.literal('page'),zod.literal('user'),zod.literal(null)]).nullable().describe('What the pasted token identified as'),
+  "exchanged": zod.boolean().describe('True when a pasted USER token was automatically converted to the Page token before storing'),
+  "pageName": zod.string().nullable().describe('Name of the Page the stored token belongs to, when known'),
+  "missingScopes": zod.array(zod.string()).nullable().describe('Required Meta permissions the pasted token lacks; null when scopes could not be inspected'),
+  "grantedScopes": zod.array(zod.string()).nullable().describe('Required Meta permissions the pasted token grants; null when scopes could not be inspected'),
+  "error": zod.string().nullable().describe('Problem encountered while inspecting\/converting the pasted token (the token is still stored)')
+}).nullish().describe('Result of inspecting the token pasted in THIS save (PUT only); null on reads or when no token was submitted')
 })
 
 
@@ -10178,7 +10194,11 @@ export const TestMetaConnectionResponse = zod.object({
   "tokenIdentity": zod.string().nullable().describe('Name the token identifies as (Page name or person)'),
   "pageOk": zod.boolean().describe('Whether the token can read the configured Page'),
   "pageName": zod.string().nullable(),
-  "error": zod.string().nullable()
+  "error": zod.string().nullable(),
+  "requiredScopes": zod.array(zod.string()).describe('Meta permissions Lead Ads intake needs'),
+  "grantedScopes": zod.array(zod.string()).nullable().describe('Required permissions the stored token grants; null when scopes could not be inspected'),
+  "missingScopes": zod.array(zod.string()).nullable().describe('Required permissions the stored token lacks; null when scopes could not be inspected'),
+  "scopesOk": zod.boolean().nullable().describe('True when all required permissions are granted; null when scopes could not be inspected')
 })
 
 

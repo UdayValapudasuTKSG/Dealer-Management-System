@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MetaSettingsLastEvent } from './metaSettingsLastEvent';
+import type { MetaSettingsTokenExchange } from './metaSettingsTokenExchange';
 
 export interface MetaSettings {
   /** True when a page token, app secret and verify token are all available for this dealer (stored or platform env) */
@@ -44,4 +45,9 @@ export interface MetaSettings {
      * @nullable
      */
   lastEvent: MetaSettingsLastEvent;
+  /**
+     * Result of inspecting the token pasted in THIS save (PUT only); null on reads or when no token was submitted
+     * @nullable
+     */
+  tokenExchange?: MetaSettingsTokenExchange;
 }

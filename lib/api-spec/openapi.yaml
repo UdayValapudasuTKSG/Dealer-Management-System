@@ -7781,6 +7781,23 @@ components:
             leadSource: { type: ["string", "null"], description: "facebook | instagram" }
             createdAt: { type: string, format: date-time }
           description: "Most recent Meta campaign lead received for THIS dealership, or null if none yet"
+        tokenExchange:
+          type: ["object", "null"]
+          required: [tokenType, exchanged, pageName, missingScopes, grantedScopes, error]
+          properties:
+            tokenType: { type: ["string", "null"], enum: [page, user, null], description: "What the pasted token identified as" }
+            exchanged: { type: boolean, description: "True when a pasted USER token was automatically converted to the Page token before storing" }
+            pageName: { type: ["string", "null"], description: "Name of the Page the stored token belongs to, when known" }
+            missingScopes:
+              type: ["array", "null"]
+              items: { type: string }
+              description: "Required Meta permissions the pasted token lacks; null when scopes could not be inspected"
+            grantedScopes:
+              type: ["array", "null"]
+              items: { type: string }
+              description: "Required Meta permissions the pasted token grants; null when scopes could not be inspected"
+            error: { type: ["string", "null"], description: "Problem encountered while inspecting/converting the pasted token (the token is still stored)" }
+          description: "Result of inspecting the token pasted in THIS save (PUT only); null on reads or when no token was submitted"
     UpdateMetaSettingsRequest:
       type: object
       properties:
@@ -7798,7 +7815,7 @@ components:
           description: "Webhook verify token; null/empty clears. Omit to leave unchanged."
     MetaTestResult:
       type: object
-      required: [ok, tokenType, tokenIdentity, pageOk, pageName, error]
+      required: [ok, tokenType, tokenIdentity, pageOk, pageName, error, requiredScopes, grantedScopes, missingScopes, scopesOk]
       properties:
         ok: { type: boolean, description: "True when the token is a PAGE token with access to the configured Page" }
         tokenType: { type: ["string", "null"], enum: [page, user, null], description: "What the token identifies as" }
@@ -7806,6 +7823,19 @@ components:
         pageOk: { type: boolean, description: "Whether the token can read the configured Page" }
         pageName: { type: ["string", "null"] }
         error: { type: ["string", "null"] }
+        requiredScopes:
+          type: array
+          items: { type: string }
+          description: "Meta permissions Lead Ads intake needs"
+        grantedScopes:
+          type: ["array", "null"]
+          items: { type: string }
+          description: "Required permissions the stored token grants; null when scopes could not be inspected"
+        missingScopes:
+          type: ["array", "null"]
+          items: { type: string }
+          description: "Required permissions the stored token lacks; null when scopes could not be inspected"
+        scopesOk: { type: ["boolean", "null"], description: "True when all required permissions are granted; null when scopes could not be inspected" }
     MetaSubscribeResult:
       type: object
       required: [ok, error]
