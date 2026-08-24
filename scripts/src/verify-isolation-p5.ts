@@ -224,10 +224,24 @@ async function run(userA: string) {
 
   // N20: super admin without membership/grant cannot mutate data plane
   {
+    // Other verification suites (p0-security) create 60-minute impersonation
+    // grants for the same super-admin fixture; expire them so this test
+    // really runs grant-less.
+    await pool.query(
+      `update impersonation_grants set expires_at = now()
+       where expires_at > now()
+         and user_id = (select id from users where email = $1)`,
+      [SUPER],
+    );
     const r = await req("POST", "/leads", {
       user: SUPER,
       dealerId: 1,
-      body: { name: "Iso Test", phone: "5926001235", source: "walk_in" },
+      body: {
+        name: "Iso Test",
+        phone: "5926001235",
+        source: "walk_in",
+        channel: "walkin",
+      },
     });
     check("N20 super admin data-plane write → 403", r.status === 403, `got ${r.status}`);
   }
