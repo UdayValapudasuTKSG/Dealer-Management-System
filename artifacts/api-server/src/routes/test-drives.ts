@@ -9,6 +9,10 @@ import {
 } from "@workspace/db";
 import { activeDealerId } from "../middlewares/rbac";
 import {
+  checkLeadMutationOwnership,
+  LEAD_NOT_OWNED,
+} from "../lib/lead-ownership";
+import {
   ListTestDrivesQueryParams,
   CreateTestDriveBody,
   UpdateTestDriveParams,
@@ -96,6 +100,13 @@ router.post("/test-drives", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Lead not found" });
     return;
   }
+  if (
+    (await checkLeadMutationOwnership(res.locals.user, dealerId, lead.id)) ===
+    "forbidden"
+  ) {
+    res.status(403).json(LEAD_NOT_OWNED);
+    return;
+  }
   const [created] = await db
     .insert(testDrivesTable)
     .values({
@@ -149,6 +160,16 @@ router.patch("/test-drives/:id", async (req, res): Promise<void> => {
     );
   if (!drive) {
     res.status(404).json({ error: "Test drive not found" });
+    return;
+  }
+  if (
+    (await checkLeadMutationOwnership(
+      res.locals.user,
+      dealerId,
+      drive.leadId,
+    )) === "forbidden"
+  ) {
+    res.status(403).json(LEAD_NOT_OWNED);
     return;
   }
 

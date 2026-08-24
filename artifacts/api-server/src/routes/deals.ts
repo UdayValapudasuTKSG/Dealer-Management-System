@@ -18,6 +18,10 @@ import { recordAgentRun } from "../lib/agent-governance";
 import { activeDealerId } from "../middlewares/rbac";
 import { idempotent } from "../middlewares/idempotency";
 import {
+  checkLeadMutationOwnership,
+  LEAD_NOT_OWNED,
+} from "../lib/lead-ownership";
+import {
   findBlockedEditField,
   redactHiddenFields,
 } from "../lib/field-permissions";
@@ -551,6 +555,17 @@ router.post("/deals", async (req, res): Promise<void> => {
     linkedLead = await findDealerLead(parsed.data.leadId, dealerId);
     if (!linkedLead) {
       res.status(404).json({ error: "Lead not found" });
+      return;
+    }
+    // Sales Advisors may only desk deals against leads assigned to them.
+    if (
+      (await checkLeadMutationOwnership(
+        res.locals.user,
+        dealerId,
+        linkedLead.id,
+      )) === "forbidden"
+    ) {
+      res.status(403).json(LEAD_NOT_OWNED);
       return;
     }
   }

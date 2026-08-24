@@ -943,9 +943,21 @@ export default function LeadDetail() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [, navigate] = useLocation();
 
-  const { can, isLoading: authLoading } = useAuthz();
-  const canEdit = can("leads", "edit");
-  const canDeskDeal = can("deals", "create");
+  const { can, me, isLoading: authLoading } = useAuthz();
+  // Sales Advisors can view every lead but only edit leads assigned to
+  // them (mirrors the server-side ownership guard on /leads/:id mutations).
+  const ownsLead =
+    !!lead &&
+    !!me &&
+    (lead.ownerUserId === me.id ||
+      (lead.ownerUserId == null &&
+        !!me.name &&
+        (lead.assignedTo ?? "").trim().toLowerCase() ===
+          me.name.trim().toLowerCase()));
+  const editRestrictedToOwn = me?.roleName === "Sales Advisor";
+  const canEdit = can("leads", "edit") && (!editRestrictedToOwn || ownsLead);
+  const canDeskDeal =
+    can("deals", "create") && (!editRestrictedToOwn || ownsLead);
   const canReplyToDeal = can("deals", "edit");
   const canDelete = can("leads", "delete");
   const canFinance = can("finance", "create");
@@ -1399,7 +1411,9 @@ export default function LeadDetail() {
     label: string,
     sameTab: boolean = false,
   ) => {
-    logTouch.mutate({ id: lead.id, data: { text: label } });
+    // View-only visitors (e.g. an advisor on a colleague's lead) can still
+    // open the channel, but must not write touch notes to the lead.
+    if (canEdit) logTouch.mutate({ id: lead.id, data: { text: label } });
     if (typeof window !== "undefined") {
       if (sameTab) window.location.href = href;
       else window.open(href, "_blank", "noopener");
@@ -1583,14 +1597,16 @@ export default function LeadDetail() {
                 Desk deal
               </Button>
             )}
-            <Button
-              variant="outline"
-              onClick={() => setWorkflowOpen(true)}
-              className="gap-1.5"
-            >
-              <ClipboardList className="w-4 h-4" />
-              Lead actions
-            </Button>
+            {canEdit && (
+              <Button
+                variant="outline"
+                onClick={() => setWorkflowOpen(true)}
+                className="gap-1.5"
+              >
+                <ClipboardList className="w-4 h-4" />
+                Lead actions
+              </Button>
+            )}
             {(canEdit || canDelete) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -3432,7 +3448,11 @@ export default function LeadDetail() {
             )}
           </div>
 
-          <TestDriveCard leadId={lead.id} onBook={() => setWorkflowOpen(true)} />
+          <TestDriveCard
+            leadId={lead.id}
+            onBook={() => setWorkflowOpen(true)}
+            canEdit={canEdit}
+          />
 
           {pendingGates.length > 0 && (
             <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-5">
@@ -3477,14 +3497,16 @@ export default function LeadDetail() {
                 <FileText className="w-4 h-4 text-primary" />
                 Build Quote
               </Button>
-              <Button
-                variant="outline"
-                className="w-full justify-start gap-2"
-                onClick={() => setWorkflowOpen(true)}
-              >
-                <Car className="w-4 h-4 text-primary" />
-                Book Test Drive
-              </Button>
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start gap-2"
+                  onClick={() => setWorkflowOpen(true)}
+                >
+                  <Car className="w-4 h-4 text-primary" />
+                  Book Test Drive
+                </Button>
+              )}
             </div>
           </div>
 

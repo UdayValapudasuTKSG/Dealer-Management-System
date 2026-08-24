@@ -27,6 +27,10 @@ import {
 } from "@workspace/api-zod";
 import { enqueueEmail } from "../lib/email";
 import {
+  checkLeadMutationOwnership,
+  LEAD_NOT_OWNED,
+} from "../lib/lead-ownership";
+import {
   notifyReservationPending,
   notifyCancellation,
 } from "../lib/notify-triggers";
@@ -425,6 +429,20 @@ router.post("/bookings", async (req, res): Promise<void> => {
         "A trusted-bypass waiver only applies to zero-fee reservations — remove the waiver or set the booking amount to 0",
     });
     return;
+  }
+
+  // Sales Advisors may only reserve against leads assigned to them.
+  if (parsed.data.leadId !== undefined) {
+    if (
+      (await checkLeadMutationOwnership(
+        res.locals.user,
+        dealerId,
+        parsed.data.leadId,
+      )) === "forbidden"
+    ) {
+      res.status(403).json(LEAD_NOT_OWNED);
+      return;
+    }
   }
 
   // One active reservation per lead: amend the existing booking instead.

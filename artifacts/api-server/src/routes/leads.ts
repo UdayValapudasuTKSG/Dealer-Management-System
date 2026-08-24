@@ -135,6 +135,10 @@ import {
 import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 import { activeDealerId, hasPermission } from "../middlewares/rbac";
 import {
+  checkLeadMutationOwnership,
+  LEAD_NOT_OWNED,
+} from "../lib/lead-ownership";
+import {
   MIN_AGENT_CONFIDENCE,
   guardUntrusted,
   isAgentEnabled,
@@ -194,6 +198,35 @@ import {
 
 const router: IRouter = Router();
 
+/**
+ * Ownership guard: Sales Advisors can SEE every lead in the dealership but
+ * may only MUTATE leads assigned to them. Applies to every non-GET
+ * /leads/:id... endpoint (PATCH, decision, advance, notes, calls, WhatsApp,
+ * assign, …). Managers/coordinators/GM are unaffected. Missing leads fall
+ * through so each route returns its own 404.
+ */
+router.use(async (req, res, next) => {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    next();
+    return;
+  }
+  const match = req.path.match(/^\/leads\/(\d+)(?:\/|$)/);
+  if (!match) {
+    next();
+    return;
+  }
+  const verdict = await checkLeadMutationOwnership(
+    res.locals.user,
+    activeDealerId(res),
+    Number(match[1]),
+  );
+  if (verdict === "forbidden") {
+    res.status(403).json(LEAD_NOT_OWNED);
+    return;
+  }
+  next(); // "missing" falls through: route's own lookup produces the 404
+});
+
 async function logLeadEvent(
   lead: Lead,
   kind: string,
@@ -250,12 +283,10 @@ router.get("/leads", async (req, res): Promise<void> => {
   if (query.data.phase) filters.push(eq(leadsTable.phase, query.data.phase));
   if (query.data.status) filters.push(eq(leadsTable.status, query.data.status));
 
-  // RBAC visibility: Sales Advisors see only leads they own; every other
-  // role (managers, coordinators, GM) sees the full pipeline.
+  // RBAC visibility: every role with leads:view sees the full dealer
+  // pipeline (Sales Advisors included — they browse everything but may only
+  // MUTATE leads assigned to them; see the ownership guard below).
   const user = res.locals.user;
-  if (user && user.roleName === "Sales Advisor") {
-    filters.push(eq(leadsTable.ownerUserId, user.id));
-  }
 
   const rows = await db
     .select()

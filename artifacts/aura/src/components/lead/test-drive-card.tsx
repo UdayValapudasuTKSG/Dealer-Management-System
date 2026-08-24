@@ -20,9 +20,13 @@ const STATUS_STYLE: Record<string, string> = {
 export function TestDriveCard({
   leadId,
   onBook,
+  canEdit = true,
 }: {
   leadId: number;
   onBook: () => void;
+  /** False for view-only visitors (e.g. an advisor viewing a colleague's
+   *  lead) — booking and status actions are hidden. */
+  canEdit?: boolean;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -69,13 +73,18 @@ export function TestDriveCard({
         <div className="h-10 rounded-lg bg-foreground/[0.05] animate-pulse" />
       ) : scheduled.length === 0 && history.length === 0 ? (
         <div className="text-sm text-muted-foreground">
-          No test drive scheduled.{" "}
-          <button
-            onClick={onBook}
-            className="text-primary font-medium hover:underline"
-          >
-            Book one
-          </button>
+          No test drive scheduled.
+          {canEdit && (
+            <>
+              {" "}
+              <button
+                onClick={onBook}
+                className="text-primary font-medium hover:underline"
+              >
+                Book one
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -101,6 +110,7 @@ export function TestDriveCard({
                   {d.status.replace("_", " ")}
                 </span>
               </div>
+              {canEdit && (
               <div className="flex flex-wrap gap-1.5">
                 <button
                   onClick={() => act(d.id, "completed", "completed")}
@@ -131,6 +141,7 @@ export function TestDriveCard({
                   Cancel
                 </button>
               </div>
+              )}
             </div>
           ))}
           {history.length > 0 && (

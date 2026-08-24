@@ -954,7 +954,7 @@ export default function Leads() {
                       Account
                       <ArrowUpRight className="w-3 h-3" />
                     </Link>
-                  ) : (
+                  ) : me?.roleName === "Sales Advisor" && !isMine(r.lead) ? null : (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
