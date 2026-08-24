@@ -51,4 +51,5 @@
 - [WhatsApp quote documents](whatsapp-quote-documents.md) — rebuild from the outbox snapshot, upload privately to Meta, require an open 24h window, and report dedupe state honestly.
 - [Vehicle VIN uniqueness](vehicle-vin-uniqueness.md) — normalized active VINs are dealer-scoped; reconcile historical duplicates before adding a database unique index.
 - [Per-dealer SMTP email](dealer-smtp-email.md) — dealer-SMTP only, no global fallback; never expose raw SMTP error text (sanitize to codes); outbox rows need atomic CAS claims.
+- [WhatsApp conversational agent](whatsapp-conversational-agent.md) — LLM tool-loop layered over guided flow; empty end_turn needs lastSeenText; PII provenance guard; advisory-lock lead upsert.
 - [Dynamic download proxy caching](dynamic-download-proxy-cache.md) — permission-scoped exports need API no-store headers plus client cache-busting; a proxy 304 has no downloadable body.

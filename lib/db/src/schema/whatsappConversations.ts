@@ -45,6 +45,13 @@ export const whatsappConversationsTable = pgTable(
      * is suppressed and downgraded to Email → In-App. Cleared by "START".
      */
     optedOutAt: timestamp("opted_out_at", { withTimezone: true }),
+    /**
+     * Structured memory for the conversational AI concierge (JSON text):
+     * accumulated facts (budget, trade-in, financing interest, vehicle under
+     * discussion, summary…) that must survive across messages and restarts.
+     * Null when the deterministic guided flow is driving the conversation.
+     */
+    aiContext: text("ai_context"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

@@ -33,6 +33,7 @@ import {
   interpretWhatsappLeadMessage,
 } from "./whatsapp-ai-concierge";
 import { normalizeWhatsappPhone } from "./whatsapp-phone";
+import { handleConversationalWhatsapp } from "./whatsapp-agent";
 
 // ---------------------------------------------------------------------------
 // WhatsApp guided lead-capture bot — deterministic state machine, shared by
@@ -1580,14 +1581,46 @@ export async function handleWhatsappMessage(
       convo = null;
     }
 
-    if (!convo) {
-      // Repeat message from someone with an open lead: route to intent-aware handler.
+    // Conversational agent first: free-text messages are handled by the
+    // LLM tool-loop concierge (natural conversation, real data via
+    // dealer-scoped tools). Button/list replies and any agent failure fall
+    // back to the deterministic guided flow below — nothing is removed.
+    {
       const existing = await findOpenLeadByPhone(dealerId, phone);
-      if (existing) {
-        if (await handleTestDriveReminderReply(t, existing, msg)) return;
+      // Test-drive reminder Yes/No stays deterministic — it must never be
+      // reinterpreted by the model.
+      if (existing && (await handleTestDriveReminderReply(t, existing, msg)))
+        return;
+      // Bare menu-style replies ("2", "yes", "skip") during an in-flight
+      // guided conversation stay deterministic — they answer a specific
+      // legacy prompt and must not be reinterpreted by the model.
+      const menuStyleReply =
+        !!convo &&
+        convo.step !== "ai" &&
+        /^\s*(\d{1,2}|yes|y|no|n|skip|none|confirm(ed)?|ok(ay)?|correct)\s*[.!)]*\s*$/i.test(
+          msg.text ?? "",
+        );
+      if (
+        !menuStyleReply &&
+        (await handleConversationalWhatsapp(t, dealerId, msg, existing))
+      )
+        return;
+      // Agent declined/failed. If the session was agent-driven, restart the
+      // guided flow from the top so the legacy step machine has a valid step.
+      if (convo?.step === "ai") {
+        await upsertConversation(dealerId, phone, {
+          step: "name",
+          menu: null,
+        });
+        convo = await activeConversation(dealerId, phone);
+      }
+      if (!convo && existing) {
         await handleRepeatCustomerMessage(t, existing, msg, null);
         return;
       }
+    }
+
+    if (!convo) {
 
       // Fresh conversation: seed the session. The AI concierge can extract
       // multiple facts from the customer's opening message; the deterministic
