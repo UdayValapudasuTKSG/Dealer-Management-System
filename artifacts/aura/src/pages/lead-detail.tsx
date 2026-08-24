@@ -141,6 +141,8 @@ const SOURCE_LABEL: Record<string, string> = {
   instagram: "Instagram",
   whatsapp: "WhatsApp",
   referral: "Referral",
+  gmail: "Email",
+  email: "Email",
 };
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -3522,6 +3524,17 @@ export default function LeadDetail() {
                 </div>
               </div>
             </Link>
+          )}
+          {!vehicle && lead.interestedModelText && (
+            <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-4">
+              <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
+                Enquired about
+              </div>
+              <div className="font-semibold">{lead.interestedModelText}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Not yet matched to a unit in inventory.
+              </div>
+            </div>
           )}
         </div>
       </div>

@@ -8789,6 +8789,7 @@ components:
         customerId: { type: ["integer", "null"] }
         interestedVehicleId: { type: ["integer", "null"] }
         selectedModel: { type: ["string", "null"] }
+        interestedModelText: { type: ["string", "null"] }
         variant: { type: ["string", "null"] }
         color: { type: ["string", "null"] }
         preferredBranch: { type: ["string", "null"] }

@@ -1979,6 +1979,8 @@ export interface Lead {
   /** @nullable */
   selectedModel?: string | null;
   /** @nullable */
+  interestedModelText?: string | null;
+  /** @nullable */
   variant?: string | null;
   /** @nullable */
   color?: string | null;

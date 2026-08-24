@@ -58,6 +58,9 @@ export const leadsTable = pgTable("leads", {
   interestedVehicleId: integer("interested_vehicle_id"),
   // Locked at reservation (Pre-Book) — distinct from the interested model(s).
   selectedModel: text("selected_model"),
+  // Free-text model the customer asked about at intake (e.g. from an email
+  // enquiry) when it couldn't be matched to a unit in inventory.
+  interestedModelText: text("interested_model_text"),
   variant: text("variant"),
   color: text("color"),
   preferredBranch: text("preferred_branch"),

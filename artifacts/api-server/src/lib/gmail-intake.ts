@@ -329,6 +329,7 @@ async function handleEnquiry(opts: {
     source: "gmail",
     notes: noteParts.join("\n\n"),
     vehicle,
+    interestedModelText: opts.extraction.vehicle,
     channelLabel: "Email",
     actor: "AURA Email Agent",
   });

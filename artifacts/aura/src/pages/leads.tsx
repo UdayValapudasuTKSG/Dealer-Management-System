@@ -104,6 +104,8 @@ const SOURCE_LABEL: Record<string, string> = {
   whatsapp: "WhatsApp",
   referral: "Referral",
   social_media: "Social Media",
+  gmail: "Email",
+  email: "Email",
 };
 
 const SOCIAL_SUB_PLATFORMS = [
@@ -288,7 +290,7 @@ export default function Leads() {
         );
         const model = vehicle
           ? `${vehicle.make} ${vehicle.model}`
-          : lead.selectedModel ?? null;
+          : (lead.selectedModel ?? lead.interestedModelText ?? null);
         const customer =
           lead.customerId != null ? customerById.get(lead.customerId) : null;
         const locationParts = [
@@ -853,7 +855,7 @@ export default function Leads() {
                       )}
                     </td>
                     <td className="px-4 py-2 text-muted-foreground truncate max-w-[180px]">
-                      {r.model ?? SOURCE_LABEL[r.lead.source] ?? r.lead.source}
+                      {r.model ?? "—"}
                     </td>
                     <td
                       className="px-4 py-2 text-muted-foreground truncate max-w-[190px]"
@@ -939,9 +941,7 @@ export default function Leads() {
                       {r.lead.name}
                     </div>
                     <div className="text-xs text-muted-foreground truncate mt-0.5">
-                      {r.model ??
-                        SOURCE_LABEL[r.lead.source] ??
-                        r.lead.source}
+                      {r.model ?? SOURCE_LABEL[r.lead.source] ?? r.lead.source}
                     </div>
                   </div>
                   {r.lead.customerId ? (

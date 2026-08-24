@@ -67,6 +67,8 @@ export type InboundLeadOptions = {
   source: string;
   notes?: string | null;
   vehicle?: MatchedVehicle | null;
+  /** Free-text model the customer asked about when no inventory unit matched. */
+  interestedModelText?: string | null;
   /** Human label for the channel, used in timeline copy ("Facebook Lead Ad") */
   channelLabel: string;
   /** R10.3 consent captured at intake (per-channel); carried through dedup. */
@@ -110,6 +112,7 @@ async function createNewInboundLead(opts: InboundLeadOptions): Promise<Lead> {
       phase: "new",
       status: "new",
       interestedVehicleId: opts.vehicle?.id ?? null,
+      interestedModelText: opts.vehicle ? null : (opts.interestedModelText ?? null),
       variant: opts.vehicle?.variant ?? null,
       color: opts.vehicle?.color ?? null,
       notes: opts.notes ?? null,
