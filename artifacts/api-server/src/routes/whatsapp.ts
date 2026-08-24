@@ -274,8 +274,12 @@ router.post("/whatsapp/settings/test", async (_req, res): Promise<void> => {
   }
 
   try {
-    const appId = process.env["META_APP_ID"];
-    const appSecret = process.env["META_APP_SECRET"];
+    // WhatsApp may run on its own Meta app (separate from the Facebook Lead
+    // Ads app); prefer dedicated credentials, fall back to the shared ones.
+    const appId =
+      process.env["WHATSAPP_APP_ID"] || process.env["META_APP_ID"];
+    const appSecret =
+      process.env["WHATSAPP_APP_SECRET"] || process.env["META_APP_SECRET"];
     if (!appId || !appSecret) {
       throw new Error("The platform Meta app is not fully configured");
     }

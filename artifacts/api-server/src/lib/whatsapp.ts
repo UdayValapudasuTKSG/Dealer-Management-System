@@ -60,7 +60,10 @@ export function whatsappConfig(): {
   phoneNumberId: string;
   dealerId: number;
 } | null {
-  const appSecret = process.env["META_APP_SECRET"];
+  // WhatsApp may run on its own Meta app (separate from the Facebook Lead
+  // Ads app); prefer the dedicated secret, fall back to the shared one.
+  const appSecret =
+    process.env["WHATSAPP_APP_SECRET"] || process.env["META_APP_SECRET"];
   const verifyToken = process.env["META_VERIFY_TOKEN"];
   const accessToken = process.env["WHATSAPP_ACCESS_TOKEN"];
   const phoneNumberId = process.env["WHATSAPP_PHONE_NUMBER_ID"];
