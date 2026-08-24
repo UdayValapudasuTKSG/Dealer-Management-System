@@ -246,6 +246,7 @@ export default function Leads() {
         case "contacted":
           return "contacted";
         case "qualified":
+        case "proposal":
           return "engaged";
         case "negotiation":
           return "pre_book";
