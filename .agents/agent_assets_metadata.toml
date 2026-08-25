@@ -245,5 +245,5 @@ description = "Full pg_dump including the new GT Automotive data — 2,685 leads
 id = "trho2dXQ_2BkXk8B8ZRNL"
 uri = "file://attached_assets/cam-motors/cam-motors-inventory-import.xlsx"
 type = "table"
-title = "CAM Motors inventory import — now with VINs & engine numbers"
-description = "All 17 vehicles now include unique randomly generated 17-character VINs (L1C… for Jetour, LVC… for Foton) and engine numbers, alongside the scraped prices, colors, images, and descriptions."
+title = "CAM Motors inventory — 51 units (3 of each vehicle)"
+description = "Each of the 17 models now has 3 stock units — 51 rows total, every unit with its own unique 17-character VIN and engine number. One unit per model keeps the Featured flag."

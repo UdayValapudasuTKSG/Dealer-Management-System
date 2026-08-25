@@ -47,6 +47,7 @@
 - [Orval inline body collision](orval-inline-body-collision.md) — request bodies must be named component schemas ($ref), and api-zod index.ts must stay single-quoted or codegen appends duplicate exports.
 - [DB uniqueness + migrations](db-uniqueness-and-migrations.md) — new columns need a tracked idempotent SQL migration; uniqueness rules need a partial unique index + 23505→409, app pre-checks race.
 - [Regression suite fixture users](regression-suite-fixture-users.md) — isolation suites must seed ephemeral single-dealer test users; shared demo account memberships drift and break "non-member → 403" checks.
+- [Verify suites 502 on batch restart](verify-suite-batch-502s.md) — all-502 suite failures right after a mass workflow restart are the api-server rebuild race, not regressions; re-run once healthz is 200.
 - [Parallel completion validations](parallel-completion-validations.md) — completion checks run concurrently; suites mutating shared DB fixtures must coordinate or use isolated data.
 - [WhatsApp quote documents](whatsapp-quote-documents.md) — rebuild from the outbox snapshot, upload privately to Meta, require an open 24h window, and report dedupe state honestly.
 - [Vehicle VIN uniqueness](vehicle-vin-uniqueness.md) — normalized active VINs are dealer-scoped; reconcile historical duplicates before adding a database unique index.
