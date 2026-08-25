@@ -19,6 +19,7 @@ import { encryptMetaSecret } from "../lib/meta-crypto";
 import {
   getMetaConnectionRow,
   resolveMetaPageToken,
+  resolveMetaAppSecret,
 } from "../lib/meta-connection";
 import { logger } from "../lib/logger";
 
@@ -220,7 +221,11 @@ router.put("/meta/settings", async (req, res): Promise<void> => {
         .select({ metaPageId: dealersTable.metaPageId })
         .from(dealersTable)
         .where(eq(dealersTable.id, dealerId));
-      const prepared = await prepareTokenForStorage(t, row?.metaPageId ?? null);
+      const prepared = await prepareTokenForStorage(
+        t,
+        row?.metaPageId ?? null,
+        dealerId,
+      );
       tokenExchange = prepared.exchange;
       patch.pageAccessTokenCiphertext = encryptMetaSecret(
         prepared.tokenToStore,
@@ -329,15 +334,55 @@ type TokenExchange = {
 };
 
 /**
+ * Best-effort upgrade of a short-lived USER token to a long-lived one
+ * (~60 days) via fb_exchange_token, so the Page token derived from it does
+ * not expire within hours. Needs the dealer's app secret (stored or env) and
+ * the app id, which the token itself reveals via GET /app. Returns the
+ * original token when anything is unavailable or fails — never blocks.
+ */
+async function upgradeToLongLivedUserToken(
+  userToken: string,
+  dealerId: number,
+): Promise<string> {
+  try {
+    const appSecret = await resolveMetaAppSecret(dealerId);
+    if (!appSecret) return userToken;
+    const app = await graphGet("app?fields=id", userToken);
+    const appId = app.ok ? String(app.json["id"] ?? "") : "";
+    if (!appId) return userToken;
+    const resp = await graphGet(
+      `oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&fb_exchange_token=${encodeURIComponent(userToken)}`,
+      userToken,
+    );
+    const longLived = resp.json["access_token"];
+    if (resp.ok && typeof longLived === "string" && longLived) {
+      logger.info({ dealerId }, "Meta user token upgraded to long-lived");
+      return longLived;
+    }
+    logger.warn(
+      { dealerId, reason: graphErrorMessage(resp.json) },
+      "Meta long-lived token exchange failed; using pasted token",
+    );
+    return userToken;
+  } catch (err) {
+    logger.warn({ err, dealerId }, "Meta long-lived token exchange errored");
+    return userToken;
+  }
+}
+
+/**
  * Accept ANY pasted Facebook token: if it's a USER token and the dealer has
- * a Page configured, exchange it for that Page's token
- * (GET /<pageId>?fields=access_token) and store the Page token instead.
+ * a Page configured, first upgrade it to a long-lived user token (when the
+ * app secret is available), then exchange it for that Page's token
+ * (GET /<pageId>?fields=access_token) and store the Page token instead — a
+ * Page token derived from a long-lived user token does not auto-expire.
  * Always reports scope status; on any Graph failure the pasted token is
  * stored as-is with an explanatory message (never blocks the save).
  */
 async function prepareTokenForStorage(
   pastedToken: string,
   pageId: string | null,
+  dealerId: number,
 ): Promise<{ tokenToStore: string; exchange: TokenExchange }> {
   const exchange: TokenExchange = {
     tokenType: null,
@@ -372,9 +417,10 @@ async function prepareTokenForStorage(
         "This is a USER token and no Facebook Page ID is saved yet — save your Page ID, then paste the token again so it can be converted to the Page token.";
       return { tokenToStore, exchange };
     }
+    const bearer = await upgradeToLongLivedUserToken(pastedToken, dealerId);
     const page = await graphGet(
       `${encodeURIComponent(pageId)}?fields=access_token,name`,
-      pastedToken,
+      bearer,
     );
     const pageToken = page.json["access_token"];
     if (!page.ok || typeof pageToken !== "string" || !pageToken) {
