@@ -240,3 +240,10 @@ uri = "file://backups/aura-dev-backup.sql.gz"
 type = "unspecified"
 title = "Fresh PostgreSQL backup (post re-import)"
 description = "Full pg_dump including the new GT Automotive data — 2,685 leads, 541 customers, 437 vehicles, 647 linked quote PDFs."
+
+[[outputs]]
+id = "trho2dXQ_2BkXk8B8ZRNL"
+uri = "file://attached_assets/cam-motors/cam-motors-inventory-import.xlsx"
+type = "table"
+title = "CAM Motors inventory import (17 vehicles)"
+description = "AURA inventory import template pre-filled with all 17 vehicles scraped from cammotors.gy — prices, duty-free amounts, colors, images, and descriptions included."
