@@ -78,15 +78,19 @@ export default function CapacityPage() {
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: getListCapacityBlocksQueryKey({ from, to }) });
 
-  // kind:refId:date -> block
+  // kind:refId:date -> blocks (a day can hold several hour windows, e.g.
+  // busy 9-10, free, busy 14-16). Full-day first, then by start hour.
   const blockIndex = useMemo(() => {
-    const m = new Map<string, CapacityBlock>();
+    const m = new Map<string, CapacityBlock[]>();
     for (const b of blocks ?? []) {
       // The API serializes the SQL date as UTC midnight — take the ISO date
       // part directly; local getters would shift it a day west of UTC.
       const day = new Date(b.date).toISOString().slice(0, 10);
-      m.set(`${b.kind}:${b.refId}:${day}`, b);
+      const key = `${b.kind}:${b.refId}:${day}`;
+      m.set(key, [...(m.get(key) ?? []), b]);
     }
+    for (const list of m.values())
+      list.sort((a, b) => (a.startHour ?? -1) - (b.startHour ?? -1));
     return m;
   }, [blocks]);
 
@@ -122,12 +126,19 @@ export default function CapacityPage() {
   const [busyCell, setBusyCell] = useState<string | null>(null);
 
   const openBlockDialog = (refId: number, label: string, day: Date) => {
-    setMode("day");
+    setMode("hours");
     setStartHour("9");
     setEndHour("12");
     setReason("");
     setTarget({ refId, label, day });
   };
+
+  // Blocks for the resource/day currently open in the dialog (live — updates
+  // as windows are added/removed without closing the dialog).
+  const targetBlocks = target
+    ? (blockIndex.get(`${tab}:${target.refId}:${dateStr(target.day)}`) ?? [])
+    : [];
+  const targetHasFullDay = targetBlocks.some((b) => b.startHour == null);
 
   const submitBlock = async () => {
     if (!target) return;
@@ -205,8 +216,9 @@ export default function CapacityPage() {
           <Users className="w-4 h-4" /> Advisors
         </Button>
         <span className="text-xs text-muted-foreground ml-2">
-          Click an open cell to block it (full day or specific hours); click a
-          blocked cell to unblock.
+          Click a cell to manage that day — block the full day or add one or
+          more hour windows (e.g. busy 9–10, free, busy 2–4), and remove
+          blocks you no longer need.
         </span>
       </div>
 
@@ -259,46 +271,54 @@ export default function CapacityPage() {
                     </td>
                     {days.map((d) => {
                       const key = `${tab}:${r.id}:${dateStr(d)}`;
-                      const block = blockIndex.get(key);
+                      const cellBlocks = blockIndex.get(key) ?? [];
                       const busy = busyCell === key;
-                      const hourly =
-                        block && block.startHour != null && block.endHour != null;
+                      const fullDay = cellBlocks.some(
+                        (b) => b.startHour == null,
+                      );
+                      const windows = cellBlocks.filter(
+                        (b) => b.startHour != null && b.endHour != null,
+                      );
+                      const windowsLabel = windows
+                        .map((b) => `${b.startHour}–${b.endHour}h`)
+                        .join(", ");
                       return (
                         <td key={key} className="p-1 text-center align-middle">
                           <button
                             aria-label={`${r.label} — ${dateStr(d)} — ${
-                              block
-                                ? hourly
-                                  ? `blocked ${hourLabel(block.startHour!)}–${hourLabel(block.endHour!)}`
-                                  : "blocked all day"
-                                : "available"
+                              fullDay
+                                ? "blocked all day"
+                                : windows.length > 0
+                                  ? `blocked ${windowsLabel}`
+                                  : "available"
                             }`}
-                            title={block?.reason ?? undefined}
-                            disabled={busy}
-                            onClick={() =>
-                              block
-                                ? unblock(block, key)
-                                : openBlockDialog(r.id, r.label, d)
+                            title={
+                              cellBlocks
+                                .map((b) => b.reason)
+                                .filter(Boolean)
+                                .join("; ") || undefined
                             }
+                            disabled={busy}
+                            onClick={() => openBlockDialog(r.id, r.label, d)}
                             className={cn(
                               "min-w-9 h-9 px-1 rounded-lg border transition-colors inline-flex flex-col items-center justify-center leading-none",
-                              block
-                                ? hourly
+                              fullDay
+                                ? "bg-red-500/25 border-red-500/40 hover:bg-red-500/35 text-red-600 dark:text-red-400"
+                                : windows.length > 0
                                   ? "bg-amber-500/20 border-amber-500/40 hover:bg-amber-500/30 text-amber-600 dark:text-amber-400"
-                                  : "bg-red-500/25 border-red-500/40 hover:bg-red-500/35 text-red-600 dark:text-red-400"
-                                : "bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/25",
+                                  : "bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/25",
                             )}
                           >
                             {busy ? (
                               <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : block ? (
-                              hourly ? (
-                                <span className="text-[8px] font-bold">
-                                  {block.startHour}–{block.endHour}h
-                                </span>
-                              ) : (
-                                "✕"
-                              )
+                            ) : fullDay ? (
+                              "✕"
+                            ) : windows.length > 0 ? (
+                              <span className="text-[8px] font-bold whitespace-nowrap">
+                                {windows.length > 2
+                                  ? `${windows.length} blocks`
+                                  : windowsLabel}
+                              </span>
                             ) : (
                               ""
                             )}
@@ -317,7 +337,7 @@ export default function CapacityPage() {
       <Dialog open={!!target} onOpenChange={(o) => !o && setTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Block capacity</DialogTitle>
+            <DialogTitle>Manage capacity</DialogTitle>
             <DialogDescription>
               {target
                 ? `${target.label} — ${target.day.toLocaleDateString("en-US", {
@@ -328,12 +348,57 @@ export default function CapacityPage() {
                 : ""}
             </DialogDescription>
           </DialogHeader>
+          {targetBlocks.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Current blocks
+              </p>
+              {targetBlocks.map((b) => (
+                <div
+                  key={b.id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-foreground/[0.04] px-3 py-1.5 text-sm"
+                >
+                  <span>
+                    {b.startHour != null && b.endHour != null
+                      ? `${hourLabel(b.startHour)} – ${hourLabel(b.endHour)}`
+                      : "Full day"}
+                    {b.reason ? (
+                      <span className="text-muted-foreground"> — {b.reason}</span>
+                    ) : null}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 rounded-full text-destructive hover:text-destructive"
+                    disabled={deleteBlock.isPending}
+                    onClick={() =>
+                      unblock(b, `${tab}:${target!.refId}:${dateStr(target!.day)}`)
+                    }
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          {targetHasFullDay ? (
+            <p className="text-xs text-muted-foreground">
+              The whole day is blocked. Remove the full-day block to switch to
+              specific hour windows.
+            </p>
+          ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
                 variant={mode === "day" ? "default" : "outline"}
                 className="rounded-full"
+                disabled={targetBlocks.length > 0}
+                title={
+                  targetBlocks.length > 0
+                    ? "Remove the hour windows first to block the full day"
+                    : undefined
+                }
                 onClick={() => setMode("day")}
               >
                 Full day
@@ -382,24 +447,27 @@ export default function CapacityPage() {
               placeholder="Reason (optional) — e.g. service, event, leave"
             />
           </div>
+          )}
           <DialogFooter>
             <Button
               variant="outline"
               className="rounded-full"
               onClick={() => setTarget(null)}
             >
-              Cancel
+              {targetBlocks.length > 0 ? "Done" : "Cancel"}
             </Button>
-            <Button
-              className="rounded-full"
-              disabled={createBlock.isPending}
-              onClick={submitBlock}
-            >
-              {createBlock.isPending && (
-                <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-              )}
-              Block {mode === "day" ? "day" : "hours"}
-            </Button>
+            {!targetHasFullDay && (
+              <Button
+                className="rounded-full"
+                disabled={createBlock.isPending}
+                onClick={submitBlock}
+              >
+                {createBlock.isPending && (
+                  <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                )}
+                {mode === "day" ? "Block day" : "Add block"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

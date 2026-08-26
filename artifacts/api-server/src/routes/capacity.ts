@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, lte, sql } from "drizzle-orm";
 import {
   db,
   capacityBlocksTable,
@@ -151,35 +151,81 @@ router.post("/capacity-blocks", async (req, res): Promise<void> => {
     res.status(422).json({ error: "End hour must be after the start hour." });
     return;
   }
-  const [row] = await db
-    .insert(capacityBlocksTable)
-    .values({
-      dealerId,
-      kind: parsed.data.kind,
-      refId: parsed.data.refId,
-      date: dateStr(parsed.data.date),
-      startHour,
-      endHour,
-      reason: parsed.data.reason ?? null,
-      createdBy: actorName(res),
-    })
-    .onConflictDoNothing()
-    .returning();
-  const block =
-    row ??
-    (
-      await db
-        .select()
-        .from(capacityBlocksTable)
-        .where(
-          and(
-            eq(capacityBlocksTable.dealerId, dealerId),
-            eq(capacityBlocksTable.kind, parsed.data.kind),
-            eq(capacityBlocksTable.refId, parsed.data.refId),
-            eq(capacityBlocksTable.date, dateStr(parsed.data.date)),
-          ),
-        )
-    )[0]!;
+  // A resource/day may carry several disjoint hour windows (busy 9-10, free,
+  // busy 14-16) OR one full-day block — never both. Row locks can't guard an
+  // empty result set, so the whole check-and-insert is serialized under a
+  // transaction-scoped advisory lock on the resource/day tuple.
+  const day = dateStr(parsed.data.date);
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`capblk:${dealerId}:${parsed.data.kind}:${parsed.data.refId}:${day}`}))`,
+    );
+    const existing = await tx
+      .select()
+      .from(capacityBlocksTable)
+      .where(
+        and(
+          eq(capacityBlocksTable.dealerId, dealerId),
+          eq(capacityBlocksTable.kind, parsed.data.kind),
+          eq(capacityBlocksTable.refId, parsed.data.refId),
+          eq(capacityBlocksTable.date, day),
+        ),
+      );
+    const fullDay = existing.find((b) => b.startHour == null);
+    if (fullDay) {
+      // Whole day already blocked — any further block is redundant.
+      return { row: null as typeof fullDay | null, block: fullDay };
+    }
+    if (startHour == null && existing.length > 0) {
+      return {
+        row: null,
+        block: null,
+        conflict:
+          "This day already has hour-window blocks. Remove them first to block the full day.",
+      };
+    }
+    if (startHour != null && endHour != null) {
+      const clash = existing.find(
+        (b) =>
+          b.startHour != null &&
+          b.endHour != null &&
+          startHour < b.endHour &&
+          endHour > b.startHour,
+      );
+      if (clash) {
+        // Exact duplicate → return existing quietly; partial overlap → 409.
+        if (clash.startHour === startHour && clash.endHour === endHour)
+          return { row: null, block: clash };
+        return {
+          row: null,
+          block: null,
+          conflict: `Overlaps an existing block (${clash.startHour}:00–${clash.endHour}:00). Remove it first or pick a non-overlapping window.`,
+        };
+      }
+    }
+    const [row] = await tx
+      .insert(capacityBlocksTable)
+      .values({
+        dealerId,
+        kind: parsed.data.kind,
+        refId: parsed.data.refId,
+        date: day,
+        startHour,
+        endHour,
+        reason: parsed.data.reason ?? null,
+        createdBy: actorName(res),
+      })
+      .returning();
+    return { row: row!, block: row! };
+  });
+  if ("conflict" in result && result.conflict) {
+    res.status(409).json({ error: result.conflict });
+    return;
+  }
+  const { row, block } = result as {
+    row: typeof result.block;
+    block: NonNullable<typeof result.block>;
+  };
   if (row) {
     await db.insert(timelineEventsTable).values({
       dealerId,

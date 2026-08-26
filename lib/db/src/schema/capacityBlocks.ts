@@ -7,6 +7,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { isNull, isNotNull, sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -38,7 +39,16 @@ export const capacityBlocksTable = pgTable(
       .defaultNow(),
   },
   (t) => [
-    uniqueIndex("capacity_blocks_unique").on(t.dealerId, t.kind, t.refId, t.date),
+    // A resource/day may carry MULTIPLE hour windows (e.g. busy 9-10, free,
+    // busy 14-16) but only one full-day block. Exact-duplicate hour windows
+    // are also rejected; overlap between different windows is enforced in the
+    // route (inside a transaction), not by the index.
+    uniqueIndex("capacity_blocks_fullday_unique")
+      .on(t.dealerId, t.kind, t.refId, t.date)
+      .where(isNull(t.startHour)),
+    uniqueIndex("capacity_blocks_window_unique")
+      .on(t.dealerId, t.kind, t.refId, t.date, t.startHour, t.endHour)
+      .where(isNotNull(t.startHour)),
   ],
 );
 
