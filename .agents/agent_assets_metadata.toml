@@ -247,3 +247,10 @@ uri = "file://attached_assets/cam-motors/cam-motors-inventory-import.xlsx"
 type = "table"
 title = "CAM Motors inventory — 51 units (3 of each vehicle)"
 description = "Each of the 17 models now has 3 stock units — 51 rows total, every unit with its own unique 17-character VIN and engine number. One unit per model keeps the Featured flag."
+
+[[outputs]]
+id = "K_31AyS2H0zwJNqfdhbvP"
+uri = "file://attached_assets/manual/aura-user-manual.pdf"
+type = "pdf"
+title = "AURA Dealership OS — User Manual (PDF)"
+description = "Complete user manual covering all 23 areas: sign-in, navigation & roles, My Day, Pipeline & lead workbench, Deals, Quotes, Finance, Approvals, GRA duty filing, Inventory, Capacity, Deliveries, Service, Parts, Accounts, Reports, Notifications, all Settings pages, WhatsApp/Meta, ERPNext/Email, the Realm platform console, and an FAQ."

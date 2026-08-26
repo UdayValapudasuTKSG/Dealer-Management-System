@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AURA Dealership OS — User Manual</title>
+<style>
+  :root { --ink:#101828; --muted:#475467; --brand:#1d4ed8; --line:#e4e7ec; --soft:#f6f8fb; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, Helvetica, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.55; margin: 0; }
+  .cover { page-break-after: always; padding-top: 220px; text-align: center; }
+  .cover h1 { font-size: 34pt; margin: 0; color: var(--brand); letter-spacing: -1px; }
+  .cover .sub { font-size: 15pt; color: var(--muted); margin-top: 10px; }
+  .cover .meta { margin-top: 60px; color: var(--muted); font-size: 10pt; }
+  h1 { font-size: 17pt; color: var(--brand); border-bottom: 2px solid var(--brand); padding-bottom: 6px; margin: 0 0 12px; page-break-after: avoid; }
+  .chapter { page-break-before: always; }
+  h2 { font-size: 12.5pt; margin: 20px 0 6px; color: var(--ink); page-break-after: avoid; }
+  h3 { font-size: 11pt; margin: 14px 0 4px; page-break-after: avoid; }
+  p { margin: 5px 0; }
+  ul, ol { margin: 5px 0 8px; padding-left: 20px; }
+  li { margin: 2.5px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 9.5pt; }
+  th, td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  .tip { background: #eff6ff; border-left: 3px solid var(--brand); padding: 7px 12px; margin: 8px 0; font-size: 9.5pt; }
+  .warn { background: #fffbeb; border-left: 3px solid #d97706; padding: 7px 12px; margin: 8px 0; font-size: 9.5pt; }
+  .path { font-family: Consolas, monospace; font-size: 9pt; background: var(--soft); padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+  .toc li { margin: 4px 0; }
+  .toc { columns: 2; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>AURA Dealership OS</h1>
+  <div class="sub">Complete User Manual</div>
+  <div class="meta">Version 1.0 · August 2026<br>Covers every module and page of the AURA workspace and the AURA Realm platform console</div>
+</div>
+
+<section>
+<h1>Contents</h1>
+<ol class="toc">
+  <li>Getting Started &amp; Signing In</li>
+  <li>Navigation, Roles &amp; Permissions</li>
+  <li>My Day — Command Center</li>
+  <li>Pipeline — Leads &amp; Enquiries</li>
+  <li>Lead Workbench (Lead Detail)</li>
+  <li>Deals</li>
+  <li>Quotes &amp; Discounts</li>
+  <li>Finance — Credit, Invoices &amp; Payments</li>
+  <li>Approvals (Gates)</li>
+  <li>GRA Customs Duty Filing</li>
+  <li>Inventory &amp; Vehicle Detail</li>
+  <li>Capacity — Test-Drive Planning</li>
+  <li>Deliveries &amp; Bookings</li>
+  <li>Service &amp; Workshop</li>
+  <li>Parts, Suppliers &amp; Purchasing</li>
+  <li>Accounts (Customers)</li>
+  <li>Reports</li>
+  <li>Notifications &amp; Tasks</li>
+  <li>Settings — Administration</li>
+  <li>WhatsApp &amp; Meta Lead Ads</li>
+  <li>ERPNext &amp; Email Integrations</li>
+  <li>AURA Realm — Platform Console</li>
+  <li>Frequently Asked Questions</li>
+</ol>
+</section>
+
+<section class="chapter">
+<h1>1. Getting Started &amp; Signing In</h1>
+<h2>Accessing AURA</h2>
+<p>Open your dealership's AURA address in a web browser. The public landing page introduces the product; staff sign in from <span class="path">/sign-in</span> (there is also a <span class="path">/sign-up</span> page for invited users completing registration).</p>
+<ol>
+  <li>Click <b>Sign in</b> and enter your work email and password (accounts are managed by your administrator under Settings → Team).</li>
+  <li>On first sign-in you land on your role's home page — for example, sales advisors go to the Pipeline, managers to My Day.</li>
+  <li>If your account belongs to more than one dealership, a dealership picker appears; choose the one you want to work in. You can switch at any time from the header.</li>
+</ol>
+<div class="warn"><b>No dealership yet?</b> If you sign in and see a "no dealership" screen, your account has not been added to a dealership team. Ask your General Manager to add you under Settings → Team.</div>
+<h2>Public test-drive booking</h2>
+<p>Customers can book test drives without an account through a personal link (<span class="path">/book-test-drive/…</span>) sent to them by your sales team via WhatsApp or email. Bookings made this way appear in Capacity and on the lead's timeline.</p>
+</section>
+
+<section class="chapter">
+<h1>2. Navigation, Roles &amp; Permissions</h1>
+<h2>The sidebar</h2>
+<p>The workspace is organised into clusters:</p>
+<table>
+  <tr><th>Cluster</th><th>Pages</th></tr>
+  <tr><td>Insights &amp; Actions</td><td>My Day (Command Center), Reports</td></tr>
+  <tr><td>Sales</td><td>Pipeline, Deals, Finance</td></tr>
+  <tr><td>Operations</td><td>Inventory, Capacity, Deliveries, Service, Parts</td></tr>
+  <tr><td>Accounts</td><td>Accounts (customers)</td></tr>
+  <tr><td>Settings</td><td>Profile, Team, Roles, Lead Sources, Lead Stages, Tax Rules, Audit, Branding, Email, ERPNext, Meta Lead Ads, WhatsApp</td></tr>
+</table>
+<h2>What you see depends on your role</h2>
+<ul>
+  <li><b>Managers</b> (General, Sales, Service, Finance Managers, Dealer Admin) see the full clustered menu.</li>
+  <li><b>Advisors and technicians</b> (Sales Advisor, Delivery Advisor, Service Advisor, Technician, Parts Advisor, marketing roles) see a focused menu with just the pages they use; extra items appear only when their role has view permission.</li>
+  <li>Every menu item, page and action is governed by <b>role permissions</b> (view / create / edit, per module) configured under Settings → Roles &amp; Permissions. If you cannot see a page or button that a colleague can, your role does not include it.</li>
+  <li><b>Service</b> and <b>Parts</b> additionally require the dealership to have those modules enabled for its plan.</li>
+</ul>
+<div class="tip">Money throughout the system is in <b>Guyanese dollars (GYD)</b> — quotes, invoices, duties, reports.</div>
+</section>
+
+<section class="chapter">
+<h1>3. My Day — Command Center</h1>
+<p>My Day (<span class="path">/command-center</span>) is your daily triage screen. It combines everything needing attention into a single action queue, plus KPI summaries with drill-through to sales, pipeline, deliveries and service.</p>
+<h2>The action queue</h2>
+<ul>
+  <li>Cards cover <b>approvals waiting on you</b>, <b>overdue and upcoming tasks</b>, <b>lead follow-ups breaching SLA</b>, <b>deliveries in progress</b>, and <b>service alerts</b>.</li>
+  <li>Filter by type, severity, or date (including a Today view); use the search box to find a specific card; pagination keeps long queues manageable.</li>
+  <li>Clicking a card opens the underlying record. Approval cards open the decision dialog directly (see chapter 9).</li>
+</ul>
+<p>Counts and cards are scoped to <i>you</i> — your role, your permissions and your dealership. A sales advisor sees their own leads' follow-ups; a manager also sees pending approvals.</p>
+<div class="tip">The old Calendar page has been merged into My Day; the <span class="path">/calendar</span> link redirects here.</div>
+</section>
+
+<section class="chapter">
+<h1>4. Pipeline — Leads &amp; Enquiries</h1>
+<p>The Pipeline (<span class="path">/pipeline</span>) is where every enquiry lives, from first contact to delivered vehicle.</p>
+<h2>Lead stages</h2>
+<p>Leads progress through eight stages, grouped in four phases:</p>
+<table>
+  <tr><th>Phase</th><th>Stages</th></tr>
+  <tr><td>Lead</td><td>New → Contacted → Engaged</td></tr>
+  <tr><td>Pre-Booking</td><td>Pre-Book → Vehicle Allocated</td></tr>
+  <tr><td>Payment</td><td>Payment</td></tr>
+  <tr><td>Delivery</td><td>Pre-Delivery → Delivered</td></tr>
+</table>
+<p>Stage advancement can require specific fields or documents — these requirements are configured by your admin under Settings → Lead Stages and are enforced when you try to advance.</p>
+<h2>Creating a lead</h2>
+<ol>
+  <li>Click <b>New Lead</b>.</li>
+  <li>Enter the customer's name, phone, email and address (required), pick the <b>source</b> (walk-in, referral, Facebook, etc. — the list is configurable). Social sources ask for the platform.</li>
+  <li>Optionally set the interested model, link or create a retail customer account, set priority and notes.</li>
+</ol>
+<p>Leads also arrive automatically from <b>Facebook/Instagram Lead Ads</b>, <b>WhatsApp</b> conversations, and <b>email enquiries</b> — these appear with their source set accordingly, ready to be picked up or auto-assigned.</p>
+<h2>Working the list</h2>
+<ul>
+  <li>Tabs: <b>All, Mine, Lead, Pre-Booking, Payment, Delivery, Lost</b>.</li>
+  <li>Search by name, model, location, branch, phone or email; sort any column; switch between list and table views.</li>
+  <li>SLA and triage indicators highlight leads waiting too long for first contact or follow-up. Ownership (which advisor a lead belongs to) is always visible.</li>
+</ul>
+<div class="warn">Unassigned leads are automatically routed to active sales advisors after a few minutes, and the customer receives a welcome email introducing their advisor — so claim new leads promptly.</div>
+</section>
+
+<section class="chapter">
+<h1>5. Lead Workbench (Lead Detail)</h1>
+<p>Open any lead to reach its workbench (<span class="path">/lead/…</span>) — the single place to run the whole customer conversation.</p>
+<ul>
+  <li><b>Stage rail</b> — advance the lead through its stages; requirements are validated as you go.</li>
+  <li><b>Calls</b> — call the customer and log outcomes.</li>
+  <li><b>WhatsApp panel</b> — read the full WhatsApp conversation and send messages/templates without leaving the page (see chapter 20). Quotes can be sent as PDF documents over WhatsApp.</li>
+  <li><b>Test drives</b> — book a slot directly or send the customer a self-booking link; capacity rules prevent double-booking (chapter 12).</li>
+  <li><b>Notes &amp; documents</b> — keep the paper trail: quotes, IDs, correspondence.</li>
+  <li><b>Customer linking</b> — connect the lead to an existing customer account, or create one.</li>
+</ul>
+<div class="tip">One lead should carry one active buying journey. If the same person enquires again later, the existing conversation and history stay attached to them.</div>
+</section>
+
+<section class="chapter">
+<h1>6. Deals</h1>
+<p>The Deals page (<span class="path">/deals</span>) tracks every negotiation from desking to committed sale.</p>
+<h2>Desking a new deal</h2>
+<ol>
+  <li>Click <b>Desk a New Deal</b>.</li>
+  <li>Attach the lead, vehicle and customer; enter the price; apply a discount (fixed amount or percentage); choose the stage and payment method (cash, bank financing, cheque).</li>
+</ol>
+<h2>Working deals</h2>
+<ul>
+  <li>Kanban pipeline and list views; open a deal to edit terms, start a finance application, generate a quote, or message the customer on WhatsApp.</li>
+  <li><b>Cancelling</b> a deal requires a reason (customer changed mind, financing declined, bought elsewhere, price, delay, defect, duplicate, other) plus context.</li>
+  <li><b>Discounts beyond policy</b> (e.g. below floor price) automatically raise a manager approval gate — the deal waits until it is approved or adjusted (chapter 9).</li>
+</ul>
+<div class="warn">Deals have <b>no manual stage jump to "delivered"</b>. A committed deal advances automatically: finance disbursement commits it, and completing the nine-step delivery workflow (chapter 13) delivers it. This keeps the paper trail honest.</div>
+</section>
+
+<section class="chapter">
+<h1>7. Quotes &amp; Discounts</h1>
+<p>Quotes are built from within a deal — there is no separate quotes page.</p>
+<ul>
+  <li>Build a quote from the deal's vehicle and pricing; totals (including taxes) are computed by the server from your dealership's tax rules.</li>
+  <li>Apply a discount as an amount or percentage and give a rationale. Discounts within policy apply immediately; over-policy discounts create an approval gate for a manager.</li>
+  <li>A <b>regenerated quote supersedes</b> any pending discount approval for the old version.</li>
+  <li>Send the quote to the customer as a PDF via WhatsApp directly from the lead workbench.</li>
+</ul>
+</section>
+
+<section class="chapter">
+<h1>8. Finance — Credit, Invoices &amp; Payments</h1>
+<p>The Finance page (<span class="path">/finance</span>) manages lending applications, invoices and payments.</p>
+<h2>Credit applications</h2>
+<ol>
+  <li>Click <b>New Credit Application</b>. You can prefill from a lead and link the customer.</li>
+  <li>Capture the applicant, lender, amount financed, down payment, term, APR, employer, employment type/years and income.</li>
+  <li>Submit to the lender; track status through review, approval or decline. Attach supporting documents on the application detail.</li>
+  <li>A declined application raises a gate for manager review — the manager can accept the decline or send it back to under-review.</li>
+</ol>
+<p>The list of banks/lenders is managed on this page.</p>
+<h2>Invoices &amp; payments</h2>
+<ul>
+  <li>Create invoices against a customer/deal with line items and totals; record payments with method and reference (cash, transfer, cheque).</li>
+  <li>Track settlement — paid, outstanding balance, credits and adjustments (adjustments require a reason).</li>
+  <li>Refunds are strictly controlled: releasing a refund requires an approved gate, and is capped at the approved amount (chapter 9).</li>
+</ul>
+<div class="tip">Finance disbursement is what commits a financed deal — once the lender pays out, the deal moves forward automatically.</div>
+</section>
+
+<section class="chapter">
+<h1>9. Approvals (Gates)</h1>
+<p>Sensitive actions in AURA never execute on one person's say-so. They raise an <b>approval gate</b> that an authorised manager must resolve. Gates appear on My Day and inside the record they relate to.</p>
+<table>
+  <tr><th>Gate</th><th>Raised when</th><th>On approval</th></tr>
+  <tr><td>Below floor price / quote discount</td><td>A discount exceeds policy</td><td>The discounted price is authorised and applied</td></tr>
+  <tr><td>Credit decline</td><td>A lender declines an application</td><td>Decline stands, or adjust back to under-review</td></tr>
+  <tr><td>Capital order</td><td>Stock purchase needs sign-off</td><td>Vehicle moves to in-transit</td></tr>
+  <tr><td>GRA filing</td><td>A duty sheet is sent for review</td><td>Filing to GRA is unlocked</td></tr>
+  <tr><td>Refund release</td><td>A deposit/payment refund is requested</td><td>Refund can be executed, capped at the approved amount; the vehicle is released</td></tr>
+</table>
+<h2>Deciding a gate</h2>
+<ul>
+  <li>Open the gate card to see the evidence and context, then <b>Approve</b>, <b>Adjust</b> (approve with changed figures), or <b>Reject/Dismiss</b>.</li>
+  <li>A <b>justification is mandatory</b> — blank or whitespace-only reasons are rejected, and the decision is recorded in the audit timeline under your name.</li>
+  <li>Rejection sends the request back for correction; the underlying record stays blocked (e.g. a vehicle stays held) until a decision is made.</li>
+</ul>
+</section>
+
+<section class="chapter">
+<h1>10. GRA Customs Duty Filing</h1>
+<p>Duty filing for imported vehicles is handled inside the pipeline/delivery workflow (the old <span class="path">/gra</span> link redirects to the Pipeline).</p>
+<ol>
+  <li><b>Prepare the duty sheet</b> — upload or select the duty document; enter CIF value, year of import, FOB, freight and insurance. Identity fields are keyed by hand; figures extracted from documents are restricted to a safe allowlist.</li>
+  <li><b>Server-computed duty</b> — duty and levy lines are computed on the server from your dealership's tax rules (Settings → Tax Rules) and shown read-only. The app never trusts a browser-side calculation.</li>
+  <li><b>Send for review</b> — an authorised officer reviews the sheet as an approval gate. Only an approved (or adjusted) gate unlocks filing.</li>
+  <li><b>File to GRA</b> — generates the duty-pack PDF for download and submission, recomputing at filing time and checking every line for drift against what was approved. Registration state is tracked (pending → submitted to GRA → plate issued) through delivery.</li>
+</ol>
+<div class="warn">If a duty figure changed since approval (for example a tax rule was edited), filing stops and the sheet must be re-approved — this is deliberate.</div>
+</section>
+
+<section class="chapter">
+<h1>11. Inventory &amp; Vehicle Detail</h1>
+<p>Inventory (<span class="path">/inventory</span>) is the vehicle master list for your dealership.</p>
+<h2>Finding and viewing vehicles</h2>
+<ul>
+  <li>Search by make, model or year; filter by body type, powertrain (EV / Hybrid / Petrol / Diesel) and division; switch card/table views.</li>
+  <li>Cards show availability, allocation/reservation, and the deal/customer a vehicle is attached to.</li>
+  <li>Open a vehicle (<span class="path">/vehicle/…</span>) for full identity, specification, pricing, photos, status history and linked deals.</li>
+</ul>
+<h2>Adding stock</h2>
+<ul>
+  <li><b>Add vehicle</b> — full form covering identity/specification, pricing, duty-free amount, stock/status, location/division, VIN and photos.</li>
+  <li><b>Import</b> — download the XLSX template, fill it (required: Make, Model, Year, Price, Powertrain, Mileage, Exterior Color, Body Type; VIN and Engine Number must be 17 characters when present) and upload. Rows with problems are reported so you can fix and re-import.</li>
+</ul>
+<div class="tip">VINs are unique within your dealership — a duplicate active VIN will be rejected. Use export → edit → re-import (keyed by Inventory ID) to correct vehicle data in bulk.</div>
+</section>
+
+<section class="chapter">
+<h1>12. Capacity — Test-Drive Planning</h1>
+<p>Capacity (<span class="path">/capacity</span>) controls when test drives can happen.</p>
+<ul>
+  <li>Define bookable hours and block out slots per hour.</li>
+  <li>Block a <b>model</b> for a period — model blocks apply to every unit of that model, across all vehicles.</li>
+  <li>Bookings made by staff (lead workbench) and by customers (public self-booking link) both respect these rules, preventing double-booking.</li>
+</ul>
+</section>
+
+<section class="chapter">
+<h1>13. Deliveries &amp; Bookings</h1>
+<p>Deliveries (<span class="path">/deliveries</span>) manages the handover of sold vehicles, in three tabs: <b>Active</b>, <b>Completed</b> and <b>Bookings</b>.</p>
+<h2>The nine-step delivery workflow</h2>
+<p>Each delivery advances step by step through a checklist (including PDI — pre-delivery inspection). For every step you can:</p>
+<ul>
+  <li>Complete it once its requirements are met (some steps require data such as the customer's signature, plate number or delivery date before they can complete);</li>
+  <li>Edit step details and notes;</li>
+  <li><b>Skip</b> it explicitly — skipping bypasses the step's requirements and is recorded.</li>
+</ul>
+<h2>What you manage on a delivery</h2>
+<ul>
+  <li>Assign the delivery advisor and sales advisor.</li>
+  <li>Capture registration state (pending → submitted to GRA → plate issued) and insurance policy/provider.</li>
+  <li>Record customer comments and signature at handover.</li>
+  <li>Send the warranty email; send booking-payment reminders; mark bookings paid; see payment/expiry state.</li>
+</ul>
+<h2>Cancelling</h2>
+<p>Cancelling a delivery/booking with a refund requires manager approval via a refund-release gate. The vehicle remains held until the gate is decided.</p>
+</section>
+
+<section class="chapter">
+<h1>14. Service &amp; Workshop</h1>
+<p>Service (<span class="path">/service</span>) combines bookings, workshop job cards, coverage and service invoicing (the old Workshop page was merged in). Tabs: <b>Bookings, Jobs, Coverage, Invoices, My Jobs</b>.</p>
+<h2>Booking &amp; job flow</h2>
+<ol>
+  <li><b>Book service</b> — pick the customer and vehicle, appointment time and the complaint/request.</li>
+  <li><b>Open the job card</b> — assign a technician, advance job status as work proceeds.</li>
+  <li><b>Diagnose</b> — capture diagnosis, root cause and work performed; attach checklists; record severity; add warranty/coverage where applicable.</li>
+  <li><b>Parts</b> — issue parts to the job from stock and return unused ones; movements are tracked.</li>
+  <li><b>Close &amp; invoice</b> — generate the service invoice; apply discounts/adjustments (with reason), create credit notes, or carry the job over with a reason.</li>
+</ol>
+<p>After-sales cases with severity levels are supported for complaints and follow-ups. Technicians use <b>My Jobs</b> to see only their assigned work.</p>
+<div class="tip">Service orders link to the customer's garage vehicle, so history accumulates against the actual car.</div>
+</section>
+
+<section class="chapter">
+<h1>15. Parts, Suppliers &amp; Purchasing</h1>
+<p>Parts (<span class="path">/parts</span>) manages the parts catalogue and stock. Tabs: <b>Parts, Suppliers, Purchase Orders, Purchases</b>.</p>
+<ul>
+  <li><b>Parts</b> — add/edit parts (SKU, name, cost, price), search by name or SKU, import in bulk. A cost-plus markup setting auto-prices imported parts.</li>
+  <li><b>Suppliers</b> — maintain the supplier list.</li>
+  <li><b>Purchase Orders</b> — raise POs on suppliers, then <b>receive stock</b> against them when goods arrive.</li>
+  <li><b>Adjustments</b> — record manual stock movements with notes when counts change outside of purchasing/service.</li>
+  <li>Issuing and returning parts on workshop jobs happens from the Service module and is reflected here.</li>
+</ul>
+<p>If ERPNext sync is enabled (chapter 21), items, purchase receipts and stock movements flow to/from your ERPNext instance automatically.</p>
+</section>
+
+<section class="chapter">
+<h1>16. Accounts (Customers)</h1>
+<p>Accounts (<span class="path">/customers</span>) is the customer master.</p>
+<ul>
+  <li>Search and list accounts; add a new account; open the detail page (<span class="path">/customers/…</span>).</li>
+  <li><b>Profile</b> — name, email, phone, WhatsApp, date of birth, occupation/company, address, TIN, loyalty tier.</li>
+  <li><b>Care</b> — after-sales interactions and ratings.</li>
+  <li><b>Documents &amp; Notes</b> — IDs, agreements and the running relationship record.</li>
+  <li><b>Privacy</b> — export the customer's data as a JSON bundle or erase it (requires customer-admin permission; deletion is confirmation-gated). Communications default to transactional-only.</li>
+  <li>The detail page links across to the customer's leads, deals, finance records, invoices and conversations.</li>
+</ul>
+<div class="tip">Keep phone numbers in full international format (e.g. +592…) so WhatsApp messages and service reminders reach the customer.</div>
+</section>
+
+<section class="chapter">
+<h1>17. Reports</h1>
+<p>Reports (<span class="path">/reports</span>) provides role-scoped performance dashboards: revenue, pipeline conversion, delivery and service throughput, and persona-based analytics.</p>
+<ul>
+  <li>Pick a report and date range; charts and cards update accordingly.</li>
+  <li><b>Export</b> — download server-generated report files in the formats offered; failures are reported and audited.</li>
+  <li>What you can see follows your role — for example, roles without money permissions see reports with monetary figures redacted.</li>
+</ul>
+</section>
+
+<section class="chapter">
+<h1>18. Notifications &amp; Tasks</h1>
+<ul>
+  <li>The <b>bell</b> in the header lists unread in-app notifications — assignments, approvals, ratings, sync issues — and takes you to the record.</li>
+  <li><b>Tasks</b> (follow-ups, reminders) surface on My Day's action queue with overdue/upcoming grouping.</li>
+  <li>Email notifications are sent for key events (lead assignment, approvals, SLA breaches, warranty) through your dealership's configured email connection (chapter 21).</li>
+</ul>
+</section>
+
+<section class="chapter">
+<h1>19. Settings — Administration</h1>
+<p>Settings pages (under <span class="path">/settings</span>) require the settings permission; <b>Profile</b> is available to everyone.</p>
+<table>
+  <tr><th>Page</th><th>What you manage</th></tr>
+  <tr><td>Profile</td><td>Your own identity and contact details.</td></tr>
+  <tr><td>Team</td><td>Invite/add staff by email; assign role, manager, phone, division; activate/deactivate accounts.</td></tr>
+  <tr><td>Roles &amp; Permissions</td><td>Create roles and set module-by-module permissions (view/create/edit…). "View" is an explicit switch — a role with edit but not view will not see the module.</td></tr>
+  <tr><td>Lead Sources</td><td>Add/edit/activate the sources offered on New Lead; social sources ask for the platform.</td></tr>
+  <tr><td>Lead Stages</td><td>Configure the requirements to advance each stage; saving publishes a new version that applies immediately.</td></tr>
+  <tr><td>Tax Rules</td><td>Ordered percentage/fixed tax and duty rules with optional price thresholds and notes — these drive quote totals and GRA duty computation. All amounts GYD.</td></tr>
+  <tr><td>Audit</td><td>Search every sign-in and change by actor, action and module, newest first.</td></tr>
+  <tr><td>Branding</td><td>Dealership identity and logo used across the app and printed documents (white-label).</td></tr>
+  <tr><td>Email</td><td>Per-dealership SMTP (Gmail app password), test/enable/disable, outbound queue monitoring and template overrides.</td></tr>
+  <tr><td>ERPNext</td><td>Accounting sync — see chapter 21.</td></tr>
+  <tr><td>Meta Lead Ads / WhatsApp</td><td>Social lead capture and messaging — see chapter 20.</td></tr>
+</table>
+<div class="warn">Changing tax rules affects new quotes and duty sheets immediately. Already-approved duty gates will fail the drift check at filing and need re-approval.</div>
+</section>
+
+<section class="chapter">
+<h1>20. WhatsApp &amp; Meta Lead Ads</h1>
+<h2>WhatsApp (Settings → WhatsApp)</h2>
+<ul>
+  <li>Connect your Meta Business WhatsApp number (phone number ID, business account ID, access token); pick and manage message templates and language; test and enable the connection.</li>
+  <li>Once connected, staff message customers from the <b>lead workbench WhatsApp panel</b>. Free-form replies are possible within 24&nbsp;hours of the customer's last message; outside that window a pre-approved template must be used.</li>
+  <li>Inbound WhatsApp messages create or update leads automatically and appear in the conversation thread; quote PDFs can be sent as documents.</li>
+  <li>Each dealership sends only from its own number — there is no shared fallback sender.</li>
+</ul>
+<h2>Meta Lead Ads (Settings → Meta Lead Ads)</h2>
+<ul>
+  <li>Connect your Facebook Page with a page access token; the connection banner warns before a token expires.</li>
+  <li>New Facebook/Instagram lead-form submissions flow straight into the Pipeline with source "facebook", deduplicated against existing leads.</li>
+  <li>A backfill can import historical campaign leads on request; imported leads arrive unassigned with their original submission dates.</li>
+</ul>
+</section>
+
+<section class="chapter">
+<h1>21. ERPNext &amp; Email Integrations</h1>
+<h2>ERPNext (Settings → ERPNext)</h2>
+<ul>
+  <li>Configure your instance URL, API key/secret (secret can be rotated), company, and the accounts for sales, VAT, debtors and cash; test and enable.</li>
+  <li>Customers, sales invoices, payment entries, parts items, purchase receipts and stock movements sync through a queued, retry-safe pipeline that deduplicates — you can safely queue existing records for first-time sync.</li>
+  <li>If the connection is not configured, outgoing changes park in the queue without failing; they sync once you connect. Sync failures are visible and, when they pile up, managers are alerted.</li>
+</ul>
+<h2>Email (Settings → Email)</h2>
+<ul>
+  <li>Per-dealership Gmail SMTP: host, port, security, user and app password. Test the connection, send a test message, enable/disable, and monitor the outbound queue.</li>
+  <li>All customer and staff emails (assignments, reminders, warranty, approvals) send through this connection — if it is disabled, emails queue but do not send.</li>
+</ul>
+</section>
+
+<section class="chapter">
+<h1>22. AURA Realm — Platform Console</h1>
+<p>Realm (<span class="path">/realm/</span>) is the separate console for <b>platform super-administrators</b> — dealership staff never see it.</p>
+<table>
+  <tr><th>Page</th><th>Purpose</th></tr>
+  <tr><td>Command Overview</td><td>Network-wide health and KPIs.</td></tr>
+  <tr><td>Dealership Network</td><td>All dealerships; open one for detail. Provision new dealerships (10-step saga with retry/resume), suspend/resume, offboard with data export and retention clock, and close.</td></tr>
+  <tr><td>AI Agents</td><td>Global and per-dealer agent kill switches and policies.</td></tr>
+  <tr><td>Meta Lead Ads</td><td>Platform-level Meta connection oversight.</td></tr>
+  <tr><td>Platform Users</td><td>Super-admin and cross-dealer user management.</td></tr>
+  <tr><td>Platform Audit Log</td><td>Every platform-level action.</td></tr>
+</table>
+<p>Super-admins access dealer data only through time-boxed, reasoned <b>impersonation grants</b> (read-only or elevated; money-posting always blocked), all audited.</p>
+</section>
+
+<section class="chapter">
+<h1>23. Frequently Asked Questions</h1>
+<h3>I can't see a page/button my colleague has.</h3>
+<p>Your role lacks that module's permission. Ask an admin to check Settings → Roles &amp; Permissions (remember "view" must be ticked explicitly).</p>
+<h3>Why can't I move a deal to delivered?</h3>
+<p>Deals advance through events: finance disbursement commits them, the delivery workflow delivers them. Complete the delivery steps instead.</p>
+<h3>Why was my discount not applied immediately?</h3>
+<p>It exceeded policy and created a manager approval gate. Track it on the deal or ask your manager to decide it from My Day.</p>
+<h3>Duty figures look different from my spreadsheet.</h3>
+<p>Duty is computed server-side from Settings → Tax Rules. Check the rules and thresholds there; the on-screen breakdown shows each line.</p>
+<h3>WhatsApp won't let me type a free message.</h3>
+<p>The customer's 24-hour reply window has closed. Send an approved template; the window reopens when they reply.</p>
+<h3>A vehicle import row failed.</h3>
+<p>Check required columns (Make, Model, Year, Price, Powertrain, Mileage, Exterior Color, Body Type), the Powertrain enum (EV/Hybrid/Petrol/Diesel), 17-character VIN/Engine Number, and duplicate VINs.</p>
+<h3>Emails aren't going out.</h3>
+<p>Settings → Email: confirm the connection is enabled and passing its test; check the outbound queue for failures.</p>
+</section>
+
+</body>
+</html>
