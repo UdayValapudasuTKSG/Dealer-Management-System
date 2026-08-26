@@ -712,7 +712,15 @@ const PATH_MODULES: Record<string, RouteRule> = {
         : (METHOD_CATEGORY[req.method] ?? "view"),
   },
   bookings: { module: "inventory" },
-  deliveries: { module: "deliveries" },
+  deliveries: {
+    module: "deliveries",
+    category: (req) =>
+      // Reopening a completed step is a backward correction — requires edit,
+      // not create (POST would otherwise map to create).
+      req.method === "POST" && /^\/deliveries\/\d+\/revert\/?$/.test(req.path)
+        ? "edit"
+        : (METHOD_CATEGORY[req.method] ?? "view"),
+  },
   "delivery-advisors": { module: "deliveries" },
   leads: {
     module: "leads",

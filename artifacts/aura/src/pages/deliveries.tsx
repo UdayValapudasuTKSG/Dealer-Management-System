@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAuthz } from "@/lib/auth";
 import { useFocusParam } from "@/lib/use-focus-param";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListDeliveries,
   useAdvanceDelivery,
+  useRevertDeliveryStep,
   useUpdateDelivery,
   useUpdateDeliveryPdi,
   useListDeliveryAdvisors,
@@ -303,10 +305,13 @@ function DeliveryDetail({
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { can } = useAuthz();
+  const canReopen = can("deliveries", "edit");
   const { data: advisors } = useListDeliveryAdvisors();
   const { data: salesAdvisors } = useListLeadAdvisors();
   const updateDeal = useUpdateDeal();
   const advance = useAdvanceDelivery();
+  const revertStep = useRevertDeliveryStep();
   const sendWarrantyEmail = useSendDeliveryWarrantyEmail();
   const updateDelivery = useUpdateDelivery();
   const updatePdi = useUpdateDeliveryPdi();
@@ -397,6 +402,37 @@ function DeliveryDetail({
               data?.unmet && data.unmet.length > 0
                 ? data.unmet.join(" · ")
                 : (data?.error ?? "Something went wrong."),
+            variant: "destructive",
+          });
+          invalidate();
+        },
+      },
+    );
+  };
+
+  const handleReopen = (s: DeliveryStepState) => {
+    if (
+      !window.confirm(
+        `Reopen "${s.label}"? The workflow moves back to this step so it can be redone. Anything already sent (emails, invoices) is not undone.`,
+      )
+    )
+      return;
+    revertStep.mutate(
+      { id: delivery.id, data: { step: s.key } },
+      {
+        onSuccess: (d) => {
+          invalidate();
+          toast({
+            title: "Step reopened",
+            description: `Current step is now: ${d.steps.find((x) => x.key === d.currentStep)?.label}`,
+          });
+        },
+        onError: (err: unknown) => {
+          const data = (err as { response?: { data?: { error?: string } } })
+            ?.response?.data;
+          toast({
+            title: "Cannot reopen",
+            description: data?.error ?? "Something went wrong.",
             variant: "destructive",
           });
           invalidate();
@@ -1047,6 +1083,11 @@ function DeliveryDetail({
                   s.key === delivery.currentStep &&
                   delivery.status !== "completed"
                 }
+                onReopen={
+                  canReopen && delivery.status !== "completed"
+                    ? handleReopen
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -1474,9 +1515,11 @@ function HandoverVerificationBanner({
 function StepRow({
   step,
   isCurrent,
+  onReopen,
 }: {
   step: DeliveryStepState;
   isCurrent: boolean;
+  onReopen?: (step: DeliveryStepState) => void;
 }) {
   const done = step.status === "completed";
   const skipped = step.status === "skipped";
@@ -1522,6 +1565,15 @@ function StepRow({
           {step.completedBy ? `${step.completedBy} · ` : ""}
           {fmtDate(step.completedAt)}
         </span>
+      )}
+      {(done || skipped) && onReopen && (
+        <button
+          onClick={() => onReopen(step)}
+          className="text-xs font-medium text-muted-foreground hover:text-foreground border border-border rounded-lg px-2 py-1 transition-colors"
+          title={`Reopen ${step.label} — moves the workflow back to this step`}
+        >
+          Reopen
+        </button>
       )}
     </div>
   );

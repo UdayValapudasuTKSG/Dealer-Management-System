@@ -1169,6 +1169,83 @@ export const AdvanceDeliveryResponse = zod.object({
 
 
 /**
+ * @summary Reopen a completed or skipped delivery step — moves the workflow back to it
+ */
+export const RevertDeliveryStepParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RevertDeliveryStepBody = zod.object({
+  "step": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'warranty', 'delivery', 'signature', 'feedback']),
+  "note": zod.string().optional().describe('Optional reason recorded on the timeline')
+})
+
+export const RevertDeliveryStepResponse = zod.object({
+  "id": zod.number(),
+  "dealId": zod.number(),
+  "bookingId": zod.number().nullish(),
+  "vehicleId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "advisorUserId": zod.number().nullish(),
+  "advisorName": zod.string().nullish(),
+  "salesAdvisorUserId": zod.number().nullish(),
+  "salesAdvisorName": zod.string().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "status": zod.enum(['in_progress', 'completed', 'cancelled']),
+  "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'warranty', 'delivery', 'signature', 'feedback']),
+  "steps": zod.array(zod.object({
+  "key": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'warranty', 'delivery', 'signature', 'feedback']),
+  "label": zod.string(),
+  "status": zod.enum(['pending', 'completed', 'skipped']),
+  "note": zod.string().nullish(),
+  "completedAt": zod.string().nullish(),
+  "completedBy": zod.string().nullish()
+})),
+  "pdiItems": zod.array(zod.object({
+  "label": zod.string(),
+  "status": zod.enum(['pending', 'pass', 'fail', 'waived']),
+  "waiveReason": zod.string().nullish(),
+  "note": zod.string().nullish()
+})),
+  "appointmentAt": zod.coerce.date().nullish(),
+  "invoiceId": zod.number().nullish(),
+  "signatureName": zod.string().nullish(),
+  "signatureData": zod.string().nullish(),
+  "warrantySignatureName": zod.string().nullish(),
+  "warrantySignatureData": zod.string().nullish(),
+  "feedbackRating": zod.number().nullish(),
+  "feedbackComment": zod.string().nullish(),
+  "registrationNumber": zod.string().nullish(),
+  "registrationStatus": zod.enum(['pending', 'submitted', 'issued']).optional(),
+  "registrationSubmittedAt": zod.coerce.date().nullish(),
+  "registrationStuck": zod.boolean().optional().describe('Registration has sat at \"submitted\" for more than 72 hours'),
+  "insurancePolicy": zod.string().nullish(),
+  "insuranceProvider": zod.string().nullish(),
+  "handoverOverrides": zod.record(zod.string(), zod.string()).optional().describe('Manual corrections shown on the printed handover form'),
+  "insuranceDocId": zod.number().nullish(),
+  "handoverSheetDocId": zod.number().nullish(),
+  "pdiWorkOrderId": zod.number().nullish(),
+  "deliveredAt": zod.coerce.date().nullish(),
+  "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
+  "handoverVerification": zod.union([zod.object({
+  "status": zod.enum(['none', 'pending', 'proposed', 'accepted', 'dismissed', 'failed']),
+  "allMatch": zod.boolean(),
+  "summary": zod.string().nullish(),
+  "fields": zod.array(zod.object({
+  "field": zod.string(),
+  "label": zod.string(),
+  "extracted": zod.string().nullable(),
+  "expected": zod.string().nullable(),
+  "match": zod.boolean()
+}))
+}),zod.null()]).optional(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Update the PDI checklist items
  */
 export const UpdateDeliveryPdiParams = zod.object({

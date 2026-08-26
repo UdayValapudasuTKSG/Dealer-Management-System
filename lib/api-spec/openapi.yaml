@@ -785,6 +785,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UnmetError"
+  /deliveries/{id}/revert:
+    post:
+      operationId: revertDeliveryStep
+      tags: [deliveries]
+      summary: Reopen a completed or skipped delivery step — moves the workflow back to it
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryRevertInput"
+      responses:
+        "200":
+          description: Step reopened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Step cannot be reopened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /deliveries/{id}/pdi:
     patch:
       operationId: updateDeliveryPdi
@@ -8943,6 +8978,12 @@ components:
         deliveredAt: { type: string, format: date-time, description: "Actual handover timestamp (GMT-4) — required on the delivery step" }
         feedbackRating: { type: integer, minimum: 1, maximum: 5 }
         feedbackComment: { type: string }
+    DeliveryRevertInput:
+      type: object
+      required: [step]
+      properties:
+        step: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, warranty, delivery, signature, feedback] }
+        note: { type: string, description: "Optional reason recorded on the timeline" }
     DeliveryPdiInput:
       type: object
       required: [items]

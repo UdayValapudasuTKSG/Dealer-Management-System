@@ -106,6 +106,7 @@ import type {
   DeliveryAdvisor,
   DeliveryInput,
   DeliveryPdiInput,
+  DeliveryRevertInput,
   DeliveryUpdate,
   Division,
   Document,
@@ -2576,6 +2577,78 @@ export const useAdvanceDelivery = <TError = ErrorType<Error | UnmetError>,
         TContext
       > => {
       return useMutation(getAdvanceDeliveryMutationOptions(options));
+    }
+
+export const getRevertDeliveryStepUrl = (id: number,) => {
+
+
+
+
+  return `/api/deliveries/${id}/revert`
+}
+
+/**
+ * @summary Reopen a completed or skipped delivery step — moves the workflow back to it
+ */
+export const revertDeliveryStep = async (id: number,
+    deliveryRevertInput: DeliveryRevertInput, options?: RequestInit): Promise<Delivery> => {
+
+  return customFetch<Delivery>(getRevertDeliveryStepUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(deliveryRevertInput)
+  }
+);}
+
+
+
+
+
+export const getRevertDeliveryStepMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revertDeliveryStep>>, TError,{id: number;data: BodyType<DeliveryRevertInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revertDeliveryStep>>, TError,{id: number;data: BodyType<DeliveryRevertInput>}, TContext> => {
+
+const mutationKey = ['revertDeliveryStep'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revertDeliveryStep>>, {id: number;data: BodyType<DeliveryRevertInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  revertDeliveryStep(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevertDeliveryStepMutationResult = NonNullable<Awaited<ReturnType<typeof revertDeliveryStep>>>
+    export type RevertDeliveryStepMutationBody = BodyType<DeliveryRevertInput>
+    export type RevertDeliveryStepMutationError = ErrorType<Error>
+
+    /**
+ * @summary Reopen a completed or skipped delivery step — moves the workflow back to it
+ */
+export const useRevertDeliveryStep = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revertDeliveryStep>>, TError,{id: number;data: BodyType<DeliveryRevertInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revertDeliveryStep>>,
+        TError,
+        {id: number;data: BodyType<DeliveryRevertInput>},
+        TContext
+      > => {
+      return useMutation(getRevertDeliveryStepMutationOptions(options));
     }
 
 export const getUpdateDeliveryPdiUrl = (id: number,) => {

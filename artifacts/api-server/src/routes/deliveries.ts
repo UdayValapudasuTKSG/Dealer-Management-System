@@ -45,6 +45,8 @@ import {
   AdvanceDeliveryParams,
   AdvanceDeliveryBody,
   AdvanceDeliveryResponse,
+  RevertDeliveryStepParams,
+  RevertDeliveryStepBody,
   UpdateDeliveryPdiParams,
   UpdateDeliveryPdiBody,
   UpdateDeliveryPdiResponse,
@@ -766,6 +768,23 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
         return;
       }
       extra.appointmentAt = at;
+      // Re-completing after a reopen must not spam the customer: only send
+      // the schedule email + delivery-ready notifications if this step has
+      // never completed before OR the appointment time actually changed.
+      const priorAt = delivery.appointmentAt?.getTime() ?? null;
+      const [alreadyAnnounced] = await db
+        .select({ id: timelineEventsTable.id })
+        .from(timelineEventsTable)
+        .where(
+          and(
+            eq(timelineEventsTable.dealerId, delivery.dealerId),
+            eq(timelineEventsTable.refType, "delivery"),
+            eq(timelineEventsTable.refId, delivery.id),
+            eq(timelineEventsTable.kind, "delivery_appointment"),
+          ),
+        )
+        .limit(1);
+      if (alreadyAnnounced && priorAt === at.getTime()) break;
       void (async () => {
         const { email, name } = await customerEmailFor(delivery);
         if (!email) return;
@@ -911,20 +930,45 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
             eq(vehiclesTable.dealerId, delivery.dealerId),
           ),
         );
-      await db.insert(reviewsTable).values({
-        dealerId: delivery.dealerId,
-        customerId: delivery.customerId ?? null,
-        customerName: customer?.name ?? null,
-        source: "delivery_csat",
-        rating: parsed.data.feedbackRating,
-        comment: parsed.data.feedbackComment ?? null,
-        refType: "delivery",
-        refId: delivery.id,
-        vehicleLabel: vehicle
-          ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
-          : null,
-        capturedBy: actor,
-      });
+      // Re-completing feedback after a reopen must not create a second CSAT
+      // record — update the existing one for this delivery instead.
+      const [existingReview] = await db
+        .select({ id: reviewsTable.id })
+        .from(reviewsTable)
+        .where(
+          and(
+            eq(reviewsTable.dealerId, delivery.dealerId),
+            eq(reviewsTable.source, "delivery_csat"),
+            eq(reviewsTable.refType, "delivery"),
+            eq(reviewsTable.refId, delivery.id),
+          ),
+        )
+        .limit(1);
+      if (existingReview) {
+        await db
+          .update(reviewsTable)
+          .set({
+            rating: parsed.data.feedbackRating,
+            comment: parsed.data.feedbackComment ?? null,
+            capturedBy: actor,
+          })
+          .where(eq(reviewsTable.id, existingReview.id));
+      } else {
+        await db.insert(reviewsTable).values({
+          dealerId: delivery.dealerId,
+          customerId: delivery.customerId ?? null,
+          customerName: customer?.name ?? null,
+          source: "delivery_csat",
+          rating: parsed.data.feedbackRating,
+          comment: parsed.data.feedbackComment ?? null,
+          refType: "delivery",
+          refId: delivery.id,
+          vehicleLabel: vehicle
+            ? `${vehicle.year} ${vehicle.make} ${vehicle.model}`
+            : null,
+          capturedBy: actor,
+        });
+      }
     } catch (err) {
       logger.error({ err, deliveryId: delivery.id }, "csat review insert failed");
     }
@@ -1236,6 +1280,124 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
   }
 
   res.json(AdvanceDeliveryResponse.parse((await enrich([updated!], activeDealerId(res)))[0]));
+});
+
+// Reopen a completed or skipped step. Moves the workflow pointer back to the
+// earliest pending step so it can be redone (data already captured stays on
+// the row, so re-completing is quick). Deliberately does NOT undo side
+// effects that already fired (invoices, emails, notifications) — reopening is
+// a correction mechanism, not a rollback. Fully completed deliveries cannot
+// be reopened: handover effects (vehicle delivered, deal stage, garage asset)
+// are irreversible here.
+router.post("/deliveries/:id/revert", async (req, res): Promise<void> => {
+  const params = RevertDeliveryStepParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = RevertDeliveryStepBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const step = parsed.data.step as DeliveryStep;
+  const dealerId = activeDealerId(res);
+  const actor =
+    res.locals.user?.name ?? res.locals.user?.email ?? "Delivery desk";
+
+  // The whole read-check-write runs in a transaction under a row lock so a
+  // concurrent advance/revert cannot interleave with this one and clobber the
+  // steps JSON or the pointer.
+  type RevertOutcome =
+    | { ok: true; row: typeof deliveriesTable.$inferSelect }
+    | { ok: false; status: number; error: string };
+  const outcome: RevertOutcome = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(deliveriesTable)
+      .where(
+        and(
+          eq(deliveriesTable.id, params.data.id),
+          eq(deliveriesTable.dealerId, dealerId),
+        ),
+      )
+      .for("update");
+    if (!row) return { ok: false, status: 404, error: "Delivery not found" };
+    if (row.status === "completed") {
+      return {
+        ok: false,
+        status: 422,
+        error:
+          "This delivery is already completed — the handover cannot be reopened",
+      };
+    }
+    const current = normalizeDeliverySteps(row.steps);
+    const target = current.find((s) => s.key === step);
+    if (!target) {
+      return { ok: false, status: 422, error: "Unknown step for this delivery" };
+    }
+    if (target.status === "pending") {
+      return {
+        ok: false,
+        status: 422,
+        error: `${DELIVERY_STEP_LABELS[step]} is not completed yet — nothing to reopen`,
+      };
+    }
+    const steps: DeliveryStepState[] = current.map((s) =>
+      s.key === step
+        ? { ...s, status: "pending", completedAt: null, completedBy: null }
+        : s,
+    );
+    // Pointer goes to the earliest pending step in workflow order so strict
+    // in-order advancing keeps working (reopening an early step while later
+    // ones are done means the early step becomes current again).
+    const firstPending = steps.find((s) => s.status === "pending");
+    const [updatedRow] = await tx
+      .update(deliveriesTable)
+      .set({
+        steps,
+        currentStep: firstPending ? firstPending.key : row.currentStep,
+      })
+      .where(
+        and(
+          eq(deliveriesTable.id, row.id),
+          eq(deliveriesTable.dealerId, row.dealerId),
+        ),
+      )
+      .returning();
+    return { ok: true, row: updatedRow! };
+  });
+
+  if (!outcome.ok) {
+    res.status(outcome.status).json({ error: outcome.error });
+    return;
+  }
+  const updated = outcome.row;
+  const delivery = updated;
+
+  try {
+    await db.insert(timelineEventsTable).values({
+      dealerId: delivery.dealerId,
+      customerId: delivery.customerId ?? null,
+      domain: "delivery",
+      kind: `delivery_${step}_reopened`,
+      title: `${DELIVERY_STEP_LABELS[step]} reopened`,
+      detail: parsed.data.note ?? null,
+      actor,
+      isAgent: false,
+      cause: `Delivery #${delivery.id} — deal #${delivery.dealId}`,
+      refType: "delivery",
+      refId: delivery.id,
+    });
+  } catch (err) {
+    logger.error({ err, deliveryId: delivery.id }, "reopen receipt failed");
+  }
+
+  res.json(
+    AdvanceDeliveryResponse.parse(
+      (await enrich([updated], activeDealerId(res)))[0],
+    ),
+  );
 });
 
 router.patch("/deliveries/:id/pdi", async (req, res): Promise<void> => {

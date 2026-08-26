@@ -2016,6 +2016,28 @@ export interface DeliveryAdvanceInput {
   feedbackComment?: string;
 }
 
+export type DeliveryRevertInputStep = typeof DeliveryRevertInputStep[keyof typeof DeliveryRevertInputStep];
+
+
+export const DeliveryRevertInputStep = {
+  sales_order: 'sales_order',
+  pdi_checklist: 'pdi_checklist',
+  registration: 'registration',
+  insurance: 'insurance',
+  invoice: 'invoice',
+  appointment: 'appointment',
+  warranty: 'warranty',
+  delivery: 'delivery',
+  signature: 'signature',
+  feedback: 'feedback',
+} as const;
+
+export interface DeliveryRevertInput {
+  step: DeliveryRevertInputStep;
+  /** Optional reason recorded on the timeline */
+  note?: string;
+}
+
 export interface DeliveryPdiInput {
   items: PdiItem[];
 }

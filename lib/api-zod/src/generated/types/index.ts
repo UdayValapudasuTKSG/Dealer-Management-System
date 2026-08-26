@@ -186,6 +186,8 @@ export * from './deliveryHandoverOverrides';
 export * from './deliveryInput';
 export * from './deliveryPdiInput';
 export * from './deliveryRegistrationStatus';
+export * from './deliveryRevertInput';
+export * from './deliveryRevertInputStep';
 export * from './deliveryStatus';
 export * from './deliveryStepState';
 export * from './deliveryStepStateKey';
