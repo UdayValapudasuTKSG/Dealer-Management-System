@@ -54,4 +54,5 @@
 - [Vehicle VIN uniqueness](vehicle-vin-uniqueness.md) — normalized active VINs are dealer-scoped; reconcile historical duplicates before adding a database unique index.
 - [Per-dealer SMTP email](dealer-smtp-email.md) — dealer-SMTP only, no global fallback; never expose raw SMTP error text (sanitize to codes); outbox rows need atomic CAS claims.
 - [WhatsApp conversational agent](whatsapp-conversational-agent.md) — LLM tool-loop layered over guided flow; empty end_turn needs lastSeenText; PII provenance guard; advisory-lock lead upsert.
+- [Vehicle free-text matching](vehicle-text-matching.md) — form slugs + marketing-name drift ("SEALION 7" vs inventory "SEALION EV") need normalized + token-prefix matching via matchVehicleByText.
 - [Dynamic download proxy caching](dynamic-download-proxy-cache.md) — permission-scoped exports need API no-store headers plus client cache-busting; a proxy 304 has no downloadable body.

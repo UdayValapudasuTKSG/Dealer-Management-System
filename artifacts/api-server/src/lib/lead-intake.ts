@@ -29,25 +29,136 @@ export type MatchedVehicle = {
   color: string | null;
 };
 
+/** Normalize free text / form-option slugs for inventory matching: lowercase,
+ * strip every non-alphanumeric character (spaces, underscores, dashes, dots),
+ * so "sealion_7" ≡ "SEALION 7" and "yuan_plus_-_480_gs" ≡ "Yuan Plus - 480 GS". */
+export function normalizeVehicleText(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function tokenizeVehicleText(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+type VehicleRow = {
+  id: number;
+  year: number;
+  make: string;
+  model: string;
+  trim: string | null;
+  variant: string | null;
+  exteriorColor: string | null;
+};
+
+/** Token-prefix fallback for marketing-name drift ("sealion_7" vs inventory
+ * model "SEALION EV"): strip make tokens from the answer, score each distinct
+ * model by how many of its leading tokens the answer starts with, and accept
+ * only a strictly unique best-scoring model (>= 1 alphabetic token). Among the
+ * units of the winning model, prefer one whose variant/trim tokens also appear
+ * in the answer (e.g. "yuan_plus_-_480_gs" -> variant "480KM-GS"). */
+function matchByTokenPrefix<T extends VehicleRow>(
+  text: string,
+  vehicles: T[],
+): T | null {
+  const makeTokens = new Set(
+    vehicles.flatMap((v) => tokenizeVehicleText(v.make)),
+  );
+  const needleTokens = tokenizeVehicleText(text).filter(
+    (t) => !makeTokens.has(t),
+  );
+  if (needleTokens.length === 0) return null;
+
+  const scoreModel = (model: string): number => {
+    const modelTokens = tokenizeVehicleText(model);
+    let score = 0;
+    while (
+      score < modelTokens.length &&
+      score < needleTokens.length &&
+      modelTokens[score] === needleTokens[score]
+    ) {
+      score++;
+    }
+    // Require at least one alphabetic token in the shared prefix — a bare
+    // numeric overlap ("7") is not a confident model identification.
+    const prefix = modelTokens.slice(0, score);
+    if (!prefix.some((t) => /[a-z]/.test(t) && t.length >= 3)) return 0;
+    return score;
+  };
+
+  const byModel = new Map<string, { score: number; units: T[] }>();
+  for (const v of vehicles) {
+    const key = normalizeVehicleText(v.model);
+    let entry = byModel.get(key);
+    if (!entry) {
+      entry = { score: scoreModel(v.model), units: [] };
+      byModel.set(key, entry);
+    }
+    entry.units.push(v);
+  }
+  let best: { score: number; units: T[] } | null = null;
+  let tied = false;
+  for (const entry of byModel.values()) {
+    if (entry.score === 0) continue;
+    if (!best || entry.score > best.score) {
+      best = entry;
+      tied = false;
+    } else if (entry.score === best.score) {
+      tied = true;
+    }
+  }
+  if (!best || tied) return null;
+
+  // Prefer the unit whose variant/trim tokens overlap the answer the most.
+  const needleSet = new Set(needleTokens);
+  let bestUnit = best.units[0]!;
+  let bestOverlap = 0;
+  for (const unit of best.units) {
+    const variantTokens = tokenizeVehicleText(
+      `${unit.trim ?? ""} ${unit.variant ?? ""}`,
+    );
+    const overlap = variantTokens.filter((t) => needleSet.has(t)).length;
+    if (overlap > bestOverlap) {
+      bestOverlap = overlap;
+      bestUnit = unit;
+    }
+  }
+  return bestUnit;
+}
+
 /** Match a free-text vehicle mention against inventory (same heuristics as
- * the website enquiry fallback). */
+ * the website enquiry fallback). Meta lead forms often return raw option
+ * slugs ("sealion_7"), so comparison happens on normalized strings. */
 export async function matchVehicleByText(
   text: string | null | undefined,
   dealerId: number,
 ): Promise<MatchedVehicle | null> {
   if (!text || !text.trim()) return null;
+  const needle = normalizeVehicleText(text);
+  // Too-short needles ("7", "gs") would substring-match half the inventory.
+  if (needle.length < 3) return null;
   const vehicles = await db
     .select()
     .from(vehiclesTable)
-    .where(eq(vehiclesTable.dealerId, dealerId));
-  const needle = text.trim().toLowerCase();
-  const match = vehicles.find((v) => {
-    const full = `${v.year} ${v.make} ${v.model}`.toLowerCase();
-    const short = `${v.make} ${v.model}`.toLowerCase();
+    .where(eq(vehiclesTable.dealerId, dealerId))
+    .orderBy(vehiclesTable.id);
+  let match = vehicles.find((v) => {
+    const full = normalizeVehicleText(`${v.year} ${v.make} ${v.model}`);
+    const short = normalizeVehicleText(`${v.make} ${v.model}`);
+    const model = normalizeVehicleText(v.model);
     return (
-      full.includes(needle) || short.includes(needle) || needle.includes(short)
+      full.includes(needle) ||
+      short.includes(needle) ||
+      needle.includes(short) ||
+      (model.length >= 3 && needle.includes(model))
     );
   });
+  // Fallback for marketing-name drift ("sealion_7" vs inventory "SEALION EV"):
+  // score each distinct model by how many of its leading tokens the answer
+  // starts with (make tokens stripped), and accept only a strictly unique best.
+  if (!match) match = matchByTokenPrefix(text, vehicles) ?? undefined;
   if (!match) return null;
   return {
     id: match.id,
