@@ -11,6 +11,7 @@ import { migrateLegacyAttachments } from "./lib/documents-migrate";
 import { startMetricsFlusher } from "./lib/metrics";
 import { logPendingInfraSeams } from "./lib/infra-seams";
 import { registerErpnextEntitySync } from "./lib/erpnext/entities";
+import { startMetaLeadPolling } from "./lib/meta-lead-poll";
 
 const rawPort = process.env["PORT"];
 
@@ -43,5 +44,6 @@ app.listen(port, (err) => {
   startErpnextSyncWorker();
   void migrateLegacyAttachments();
   startMetricsFlusher();
+  startMetaLeadPolling();
   logPendingInfraSeams();
 });

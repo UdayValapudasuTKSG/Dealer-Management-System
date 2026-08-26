@@ -213,21 +213,36 @@ async function dealerIdForMetaPage(pageId: string): Promise<number | null> {
   return d?.id ?? null;
 }
 
-async function processLeadgenEvent(
+export async function processLeadgenEvent(
   leadgenId: string,
   pageId: string,
 ): Promise<void> {
-  // Idempotency: skip leadgen ids we've already processed (Meta retries).
-  const [seen] = await db
-    .select()
-    .from(webhookEventsTable)
-    .where(
-      and(
-        eq(webhookEventsTable.channel, "meta_leadgen"),
-        eq(webhookEventsTable.externalId, leadgenId),
-      ),
-    );
-  if (seen) return;
+  // Idempotency: atomically claim the (channel, externalId) ledger key BEFORE
+  // any side effect. With both webhook delivery and the polling fallback able
+  // to see the same leadgen id concurrently, a check-then-insert-at-the-end
+  // pattern would let two invocations each create a lead; the unique index on
+  // (channel, external_id) makes exactly one claim win. The loser (or a Meta
+  // retry of an already-processed id) sees zero inserted rows and returns.
+  const claimed = await db
+    .insert(webhookEventsTable)
+    .values({ channel: "meta_leadgen", externalId: leadgenId })
+    .onConflictDoNothing()
+    .returning({ id: webhookEventsTable.id });
+  if (claimed.length === 0) return;
+  const claimId = claimed[0]!.id;
+  // On any failure below, release the claim so a webhook retry / next poll
+  // sweep can process the lead (otherwise it would be permanently skipped).
+  const releaseClaim = async () => {
+    await db
+      .delete(webhookEventsTable)
+      .where(eq(webhookEventsTable.id, claimId))
+      .catch((err) =>
+        logger.error(
+          { err, leadgenId },
+          "Meta leadgen: failed to release ledger claim",
+        ),
+      );
+  };
 
   // Tenant routing: page_id must map to a dealer BEFORE any write.
   const dealerId = await dealerIdForMetaPage(pageId);
@@ -236,6 +251,7 @@ async function processLeadgenEvent(
       { leadgenId, pageId },
       "Meta leadgen rejected: page_id is not mapped to any dealer",
     );
+    await releaseClaim();
     return;
   }
 
@@ -246,9 +262,11 @@ async function processLeadgenEvent(
       { leadgenId, pageId, dealerId },
       "Meta leadgen skipped: no page access token configured for this dealer",
     );
+    await releaseClaim();
     return;
   }
 
+  try {
   const url = `${GRAPH_BASE}/${encodeURIComponent(leadgenId)}?fields=field_data,created_time,platform,form_id&access_token=${encodeURIComponent(pageToken)}`;
   const resp = await fetch(url);
   if (!resp.ok) {
@@ -313,12 +331,16 @@ async function processLeadgenEvent(
     actor: "Meta Lead Ads",
   });
 
-  await db.insert(webhookEventsTable).values({
-    channel: "meta_leadgen",
-    externalId: leadgenId,
-    dealerId,
-    leadId: lead.id,
-  });
+  // Complete the claim with the routing outcome.
+  await db
+    .update(webhookEventsTable)
+    .set({ dealerId, leadId: lead.id })
+    .where(eq(webhookEventsTable.id, claimId));
+  } catch (err) {
+    // Release the claim so the webhook retry / next poll sweep reprocesses.
+    await releaseClaim();
+    throw err;
+  }
 }
 
 // Receiver. Mounted with express.raw() (see app.ts) so the signature can be

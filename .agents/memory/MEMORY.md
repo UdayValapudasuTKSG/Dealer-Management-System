@@ -25,6 +25,7 @@
 - [GYD-only currency](gyd-only-currency.md) — system re-denominated Aug 2026: all money stored/displayed in GYD, rates pinned to 1; never reintroduce rate fallbacks or ×rate money paths.
 - [GRA duty engine conventions](gra-duty-engine.md) — dealer_taxes-driven, server-only duty; gate approve authorises, filing recomputes with LINE-LEVEL drift check; extract is allowlisted, identity fields human-keyed.
 - [Agent-run idempotency ledger](agent-run-idempotency-ledger.md) — dedupe via agent_runs needs a stable refType/refId across ALL outcome paths; downstream entities go in affectedEntities.
+- [Meta leadgen webhook gaps](meta-leadads-webhook-gaps.md) — dev-mode apps silently drop real-customer webhooks; the poll fallback + atomic ledger claim covers it. Never revert to check-then-insert.
 - [Meta Lead Ads onboarding](meta-leadads-onboarding.md) — token page grants bake at issuance; find the real campaign page via ad creatives; backfill history via form leads, unassigned + deduped + ledgered.
 - [Meta WhatsApp webhook attach](meta-whatsapp-webhook-attach.md) — webhook config alone isn't enough; app must be linked via POST /<WABA>/subscribed_apps or inbound is silently dropped.
 - [Dealer-scoped WhatsApp outbound](whatsapp-outbound-providers.md) — resolve an enabled channel only by dealer; never fall back to another dealer/global sender.
