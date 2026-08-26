@@ -278,10 +278,17 @@ export async function processLeadgenEvent(
     platform?: string;
   };
 
+  // Normalize field keys: Meta returns either snake_case API names
+  // ("first_name") or human labels ("First Name") depending on the form.
+  const normalizeKey = (k: string) =>
+    k
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
   const fields = new Map<string, string>();
   for (const f of data.field_data ?? []) {
     const v = f.values?.[0];
-    if (v != null && v !== "") fields.set(f.name.toLowerCase(), v);
+    if (v != null && v !== "") fields.set(normalizeKey(f.name), v);
   }
   const pick = (...names: string[]): string | null => {
     for (const n of names) {
@@ -302,11 +309,21 @@ export async function processLeadgenEvent(
 
   // Any custom question mentioning a vehicle/car/model is treated as the
   // vehicle-interest answer and matched against inventory.
+  // Prefer an explicit model question over generic vehicle fields (e.g.
+  // "Vehicle Color" must not win over "Which BYD Model are you interested in").
   let vehicleAnswer: string | null = null;
   for (const [key, value] of fields) {
-    if (/vehicle|car|model|interested/.test(key)) {
+    if (/model/.test(key) && !/color|colour/.test(key)) {
       vehicleAnswer = value;
       break;
+    }
+  }
+  if (!vehicleAnswer) {
+    for (const [key, value] of fields) {
+      if (/vehicle|car|interested/.test(key) && !/color|colour/.test(key)) {
+        vehicleAnswer = value;
+        break;
+      }
     }
   }
   const vehicle = await matchVehicleByText(vehicleAnswer, dealerId);
