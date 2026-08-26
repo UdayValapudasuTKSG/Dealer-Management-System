@@ -198,6 +198,9 @@ export default function Leads() {
 
   // Advisor filter (leadership only) + table sorting (everyone).
   const [advisorFilter, setAdvisorFilter] = useState<string>("all");
+  // "__all__" sentinel: a dealer-configured source could legitimately use the
+  // code "all", so the unscoped option must not collide with it.
+  const [sourceFilter, setSourceFilter] = useState<string>("__all__");
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   // Three-state sort cycle: ascending → descending → off (original order).
@@ -375,8 +378,25 @@ export default function Leads() {
     [leads],
   );
 
+  // Source options: configured lead sources plus any legacy/ad-hoc codes
+  // still present on leads, so no lead is ever unfilterable.
+  const sourceOptions = useMemo(() => {
+    const byCode = new Map<string, string>();
+    for (const s of leadSources ?? []) byCode.set(s.code, s.name);
+    for (const l of leads ?? []) {
+      const code = (l.source ?? "").trim();
+      if (code && !byCode.has(code))
+        byCode.set(code, SOURCE_LABEL[code] ?? code);
+    }
+    return Array.from(byCode, ([code, label]) => ({ code, label })).sort(
+      (a, b) => a.label.localeCompare(b.label),
+    );
+  }, [leadSources, leads]);
+
   const visible = useMemo(() => {
     return rows.filter((r) => {
+      if (sourceFilter !== "__all__" && r.lead.source !== sourceFilter)
+        return false;
       if (
         advisorFilter !== "all" &&
         (r.lead.assignedTo ?? "").trim() !== advisorFilter
@@ -394,13 +414,13 @@ export default function Leads() {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, tab, myId, myName, advisorFilter]);
+  }, [rows, tab, myId, myName, advisorFilter, sourceFilter]);
 
   const PAGE_SIZE = layout === "list" ? 25 : compact ? 30 : 24;
   const [page, setPage] = useState(1);
   useEffect(() => {
     setPage(1);
-  }, [tab, search, layout, density, advisorFilter]);
+  }, [tab, search, layout, density, advisorFilter, sourceFilter]);
   const sortedVisible = useMemo(() => {
     if (!sortKey) return visible;
     const dir = sortDir === "asc" ? 1 : -1;
@@ -744,6 +764,21 @@ export default function Leads() {
               className="w-full h-9 rounded-full bg-foreground/[0.04] border border-white/10 pl-9 pr-4 text-sm focus:outline-none focus:border-primary/50"
             />
           </div>
+          {sourceOptions.length > 0 && (
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="h-9 rounded-full bg-foreground/[0.04] border border-white/10 text-sm px-3 pr-8 text-foreground/90 focus:outline-none focus:border-primary/50"
+              aria-label="Filter by lead source"
+            >
+              <option value="__all__">All sources</option>
+              {sourceOptions.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          )}
           {isLeadership && advisorOptions.length > 0 && (
             <select
               value={advisorFilter}
