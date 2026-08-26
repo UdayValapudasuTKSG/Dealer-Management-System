@@ -2068,6 +2068,7 @@ export const DocumentEntityType = {
   lead: 'lead',
   vehicle: 'vehicle',
   delivery: 'delivery',
+  job_card: 'job_card',
 } as const;
 
 export type DocumentType = typeof DocumentType[keyof typeof DocumentType];
@@ -2127,6 +2128,7 @@ export const DocumentInputEntityType = {
   lead: 'lead',
   vehicle: 'vehicle',
   delivery: 'delivery',
+  job_card: 'job_card',
 } as const;
 
 export type DocumentInputType = typeof DocumentInputType[keyof typeof DocumentInputType];
@@ -4721,12 +4723,70 @@ export interface JobCard {
   startedAt?: string | null;
   /** @nullable */
   completedAt?: string | null;
+  /** Accumulated worked seconds (excludes the running segment) */
+  timerSeconds?: number;
+  /**
+     * Start of the running timer segment; null when paused
+     * @nullable
+     */
+  timerStartedAt?: string | null;
   createdAt: string;
 }
 
 export interface JobCardRolloverRequest {
   toDate: string;
   reason?: string;
+}
+
+export type JobCardTimerActionAction = typeof JobCardTimerActionAction[keyof typeof JobCardTimerActionAction];
+
+
+export const JobCardTimerActionAction = {
+  pause: 'pause',
+  resume: 'resume',
+} as const;
+
+export interface JobCardTimerAction {
+  action: JobCardTimerActionAction;
+}
+
+export interface JobCardReopenRequest {
+  reason?: string;
+}
+
+export type JobCardHistoryItemStatus = typeof JobCardHistoryItemStatus[keyof typeof JobCardHistoryItemStatus];
+
+
+export const JobCardHistoryItemStatus = {
+  open: 'open',
+  in_progress: 'in_progress',
+  on_hold: 'on_hold',
+  completed: 'completed',
+  closed: 'closed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface JobCardHistoryItem {
+  id: number;
+  serviceOrderId: number;
+  title: string;
+  status: JobCardHistoryItemStatus;
+  /** @nullable */
+  technicianName?: string | null;
+  /** @nullable */
+  customerName?: string | null;
+  vehicleInfo: string;
+  laborHours: number;
+  timerSeconds: number;
+  /** @nullable */
+  serviceAnalysis?: string | null;
+  /** @nullable */
+  workPerformed?: string | null;
+  /** @nullable */
+  startedAt?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  createdAt: string;
 }
 
 export type JobCardRolloverApprovalAs = typeof JobCardRolloverApprovalAs[keyof typeof JobCardRolloverApprovalAs];
@@ -5231,15 +5291,45 @@ export interface PartImportError {
   message: string;
 }
 
+export type PartImportResultMode = typeof PartImportResultMode[keyof typeof PartImportResultMode];
+
+
+export const PartImportResultMode = {
+  preview: 'preview',
+  apply: 'apply',
+} as const;
+
+export type PartImportRowPreviewAction = typeof PartImportRowPreviewAction[keyof typeof PartImportRowPreviewAction];
+
+
+export const PartImportRowPreviewAction = {
+  create: 'create',
+  update: 'update',
+} as const;
+
+export interface PartImportRowPreview {
+  row: number;
+  sku: string;
+  name: string;
+  action: PartImportRowPreviewAction;
+  /** @nullable */
+  supplier?: string | null;
+  /** Supplier name not found — it would be created */
+  newSupplier?: boolean;
+}
+
 export interface PartImportResult {
   /** Data rows found in the file */
   total: number;
-  /** New parts created */
+  /** New parts created (preview: would be created) */
   inserted: number;
-  /** Existing parts updated (upsert by dealer + part number) */
+  /** Existing parts updated (upsert by dealer + part number; preview: would be updated) */
   updated: number;
   /** Rows not applied (validation errors, duplicates, row cap) */
   skipped: number;
+  mode: PartImportResultMode;
+  /** Preview only: per-row classification */
+  rows?: PartImportRowPreview[];
   errors: PartImportError[];
 }
 
@@ -7159,6 +7249,13 @@ status?: string;
 mine?: string;
 };
 
+export type ListJobCardHistoryParams = {
+/**
+ * Matches customer name, vehicle, or job title
+ */
+q?: string;
+};
+
 export type ListServiceInvoicesParams = {
 status?: string;
 };
@@ -7171,6 +7268,21 @@ export type ListPartsParams = {
 search?: string;
 lowStock?: string;
 };
+
+export type ImportPartsParams = {
+/**
+ * preview classifies rows without writing; apply (default) persists
+ */
+mode?: ImportPartsMode;
+};
+
+export type ImportPartsMode = typeof ImportPartsMode[keyof typeof ImportPartsMode];
+
+
+export const ImportPartsMode = {
+  preview: 'preview',
+  apply: 'apply',
+} as const;
 
 export type ListTestDrivesParams = {
 leadId?: number;
@@ -7354,6 +7466,7 @@ export const ListDocumentsEntityType = {
   lead: 'lead',
   vehicle: 'vehicle',
   delivery: 'delivery',
+  job_card: 'job_card',
 } as const;
 
 export type RotateErpnextWebhookSecret200 = {

@@ -799,6 +799,51 @@ router.post("/parts/import", async (req, res): Promise<void> => {
     return created.id;
   };
 
+  // Preview mode: classify every row (create vs update, new suppliers)
+  // without touching the database, so staff can confirm before applying.
+  const mode = req.query.mode === "preview" ? "preview" : "apply";
+  if (mode === "preview") {
+    const skus = [...bySku.keys()];
+    const existingSkus = new Set<string>(
+      skus.length
+        ? (
+            await db
+              .select({ sku: partsTable.sku })
+              .from(partsTable)
+              .where(
+                and(
+                  eq(partsTable.dealerId, dealerId),
+                  inArray(sql`upper(${partsTable.sku})`, skus),
+                ),
+              )
+          ).map((p) => p.sku.toUpperCase())
+        : [],
+    );
+    const previewRows = [...bySku.values()].map((r) => ({
+      row: r.row,
+      sku: r.sku,
+      name: r.name,
+      action: existingSkus.has(r.sku.toUpperCase()) ? "update" : "create",
+      supplier: r.supplier ?? null,
+      newSupplier: r.supplier
+        ? !supplierIds.has(r.supplier.toLowerCase())
+        : false,
+    }));
+    const wouldUpdate = previewRows.filter((p) => p.action === "update").length;
+    res.json(
+      ImportPartsResponse.parse({
+        total,
+        inserted: previewRows.length - wouldUpdate,
+        updated: wouldUpdate,
+        skipped: total - previewRows.length,
+        mode,
+        rows: previewRows,
+        errors,
+      }),
+    );
+    return;
+  }
+
   let inserted = 0;
   let updated = 0;
   for (const r of bySku.values()) {
@@ -870,9 +915,87 @@ router.post("/parts/import", async (req, res): Promise<void> => {
       inserted,
       updated,
       skipped: total - inserted - updated,
+      mode,
       errors,
     }),
   );
+});
+
+// Current parts inventory as Excel — same columns as the import template so
+// the exported file can be edited and re-imported (round-trip updates).
+router.get("/parts/export", async (_req, res): Promise<void> => {
+  const dealerId = activeDealerId(res);
+  const rows = await db
+    .select({
+      sku: partsTable.sku,
+      name: partsTable.name,
+      category: partsTable.category,
+      supplier: suppliersTable.name,
+      unitCost: partsTable.unitCost,
+      unitPrice: partsTable.unitPrice,
+      stock: partsTable.stock,
+      reorderLevel: partsTable.reorderLevel,
+      location: partsTable.location,
+      status: partsTable.status,
+    })
+    .from(partsTable)
+    .leftJoin(
+      suppliersTable,
+      and(
+        eq(partsTable.supplierId, suppliersTable.id),
+        // Tenancy: constrain the joined table too, never trust the FK alone.
+        eq(suppliersTable.dealerId, partsTable.dealerId),
+      ),
+    )
+    .where(eq(partsTable.dealerId, dealerId))
+    .orderBy(partsTable.sku);
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Parts");
+  const headers = [
+    "Part Number",
+    "Description",
+    "Category",
+    "Supplier",
+    "Unit Cost",
+    "Sell Price",
+    "Quantity",
+    "Reorder Level",
+    "Bin Location",
+    "Status",
+  ];
+  sheet.addRow(headers);
+  sheet.getRow(1).font = { bold: true };
+  for (const r of rows) {
+    sheet.addRow([
+      r.sku,
+      r.name,
+      r.category,
+      r.supplier ?? "",
+      r.unitCost,
+      r.unitPrice,
+      r.stock,
+      r.reorderLevel,
+      r.location ?? "",
+      r.status,
+    ]);
+  }
+  sheet.columns.forEach((col, i) => {
+    col.width = Math.max(14, headers[i].length + 4);
+  });
+  const notes = workbook.addWorksheet("Notes");
+  notes.addRow(["Edit and re-import this file to bulk-update parts."]);
+  notes.addRow(["Existing parts are matched by Part Number; the Status column is ignored on import."]);
+  const buffer = await workbook.xlsx.writeBuffer();
+  res
+    .setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    .setHeader(
+      "Content-Disposition",
+      'attachment; filename="aura-parts-inventory.xlsx"',
+    )
+    .send(Buffer.from(buffer));
 });
 
 const PART_TEMPLATE_COLUMNS: { header: string; example: string | number }[] = [

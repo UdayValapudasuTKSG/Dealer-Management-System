@@ -52,6 +52,7 @@ import {
   ensureFinalInvoiceForDeal,
 } from "../lib/invoicing";
 import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
+import { approvedQuoteDiscountForLead } from "../lib/quotes";
 import {
   refundBlockReason,
   capturedFundsForDeal,
@@ -597,10 +598,42 @@ router.post("/deals", async (req, res): Promise<void> => {
     divisionId = veh?.divisionId ?? (await defaultDivisionId(dealerId));
   }
 
+  // Seed the deal's discount from the lead's manager-approved quote discount
+  // when the desking form didn't set one — the customer was quoted the
+  // reduced price, so the deal must not silently revert to list price.
+  let seededDiscount: { discount: number; otdPrice: number } | null = null;
+  if (linkedLead && parsed.data.discount == null) {
+    const quoteDiscount = Math.min(
+      await approvedQuoteDiscountForLead(dealerId, linkedLead.id),
+      parsed.data.vehiclePrice,
+    );
+    if (quoteDiscount > 0) {
+      const [veh] = await db
+        .select({ powertrain: vehiclesTable.powertrain })
+        .from(vehiclesTable)
+        .where(
+          and(
+            eq(vehiclesTable.id, parsed.data.vehicleId),
+            eq(vehiclesTable.dealerId, dealerId),
+          ),
+        );
+      const taxBase = Math.max(
+        parsed.data.vehiclePrice - quoteDiscount + (parsed.data.accessories ?? 0),
+        0,
+      );
+      const taxRules = await ensureDealerTaxes(dealerId);
+      const { totalWithTax } = computeTaxes(taxBase, taxRules, {
+        powertrain: veh?.powertrain ?? null,
+      });
+      seededDiscount = { discount: quoteDiscount, otdPrice: totalWithTax };
+    }
+  }
+
   const [deal] = await db
     .insert(dealsTable)
     .values({
       ...parsed.data,
+      ...(seededDiscount ?? {}),
       divisionId,
       salesAdvisorUserId,
       dealerId,

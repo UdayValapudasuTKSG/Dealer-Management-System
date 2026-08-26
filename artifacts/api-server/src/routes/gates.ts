@@ -241,6 +241,45 @@ async function applyCascade(
               total: quote.basePrice + quote.totalTax - amt,
             })
             .where(eq(quotesTable.id, quote.id));
+          // Carry the approved discount onto the lead's desking deal so the
+          // deal (and its OTD) reflects the price the customer was quoted.
+          // Committed/delivered deals keep their gate-guarded pricing.
+          if (quote.leadId) {
+            const [deal] = await tx
+              .select()
+              .from(dealsTable)
+              .where(
+                and(
+                  eq(dealsTable.dealerId, gate.dealerId),
+                  eq(dealsTable.leadId, quote.leadId),
+                  eq(dealsTable.stage, "desking"),
+                ),
+              )
+              .orderBy(desc(dealsTable.createdAt))
+              .limit(1);
+            if (deal) {
+              const discount = Math.min(amt, deal.vehiclePrice);
+              const [veh] = await tx
+                .select({ powertrain: vehiclesTable.powertrain })
+                .from(vehiclesTable)
+                .where(
+                  and(
+                    eq(vehiclesTable.id, deal.vehicleId),
+                    eq(vehiclesTable.dealerId, deal.dealerId),
+                  ),
+                );
+              const taxRules = await ensureDealerTaxes(deal.dealerId);
+              const { totalWithTax } = computeTaxes(
+                Math.max(deal.vehiclePrice - discount + deal.accessories, 0),
+                taxRules,
+                { powertrain: veh?.powertrain ?? null },
+              );
+              await tx
+                .update(dealsTable)
+                .set({ discount, otdPrice: totalWithTax })
+                .where(eq(dealsTable.id, deal.id));
+            }
+          }
           return {
             title:
               action === "adjust"

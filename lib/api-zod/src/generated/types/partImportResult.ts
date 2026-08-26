@@ -6,15 +6,20 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PartImportError } from './partImportError';
+import type { PartImportResultMode } from './partImportResultMode';
+import type { PartImportRowPreview } from './partImportRowPreview';
 
 export interface PartImportResult {
   /** Data rows found in the file */
   total: number;
-  /** New parts created */
+  /** New parts created (preview: would be created) */
   inserted: number;
-  /** Existing parts updated (upsert by dealer + part number) */
+  /** Existing parts updated (upsert by dealer + part number; preview: would be updated) */
   updated: number;
   /** Rows not applied (validation errors, duplicates, row cap) */
   skipped: number;
+  mode: PartImportResultMode;
+  /** Preview only: per-row classification */
+  rows?: PartImportRowPreview[];
   errors: PartImportError[];
 }

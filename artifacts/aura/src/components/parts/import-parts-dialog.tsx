@@ -22,16 +22,30 @@ import {
   Loader2,
   CheckCircle2,
   AlertTriangle,
+  Eye,
+  PlusCircle,
+  RefreshCw,
   X,
 } from "lucide-react";
 
 const apiBase = () => `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
+
+type PreviewRow = {
+  row: number;
+  sku: string;
+  name: string;
+  action: "create" | "update";
+  supplier?: string | null;
+  newSupplier?: boolean;
+};
 
 type ImportResult = {
   total: number;
   inserted: number;
   updated: number;
   skipped: number;
+  mode: "preview" | "apply";
+  rows?: PreviewRow[];
   errors: { row: number; field?: string | null; message: string }[];
 };
 
@@ -48,11 +62,13 @@ export function ImportPartsDialog({
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<ImportResult | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
   const reset = () => {
     setFile(null);
+    setPreview(null);
     setResult(null);
     setUploading(false);
     setDragOver(false);
@@ -71,17 +87,18 @@ export function ImportPartsDialog({
       });
       return;
     }
+    setPreview(null);
     setResult(null);
     setFile(f);
   };
 
-  const onImport = async () => {
+  const run = async (mode: "preview" | "apply") => {
     if (!file) return;
     setUploading(true);
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`${apiBase()}/parts/import`, {
+      const res = await fetch(`${apiBase()}/parts/import?mode=${mode}`, {
         method: "POST",
         body: form,
         credentials: "include",
@@ -91,6 +108,18 @@ export function ImportPartsDialog({
         throw new Error(body?.error ?? `Import failed (${res.status})`);
       }
       const summary = (await res.json()) as ImportResult;
+      if (mode === "preview") {
+        setPreview(summary);
+        if (summary.inserted + summary.updated === 0) {
+          toast({
+            title: "Nothing to import",
+            description:
+              "No rows passed validation — review the issues listed in the dialog.",
+            variant: "destructive",
+          });
+        }
+        return;
+      }
       setResult(summary);
       const applied = summary.inserted + summary.updated;
       if (applied > 0) {
@@ -117,6 +146,8 @@ export function ImportPartsDialog({
       setUploading(false);
     }
   };
+
+  const shown = result ?? preview;
 
   return (
     <Dialog
@@ -204,30 +235,49 @@ export function ImportPartsDialog({
           </div>
         )}
 
-        {result && (
+        {shown && (
           <div className="space-y-3">
             <div className="flex items-center gap-4 rounded-xl bg-foreground/[0.03] border border-white/10 px-4 py-3 text-sm">
               <span className="flex items-center gap-1.5 text-emerald-400">
                 <CheckCircle2 className="w-4 h-4" />
-                {result.inserted} added
+                {shown.inserted} {shown.mode === "preview" ? "to add" : "added"}
               </span>
-              {result.updated > 0 && (
+              {shown.updated > 0 && (
                 <span className="flex items-center gap-1.5 text-sky-400">
                   <CheckCircle2 className="w-4 h-4" />
-                  {result.updated} updated
+                  {shown.updated} {shown.mode === "preview" ? "to update" : "updated"}
                 </span>
               )}
-              {result.skipped > 0 && (
+              {shown.skipped > 0 && (
                 <span className="flex items-center gap-1.5 text-amber-400">
                   <AlertTriangle className="w-4 h-4" />
-                  {result.skipped} skipped
+                  {shown.skipped} skipped
                 </span>
               )}
-              <span className="text-muted-foreground ml-auto">{result.total} rows</span>
+              <span className="text-muted-foreground ml-auto">{shown.total} rows</span>
             </div>
-            {result.errors.length > 0 && (
+            {preview && !result && preview.rows && preview.rows.length > 0 && (
+              <div className="max-h-52 overflow-y-auto rounded-xl border border-white/10 bg-foreground/[0.02] divide-y divide-white/5">
+                {preview.rows.map((r) => (
+                  <div key={r.row} className="flex items-center gap-2 px-4 py-2 text-xs">
+                    {r.action === "create" ? (
+                      <PlusCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    ) : (
+                      <RefreshCw className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                    )}
+                    <span className="font-mono font-medium">{r.sku}</span>
+                    <span className="text-muted-foreground truncate">{r.name}</span>
+                    <span className="ml-auto shrink-0 text-muted-foreground">
+                      {r.action === "create" ? "new part" : "update"}
+                      {r.newSupplier && r.supplier ? ` · new supplier "${r.supplier}"` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {shown.errors.length > 0 && (
               <div className="max-h-44 overflow-y-auto rounded-xl border border-amber-500/20 bg-amber-500/[0.04] divide-y divide-white/5">
-                {result.errors.map((e, i) => (
+                {shown.errors.map((e, i) => (
                   <div key={i} className="px-4 py-2 text-xs">
                     <span className="font-semibold text-amber-400">
                       Row {e.row}
@@ -250,21 +300,52 @@ export function ImportPartsDialog({
             >
               Import another file
             </Button>
+          ) : preview ? (
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setPreview(null);
+                }}
+                variant="outline"
+                disabled={uploading}
+                className="rounded-full px-5 border-white/15"
+              >
+                Back
+              </Button>
+              <Button
+                onClick={() => run("apply")}
+                disabled={uploading || preview.inserted + preview.updated === 0}
+                className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Applying…
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    Apply {preview.inserted + preview.updated} change
+                    {preview.inserted + preview.updated === 1 ? "" : "s"}
+                  </>
+                )}
+              </Button>
+            </div>
           ) : (
             <Button
-              onClick={onImport}
+              onClick={() => run("preview")}
               disabled={!file || uploading}
               className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 gap-2"
             >
               {uploading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Importing…
+                  Checking…
                 </>
               ) : (
                 <>
-                  <Upload className="w-4 h-4" />
-                  Import parts
+                  <Eye className="w-4 h-4" />
+                  Preview import
                 </>
               )}
             </Button>

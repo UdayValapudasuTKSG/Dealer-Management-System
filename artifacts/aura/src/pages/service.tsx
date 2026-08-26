@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useFocusParam, useFocusHighlight } from "@/lib/use-focus-param";
 import {
@@ -32,6 +32,9 @@ import {
   useCreateCase,
   getListCasesQueryKey,
   useRolloverJobCard,
+  useToggleJobCardTimer,
+  useReopenJobCard,
+  useListJobCardHistory,
   useApproveJobCardRollover,
   useDecideJobCardSurcharge,
   useRequestServiceInvoiceDiscount,
@@ -74,7 +77,13 @@ import {
   Printer,
   Archive,
   Trash2,
+  Pause,
+  Play,
+  RotateCcw,
+  History,
+  Search,
 } from "lucide-react";
+import { DocumentsCard } from "@/components/documents-card";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -133,6 +142,7 @@ const TABS = [
   { key: "myjobs", label: "My Jobs", icon: Wrench },
   { key: "invoices", label: "Invoices", icon: Receipt },
   { key: "coverage", label: "Warranty & AMC", icon: ShieldCheck },
+  { key: "history", label: "History", icon: History },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -247,6 +257,7 @@ export default function Service() {
           {tab === "myjobs" && <MyJobsTab />}
           {tab === "invoices" && <InvoicesTab />}
           {tab === "coverage" && <CoverageTab />}
+          {tab === "history" && <HistoryTab />}
         </motion.div>
       </AnimatePresence>
     </Page>
@@ -264,6 +275,115 @@ function HeaderAction({ tab }: { tab: TabKey }) {
 /* ------------------------------------------------------------------ */
 /* My Jobs — the technician's own queue (merged from Workshop, 2026-07) */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/* History — past job cards across all customers/vehicles              */
+/* ------------------------------------------------------------------ */
+
+function formatWorkedSeconds(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m.toString().padStart(2, "0")}m`;
+  return `${m}m`;
+}
+
+function HistoryTab() {
+  const [q, setQ] = useState("");
+  const [applied, setApplied] = useState("");
+  const { data: rows, isLoading } = useListJobCardHistory(
+    applied ? { q: applied } : {},
+  );
+
+  return (
+    <div className="space-y-4">
+      <form
+        className="flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setApplied(q.trim());
+        }}
+      >
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by customer, vehicle or job title…"
+            className="pl-10 rounded-full bg-white/[0.03] border-white/10"
+          />
+        </div>
+        <Button type="submit" className="rounded-full bg-primary hover:bg-primary/90 text-white">
+          Search
+        </Button>
+      </form>
+
+      {isLoading ? (
+        <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />
+      ) : !rows?.length ? (
+        <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 flex flex-col items-center gap-3 text-center">
+          <History className="w-8 h-8 text-muted-foreground" />
+          <p className="text-muted-foreground">
+            {applied ? "No past jobs match that search." : "No job cards yet."}
+          </p>
+        </div>
+      ) : (
+        <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 font-semibold">Job</th>
+                <th className="px-4 py-3 font-semibold hidden md:table-cell">Customer</th>
+                <th className="px-4 py-3 font-semibold hidden lg:table-cell">Vehicle</th>
+                <th className="px-4 py-3 font-semibold hidden md:table-cell">Technician</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold text-right hidden sm:table-cell">Worked</th>
+                <th className="px-4 py-3 font-semibold text-right">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} className="border-b border-white/5 hover:bg-foreground/[0.03] transition-colors align-top">
+                  <td className="px-4 py-3">
+                    <div className="font-medium">{r.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      JC #{r.id} · RO #{r.serviceOrderId}
+                    </div>
+                    {(r.serviceAnalysis || r.workPerformed) && (
+                      <div className="text-xs text-muted-foreground mt-1 max-w-md line-clamp-2">
+                        {r.workPerformed ?? r.serviceAnalysis}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell">{r.customerName ?? "—"}</td>
+                  <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{r.vehicleInfo}</td>
+                  <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{r.technicianName ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <Badge
+                      variant="secondary"
+                      className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border-none"
+                    >
+                      {JOB_STATUS_LABEL[r.status] ?? r.status}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right hidden sm:table-cell">
+                    {r.timerSeconds > 0
+                      ? formatWorkedSeconds(r.timerSeconds)
+                      : r.laborHours > 0
+                        ? `${r.laborHours}h`
+                        : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right text-muted-foreground whitespace-nowrap">
+                    {format(new Date(r.completedAt ?? r.createdAt), "MMM d, yyyy")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function MyJobsTab() {
   const { data: cards, isLoading } = useListJobCards({ mine: "1" });
@@ -1037,10 +1157,38 @@ function useIsServiceApprover() {
   return /service manager|general manager|leadership|management|owner.?admin|admin/i.test(role);
 }
 
+/** Live worked-time readout: accumulated seconds plus the running segment. */
+function TimerReadout({ card }: { card: JobCard }) {
+  const running = card.status === "in_progress" && !!card.timerStartedAt;
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const t = window.setInterval(() => tick((n) => n + 1), 30_000);
+    return () => window.clearInterval(t);
+  }, [running]);
+  const seconds =
+    (card.timerSeconds ?? 0) +
+    (running && card.timerStartedAt
+      ? Math.max(
+          0,
+          Math.round((Date.now() - new Date(card.timerStartedAt).getTime()) / 1000),
+        )
+      : 0);
+  if (seconds <= 0 && !running) return null;
+  return (
+    <span className={cn("font-medium", running ? "text-primary" : "text-foreground")}>
+      · {formatWorkedSeconds(seconds)} worked{running ? " (running)" : card.status === "in_progress" ? " (paused)" : ""}
+    </span>
+  );
+}
+
 export function JobCardPanel({ card, technicianView = false }: { card: JobCard; technicianView?: boolean }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const update = useUpdateJobCard();
+  const timer = useToggleJobCardTimer();
+  const reopen = useReopenJobCard();
+  const { can } = useAuthz();
   const invoice = useCreateJobCardInvoice();
   const addPart = useAddJobCardPart();
   const createCreditNote = useCreateJobCardCreditNote();
@@ -1169,6 +1317,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
                     · {formatWorkDuration(new Date(card.startedAt), new Date(card.completedAt))} on vehicle
                   </span>
                 )}
+                <TimerReadout card={card} />
               </div>
             )}
           </div>
@@ -1396,6 +1545,14 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
 
         <RolloverSection card={card} onChanged={invalidate} technicianView={technicianView} />
 
+        {/* Diagnostic reports & other paperwork attach at any point in the
+            job's life — uploads go to private object storage. */}
+        <DocumentsCard
+          entityType="job_card"
+          entityId={card.id}
+          canEdit={can("service", "edit")}
+        />
+
         <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
@@ -1477,6 +1634,66 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
             >
               <Wrench className="w-3.5 h-3.5" />
               Move to {JOB_STATUS_LABEL[next]}
+            </Button>
+          )}
+          {card.status === "in_progress" && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={timer.isPending}
+              className="rounded-full border-white/15 text-xs gap-1.5"
+              onClick={async () => {
+                try {
+                  await timer.mutateAsync({
+                    id: card.id,
+                    data: { action: card.timerStartedAt ? "pause" : "resume" },
+                  });
+                  invalidate();
+                  toast({
+                    title: card.timerStartedAt ? "Timer paused" : "Timer running",
+                  });
+                } catch (e: unknown) {
+                  const msg =
+                    (e as { response?: { data?: { error?: string } } })?.response
+                      ?.data?.error ?? "Could not update the timer.";
+                  toast({ title: "Timer", description: msg, variant: "destructive" });
+                }
+              }}
+            >
+              {card.timerStartedAt ? (
+                <>
+                  <Pause className="w-3.5 h-3.5" /> Pause timer
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5" /> Resume timer
+                </>
+              )}
+            </Button>
+          )}
+          {(card.status === "completed" || card.status === "closed") && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={reopen.isPending}
+              className="rounded-full border-white/15 text-xs gap-1.5"
+              onClick={async () => {
+                try {
+                  await reopen.mutateAsync({ id: card.id, data: {} });
+                  invalidate();
+                  toast({
+                    title: "Job card reopened",
+                    description: "The job is back in progress and the timer is running.",
+                  });
+                } catch (e: unknown) {
+                  const msg =
+                    (e as { response?: { data?: { error?: string } } })?.response
+                      ?.data?.error ?? "Could not reopen the job card.";
+                  toast({ title: "Reopen failed", description: msg, variant: "destructive" });
+                }
+              }}
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Reopen
             </Button>
           )}
           {!technicianView && card.status === "completed" && (

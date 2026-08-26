@@ -73,5 +73,12 @@ export interface JobCard {
   startedAt?: Date | null;
   /** @nullable */
   completedAt?: Date | null;
+  /** Accumulated worked seconds (excludes the running segment) */
+  timerSeconds?: number;
+  /**
+     * Start of the running timer segment; null when paused
+     * @nullable
+     */
+  timerStartedAt?: Date | null;
   createdAt: Date;
 }

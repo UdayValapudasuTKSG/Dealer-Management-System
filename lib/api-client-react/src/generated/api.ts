@@ -152,18 +152,22 @@ import type {
   HealthStatus,
   ImpersonationGrant,
   ImpersonationRequest,
+  ImportPartsParams,
   ImportVehiclesParams,
   InventoryBreakdown,
   Invoice,
   InvoiceInput,
   InvoiceUpdate,
   JobCard,
+  JobCardHistoryItem,
   JobCardInput,
   JobCardPart,
   JobCardPartInput,
+  JobCardReopenRequest,
   JobCardRolloverApproval,
   JobCardRolloverRequest,
   JobCardSurchargeDecision,
+  JobCardTimerAction,
   JobCardUpdate,
   Lead,
   LeadAdvanceInput,
@@ -201,6 +205,7 @@ import type {
   ListGatesParams,
   ListGraFilingsParams,
   ListInvoicesParams,
+  ListJobCardHistoryParams,
   ListJobCardsParams,
   ListLeadSourcesParams,
   ListLeadsParams,
@@ -9597,6 +9602,234 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getUpdateJobCardMutationOptions(options));
     }
 
+export const getListJobCardHistoryUrl = (params?: ListJobCardHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/job-cards/history?${stringifiedParams}` : `/api/job-cards/history`
+}
+
+/**
+ * @summary Search past job cards across customers/vehicles (service history lookup)
+ */
+export const listJobCardHistory = async (params?: ListJobCardHistoryParams, options?: RequestInit): Promise<JobCardHistoryItem[]> => {
+
+  return customFetch<JobCardHistoryItem[]>(getListJobCardHistoryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListJobCardHistoryQueryKey = (params?: ListJobCardHistoryParams,) => {
+    return [
+    `/api/job-cards/history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListJobCardHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listJobCardHistory>>, TError = ErrorType<unknown>>(params?: ListJobCardHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobCardHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListJobCardHistoryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJobCardHistory>>> = ({ signal }) => listJobCardHistory(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJobCardHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListJobCardHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listJobCardHistory>>>
+export type ListJobCardHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Search past job cards across customers/vehicles (service history lookup)
+ */
+
+export function useListJobCardHistory<TData = Awaited<ReturnType<typeof listJobCardHistory>>, TError = ErrorType<unknown>>(
+ params?: ListJobCardHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobCardHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListJobCardHistoryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getToggleJobCardTimerUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/timer`
+}
+
+/**
+ * @summary Pause or resume the work timer on an in-progress job card
+ */
+export const toggleJobCardTimer = async (id: number,
+    jobCardTimerAction: JobCardTimerAction, options?: RequestInit): Promise<JobCard> => {
+
+  return customFetch<JobCard>(getToggleJobCardTimerUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(jobCardTimerAction)
+  }
+);}
+
+
+
+
+
+export const getToggleJobCardTimerMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof toggleJobCardTimer>>, TError,{id: number;data: BodyType<JobCardTimerAction>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof toggleJobCardTimer>>, TError,{id: number;data: BodyType<JobCardTimerAction>}, TContext> => {
+
+const mutationKey = ['toggleJobCardTimer'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof toggleJobCardTimer>>, {id: number;data: BodyType<JobCardTimerAction>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  toggleJobCardTimer(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ToggleJobCardTimerMutationResult = NonNullable<Awaited<ReturnType<typeof toggleJobCardTimer>>>
+    export type ToggleJobCardTimerMutationBody = BodyType<JobCardTimerAction>
+    export type ToggleJobCardTimerMutationError = ErrorType<Error>
+
+    /**
+ * @summary Pause or resume the work timer on an in-progress job card
+ */
+export const useToggleJobCardTimer = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof toggleJobCardTimer>>, TError,{id: number;data: BodyType<JobCardTimerAction>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof toggleJobCardTimer>>,
+        TError,
+        {id: number;data: BodyType<JobCardTimerAction>},
+        TContext
+      > => {
+      return useMutation(getToggleJobCardTimerMutationOptions(options));
+    }
+
+export const getReopenJobCardUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/reopen`
+}
+
+/**
+ * @summary Reopen a completed/closed job card back to in-progress
+ */
+export const reopenJobCard = async (id: number,
+    jobCardReopenRequest?: JobCardReopenRequest, options?: RequestInit): Promise<JobCard> => {
+
+  return customFetch<JobCard>(getReopenJobCardUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(jobCardReopenRequest)
+  }
+);}
+
+
+
+
+
+export const getReopenJobCardMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reopenJobCard>>, TError,{id: number;data?: BodyType<JobCardReopenRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reopenJobCard>>, TError,{id: number;data?: BodyType<JobCardReopenRequest>}, TContext> => {
+
+const mutationKey = ['reopenJobCard'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reopenJobCard>>, {id: number;data?: BodyType<JobCardReopenRequest>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reopenJobCard(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReopenJobCardMutationResult = NonNullable<Awaited<ReturnType<typeof reopenJobCard>>>
+    export type ReopenJobCardMutationBody = BodyType<JobCardReopenRequest> | undefined
+    export type ReopenJobCardMutationError = ErrorType<Error>
+
+    /**
+ * @summary Reopen a completed/closed job card back to in-progress
+ */
+export const useReopenJobCard = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reopenJobCard>>, TError,{id: number;data?: BodyType<JobCardReopenRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reopenJobCard>>,
+        TError,
+        {id: number;data?: BodyType<JobCardReopenRequest>},
+        TContext
+      > => {
+      return useMutation(getReopenJobCardMutationOptions(options));
+    }
+
 export const getRolloverJobCardUrl = (id: number,) => {
 
 
@@ -11107,20 +11340,104 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getUpdatePartMutationOptions(options));
     }
 
-export const getImportPartsUrl = () => {
+export const getDownloadPartsInventoryUrl = () => {
 
 
 
 
-  return `/api/parts/import`
+  return `/api/parts/export`
+}
+
+/**
+ * @summary Download the active dealer's current parts inventory as Excel
+ */
+export const downloadPartsInventory = async ( options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getDownloadPartsInventoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadPartsInventoryQueryKey = () => {
+    return [
+    `/api/parts/export`
+    ] as const;
+    }
+
+
+export const getDownloadPartsInventoryQueryOptions = <TData = Awaited<ReturnType<typeof downloadPartsInventory>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadPartsInventory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadPartsInventoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadPartsInventory>>> = ({ signal }) => downloadPartsInventory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadPartsInventory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type DownloadPartsInventoryQueryResult = NonNullable<Awaited<ReturnType<typeof downloadPartsInventory>>>
+export type DownloadPartsInventoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Download the active dealer's current parts inventory as Excel
+ */
+
+export function useDownloadPartsInventory<TData = Awaited<ReturnType<typeof downloadPartsInventory>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof downloadPartsInventory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getDownloadPartsInventoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getImportPartsUrl = (params?: ImportPartsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/parts/import?${stringifiedParams}` : `/api/parts/import`
 }
 
 /**
  * @summary Bulk import parts from a CSV or Excel (.xlsx) file — dealer markup derives missing sell prices
  */
-export const importParts = async ( options?: RequestInit): Promise<PartImportResult> => {
+export const importParts = async (params?: ImportPartsParams, options?: RequestInit): Promise<PartImportResult> => {
 
-  return customFetch<PartImportResult>(getImportPartsUrl(),
+  return customFetch<PartImportResult>(getImportPartsUrl(params),
   {
     ...options,
     method: 'POST'
@@ -11134,8 +11451,8 @@ export const importParts = async ( options?: RequestInit): Promise<PartImportRes
 
 
 export const getImportPartsMutationOptions = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,void, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,{params?: ImportPartsParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,{params?: ImportPartsParams}, TContext> => {
 
 const mutationKey = ['importParts'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -11147,10 +11464,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importParts>>, void> = () => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importParts>>, {params?: ImportPartsParams}> = (props) => {
+          const {params} = props ?? {};
 
-
-          return  importParts(requestOptions)
+          return  importParts(params,requestOptions)
         }
 
 
@@ -11168,11 +11485,11 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
  * @summary Bulk import parts from a CSV or Excel (.xlsx) file — dealer markup derives missing sell prices
  */
 export const useImportParts = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importParts>>, TError,{params?: ImportPartsParams}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof importParts>>,
         TError,
-        void,
+        {params?: ImportPartsParams},
         TContext
       > => {
       return useMutation(getImportPartsMutationOptions(options));

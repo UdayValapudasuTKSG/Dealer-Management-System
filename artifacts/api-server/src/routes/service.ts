@@ -8,7 +8,7 @@ import {
 import { getServiceSettings } from "../lib/service-settings";
 import { queueCustomerSync } from "../lib/erpnext/entities";
 import { dealerExchangeRate } from "../lib/invoicing";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   serviceOrdersTable,
@@ -42,6 +42,14 @@ import {
   ListServiceTechniciansResponse,
   ListJobCardsQueryParams,
   ListJobCardsResponse,
+  ListJobCardHistoryQueryParams,
+  ListJobCardHistoryResponse,
+  ToggleJobCardTimerParams,
+  ToggleJobCardTimerBody,
+  ToggleJobCardTimerResponse,
+  ReopenJobCardParams,
+  ReopenJobCardBody,
+  ReopenJobCardResponse,
   CreateJobCardBody,
   CreateJobCardResponse,
   UpdateJobCardParams,
@@ -929,6 +937,82 @@ async function autoCreateJobCard(
   }
 }
 
+/** Whole seconds elapsed since `from` (never negative). */
+function elapsedSeconds(from: Date): number {
+  return Math.max(0, Math.round((Date.now() - from.getTime()) / 1000));
+}
+
+/** SQL fragment: accumulated timer seconds plus the running segment, folded
+ * atomically from the row's CURRENT values (immune to read-then-write races). */
+const foldedTimerSeconds = sql<number>`${jobCardsTable.timerSeconds} + coalesce(greatest(0, extract(epoch from (now() - ${jobCardsTable.timerStartedAt})))::int, 0)`;
+
+/** Timer/reopen are edit-actions on an existing card: allowed for service
+ * managers/management, or the technician the card is assigned to. */
+function canActOnJobCard(
+  user:
+    | { id?: number; roleName?: string | null; isSuperAdmin?: boolean }
+    | undefined
+    | null,
+  card: { technicianUserId: number | null },
+): boolean {
+  if (isServiceApprover(user)) return true;
+  return card.technicianUserId != null && user?.id === card.technicianUserId;
+}
+
+// Service-history lookup: technicians search past job cards across ALL
+// customers/vehicles (view permission on service is enforced by the router
+// middleware). Newest first, capped at 100 rows.
+router.get("/job-cards/history", async (req, res): Promise<void> => {
+  const query = ListJobCardHistoryQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
+  const q = query.data.q?.trim();
+  const like = q ? `%${q}%` : null;
+  const rows = await db
+    .select({
+      id: jobCardsTable.id,
+      serviceOrderId: jobCardsTable.serviceOrderId,
+      title: jobCardsTable.title,
+      status: jobCardsTable.status,
+      technicianName: jobCardsTable.technicianName,
+      customerName: serviceOrdersTable.customerName,
+      vehicleInfo: serviceOrdersTable.vehicleInfo,
+      laborHours: jobCardsTable.laborHours,
+      timerSeconds: jobCardsTable.timerSeconds,
+      serviceAnalysis: jobCardsTable.serviceAnalysis,
+      workPerformed: jobCardsTable.workPerformed,
+      startedAt: jobCardsTable.startedAt,
+      completedAt: jobCardsTable.completedAt,
+      createdAt: jobCardsTable.createdAt,
+    })
+    .from(jobCardsTable)
+    .innerJoin(
+      serviceOrdersTable,
+      and(
+        eq(jobCardsTable.serviceOrderId, serviceOrdersTable.id),
+        // Tenancy: constrain the joined table too, never trust the FK alone.
+        eq(serviceOrdersTable.dealerId, jobCardsTable.dealerId),
+      ),
+    )
+    .where(
+      and(
+        eq(jobCardsTable.dealerId, activeDealerId(res)),
+        like
+          ? or(
+              ilike(serviceOrdersTable.customerName, like),
+              ilike(serviceOrdersTable.vehicleInfo, like),
+              ilike(jobCardsTable.title, like),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(desc(jobCardsTable.createdAt))
+    .limit(100);
+  res.json(ListJobCardHistoryResponse.parse(rows));
+});
+
 router.get("/job-cards", async (req, res): Promise<void> => {
   const query = ListJobCardsQueryParams.safeParse(req.query);
   if (!query.success) {
@@ -1061,6 +1145,21 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   ) {
     patch.startedAt = new Date();
   }
+  // Work timer follows the status machine: entering in_progress starts a
+  // segment (unless one is already running); leaving it folds the running
+  // segment into the accumulated total.
+  if (parsed.data.status && parsed.data.status !== existing.status) {
+    if (parsed.data.status === "in_progress") {
+      // Start a segment unless one is already running (SQL keeps this
+      // race-free against a concurrent resume).
+      patch.timerStartedAt = sql`coalesce(${jobCardsTable.timerStartedAt}, now())`;
+    } else {
+      // Leaving in_progress folds any running segment atomically from the
+      // row's current values — a racing resume cannot strand a segment.
+      patch.timerSeconds = foldedTimerSeconds;
+      patch.timerStartedAt = null;
+    }
+  }
   if (parsed.data.status === "completed" && existing.status !== "completed") {
     // Completion write-up is mandatory: the technician must record their
     // analysis of the service AND what work was performed before the card
@@ -1126,6 +1225,196 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   }
 
   res.json(UpdateJobCardResponse.parse(card));
+});
+
+// ---------------------------------------------------------------------------
+// Work timer: technicians pause/resume without changing the card's status
+// ---------------------------------------------------------------------------
+
+router.post("/job-cards/:id/timer", async (req, res): Promise<void> => {
+  const params = ToggleJobCardTimerParams.safeParse(req.params);
+  const body = ToggleJobCardTimerBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({
+      error: (params.success ? body : params).error?.message ?? "Invalid",
+    });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(jobCardsTable)
+    .where(
+      and(
+        eq(jobCardsTable.id, params.data.id),
+        eq(jobCardsTable.dealerId, activeDealerId(res)),
+      ),
+    );
+  if (!existing) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  if (!canActOnJobCard(res.locals.user, existing)) {
+    res.status(403).json({
+      error:
+        "Only the assigned technician or the Service Manager can control this job's timer",
+    });
+    return;
+  }
+  if (existing.status !== "in_progress") {
+    res.status(409).json({
+      error: "Timer only runs while the job is in progress",
+    });
+    return;
+  }
+  // Compare-and-set: the UPDATE only lands when the card is still in progress
+  // AND the timer is in the expected state, so concurrent pause/resume/status
+  // requests cannot double-fold or drop a running segment.
+  const pausing = body.data.action === "pause";
+  const [card] = await db
+    .update(jobCardsTable)
+    .set(
+      pausing
+        ? { timerSeconds: foldedTimerSeconds, timerStartedAt: null }
+        : { timerStartedAt: new Date() },
+    )
+    .where(
+      and(
+        eq(jobCardsTable.id, existing.id),
+        eq(jobCardsTable.dealerId, existing.dealerId),
+        eq(jobCardsTable.status, "in_progress"),
+        pausing
+          ? sql`${jobCardsTable.timerStartedAt} is not null`
+          : isNull(jobCardsTable.timerStartedAt),
+      ),
+    )
+    .returning();
+  if (!card) {
+    res.status(409).json({
+      error: pausing ? "Timer is already paused" : "Timer is already running",
+    });
+    return;
+  }
+  res.json(ToggleJobCardTimerResponse.parse(card));
+});
+
+// ---------------------------------------------------------------------------
+// Reopen: completed/closed card goes back to in-progress for more work
+// ---------------------------------------------------------------------------
+
+router.post("/job-cards/:id/reopen", async (req, res): Promise<void> => {
+  const params = ReopenJobCardParams.safeParse(req.params);
+  const body = ReopenJobCardBody.safeParse(req.body ?? {});
+  if (!params.success || !body.success) {
+    res.status(400).json({
+      error: (params.success ? body : params).error?.message ?? "Invalid",
+    });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(jobCardsTable)
+    .where(
+      and(
+        eq(jobCardsTable.id, params.data.id),
+        eq(jobCardsTable.dealerId, activeDealerId(res)),
+      ),
+    );
+  if (!existing) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  if (!canActOnJobCard(res.locals.user, existing)) {
+    res.status(403).json({
+      error:
+        "Only the assigned technician or the Service Manager can reopen this job card",
+    });
+    return;
+  }
+  if (existing.status !== "completed" && existing.status !== "closed") {
+    res
+      .status(409)
+      .json({ error: "Only completed or closed job cards can be reopened" });
+    return;
+  }
+  // A PAID invoice locks the card shut — reopening would let more work land
+  // on a bill the customer already settled. Issued (unpaid) invoices keep
+  // the adjustments path open, so they don't block a reopen.
+  const [paidInvoice] = await db
+    .select({ id: serviceInvoicesTable.id })
+    .from(serviceInvoicesTable)
+    .where(
+      and(
+        eq(serviceInvoicesTable.jobCardId, existing.id),
+        eq(serviceInvoicesTable.dealerId, existing.dealerId),
+        eq(serviceInvoicesTable.status, "paid"),
+      ),
+    );
+  if (paidInvoice) {
+    res.status(409).json({
+      error:
+        "This job's invoice is already paid — open a new job card for additional work instead of reopening this one.",
+    });
+    return;
+  }
+  let card: JobCard | undefined;
+  try {
+    [card] = await db
+      .update(jobCardsTable)
+      .set({
+        status: "in_progress",
+        completedAt: null,
+        timerStartedAt: new Date(),
+        ...(body.data?.reason
+          ? {
+              notes: existing.notes
+                ? `${existing.notes}\nReopened: ${body.data.reason}`
+                : `Reopened: ${body.data.reason}`,
+            }
+          : {}),
+      })
+      .where(eq(jobCardsTable.id, existing.id))
+      .returning();
+  } catch (err) {
+    // Partial unique index: one active job card per asset at a time.
+    if (
+      err instanceof Error &&
+      "code" in err &&
+      (err as { code?: string }).code === "23505"
+    ) {
+      res.status(409).json({
+        error:
+          "This vehicle already has another active job card — complete or close it before reopening this one.",
+      });
+      return;
+    }
+    throw err;
+  }
+  if (card) {
+    const [order] = await db
+      .select()
+      .from(serviceOrdersTable)
+      .where(eq(serviceOrdersTable.id, card.serviceOrderId));
+    await db.insert(timelineEventsTable).values({
+      dealerId: card.dealerId,
+      customerId: order?.customerId ?? null,
+      domain: "service",
+      kind: "job_card_reopened",
+      title: `Job card #${card.id} reopened`,
+      detail: body.data?.reason ?? null,
+      actor: res.locals.user?.name ?? "Service",
+    });
+    if (card.technicianUserId != null) {
+      void notifyUser({
+        userId: card.technicianUserId,
+        dealerId: card.dealerId,
+        type: "assignment",
+        title: `Job card #${card.id} reopened`,
+        body: card.title,
+        link: "/workshop",
+      });
+    }
+  }
+  res.json(ReopenJobCardResponse.parse(card));
 });
 
 // ---------------------------------------------------------------------------

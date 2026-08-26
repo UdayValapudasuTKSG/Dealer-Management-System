@@ -3221,6 +3221,96 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /job-cards/history:
+    get:
+      operationId: listJobCardHistory
+      tags: [service]
+      summary: Search past job cards across customers/vehicles (service history lookup)
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: "Matches customer name, vehicle, or job title"
+          schema: { type: string }
+      responses:
+        "200":
+          description: Past job cards, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JobCardHistoryItem"
+  /job-cards/{id}/timer:
+    post:
+      operationId: toggleJobCardTimer
+      tags: [service]
+      summary: Pause or resume the work timer on an in-progress job card
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCardTimerAction"
+      responses:
+        "200":
+          description: Updated job card
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCard"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Timer already in the requested state or card not in progress
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /job-cards/{id}/reopen:
+    post:
+      operationId: reopenJobCard
+      tags: [service]
+      summary: Reopen a completed/closed job card back to in-progress
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCardReopenRequest"
+      responses:
+        "200":
+          description: Reopened job card
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCard"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Card not reopenable (active, paid invoice, or another active card on the vehicle)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /job-cards/{id}/rollover:
     post:
       operationId: rolloverJobCard
@@ -3794,11 +3884,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /parts/export:
+    get:
+      operationId: downloadPartsInventory
+      tags: [parts]
+      summary: Download the active dealer's current parts inventory as Excel
+      responses:
+        "200":
+          description: XLSX parts workbook
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
   /parts/import:
     post:
       operationId: importParts
       tags: [parts]
       summary: Bulk import parts from a CSV or Excel (.xlsx) file — dealer markup derives missing sell prices
+      parameters:
+        - name: mode
+          in: query
+          required: false
+          description: "preview classifies rows without writing; apply (default) persists"
+          schema: { type: string, enum: [preview, apply] }
       requestBody:
         required: true
         description: "multipart/form-data with a single `file` field containing the .xlsx or .csv"
@@ -7227,7 +7336,7 @@ paths:
         - name: entityType
           in: query
           required: true
-          schema: { type: string, enum: [lead, vehicle, delivery] }
+          schema: { type: string, enum: [lead, vehicle, delivery, job_card] }
         - name: entityId
           in: query
           required: true
@@ -9032,7 +9141,7 @@ components:
         ]
       properties:
         id: { type: integer }
-        entityType: { type: string, enum: [lead, vehicle, delivery] }
+        entityType: { type: string, enum: [lead, vehicle, delivery, job_card] }
         entityId: { type: integer }
         type:
           type: string
@@ -9069,7 +9178,7 @@ components:
       type: object
       required: [entityType, entityId, type, fileName, storageKey, mimeType, sizeBytes]
       properties:
-        entityType: { type: string, enum: [lead, vehicle, delivery] }
+        entityType: { type: string, enum: [lead, vehicle, delivery, job_card] }
         entityId: { type: integer }
         type:
           type: string
@@ -10469,6 +10578,8 @@ components:
         surchargeDecidedAt: { type: ["string", "null"], format: date-time }
         startedAt: { type: ["string", "null"], format: date-time }
         completedAt: { type: ["string", "null"], format: date-time }
+        timerSeconds: { type: integer, description: "Accumulated worked seconds (excludes the running segment)" }
+        timerStartedAt: { type: ["string", "null"], format: date-time, description: "Start of the running timer segment; null when paused" }
         createdAt: { type: string, format: date-time }
     JobCardRolloverRequest:
       type: object
@@ -10476,6 +10587,33 @@ components:
       properties:
         toDate: { type: string, format: date }
         reason: { type: string }
+    JobCardTimerAction:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [pause, resume] }
+    JobCardReopenRequest:
+      type: object
+      properties:
+        reason: { type: string }
+    JobCardHistoryItem:
+      type: object
+      required: [id, serviceOrderId, title, status, laborHours, timerSeconds, vehicleInfo, createdAt]
+      properties:
+        id: { type: integer }
+        serviceOrderId: { type: integer }
+        title: { type: string }
+        status: { type: string, enum: [open, in_progress, on_hold, completed, closed, cancelled] }
+        technicianName: { type: ["string", "null"] }
+        customerName: { type: ["string", "null"] }
+        vehicleInfo: { type: string }
+        laborHours: { type: number }
+        timerSeconds: { type: integer }
+        serviceAnalysis: { type: ["string", "null"] }
+        workPerformed: { type: ["string", "null"] }
+        startedAt: { type: ["string", "null"], format: date-time }
+        completedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
     JobCardRolloverApproval:
       type: object
       required: [as]
@@ -10773,16 +10911,32 @@ components:
         message: { type: string }
     PartImportResult:
       type: object
-      required: [total, inserted, updated, skipped, errors]
+      required: [total, inserted, updated, skipped, errors, mode]
       properties:
         total: { type: integer, description: "Data rows found in the file" }
-        inserted: { type: integer, description: "New parts created" }
-        updated: { type: integer, description: "Existing parts updated (upsert by dealer + part number)" }
+        inserted: { type: integer, description: "New parts created (preview: would be created)" }
+        updated: { type: integer, description: "Existing parts updated (upsert by dealer + part number; preview: would be updated)" }
         skipped: { type: integer, description: "Rows not applied (validation errors, duplicates, row cap)" }
+        mode: { type: string, enum: [preview, apply] }
+        rows:
+          type: array
+          description: "Preview only: per-row classification"
+          items:
+            $ref: "#/components/schemas/PartImportRowPreview"
         errors:
           type: array
           items:
             $ref: "#/components/schemas/PartImportError"
+    PartImportRowPreview:
+      type: object
+      required: [row, sku, name, action]
+      properties:
+        row: { type: integer }
+        sku: { type: string }
+        name: { type: string }
+        action: { type: string, enum: [create, update] }
+        supplier: { type: ["string", "null"] }
+        newSupplier: { type: boolean, description: "Supplier name not found — it would be created" }
     PartsSettings:
       type: object
       required: [markupPercent]

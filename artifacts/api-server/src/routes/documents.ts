@@ -7,6 +7,7 @@ import {
   leadsTable,
   vehiclesTable,
   deliveriesTable,
+  jobCardsTable,
   auditLogsTable,
   timelineEventsTable,
 } from "@workspace/db";
@@ -60,6 +61,7 @@ export const ALLOWED_DOCUMENT_MIME = new Set([
 function moduleFor(entityType: string): string {
   if (entityType === "lead") return "leads";
   if (entityType === "delivery") return "deliveries";
+  if (entityType === "job_card") return "service";
   return "inventory";
 }
 
@@ -82,9 +84,21 @@ function requirePermission(
 /** 404 unless the parent lead/vehicle/delivery exists in the active dealer. */
 async function parentExists(
   dealerId: number,
-  entityType: "lead" | "vehicle" | "delivery",
+  entityType: "lead" | "vehicle" | "delivery" | "job_card",
   entityId: number,
 ): Promise<boolean> {
+  if (entityType === "job_card") {
+    const [row] = await db
+      .select({ id: jobCardsTable.id })
+      .from(jobCardsTable)
+      .where(
+        and(
+          eq(jobCardsTable.id, entityId),
+          eq(jobCardsTable.dealerId, dealerId),
+        ),
+      );
+    return !!row;
+  }
   if (entityType === "lead") {
     const [row] = await db
       .select({ id: leadsTable.id })

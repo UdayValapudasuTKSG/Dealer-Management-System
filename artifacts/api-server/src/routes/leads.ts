@@ -151,6 +151,7 @@ import {
 } from "../lib/calendar";
 import { buildQuotePdf } from "../lib/quote-pdf";
 import {
+  approvedQuoteDiscountForLead,
   autoQuoteOnLeadCreated,
   autoQuoteOnLeadUpdated,
   generateQuoteForLead,
@@ -1872,9 +1873,19 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
       // the deal must never sit at 0 OTD or downstream (invoices, commit
       // gates, remaining-balance displays) all read zero.
       const taxRules = await ensureDealerTaxes(dealerId);
-      const { totalWithTax } = computeTaxes(vehicle.price, taxRules, {
-        powertrain: vehicle.powertrain ?? null,
-      });
+      // A manager-approved discount on the current quote carries onto the
+      // auto-desked deal — the customer was quoted the reduced price.
+      const quoteDiscount = Math.min(
+        await approvedQuoteDiscountForLead(dealerId, lead.id),
+        vehicle.price,
+      );
+      const { totalWithTax } = computeTaxes(
+        Math.max(vehicle.price - quoteDiscount, 0),
+        taxRules,
+        {
+          powertrain: vehicle.powertrain ?? null,
+        },
+      );
       const [autoDeal] = await db
         .insert(dealsTable)
         .values({
@@ -1885,7 +1896,7 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
           vehicleId: vehicle.id,
           vehiclePrice: vehicle.price,
           otdPrice: totalWithTax,
-          discount: 0,
+          discount: quoteDiscount,
           divisionId:
             vehicle.divisionId ?? (await defaultDivisionId(dealerId)),
           salesAdvisor: lead.assignedTo ?? null,

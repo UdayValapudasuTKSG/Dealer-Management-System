@@ -251,6 +251,31 @@ export function autoQuoteOnLeadUpdated(before: Lead, after: Lead): void {
 }
 
 /** Full lead row by id — used by routes that already validated tenancy. */
+/**
+ * Manager-approved discount on the lead's CURRENT quote (0 when none).
+ * Deals desked for the lead seed their discount from this so the customer's
+ * approved quote price carries into the deal instead of the list price.
+ */
+export async function approvedQuoteDiscountForLead(
+  dealerId: number,
+  leadId: number,
+): Promise<number> {
+  const [quote] = await db
+    .select({ discountAmount: quotesTable.discountAmount })
+    .from(quotesTable)
+    .where(
+      and(
+        eq(quotesTable.dealerId, dealerId),
+        eq(quotesTable.leadId, leadId),
+        eq(quotesTable.status, "current"),
+        eq(quotesTable.discountStatus, "approved"),
+      ),
+    )
+    .orderBy(desc(quotesTable.version))
+    .limit(1);
+  return quote?.discountAmount ?? 0;
+}
+
 export async function quoteById(
   dealerId: number,
   leadId: number,

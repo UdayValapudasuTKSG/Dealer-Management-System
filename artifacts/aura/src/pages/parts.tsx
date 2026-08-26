@@ -48,7 +48,9 @@ import {
   Loader2,
   Percent,
   Pencil,
+  Download,
 } from "lucide-react";
+import { useAuthz } from "@/lib/auth";
 import { ImportPartsDialog } from "@/components/parts/import-parts-dialog";
 import { format } from "date-fns";
 import { useViewMode } from "@/hooks/use-view-mode";
@@ -68,6 +70,92 @@ const TABS = [
   { key: "purchases", label: "Quick Purchases", icon: ShoppingCart },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
+
+const apiBase = () => `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
+const XLSX_MIME =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+/** Download the full parts inventory as an Excel workbook (re-importable). */
+function ExportPartsButton() {
+  const { toast } = useToast();
+  const { activeDealer } = useAuthz();
+  const [downloading, setDownloading] = useState(false);
+
+  const download = async () => {
+    setDownloading(true);
+    try {
+      const headers = new Headers({ "Cache-Control": "no-cache" });
+      if (activeDealer?.dealerId != null) {
+        headers.set("x-dealer-id", String(activeDealer.dealerId));
+      }
+      // Keep raw downloads aligned with the shared API client, including its
+      // development-only persona header used by automated role testing.
+      try {
+        const testEmail = localStorage.getItem("aura-test-user-email");
+        if (testEmail) headers.set("x-test-user-email", testEmail);
+      } catch {
+        // localStorage can be unavailable in privacy-restricted browsers.
+      }
+      const response = await fetch(`${apiBase()}/parts/export?download=${Date.now()}`, {
+        cache: "no-store",
+        credentials: "include",
+        headers,
+      });
+      if (!response.ok) throw new Error(`Export failed (HTTP ${response.status})`);
+      const bytes = await response.blob();
+      if (bytes.size === 0) throw new Error("The downloaded workbook is empty.");
+      // XLSX files are ZIP containers — validate the binary signature since
+      // the reverse proxy can rewrite Content-Type.
+      const sig = new Uint8Array(await bytes.slice(0, 4).arrayBuffer());
+      const isXlsxZip =
+        sig[0] === 0x50 && sig[1] === 0x4b && sig[2] === 0x03 && sig[3] === 0x04;
+      if (!isXlsxZip) {
+        const text = await bytes.text();
+        try {
+          const problem = JSON.parse(text) as { error?: string; message?: string };
+          throw new Error(problem.message ?? problem.error ?? "The Excel export failed.");
+        } catch (error) {
+          if (error instanceof SyntaxError) {
+            throw new Error("The server did not return an Excel workbook.");
+          }
+          throw error;
+        }
+      }
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const filename =
+        disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? "aura-parts-inventory.xlsx";
+      const url = URL.createObjectURL(new Blob([bytes], { type: XLSX_MIME }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      toast({ title: "Excel download started" });
+    } catch (error) {
+      toast({
+        title: "Excel download failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      disabled={downloading}
+      onClick={download}
+      className="rounded-full gap-2 border-white/15"
+    >
+      {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+      Export
+    </Button>
+  );
+}
 
 export default function Parts() {
   const [tab, setTab] = useState<TabKey>("parts");
@@ -363,6 +451,7 @@ function PartsTab() {
             </Button>
           }
         />
+        <ExportPartsButton />
         <MarkupEditor />
         <ViewControls
           layout={layout}

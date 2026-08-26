@@ -13,4 +13,5 @@ export const DocumentInputEntityType = {
   lead: 'lead',
   vehicle: 'vehicle',
   delivery: 'delivery',
+  job_card: 'job_card',
 } as const;

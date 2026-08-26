@@ -3468,7 +3468,7 @@ export const UploadDealBankLetterBody = zod.object({
 export const UploadDealBankLetterResponse = zod.object({
   "document": zod.object({
   "id": zod.number(),
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card']),
   "entityId": zod.number(),
   "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "version": zod.number(),
@@ -4532,6 +4532,8 @@ export const ListJobCardsResponseItem = zod.object({
   "surchargeDecidedAt": zod.coerce.date().nullish(),
   "startedAt": zod.coerce.date().nullish(),
   "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
   "createdAt": zod.coerce.date()
 })
 export const ListJobCardsResponse = zod.array(ListJobCardsResponseItem)
@@ -4613,6 +4615,8 @@ export const CreateJobCardResponse = zod.object({
   "surchargeDecidedAt": zod.coerce.date().nullish(),
   "startedAt": zod.coerce.date().nullish(),
   "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
   "createdAt": zod.coerce.date()
 })
 
@@ -4714,6 +4718,178 @@ export const UpdateJobCardResponse = zod.object({
   "surchargeDecidedAt": zod.coerce.date().nullish(),
   "startedAt": zod.coerce.date().nullish(),
   "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Search past job cards across customers/vehicles (service history lookup)
+ */
+export const ListJobCardHistoryQueryParams = zod.object({
+  "q": zod.coerce.string().optional().describe('Matches customer name, vehicle, or job title')
+})
+
+export const ListJobCardHistoryResponseItem = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "title": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
+  "technicianName": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "laborHours": zod.number(),
+  "timerSeconds": zod.number(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListJobCardHistoryResponse = zod.array(ListJobCardHistoryResponseItem)
+
+
+/**
+ * @summary Pause or resume the work timer on an in-progress job card
+ */
+export const ToggleJobCardTimerParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ToggleJobCardTimerBody = zod.object({
+  "action": zod.enum(['pause', 'resume'])
+})
+
+export const ToggleJobCardTimerResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "assetId": zod.number().nullish(),
+  "title": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
+  "technicianUserId": zod.number().nullish(),
+  "technicianName": zod.string().nullish(),
+  "bay": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "durationMins": zod.number().nullish(),
+  "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']),
+  "quoteTotal": zod.number(),
+  "quoteApprovedAt": zod.coerce.date().nullish(),
+  "intake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "outtake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "checklist": zod.array(zod.object({
+  "label": zod.string(),
+  "done": zod.boolean()
+})),
+  "laborHours": zod.number(),
+  "laborRate": zod.number(),
+  "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Reopen a completed/closed job card back to in-progress
+ */
+export const ReopenJobCardParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ReopenJobCardBody = zod.object({
+  "reason": zod.string().optional()
+})
+
+export const ReopenJobCardResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "assetId": zod.number().nullish(),
+  "title": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
+  "technicianUserId": zod.number().nullish(),
+  "technicianName": zod.string().nullish(),
+  "bay": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "durationMins": zod.number().nullish(),
+  "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']),
+  "quoteTotal": zod.number(),
+  "quoteApprovedAt": zod.coerce.date().nullish(),
+  "intake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "outtake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "checklist": zod.array(zod.object({
+  "label": zod.string(),
+  "done": zod.boolean()
+})),
+  "laborHours": zod.number(),
+  "laborRate": zod.number(),
+  "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
   "createdAt": zod.coerce.date()
 })
 
@@ -4785,6 +4961,8 @@ export const RolloverJobCardResponse = zod.object({
   "surchargeDecidedAt": zod.coerce.date().nullish(),
   "startedAt": zod.coerce.date().nullish(),
   "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
   "createdAt": zod.coerce.date()
 })
 
@@ -4855,6 +5033,8 @@ export const ApproveJobCardRolloverResponse = zod.object({
   "surchargeDecidedAt": zod.coerce.date().nullish(),
   "startedAt": zod.coerce.date().nullish(),
   "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
   "createdAt": zod.coerce.date()
 })
 
@@ -4930,6 +5110,8 @@ export const DecideJobCardSurchargeResponse = zod.object({
   "surchargeDecidedAt": zod.coerce.date().nullish(),
   "startedAt": zod.coerce.date().nullish(),
   "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
   "createdAt": zod.coerce.date()
 })
 
@@ -5464,13 +5646,32 @@ export const UpdatePartResponse = zod.object({
 
 
 /**
+ * @summary Download the active dealer's current parts inventory as Excel
+ */
+export const DownloadPartsInventoryResponse = zod.unknown()
+
+
+/**
  * @summary Bulk import parts from a CSV or Excel (.xlsx) file — dealer markup derives missing sell prices
  */
+export const ImportPartsQueryParams = zod.object({
+  "mode": zod.enum(['preview', 'apply']).optional().describe('preview classifies rows without writing; apply (default) persists')
+})
+
 export const ImportPartsResponse = zod.object({
   "total": zod.number().describe('Data rows found in the file'),
-  "inserted": zod.number().describe('New parts created'),
-  "updated": zod.number().describe('Existing parts updated (upsert by dealer + part number)'),
+  "inserted": zod.number().describe('New parts created (preview: would be created)'),
+  "updated": zod.number().describe('Existing parts updated (upsert by dealer + part number; preview: would be updated)'),
   "skipped": zod.number().describe('Rows not applied (validation errors, duplicates, row cap)'),
+  "mode": zod.enum(['preview', 'apply']),
+  "rows": zod.array(zod.object({
+  "row": zod.number(),
+  "sku": zod.string(),
+  "name": zod.string(),
+  "action": zod.enum(['create', 'update']),
+  "supplier": zod.string().nullish(),
+  "newSupplier": zod.boolean().optional().describe('Supplier name not found — it would be created')
+})).optional().describe('Preview only: per-row classification'),
   "errors": zod.array(zod.object({
   "row": zod.number().describe('File row number (1-based, including header)'),
   "field": zod.string().nullish().describe('Offending field, when attributable'),
@@ -9921,13 +10122,13 @@ export const CreateCommNoteResponse = zod.object({
  * @summary List documents for a lead or vehicle (all versions, newest first)
  */
 export const ListDocumentsQueryParams = zod.object({
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card']),
   "entityId": zod.coerce.number()
 })
 
 export const ListDocumentsResponseItem = zod.object({
   "id": zod.number(),
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card']),
   "entityId": zod.number(),
   "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "version": zod.number(),
@@ -9963,7 +10164,7 @@ export const createDocumentBodySizeBytesMin = 0;
 
 
 export const CreateDocumentBody = zod.object({
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card']),
   "entityId": zod.number(),
   "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "fileName": zod.string().min(1),
@@ -9975,7 +10176,7 @@ export const CreateDocumentBody = zod.object({
 
 export const CreateDocumentResponse = zod.object({
   "id": zod.number(),
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card']),
   "entityId": zod.number(),
   "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "version": zod.number(),
@@ -10026,7 +10227,7 @@ export const ReviewDocumentExtractionBody = zod.object({
 
 export const ReviewDocumentExtractionResponse = zod.object({
   "id": zod.number(),
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card']),
   "entityId": zod.number(),
   "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "version": zod.number(),

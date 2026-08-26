@@ -770,6 +770,12 @@ const PATH_MODULES: Record<string, RouteRule> = {
       if (/^\/job-cards\/\d+\/rollover\/approve\/?$/.test(req.path)) {
         return "edit";
       }
+      // Timer pause/resume and reopen are edit-actions on an existing card,
+      // reachable by Technicians (service:edit, no create); the routes
+      // enforce manager-or-assigned-technician identity themselves.
+      if (/^\/job-cards\/\d+\/(timer|reopen)\/?$/.test(req.path)) {
+        return "edit";
+      }
       return METHOD_CATEGORY[req.method] ?? "view";
     },
   },
