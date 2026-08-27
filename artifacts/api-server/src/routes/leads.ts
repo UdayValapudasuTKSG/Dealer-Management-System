@@ -1,5 +1,6 @@
 import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { Router, type IRouter } from "express";
+import { z } from "zod/v4";
 import { eq, desc, and, or, isNull, isNotNull, ne, ilike, gte, lte, sql, inArray, notInArray, notExists, type SQL } from "drizzle-orm";
 import {
   db,
@@ -19,6 +20,7 @@ import {
   agentsTable,
   gatesTable,
   quotesTable,
+  documentsTable,
   testDrivesTable,
   capacityBlocksTable,
   SOCIAL_SUB_PLATFORMS,
@@ -101,6 +103,7 @@ import {
   ListLeadSourcesResponse,
 } from "@workspace/api-zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
+import { ObjectStorageService } from "../lib/objectStorage";
 import {
   onLeadCreated,
   onLeadUpdated,
@@ -444,14 +447,14 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-
   const dealerId = activeDealerId(res);
+
   const [lead] = await db
     .select()
     .from(leadsTable)
     .where(
       and(
-        eq(leadsTable.id, params.data.id),
+        eq(leadsTable.id, params.data!.id),
         eq(leadsTable.dealerId, dealerId),
         isNull(leadsTable.deletedAt),
       ),
@@ -1204,21 +1207,37 @@ router.post(
       });
       return;
     }
-    if (quote.discountStatus === "pending") {
+    const requestType = body.data.requestType ?? "discount";
+    if (requestType === "discount" && quote.discountStatus === "pending") {
       res.status(409).json({
         error:
           "A discount request is already pending management approval on this quote.",
       });
       return;
     }
-    const amount = body.data.amount;
-    if (amount >= quote.total) {
+    if (requestType === "duty_free" && quote.dutyFreeStatus === "pending") {
+      res.status(409).json({ error: "A duty-free request is already pending management approval on this quote." });
+      return;
+    }
+    const amount = body.data.amount ?? 0;
+    if (requestType === "discount" && (!body.data.amount || amount >= quote.total)) {
       res.status(422).json({
         error: `Discount must be less than the quote total (GY$${quote.total.toLocaleString("en-US")}).`,
       });
       return;
     }
     const actor = actorName(res);
+    const [quoteImage] = await db
+      .select({ id: documentsTable.id, fileName: documentsTable.fileName })
+      .from(documentsTable)
+      .where(and(
+        eq(documentsTable.dealerId, lead.dealerId),
+        eq(documentsTable.entityType, "quote"),
+        eq(documentsTable.entityId, quote.id),
+        eq(documentsTable.type, "quote"),
+      ))
+      .orderBy(desc(documentsTable.version), desc(documentsTable.id))
+      .limit(1);
     // Gate insert + quote flag flip run in ONE transaction with a
     // compare-and-set on discountStatus, so two concurrent requests can't
     // both create pending gates for the same quote.
@@ -1230,32 +1249,36 @@ router.post(
           .insert(gatesTable)
           .values({
         dealerId: lead.dealerId,
-        type: "quote_discount",
+        type: requestType === "duty_free" ? "quote_duty_free" : "quote_discount",
         status: "pending",
         priority: "normal",
         customerId: lead.customerId ?? null,
         customerName: lead.name,
         refType: "quote",
         refId: quote.id,
-        amount,
-        title: `Quote discount approval — ${lead.name}`,
+        amount: requestType === "duty_free" ? quote.total : amount,
+        title: `${requestType === "duty_free" ? "Duty-free quote" : "Quote discount"} approval — ${lead.name}`,
         summary:
-          `${actor} requested a GY$${amount.toLocaleString("en-US")} discount on ` +
-          `${quote.quoteNumber} rev ${quote.version} (total GY$${quote.total.toLocaleString("en-US")}).` +
-          (body.data.reason ? ` Reason: ${body.data.reason}` : ""),
+          requestType === "duty_free"
+            ? `${actor} requested duty-free treatment for ${quote.quoteNumber} rev ${quote.version}. Reason: ${body.data.reason}`
+            : `${actor} requested a GY$${amount.toLocaleString("en-US")} discount on ${quote.quoteNumber} rev ${quote.version} (total GY$${quote.total.toLocaleString("en-US")}). Reason: ${body.data.reason}`,
         evidence: [
           { label: "Quote", value: `${quote.quoteNumber}-R${quote.version}` },
           {
             label: "Quote total",
             value: `GY$${quote.total.toLocaleString("en-US")}`,
           },
-          {
+          ...(requestType === "discount" ? [{
             label: "Requested discount",
             value: `GY$${amount.toLocaleString("en-US")}`,
-          },
+          }] : []),
           { label: "Requested by", value: actor },
-          ...(body.data.reason
-            ? [{ label: "Reason", value: body.data.reason }]
+          { label: "Reason", value: body.data.reason },
+          ...(quoteImage
+            ? [
+                { label: "Quote image", value: quoteImage.fileName },
+                { label: "Quote image document", value: String(quoteImage.id) },
+              ]
             : []),
         ],
           })
@@ -1266,19 +1289,21 @@ router.post(
         // zero rows and the whole transaction rolls back.
         const [u] = await tx
           .update(quotesTable)
-          .set({
-            discountStatus: "pending",
-            discountRequestedAmount: amount,
-            discountReason: body.data.reason ?? null,
-            discountRequestedBy: actor,
-            discountGateId: g?.id ?? null,
+          .set(requestType === "duty_free" ? {
+            requestType: "duty_free", dutyFreeStatus: "pending",
+            dutyFreeReason: body.data.reason, dutyFreeRequestedBy: actor, dutyFreeGateId: g?.id ?? null,
+          } : {
+            discountStatus: "pending", discountRequestedAmount: amount,
+            discountReason: body.data.reason, discountRequestedBy: actor, discountGateId: g?.id ?? null,
           })
           .where(
             and(
               eq(quotesTable.id, quote.id),
               eq(quotesTable.dealerId, lead.dealerId),
               eq(quotesTable.status, "current"),
-              ne(quotesTable.discountStatus, "pending"),
+              ...(requestType === "duty_free"
+                ? [ne(quotesTable.dutyFreeStatus, "pending")]
+                : [ne(quotesTable.discountStatus, "pending")]),
             ),
           )
           .returning();
@@ -1299,9 +1324,12 @@ router.post(
       dealerId: lead.dealerId,
       customerId: lead.customerId,
       domain: "leads",
-      kind: "quote_discount_requested",
-      title: `Discount requested on ${quote.quoteNumber}`,
-      detail: `GY$${amount.toLocaleString("en-US")} off rev ${quote.version} — pending management approval.${body.data.reason ? ` Reason: ${body.data.reason}` : ""}`,
+      kind: requestType === "duty_free" ? "quote_duty_free_requested" : "quote_discount_requested",
+      title: `${requestType === "duty_free" ? "Duty Free" : "Discount"} requested on ${quote.quoteNumber}`,
+      detail:
+        requestType === "duty_free"
+          ? `Duty Free treatment requested for rev ${quote.version} — pending management approval. Reason: ${body.data.reason}`
+          : `GY$${amount.toLocaleString("en-US")} off rev ${quote.version} — pending management approval. Reason: ${body.data.reason}`,
       actor,
       refType: "lead",
       refId: lead.id,
@@ -1328,9 +1356,29 @@ router.get(
       res.status(404).json({ error: "Quote not found" });
       return;
     }
+    const [quoteImage] = await db
+      .select()
+      .from(documentsTable)
+      .where(and(
+        eq(documentsTable.dealerId, lead.dealerId),
+        eq(documentsTable.entityType, "quote"),
+        eq(documentsTable.entityId, quote.id),
+        eq(documentsTable.type, "quote"),
+        sql`${documentsTable.mimeType} in ('image/jpeg', 'image/jpg', 'image/png')`,
+      ))
+      .orderBy(desc(documentsTable.version), desc(documentsTable.id))
+      .limit(1);
+    let attachment: { data: Buffer; fileName: string } | null = null;
+    if (quoteImage?.storageKey) {
+      const storage = new ObjectStorageService();
+      const file = await storage.getObjectEntityFile(quoteImage.storageKey);
+      const [data] = await file.download();
+      attachment = { data, fileName: quoteImage.fileName };
+    }
     const pdf = await buildQuotePdf(
       await quotePdfPayload(quote),
       (await getDealerPdfBranding(lead.dealerId)).logo,
+      attachment,
     );
     const safeName =
       `${quote.customerName} - ${quote.quoteNumber}-R${quote.version}.pdf`.replace(
@@ -3039,150 +3087,42 @@ router.delete("/leads/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-
-  // Soft delete (R4.8): never hard-remove from the data plane.
-  const actor = res.locals.user;
+  const archive = z.object({ reason: z.string().trim().min(3).max(1000) }).safeParse(req.body);
+  if (!archive.success) {
+    res.status(422).json({ error: "A reason is required to request lead archive." });
+    return;
+  }
   const dealerId = activeDealerId(res);
-  const [lead] = await db
-    .update(leadsTable)
-    .set({
-      deletedAt: new Date(),
-      deletedBy: actor?.email ?? actor?.name ?? null,
-    })
-    .where(
-      and(
-        eq(leadsTable.id, params.data.id),
-        eq(leadsTable.dealerId, dealerId),
-        isNull(leadsTable.deletedAt),
-      ),
-    )
-    .returning();
-
-  if (!lead) {
+  const [current] = await db.select().from(leadsTable).where(and(
+    eq(leadsTable.id, params.data.id), eq(leadsTable.dealerId, dealerId), isNull(leadsTable.deletedAt),
+  ));
+  if (!current) {
     res.status(404).json({ error: "Lead not found" });
     return;
   }
-
-  // Cleanup cascade: cancel everything tied to this lead so the contact
-  // (phone/email) and any reserved stock are immediately reusable.
-  // 1. Cancel linked deals that haven't been delivered.
-  const linkedDeals = await db
-    .select()
-    .from(dealsTable)
-    .where(and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, lead.id)));
-  const cancellableDeals = linkedDeals.filter(
-    (d) => d.stage !== "delivered" && d.stage !== "cancelled" && d.stage !== "lost",
-  );
-  if (cancellableDeals.length > 0) {
-    await db
-      .update(dealsTable)
-      .set({ stage: "cancelled" })
-      .where(
-        inArray(
-          dealsTable.id,
-          cancellableDeals.map((d) => d.id),
-        ),
-      );
-  }
-
-  // 2. Cancel active bookings hanging off those deals.
-  const dealIds = linkedDeals.map((d) => d.id);
-  if (dealIds.length > 0) {
-    await db
-      .update(bookingsTable)
-      .set({ status: "cancelled" })
-      .where(
-        and(
-          eq(bookingsTable.dealerId, dealerId),
-          inArray(bookingsTable.dealId, dealIds),
-          eq(bookingsTable.status, "active"),
-        ),
-      );
-  }
-
-  // 3. Dismiss pending gates on the lead and its deals.
-  const gateConds: SQL[] = [
-    and(eq(gatesTable.refType, "lead"), eq(gatesTable.refId, lead.id))!,
-  ];
-  if (dealIds.length > 0)
-    gateConds.push(
-      and(eq(gatesTable.refType, "deal"), inArray(gatesTable.refId, dealIds))!,
-    );
-  await db
-    .update(gatesTable)
-    .set({ status: "dismissed" })
-    .where(
-      and(
-        eq(gatesTable.dealerId, dealerId),
-        eq(gatesTable.status, "pending"),
-        or(...gateConds),
-      ),
-    );
-
-  // 4. Release reserved/booked vehicles tied to this lead — but only when no
-  // OTHER live deal or active booking still claims them.
-  const vehicleIds = [
-    ...new Set(
-      [
-        lead.interestedVehicleId,
-        ...linkedDeals.map((d) => d.vehicleId),
-      ].filter((v): v is number => typeof v === "number"),
-    ),
-  ];
-  for (const vehicleId of vehicleIds) {
-    const [otherDeal] = await db
-      .select({ id: dealsTable.id })
-      .from(dealsTable)
-      .where(
-        and(
-          eq(dealsTable.dealerId, dealerId),
-          eq(dealsTable.vehicleId, vehicleId),
-          notInArray(dealsTable.stage, ["cancelled", "lost", "delivered"]),
-          dealIds.length > 0 ? notInArray(dealsTable.id, dealIds) : undefined,
-        ),
-      )
-      .limit(1);
-    const [otherBooking] = await db
-      .select({ id: bookingsTable.id })
-      .from(bookingsTable)
-      .where(
-        and(
-          eq(bookingsTable.dealerId, dealerId),
-          eq(bookingsTable.vehicleId, vehicleId),
-          eq(bookingsTable.status, "active"),
-        ),
-      )
-      .limit(1);
-    if (!otherDeal && !otherBooking) {
-      await db
-        .update(vehiclesTable)
-        .set({ status: "available" })
-        .where(
-          and(
-            eq(vehiclesTable.dealerId, dealerId),
-            eq(vehiclesTable.id, vehicleId),
-            inArray(vehiclesTable.status, ["reserved", "booked"]),
-          ),
-        );
-    }
-  }
-
-  await db.insert(timelineEventsTable).values({
-    dealerId,
-    customerId: lead.customerId,
-    domain: "leads",
-    kind: "lead_deleted",
-    title: `Lead deleted: ${lead.name}`,
-    detail: `${actor?.name ?? actor?.email ?? "Staff"} deleted this lead. ${cancellableDeals.length} deal(s) cancelled, linked bookings cancelled, pending approvals dismissed, reserved stock released. The contact details are free to be captured again.`,
-    actor: actor?.name ?? actor?.email ?? "Staff",
-    refType: "lead",
-    refId: lead.id,
+  const actorNameValue = actorName(res);
+  const gate = await db.transaction(async (tx) => {
+    const [existing] = await tx.select().from(gatesTable).where(and(
+      eq(gatesTable.dealerId, dealerId), eq(gatesTable.type, "lead_delete"),
+      eq(gatesTable.refType, "lead"), eq(gatesTable.refId, current.id), eq(gatesTable.status, "pending"),
+    ));
+    if (existing) return existing;
+    const [created] = await tx.insert(gatesTable).values({
+      dealerId, type: "lead_delete", status: "pending", priority: "high",
+      customerId: current.customerId ?? null, customerName: current.name,
+      refType: "lead", refId: current.id, title: `Lead archive approval — ${current.name}`,
+      summary: `${actorNameValue} requested archival. Reason: ${archive.data.reason}`,
+      recommendation: "Approve only after confirming that this lead should be archived and its open work can be closed.",
+      evidence: [{ label: "Reason", value: archive.data.reason }, { label: "Requested by", value: actorNameValue }],
+    }).returning();
+    return created!;
   });
-
-  res.sendStatus(204);
+  res.status(202).json({ pending: true, gateId: gate.id, message: "Lead archive requested for manager approval." });
 });
 
-// R4.8: restore a soft-deleted lead (delete-class privilege).
+// Restore lead visibility only. Archive-time operational closures are retained
+// as history; silently resurrecting deals, bookings, deliveries, or stale gates
+// would create conflicting holds and approvals.
 router.post("/leads/:id/restore", async (req, res): Promise<void> => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {

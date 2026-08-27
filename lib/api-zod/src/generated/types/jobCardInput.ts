@@ -12,6 +12,11 @@ export interface JobCardInput {
   serviceOrderId: number;
   /** @minLength 1 */
   title: string;
+  /**
+     * @minLength 3
+     * @maxLength 50
+     */
+  customerPhoneSnapshot?: string;
   technicianUserId?: number;
   technicianName?: string;
   bay?: string;

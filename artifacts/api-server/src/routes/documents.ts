@@ -8,6 +8,7 @@ import {
   vehiclesTable,
   deliveriesTable,
   jobCardsTable,
+  quotesTable,
   auditLogsTable,
   timelineEventsTable,
 } from "@workspace/db";
@@ -60,6 +61,7 @@ export const ALLOWED_DOCUMENT_MIME = new Set([
  */
 function moduleFor(entityType: string): string {
   if (entityType === "lead") return "leads";
+  if (entityType === "quote") return "leads";
   if (entityType === "delivery") return "deliveries";
   if (entityType === "job_card") return "service";
   return "inventory";
@@ -84,9 +86,16 @@ function requirePermission(
 /** 404 unless the parent lead/vehicle/delivery exists in the active dealer. */
 async function parentExists(
   dealerId: number,
-  entityType: "lead" | "vehicle" | "delivery" | "job_card",
+  entityType: "lead" | "vehicle" | "delivery" | "job_card" | "quote",
   entityId: number,
 ): Promise<boolean> {
+  if (entityType === "quote") {
+    const [row] = await db
+      .select({ id: quotesTable.id })
+      .from(quotesTable)
+      .where(and(eq(quotesTable.id, entityId), eq(quotesTable.dealerId, dealerId)));
+    return !!row;
+  }
   if (entityType === "job_card") {
     const [row] = await db
       .select({ id: jobCardsTable.id })
@@ -172,6 +181,13 @@ router.post("/documents", async (req: Request, res: Response): Promise<void> => 
     res
       .status(422)
       .json({ error: "Only PDF, JPG, PNG or DOCX documents are allowed" });
+    return;
+  }
+  if (
+    body.entityType === "quote" &&
+    !["image/jpeg", "image/jpg", "image/png"].includes(body.mimeType)
+  ) {
+    res.status(422).json({ error: "Quote attachments must be JPG or PNG images" });
     return;
   }
   if (body.sizeBytes > MAX_DOCUMENT_BYTES) {

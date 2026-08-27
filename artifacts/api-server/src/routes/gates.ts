@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import {
   db,
   gatesTable,
@@ -11,6 +11,7 @@ import {
   bookingsTable,
   deliveriesTable,
   timelineEventsTable,
+  invoicesTable,
   paymentsTable,
   quotesTable,
   type Gate,
@@ -27,7 +28,7 @@ import {
   type AdvanceStage,
 } from "../lib/stage-review";
 import { computeDraftDuty, taxLinesMatch } from "../lib/gra-duty";
-import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
+import { computeTaxes, ensureDealerTaxes, isDutyOrStatutoryTax } from "../lib/taxes";
 import { activeDealerId } from "../middlewares/rbac";
 import { notifyRefundApproved } from "../lib/notify-triggers";
 import {
@@ -227,26 +228,19 @@ async function applyCascade(
               eq(quotesTable.discountStatus, "pending"),
               eq(quotesTable.discountGateId, gate.id),
             ),
-          );
+          )
+          .for("update");
         if (quote) {
           const amt = Math.min(
             Math.max(effectiveAmount, 0),
             Math.max(quote.basePrice + quote.totalTax - 1, 0),
           );
-          await tx
-            .update(quotesTable)
-            .set({
-              discountAmount: amt,
-              discountStatus: "approved",
-              total: quote.basePrice + quote.totalTax - amt,
-            })
-            .where(eq(quotesTable.id, quote.id));
           // Carry the approved discount onto the lead's desking deal so the
           // deal (and its OTD) reflects the price the customer was quoted.
           // Committed/delivered deals keep their gate-guarded pricing.
           if (quote.leadId) {
-            const [deal] = await tx
-              .select()
+            const [dealRef] = await tx
+              .select({ id: dealsTable.id })
               .from(dealsTable)
               .where(
                 and(
@@ -257,29 +251,81 @@ async function applyCascade(
               )
               .orderBy(desc(dealsTable.createdAt))
               .limit(1);
+            let deal: typeof dealsTable.$inferSelect | undefined;
+            if (dealRef) {
+              await tx.execute(
+                sql`select pg_advisory_xact_lock(hashtext(${`deal-pricing:${gate.dealerId}:${dealRef.id}`}))`,
+              );
+              [deal] = await tx
+                .select()
+                .from(dealsTable)
+                .where(and(
+                  eq(dealsTable.id, dealRef.id),
+                  eq(dealsTable.dealerId, gate.dealerId),
+                  eq(dealsTable.stage, "desking"),
+                ))
+                .for("update");
+            }
             if (deal) {
               const discount = Math.min(amt, deal.vehiclePrice);
-              const [veh] = await tx
-                .select({ powertrain: vehiclesTable.powertrain })
-                .from(vehiclesTable)
-                .where(
-                  and(
-                    eq(vehiclesTable.id, deal.vehicleId),
-                    eq(vehiclesTable.dealerId, deal.dealerId),
-                  ),
-                );
-              const taxRules = await ensureDealerTaxes(deal.dealerId);
-              const { totalWithTax } = computeTaxes(
-                Math.max(deal.vehiclePrice - discount + deal.accessories, 0),
-                taxRules,
-                { powertrain: veh?.powertrain ?? null },
+              const taxBase = Math.max(
+                deal.vehiclePrice - discount + deal.accessories,
+                0,
               );
+              let totalWithTax: number;
+              let taxSnapshot = deal.taxSnapshot;
+              if (deal.dutyFreeApproved) {
+                if (!deal.taxSnapshot) {
+                  return {
+                    title: "Quote discount approval blocked",
+                    detail:
+                      "The linked Duty Free deal has no approved tax snapshot. No quote or deal pricing was changed.",
+                  };
+                }
+                taxSnapshot = deal.taxSnapshot.map((line) => ({
+                  ...line,
+                  amount:
+                    line.kind === "percent"
+                      ? Math.round(taxBase * (line.rate / 100) * 100) / 100
+                      : line.amount,
+                }));
+                totalWithTax =
+                  Math.round(
+                    (taxBase +
+                      taxSnapshot.reduce((sum, line) => sum + line.amount, 0)) *
+                      100,
+                  ) / 100;
+              } else {
+                const [veh] = await tx
+                  .select({ powertrain: vehiclesTable.powertrain })
+                  .from(vehiclesTable)
+                  .where(
+                    and(
+                      eq(vehiclesTable.id, deal.vehicleId),
+                      eq(vehiclesTable.dealerId, deal.dealerId),
+                    ),
+                  );
+                const taxRules = await ensureDealerTaxes(deal.dealerId);
+                const computed = computeTaxes(taxBase, taxRules, {
+                  powertrain: veh?.powertrain ?? null,
+                });
+                totalWithTax = computed.totalWithTax;
+                taxSnapshot = computed.lines;
+              }
               await tx
                 .update(dealsTable)
-                .set({ discount, otdPrice: totalWithTax })
+                .set({ discount, otdPrice: totalWithTax, taxSnapshot })
                 .where(eq(dealsTable.id, deal.id));
             }
           }
+          await tx
+            .update(quotesTable)
+            .set({
+              discountAmount: amt,
+              discountStatus: "approved",
+              total: quote.basePrice + quote.totalTax - amt,
+            })
+            .where(eq(quotesTable.id, quote.id));
           return {
             title:
               action === "adjust"
@@ -293,6 +339,356 @@ async function applyCascade(
         title: "Quote discount approved",
         detail: "Quote no longer found — no changes applied.",
       };
+    }
+    case "quote_duty_free": {
+      // The gate is tied to an exact current revision.  The CAS predicates
+      // deliberately make a regenerated/re-requested quote a no-op rather
+      // than applying an old manager decision to new pricing.
+      if (gate.refType !== "quote" || !gate.refId) {
+        return { title: "Duty-free quote approved", detail: "Quote reference is unavailable; no pricing was changed." };
+      }
+      const [quote] = await tx.select().from(quotesTable).where(and(
+        eq(quotesTable.id, gate.refId), eq(quotesTable.dealerId, gate.dealerId),
+        eq(quotesTable.status, "current"), eq(quotesTable.requestType, "duty_free"),
+        eq(quotesTable.dutyFreeStatus, "pending"), eq(quotesTable.dutyFreeGateId, gate.id),
+       )).for("update");
+      if (!quote) {
+        return { title: "Duty-free quote approval stale", detail: "The quote revision was replaced or its request changed; no pricing was changed." };
+      }
+      // taxSnapshot is the authority reviewed with this revision; do not
+      // reread mutable dealer tax rules while approving it.
+      const retained = quote.taxSnapshot.filter((line) => !isDutyOrStatutoryTax(line));
+      const totalTax = Math.round(retained.reduce((sum, line) => sum + line.amount, 0) * 100) / 100;
+      const [applied] = await tx.update(quotesTable).set({
+        taxLines: retained, taxSnapshot: retained, totalTax,
+        total: quote.basePrice + totalTax - quote.discountAmount,
+        dutyFreeStatus: "approved",
+      }).where(and(eq(quotesTable.id, quote.id), eq(quotesTable.dutyFreeStatus, "pending"), eq(quotesTable.dutyFreeGateId, gate.id))).returning();
+      if (!applied) return { title: "Duty-free quote approval stale", detail: "The quote changed while approval was recorded; no pricing was changed." };
+       const [dealRef] = await tx.select({ id: dealsTable.id }).from(dealsTable).where(and(
+        eq(dealsTable.dealerId, gate.dealerId), eq(dealsTable.leadId, quote.leadId),
+        eq(dealsTable.stage, "desking"),
+      )).orderBy(desc(dealsTable.createdAt)).limit(1);
+       let deal: typeof dealsTable.$inferSelect | undefined;
+       if (dealRef) {
+         await tx.execute(
+           sql`select pg_advisory_xact_lock(hashtext(${`deal-pricing:${gate.dealerId}:${dealRef.id}`}))`,
+         );
+         [deal] = await tx.select().from(dealsTable).where(and(
+           eq(dealsTable.id, dealRef.id),
+           eq(dealsTable.dealerId, gate.dealerId),
+           eq(dealsTable.stage, "desking"),
+         )).for("update");
+       }
+      if (deal) {
+        const taxBase = Math.max(deal.vehiclePrice - deal.discount + deal.accessories, 0);
+        const dealLines = retained.map((line) => ({
+          ...line,
+          amount:
+            line.kind === "percent"
+              ? Math.round(taxBase * (line.rate / 100) * 100) / 100
+              : line.amount,
+        }));
+        const dealTax = Math.round(dealLines.reduce((sum, line) => sum + line.amount, 0) * 100) / 100;
+        await tx.update(dealsTable).set({
+          dutyFreeApproved: true,
+          taxSnapshot: dealLines,
+          otdPrice: Math.round((taxBase + dealTax) * 100) / 100,
+        }).where(and(eq(dealsTable.id, deal.id), eq(dealsTable.stage, "desking"), eq(dealsTable.dutyFreeApproved, false)));
+      }
+      return {
+        title: "Duty-free quote approved",
+        detail: `Statutory duty, excise and VAT were removed from ${quote.quoteNumber} rev ${quote.version}; unrelated levies and fixed fees were retained.`,
+      };
+    }
+    case "deal_cancellation": {
+      if (gate.refType !== "deal" || !gate.refId) {
+        return { title: "Deal cancellation stale", detail: "Deal reference is unavailable; no operational changes were made." };
+      }
+      const [deal] = await tx.select().from(dealsTable).where(and(
+        eq(dealsTable.id, gate.refId), eq(dealsTable.dealerId, gate.dealerId),
+        inArray(dealsTable.stage, ["desking", "committed"]),
+        eq(dealsTable.cancellationGateId, gate.id),
+      ));
+      if (!deal) return { title: "Deal cancellation stale", detail: "The deal changed after the request; no operational changes were made." };
+      const reason = gate.evidence.find((item) => item.label === "Reason")?.value;
+      if (!reason) return { title: "Deal cancellation incomplete", detail: "The request has no reason; no operational changes were made." };
+      const invoices = await tx.select().from(invoicesTable).where(and(
+        eq(invoicesTable.dealerId, gate.dealerId), eq(invoicesTable.dealId, deal.id),
+      ));
+      const invoiceIds = invoices.map((invoice) => invoice.id);
+      const captured = invoiceIds.length === 0 ? 0 : (await tx.select({
+        amount: sql<number>`coalesce(sum(${paymentsTable.amount}), 0)::float`,
+      }).from(paymentsTable).where(and(
+        eq(paymentsTable.dealerId, gate.dealerId),
+        inArray(paymentsTable.invoiceId, invoiceIds),
+      )))[0]?.amount ?? 0;
+      if (captured > 0.005) {
+        const [delivery] = await tx.select().from(deliveriesTable).where(and(
+          eq(deliveriesTable.dealerId, gate.dealerId),
+          eq(deliveriesTable.dealId, deal.id),
+        )).limit(1);
+        const [vehicle] = await tx.select({ status: vehiclesTable.status }).from(vehiclesTable).where(and(
+          eq(vehiclesTable.dealerId, gate.dealerId),
+          eq(vehiclesTable.id, deal.vehicleId),
+        )).limit(1);
+        const registrationDone = delivery?.steps.some(
+          (step) => step.key === "registration" && step.status === "completed",
+        );
+        if (
+          registrationDone ||
+          delivery?.status === "completed" ||
+          vehicle?.status === "delivered" ||
+          vehicle?.status === "sold"
+        ) {
+          return {
+            title: "Deal cancellation approval stale",
+            detail:
+              "Registration or delivery completed after this request. The refundable window is closed and no cancellation changes were made.",
+          };
+        }
+      }
+      const requesterNote = gate.evidence.find(
+        (item) => item.label === "Requester note",
+      )?.value;
+      const [cancelled] = await tx.update(dealsTable).set({
+        stage: "cancelled",
+        cancellationReason: reason,
+        cancellationNote:
+          [requesterNote, gate.resolution ? `Manager decision: ${gate.resolution}` : null]
+            .filter(Boolean)
+            .join("\n") || null,
+      }).where(and(eq(dealsTable.id, deal.id), eq(dealsTable.dealerId, gate.dealerId),
+        inArray(dealsTable.stage, ["desking", "committed"]), eq(dealsTable.cancellationGateId, gate.id))).returning();
+      if (!cancelled) return { title: "Deal cancellation stale", detail: "The deal changed during approval; no operational changes were made." };
+      await tx.update(bookingsTable).set({ status: "cancelled", cancellationReason: reason })
+        .where(and(eq(bookingsTable.dealerId, gate.dealerId), eq(bookingsTable.dealId, deal.id), eq(bookingsTable.status, "active")));
+      await tx.update(deliveriesTable).set({ status: "cancelled" })
+        .where(and(eq(deliveriesTable.dealerId, gate.dealerId), eq(deliveriesTable.dealId, deal.id), eq(deliveriesTable.status, "in_progress")));
+      let releaseDetail = "";
+      if (captured > 0.005) {
+        const [existingRefund] = await tx.select({ id: gatesTable.id }).from(gatesTable).where(and(
+          eq(gatesTable.dealerId, gate.dealerId), eq(gatesTable.type, "refund_release"),
+          eq(gatesTable.refType, "deal"), eq(gatesTable.refId, deal.id), eq(gatesTable.status, "pending"),
+        ));
+        const refundGate = existingRefund ?? (await tx.insert(gatesTable).values({
+          dealerId: gate.dealerId,
+          type: "refund_release",
+          status: "pending",
+          priority: "high",
+          customerId: deal.customerId,
+          customerName: deal.customerName,
+          refType: "deal",
+          refId: deal.id,
+          title: `Refund release — ${deal.customerName ?? `Deal #${deal.id}`}`,
+          summary: `Cancellation (${reason.replace(/_/g, " ")}) has GY$${captured.toLocaleString("en-US")} captured. Manager approval releases the vehicle hold and authorizes finance to execute the refund.`,
+          recommendation: "Verify the refund amount, then approve to release the hold and route the refund to finance.",
+          amount: captured,
+          evidence: [
+            { label: "Reason", value: reason },
+            { label: "Captured funds", value: `GY$${captured.toLocaleString("en-US")}` },
+            { label: "Invoices", value: invoices.map((invoice) => invoice.invoiceNumber).join(", ") || "—" },
+          ],
+        }).returning({ id: gatesTable.id }))[0]!;
+        releaseDetail = ` Refund gate #${refundGate.id} was raised; the vehicle remains held until that approval.`;
+      } else {
+        const [otherBooking] = await tx.select({ id: bookingsTable.id }).from(bookingsTable).where(and(
+          eq(bookingsTable.dealerId, gate.dealerId), eq(bookingsTable.vehicleId, deal.vehicleId),
+          eq(bookingsTable.status, "active"),
+        )).limit(1);
+        const [otherDeal] = await tx.select({ id: dealsTable.id }).from(dealsTable).where(and(
+          eq(dealsTable.dealerId, gate.dealerId), eq(dealsTable.vehicleId, deal.vehicleId),
+          notInArray(dealsTable.stage, ["cancelled", "lost", "delivered"]),
+        )).limit(1);
+        if (!otherBooking && !otherDeal) {
+          await tx.update(vehiclesTable).set({ status: "available", holdUntil: null, holdReason: null })
+            .where(and(eq(vehiclesTable.id, deal.vehicleId), eq(vehiclesTable.dealerId, gate.dealerId),
+              inArray(vehiclesTable.status, ["reserved", "booked"])));
+          releaseDetail = " The vehicle was returned to available stock.";
+        } else {
+          releaseDetail = " The vehicle remains held by other active work.";
+        }
+      }
+      return { title: "Deal cancellation approved", detail: `Deal #${deal.id} was cancelled for ${reason.replace(/_/g, " ")}; linked booking and delivery work was closed.${releaseDetail}` };
+    }
+    case "lead_delete": {
+      if (gate.refType !== "lead" || !gate.refId) return { title: "Lead archive stale", detail: "Lead reference is unavailable; no archive was made." };
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`lead-link:${gate.dealerId}:${gate.refId}`}))`,
+      );
+      const [pendingLead] = await tx.select().from(leadsTable).where(and(
+        eq(leadsTable.id, gate.refId),
+        eq(leadsTable.dealerId, gate.dealerId),
+        sql`${leadsTable.deletedAt} is null`,
+      )).for("update");
+      if (!pendingLead) return { title: "Lead archive stale", detail: "The lead was already archived or changed; no changes were made." };
+      const linkedDeals = await tx.select().from(dealsTable).where(and(
+        eq(dealsTable.dealerId, gate.dealerId), eq(dealsTable.leadId, pendingLead.id),
+      ));
+      const dealIds = linkedDeals.map((deal) => deal.id);
+      const cancellableDeals = linkedDeals.filter(
+        (deal) => !["delivered", "cancelled", "lost"].includes(deal.stage),
+      );
+      const capturedByDeal = new Map<number, number>();
+      const heldVehicleIds = new Set<number>();
+      for (const deal of cancellableDeals) {
+        const [lockedDeal] = await tx.select({ id: dealsTable.id, stage: dealsTable.stage })
+          .from(dealsTable)
+          .where(and(
+            eq(dealsTable.dealerId, gate.dealerId),
+            eq(dealsTable.id, deal.id),
+          ))
+          .for("update");
+        if (!lockedDeal || ["delivered", "cancelled", "lost"].includes(lockedDeal.stage)) {
+          return {
+            title: "Lead archive approval stale",
+            detail: `Deal #${deal.id} changed after this request. The lead and linked work were left unchanged.`,
+          };
+        }
+        const invoices = await tx.select({ id: invoicesTable.id }).from(invoicesTable).where(and(
+          eq(invoicesTable.dealerId, gate.dealerId),
+          eq(invoicesTable.dealId, deal.id),
+        )).for("update");
+        const invoiceIds = invoices.map((invoice) => invoice.id);
+        const captured = invoiceIds.length === 0 ? 0 : (await tx.select({
+          amount: sql<number>`coalesce(sum(${paymentsTable.amount}), 0)::float`,
+        }).from(paymentsTable).where(and(
+          eq(paymentsTable.dealerId, gate.dealerId),
+          inArray(paymentsTable.invoiceId, invoiceIds),
+        )))[0]?.amount ?? 0;
+        capturedByDeal.set(deal.id, captured);
+        if (captured <= 0.005) continue;
+        heldVehicleIds.add(deal.vehicleId);
+        const [delivery] = await tx.select().from(deliveriesTable).where(and(
+          eq(deliveriesTable.dealerId, gate.dealerId),
+          eq(deliveriesTable.dealId, deal.id),
+        )).limit(1).for("update");
+        const [vehicle] = await tx.select({ status: vehiclesTable.status }).from(vehiclesTable).where(and(
+          eq(vehiclesTable.dealerId, gate.dealerId),
+          eq(vehiclesTable.id, deal.vehicleId),
+        )).limit(1).for("update");
+        const registrationDone = delivery?.steps.some(
+          (step) => step.key === "registration" && step.status === "completed",
+        );
+        if (
+          registrationDone ||
+          delivery?.status === "completed" ||
+          vehicle?.status === "delivered" ||
+          vehicle?.status === "sold"
+        ) {
+          return {
+            title: "Lead archive approval stale",
+            detail:
+              `Deal #${deal.id} completed registration or delivery after this request. ` +
+              "The lead and linked work were left unchanged.",
+          };
+        }
+      }
+      const reason = gate.evidence.find((item) => item.label === "Reason")?.value ?? "No reason recorded";
+      const [lead] = await tx.update(leadsTable).set({
+        deletedAt: new Date(), deletedBy: gate.resolvedBy ?? "Manager",
+      }).where(and(eq(leadsTable.id, pendingLead.id), eq(leadsTable.dealerId, gate.dealerId),
+        sql`${leadsTable.deletedAt} is null`)).returning();
+      if (!lead) return { title: "Lead archive stale", detail: "The lead changed while approval was being recorded; no changes were made." };
+      for (const deal of cancellableDeals) {
+        await tx.update(dealsTable).set({
+          stage: "cancelled",
+          cancellationReason: "customer_changed_mind",
+          cancellationNote: reason,
+        }).where(and(
+          eq(dealsTable.dealerId, gate.dealerId),
+          eq(dealsTable.id, deal.id),
+          notInArray(dealsTable.stage, ["delivered", "cancelled", "lost"]),
+        ));
+      }
+      if (dealIds.length > 0) {
+        await tx.update(bookingsTable).set({ status: "cancelled" }).where(and(
+          eq(bookingsTable.dealerId, gate.dealerId), inArray(bookingsTable.dealId, dealIds),
+          eq(bookingsTable.status, "active"),
+        ));
+        await tx.update(deliveriesTable).set({ status: "cancelled" }).where(and(
+          eq(deliveriesTable.dealerId, gate.dealerId),
+          inArray(deliveriesTable.dealId, dealIds),
+          notInArray(deliveriesTable.status, ["completed", "cancelled"]),
+        ));
+        await tx.update(gatesTable).set({ status: "dismissed" }).where(and(
+          eq(gatesTable.dealerId, gate.dealerId), eq(gatesTable.status, "pending"),
+          eq(gatesTable.refType, "deal"), inArray(gatesTable.refId, dealIds),
+        ));
+      }
+      await tx.update(gatesTable).set({ status: "dismissed" }).where(and(
+        eq(gatesTable.dealerId, gate.dealerId), eq(gatesTable.status, "pending"),
+        eq(gatesTable.refType, "lead"), eq(gatesTable.refId, lead.id),
+        sql`${gatesTable.id} <> ${gate.id}`,
+      ));
+      let refundCount = 0;
+      for (const deal of cancellableDeals) {
+        const captured = capturedByDeal.get(deal.id) ?? 0;
+        if (captured <= 0.005) continue;
+        const [existingRefund] = await tx.select({ id: gatesTable.id }).from(gatesTable).where(and(
+          eq(gatesTable.dealerId, gate.dealerId),
+          eq(gatesTable.type, "refund_release"),
+          eq(gatesTable.refType, "deal"),
+          eq(gatesTable.refId, deal.id),
+          eq(gatesTable.status, "pending"),
+        )).limit(1);
+        if (!existingRefund) {
+          await tx.insert(gatesTable).values({
+            dealerId: gate.dealerId,
+            type: "refund_release",
+            title: `Refund required for archived lead deal #${deal.id}`,
+            summary:
+              "Captured funds must be refunded before this vehicle can be released.",
+            amount: captured,
+            priority: "high",
+            recommendation: "Review the captured payments and approve the refund release.",
+            evidence: [
+              { label: "Deal", value: `#${deal.id}` },
+              { label: "Captured", value: `GY$${captured.toLocaleString("en-US")}` },
+              { label: "Archive gate", value: `#${gate.id}` },
+            ],
+            refType: "deal",
+            refId: deal.id,
+            customerId: lead.customerId,
+            customerName: lead.name,
+          });
+        }
+        refundCount += 1;
+      }
+      const vehicleIds = [...new Set([
+        lead.interestedVehicleId,
+        ...linkedDeals.map((deal) => deal.vehicleId),
+      ].filter((id): id is number => typeof id === "number"))];
+      for (const vehicleId of vehicleIds) {
+        if (heldVehicleIds.has(vehicleId)) continue;
+        const [otherDeal] = await tx.select({ id: dealsTable.id }).from(dealsTable).where(and(
+          eq(dealsTable.dealerId, gate.dealerId), eq(dealsTable.vehicleId, vehicleId),
+          notInArray(dealsTable.stage, ["cancelled", "lost", "delivered"]),
+          dealIds.length > 0 ? notInArray(dealsTable.id, dealIds) : undefined,
+        )).limit(1);
+        const [otherBooking] = await tx.select({ id: bookingsTable.id }).from(bookingsTable).where(and(
+          eq(bookingsTable.dealerId, gate.dealerId), eq(bookingsTable.vehicleId, vehicleId),
+          eq(bookingsTable.status, "active"),
+        )).limit(1);
+        if (!otherDeal && !otherBooking) {
+          await tx.update(vehiclesTable).set({ status: "available", holdUntil: null, holdReason: null }).where(and(
+            eq(vehiclesTable.dealerId, gate.dealerId), eq(vehiclesTable.id, vehicleId),
+            inArray(vehiclesTable.status, ["reserved", "booked"]),
+          ));
+        }
+      }
+      await tx.insert(timelineEventsTable).values({
+        dealerId: gate.dealerId,
+        customerId: lead.customerId,
+        domain: "leads",
+        kind: "lead_deleted",
+        title: `Lead archived: ${lead.name}`,
+        detail: `${gate.resolvedBy ?? "Manager"} approved archival. Reason: ${reason}. ${cancellableDeals.length} open deal(s) cancelled; linked bookings and pending approvals were closed.${refundCount ? ` ${refundCount} refund approval(s) were opened and their vehicle holds retained.` : ""} Historical records remain retained.`,
+        actor: gate.resolvedBy ?? "Manager",
+        refType: "lead",
+        refId: lead.id,
+      });
+      return { title: "Lead archive approved", detail: `${lead.name} was soft-archived and linked open work was closed.${refundCount ? ` ${refundCount} paid deal(s) now require refund approval before vehicle release.` : ""} Historical records remain retained.` };
     }
     case "gra_filing": {
       // Approval AUTHORISES the filing but does not file it — the snapshot
@@ -729,6 +1125,21 @@ router.post("/gates/:id/resolve", async (req, res): Promise<void> => {
               eq(quotesTable.id, row.refId),
               eq(quotesTable.dealerId, row.dealerId),
               eq(quotesTable.discountStatus, "pending"),
+            ),
+          );
+      }
+      if (row.type === "quote_duty_free" && row.refId) {
+        // A declined request never alters price/taxes; it only closes the
+        // explicit request state on the same revision.
+        await tx
+          .update(quotesTable)
+          .set({ dutyFreeStatus: "rejected" })
+          .where(
+            and(
+              eq(quotesTable.id, row.refId),
+              eq(quotesTable.dealerId, row.dealerId),
+              eq(quotesTable.dutyFreeStatus, "pending"),
+              eq(quotesTable.dutyFreeGateId, row.id),
             ),
           );
       }

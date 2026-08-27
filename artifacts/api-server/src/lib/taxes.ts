@@ -14,6 +14,20 @@ export type TaxLine = {
   amount: number;
 };
 
+/** Taxes which a duty-free approval may remove.  Code is authoritative where
+ * configured; names cover legacy dealer configurations without canonical codes. */
+export function isDutyOrStatutoryTax(
+  tax: Pick<DealerTax, "code" | "name">,
+): boolean {
+  return /(?:duty|excise|vat)/i.test(`${tax.code} ${tax.name}`);
+}
+
+export function dutyFreeTaxRules(
+  taxes: DealerTax[],
+): DealerTax[] {
+  return taxes.filter((tax) => !isDutyOrStatutoryTax(tax));
+}
+
 export function computeTaxes(
   base: number,
   taxes: Pick<

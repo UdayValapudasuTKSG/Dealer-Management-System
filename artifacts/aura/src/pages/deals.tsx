@@ -391,9 +391,9 @@ export default function Deals() {
         String(q.queryKey[0] ?? "").includes("/vehicles"),
       });
       toast({
-        title: "Deal cancelled",
+        title: "Cancellation requested",
         description:
-          "If funds were captured, a refund release request is now waiting for manager approval; otherwise the vehicle went back to available stock.",
+          "No operational changes were made. A manager must approve the cancellation request.",
       });
       setCancelDeal(null);
       setCancelReason("");

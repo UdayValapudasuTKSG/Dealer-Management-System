@@ -178,6 +178,10 @@ export const jobCardsTable = pgTable(
     laborHours: doublePrecision("labor_hours").notNull().default(0),
     laborRate: doublePrecision("labor_rate").notNull().default(120),
     notes: text("notes"),
+    // Immutable contact value captured at job-card creation. This deliberately
+    // is not a foreign-keyed/live customer field: later customer edits must
+    // never alter the contact details recorded for workshop work.
+    customerPhoneSnapshot: text("customer_phone_snapshot"),
     // Mandatory completion write-up: the technician must record their
     // analysis of the service and what work was performed before the card
     // can be marked completed (enforced in the update route).
@@ -259,6 +263,26 @@ export const insertJobCardSchema = createInsertSchema(jobCardsTable, {
 });
 export type InsertJobCard = z.infer<typeof insertJobCardSchema>;
 export type JobCard = typeof jobCardsTable.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Technician notes — append-only job-card work log
+// ---------------------------------------------------------------------------
+
+export const jobCardTechnicianNotesTable = pgTable("job_card_technician_notes", {
+  id: serial("id").primaryKey(),
+  dealerId: integer("dealer_id").notNull(),
+  jobCardId: integer("job_card_id")
+    .notNull()
+    .references(() => jobCardsTable.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  authorUserId: integer("author_user_id"),
+  authorName: text("author_name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+export type JobCardTechnicianNote =
+  typeof jobCardTechnicianNotesTable.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Job card part lines (issue decrements stock, return restocks)

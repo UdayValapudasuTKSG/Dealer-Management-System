@@ -35,6 +35,9 @@ import {
   useToggleJobCardTimer,
   useReopenJobCard,
   useListJobCardHistory,
+  useListJobCardTechnicianNotes,
+  useCreateJobCardTechnicianNote,
+  getListJobCardTechnicianNotesQueryKey,
   useApproveJobCardRollover,
   useDecideJobCardSurcharge,
   useRequestServiceInvoiceDiscount,
@@ -82,6 +85,7 @@ import {
   RotateCcw,
   History,
   Search,
+  Phone,
 } from "lucide-react";
 import { DocumentsCard } from "@/components/documents-card";
 import { Badge } from "@/components/ui/badge";
@@ -1099,6 +1103,13 @@ function CreateJobCardDialog() {
         { name: "laborRate", label: "Labour rate (GYD/hr)", type: "number", span: "half", placeholder: "120" },
         { name: "checklistText", label: "Checklist (one item per line)", type: "textarea", span: "full", placeholder: "Inspect pads\nReplace rotors\nRoad test" },
         { name: "notes", label: "Notes", type: "textarea", span: "full" },
+        {
+          name: "customerPhoneSnapshot",
+          label: "Customer phone for this job (optional override)",
+          type: "phone",
+          span: "half",
+          placeholder: "Prefilled from the linked customer if blank",
+        },
       ]}
       onSubmit={async (values) => {
         const v = values as Record<string, unknown>;
@@ -1117,7 +1128,10 @@ function CreateJobCardDialog() {
             ...(v.laborRate ? { laborRate: Number(v.laborRate) } : {}),
             ...(checklist.length > 0 ? { checklist } : {}),
             ...(v.notes ? { notes: String(v.notes) } : {}),
-          },
+            ...(v.customerPhoneSnapshot
+              ? { customerPhoneSnapshot: String(v.customerPhoneSnapshot) }
+              : {}),
+          } as never,
         });
         queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
         toast({ title: "Job card opened", description: "Technician has been notified." });
@@ -1188,7 +1202,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
   const update = useUpdateJobCard();
   const timer = useToggleJobCardTimer();
   const reopen = useReopenJobCard();
-  const { can } = useAuthz();
+  const { can, me } = useAuthz();
   const invoice = useCreateJobCardInvoice();
   const addPart = useAddJobCardPart();
   const createCreditNote = useCreateJobCardCreditNote();
@@ -1196,6 +1210,37 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
   const { data: lines } = useListJobCardParts(card.id);
   const { data: parts } = useListParts();
   const { data: creditNotes } = useListJobCardCreditNotes(card.id);
+  const [noteDraft, setNoteDraft] = useState("");
+  const technicianNotesQuery = useListJobCardTechnicianNotes(card.id);
+  const createTechnicianNote = useCreateJobCardTechnicianNote();
+  const technicianNotes = technicianNotesQuery.data ?? [];
+  const notesLoading = technicianNotesQuery.isLoading;
+  const noteSaving = createTechnicianNote.isPending;
+  const isApprover = useIsServiceApprover();
+  const customerPhoneSnapshot = (card as JobCard & {
+    customerPhoneSnapshot?: string | null;
+  }).customerPhoneSnapshot;
+  const canAddTechnicianNote =
+    card.status === "in_progress" &&
+    (isApprover || (card.technicianUserId != null && card.technicianUserId === me?.id));
+
+  const addTechnicianNote = async () => {
+    const body = noteDraft.trim();
+    if (!body) return;
+    try {
+      await createTechnicianNote.mutateAsync({ id: card.id, data: { body } });
+      await queryClient.invalidateQueries({
+        queryKey: getListJobCardTechnicianNotesQueryKey(card.id),
+      });
+      setNoteDraft("");
+    } catch (error) {
+      toast({
+        title: "Could not add technician note",
+        description: error instanceof Error ? error.message : "Try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
@@ -1303,6 +1348,12 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
               {card.technicianName ?? "Unassigned"}
               <span>· {card.laborHours}h @ {money.gyd(card.laborRate)}/hr</span>
             </div>
+            {customerPhoneSnapshot && (
+              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                <Phone className="w-3 h-3" />
+                <span>Job contact: {customerPhoneSnapshot}</span>
+              </div>
+            )}
             {(card.startedAt || card.completedAt) && (
               <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
                 <Clock className="w-3 h-3" />
@@ -1544,6 +1595,51 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
         )}
 
         <RolloverSection card={card} onChanged={invalidate} technicianView={technicianView} />
+
+        <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 space-y-2">
+          <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+            Technician work log
+          </div>
+          {notesLoading ? (
+            <p className="text-xs text-muted-foreground">Loading notes…</p>
+          ) : technicianNotes.length ? (
+            <div className="space-y-2">
+              {technicianNotes.map((note) => (
+                <div key={note.id} className="text-xs border-l-2 border-primary/40 pl-2">
+                  <p>{note.body}</p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {note.authorName} · {format(new Date(note.createdAt), "MMM d, h:mm a")}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">No technician notes yet.</p>
+          )}
+          {canAddTechnicianNote && (
+            <div className="pt-1 space-y-2">
+              <Textarea
+                value={noteDraft}
+                onChange={(event) => setNoteDraft(event.target.value)}
+                placeholder="Add an attributed work-log note…"
+                rows={2}
+                maxLength={4000}
+                data-testid={`input-technician-note-${card.id}`}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full border-white/15 text-xs"
+                disabled={noteSaving || !noteDraft.trim()}
+                onClick={() => void addTechnicianNote()}
+                data-testid={`button-add-technician-note-${card.id}`}
+              >
+                {noteSaving && <Loader2 className="mr-1.5 w-3.5 h-3.5 animate-spin" />}
+                Add work-log note
+              </Button>
+            </div>
+          )}
+        </div>
 
         {/* Diagnostic reports & other paperwork attach at any point in the
             job's life — uploads go to private object storage. */}

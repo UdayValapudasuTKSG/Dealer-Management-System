@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { QuoteDiscountStatus } from './quoteDiscountStatus';
+import type { QuoteDutyFreeStatus } from './quoteDutyFreeStatus';
+import type { QuoteRequestType } from './quoteRequestType';
 import type { QuoteStatus } from './quoteStatus';
 import type { QuoteTaxLine } from './quoteTaxLine';
 
@@ -39,7 +41,16 @@ export interface Quote {
   discountReason?: string | null;
   /** @nullable */
   discountRequestedBy?: string | null;
+  requestType?: QuoteRequestType;
+  dutyFreeStatus?: QuoteDutyFreeStatus;
+  /** @nullable */
+  dutyFreeReason?: string | null;
+  /** @nullable */
+  dutyFreeRequestedBy?: string | null;
+  /** @nullable */
+  dutyFreeGateId?: number | null;
   taxLines: QuoteTaxLine[];
+  taxSnapshot?: QuoteTaxLine[];
   totalTax: number;
   total: number;
   issuedOn: string;

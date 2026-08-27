@@ -20,6 +20,8 @@ import { leadsTable } from "./leads";
  */
 export const QUOTE_STATUSES = ["current", "superseded"] as const;
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number];
+export const QUOTE_REQUEST_TYPES = ["standard", "duty_free"] as const;
+export type QuoteRequestType = (typeof QUOTE_REQUEST_TYPES)[number];
 
 export type QuoteTaxLine = {
   code: string;
@@ -55,6 +57,14 @@ export const quotesTable = pgTable("quotes", {
   taxLines: jsonb("tax_lines").$type<QuoteTaxLine[]>().notNull().default([]),
   totalTax: doublePrecision("total_tax").notNull().default(0),
   total: doublePrecision("total").notNull(),
+  /** Standard quotes include all configured charges; duty-free is manager-authorized. */
+  requestType: text("request_type").notNull().default("standard"),
+  dutyFreeStatus: text("duty_free_status").notNull().default("none"),
+  dutyFreeReason: text("duty_free_reason"),
+  dutyFreeRequestedBy: text("duty_free_requested_by"),
+  dutyFreeGateId: integer("duty_free_gate_id"),
+  /** Immutable rule snapshot used to produce this revision and its approval. */
+  taxSnapshot: jsonb("tax_snapshot").$type<QuoteTaxLine[]>().notNull().default([]),
   // Discount workflow: a sales advisor may request a discount on the quote;
   // management must approve via a gate before it is applied to the total.
   discountAmount: doublePrecision("discount_amount").notNull().default(0),

@@ -1,5 +1,6 @@
 import { getDealerPdfBranding } from "../lib/dealer-branding";
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import {
   buildCoverageCertificatePdf,
   buildServiceInvoicePdf,
@@ -26,6 +27,7 @@ import {
   purchaseOrdersTable,
   purchaseOrderLinesTable,
   partCreditNotesTable,
+  jobCardTechnicianNotesTable,
   type JobCard,
   type ServiceInvoice,
 } from "@workspace/db";
@@ -908,6 +910,10 @@ async function autoCreateJobCard(
   order: typeof serviceOrdersTable.$inferSelect,
 ): Promise<void> {
   const surcharge = await computeLateSurcharge(order);
+  const customerPhoneSnapshot = await resolveCustomerPhoneSnapshot(
+    order.customerId,
+    order.dealerId,
+  );
   try {
     await db.insert(jobCardsTable).values({
       dealerId: order.dealerId,
@@ -922,6 +928,7 @@ async function autoCreateJobCard(
       technicianName: order.technician,
       scheduledAt: new Date(`${order.scheduledDate}T09:00:00`),
       durationMins: Math.round(order.estimatedHours * 60),
+      customerPhoneSnapshot,
       ...surcharge,
     });
   } catch (err) {
@@ -935,6 +942,32 @@ async function autoCreateJobCard(
     }
     throw err;
   }
+}
+
+/** Workshop contact snapshots come only from this dealer's linked customer. */
+async function resolveCustomerPhoneSnapshot(
+  customerId: number | null | undefined,
+  dealerId: number,
+): Promise<string | null> {
+  if (customerId == null) return null;
+  const [customer] = await db
+    .select({ phone: customersTable.phone })
+    .from(customersTable)
+    .where(
+      and(
+        eq(customersTable.id, customerId),
+        eq(customersTable.dealerId, dealerId),
+      ),
+    )
+    .limit(1);
+  const phone = customer?.phone?.trim();
+  return phone && validPhone(phone) ? phone : null;
+}
+
+/** Permissive for international formatting, but rejects short/textual values. */
+function validPhone(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 7 && digits.length <= 15 && /^[+\d\s().-]+$/.test(value);
 }
 
 /** Whole seconds elapsed since `from` (never negative). */
@@ -1061,6 +1094,21 @@ router.post("/job-cards", async (req, res): Promise<void> => {
     return;
   }
   const surcharge = await computeLateSurcharge(order);
+  const submittedPhone =
+    typeof req.body?.customerPhoneSnapshot === "string"
+      ? req.body.customerPhoneSnapshot.trim()
+      : undefined;
+  if (submittedPhone !== undefined && submittedPhone !== "" && !validPhone(submittedPhone)) {
+    res.status(400).json({
+      error: "Customer phone must contain 7–15 digits and sensible phone punctuation only",
+    });
+    return;
+  }
+  // An explicitly supplied job-card contact is a snapshot override, never a
+  // customer-master update. Otherwise prefill from the dealer-scoped order's
+  // linked customer.
+  const customerPhoneSnapshot =
+    submittedPhone || (await resolveCustomerPhoneSnapshot(order.customerId, order.dealerId));
 
   let card: typeof jobCardsTable.$inferSelect | undefined;
   try {
@@ -1075,6 +1123,7 @@ router.post("/job-cards", async (req, res): Promise<void> => {
         scheduledAt: parsed.data.scheduledAt
           ? new Date(parsed.data.scheduledAt)
           : null,
+        customerPhoneSnapshot,
         dealerId: order.dealerId,
       })
       .returning();
@@ -1108,6 +1157,79 @@ router.post("/job-cards", async (req, res): Promise<void> => {
   res.status(201).json(CreateJobCardResponse.parse(card));
 });
 
+const JobCardNoteParams = z.object({ id: z.coerce.number().int().positive() });
+const CreateJobCardNoteBody = z.object({
+  body: z.string().trim().min(1).max(4000),
+});
+
+router.get("/job-cards/:id/technician-notes", async (req, res): Promise<void> => {
+  const params = JobCardNoteParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [card] = await db.select().from(jobCardsTable).where(
+    and(eq(jobCardsTable.id, params.data.id), eq(jobCardsTable.dealerId, dealerId)),
+  );
+  if (!card || !canActOnJobCard(res.locals.user, card)) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  const notes = await db.select().from(jobCardTechnicianNotesTable).where(
+    and(
+      eq(jobCardTechnicianNotesTable.dealerId, dealerId),
+      eq(jobCardTechnicianNotesTable.jobCardId, card.id),
+    ),
+  ).orderBy(jobCardTechnicianNotesTable.createdAt);
+  res.json(notes);
+});
+
+router.post("/job-cards/:id/technician-notes", async (req, res): Promise<void> => {
+  const params = JobCardNoteParams.safeParse(req.params);
+  const parsed = CreateJobCardNoteBody.safeParse(req.body);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [card] = await db.select().from(jobCardsTable).where(
+    and(eq(jobCardsTable.id, params.data.id), eq(jobCardsTable.dealerId, dealerId)),
+  );
+  if (!card) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  if (card.status !== "in_progress") {
+    res.status(422).json({ error: "Technician notes can only be added while work is in progress" });
+    return;
+  }
+  if (!canActOnJobCard(res.locals.user, card)) {
+    res.status(403).json({ error: "Only the assigned technician or a service approver can add notes" });
+    return;
+  }
+  const author = res.locals.user?.name ?? res.locals.user?.email ?? "Unknown";
+  const [note] = await db.insert(jobCardTechnicianNotesTable).values({
+    dealerId, jobCardId: card.id, body: parsed.data.body,
+    authorUserId: res.locals.user?.id ?? null, authorName: author,
+  }).returning();
+  const [order] = await db.select({ customerId: serviceOrdersTable.customerId }).from(serviceOrdersTable)
+    .where(and(eq(serviceOrdersTable.id, card.serviceOrderId), eq(serviceOrdersTable.dealerId, dealerId)));
+  if (order?.customerId != null) {
+    await db.insert(timelineEventsTable).values({
+      dealerId, customerId: order.customerId, domain: "service", kind: "job_card_technician_note",
+      title: `Technician note added to job card #${card.id}`, detail: parsed.data.body,
+      actor: author, isAgent: false, cause: `Job card #${card.id}`,
+      refType: "job_card", refId: card.id,
+    });
+  }
+  res.status(201).json(note);
+});
+
 router.patch("/job-cards/:id", async (req, res): Promise<void> => {
   const params = UpdateJobCardParams.safeParse(req.params);
   const parsed = UpdateJobCardBody.safeParse(req.body);
@@ -1131,7 +1253,12 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const { approveQuote, scheduledAt, ...updateFields } = parsed.data;
+  const {
+    approveQuote,
+    scheduledAt,
+    customerPhoneSnapshot: _immutablePhoneSnapshot,
+    ...updateFields
+  } = parsed.data as typeof parsed.data & { customerPhoneSnapshot?: unknown };
   const patch: Record<string, unknown> = { ...updateFields };
   if (scheduledAt !== undefined) patch.scheduledAt = new Date(scheduledAt);
   // Quote approval is a one-way timestamp: customer signed off on the estimate.

@@ -27,6 +27,7 @@ import {
   ArrowUpRight,
   Sparkles,
   Banknote,
+  Image,
 } from "lucide-react";
 
 export const GATE_LABEL: Record<string, string> = {
@@ -38,6 +39,9 @@ export const GATE_LABEL: Record<string, string> = {
   refund_release: "Refund Release",
   stage_advance: "Stage Advance",
   bank_funds_received: "Bank Funds Confirmation",
+  quote_duty_free: "Duty-Free Quote",
+  deal_cancellation: "Deal Cancellation",
+  lead_delete: "Lead Archive",
 };
 
 const PRIORITY_META: Record<
@@ -222,7 +226,9 @@ export function GateCard({
           {/* Evidence — compact stat tiles */}
           {evidence.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4">
-              {evidence.map((item, i) => (
+              {evidence
+                .filter((item) => item.label !== "Quote image document")
+                .map((item, i) => (
                 <div
                   key={i}
                   className="rounded-xl bg-white/[0.03] px-3 py-2.5 min-w-0"
@@ -230,9 +236,22 @@ export function GateCard({
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground truncate">
                     {item.label}
                   </div>
-                  <div className="text-sm font-semibold mt-0.5 tracking-tight truncate">
-                    {item.value}
-                  </div>
+                  {item.label === "Quote image" &&
+                  evidence.find((entry) => entry.label === "Quote image document") ? (
+                    <a
+                      href={`${import.meta.env.BASE_URL}api/documents/${evidence.find((entry) => entry.label === "Quote image document")!.value}/download`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm font-semibold mt-0.5 text-primary hover:underline"
+                    >
+                      <Image className="w-3.5 h-3.5" />
+                      View image
+                    </a>
+                  ) : (
+                    <div className="text-sm font-semibold mt-0.5 tracking-tight truncate">
+                      {item.value}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

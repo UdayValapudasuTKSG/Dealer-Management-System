@@ -5,12 +5,18 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { QuoteDiscountRequestInputRequestType } from './quoteDiscountRequestInputRequestType';
 
 export interface QuoteDiscountRequestInput {
+  requestType?: QuoteDiscountRequestInputRequestType;
   /**
-     * Requested discount in GYD, off the quote total
+     * Requested discount in GYD, required only for Discount
      * @exclusiveMinimum 0
      */
-  amount: number;
-  reason?: string;
+  amount?: number;
+  /**
+     * @minLength 3
+     * @maxLength 1000
+     */
+  reason: string;
 }

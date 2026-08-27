@@ -776,6 +776,15 @@ const PATH_MODULES: Record<string, RouteRule> = {
       if (/^\/job-cards\/\d+\/(timer|reopen)\/?$/.test(req.path)) {
         return "edit";
       }
+      // Appending a work-log note edits an existing assigned job card. The
+      // route enforces in-progress status and assigned-technician/approver
+      // identity; technicians intentionally do not need service:create.
+      if (
+        req.method === "POST" &&
+        /^\/job-cards\/\d+\/technician-notes\/?$/.test(req.path)
+      ) {
+        return "edit";
+      }
       return METHOD_CATEGORY[req.method] ?? "view";
     },
   },

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, inArray, or, gt, sql } from "drizzle-orm";
+import { eq, desc, and, inArray, or, gt, sql, isNull } from "drizzle-orm";
 import {
   db,
   dealsTable,
@@ -11,6 +11,7 @@ import {
   paymentsTable,
   timelineEventsTable,
   documentsTable,
+  quotesTable,
   VIN_LENGTH,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
@@ -54,7 +55,6 @@ import {
 import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 import { approvedQuoteDiscountForLead } from "../lib/quotes";
 import {
-  refundBlockReason,
   capturedFundsForDeal,
   raiseRefundReleaseGate,
   cascadeDealCancellation,
@@ -92,7 +92,11 @@ async function findDealerLead(
   const [lead] = await db
     .select()
     .from(leadsTable)
-    .where(and(eq(leadsTable.id, leadId), eq(leadsTable.dealerId, dealerId)));
+    .where(and(
+      eq(leadsTable.id, leadId),
+      eq(leadsTable.dealerId, dealerId),
+      isNull(leadsTable.deletedAt),
+    ));
   return lead ?? null;
 }
 
@@ -628,26 +632,96 @@ router.post("/deals", async (req, res): Promise<void> => {
       seededDiscount = { discount: quoteDiscount, otdPrice: totalWithTax };
     }
   }
+  let inheritedDutyFree: {
+    dutyFreeApproved: true;
+    taxSnapshot: Array<{ code: string; name: string; kind: "percent" | "fixed"; rate: number; amount: number }>;
+    otdPrice: number;
+  } | null = null;
+  if (linkedLead) {
+    const [approvedDutyFreeQuote] = await db
+      .select({ taxSnapshot: quotesTable.taxSnapshot })
+      .from(quotesTable)
+      .where(and(
+        eq(quotesTable.dealerId, dealerId),
+        eq(quotesTable.leadId, linkedLead.id),
+        eq(quotesTable.status, "current"),
+        eq(quotesTable.dutyFreeStatus, "approved"),
+      ))
+      .orderBy(desc(quotesTable.version))
+      .limit(1);
+    if (approvedDutyFreeQuote) {
+      const effectiveDiscount =
+        parsed.data.discount ?? seededDiscount?.discount ?? 0;
+      const taxBase = Math.max(
+        parsed.data.vehiclePrice -
+          effectiveDiscount +
+          (parsed.data.accessories ?? 0),
+        0,
+      );
+      const taxSnapshot = approvedDutyFreeQuote.taxSnapshot.map((line) => ({
+        ...line,
+        amount:
+          line.kind === "percent"
+            ? Math.round(taxBase * (line.rate / 100) * 100) / 100
+            : line.amount,
+      }));
+      const totalTax =
+        Math.round(
+          taxSnapshot.reduce((sum, line) => sum + line.amount, 0) * 100,
+        ) / 100;
+      inheritedDutyFree = {
+        dutyFreeApproved: true,
+        taxSnapshot,
+        otdPrice: Math.round((taxBase + totalTax) * 100) / 100,
+      };
+    }
+  }
 
-  const [deal] = await db
-    .insert(dealsTable)
-    .values({
-      ...parsed.data,
-      ...(seededDiscount ?? {}),
-      divisionId,
-      salesAdvisorUserId,
-      dealerId,
-      // Inherit the lead's payment decision and reservation-fee status so a
-      // converted lead's choices don't have to be re-entered on the deal.
-      ...(parsed.data.finalPaymentMethod == null && linkedLead?.purchaseType
-        ? {
-            finalPaymentMethod:
-              linkedLead.purchaseType === "finance" ? "bank_financing" : "cash",
-          }
-        : {}),
-      ...(linkedLead?.reservationFeePaid ? { depositPaid: true } : {}),
-    })
-    .returning();
+  let deal: typeof dealsTable.$inferSelect | undefined;
+  try {
+    deal = await db.transaction(async (tx) => {
+      if (parsed.data.leadId != null) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`lead-link:${dealerId}:${parsed.data.leadId}`}))`,
+        );
+        const [activeLead] = await tx.select({ id: leadsTable.id }).from(leadsTable)
+          .where(and(
+            eq(leadsTable.id, parsed.data.leadId),
+            eq(leadsTable.dealerId, dealerId),
+            isNull(leadsTable.deletedAt),
+          ))
+          .for("update");
+        if (!activeLead) throw new Error("LEAD_ARCHIVED");
+      }
+      const [created] = await tx
+        .insert(dealsTable)
+        .values({
+          ...parsed.data,
+          ...(seededDiscount ?? {}),
+          ...(inheritedDutyFree ?? {}),
+          divisionId,
+          salesAdvisorUserId,
+          dealerId,
+          // Inherit the lead's payment decision and reservation-fee status so a
+          // converted lead's choices don't have to be re-entered on the deal.
+          ...(parsed.data.finalPaymentMethod == null && linkedLead?.purchaseType
+            ? {
+                finalPaymentMethod:
+                  linkedLead.purchaseType === "finance" ? "bank_financing" : "cash",
+              }
+            : {}),
+          ...(linkedLead?.reservationFeePaid ? { depositPaid: true } : {}),
+        })
+        .returning();
+      return created;
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "LEAD_ARCHIVED") {
+      res.status(409).json({ error: "Archived leads cannot be linked to active deals" });
+      return;
+    }
+    throw error;
+  }
 
   await raiseBelowFloorGateIfNeeded(deal!);
 
@@ -941,6 +1015,15 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
     parsed.data.discount !== undefined ||
     parsed.data.tradeInValue !== undefined ||
     parsed.data.accessories !== undefined;
+  let recalculatedTaxSnapshot:
+    | Array<{
+        code: string;
+        name: string;
+        kind: "percent" | "fixed";
+        rate: number;
+        amount: number;
+      }>
+    | null = null;
   if (before && priceTouched) {
     const vehiclePrice = parsed.data.vehiclePrice ?? before.vehiclePrice;
     const discount = parsed.data.discount ?? before.discount;
@@ -973,11 +1056,41 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
         ),
       );
     const taxBase = Math.max(vehiclePrice - discount + accessories, 0);
-    const taxRules = await ensureDealerTaxes(dealerId);
-    const { totalWithTax } = computeTaxes(taxBase, taxRules, {
-      powertrain: vehicle?.powertrain ?? null,
-    });
-    parsed.data.otdPrice = totalWithTax;
+    if (before.dutyFreeApproved) {
+      if (!before.taxSnapshot) {
+        res.status(409).json({
+          error: "duty_free_snapshot_missing",
+          detail:
+            "This Duty Free deal has no approved tax snapshot. Pricing cannot be changed until the approval record is repaired.",
+        });
+        return;
+      }
+      // Duty Free is approved authority captured on this deal. Price edits
+      // may change percentage amounts, but must never reread mutable full-tax
+      // rules and silently reintroduce statutory taxes.
+      recalculatedTaxSnapshot = before.taxSnapshot.map((line) => ({
+        ...line,
+        amount:
+          line.kind === "percent"
+            ? Math.round(taxBase * (line.rate / 100) * 100) / 100
+            : line.amount,
+      }));
+      const totalTax =
+        Math.round(
+          recalculatedTaxSnapshot.reduce(
+            (sum, line) => sum + line.amount,
+            0,
+          ) * 100,
+        ) / 100;
+      parsed.data.otdPrice = Math.round((taxBase + totalTax) * 100) / 100;
+    } else {
+      const taxRules = await ensureDealerTaxes(dealerId);
+      const { lines, totalWithTax } = computeTaxes(taxBase, taxRules, {
+        powertrain: vehicle?.powertrain ?? null,
+      });
+      parsed.data.otdPrice = totalWithTax;
+      recalculatedTaxSnapshot = lines;
+    }
   }
 
   // L9: captured funds snapshot for a cancellation, computed during the
@@ -1019,18 +1132,62 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
         });
         return;
       }
-      cancellationFunds = await capturedFundsForDeal(before);
-      if (cancellationFunds.amount > 0.005) {
-        const blocked = await refundBlockReason({
-          dealerId,
-          dealId: before.id,
-          vehicleId: before.vehicleId,
-        });
-        if (blocked) {
-          res.status(422).json({ error: "refund_window_closed", unmet: [blocked] });
-          return;
+      const cancellationReason = parsed.data.cancellationReason;
+      // Cancellation is an approval request, not an immediate operational
+      // action.  In particular, do not release VINs, cancel bookings or
+      // create refund work until a manager resolves this exact deal state.
+      const actor = dealActor(res);
+      const created = await db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`deal-cancellation:${dealerId}:${before.id}`}))`,
+        );
+        const [lockedDeal] = await tx
+          .select({
+            stage: dealsTable.stage,
+            cancellationGateId: dealsTable.cancellationGateId,
+          })
+          .from(dealsTable)
+          .where(and(
+            eq(dealsTable.id, before.id),
+            eq(dealsTable.dealerId, dealerId),
+          ))
+          .for("update");
+        if (!lockedDeal || lockedDeal.stage !== before.stage) {
+          throw new Error("CANCELLATION_STALE");
         }
-      }
+        const [existing] = await tx.select({ id: gatesTable.id }).from(gatesTable)
+          .where(and(eq(gatesTable.dealerId, dealerId), eq(gatesTable.type, "deal_cancellation"),
+            eq(gatesTable.refType, "deal"), eq(gatesTable.refId, before.id), eq(gatesTable.status, "pending")));
+        if (existing) return existing;
+        const [gate] = await tx.insert(gatesTable).values({
+          dealerId, type: "deal_cancellation", status: "pending", priority: "high",
+          customerId: before.customerId ?? null, customerName: before.customerName,
+          refType: "deal", refId: before.id, title: `Deal cancellation approval — ${before.customerName ?? `Deal #${before.id}`}`,
+          summary: `${actor} requested cancellation: ${cancellationReason}${parsed.data.cancellationNote ? ` — ${parsed.data.cancellationNote}` : ""}`,
+          recommendation: "Approve only after confirming the cancellation reason and downstream customer obligations.",
+          evidence: [
+            { label: "Reason", value: cancellationReason },
+            ...(parsed.data.cancellationNote
+              ? [{ label: "Requester note", value: parsed.data.cancellationNote }]
+              : []),
+            { label: "Requested by", value: actor },
+          ],
+        }).returning();
+        const [stamped] = await tx.update(dealsTable).set({ cancellationGateId: gate!.id })
+          .where(and(
+            eq(dealsTable.id, before.id),
+            eq(dealsTable.dealerId, dealerId),
+            eq(dealsTable.stage, before.stage),
+            lockedDeal.cancellationGateId == null
+              ? sql`${dealsTable.cancellationGateId} is null`
+              : eq(dealsTable.cancellationGateId, lockedDeal.cancellationGateId),
+          ))
+          .returning({ id: dealsTable.id });
+        if (!stamped) throw new Error("CANCELLATION_STALE");
+        return gate!;
+      });
+      res.status(202).json({ pending: true, gateId: created.id, message: "Cancellation requested for manager approval." });
+      return;
     }
     // Commit gates (08-l6 §4b / 20-r2 §R2.2): collect EVERY unmet condition
     // and report them together as machine-readable codes in one 422, instead
@@ -1206,6 +1363,9 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
   // previous advisor never survives a rename.
   const updateValues: Partial<typeof dealsTable.$inferInsert> = {
     ...parsed.data,
+    ...(recalculatedTaxSnapshot
+      ? { taxSnapshot: recalculatedTaxSnapshot }
+      : {}),
   };
   if (
     parsed.data.salesAdvisor !== undefined &&
@@ -1217,11 +1377,111 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
     );
   }
 
-  const [deal] = await db
-    .update(dealsTable)
-    .set(updateValues)
-    .where(and(eq(dealsTable.id, params.data.id), eq(dealsTable.dealerId, dealerId)))
-    .returning();
+  let deal: typeof dealsTable.$inferSelect | undefined;
+  try {
+    deal = await db.transaction(async (tx) => {
+      if (priceTouched) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`deal-pricing:${dealerId}:${params.data.id}`}))`,
+        );
+        const [current] = await tx
+          .select()
+          .from(dealsTable)
+          .where(and(
+            eq(dealsTable.id, params.data.id),
+            eq(dealsTable.dealerId, dealerId),
+          ))
+          .for("update");
+        if (!current) throw new Error("PRICING_STALE");
+        const vehiclePrice = parsed.data.vehiclePrice ?? current.vehiclePrice;
+        const discount = parsed.data.discount ?? current.discount;
+        const tradeInValue = parsed.data.tradeInValue ?? current.tradeInValue;
+        const accessories = parsed.data.accessories ?? current.accessories;
+        if (
+          vehiclePrice < 0 ||
+          discount < 0 ||
+          tradeInValue < 0 ||
+          accessories < 0 ||
+          discount > vehiclePrice ||
+          tradeInValue > vehiclePrice
+        ) {
+          throw new Error("PRICING_STALE");
+        }
+        const taxBase = Math.max(vehiclePrice - discount + accessories, 0);
+        if (current.dutyFreeApproved) {
+          if (!current.taxSnapshot) throw new Error("DUTY_FREE_SNAPSHOT_MISSING");
+          const taxSnapshot = current.taxSnapshot.map((line) => ({
+            ...line,
+            amount:
+              line.kind === "percent"
+                ? Math.round(taxBase * (line.rate / 100) * 100) / 100
+                : line.amount,
+          }));
+          const totalTax =
+            Math.round(
+              taxSnapshot.reduce((sum, line) => sum + line.amount, 0) * 100,
+            ) / 100;
+          updateValues.taxSnapshot = taxSnapshot;
+          updateValues.otdPrice = Math.round((taxBase + totalTax) * 100) / 100;
+        } else {
+          const [vehicle] = await tx
+            .select({ powertrain: vehiclesTable.powertrain })
+            .from(vehiclesTable)
+            .where(and(
+              eq(vehiclesTable.id, current.vehicleId),
+              eq(vehiclesTable.dealerId, dealerId),
+            ));
+          const computed = computeTaxes(
+            taxBase,
+            await ensureDealerTaxes(dealerId),
+            { powertrain: vehicle?.powertrain ?? null },
+          );
+          updateValues.taxSnapshot = computed.lines;
+          updateValues.otdPrice = computed.totalWithTax;
+        }
+      }
+      if (parsed.data.leadId != null) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${`lead-link:${dealerId}:${parsed.data.leadId}`}))`,
+        );
+        const [activeLead] = await tx.select({ id: leadsTable.id }).from(leadsTable)
+          .where(and(
+            eq(leadsTable.id, parsed.data.leadId),
+            eq(leadsTable.dealerId, dealerId),
+            isNull(leadsTable.deletedAt),
+          ))
+          .for("update");
+        if (!activeLead) throw new Error("LEAD_ARCHIVED");
+      }
+      const [updated] = await tx
+        .update(dealsTable)
+        .set(updateValues)
+        .where(and(eq(dealsTable.id, params.data.id), eq(dealsTable.dealerId, dealerId)))
+        .returning();
+      return updated;
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "LEAD_ARCHIVED") {
+      res.status(409).json({ error: "Archived leads cannot be linked to active deals" });
+      return;
+    }
+    if (error instanceof Error && error.message === "DUTY_FREE_SNAPSHOT_MISSING") {
+      res.status(409).json({
+        error: "duty_free_snapshot_missing",
+        detail:
+          "This Duty Free deal has no approved tax snapshot. Pricing cannot be changed until the approval record is repaired.",
+      });
+      return;
+    }
+    if (error instanceof Error && error.message === "PRICING_STALE") {
+      res.status(409).json({
+        error: "deal_pricing_changed",
+        detail: "Deal pricing changed concurrently. Refresh and try again.",
+      });
+      return;
+    }
+    throw error;
+  }
 
   if (!deal) {
     res.status(404).json({ error: "Deal not found" });

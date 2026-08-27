@@ -14,4 +14,5 @@ export const ListDocumentsEntityType = {
   vehicle: 'vehicle',
   delivery: 'delivery',
   job_card: 'job_card',
+  quote: 'quote',
 } as const;

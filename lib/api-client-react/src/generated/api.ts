@@ -63,6 +63,8 @@ import type {
   CallSentimentSuggestion,
   CapacityBlock,
   CapacityBlockInput,
+  CapacityBlockRangeInput,
+  CapacityBlockRangeResult,
   Case,
   CaseCreate,
   CaseUpdate,
@@ -167,6 +169,8 @@ import type {
   JobCardRolloverApproval,
   JobCardRolloverRequest,
   JobCardSurchargeDecision,
+  JobCardTechnicianNote,
+  JobCardTechnicianNoteInput,
   JobCardTimerAction,
   JobCardUpdate,
   Lead,
@@ -244,6 +248,7 @@ import type {
   PartsSettingsUpdate,
   Payment,
   PaymentInput,
+  PendingApprovalResult,
   PipelineStage,
   PipelineSuggestions,
   PlatformUser,
@@ -255,6 +260,7 @@ import type {
   PurchaseOrderUpdate,
   Quote,
   QuoteDiscountRequestInput,
+  ReasonedApprovalRequest,
   Receipt,
   ReceiveMetaWebhook200,
   RemindAck,
@@ -3324,14 +3330,18 @@ export const getDeleteLeadUrl = (id: number,) => {
   return `/api/leads/${id}`
 }
 
-export const deleteLead = async (id: number, options?: RequestInit): Promise<void> => {
+/**
+ * @summary Request manager approval to soft-archive a lead
+ */
+export const deleteLead = async (id: number,
+    reasonedApprovalRequest: ReasonedApprovalRequest, options?: RequestInit): Promise<PendingApprovalResult> => {
 
-  return customFetch<void>(getDeleteLeadUrl(id),
+  return customFetch<PendingApprovalResult>(getDeleteLeadUrl(id),
   {
     ...options,
-    method: 'DELETE'
-
-
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(reasonedApprovalRequest)
   }
 );}
 
@@ -3340,8 +3350,8 @@ export const deleteLead = async (id: number, options?: RequestInit): Promise<voi
 
 
 export const getDeleteLeadMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLead>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteLead>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLead>>, TError,{id: number;data: BodyType<ReasonedApprovalRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLead>>, TError,{id: number;data: BodyType<ReasonedApprovalRequest>}, TContext> => {
 
 const mutationKey = ['deleteLead'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -3353,10 +3363,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLead>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLead>>, {id: number;data: BodyType<ReasonedApprovalRequest>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  deleteLead(id,requestOptions)
+          return  deleteLead(id,data,requestOptions)
         }
 
 
@@ -3367,15 +3377,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type DeleteLeadMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLead>>>
-
+    export type DeleteLeadMutationBody = BodyType<ReasonedApprovalRequest>
     export type DeleteLeadMutationError = ErrorType<unknown>
 
-    export const useDeleteLead = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLead>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    /**
+ * @summary Request manager approval to soft-archive a lead
+ */
+export const useDeleteLead = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLead>>, TError,{id: number;data: BodyType<ReasonedApprovalRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deleteLead>>,
         TError,
-        {id: number},
+        {id: number;data: BodyType<ReasonedApprovalRequest>},
         TContext
       > => {
       return useMutation(getDeleteLeadMutationOptions(options));
@@ -3390,7 +3403,8 @@ export const getRestoreLeadUrl = (id: number,) => {
 }
 
 /**
- * @summary Restore a soft-deleted lead
+ * Restores the lead record to active visibility. Operational work closed by an approved archive remains historical and is not silently reopened.
+ * @summary Restore visibility of a soft-archived lead
  */
 export const restoreLead = async (id: number, options?: RequestInit): Promise<Lead> => {
 
@@ -3439,7 +3453,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RestoreLeadMutationError = ErrorType<Error>
 
     /**
- * @summary Restore a soft-deleted lead
+ * @summary Restore visibility of a soft-archived lead
  */
 export const useRestoreLead = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreLead>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -5224,7 +5238,7 @@ export const getRequestQuoteDiscountUrl = (id: number,) => {
 }
 
 /**
- * @summary Request a discount on the lead's current quote — management must approve via a gate before it applies
+ * @summary Request a Discount or Duty Free pricing exception on the current quote
  */
 export const requestQuoteDiscount = async (id: number,
     quoteDiscountRequestInput: QuoteDiscountRequestInput, options?: RequestInit): Promise<Quote> => {
@@ -5274,7 +5288,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type RequestQuoteDiscountMutationError = ErrorType<Error>
 
     /**
- * @summary Request a discount on the lead's current quote — management must approve via a gate before it applies
+ * @summary Request a Discount or Duty Free pricing exception on the current quote
  */
 export const useRequestQuoteDiscount = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestQuoteDiscount>>, TError,{id: number;data: BodyType<QuoteDiscountRequestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -5511,6 +5525,148 @@ export const useDeleteCapacityBlock = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getDeleteCapacityBlockMutationOptions(options));
+    }
+
+export const getPreviewCapacityBlockRangeUrl = () => {
+
+
+
+
+  return `/api/capacity-blocks/range/preview`
+}
+
+/**
+ * @summary Preview an inclusive date-range block without changing capacity
+ */
+export const previewCapacityBlockRange = async (capacityBlockRangeInput: CapacityBlockRangeInput, options?: RequestInit): Promise<CapacityBlockRangeResult> => {
+
+  return customFetch<CapacityBlockRangeResult>(getPreviewCapacityBlockRangeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(capacityBlockRangeInput)
+  }
+);}
+
+
+
+
+
+export const getPreviewCapacityBlockRangeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewCapacityBlockRange>>, TError,{data: BodyType<CapacityBlockRangeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewCapacityBlockRange>>, TError,{data: BodyType<CapacityBlockRangeInput>}, TContext> => {
+
+const mutationKey = ['previewCapacityBlockRange'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewCapacityBlockRange>>, {data: BodyType<CapacityBlockRangeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewCapacityBlockRange(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewCapacityBlockRangeMutationResult = NonNullable<Awaited<ReturnType<typeof previewCapacityBlockRange>>>
+    export type PreviewCapacityBlockRangeMutationBody = BodyType<CapacityBlockRangeInput>
+    export type PreviewCapacityBlockRangeMutationError = ErrorType<void>
+
+    /**
+ * @summary Preview an inclusive date-range block without changing capacity
+ */
+export const usePreviewCapacityBlockRange = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewCapacityBlockRange>>, TError,{data: BodyType<CapacityBlockRangeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewCapacityBlockRange>>,
+        TError,
+        {data: BodyType<CapacityBlockRangeInput>},
+        TContext
+      > => {
+      return useMutation(getPreviewCapacityBlockRangeMutationOptions(options));
+    }
+
+export const getApplyCapacityBlockRangeUrl = () => {
+
+
+
+
+  return `/api/capacity-blocks/range/apply`
+}
+
+/**
+ * @summary Atomically apply an inclusive date-range block; conflicts reject the whole request
+ */
+export const applyCapacityBlockRange = async (capacityBlockRangeInput: CapacityBlockRangeInput, options?: RequestInit): Promise<CapacityBlockRangeResult> => {
+
+  return customFetch<CapacityBlockRangeResult>(getApplyCapacityBlockRangeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(capacityBlockRangeInput)
+  }
+);}
+
+
+
+
+
+export const getApplyCapacityBlockRangeMutationOptions = <TError = ErrorType<CapacityBlockRangeResult>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyCapacityBlockRange>>, TError,{data: BodyType<CapacityBlockRangeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof applyCapacityBlockRange>>, TError,{data: BodyType<CapacityBlockRangeInput>}, TContext> => {
+
+const mutationKey = ['applyCapacityBlockRange'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof applyCapacityBlockRange>>, {data: BodyType<CapacityBlockRangeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  applyCapacityBlockRange(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApplyCapacityBlockRangeMutationResult = NonNullable<Awaited<ReturnType<typeof applyCapacityBlockRange>>>
+    export type ApplyCapacityBlockRangeMutationBody = BodyType<CapacityBlockRangeInput>
+    export type ApplyCapacityBlockRangeMutationError = ErrorType<CapacityBlockRangeResult>
+
+    /**
+ * @summary Atomically apply an inclusive date-range block; conflicts reject the whole request
+ */
+export const useApplyCapacityBlockRange = <TError = ErrorType<CapacityBlockRangeResult>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyCapacityBlockRange>>, TError,{data: BodyType<CapacityBlockRangeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof applyCapacityBlockRange>>,
+        TError,
+        {data: BodyType<CapacityBlockRangeInput>},
+        TContext
+      > => {
+      return useMutation(getApplyCapacityBlockRangeMutationOptions(options));
     }
 
 export const getDownloadLeadQuoteVersionPdfUrl = (id: number,
@@ -6774,9 +6930,9 @@ export const getUpdateDealUrl = (id: number,) => {
 }
 
 export const updateDeal = async (id: number,
-    dealUpdate: DealUpdate, options?: RequestInit): Promise<Deal> => {
+    dealUpdate: DealUpdate, options?: RequestInit): Promise<Deal | PendingApprovalResult> => {
 
-  return customFetch<Deal>(getUpdateDealUrl(id),
+  return customFetch<Deal | PendingApprovalResult>(getUpdateDealUrl(id),
   {
     ...options,
     method: 'PATCH',
@@ -9600,6 +9756,155 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateJobCardMutationOptions(options));
+    }
+
+export const getListJobCardTechnicianNotesUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/technician-notes`
+}
+
+/**
+ * @summary List append-only work notes for the assigned technician or service manager
+ */
+export const listJobCardTechnicianNotes = async (id: number, options?: RequestInit): Promise<JobCardTechnicianNote[]> => {
+
+  return customFetch<JobCardTechnicianNote[]>(getListJobCardTechnicianNotesUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListJobCardTechnicianNotesQueryKey = (id: number,) => {
+    return [
+    `/api/job-cards/${id}/technician-notes`
+    ] as const;
+    }
+
+
+export const getListJobCardTechnicianNotesQueryOptions = <TData = Awaited<ReturnType<typeof listJobCardTechnicianNotes>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobCardTechnicianNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListJobCardTechnicianNotesQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJobCardTechnicianNotes>>> = ({ signal }) => listJobCardTechnicianNotes(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJobCardTechnicianNotes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListJobCardTechnicianNotesQueryResult = NonNullable<Awaited<ReturnType<typeof listJobCardTechnicianNotes>>>
+export type ListJobCardTechnicianNotesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List append-only work notes for the assigned technician or service manager
+ */
+
+export function useListJobCardTechnicianNotes<TData = Awaited<ReturnType<typeof listJobCardTechnicianNotes>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobCardTechnicianNotes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListJobCardTechnicianNotesQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateJobCardTechnicianNoteUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/technician-notes`
+}
+
+/**
+ * @summary Add an attributed note while the job card is in progress
+ */
+export const createJobCardTechnicianNote = async (id: number,
+    jobCardTechnicianNoteInput: JobCardTechnicianNoteInput, options?: RequestInit): Promise<JobCardTechnicianNote> => {
+
+  return customFetch<JobCardTechnicianNote>(getCreateJobCardTechnicianNoteUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(jobCardTechnicianNoteInput)
+  }
+);}
+
+
+
+
+
+export const getCreateJobCardTechnicianNoteMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJobCardTechnicianNote>>, TError,{id: number;data: BodyType<JobCardTechnicianNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createJobCardTechnicianNote>>, TError,{id: number;data: BodyType<JobCardTechnicianNoteInput>}, TContext> => {
+
+const mutationKey = ['createJobCardTechnicianNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createJobCardTechnicianNote>>, {id: number;data: BodyType<JobCardTechnicianNoteInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createJobCardTechnicianNote(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateJobCardTechnicianNoteMutationResult = NonNullable<Awaited<ReturnType<typeof createJobCardTechnicianNote>>>
+    export type CreateJobCardTechnicianNoteMutationBody = BodyType<JobCardTechnicianNoteInput>
+    export type CreateJobCardTechnicianNoteMutationError = ErrorType<void>
+
+    /**
+ * @summary Add an attributed note while the job card is in progress
+ */
+export const useCreateJobCardTechnicianNote = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJobCardTechnicianNote>>, TError,{id: number;data: BodyType<JobCardTechnicianNoteInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createJobCardTechnicianNote>>,
+        TError,
+        {id: number;data: BodyType<JobCardTechnicianNoteInput>},
+        TContext
+      > => {
+      return useMutation(getCreateJobCardTechnicianNoteMutationOptions(options));
     }
 
 export const getListJobCardHistoryUrl = (params?: ListJobCardHistoryParams,) => {

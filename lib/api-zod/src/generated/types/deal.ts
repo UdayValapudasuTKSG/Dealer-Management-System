@@ -8,6 +8,7 @@
 import type { DealCancellationReason } from './dealCancellationReason';
 import type { DealFinalPaymentMethod } from './dealFinalPaymentMethod';
 import type { DealStage } from './dealStage';
+import type { QuoteTaxLine } from './quoteTaxLine';
 
 export interface Deal {
   id: number;
@@ -39,5 +40,10 @@ export interface Deal {
   cancellationReason?: DealCancellationReason;
   /** @nullable */
   cancellationNote?: string | null;
+  dutyFreeApproved?: boolean;
+  /** @nullable */
+  taxSnapshot?: QuoteTaxLine[] | null;
+  /** @nullable */
+  cancellationGateId?: number | null;
   createdAt: Date;
 }

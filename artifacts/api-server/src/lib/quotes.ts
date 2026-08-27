@@ -15,6 +15,7 @@ import {
 } from "@workspace/db";
 import { logger } from "./logger";
 import { recordAgentRun } from "./agent-governance";
+import { computeTaxes, dutyFreeTaxRules, ensureDealerTaxes } from "./taxes";
 
 // ---------------------------------------------------------------------------
 // Quote agent (A3) — auto-generates the GT-format "Code" (estimate) for every
@@ -68,6 +69,7 @@ export async function generateQuoteForLead(
     actor: string;
     isAgent: boolean;
     trigger: QuoteTrigger;
+    requestType?: "standard" | "duty_free";
     /** Staff-entered overrides from the Generate Code dialog. */
     overrides?: { modelName?: string; modelYear?: number };
   },
@@ -76,14 +78,14 @@ export async function generateQuoteForLead(
   if (!vehicle) return null;
 
   const now = new Date();
-  // Quotes are tax-free estimates by dealership policy: the printed quote
-  // shows the vehicle price only. Duties/taxes are handled downstream by the
-  // GRA filing flow, never on the customer quote.
-  const computed = {
-    lines: [] as QuoteTaxLine[],
-    totalTax: 0,
-    totalWithTax: vehicle.price,
-  };
+  const requestType = opts.requestType ?? "standard";
+  const taxRules = await ensureDealerTaxes(lead.dealerId);
+  // A request is not an approval: only a quote generated from an already
+  // approved authority can omit statutory duties.  New duty-free requests
+  // start as a normal priced revision and wait for its distinct gate.
+  const computed = computeTaxes(vehicle.price, taxRules, {
+    powertrain: vehicle.powertrain,
+  });
 
   const [latest] = await db
     .select()
@@ -140,6 +142,9 @@ export async function generateQuoteForLead(
       taxLines: computed.lines,
       totalTax: computed.totalTax,
       total: computed.totalWithTax,
+      requestType,
+      dutyFreeStatus: requestType === "duty_free" ? "pending" : "none",
+      taxSnapshot: computed.lines,
       issuedOn: longDate(now),
       validUntil: longDate(validUntil),
       trigger: opts.trigger,

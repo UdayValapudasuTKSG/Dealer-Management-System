@@ -4,10 +4,13 @@ import {
   useListCapacityBlocks,
   useCreateCapacityBlock,
   useDeleteCapacityBlock,
+  usePreviewCapacityBlockRange,
+  useApplyCapacityBlockRange,
   getListCapacityBlocksQueryKey,
   useListVehicles,
   useListLeadAdvisors,
   type CapacityBlock,
+  type CapacityBlockRangeResult,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -59,6 +62,7 @@ function windowDays(): Date[] {
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 8); // 8:00 – 19:00
 const hourLabel = (h: number) =>
   h === 12 ? "12 PM" : h < 12 ? `${h} AM` : `${h - 12} PM`;
+type RangePreview = CapacityBlockRangeResult;
 
 export default function CapacityPage() {
   const qc = useQueryClient();
@@ -124,6 +128,22 @@ export default function CapacityPage() {
   const [endHour, setEndHour] = useState("12");
   const [reason, setReason] = useState("");
   const [busyCell, setBusyCell] = useState<string | null>(null);
+  const [rangeTarget, setRangeTarget] = useState<{
+    refId: number;
+    label: string;
+  } | null>(null);
+  const [rangeFrom, setRangeFrom] = useState(from);
+  const [rangeTo, setRangeTo] = useState(to);
+  const [rangeDays, setRangeDays] = useState<"all" | "weekdays" | "selected">("all");
+  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [rangeMode, setRangeMode] = useState<"day" | "hours">("day");
+  const [rangeStartHour, setRangeStartHour] = useState("9");
+  const [rangeEndHour, setRangeEndHour] = useState("12");
+  const [rangeReason, setRangeReason] = useState("");
+  const [rangePreview, setRangePreview] = useState<RangePreview | null>(null);
+  const previewRange = usePreviewCapacityBlockRange();
+  const applyRange = useApplyCapacityBlockRange();
+  const rangeLoading = previewRange.isPending || applyRange.isPending;
 
   const openBlockDialog = (refId: number, label: string, day: Date) => {
     setMode("hours");
@@ -131,6 +151,52 @@ export default function CapacityPage() {
     setEndHour("12");
     setReason("");
     setTarget({ refId, label, day });
+  };
+  const openRangeDialog = (refId: number, label: string) => {
+    setRangeTarget({ refId, label });
+    setRangeFrom(from);
+    setRangeTo(to);
+    setRangeDays("all");
+    setSelectedWeekdays([1, 2, 3, 4, 5]);
+    setRangeMode("day");
+    setRangeStartHour("9");
+    setRangeEndHour("12");
+    setRangeReason("");
+    setRangePreview(null);
+  };
+  const rangePayload = () => ({
+    kind: tab,
+    refId: rangeTarget!.refId,
+    from: rangeFrom,
+    to: rangeTo,
+    days: rangeDays,
+    ...(rangeDays === "selected" ? { weekdays: selectedWeekdays } : {}),
+    mode: rangeMode,
+    ...(rangeMode === "hours"
+      ? { startHour: Number(rangeStartHour), endHour: Number(rangeEndHour) }
+      : {}),
+    ...(rangeReason.trim() ? { reason: rangeReason.trim() } : {}),
+  });
+  const requestRange = async (action: "preview" | "apply") => {
+    if (!rangeTarget) return;
+    if (rangeMode === "hours" && Number(rangeEndHour) <= Number(rangeStartHour)) {
+      toast({ title: "Invalid hours", description: "End time must be after the start time.", variant: "destructive" });
+      return;
+    }
+    try {
+      const body =
+        action === "preview"
+          ? await previewRange.mutateAsync({ data: rangePayload() })
+          : await applyRange.mutateAsync({ data: rangePayload() });
+      if (action === "preview") setRangePreview(body);
+      else {
+        toast({ title: "Capacity range applied", description: `${body.summary.create} new blocks created.` });
+        setRangeTarget(null);
+        invalidate();
+      }
+    } catch (err) {
+      toast({ title: action === "preview" ? "Could not preview range" : "Could not apply range", description: err instanceof Error ? err.message : "Try again.", variant: "destructive" });
+    }
   };
 
   // Blocks for the resource/day currently open in the dialog (live — updates
@@ -262,7 +328,18 @@ export default function CapacityPage() {
                 {rows.map((r) => (
                   <tr key={r.id}>
                     <td className="p-2 sticky left-0 bg-background/80 backdrop-blur">
-                      <div className="font-medium truncate max-w-[220px]">{r.label}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-medium truncate max-w-[160px]">{r.label}</div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-[10px] rounded-full"
+                          data-testid={`button-range-${tab}-${r.id}`}
+                          onClick={() => openRangeDialog(r.id, r.label)}
+                        >
+                          Range
+                        </Button>
+                      </div>
                       {r.sub && (
                         <div className="text-[10px] text-muted-foreground truncate max-w-[220px]">
                           {r.sub}
@@ -468,6 +545,101 @@ export default function CapacityPage() {
                 {mode === "day" ? "Block day" : "Add block"}
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!rangeTarget} onOpenChange={(open) => !open && setRangeTarget(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Block capacity range</DialogTitle>
+            <DialogDescription>
+              {rangeTarget ? `Create blocks for ${rangeTarget.label}. Dates are inclusive and use the dealership calendar.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 text-xs font-medium">
+                From
+                <Input data-testid="input-capacity-range-from" type="date" value={rangeFrom} onChange={(event) => { setRangeFrom(event.target.value); setRangePreview(null); }} />
+              </label>
+              <label className="space-y-1 text-xs font-medium">
+                To
+                <Input data-testid="input-capacity-range-to" type="date" value={rangeTo} onChange={(event) => { setRangeTo(event.target.value); setRangePreview(null); }} />
+              </label>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-medium">Days to block</p>
+              <div className="flex flex-wrap gap-2">
+                {([["all", "All days"], ["weekdays", "Weekdays"], ["selected", "Selected weekdays"]] as const).map(([value, label]) => (
+                  <Button key={value} size="sm" variant={rangeDays === value ? "default" : "outline"} className="rounded-full" data-testid={`button-range-days-${value}`} onClick={() => { setRangeDays(value); setRangePreview(null); }}>
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              {rangeDays === "selected" && (
+                <div className="flex flex-wrap gap-1.5">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((name, weekday) => (
+                    <Button
+                      key={name}
+                      size="sm"
+                      variant={selectedWeekdays.includes(weekday) ? "default" : "outline"}
+                      className="h-7 rounded-full"
+                      data-testid={`button-range-weekday-${weekday}`}
+                      onClick={() => {
+                        setSelectedWeekdays((current) => current.includes(weekday) ? current.filter((day) => day !== weekday) : [...current, weekday]);
+                        setRangePreview(null);
+                      }}
+                    >
+                      {name}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Button size="sm" variant={rangeMode === "day" ? "default" : "outline"} className="rounded-full" data-testid="button-range-full-day" onClick={() => { setRangeMode("day"); setRangePreview(null); }}>Full day</Button>
+                <Button size="sm" variant={rangeMode === "hours" ? "default" : "outline"} className="rounded-full" data-testid="button-range-hours" onClick={() => { setRangeMode("hours"); setRangePreview(null); }}>Hour window</Button>
+              </div>
+              {rangeMode === "hours" && (
+                <div className="flex items-center gap-2">
+                  <Select value={rangeStartHour} onValueChange={(value) => { setRangeStartHour(value); setRangePreview(null); }}>
+                    <SelectTrigger className="w-28" data-testid="select-range-start-hour"><SelectValue /></SelectTrigger>
+                    <SelectContent>{HOURS.map((hour) => <SelectItem key={hour} value={String(hour)}>{hourLabel(hour)}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <span className="text-xs text-muted-foreground">to</span>
+                  <Select value={rangeEndHour} onValueChange={(value) => { setRangeEndHour(value); setRangePreview(null); }}>
+                    <SelectTrigger className="w-28" data-testid="select-range-end-hour"><SelectValue /></SelectTrigger>
+                    <SelectContent>{HOURS.map((hour) => <SelectItem key={hour + 1} value={String(hour + 1)}>{hourLabel(hour + 1)}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+            <Input data-testid="input-capacity-range-reason" value={rangeReason} onChange={(event) => { setRangeReason(event.target.value); setRangePreview(null); }} placeholder="Reason (optional)" />
+            {rangePreview && (
+              <div className="rounded-lg border p-3 space-y-2" data-testid="status-capacity-range-preview">
+                <p className="text-xs font-medium">
+                  Preview: {rangePreview.summary.create} create, {rangePreview.summary.duplicate} duplicate, {rangePreview.summary.conflict} conflict, {rangePreview.summary.skipped} skipped
+                </p>
+                <div className="max-h-32 overflow-y-auto space-y-1 text-xs">
+                  {rangePreview.items.map((item) => (
+                    <p key={item.date} className={item.status === "conflict" ? "text-destructive" : item.status === "duplicate" ? "text-amber-600" : "text-muted-foreground"}>
+                      {item.date}: {item.status}{item.message ? ` — ${item.message}` : ""}
+                    </p>
+                  ))}
+                </div>
+                {rangePreview.summary.conflict > 0 && <p className="text-xs text-destructive">Conflicts prevent the entire range from being applied.</p>}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="rounded-full" data-testid="button-cancel-capacity-range" onClick={() => setRangeTarget(null)}>Cancel</Button>
+            <Button variant="outline" className="rounded-full" disabled={rangeLoading} data-testid="button-preview-capacity-range" onClick={() => void requestRange("preview")}>
+              {rangeLoading && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />} Preview
+            </Button>
+            <Button className="rounded-full" disabled={rangeLoading || !rangePreview || rangePreview.summary.conflict > 0} data-testid="button-apply-capacity-range" onClick={() => void requestRange("apply")}>
+              Apply range
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

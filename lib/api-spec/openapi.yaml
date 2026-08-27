@@ -1038,20 +1038,32 @@ paths:
     delete:
       operationId: deleteLead
       tags: [leads]
+      summary: Request manager approval to soft-archive a lead
       parameters:
         - name: id
           in: path
           required: true
           schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReasonedApprovalRequest"
       responses:
-        "204":
-          description: Deleted
+        "202":
+          description: Archive request created or existing pending request returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingApprovalResult"
 
   /leads/{id}/restore:
     post:
       operationId: restoreLead
       tags: [leads]
-      summary: Restore a soft-deleted lead
+      summary: Restore visibility of a soft-archived lead
+      description: Restores the lead record to active visibility. Operational work closed by an approved archive remains historical and is not silently reopened.
       parameters:
         - name: id
           in: path
@@ -1743,7 +1755,7 @@ paths:
     post:
       operationId: requestQuoteDiscount
       tags: [leads]
-      summary: Request a discount on the lead's current quote — management must approve via a gate before it applies
+      summary: Request a Discount or Duty Free pricing exception on the current quote
       parameters:
         - name: id
           in: path
@@ -1757,7 +1769,7 @@ paths:
               $ref: "#/components/schemas/QuoteDiscountRequestInput"
       responses:
         "200":
-          description: Quote with the pending discount request recorded
+          description: Quote with the pending approval request recorded
           content:
             application/json:
               schema:
@@ -1769,13 +1781,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
-          description: A discount request is already pending on this quote
+          description: A matching pricing request is already pending on this quote
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "422":
-          description: Invalid discount amount
+          description: Invalid amount or missing reason
           content:
             application/json:
               schema:
@@ -1845,6 +1857,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /capacity-blocks/range/preview:
+    post:
+      operationId: previewCapacityBlockRange
+      tags: [capacity]
+      summary: Preview an inclusive date-range block without changing capacity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CapacityBlockRangeInput"
+      responses:
+        "200":
+          description: Per-day preview and aggregate counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapacityBlockRangeResult"
+        "404":
+          description: Resource not found in this dealership
+  /capacity-blocks/range/apply:
+    post:
+      operationId: applyCapacityBlockRange
+      tags: [capacity]
+      summary: Atomically apply an inclusive date-range block; conflicts reject the whole request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CapacityBlockRangeInput"
+      responses:
+        "201":
+          description: Range applied; exact duplicates were skipped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapacityBlockRangeResult"
+        "409":
+          description: One or more dates conflict; no blocks were created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapacityBlockRangeResult"
   /leads/{id}/quotes/{quoteId}/pdf:
     get:
       operationId: downloadLeadQuoteVersionPdf
@@ -2305,6 +2361,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Deal"
+        "202":
+          description: Cancellation request created; no operational changes made
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingApprovalResult"
         "404":
           description: Not found
           content:
@@ -3221,6 +3283,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /job-cards/{id}/technician-notes:
+    get:
+      operationId: listJobCardTechnicianNotes
+      tags: [service]
+      summary: List append-only work notes for the assigned technician or service manager
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Technician notes oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JobCardTechnicianNote"
+        "404":
+          description: Job card unavailable to this user
+    post:
+      operationId: createJobCardTechnicianNote
+      tags: [service]
+      summary: Add an attributed note while the job card is in progress
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCardTechnicianNoteInput"
+      responses:
+        "201":
+          description: Note appended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCardTechnicianNote"
+        "403":
+          description: Not assigned or not a service approver
+        "422":
+          description: Job card is not in progress
   /job-cards/history:
     get:
       operationId: listJobCardHistory
@@ -7336,7 +7445,7 @@ paths:
         - name: entityType
           in: query
           required: true
-          schema: { type: string, enum: [lead, vehicle, delivery, job_card] }
+          schema: { type: string, enum: [lead, vehicle, delivery, job_card, quote] }
         - name: entityId
           in: query
           required: true
@@ -9141,7 +9250,7 @@ components:
         ]
       properties:
         id: { type: integer }
-        entityType: { type: string, enum: [lead, vehicle, delivery, job_card] }
+        entityType: { type: string, enum: [lead, vehicle, delivery, job_card, quote] }
         entityId: { type: integer }
         type:
           type: string
@@ -9178,7 +9287,7 @@ components:
       type: object
       required: [entityType, entityId, type, fileName, storageKey, mimeType, sizeBytes]
       properties:
-        entityType: { type: string, enum: [lead, vehicle, delivery, job_card] }
+        entityType: { type: string, enum: [lead, vehicle, delivery, job_card, quote] }
         entityId: { type: integer }
         type:
           type: string
@@ -9463,10 +9572,23 @@ components:
         amount: { type: number }
     QuoteDiscountRequestInput:
       type: object
-      required: [amount]
+      required: [reason]
       properties:
-        amount: { type: number, exclusiveMinimum: 0, description: "Requested discount in GYD, off the quote total" }
-        reason: { type: string }
+        requestType: { type: string, enum: [discount, duty_free], default: discount }
+        amount: { type: number, exclusiveMinimum: 0, description: "Requested discount in GYD, required only for Discount" }
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+    ReasonedApprovalRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+    PendingApprovalResult:
+      type: object
+      required: [pending, gateId, message]
+      properties:
+        pending: { type: boolean, enum: [true] }
+        gateId: { type: integer }
+        message: { type: string }
     CapacityBlock:
       type: object
       required: [id, kind, refId, date, createdAt]
@@ -9491,6 +9613,49 @@ components:
         startHour: { type: integer, minimum: 0, maximum: 23 }
         endHour: { type: integer, minimum: 1, maximum: 24 }
         reason: { type: string }
+    CapacityBlockRangeInput:
+      type: object
+      required: [kind, refId, from, to, days, mode]
+      properties:
+        kind: { type: string, enum: [vehicle, advisor] }
+        refId: { type: integer, minimum: 1 }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        days: { type: string, enum: [all, weekdays, selected] }
+        weekdays:
+          type: array
+          items: { type: integer, minimum: 0, maximum: 6 }
+          uniqueItems: true
+        mode: { type: string, enum: [day, hours] }
+        startHour: { type: integer, minimum: 0, maximum: 23 }
+        endHour: { type: integer, minimum: 1, maximum: 24 }
+        reason: { type: string, maxLength: 2000 }
+    CapacityBlockRangeItem:
+      type: object
+      required: [date, status]
+      properties:
+        date: { type: string, format: date }
+        status: { type: string, enum: [create, duplicate, conflict, skipped] }
+        message: { type: string }
+    CapacityBlockRangeSummary:
+      type: object
+      required: [create, duplicate, conflict, skipped]
+      properties:
+        create: { type: integer }
+        duplicate: { type: integer }
+        conflict: { type: integer }
+        skipped: { type: integer }
+    CapacityBlockRangeResult:
+      type: object
+      required: [resourceLabel, items, summary]
+      properties:
+        resourceLabel: { type: string }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CapacityBlockRangeItem"
+        summary:
+          $ref: "#/components/schemas/CapacityBlockRangeSummary"
     Quote:
       type: object
       required:
@@ -9538,7 +9703,16 @@ components:
         discountRequestedAmount: { type: ["number", "null"] }
         discountReason: { type: ["string", "null"] }
         discountRequestedBy: { type: ["string", "null"] }
+        requestType: { type: string, enum: [standard, duty_free] }
+        dutyFreeStatus: { type: string, enum: [none, pending, approved, rejected] }
+        dutyFreeReason: { type: ["string", "null"] }
+        dutyFreeRequestedBy: { type: ["string", "null"] }
+        dutyFreeGateId: { type: ["integer", "null"] }
         taxLines:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuoteTaxLine"
+        taxSnapshot:
           type: array
           items:
             $ref: "#/components/schemas/QuoteTaxLine"
@@ -10070,6 +10244,12 @@ components:
         salesAdvisorUserId: { type: ["integer", "null"] }
         cancellationReason: { type: ["string", "null"], enum: [customer_changed_mind, financing_declined, found_elsewhere, price, delivery_delay, vehicle_defect, duplicate, other, null] }
         cancellationNote: { type: ["string", "null"] }
+        dutyFreeApproved: { type: boolean }
+        taxSnapshot:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/QuoteTaxLine"
+        cancellationGateId: { type: ["integer", "null"] }
         createdAt: { type: string, format: date-time }
     DealInput:
       type: object
@@ -10546,6 +10726,7 @@ components:
         payType: { type: string, enum: [customer, warranty, goodwill, rectify] }
         quoteTotal: { type: number }
         quoteApprovedAt: { type: ["string", "null"], format: date-time }
+        customerPhoneSnapshot: { type: ["string", "null"] }
         intake:
           oneOf:
             - $ref: "#/components/schemas/ConditionRecord"
@@ -10631,6 +10812,7 @@ components:
       properties:
         serviceOrderId: { type: integer }
         title: { type: string, minLength: 1 }
+        customerPhoneSnapshot: { type: string, minLength: 3, maxLength: 50 }
         technicianUserId: { type: integer }
         technicianName: { type: string }
         bay: { type: string }
@@ -10666,6 +10848,21 @@ components:
         notes: { type: string }
         serviceAnalysis: { type: string, description: "Technician's analysis of the service — mandatory before the card can be marked completed" }
         workPerformed: { type: string, description: "What work was done — mandatory before the card can be marked completed" }
+    JobCardTechnicianNote:
+      type: object
+      required: [id, jobCardId, body, authorName, createdAt]
+      properties:
+        id: { type: integer }
+        jobCardId: { type: integer }
+        body: { type: string }
+        authorUserId: { type: ["integer", "null"] }
+        authorName: { type: string }
+        createdAt: { type: string, format: date-time }
+    JobCardTechnicianNoteInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 4000 }
 
     JobCardPart:
       type: object
@@ -11629,7 +11826,7 @@ components:
       required: [id, type, status, priority, title, summary, evidence, createdAt]
       properties:
         id: { type: integer }
-        type: { type: string, enum: [below_floor_price, fee_waiver, credit_decline, capital_order, gra_filing, refund_release, stage_advance, recall_damage, bank_funds_received, quote_discount] }
+        type: { type: string, enum: [below_floor_price, fee_waiver, credit_decline, capital_order, gra_filing, refund_release, stage_advance, recall_damage, bank_funds_received, quote_discount, quote_duty_free, deal_cancellation, lead_delete] }
         status: { type: string, enum: [pending, approved, adjusted, dismissed] }
         priority: { type: string, enum: [high, normal, low] }
         customerId: { type: ["integer", "null"] }

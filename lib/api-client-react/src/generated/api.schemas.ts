@@ -2069,6 +2069,7 @@ export const DocumentEntityType = {
   vehicle: 'vehicle',
   delivery: 'delivery',
   job_card: 'job_card',
+  quote: 'quote',
 } as const;
 
 export type DocumentType = typeof DocumentType[keyof typeof DocumentType];
@@ -2129,6 +2130,7 @@ export const DocumentInputEntityType = {
   vehicle: 'vehicle',
   delivery: 'delivery',
   job_card: 'job_card',
+  quote: 'quote',
 } as const;
 
 export type DocumentInputType = typeof DocumentInputType[keyof typeof DocumentInputType];
@@ -2794,13 +2796,40 @@ export interface QuoteTaxLine {
   amount: number;
 }
 
+export type QuoteDiscountRequestInputRequestType = typeof QuoteDiscountRequestInputRequestType[keyof typeof QuoteDiscountRequestInputRequestType];
+
+
+export const QuoteDiscountRequestInputRequestType = {
+  discount: 'discount',
+  duty_free: 'duty_free',
+} as const;
+
 export interface QuoteDiscountRequestInput {
+  requestType?: QuoteDiscountRequestInputRequestType;
   /**
-     * Requested discount in GYD, off the quote total
+     * Requested discount in GYD, required only for Discount
      * @exclusiveMinimum 0
      */
-  amount: number;
-  reason?: string;
+  amount?: number;
+  /**
+     * @minLength 3
+     * @maxLength 1000
+     */
+  reason: string;
+}
+
+export interface ReasonedApprovalRequest {
+  /**
+     * @minLength 3
+     * @maxLength 1000
+     */
+  reason: string;
+}
+
+export interface PendingApprovalResult {
+  pending: true;
+  gateId: number;
+  message: string;
 }
 
 export type CapacityBlockKind = typeof CapacityBlockKind[keyof typeof CapacityBlockKind];
@@ -2867,6 +2896,87 @@ export interface CapacityBlockInput {
   reason?: string;
 }
 
+export type CapacityBlockRangeInputKind = typeof CapacityBlockRangeInputKind[keyof typeof CapacityBlockRangeInputKind];
+
+
+export const CapacityBlockRangeInputKind = {
+  vehicle: 'vehicle',
+  advisor: 'advisor',
+} as const;
+
+export type CapacityBlockRangeInputDays = typeof CapacityBlockRangeInputDays[keyof typeof CapacityBlockRangeInputDays];
+
+
+export const CapacityBlockRangeInputDays = {
+  all: 'all',
+  weekdays: 'weekdays',
+  selected: 'selected',
+} as const;
+
+export type CapacityBlockRangeInputMode = typeof CapacityBlockRangeInputMode[keyof typeof CapacityBlockRangeInputMode];
+
+
+export const CapacityBlockRangeInputMode = {
+  day: 'day',
+  hours: 'hours',
+} as const;
+
+export interface CapacityBlockRangeInput {
+  kind: CapacityBlockRangeInputKind;
+  /** @minimum 1 */
+  refId: number;
+  from: string;
+  to: string;
+  days: CapacityBlockRangeInputDays;
+  /**
+     * @items.minimum 0
+     * @items.maximum 6
+     */
+  weekdays?: number[];
+  mode: CapacityBlockRangeInputMode;
+  /**
+     * @minimum 0
+     * @maximum 23
+     */
+  startHour?: number;
+  /**
+     * @minimum 1
+     * @maximum 24
+     */
+  endHour?: number;
+  /** @maxLength 2000 */
+  reason?: string;
+}
+
+export type CapacityBlockRangeItemStatus = typeof CapacityBlockRangeItemStatus[keyof typeof CapacityBlockRangeItemStatus];
+
+
+export const CapacityBlockRangeItemStatus = {
+  create: 'create',
+  duplicate: 'duplicate',
+  conflict: 'conflict',
+  skipped: 'skipped',
+} as const;
+
+export interface CapacityBlockRangeItem {
+  date: string;
+  status: CapacityBlockRangeItemStatus;
+  message?: string;
+}
+
+export interface CapacityBlockRangeSummary {
+  create: number;
+  duplicate: number;
+  conflict: number;
+  skipped: number;
+}
+
+export interface CapacityBlockRangeResult {
+  resourceLabel: string;
+  items: CapacityBlockRangeItem[];
+  summary: CapacityBlockRangeSummary;
+}
+
 export type QuoteStatus = typeof QuoteStatus[keyof typeof QuoteStatus];
 
 
@@ -2879,6 +2989,24 @@ export type QuoteDiscountStatus = typeof QuoteDiscountStatus[keyof typeof QuoteD
 
 
 export const QuoteDiscountStatus = {
+  none: 'none',
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export type QuoteRequestType = typeof QuoteRequestType[keyof typeof QuoteRequestType];
+
+
+export const QuoteRequestType = {
+  standard: 'standard',
+  duty_free: 'duty_free',
+} as const;
+
+export type QuoteDutyFreeStatus = typeof QuoteDutyFreeStatus[keyof typeof QuoteDutyFreeStatus];
+
+
+export const QuoteDutyFreeStatus = {
   none: 'none',
   pending: 'pending',
   approved: 'approved',
@@ -2915,7 +3043,16 @@ export interface Quote {
   discountReason?: string | null;
   /** @nullable */
   discountRequestedBy?: string | null;
+  requestType?: QuoteRequestType;
+  dutyFreeStatus?: QuoteDutyFreeStatus;
+  /** @nullable */
+  dutyFreeReason?: string | null;
+  /** @nullable */
+  dutyFreeRequestedBy?: string | null;
+  /** @nullable */
+  dutyFreeGateId?: number | null;
   taxLines: QuoteTaxLine[];
+  taxSnapshot?: QuoteTaxLine[];
   totalTax: number;
   total: number;
   issuedOn: string;
@@ -3756,6 +3893,11 @@ export interface Deal {
   cancellationReason?: DealCancellationReason;
   /** @nullable */
   cancellationNote?: string | null;
+  dutyFreeApproved?: boolean;
+  /** @nullable */
+  taxSnapshot?: QuoteTaxLine[] | null;
+  /** @nullable */
+  cancellationGateId?: number | null;
   createdAt: string;
 }
 
@@ -4683,6 +4825,8 @@ export interface JobCard {
   quoteTotal: number;
   /** @nullable */
   quoteApprovedAt?: string | null;
+  /** @nullable */
+  customerPhoneSnapshot?: string | null;
   intake?: ConditionRecord | null;
   outtake?: ConditionRecord | null;
   checklist: ChecklistItem[];
@@ -4829,6 +4973,11 @@ export interface JobCardInput {
   serviceOrderId: number;
   /** @minLength 1 */
   title: string;
+  /**
+     * @minLength 3
+     * @maxLength 50
+     */
+  customerPhoneSnapshot?: string;
   technicianUserId?: number;
   technicianName?: string;
   bay?: string;
@@ -4884,6 +5033,24 @@ export interface JobCardUpdate {
   serviceAnalysis?: string;
   /** What work was done — mandatory before the card can be marked completed */
   workPerformed?: string;
+}
+
+export interface JobCardTechnicianNote {
+  id: number;
+  jobCardId: number;
+  body: string;
+  /** @nullable */
+  authorUserId?: number | null;
+  authorName: string;
+  createdAt: string;
+}
+
+export interface JobCardTechnicianNoteInput {
+  /**
+     * @minLength 1
+     * @maxLength 4000
+     */
+  body: string;
 }
 
 export type JobCardPartKind = typeof JobCardPartKind[keyof typeof JobCardPartKind];
@@ -6302,6 +6469,9 @@ export const GateType = {
   recall_damage: 'recall_damage',
   bank_funds_received: 'bank_funds_received',
   quote_discount: 'quote_discount',
+  quote_duty_free: 'quote_duty_free',
+  deal_cancellation: 'deal_cancellation',
+  lead_delete: 'lead_delete',
 } as const;
 
 export type GateStatus = typeof GateStatus[keyof typeof GateStatus];
@@ -7467,6 +7637,7 @@ export const ListDocumentsEntityType = {
   vehicle: 'vehicle',
   delivery: 'delivery',
   job_card: 'job_card',
+  quote: 'quote',
 } as const;
 
 export type RotateErpnextWebhookSecret200 = {

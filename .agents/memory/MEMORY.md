@@ -56,3 +56,4 @@
 - [WhatsApp conversational agent](whatsapp-conversational-agent.md) — LLM tool-loop layered over guided flow; empty end_turn needs lastSeenText; PII provenance guard; advisory-lock lead upsert.
 - [Vehicle free-text matching](vehicle-text-matching.md) — form slugs + marketing-name drift ("SEALION 7" vs inventory "SEALION EV") need normalized + token-prefix matching via matchVehicleByText.
 - [Dynamic download proxy caching](dynamic-download-proxy-cache.md) — permission-scoped exports need API no-store headers plus client cache-busting; a proxy 304 has no downloadable body.
+- [Lead archive/link serialization](lead-archive-link-serialization.md) — archive and deal-link writes share one lead-scoped lock; restore reopens visibility, never closed operations.

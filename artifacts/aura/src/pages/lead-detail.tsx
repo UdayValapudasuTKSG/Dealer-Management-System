@@ -941,6 +941,7 @@ export default function LeadDetail() {
   const [reopenOpen, setReopenOpen] = useState(false);
   const [reopenStage, setReopenStage] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [archiveReason, setArchiveReason] = useState("");
   const [, navigate] = useLocation();
 
   const { can, me, isLoading: authLoading } = useAuthz();
@@ -1010,9 +1011,8 @@ export default function LeadDetail() {
         qc.invalidateQueries({ queryKey: getListLeadsQueryKey() });
         qc.invalidateQueries({ queryKey: getListDealsQueryKey() });
         toast({
-          title: "Lead deleted",
-          description:
-            "Linked deals and bookings were cancelled, reserved stock released, and the contact is free for new enquiries.",
+          title: "Lead archive requested",
+          description: "No records changed. A manager must approve the archive request.",
         });
         navigate("/pipeline");
       },
@@ -1065,6 +1065,7 @@ export default function LeadDetail() {
   const [discountOpen, setDiscountOpen] = useState(false);
   const [discountAmount, setDiscountAmount] = useState("");
   const [discountReason, setDiscountReason] = useState("");
+  const [quoteApprovalType, setQuoteApprovalType] = useState<"discount" | "duty_free">("discount");
   const [quoteGenOpen, setQuoteGenOpen] = useState(false);
   const [quoteModelName, setQuoteModelName] = useState("");
   const [quoteModelYear, setQuoteModelYear] = useState("");
@@ -2591,13 +2592,20 @@ export default function LeadDetail() {
                     <Dialog open={discountOpen} onOpenChange={setDiscountOpen}>
                       <DialogContent className="sm:max-w-md">
                         <DialogHeader>
-                          <DialogTitle>Request quote discount</DialogTitle>
+                          <DialogTitle>Request quote approval</DialogTitle>
                           <DialogDescription>
-                            Management must approve the discount before it is
-                            applied to the quote total.
+                            Management must approve this pricing exception before it is applied.
                           </DialogDescription>
                         </DialogHeader>
-                        <div className="space-y-3">
+                          <div className="space-y-3">
+                            <div className="space-y-1.5">
+                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Request type</p>
+                              <select value={quoteApprovalType} onChange={(e) => setQuoteApprovalType(e.target.value as "discount" | "duty_free")} data-testid="select-quote-approval-type" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                                <option value="discount">Discount</option>
+                                <option value="duty_free">Duty Free</option>
+                              </select>
+                            </div>
+                            {quoteApprovalType === "discount" && (
                           <div className="space-y-1.5">
                             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                               Discount amount (GYD)
@@ -2610,6 +2618,7 @@ export default function LeadDetail() {
                               placeholder="100000"
                             />
                           </div>
+                            )}
                           <div className="space-y-1.5">
                             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                               Reason
@@ -2621,6 +2630,15 @@ export default function LeadDetail() {
                               rows={3}
                             />
                           </div>
+                          {currentQuote && (
+                            <DocumentsCard
+                              entityType="quote"
+                              entityId={currentQuote.id}
+                              canEdit={canEdit}
+                              title="Optional approval image"
+                              imageOnly
+                            />
+                          )}
                         </div>
                         <DialogFooter>
                           <Button
@@ -2632,16 +2650,15 @@ export default function LeadDetail() {
                           <Button
                             disabled={
                               requestDiscount.isPending ||
-                              !(Number(discountAmount) > 0)
+                              !discountReason.trim() || (quoteApprovalType === "discount" && !(Number(discountAmount) > 0))
                             }
                             onClick={() =>
                               requestDiscount.mutate({
                                 id: lead.id,
                                 data: {
-                                  amount: Number(discountAmount),
-                                  ...(discountReason.trim()
-                                    ? { reason: discountReason.trim() }
-                                    : {}),
+                                  requestType: quoteApprovalType,
+                                  ...(quoteApprovalType === "discount" ? { amount: Number(discountAmount) } : {}),
+                                  reason: discountReason.trim(),
                                 },
                               })
                             }
@@ -2725,7 +2742,7 @@ export default function LeadDetail() {
                                         setDiscountOpen(true);
                                       }}
                                     >
-                                      Request Discount
+                                      Request approval
                                     </Button>
                                   )}
                                   {q.discountStatus === "rejected" && (
@@ -2783,6 +2800,15 @@ export default function LeadDetail() {
                                   </Button>
                                 </>
                               )}
+                            </div>
+                            <div className="mt-3">
+                              <DocumentsCard
+                                entityType="quote"
+                                entityId={q.id}
+                                canEdit={canEdit && q.status === "current"}
+                                title="Optional quote image"
+                                imageOnly
+                              />
                             </div>
                           </div>
                         ))}
@@ -3830,17 +3856,8 @@ export default function LeadDetail() {
             <AlertDialogTitle>Delete this lead?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2">
-                <p>This removes the lead and cleans up everything linked to it:</p>
-                <ul className="list-disc pl-5 space-y-1">
-                  <li>Undelivered deals are cancelled</li>
-                  <li>Active bookings are cancelled</li>
-                  <li>Reserved vehicles are released back to available</li>
-                  <li>Pending approvals are dismissed</li>
-                </ul>
-                <p>
-                  The phone number and email become free for a brand-new lead
-                  capture immediately.
-                </p>
+                <p>This requests a manager-approved archive. No linked work changes until it is approved.</p>
+                <Textarea value={archiveReason} onChange={(e) => setArchiveReason(e.target.value)} placeholder="Why should this lead be archived?" data-testid="input-lead-archive-reason" />
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -3848,10 +3865,10 @@ export default function LeadDetail() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleteLead.isPending}
-              onClick={() => deleteLead.mutate({ id: lead.id })}
+              disabled={deleteLead.isPending || archiveReason.trim().length < 3}
+              onClick={() => deleteLead.mutate({ id: lead.id, data: { reason: archiveReason.trim() } })}
             >
-              {deleteLead.isPending ? "Deleting…" : "Delete Lead"}
+              {deleteLead.isPending ? "Requesting…" : "Request archive"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

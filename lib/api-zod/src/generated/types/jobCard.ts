@@ -33,6 +33,8 @@ export interface JobCard {
   quoteTotal: number;
   /** @nullable */
   quoteApprovedAt?: Date | null;
+  /** @nullable */
+  customerPhoneSnapshot?: string | null;
   intake?: ConditionRecord | null;
   outtake?: ConditionRecord | null;
   checklist: ChecklistItem[];

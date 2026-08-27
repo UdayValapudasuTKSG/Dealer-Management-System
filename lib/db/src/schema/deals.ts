@@ -6,10 +6,12 @@ import {
   doublePrecision,
   boolean,
   timestamp,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { divisionsTable } from "./divisions";
+import type { QuoteTaxLine } from "./quotes";
 
 /** Canonical deal stage machine (NC-3): desking → committed → delivered (+ cancelled | lost). */
 export const DEAL_STAGES = [
@@ -63,6 +65,10 @@ export const dealsTable = pgTable("deals", {
   salesAdvisorUserId: integer("sales_advisor_user_id"),
   cancellationReason: text("cancellation_reason"),
   cancellationNote: text("cancellation_note"),
+  /** Pricing authority copied from an approved quote, never recalculated silently. */
+  dutyFreeApproved: boolean("duty_free_approved").notNull().default(false),
+  taxSnapshot: jsonb("tax_snapshot").$type<QuoteTaxLine[]>(),
+  cancellationGateId: integer("cancellation_gate_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

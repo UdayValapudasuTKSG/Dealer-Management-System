@@ -162,17 +162,23 @@ export function DocumentsCard({
   entityType,
   entityId,
   canEdit,
+  title = "Documents",
+  imageOnly = false,
 }: {
   entityType: DocumentInputEntityType;
   entityId: number;
   canEdit: boolean;
+  title?: string;
+  imageOnly?: boolean;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const params = { entityType, entityId };
   const { data: docs, isLoading } = useListDocuments(params);
   const [open, setOpen] = useState(false);
-  const [docType, setDocType] = useState<DocumentInputType>("other");
+  const [docType, setDocType] = useState<DocumentInputType>(
+    imageOnly ? "quote" : "other",
+  );
   const [comments, setComments] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
@@ -194,7 +200,7 @@ export function DocumentsCard({
   }, [docs]);
 
   const reset = () => {
-    setDocType("other");
+    setDocType(imageOnly ? "quote" : "other");
     setComments("");
     setFile(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -210,6 +216,17 @@ export function DocumentsCard({
       });
       return;
     }
+    if (
+      imageOnly &&
+      !["image/jpeg", "image/png"].includes(file.type.toLowerCase())
+    ) {
+      toast({
+        title: "Choose an image",
+        description: "Quote attachments must be JPG or PNG images.",
+        variant: "destructive",
+      });
+      return;
+    }
     setBusy(true);
     try {
       const uploaded = await uploadFile(file);
@@ -218,7 +235,7 @@ export function DocumentsCard({
         data: {
           entityType,
           entityId,
-          type: docType,
+          type: imageOnly ? "quote" : docType,
           fileName: file.name,
           storageKey: uploaded.objectPath,
           mimeType: file.type || "application/octet-stream",
@@ -250,7 +267,7 @@ export function DocumentsCard({
     <div className="rounded-2xl border border-white/10 bg-foreground/[0.02] p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-          <FileText className="w-4 h-4" /> Documents
+          <FileText className="w-4 h-4" /> {title}
         </div>
         {canEdit && (
           <Button
@@ -270,8 +287,12 @@ export function DocumentsCard({
         </div>
       ) : grouped.length === 0 ? (
         <div className="text-sm text-muted-foreground rounded-xl border border-dashed border-white/10 p-5 text-center">
-          No documents yet.
-          {canEdit ? " Upload PDF, JPG, PNG or DOCX up to 20MB." : ""}
+          {imageOnly ? "No image attached yet." : "No documents yet."}
+          {canEdit
+            ? imageOnly
+              ? " Upload an optional JPG or PNG."
+              : " Upload PDF, JPG, PNG or DOCX up to 20MB."
+            : ""}
         </div>
       ) : (
         <div className="space-y-2.5">
@@ -290,14 +311,15 @@ export function DocumentsCard({
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add document</DialogTitle>
+            <DialogTitle>{imageOnly ? "Attach quote image" : "Add document"}</DialogTitle>
             <DialogDescription>
-              PDF, JPG, PNG or DOCX up to 20MB. Uploading the same type again
-              creates a new version — history is kept.
+              {imageOnly
+                ? "JPG or PNG up to 20MB. Replacing it keeps the previous version in history."
+                : "PDF, JPG, PNG or DOCX up to 20MB. Uploading the same type again creates a new version — history is kept."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
+            {!imageOnly && <div>
               <label className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-1.5">
                 Document type
               </label>
@@ -312,7 +334,7 @@ export function DocumentsCard({
                   </option>
                 ))}
               </select>
-            </div>
+            </div>}
             <div>
               <label className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-1.5">
                 File
@@ -320,7 +342,7 @@ export function DocumentsCard({
               <Input
                 ref={fileRef}
                 type="file"
-                accept={ACCEPT}
+                accept={imageOnly ? ".jpg,.jpeg,.png,image/jpeg,image/png" : ACCEPT}
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 className="h-9 bg-background/60 border-white/15 file:text-foreground"
               />

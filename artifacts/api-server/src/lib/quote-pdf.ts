@@ -47,6 +47,7 @@ const bareAmount = (s: string): string => {
 export function buildQuotePdf(
   data: QuotePdfData,
   logo?: Buffer | null,
+  attachment?: { data: Buffer; fileName: string } | null,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0 });
@@ -325,7 +326,37 @@ export function buildQuotePdf(
       .font("Times-Roman")
       .fontSize(9)
       .fillColor(LABEL_GREY)
-      .text("Page 1 of 1", left, pageH - 46, { width: contentW, align: "center" });
+      .text(attachment ? "Page 1 of 2" : "Page 1 of 1", left, pageH - 46, {
+        width: contentW,
+        align: "center",
+      });
+
+    if (attachment) {
+      doc.addPage({ size: "A4", margin: 0 });
+      doc
+        .font("Times-Bold")
+        .fontSize(13)
+        .fillColor(TEXT)
+        .text("Quote attachment", left, 42, { width: contentW });
+      doc
+        .font("Times-Roman")
+        .fontSize(8.5)
+        .fillColor(LABEL_GREY)
+        .text(attachment.fileName, left, 62, { width: contentW });
+      doc.image(attachment.data, left, 88, {
+        fit: [contentW, pageH - 150],
+        align: "center",
+        valign: "center",
+      });
+      doc
+        .font("Times-Roman")
+        .fontSize(9)
+        .fillColor(LABEL_GREY)
+        .text("Page 2 of 2", left, pageH - 46, {
+          width: contentW,
+          align: "center",
+        });
+    }
 
     doc.end();
   });

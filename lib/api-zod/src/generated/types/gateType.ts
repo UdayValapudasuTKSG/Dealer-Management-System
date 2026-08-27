@@ -20,4 +20,7 @@ export const GateType = {
   recall_damage: 'recall_damage',
   bank_funds_received: 'bank_funds_received',
   quote_discount: 'quote_discount',
+  quote_duty_free: 'quote_duty_free',
+  deal_cancellation: 'deal_cancellation',
+  lead_delete: 'lead_delete',
 } as const;
