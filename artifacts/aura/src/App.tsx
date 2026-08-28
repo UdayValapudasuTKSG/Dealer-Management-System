@@ -16,6 +16,8 @@ import { SignInPage, SignUpPage } from "@/pages/auth-pages";
 
 import Landing from "@/pages/landing";
 import BookTestDrive from "@/pages/book-test-drive";
+import FeedbackRespond from "@/pages/feedback-respond";
+import FeedbackForms from "@/pages/feedback-forms";
 import Dashboard from "@/pages/dashboard";
 import Reports from "@/pages/reports";
 import Inventory from "@/pages/inventory";
@@ -254,6 +256,7 @@ function AppRoutes() {
                   <RoleHomeRedirect />
                 </Route>
                 <Route path="/pipeline" component={Leads} />
+                <Route path="/feedback-forms" component={FeedbackForms} />
                 <Route path="/leads" component={Leads} />
                 <Route path="/command-center" component={Dashboard} />
                 <Route path="/reports" component={Reports} />
@@ -482,6 +485,7 @@ function ClerkProviderWithRoutes() {
           <Switch>
             <Route path="/" component={Landing} />
             <Route path="/book-test-drive/:token" component={BookTestDrive} />
+            <Route path="/feedback/:token" component={FeedbackRespond} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route>

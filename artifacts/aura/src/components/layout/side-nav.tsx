@@ -27,6 +27,7 @@ import {
   CalendarRange,
   Shield,
   Bot,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 import { useClerk } from "@clerk/react";
@@ -42,6 +43,8 @@ type NavItem = {
   icon: LucideIcon;
   /** Per-dealer entitlement flag gating this item (missing = always on). */
   ent?: string;
+  /** Restrict to General Managers (and super admins) only. */
+  gmOnly?: boolean;
 };
 type Cluster = { label: string; items: NavItem[] };
 
@@ -59,6 +62,8 @@ const CLUSTERS: Cluster[] = [
       { name: "Pipeline", href: "/pipeline", module: "leads", icon: Waypoints },
       { name: "Deals", href: "/deals", module: "deals", icon: Handshake },
       { name: "Finance", href: "/finance", module: "finance", icon: Landmark },
+      // GM-only form builder for lead feedback campaigns.
+      { name: "Feedback Forms", href: "/feedback-forms", module: "leads", icon: ClipboardList, gmOnly: true },
     ],
   },
   {
@@ -349,11 +354,15 @@ function useNavClusters() {
         },
       ];
 
+  const isGM = !!me && (me.isSuperAdmin || me.roleName === "General Manager");
+
   const clusters = source.map((c) => ({
     ...c,
     items: c.items.filter(
       (i) =>
-        (!i.module || can(i.module, "view")) && (!i.ent || entitled(i.ent)),
+        (!i.module || can(i.module, "view")) &&
+        (!i.ent || entitled(i.ent)) &&
+        (!i.gmOnly || isGM),
     ),
   })).filter((c) => c.items.length > 0);
 

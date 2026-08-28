@@ -11538,3 +11538,478 @@ export const RetryErpnextSyncJobResponse = zod.object({
 })
 
 
+/**
+ * @summary List the dealership's feedback forms (GM only)
+ */
+
+
+export const listFeedbackFormsResponseQuestionsItemMaxStarsMin = 3;
+export const listFeedbackFormsResponseQuestionsItemMaxStarsMax = 10;
+
+
+
+export const ListFeedbackFormsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "questions": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(listFeedbackFormsResponseQuestionsItemMaxStarsMin).max(listFeedbackFormsResponseQuestionsItemMaxStarsMax).optional()
+})),
+  "sentCount": zod.number(),
+  "responseCount": zod.number(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListFeedbackFormsResponse = zod.array(ListFeedbackFormsResponseItem)
+
+
+/**
+ * @summary Create a feedback form draft (GM only)
+ */
+
+
+
+export const createFeedbackFormBodyQuestionsItemMaxStarsMin = 3;
+export const createFeedbackFormBodyQuestionsItemMaxStarsMax = 10;
+
+
+
+export const CreateFeedbackFormBody = zod.object({
+  "name": zod.string().min(1),
+  "description": zod.string().nullish(),
+  "questions": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(createFeedbackFormBodyQuestionsItemMaxStarsMin).max(createFeedbackFormBodyQuestionsItemMaxStarsMax).optional()
+}))
+})
+
+
+
+export const createFeedbackFormResponseQuestionsItemMaxStarsMin = 3;
+export const createFeedbackFormResponseQuestionsItemMaxStarsMax = 10;
+
+
+
+export const CreateFeedbackFormResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "questions": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(createFeedbackFormResponseQuestionsItemMaxStarsMin).max(createFeedbackFormResponseQuestionsItemMaxStarsMax).optional()
+})),
+  "sentCount": zod.number(),
+  "responseCount": zod.number(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Preview leads matching a filter expression, with exclusions (GM only)
+ */
+export const PreviewFeedbackRecipientsBody = zod.object({
+  "formId": zod.number().nullish(),
+  "filters": zod.array(zod.object({
+  "field": zod.enum(['phase', 'status', 'source', 'owner', 'division', 'created', 'vehicleInterest']),
+  "operator": zod.enum(['is', 'is_not', 'is_any_of', 'contains', 'on_or_after', 'on_or_before']),
+  "values": zod.array(zod.string())
+})).optional(),
+  "leadIds": zod.array(zod.number()).optional(),
+  "channels": zod.array(zod.enum(['email', 'whatsapp'])).optional()
+})
+
+export const PreviewFeedbackRecipientsResponse = zod.object({
+  "matchingCount": zod.number(),
+  "matchingLeadIds": zod.array(zod.number()),
+  "included": zod.array(zod.object({
+  "leadId": zod.number(),
+  "name": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "channels": zod.array(zod.string())
+})),
+  "excluded": zod.array(zod.object({
+  "leadId": zod.number(),
+  "name": zod.string(),
+  "reason": zod.enum(['no_contact', 'email_opt_out', 'whatsapp_opt_out', 'already_sent'])
+}))
+})
+
+
+/**
+ * @summary Get a feedback form (GM only)
+ */
+export const GetFeedbackFormParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+export const getFeedbackFormResponseQuestionsItemMaxStarsMin = 3;
+export const getFeedbackFormResponseQuestionsItemMaxStarsMax = 10;
+
+
+
+export const GetFeedbackFormResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "questions": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(getFeedbackFormResponseQuestionsItemMaxStarsMin).max(getFeedbackFormResponseQuestionsItemMaxStarsMax).optional()
+})),
+  "sentCount": zod.number(),
+  "responseCount": zod.number(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update a feedback form's name/description/questions (GM only)
+ */
+export const UpdateFeedbackFormParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const updateFeedbackFormBodyQuestionsItemMaxStarsMin = 3;
+export const updateFeedbackFormBodyQuestionsItemMaxStarsMax = 10;
+
+
+
+export const UpdateFeedbackFormBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "description": zod.string().nullish(),
+  "questions": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(updateFeedbackFormBodyQuestionsItemMaxStarsMin).max(updateFeedbackFormBodyQuestionsItemMaxStarsMax).optional()
+})).optional()
+})
+
+
+
+export const updateFeedbackFormResponseQuestionsItemMaxStarsMin = 3;
+export const updateFeedbackFormResponseQuestionsItemMaxStarsMax = 10;
+
+
+
+export const UpdateFeedbackFormResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "questions": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(updateFeedbackFormResponseQuestionsItemMaxStarsMin).max(updateFeedbackFormResponseQuestionsItemMaxStarsMax).optional()
+})),
+  "sentCount": zod.number(),
+  "responseCount": zod.number(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Publish, archive or reactivate a form (GM only)
+ */
+export const SetFeedbackFormStatusParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SetFeedbackFormStatusBody = zod.object({
+  "action": zod.enum(['publish', 'archive', 'reactivate'])
+})
+
+
+
+export const setFeedbackFormStatusResponseQuestionsItemMaxStarsMin = 3;
+export const setFeedbackFormStatusResponseQuestionsItemMaxStarsMax = 10;
+
+
+
+export const SetFeedbackFormStatusResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "questions": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(setFeedbackFormStatusResponseQuestionsItemMaxStarsMin).max(setFeedbackFormStatusResponseQuestionsItemMaxStarsMax).optional()
+})),
+  "sentCount": zod.number(),
+  "responseCount": zod.number(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Duplicate a form as a new draft (GM only)
+ */
+export const DuplicateFeedbackFormParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+export const duplicateFeedbackFormResponseQuestionsItemMaxStarsMin = 3;
+export const duplicateFeedbackFormResponseQuestionsItemMaxStarsMax = 10;
+
+
+
+export const DuplicateFeedbackFormResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "status": zod.enum(['draft', 'published', 'archived']),
+  "questions": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(duplicateFeedbackFormResponseQuestionsItemMaxStarsMin).max(duplicateFeedbackFormResponseQuestionsItemMaxStarsMax).optional()
+})),
+  "sentCount": zod.number(),
+  "responseCount": zod.number(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Bulk-send a published form to selected or all-matching leads (GM only)
+ */
+export const SendFeedbackFormParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const sendFeedbackFormBodyExpiresInDaysMax = 90;
+
+
+
+export const SendFeedbackFormBody = zod.object({
+  "mode": zod.enum(['selected', 'all_matching']),
+  "leadIds": zod.array(zod.number()).optional(),
+  "filters": zod.array(zod.object({
+  "field": zod.enum(['phase', 'status', 'source', 'owner', 'division', 'created', 'vehicleInterest']),
+  "operator": zod.enum(['is', 'is_not', 'is_any_of', 'contains', 'on_or_after', 'on_or_before']),
+  "values": zod.array(zod.string())
+})).optional(),
+  "channels": zod.array(zod.enum(['email', 'whatsapp'])).min(1),
+  "expiresInDays": zod.number().min(1).max(sendFeedbackFormBodyExpiresInDaysMax).optional()
+})
+
+export const SendFeedbackFormResponse = zod.object({
+  "queued": zod.number(),
+  "skipped": zod.array(zod.object({
+  "leadId": zod.number(),
+  "name": zod.string(),
+  "reason": zod.enum(['no_contact', 'email_opt_out', 'whatsapp_opt_out', 'already_sent'])
+}))
+})
+
+
+/**
+ * @summary Delivery + response status for a form's invitations (GM only)
+ */
+export const ListFeedbackFormInvitationsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+export const listFeedbackFormInvitationsResponseQuestionsSnapshotItemMaxStarsMin = 3;
+export const listFeedbackFormInvitationsResponseQuestionsSnapshotItemMaxStarsMax = 10;
+
+
+
+export const ListFeedbackFormInvitationsResponseItem = zod.object({
+  "id": zod.number(),
+  "formId": zod.number(),
+  "leadId": zod.number(),
+  "leadName": zod.string().nullish(),
+  "formName": zod.string(),
+  "status": zod.enum(['sent', 'completed']),
+  "channels": zod.array(zod.string()),
+  "delivery": zod.array(zod.object({
+  "channel": zod.enum(['email', 'whatsapp']),
+  "status": zod.string()
+})),
+  "questionsSnapshot": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(listFeedbackFormInvitationsResponseQuestionsSnapshotItemMaxStarsMin).max(listFeedbackFormInvitationsResponseQuestionsSnapshotItemMaxStarsMax).optional()
+})).optional(),
+  "answers": zod.record(zod.string(), zod.unknown()).nullish(),
+  "expiresAt": zod.coerce.date(),
+  "submittedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListFeedbackFormInvitationsResponse = zod.array(ListFeedbackFormInvitationsResponseItem)
+
+
+/**
+ * @summary Feedback invitations + submitted answers for a lead
+ */
+export const GetLeadFeedbackParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+export const getLeadFeedbackResponseQuestionsSnapshotItemMaxStarsMin = 3;
+export const getLeadFeedbackResponseQuestionsSnapshotItemMaxStarsMax = 10;
+
+
+
+export const GetLeadFeedbackResponseItem = zod.object({
+  "id": zod.number(),
+  "formId": zod.number(),
+  "leadId": zod.number(),
+  "leadName": zod.string().nullish(),
+  "formName": zod.string(),
+  "status": zod.enum(['sent', 'completed']),
+  "channels": zod.array(zod.string()),
+  "delivery": zod.array(zod.object({
+  "channel": zod.enum(['email', 'whatsapp']),
+  "status": zod.string()
+})),
+  "questionsSnapshot": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(getLeadFeedbackResponseQuestionsSnapshotItemMaxStarsMin).max(getLeadFeedbackResponseQuestionsSnapshotItemMaxStarsMax).optional()
+})).optional(),
+  "answers": zod.record(zod.string(), zod.unknown()).nullish(),
+  "expiresAt": zod.coerce.date(),
+  "submittedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const GetLeadFeedbackResponse = zod.array(GetLeadFeedbackResponseItem)
+
+
+/**
+ * @summary Public — load a feedback invitation by secure token
+ */
+export const GetPublicFeedbackFormParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+
+
+export const getPublicFeedbackFormResponseQuestionsItemMaxStarsMin = 3;
+export const getPublicFeedbackFormResponseQuestionsItemMaxStarsMax = 10;
+
+
+
+export const GetPublicFeedbackFormResponse = zod.object({
+  "state": zod.enum(['open', 'submitted']),
+  "formName": zod.string(),
+  "brandName": zod.string(),
+  "leadName": zod.string().nullish(),
+  "questions": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(getPublicFeedbackFormResponseQuestionsItemMaxStarsMin).max(getPublicFeedbackFormResponseQuestionsItemMaxStarsMax).optional()
+})),
+  "submittedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Public — submit answers once for a feedback invitation
+ */
+export const SubmitPublicFeedbackFormParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+
+export const submitPublicFeedbackFormBodyAnswersItemRatingMax = 10;
+
+
+
+export const SubmitPublicFeedbackFormBody = zod.object({
+  "answers": zod.array(zod.object({
+  "questionId": zod.string().min(1),
+  "text": zod.string().optional(),
+  "choices": zod.array(zod.string()).optional(),
+  "rating": zod.number().min(1).max(submitPublicFeedbackFormBodyAnswersItemRatingMax).optional()
+}))
+})
+
+
+
+export const submitPublicFeedbackFormResponseQuestionsItemMaxStarsMin = 3;
+export const submitPublicFeedbackFormResponseQuestionsItemMaxStarsMax = 10;
+
+
+
+export const SubmitPublicFeedbackFormResponse = zod.object({
+  "state": zod.enum(['open', 'submitted']),
+  "formName": zod.string(),
+  "brandName": zod.string(),
+  "leadName": zod.string().nullish(),
+  "questions": zod.array(zod.object({
+  "id": zod.string().min(1),
+  "type": zod.enum(['text', 'long_text', 'single_choice', 'multi_choice', 'star_rating']),
+  "label": zod.string().min(1),
+  "required": zod.boolean(),
+  "options": zod.array(zod.string()).optional(),
+  "maxStars": zod.number().min(submitPublicFeedbackFormResponseQuestionsItemMaxStarsMin).max(submitPublicFeedbackFormResponseQuestionsItemMaxStarsMax).optional()
+})),
+  "submittedAt": zod.coerce.date().nullish()
+})
+
+

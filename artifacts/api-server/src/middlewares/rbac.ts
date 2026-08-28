@@ -731,6 +731,13 @@ const PATH_MODULES: Record<string, RouteRule> = {
   },
   pipeline: { module: "leads" },
   "test-drives": { module: "leads" },
+  // GM-only feedback form builder + bulk send: RBAC maps to the leads module
+  // (writes → edit so a GM role without leads:create can still operate), and
+  // every route additionally enforces General-Manager-or-super-admin itself.
+  "feedback-forms": {
+    module: "leads",
+    category: (req) => (req.method === "GET" ? "view" : "edit"),
+  },
   customers: { module: "customers" },
   reviews: { module: "customers" },
   cases: { module: "customers" },

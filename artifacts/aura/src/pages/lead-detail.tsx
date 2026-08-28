@@ -6,6 +6,7 @@ import {
   useListDivisions,
   useGetVehicle,
   useGetLeadTimeline,
+  useGetLeadFeedback,
   useGetLeadQuote,
   useCreateLeadNote,
   useUpdateLead,
@@ -119,6 +120,7 @@ import { TestDriveCard } from "@/components/lead/test-drive-card";
 import { useAuthz } from "@/lib/auth";
 import { useMoney, formatGuyanaDate, formatGuyanaDateTime } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
+import { InvitationRow } from "@/pages/feedback-forms";
 import { cn } from "@/lib/utils";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -3244,6 +3246,7 @@ export default function LeadDetail() {
 
               {tab === "activity" && (
                 <div className="space-y-5">
+                  <LeadFeedbackSection leadId={lead.id} />
                   <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-4">
                     <Textarea
                       value={noteText}
@@ -3898,5 +3901,23 @@ export default function LeadDetail() {
         </AlertDialogContent>
       </AlertDialog>
     </Page>
+  );
+}
+
+/** Feedback invitations & submitted answers for this lead (activity tab). */
+function LeadFeedbackSection({ leadId }: { leadId: number }) {
+  const { data: invitations, error } = useGetLeadFeedback(leadId);
+  if (error || !invitations?.length) return null;
+  return (
+    <div className="rounded-2xl border border-white/10 bg-foreground/[0.03] p-4">
+      <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground mb-3">
+        Feedback Forms
+      </div>
+      <div className="space-y-2.5">
+        {invitations.map((inv) => (
+          <InvitationRow key={inv.id} inv={inv} />
+        ))}
+      </div>
+    </div>
   );
 }

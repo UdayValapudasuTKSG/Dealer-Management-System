@@ -50,6 +50,7 @@ import { useViewMode } from "@/hooks/use-view-mode";
 import { Pagination } from "@/components/pagination";
 import { ViewControls } from "@/components/view-controls";
 import { useAuthz } from "@/lib/auth";
+import { SendFeedbackDialog } from "@/components/send-feedback-dialog";
 import { CONTACT_SLA_HOURS, hoursSince, humanHours } from "@/lib/triage";
 
 const STAGES = [
@@ -494,6 +495,31 @@ export default function Leads() {
     [sortedVisible, safePage, PAGE_SIZE],
   );
 
+  // GM bulk feedback-form selection: checkboxes on the list view plus a
+  // "select all filtered" that spans every result page (not just the visible
+  // one). The send dialog can also target all_matching via server filters.
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [sendFeedbackOpen, setSendFeedbackOpen] = useState(false);
+  const toggleSelected = (id: number) =>
+    setSelectedIds((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const pageIds = paged.map((r) => r.lead.id);
+  const allPageSelected =
+    pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const togglePage = () =>
+    setSelectedIds((cur) => {
+      const next = new Set(cur);
+      if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+      else pageIds.forEach((id) => next.add(id));
+      return next;
+    });
+  const selectAllFiltered = () =>
+    setSelectedIds(new Set(sortedVisible.map((r) => r.lead.id)));
+
   // Link-account dialog: pick an existing account or create one from the lead.
   const [linkTarget, setLinkTarget] = useState<Lead | null>(null);
   const [accountSearch, setAccountSearch] = useState("");
@@ -866,6 +892,37 @@ export default function Leads() {
           </div>
         </div>
 
+        {isLeadership && selectedIds.size > 0 && (
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-primary/30 bg-primary/[0.07] px-4 py-2.5">
+            <span className="text-sm font-semibold">
+              {selectedIds.size} lead{selectedIds.size === 1 ? "" : "s"} selected
+            </span>
+            {selectedIds.size < sortedVisible.length && (
+              <button
+                type="button"
+                onClick={selectAllFiltered}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                Select all {sortedVisible.length} filtered leads
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Clear selection
+            </button>
+            <div className="flex-1" />
+            <Button
+              size="sm"
+              onClick={() => setSendFeedbackOpen(true)}
+              className="rounded-full h-8 text-xs bg-primary hover:bg-primary/90"
+            >
+              Send Feedback Form
+            </Button>
+          </div>
+        )}
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3, 4].map((i) => (
@@ -885,6 +942,17 @@ export default function Leads() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  {isLeadership && (
+                    <th className="pl-4 pr-1 py-3 w-8">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all leads on this page"
+                        checked={allPageSelected}
+                        onChange={togglePage}
+                        className="w-4 h-4 accent-[var(--primary)] cursor-pointer align-middle"
+                      />
+                    </th>
+                  )}
                   {(
                     [
                       ["Client", "client"],
@@ -920,6 +988,20 @@ export default function Leads() {
                       compact ? "h-11" : "h-14",
                     )}
                   >
+                    {isLeadership && (
+                      <td
+                        className="pl-4 pr-1 py-2 w-8"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${r.lead.name}`}
+                          checked={selectedIds.has(r.lead.id)}
+                          onChange={() => toggleSelected(r.lead.id)}
+                          className="w-4 h-4 accent-[var(--primary)] cursor-pointer align-middle"
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-2">
                       <div className="font-medium truncate max-w-[200px]">
                         {r.lead.name}
@@ -1192,6 +1274,13 @@ export default function Leads() {
           </DialogContent>
         </Dialog>
       </Page>
+      {sendFeedbackOpen && (
+        <SendFeedbackDialog
+          open={sendFeedbackOpen}
+          onClose={() => setSendFeedbackOpen(false)}
+          selectedLeadIds={[...selectedIds]}
+        />
+      )}
     </>
   );
 }

@@ -129,6 +129,13 @@ import type {
   ErpnextSyncJob,
   ErpnextTestResult,
   Error,
+  FeedbackForm,
+  FeedbackFormInput,
+  FeedbackFormStatusInput,
+  FeedbackFormUpdate,
+  FeedbackInvitation,
+  FeedbackRecipientsPreview,
+  FeedbackRecipientsPreviewRequest,
   FinanceApplication,
   FinanceApplicationDetail,
   FinanceApplicationInput,
@@ -254,6 +261,8 @@ import type {
   PlatformUser,
   PredictiveAnalytics,
   ProvisioningStatus,
+  PublicFeedbackForm,
+  PublicFeedbackSubmission,
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderReceiveBody,
@@ -276,6 +285,8 @@ import type {
   SalesPerformance,
   SearchResults,
   SendDeliveryWarrantyEmail200,
+  SendFeedbackFormRequest,
+  SendFeedbackFormResult,
   SendQuoteInput,
   SendQuoteResult,
   SentimentAnalysis,
@@ -24336,5 +24347,891 @@ export const useRetryErpnextSyncJob = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getRetryErpnextSyncJobMutationOptions(options));
+    }
+
+export const getListFeedbackFormsUrl = () => {
+
+
+
+
+  return `/api/feedback-forms`
+}
+
+/**
+ * @summary List the dealership's feedback forms (GM only)
+ */
+export const listFeedbackForms = async ( options?: RequestInit): Promise<FeedbackForm[]> => {
+
+  return customFetch<FeedbackForm[]>(getListFeedbackFormsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFeedbackFormsQueryKey = () => {
+    return [
+    `/api/feedback-forms`
+    ] as const;
+    }
+
+
+export const getListFeedbackFormsQueryOptions = <TData = Awaited<ReturnType<typeof listFeedbackForms>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFeedbackForms>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFeedbackFormsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFeedbackForms>>> = ({ signal }) => listFeedbackForms({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFeedbackForms>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFeedbackFormsQueryResult = NonNullable<Awaited<ReturnType<typeof listFeedbackForms>>>
+export type ListFeedbackFormsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the dealership's feedback forms (GM only)
+ */
+
+export function useListFeedbackForms<TData = Awaited<ReturnType<typeof listFeedbackForms>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFeedbackForms>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFeedbackFormsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateFeedbackFormUrl = () => {
+
+
+
+
+  return `/api/feedback-forms`
+}
+
+/**
+ * @summary Create a feedback form draft (GM only)
+ */
+export const createFeedbackForm = async (feedbackFormInput: FeedbackFormInput, options?: RequestInit): Promise<FeedbackForm> => {
+
+  return customFetch<FeedbackForm>(getCreateFeedbackFormUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(feedbackFormInput)
+  }
+);}
+
+
+
+
+
+export const getCreateFeedbackFormMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createFeedbackForm>>, TError,{data: BodyType<FeedbackFormInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createFeedbackForm>>, TError,{data: BodyType<FeedbackFormInput>}, TContext> => {
+
+const mutationKey = ['createFeedbackForm'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createFeedbackForm>>, {data: BodyType<FeedbackFormInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createFeedbackForm(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateFeedbackFormMutationResult = NonNullable<Awaited<ReturnType<typeof createFeedbackForm>>>
+    export type CreateFeedbackFormMutationBody = BodyType<FeedbackFormInput>
+    export type CreateFeedbackFormMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a feedback form draft (GM only)
+ */
+export const useCreateFeedbackForm = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createFeedbackForm>>, TError,{data: BodyType<FeedbackFormInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createFeedbackForm>>,
+        TError,
+        {data: BodyType<FeedbackFormInput>},
+        TContext
+      > => {
+      return useMutation(getCreateFeedbackFormMutationOptions(options));
+    }
+
+export const getPreviewFeedbackRecipientsUrl = () => {
+
+
+
+
+  return `/api/feedback-forms/preview-recipients`
+}
+
+/**
+ * @summary Preview leads matching a filter expression, with exclusions (GM only)
+ */
+export const previewFeedbackRecipients = async (feedbackRecipientsPreviewRequest: FeedbackRecipientsPreviewRequest, options?: RequestInit): Promise<FeedbackRecipientsPreview> => {
+
+  return customFetch<FeedbackRecipientsPreview>(getPreviewFeedbackRecipientsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(feedbackRecipientsPreviewRequest)
+  }
+);}
+
+
+
+
+
+export const getPreviewFeedbackRecipientsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewFeedbackRecipients>>, TError,{data: BodyType<FeedbackRecipientsPreviewRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewFeedbackRecipients>>, TError,{data: BodyType<FeedbackRecipientsPreviewRequest>}, TContext> => {
+
+const mutationKey = ['previewFeedbackRecipients'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewFeedbackRecipients>>, {data: BodyType<FeedbackRecipientsPreviewRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewFeedbackRecipients(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewFeedbackRecipientsMutationResult = NonNullable<Awaited<ReturnType<typeof previewFeedbackRecipients>>>
+    export type PreviewFeedbackRecipientsMutationBody = BodyType<FeedbackRecipientsPreviewRequest>
+    export type PreviewFeedbackRecipientsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Preview leads matching a filter expression, with exclusions (GM only)
+ */
+export const usePreviewFeedbackRecipients = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewFeedbackRecipients>>, TError,{data: BodyType<FeedbackRecipientsPreviewRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewFeedbackRecipients>>,
+        TError,
+        {data: BodyType<FeedbackRecipientsPreviewRequest>},
+        TContext
+      > => {
+      return useMutation(getPreviewFeedbackRecipientsMutationOptions(options));
+    }
+
+export const getGetFeedbackFormUrl = (id: number,) => {
+
+
+
+
+  return `/api/feedback-forms/${id}`
+}
+
+/**
+ * @summary Get a feedback form (GM only)
+ */
+export const getFeedbackForm = async (id: number, options?: RequestInit): Promise<FeedbackForm> => {
+
+  return customFetch<FeedbackForm>(getGetFeedbackFormUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFeedbackFormQueryKey = (id: number,) => {
+    return [
+    `/api/feedback-forms/${id}`
+    ] as const;
+    }
+
+
+export const getGetFeedbackFormQueryOptions = <TData = Awaited<ReturnType<typeof getFeedbackForm>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedbackForm>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFeedbackFormQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeedbackForm>>> = ({ signal }) => getFeedbackForm(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFeedbackForm>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFeedbackFormQueryResult = NonNullable<Awaited<ReturnType<typeof getFeedbackForm>>>
+export type GetFeedbackFormQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Get a feedback form (GM only)
+ */
+
+export function useGetFeedbackForm<TData = Awaited<ReturnType<typeof getFeedbackForm>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedbackForm>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFeedbackFormQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateFeedbackFormUrl = (id: number,) => {
+
+
+
+
+  return `/api/feedback-forms/${id}`
+}
+
+/**
+ * @summary Update a feedback form's name/description/questions (GM only)
+ */
+export const updateFeedbackForm = async (id: number,
+    feedbackFormUpdate: FeedbackFormUpdate, options?: RequestInit): Promise<FeedbackForm> => {
+
+  return customFetch<FeedbackForm>(getUpdateFeedbackFormUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(feedbackFormUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateFeedbackFormMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFeedbackForm>>, TError,{id: number;data: BodyType<FeedbackFormUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateFeedbackForm>>, TError,{id: number;data: BodyType<FeedbackFormUpdate>}, TContext> => {
+
+const mutationKey = ['updateFeedbackForm'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFeedbackForm>>, {id: number;data: BodyType<FeedbackFormUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateFeedbackForm(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateFeedbackFormMutationResult = NonNullable<Awaited<ReturnType<typeof updateFeedbackForm>>>
+    export type UpdateFeedbackFormMutationBody = BodyType<FeedbackFormUpdate>
+    export type UpdateFeedbackFormMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a feedback form's name/description/questions (GM only)
+ */
+export const useUpdateFeedbackForm = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFeedbackForm>>, TError,{id: number;data: BodyType<FeedbackFormUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateFeedbackForm>>,
+        TError,
+        {id: number;data: BodyType<FeedbackFormUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateFeedbackFormMutationOptions(options));
+    }
+
+export const getSetFeedbackFormStatusUrl = (id: number,) => {
+
+
+
+
+  return `/api/feedback-forms/${id}/status`
+}
+
+/**
+ * @summary Publish, archive or reactivate a form (GM only)
+ */
+export const setFeedbackFormStatus = async (id: number,
+    feedbackFormStatusInput: FeedbackFormStatusInput, options?: RequestInit): Promise<FeedbackForm> => {
+
+  return customFetch<FeedbackForm>(getSetFeedbackFormStatusUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(feedbackFormStatusInput)
+  }
+);}
+
+
+
+
+
+export const getSetFeedbackFormStatusMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setFeedbackFormStatus>>, TError,{id: number;data: BodyType<FeedbackFormStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setFeedbackFormStatus>>, TError,{id: number;data: BodyType<FeedbackFormStatusInput>}, TContext> => {
+
+const mutationKey = ['setFeedbackFormStatus'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setFeedbackFormStatus>>, {id: number;data: BodyType<FeedbackFormStatusInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  setFeedbackFormStatus(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetFeedbackFormStatusMutationResult = NonNullable<Awaited<ReturnType<typeof setFeedbackFormStatus>>>
+    export type SetFeedbackFormStatusMutationBody = BodyType<FeedbackFormStatusInput>
+    export type SetFeedbackFormStatusMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Publish, archive or reactivate a form (GM only)
+ */
+export const useSetFeedbackFormStatus = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setFeedbackFormStatus>>, TError,{id: number;data: BodyType<FeedbackFormStatusInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setFeedbackFormStatus>>,
+        TError,
+        {id: number;data: BodyType<FeedbackFormStatusInput>},
+        TContext
+      > => {
+      return useMutation(getSetFeedbackFormStatusMutationOptions(options));
+    }
+
+export const getDuplicateFeedbackFormUrl = (id: number,) => {
+
+
+
+
+  return `/api/feedback-forms/${id}/duplicate`
+}
+
+/**
+ * @summary Duplicate a form as a new draft (GM only)
+ */
+export const duplicateFeedbackForm = async (id: number, options?: RequestInit): Promise<FeedbackForm> => {
+
+  return customFetch<FeedbackForm>(getDuplicateFeedbackFormUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getDuplicateFeedbackFormMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof duplicateFeedbackForm>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof duplicateFeedbackForm>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['duplicateFeedbackForm'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof duplicateFeedbackForm>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  duplicateFeedbackForm(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DuplicateFeedbackFormMutationResult = NonNullable<Awaited<ReturnType<typeof duplicateFeedbackForm>>>
+
+    export type DuplicateFeedbackFormMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Duplicate a form as a new draft (GM only)
+ */
+export const useDuplicateFeedbackForm = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof duplicateFeedbackForm>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof duplicateFeedbackForm>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDuplicateFeedbackFormMutationOptions(options));
+    }
+
+export const getSendFeedbackFormUrl = (id: number,) => {
+
+
+
+
+  return `/api/feedback-forms/${id}/send`
+}
+
+/**
+ * @summary Bulk-send a published form to selected or all-matching leads (GM only)
+ */
+export const sendFeedbackForm = async (id: number,
+    sendFeedbackFormRequest: SendFeedbackFormRequest, options?: RequestInit): Promise<SendFeedbackFormResult> => {
+
+  return customFetch<SendFeedbackFormResult>(getSendFeedbackFormUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendFeedbackFormRequest)
+  }
+);}
+
+
+
+
+
+export const getSendFeedbackFormMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendFeedbackForm>>, TError,{id: number;data: BodyType<SendFeedbackFormRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendFeedbackForm>>, TError,{id: number;data: BodyType<SendFeedbackFormRequest>}, TContext> => {
+
+const mutationKey = ['sendFeedbackForm'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendFeedbackForm>>, {id: number;data: BodyType<SendFeedbackFormRequest>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  sendFeedbackForm(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendFeedbackFormMutationResult = NonNullable<Awaited<ReturnType<typeof sendFeedbackForm>>>
+    export type SendFeedbackFormMutationBody = BodyType<SendFeedbackFormRequest>
+    export type SendFeedbackFormMutationError = ErrorType<Error>
+
+    /**
+ * @summary Bulk-send a published form to selected or all-matching leads (GM only)
+ */
+export const useSendFeedbackForm = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendFeedbackForm>>, TError,{id: number;data: BodyType<SendFeedbackFormRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendFeedbackForm>>,
+        TError,
+        {id: number;data: BodyType<SendFeedbackFormRequest>},
+        TContext
+      > => {
+      return useMutation(getSendFeedbackFormMutationOptions(options));
+    }
+
+export const getListFeedbackFormInvitationsUrl = (id: number,) => {
+
+
+
+
+  return `/api/feedback-forms/${id}/invitations`
+}
+
+/**
+ * @summary Delivery + response status for a form's invitations (GM only)
+ */
+export const listFeedbackFormInvitations = async (id: number, options?: RequestInit): Promise<FeedbackInvitation[]> => {
+
+  return customFetch<FeedbackInvitation[]>(getListFeedbackFormInvitationsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFeedbackFormInvitationsQueryKey = (id: number,) => {
+    return [
+    `/api/feedback-forms/${id}/invitations`
+    ] as const;
+    }
+
+
+export const getListFeedbackFormInvitationsQueryOptions = <TData = Awaited<ReturnType<typeof listFeedbackFormInvitations>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFeedbackFormInvitations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFeedbackFormInvitationsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFeedbackFormInvitations>>> = ({ signal }) => listFeedbackFormInvitations(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFeedbackFormInvitations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFeedbackFormInvitationsQueryResult = NonNullable<Awaited<ReturnType<typeof listFeedbackFormInvitations>>>
+export type ListFeedbackFormInvitationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Delivery + response status for a form's invitations (GM only)
+ */
+
+export function useListFeedbackFormInvitations<TData = Awaited<ReturnType<typeof listFeedbackFormInvitations>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFeedbackFormInvitations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFeedbackFormInvitationsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetLeadFeedbackUrl = (id: number,) => {
+
+
+
+
+  return `/api/leads/${id}/feedback`
+}
+
+/**
+ * @summary Feedback invitations + submitted answers for a lead
+ */
+export const getLeadFeedback = async (id: number, options?: RequestInit): Promise<FeedbackInvitation[]> => {
+
+  return customFetch<FeedbackInvitation[]>(getGetLeadFeedbackUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLeadFeedbackQueryKey = (id: number,) => {
+    return [
+    `/api/leads/${id}/feedback`
+    ] as const;
+    }
+
+
+export const getGetLeadFeedbackQueryOptions = <TData = Awaited<ReturnType<typeof getLeadFeedback>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadFeedback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLeadFeedbackQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLeadFeedback>>> = ({ signal }) => getLeadFeedback(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLeadFeedback>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLeadFeedbackQueryResult = NonNullable<Awaited<ReturnType<typeof getLeadFeedback>>>
+export type GetLeadFeedbackQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Feedback invitations + submitted answers for a lead
+ */
+
+export function useGetLeadFeedback<TData = Awaited<ReturnType<typeof getLeadFeedback>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLeadFeedback>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLeadFeedbackQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPublicFeedbackFormUrl = (token: string,) => {
+
+
+
+
+  return `/api/feedback/${token}`
+}
+
+/**
+ * @summary Public — load a feedback invitation by secure token
+ */
+export const getPublicFeedbackForm = async (token: string, options?: RequestInit): Promise<PublicFeedbackForm> => {
+
+  return customFetch<PublicFeedbackForm>(getGetPublicFeedbackFormUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicFeedbackFormQueryKey = (token: string,) => {
+    return [
+    `/api/feedback/${token}`
+    ] as const;
+    }
+
+
+export const getGetPublicFeedbackFormQueryOptions = <TData = Awaited<ReturnType<typeof getPublicFeedbackForm>>, TError = ErrorType<Error>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicFeedbackForm>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicFeedbackFormQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicFeedbackForm>>> = ({ signal }) => getPublicFeedbackForm(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicFeedbackForm>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicFeedbackFormQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicFeedbackForm>>>
+export type GetPublicFeedbackFormQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Public — load a feedback invitation by secure token
+ */
+
+export function useGetPublicFeedbackForm<TData = Awaited<ReturnType<typeof getPublicFeedbackForm>>, TError = ErrorType<Error>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicFeedbackForm>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicFeedbackFormQueryOptions(token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitPublicFeedbackFormUrl = (token: string,) => {
+
+
+
+
+  return `/api/feedback/${token}/submit`
+}
+
+/**
+ * @summary Public — submit answers once for a feedback invitation
+ */
+export const submitPublicFeedbackForm = async (token: string,
+    publicFeedbackSubmission: PublicFeedbackSubmission, options?: RequestInit): Promise<PublicFeedbackForm> => {
+
+  return customFetch<PublicFeedbackForm>(getSubmitPublicFeedbackFormUrl(token),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(publicFeedbackSubmission)
+  }
+);}
+
+
+
+
+
+export const getSubmitPublicFeedbackFormMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPublicFeedbackForm>>, TError,{token: string;data: BodyType<PublicFeedbackSubmission>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitPublicFeedbackForm>>, TError,{token: string;data: BodyType<PublicFeedbackSubmission>}, TContext> => {
+
+const mutationKey = ['submitPublicFeedbackForm'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitPublicFeedbackForm>>, {token: string;data: BodyType<PublicFeedbackSubmission>}> = (props) => {
+          const {token,data} = props ?? {};
+
+          return  submitPublicFeedbackForm(token,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitPublicFeedbackFormMutationResult = NonNullable<Awaited<ReturnType<typeof submitPublicFeedbackForm>>>
+    export type SubmitPublicFeedbackFormMutationBody = BodyType<PublicFeedbackSubmission>
+    export type SubmitPublicFeedbackFormMutationError = ErrorType<Error>
+
+    /**
+ * @summary Public — submit answers once for a feedback invitation
+ */
+export const useSubmitPublicFeedbackForm = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPublicFeedbackForm>>, TError,{token: string;data: BodyType<PublicFeedbackSubmission>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitPublicFeedbackForm>>,
+        TError,
+        {token: string;data: BodyType<PublicFeedbackSubmission>},
+        TContext
+      > => {
+      return useMutation(getSubmitPublicFeedbackFormMutationOptions(options));
     }
 

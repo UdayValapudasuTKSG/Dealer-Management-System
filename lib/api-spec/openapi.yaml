@@ -7959,6 +7959,293 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /feedback-forms:
+    get:
+      operationId: listFeedbackForms
+      tags: [feedback-forms]
+      summary: List the dealership's feedback forms (GM only)
+      responses:
+        "200":
+          description: Feedback forms
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FeedbackForm"
+    post:
+      operationId: createFeedbackForm
+      tags: [feedback-forms]
+      summary: Create a feedback form draft (GM only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackFormInput"
+      responses:
+        "201":
+          description: Created form
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackForm"
+
+  /feedback-forms/preview-recipients:
+    post:
+      operationId: previewFeedbackRecipients
+      tags: [feedback-forms]
+      summary: Preview leads matching a filter expression, with exclusions (GM only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackRecipientsPreviewRequest"
+      responses:
+        "200":
+          description: Matching / included / excluded recipients
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackRecipientsPreview"
+
+  /feedback-forms/{id}:
+    get:
+      operationId: getFeedbackForm
+      tags: [feedback-forms]
+      summary: Get a feedback form (GM only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Form
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackForm"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateFeedbackForm
+      tags: [feedback-forms]
+      summary: Update a feedback form's name/description/questions (GM only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackFormUpdate"
+      responses:
+        "200":
+          description: Updated form
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackForm"
+
+  /feedback-forms/{id}/status:
+    post:
+      operationId: setFeedbackFormStatus
+      tags: [feedback-forms]
+      summary: Publish, archive or reactivate a form (GM only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackFormStatusInput"
+      responses:
+        "200":
+          description: Updated form
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackForm"
+
+  /feedback-forms/{id}/duplicate:
+    post:
+      operationId: duplicateFeedbackForm
+      tags: [feedback-forms]
+      summary: Duplicate a form as a new draft (GM only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "201":
+          description: New draft copy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackForm"
+
+  /feedback-forms/{id}/send:
+    post:
+      operationId: sendFeedbackForm
+      tags: [feedback-forms]
+      summary: Bulk-send a published form to selected or all-matching leads (GM only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendFeedbackFormRequest"
+      responses:
+        "200":
+          description: Send summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendFeedbackFormResult"
+        "409":
+          description: Form is not published
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /feedback-forms/{id}/invitations:
+    get:
+      operationId: listFeedbackFormInvitations
+      tags: [feedback-forms]
+      summary: Delivery + response status for a form's invitations (GM only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Invitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FeedbackInvitation"
+
+  /leads/{id}/feedback:
+    get:
+      operationId: getLeadFeedback
+      tags: [leads]
+      summary: Feedback invitations + submitted answers for a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Invitations for this lead
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FeedbackInvitation"
+
+  /feedback/{token}:
+    get:
+      operationId: getPublicFeedbackForm
+      tags: [feedback-forms]
+      summary: Public — load a feedback invitation by secure token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Invitation snapshot for the customer form page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicFeedbackForm"
+        "404":
+          description: Unknown link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Expired link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /feedback/{token}/submit:
+    post:
+      operationId: submitPublicFeedbackForm
+      tags: [feedback-forms]
+      summary: Public — submit answers once for a feedback invitation
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicFeedbackSubmission"
+      responses:
+        "200":
+          description: Submission accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicFeedbackForm"
+        "404":
+          description: Unknown link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Already submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Expired link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Answer validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   schemas:
     WhatsappSettings:
@@ -12547,3 +12834,192 @@ components:
         timeline:
           type: array
           items: { $ref: "#/components/schemas/TimelineEvent" }
+
+    FeedbackQuestion:
+      type: object
+      required: [id, type, label, required]
+      properties:
+        id: { type: string, minLength: 1 }
+        type: { type: string, enum: [text, long_text, single_choice, multi_choice, star_rating] }
+        label: { type: string, minLength: 1 }
+        required: { type: boolean }
+        options:
+          type: array
+          items: { type: string }
+        maxStars: { type: integer, minimum: 3, maximum: 10 }
+    FeedbackForm:
+      type: object
+      required: [id, name, status, questions, sentCount, responseCount, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: ["string", "null"] }
+        status: { type: string, enum: [draft, published, archived] }
+        questions:
+          type: array
+          items: { $ref: "#/components/schemas/FeedbackQuestion" }
+        sentCount: { type: integer }
+        responseCount: { type: integer }
+        createdBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    FeedbackFormInput:
+      type: object
+      required: [name, questions]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: ["string", "null"] }
+        questions:
+          type: array
+          items: { $ref: "#/components/schemas/FeedbackQuestion" }
+    FeedbackFormUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: ["string", "null"] }
+        questions:
+          type: array
+          items: { $ref: "#/components/schemas/FeedbackQuestion" }
+    FeedbackFormStatusInput:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [publish, archive, reactivate] }
+    LeadFilterCondition:
+      type: object
+      required: [field, operator, values]
+      properties:
+        field: { type: string, enum: [phase, status, source, owner, division, created, vehicleInterest] }
+        operator: { type: string, enum: [is, is_not, is_any_of, contains, on_or_after, on_or_before] }
+        values:
+          type: array
+          items: { type: string }
+    FeedbackRecipientsPreviewRequest:
+      type: object
+      properties:
+        formId: { type: ["integer", "null"] }
+        filters:
+          type: array
+          items: { $ref: "#/components/schemas/LeadFilterCondition" }
+        leadIds:
+          type: array
+          items: { type: integer }
+        channels:
+          type: array
+          items: { type: string, enum: [email, whatsapp] }
+    FeedbackRecipientSummary:
+      type: object
+      required: [leadId, name, channels]
+      properties:
+        leadId: { type: integer }
+        name: { type: string }
+        email: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        channels:
+          type: array
+          items: { type: string }
+    FeedbackRecipientExclusion:
+      type: object
+      required: [leadId, name, reason]
+      properties:
+        leadId: { type: integer }
+        name: { type: string }
+        reason: { type: string, enum: [no_contact, email_opt_out, whatsapp_opt_out, already_sent] }
+    FeedbackRecipientsPreview:
+      type: object
+      required: [matchingCount, matchingLeadIds, included, excluded]
+      properties:
+        matchingCount: { type: integer }
+        matchingLeadIds:
+          type: array
+          items: { type: integer }
+        included:
+          type: array
+          items: { $ref: "#/components/schemas/FeedbackRecipientSummary" }
+        excluded:
+          type: array
+          items: { $ref: "#/components/schemas/FeedbackRecipientExclusion" }
+    SendFeedbackFormRequest:
+      type: object
+      required: [mode, channels]
+      properties:
+        mode: { type: string, enum: [selected, all_matching] }
+        leadIds:
+          type: array
+          items: { type: integer }
+        filters:
+          type: array
+          items: { $ref: "#/components/schemas/LeadFilterCondition" }
+        channels:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [email, whatsapp] }
+        expiresInDays: { type: integer, minimum: 1, maximum: 90 }
+    SendFeedbackFormResult:
+      type: object
+      required: [queued, skipped]
+      properties:
+        queued: { type: integer }
+        skipped:
+          type: array
+          items: { $ref: "#/components/schemas/FeedbackRecipientExclusion" }
+    FeedbackDeliveryState:
+      type: object
+      required: [channel, status]
+      properties:
+        channel: { type: string, enum: [email, whatsapp] }
+        status: { type: string }
+    FeedbackInvitation:
+      type: object
+      required: [id, formId, leadId, formName, status, channels, delivery, expiresAt, createdAt]
+      properties:
+        id: { type: integer }
+        formId: { type: integer }
+        leadId: { type: integer }
+        leadName: { type: ["string", "null"] }
+        formName: { type: string }
+        status: { type: string, enum: [sent, completed] }
+        channels:
+          type: array
+          items: { type: string }
+        delivery:
+          type: array
+          items: { $ref: "#/components/schemas/FeedbackDeliveryState" }
+        questionsSnapshot:
+          type: array
+          items: { $ref: "#/components/schemas/FeedbackQuestion" }
+        answers:
+          type: ["object", "null"]
+          additionalProperties: true
+        expiresAt: { type: string, format: date-time }
+        submittedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    PublicFeedbackForm:
+      type: object
+      required: [state, formName, brandName, questions]
+      properties:
+        state: { type: string, enum: [open, submitted] }
+        formName: { type: string }
+        brandName: { type: string }
+        leadName: { type: ["string", "null"] }
+        questions:
+          type: array
+          items: { $ref: "#/components/schemas/FeedbackQuestion" }
+        submittedAt: { type: ["string", "null"], format: date-time }
+    PublicFeedbackAnswer:
+      type: object
+      required: [questionId]
+      properties:
+        questionId: { type: string, minLength: 1 }
+        text: { type: string }
+        choices:
+          type: array
+          items: { type: string }
+        rating: { type: integer, minimum: 1, maximum: 10 }
+    PublicFeedbackSubmission:
+      type: object
+      required: [answers]
+      properties:
+        answers:
+          type: array
+          items: { $ref: "#/components/schemas/PublicFeedbackAnswer" }

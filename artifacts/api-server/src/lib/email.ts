@@ -544,6 +544,10 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     heading: (x) => `How did we do, ${d(x, "name", "")}?`.trim(),
     body: (x) =>
       `Thank you${x.context ? ` for ${x.context}` : ""}. We'd love two minutes of your time — your feedback goes straight to the general manager and shapes how we look after you next.`,
+    cta: (x) =>
+      x.link
+        ? { label: "Share your feedback", href: x.link }
+        : { label: "We appreciate you" },
     sample: { name: "Alex", context: "your recent delivery" },
   },
   "service.cadence.due": {

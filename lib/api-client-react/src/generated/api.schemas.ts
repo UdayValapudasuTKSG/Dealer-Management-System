@@ -7416,6 +7416,279 @@ export interface CustomerCommunications {
   timeline: TimelineEvent[];
 }
 
+export type FeedbackQuestionType = typeof FeedbackQuestionType[keyof typeof FeedbackQuestionType];
+
+
+export const FeedbackQuestionType = {
+  text: 'text',
+  long_text: 'long_text',
+  single_choice: 'single_choice',
+  multi_choice: 'multi_choice',
+  star_rating: 'star_rating',
+} as const;
+
+export interface FeedbackQuestion {
+  /** @minLength 1 */
+  id: string;
+  type: FeedbackQuestionType;
+  /** @minLength 1 */
+  label: string;
+  required: boolean;
+  options?: string[];
+  /**
+     * @minimum 3
+     * @maximum 10
+     */
+  maxStars?: number;
+}
+
+export type FeedbackFormStatus = typeof FeedbackFormStatus[keyof typeof FeedbackFormStatus];
+
+
+export const FeedbackFormStatus = {
+  draft: 'draft',
+  published: 'published',
+  archived: 'archived',
+} as const;
+
+export interface FeedbackForm {
+  id: number;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  status: FeedbackFormStatus;
+  questions: FeedbackQuestion[];
+  sentCount: number;
+  responseCount: number;
+  /** @nullable */
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FeedbackFormInput {
+  /** @minLength 1 */
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  questions: FeedbackQuestion[];
+}
+
+export interface FeedbackFormUpdate {
+  /** @minLength 1 */
+  name?: string;
+  /** @nullable */
+  description?: string | null;
+  questions?: FeedbackQuestion[];
+}
+
+export type FeedbackFormStatusInputAction = typeof FeedbackFormStatusInputAction[keyof typeof FeedbackFormStatusInputAction];
+
+
+export const FeedbackFormStatusInputAction = {
+  publish: 'publish',
+  archive: 'archive',
+  reactivate: 'reactivate',
+} as const;
+
+export interface FeedbackFormStatusInput {
+  action: FeedbackFormStatusInputAction;
+}
+
+export type LeadFilterConditionField = typeof LeadFilterConditionField[keyof typeof LeadFilterConditionField];
+
+
+export const LeadFilterConditionField = {
+  phase: 'phase',
+  status: 'status',
+  source: 'source',
+  owner: 'owner',
+  division: 'division',
+  created: 'created',
+  vehicleInterest: 'vehicleInterest',
+} as const;
+
+export type LeadFilterConditionOperator = typeof LeadFilterConditionOperator[keyof typeof LeadFilterConditionOperator];
+
+
+export const LeadFilterConditionOperator = {
+  is: 'is',
+  is_not: 'is_not',
+  is_any_of: 'is_any_of',
+  contains: 'contains',
+  on_or_after: 'on_or_after',
+  on_or_before: 'on_or_before',
+} as const;
+
+export interface LeadFilterCondition {
+  field: LeadFilterConditionField;
+  operator: LeadFilterConditionOperator;
+  values: string[];
+}
+
+export type FeedbackRecipientsPreviewRequestChannelsItem = typeof FeedbackRecipientsPreviewRequestChannelsItem[keyof typeof FeedbackRecipientsPreviewRequestChannelsItem];
+
+
+export const FeedbackRecipientsPreviewRequestChannelsItem = {
+  email: 'email',
+  whatsapp: 'whatsapp',
+} as const;
+
+export interface FeedbackRecipientsPreviewRequest {
+  /** @nullable */
+  formId?: number | null;
+  filters?: LeadFilterCondition[];
+  leadIds?: number[];
+  channels?: FeedbackRecipientsPreviewRequestChannelsItem[];
+}
+
+export interface FeedbackRecipientSummary {
+  leadId: number;
+  name: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  channels: string[];
+}
+
+export type FeedbackRecipientExclusionReason = typeof FeedbackRecipientExclusionReason[keyof typeof FeedbackRecipientExclusionReason];
+
+
+export const FeedbackRecipientExclusionReason = {
+  no_contact: 'no_contact',
+  email_opt_out: 'email_opt_out',
+  whatsapp_opt_out: 'whatsapp_opt_out',
+  already_sent: 'already_sent',
+} as const;
+
+export interface FeedbackRecipientExclusion {
+  leadId: number;
+  name: string;
+  reason: FeedbackRecipientExclusionReason;
+}
+
+export interface FeedbackRecipientsPreview {
+  matchingCount: number;
+  matchingLeadIds: number[];
+  included: FeedbackRecipientSummary[];
+  excluded: FeedbackRecipientExclusion[];
+}
+
+export type SendFeedbackFormRequestMode = typeof SendFeedbackFormRequestMode[keyof typeof SendFeedbackFormRequestMode];
+
+
+export const SendFeedbackFormRequestMode = {
+  selected: 'selected',
+  all_matching: 'all_matching',
+} as const;
+
+export type SendFeedbackFormRequestChannelsItem = typeof SendFeedbackFormRequestChannelsItem[keyof typeof SendFeedbackFormRequestChannelsItem];
+
+
+export const SendFeedbackFormRequestChannelsItem = {
+  email: 'email',
+  whatsapp: 'whatsapp',
+} as const;
+
+export interface SendFeedbackFormRequest {
+  mode: SendFeedbackFormRequestMode;
+  leadIds?: number[];
+  filters?: LeadFilterCondition[];
+  /** @minItems 1 */
+  channels: SendFeedbackFormRequestChannelsItem[];
+  /**
+     * @minimum 1
+     * @maximum 90
+     */
+  expiresInDays?: number;
+}
+
+export interface SendFeedbackFormResult {
+  queued: number;
+  skipped: FeedbackRecipientExclusion[];
+}
+
+export type FeedbackDeliveryStateChannel = typeof FeedbackDeliveryStateChannel[keyof typeof FeedbackDeliveryStateChannel];
+
+
+export const FeedbackDeliveryStateChannel = {
+  email: 'email',
+  whatsapp: 'whatsapp',
+} as const;
+
+export interface FeedbackDeliveryState {
+  channel: FeedbackDeliveryStateChannel;
+  status: string;
+}
+
+export type FeedbackInvitationStatus = typeof FeedbackInvitationStatus[keyof typeof FeedbackInvitationStatus];
+
+
+export const FeedbackInvitationStatus = {
+  sent: 'sent',
+  completed: 'completed',
+} as const;
+
+/**
+ * @nullable
+ */
+export type FeedbackInvitationAnswers = { [key: string]: unknown } | null;
+
+export interface FeedbackInvitation {
+  id: number;
+  formId: number;
+  leadId: number;
+  /** @nullable */
+  leadName?: string | null;
+  formName: string;
+  status: FeedbackInvitationStatus;
+  channels: string[];
+  delivery: FeedbackDeliveryState[];
+  questionsSnapshot?: FeedbackQuestion[];
+  /** @nullable */
+  answers?: FeedbackInvitationAnswers;
+  expiresAt: string;
+  /** @nullable */
+  submittedAt?: string | null;
+  createdAt: string;
+}
+
+export type PublicFeedbackFormState = typeof PublicFeedbackFormState[keyof typeof PublicFeedbackFormState];
+
+
+export const PublicFeedbackFormState = {
+  open: 'open',
+  submitted: 'submitted',
+} as const;
+
+export interface PublicFeedbackForm {
+  state: PublicFeedbackFormState;
+  formName: string;
+  brandName: string;
+  /** @nullable */
+  leadName?: string | null;
+  questions: FeedbackQuestion[];
+  /** @nullable */
+  submittedAt?: string | null;
+}
+
+export interface PublicFeedbackAnswer {
+  /** @minLength 1 */
+  questionId: string;
+  text?: string;
+  choices?: string[];
+  /**
+     * @minimum 1
+     * @maximum 10
+     */
+  rating?: number;
+}
+
+export interface PublicFeedbackSubmission {
+  answers: PublicFeedbackAnswer[];
+}
+
 export type VerifyMetaWebhookParams = {
 'hub.mode'?: string;
 'hub.verify_token'?: string;

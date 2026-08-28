@@ -137,6 +137,12 @@ export function testDriveBookingUrl(token: string): string | null {
   return origin ? `${origin}/book-test-drive/${token}` : null;
 }
 
+/** Public customer feedback form URL for an invitation token. */
+export function feedbackFormUrl(token: string): string | null {
+  const origin = publicAppOrigin();
+  return origin ? `${origin}/feedback/${token}` : null;
+}
+
 /**
  * New lead created → personalised PDF quote when a vehicle of interest is on
  * file (details pulled from inventory), otherwise the "lead_received" welcome.
