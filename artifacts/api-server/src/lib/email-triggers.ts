@@ -170,41 +170,10 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
           ...(fallbackVehicleName ? { vehicle: fallbackVehicleName } : {}),
         },
       });
-    } else {
-      const label = `${v.make} ${v.model}`;
-      const version =
-        v.trim || v.variant || lead.variant || "Standard specification";
-      const color = v.exteriorColor || lead.color || "";
-      const quantity = 1;
-      const now = new Date();
-      const validUntil = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-      // Booking CTA rides along inside the quote email too, so the customer
-      // can reserve a slot even if the separate invite email is missed.
-      const bookingLink = lead.testDriveAt
-        ? null
-        : testDriveBookingUrl(lead.testDriveToken);
-
-      await send({
-        dealerId: lead.dealerId,
-        template: "vehicle_quote",
-        to,
-        customerId: lead.customerId,
-        data: {
-          name,
-          vehicle: label,
-          model: v.model,
-          version,
-          color,
-          quantity: String(quantity),
-          unitPrice: money(v.price),
-          total: money(v.price * quantity),
-          quoteRef: `Q-${lead.id}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`,
-          issuedOn: longDate(now),
-          validUntil: longDate(validUntil),
-          ...(bookingLink ? { link: bookingLink } : {}),
-        },
-      });
     }
+    // Leads with a vehicle interest are handled by the quote agent, which
+    // generates, snapshots, and queues the canonical quote revision. Keeping
+    // this trigger welcome-only prevents a second legacy quote email.
 
     // NOTE: the self-service test-drive booking invite is NOT sent
     // automatically — staff trigger it from the lead page when appropriate

@@ -261,7 +261,11 @@ async function attemptAutoAdvance(
   if (!stage) return { advanced: null, unmet: ["No next stage"] };
 
   const deals = await db
-    .select({ depositPaid: dealsTable.depositPaid })
+    .select({
+      id: dealsTable.id,
+      stage: dealsTable.stage,
+      depositPaid: dealsTable.depositPaid,
+    })
     .from(dealsTable)
     .where(and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, lead.id)));
 

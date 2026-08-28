@@ -1,7 +1,10 @@
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import {
   db,
   vehiclesTable,
+  leadVehicleInterestsTable,
+  deliveriesTable,
+  dealItemsTable,
   callLogsTable,
   contactsTable,
   type Lead,
@@ -86,7 +89,7 @@ export function nextAdvanceStage(lead: Lead): AdvanceStage | null {
 export function buildStageChecks(
   lead: Lead,
   dealerId: number,
-  leadDeals: { depositPaid: boolean | null }[],
+  leadDeals: { id: number; stage: string; depositPaid: boolean | null }[],
   // selfHeal: only the gated stage-advance WRITE path may let checks repair
   // data (auto-link account / backfill primary contact). Read paths (review
   // stepper, agent briefs, proposals) must stay side-effect free.
@@ -138,7 +141,17 @@ export function buildStageChecks(
     // Pre-Book (L4) gates: model locked, fee paid (or manager-approved
     // waiver — the waiver flips reservationFeePaid too), account linked
     // with a primary contact on file.
-    selected_model: () => Boolean(lead.selectedModel),
+    selected_model: async () => {
+      if (lead.selectedModel || lead.interestedVehicleId) return true;
+      const [row] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(leadVehicleInterestsTable)
+        .where(and(
+          eq(leadVehicleInterestsTable.dealerId, dealerId),
+          eq(leadVehicleInterestsTable.leadId, lead.id),
+        ));
+      return (row?.n ?? 0) > 0;
+    },
     reservation_fee: () => Boolean(lead.reservationFeePaid),
     primary_contact: async () => {
       // Self-healing (write path only): linking an account with a primary
@@ -176,33 +189,64 @@ export function buildStageChecks(
     // Vehicle Allocated (L5): a physical unit (VIN) must be bound to the
     // lead, and that unit must be clear of recall/damage flags.
     vin_allocated: async () => {
-      if (!lead.interestedVehicleId) return false;
-      const [v] = await db
-        .select({ vin: vehiclesTable.vin })
-        .from(vehiclesTable)
-        .where(
+      const dealIds = leadDeals
+        .filter((candidate) =>
+          candidate.stage === "committed" || candidate.stage === "delivered"
+        )
+        .map((candidate) => candidate.id);
+      if (!dealIds.length) return false;
+      const [expected] = await db
+        .select({
+          n: sql<number>`coalesce(sum(${dealItemsTable.quantity}), 0)::int`,
+        })
+        .from(dealItemsTable)
+        .where(and(
+          eq(dealItemsTable.dealerId, dealerId),
+          inArray(dealItemsTable.dealId, dealIds),
+        ));
+      const [allocated] = await db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(deliveriesTable)
+        .innerJoin(
+          vehiclesTable,
           and(
-            eq(vehiclesTable.id, lead.interestedVehicleId),
+            eq(vehiclesTable.id, deliveriesTable.vehicleId),
             eq(vehiclesTable.dealerId, dealerId),
           ),
-        );
-      return Boolean(v?.vin);
+        )
+        .where(and(
+          eq(deliveriesTable.dealerId, dealerId),
+          inArray(deliveriesTable.dealId, dealIds),
+          sql`length(${vehiclesTable.vin}) = 17`,
+        ));
+      return (expected?.n ?? 0) > 0 &&
+        (allocated?.n ?? 0) === expected!.n;
     },
     recall_clear: async () => {
-      if (!lead.interestedVehicleId) return true;
-      const [v] = await db
+      const dealIds = leadDeals
+        .filter((candidate) =>
+          candidate.stage === "committed" || candidate.stage === "delivered"
+        )
+        .map((candidate) => candidate.id);
+      if (!dealIds.length) return true;
+      const allocated = await db
         .select({
           recallFlag: vehiclesTable.recallFlag,
           damageFlag: vehiclesTable.damageFlag,
         })
-        .from(vehiclesTable)
-        .where(
+        .from(deliveriesTable)
+        .innerJoin(
+          vehiclesTable,
           and(
-            eq(vehiclesTable.id, lead.interestedVehicleId),
+            eq(vehiclesTable.id, deliveriesTable.vehicleId),
             eq(vehiclesTable.dealerId, dealerId),
           ),
-        );
-      return !v || (!v.recallFlag && !v.damageFlag);
+        )
+        .where(and(
+          eq(deliveriesTable.dealerId, dealerId),
+          inArray(deliveriesTable.dealId, dealIds),
+        ));
+      return allocated.every((unit) => !unit.recallFlag && !unit.damageFlag);
     },
     deposit_taken: () =>
       Boolean((deal && deal.depositPaid) || lead.reservationFeePaid),

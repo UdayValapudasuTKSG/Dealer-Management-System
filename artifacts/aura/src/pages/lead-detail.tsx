@@ -1345,7 +1345,13 @@ export default function LeadDetail() {
       checklist: [
         { label: "Reservation fee paid", done: lead.reservationFeePaid },
         { label: "Account created & linked", done: !!lead.customerId },
-        { label: "Selected model locked", done: !!lead.interestedVehicleId },
+        {
+          label: "Selected model locked",
+          done:
+            (lead.vehicleInterests?.length ?? 0) > 0 ||
+            !!lead.selectedModel ||
+            !!lead.interestedVehicleId,
+        },
       ],
     },
     {

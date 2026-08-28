@@ -992,10 +992,15 @@ router.post("/deals", async (req, res): Promise<void> => {
             eq(quoteItemsTable.quoteId, quote.id),
           )).orderBy(quoteItemsTable.position);
           const subtotal = items.reduce((sum, item) => sum + item.basePrice * item.quantity, 0);
-          if (items.length) await tx.insert(dealItemsTable).values(items.map((item) => {
-            const share = subtotal > 0
-              ? Math.round(quote.discountAmount * (item.basePrice * item.quantity / subtotal) * 100) / 100
-              : 0;
+          if (items.length) {
+            let assignedDiscount = 0;
+            await tx.insert(dealItemsTable).values(items.map((item, index) => {
+            const share = index === items.length - 1
+              ? Math.round((quote.discountAmount - assignedDiscount) * 100) / 100
+              : subtotal > 0
+                ? Math.round(quote.discountAmount * (item.basePrice * item.quantity / subtotal) * 100) / 100
+                : 0;
+            assignedDiscount += share;
              return {
                dealerId, dealId: created.id, quoteItemId: item.id, vehicleId: item.vehicleId,
                make: item.make, model: item.model, modelYear: item.modelYear,
@@ -1004,7 +1009,8 @@ router.post("/deals", async (req, res): Promise<void> => {
               vehiclePrice: item.basePrice, discount: share,
               taxSnapshot: item.taxLines, total: item.total - share,
             };
-          }));
+            }));
+          }
         }
       }
       // Compatibility floor: direct/lead-less deals and legacy header-only

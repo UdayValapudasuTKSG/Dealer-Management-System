@@ -14,6 +14,7 @@ import {
   timelineEventsTable,
   emailLogsTable,
   dealsTable,
+  dealItemsTable,
   dealersTable,
   customersTable,
   bookingsTable,
@@ -21,6 +22,7 @@ import {
   agentsTable,
   gatesTable,
   quotesTable,
+  quoteItemsTable,
   documentsTable,
   testDrivesTable,
   capacityBlocksTable,
@@ -515,7 +517,10 @@ router.post("/leads", async (req, res): Promise<void> => {
   const leadWithInterests = lead
     ? (await withLeadVehicleInterests([lead]))[0]!
     : lead;
-  if (lead) onLeadCreated(lead);
+  // Specification-backed leads receive the canonical generated quote from the
+  // quote agent. The lifecycle trigger remains the welcome-email fallback only
+  // for leads that have no vehicle interest yet.
+  if (lead && normalizedInterests.length === 0) onLeadCreated(lead);
   // R6.2 #1 New Lead → division sales managers (In-App + Email).
   if (lead) notifyLeadNew(lead);
   // Quote agent (A3): auto-generate the Code from inventory + tax config.
@@ -1538,7 +1543,11 @@ router.post(
     const channel = body.data.channel;
     const emailRequested = channel === "email" || channel === "both";
     const whatsappRequested = channel === "whatsapp" || channel === "both";
-    const quotePayload = await quotePdfPayload(quote);
+    const quotePayload = {
+      ...(await quotePdfPayload(quote)),
+      quoteId: String(quote.id),
+      leadId: String(lead.id),
+    };
     let emailQueued = false;
     let whatsappStatus:
       | "not_requested"
@@ -1632,34 +1641,6 @@ router.post(
       }
     }
 
-    const sentVia =
-      emailQueued &&
-      (whatsappStatus === "queued" || whatsappStatus === "already_sent")
-        ? "email and WhatsApp PDF"
-        : emailQueued
-          ? "email"
-          : "WhatsApp PDF";
-    await db
-      .update(quotesTable)
-      .set({ sentAt: new Date(), sentVia })
-      .where(eq(quotesTable.id, quote.id));
-    await db
-      .update(leadsTable)
-      .set({ quotationSent: true })
-      .where(
-        and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, lead.dealerId)),
-      );
-    await logLeadEvent(
-      lead,
-      "quote_sent",
-      `Code ${quote.quoteNumber} sent via ${sentVia}`,
-      `Rev ${quote.version} — total GY$${quote.total.toLocaleString("en-US")} sent to the customer.${
-        whatsappBlockedReason
-          ? ` WhatsApp PDF skipped: ${whatsappBlockedReason}`
-          : ""
-      }`,
-      actorName(res),
-    );
     res.json(
       SendLeadQuoteResponse.parse({
         ok: true,
@@ -2008,61 +1989,59 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
     .from(dealsTable)
     .where(and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.leadId, lead.id)));
 
-  // AUTO-DESK: when a lead advances into Negotiation with a vehicle selected
-  // but no deal on file, a draft deal is desked automatically at the listed
-  // price. This is DETERMINISTIC transactional code triggered by the human's
-  // advance action — not an AI write, so it carries no kill switch (R3.2);
-  // it is audited as a system action.
+  // AUTO-DESK: when a lead advances into Negotiation (or an older affected
+  // lead next attempts Sold) with interests but no deal, bind the current
+  // frozen quote and copy every quote line into one aggregate draft deal.
+  // Physical units remain unallocated until deal commitment.
   if (
-    toStage === "negotiation" &&
-    leadDeals.length === 0 &&
-    lead.interestedVehicleId
+    (toStage === "negotiation" || toStage === "sold") &&
+    leadDeals.length === 0
   ) {
     const startedAt = Date.now();
-    const [vehicle] = await db
-      .select()
-      .from(vehiclesTable)
-      .where(
-        and(
-          eq(vehiclesTable.id, lead.interestedVehicleId),
-          eq(vehiclesTable.dealerId, dealerId),
-        ),
+    const autoDeal = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtext(${`lead-link:${dealerId}:${lead.id}`}))`,
       );
-    if (vehicle) {
-      // Deterministic OTD from the tax engine — same rule as manual desking:
-      // the deal must never sit at 0 OTD or downstream (invoices, commit
-      // gates, remaining-balance displays) all read zero.
-      const taxRules = await ensureDealerTaxes(dealerId);
-      // A manager-approved discount on the current quote carries onto the
-      // auto-desked deal — the customer was quoted the reduced price.
-      const quoteDiscount = Math.min(
-        await approvedQuoteDiscountForLead(dealerId, lead.id),
-        vehicle.price,
-      );
-      const { totalWithTax } = computeTaxes(
-        Math.max(vehicle.price - quoteDiscount, 0),
-        taxRules,
-        {
-          powertrain: vehicle.powertrain ?? null,
-        },
-      );
-      const [autoDeal] = await db
+      const [existing] = await tx
+        .select()
+        .from(dealsTable)
+        .where(and(
+          eq(dealsTable.dealerId, dealerId),
+          eq(dealsTable.leadId, lead.id),
+        ))
+        .limit(1);
+      if (existing) return { deal: existing, created: false };
+
+      const [quote] = await tx
+        .select()
+        .from(quotesTable)
+        .where(and(
+          eq(quotesTable.dealerId, dealerId),
+          eq(quotesTable.leadId, lead.id),
+          eq(quotesTable.status, "current"),
+        ))
+        .orderBy(desc(quotesTable.version))
+        .limit(1)
+        .for("update");
+      if (!quote) return null;
+
+      const [created] = await tx
         .insert(dealsTable)
         .values({
           dealerId,
           leadId: lead.id,
+          quoteId: quote.id,
           customerId: lead.customerId ?? null,
           customerName: lead.name,
-          vehicleId: vehicle.id,
-          vehiclePrice: vehicle.price,
-          otdPrice: totalWithTax,
-          discount: quoteDiscount,
-          divisionId:
-            vehicle.divisionId ?? (await defaultDivisionId(dealerId)),
+          vehicleId: quote.vehicleId!,
+          vehiclePrice: quote.basePrice,
+          otdPrice: quote.total,
+          discount: quote.discountAmount,
+          dutyFreeApproved: quote.dutyFreeStatus === "approved",
+          taxSnapshot: quote.taxSnapshot,
+          divisionId: lead.divisionId ?? (await defaultDivisionId(dealerId)),
           salesAdvisor: lead.assignedTo ?? null,
-          // Carry the lead's payment decision + reservation status onto the
-          // auto-desked deal so downstream flows (bank letter, commit gates)
-          // see them without manual re-entry.
+          salesAdvisorUserId: lead.ownerUserId ?? null,
           ...(lead.purchaseType
             ? {
                 finalPaymentMethod:
@@ -2072,15 +2051,67 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
           depositPaid: lead.reservationFeePaid ?? false,
         })
         .returning();
-      if (autoDeal) {
-        leadDeals.push(autoDeal);
+      if (!created) return null;
+
+      const items = await tx
+        .select()
+        .from(quoteItemsTable)
+        .where(and(
+          eq(quoteItemsTable.dealerId, dealerId),
+          eq(quoteItemsTable.quoteId, quote.id),
+        ))
+        .orderBy(quoteItemsTable.position);
+      const subtotal = items.reduce(
+        (sum, item) => sum + item.basePrice * item.quantity,
+        0,
+      );
+      if (items.length) {
+        let assignedDiscount = 0;
+        await tx.insert(dealItemsTable).values(items.map((item, index) => {
+          const discount =
+            index === items.length - 1
+              ? Math.round((quote.discountAmount - assignedDiscount) * 100) / 100
+              : subtotal > 0
+                ? Math.round(
+                    quote.discountAmount *
+                      ((item.basePrice * item.quantity) / subtotal) *
+                      100,
+                  ) / 100
+                : 0;
+          assignedDiscount += discount;
+          return {
+            dealerId,
+            dealId: created.id,
+            quoteItemId: item.id,
+            vehicleId: item.vehicleId,
+            make: item.make,
+            model: item.model,
+            modelYear: item.modelYear,
+            variant: item.trim,
+            color: item.color,
+            quantity: item.quantity,
+            position: item.position,
+            vehiclePrice: item.basePrice,
+            discount,
+            taxSnapshot: item.taxLines,
+            total: item.total - discount,
+          };
+        }));
+      }
+      return { deal: created, created: true };
+    });
+    if (autoDeal) {
+      if (!leadDeals.some((deal) => deal.id === autoDeal.deal.id)) {
+        leadDeals.push(autoDeal.deal);
+      }
+      if (autoDeal.created) {
         await db.insert(timelineEventsTable).values({
           dealerId,
           customerId: lead.customerId,
           domain: "leads",
           kind: "deal_created",
           title: "Deal auto-desked by AURA",
-          detail: `Draft deal #${autoDeal.id} created at the vehicle's listed price when the lead entered Negotiation — review and adjust the numbers.`,
+          detail: `Aggregate draft deal #${autoDeal.deal.id} created from the current quote when the lead entered Negotiation — physical units will be allocated at commitment.`,
           actor: "AURA System",
           isAgent: false,
           refType: "lead",
@@ -2093,15 +2124,15 @@ router.post("/leads/:id/advance", async (req, res): Promise<void> => {
           autonomy: "system",
           inputSource: "stage_advance",
           inputSummary: `Lead #${lead.id} advanced to Negotiation with no deal on file`,
-          outputSummary: `Drafted deal #${autoDeal.id} at listed price for vehicle #${vehicle.id}`,
+          outputSummary: `Drafted aggregate deal #${autoDeal.deal.id} from the current quote`,
           confidence: 1,
           refType: "deal",
-          refId: autoDeal.id,
+          refId: autoDeal.deal.id,
           latencyMs: Date.now() - startedAt,
           mutation: true,
-          changeSummary: `No deal on file → draft deal #${autoDeal.id} created at listed price ${vehicle.price} with 0 discount`,
+          changeSummary: `No deal on file → aggregate draft deal #${autoDeal.deal.id} created from the frozen quote`,
           affectedEntities: [
-            { type: "deal", id: autoDeal.id },
+            { type: "deal", id: autoDeal.deal.id },
             { type: "lead", id: lead.id },
           ],
         });

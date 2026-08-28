@@ -21,6 +21,7 @@ import {
 import { logger } from "./logger";
 import { recordAgentRun } from "./agent-governance";
 import { computeTaxes, dutyFreeTaxRules } from "./taxes";
+import { enqueueEmail } from "./email";
 
 // ---------------------------------------------------------------------------
 // Quote agent (A3) — auto-generates the GT-format "Code" (estimate) for every
@@ -171,9 +172,21 @@ export async function generateQuoteForLead(
         (interest.model.toLowerCase().startsWith(interest.make.toLowerCase()) ? interest.model : `${interest.make} ${interest.model}`);
       return { interest, representative, quantity: interest.quantity, position: interest.position, computed, modelYear, vehicleLine };
     });
-    const unchanged = latestItems.length === normalItems.length && latestItems.every((item, index) => {
-      const next = normalItems[index]!;
-      return item.vehicleId === next.interest.vehicleId && item.make === next.interest.make &&
+    const comparisonRules =
+      latest?.dutyFreeStatus === "approved"
+        ? dutyFreeTaxRules(taxRules)
+        : taxRules;
+    const comparisonItems = normalItems.map((item) => ({
+      ...item,
+      computed: computeTaxes(
+        item.interest.unitPrice * item.quantity,
+        comparisonRules,
+        { powertrain: item.representative?.powertrain },
+      ),
+    }));
+    const unchanged = latestItems.length === comparisonItems.length && latestItems.every((item, index) => {
+      const next = comparisonItems[index]!;
+       return item.vehicleId === (next.interest.vehicleId ?? null) && item.make === next.interest.make &&
         item.model === next.interest.model && item.quantity === next.quantity &&
         item.position === next.position && item.basePrice === next.interest.unitPrice &&
         item.modelYear === next.modelYear && item.vehicleLine === next.vehicleLine &&
@@ -194,6 +207,26 @@ export async function generateQuoteForLead(
     const basePrice = pricedItems.reduce((sum, item) => sum + item.interest.unitPrice * item.quantity, 0);
     const totalTax = pricedItems.reduce((sum, item) => sum + item.computed.totalTax, 0);
     const total = Math.max(basePrice + totalTax - approvedDiscount, 0);
+    // A retried lead-created event must reuse the one canonical revision. The
+    // advisory lock makes this atomic; the stable quote id then also makes the
+    // email outbox dedupe key stable.
+    if (
+      opts.trigger === "lead_created" &&
+      latest?.trigger === "lead_created" &&
+      unchanged
+    ) {
+      return {
+        quote: latest,
+        pricedItems,
+        totalTax: latest.totalTax,
+        basePrice: latest.basePrice,
+        total: latest.total,
+        quoteNumber: latest.quoteNumber,
+        version: latest.version,
+        lead: currentLead,
+        createdNew: false,
+      };
+    }
     let quoteNumber = latest?.quoteNumber;
     if (!quoteNumber) {
       // Quote versioning is lead-scoped, but the public number namespace is
@@ -227,10 +260,9 @@ export async function generateQuoteForLead(
     .values({
       dealerId: currentLead.dealerId,
       leadId: currentLead.id,
-      // Compatibility projection: the first interest is the primary vehicle.
-       // Header-only compatibility provenance. This does not reserve, hold,
-       // or assign the unit; allocation is exclusively performed at commit.
-       vehicleId: primary.interest.vehicleId ?? primary.representative?.id ?? null,
+       // Historical provenance only. New specification-backed quotes never
+       // project an inventory representative into the commercial snapshot.
+       vehicleId: primary.interest.vehicleId ?? null,
       quoteNumber,
       version,
       status: "current",
@@ -262,12 +294,11 @@ export async function generateQuoteForLead(
       isAgent: opts.isAgent,
     })
     .returning();
-    // Item rows preserve the full pre-authority commercial snapshot used for
-    // staleness comparison. The parent header carries the approved effective
-    // duty-free/discount presentation.
-    await tx.insert(quoteItemsTable).values(normalItems.map((item) => ({
+    // Item rows and the header preserve the same effective commercial
+    // snapshot, including approved Duty Free treatment.
+    await tx.insert(quoteItemsTable).values(pricedItems.map((item) => ({
        dealerId: currentLead.dealerId, quoteId: created!.id,
-       vehicleId: item.interest.vehicleId ?? item.representative?.id ?? null,
+        vehicleId: item.interest.vehicleId ?? null,
        make: item.interest.make, model: item.interest.model,
       quantity: item.quantity, position: item.position, modelYear: item.modelYear,
       vehicleLine: item.vehicleLine,
@@ -277,10 +308,30 @@ export async function generateQuoteForLead(
       taxLines: item.computed.lines, totalTax: item.computed.totalTax,
       total: item.computed.totalWithTax,
     })));
-    return { quote: created!, pricedItems, totalTax, basePrice, total, quoteNumber, version, lead: currentLead };
+    return {
+      quote: created!,
+      pricedItems,
+      totalTax,
+      basePrice,
+      total,
+      quoteNumber,
+      version,
+      lead: currentLead,
+      createdNew: true,
+    };
   });
   if (!committed) return null;
-  const { quote, pricedItems, totalTax, basePrice, total, quoteNumber, version, lead: committedLead } = committed;
+  const {
+    quote,
+    pricedItems,
+    totalTax,
+    basePrice,
+    total,
+    quoteNumber,
+    version,
+    lead: committedLead,
+    createdNew,
+  } = committed;
 
   const taxSummary =
     totalTax > 0
@@ -292,7 +343,7 @@ export async function generateQuoteForLead(
     `${quoteNumber} rev ${version} — ${pricedItems.length} vehicle interest(s), ` +
     `base $${basePrice.toLocaleString("en-US")}, ${taxSummary}, total $${total.toLocaleString("en-US")}.`;
 
-  if (opts.isAgent) {
+  if (opts.isAgent && createdNew) {
     await recordAgentRun({
       dealerId: committedLead.dealerId,
       agentKey: "quote_tax",
@@ -307,23 +358,25 @@ export async function generateQuoteForLead(
     });
   }
 
-  await db.insert(timelineEventsTable).values({
-    dealerId: committedLead.dealerId,
-    customerId: committedLead.customerId,
-    domain: "leads",
-    kind: version === 1 ? "quote_generated" : "quote_regenerated",
-    title:
-      version === 1
-        ? `Code ${quoteNumber} generated`
-        : `Code ${quoteNumber} regenerated (rev ${version})`,
-    detail,
-    actor: opts.actor,
-    isAgent: opts.isAgent,
-    refType: "lead",
-    refId: committedLead.id,
-  });
+  if (createdNew) {
+    await db.insert(timelineEventsTable).values({
+      dealerId: committedLead.dealerId,
+      customerId: committedLead.customerId,
+      domain: "leads",
+      kind: version === 1 ? "quote_generated" : "quote_regenerated",
+      title:
+        version === 1
+          ? `Code ${quoteNumber} generated`
+          : `Code ${quoteNumber} regenerated (rev ${version})`,
+      detail,
+      actor: opts.actor,
+      isAgent: opts.isAgent,
+      refType: "lead",
+      refId: committedLead.id,
+    });
+  }
 
-  if (opts.isAgent) {
+  if (opts.isAgent && createdNew) {
     await db.insert(activityTable).values({
       dealerId: committedLead.dealerId,
       agentKey: AGENT_KEY,
@@ -332,6 +385,26 @@ export async function generateQuoteForLead(
       action: version === 1 ? "Generated quotation Code" : "Regenerated quotation Code",
       entity: committedLead.name,
       detail,
+    });
+  }
+
+  // Lead-created quotes are not merely generated: when an email address is
+  // available, queue the exact stored revision for delivery automatically.
+  // The quote id in the dedupe key makes retries safe without suppressing a
+  // later regenerated revision.
+  if (opts.trigger === "lead_created" && committedLead.email) {
+    await enqueueEmail({
+      template: "vehicle_quote",
+      to: committedLead.email,
+      dealerId: committedLead.dealerId,
+      customerId: committedLead.customerId,
+      leadId: committedLead.id,
+      data: {
+        ...(await quotePdfPayload(quote)),
+        quoteId: String(quote.id),
+        leadId: String(committedLead.id),
+      },
+      dedupeKey: `lead:${committedLead.id}:quote:${quote.id}:email:v1`,
     });
   }
 

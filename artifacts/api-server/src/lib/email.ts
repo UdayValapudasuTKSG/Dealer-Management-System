@@ -6,6 +6,7 @@ import {
   emailLogsTable,
   emailTemplateOverridesTable,
   leadsTable,
+  quotesTable,
   notificationsTable,
   receiptsTable,
   serviceInvoicesTable,
@@ -1341,6 +1342,73 @@ let processing = false;
 const OUTBOX_CLAIM_LEASE_MS = 2 * 60 * 1000;
 const OUTBOX_PROVIDER_RECEIPT_TIMEOUT_MS = 30 * 60 * 1000;
 
+async function markQuoteDelivered(
+  item: EmailLog,
+  sentVia: "email" | "WhatsApp PDF",
+): Promise<void> {
+  let payload = item.payload ?? {};
+  if (item.channel === "whatsapp" && payload.documentDataJson) {
+    try {
+      payload = {
+        ...payload,
+        ...(JSON.parse(payload.documentDataJson) as Record<string, string>),
+      };
+    } catch {
+      return;
+    }
+  }
+  const quoteId = Number(payload.quoteId);
+  const leadId = Number(payload.leadId ?? item.leadId);
+  if (!Number.isInteger(quoteId) || !Number.isInteger(leadId)) return;
+  const sentAt = new Date();
+  await db.transaction(async (tx) => {
+    const [storedQuote] = await tx
+      .select()
+      .from(quotesTable)
+      .where(and(
+        eq(quotesTable.id, quoteId),
+        eq(quotesTable.leadId, leadId),
+        eq(quotesTable.dealerId, item.dealerId),
+      ))
+      .for("update");
+    if (!storedQuote) return;
+    const [newlySent] = storedQuote.sentAt
+      ? []
+      : await tx
+          .update(quotesTable)
+          .set({ sentAt, sentVia })
+          .where(and(
+            eq(quotesTable.id, quoteId),
+            eq(quotesTable.leadId, leadId),
+            eq(quotesTable.dealerId, item.dealerId),
+            isNull(quotesTable.sentAt),
+          ))
+          .returning();
+    // This runs even for an already-sent quote, repairing any historical split
+    // where the quote was stamped but the lead flag was not.
+    await tx
+      .update(leadsTable)
+      .set({ quotationSent: true })
+      .where(and(
+        eq(leadsTable.id, leadId),
+        eq(leadsTable.dealerId, item.dealerId),
+      ));
+    if (!newlySent) return;
+    await tx.insert(timelineEventsTable).values({
+      dealerId: item.dealerId,
+      customerId: item.customerId,
+      domain: "leads",
+      kind: "quote_sent",
+      title: `Code ${newlySent.quoteNumber} sent via ${sentVia}`,
+      detail: `Rev ${newlySent.version} was confirmed sent to the customer.`,
+      actor: sentVia === "email" ? "Email Engine" : "WhatsApp Engine",
+      isAgent: true,
+      refType: "lead",
+      refId: leadId,
+    });
+  });
+}
+
 /** Items ready for a (re)try: queued or retryable-failed, past their backoff time. */
 function readyFilter(channel: "email" | "whatsapp") {
   return and(
@@ -1765,6 +1833,7 @@ async function processWhatsappQueue(): Promise<void> {
         providerMessageId: result.providerMessageId,
         status: "accepted",
       });
+      await markQuoteDelivered(item, "WhatsApp PDF");
       logger.info(
         {
           id: item.id,
@@ -2080,6 +2149,7 @@ export async function processQueue(): Promise<void> {
           .update(emailLogsTable)
           .set({ status: "sent", sentAt: new Date(), lastError: null })
           .where(eq(emailLogsTable.id, item.id));
+        await markQuoteDelivered(item, "email");
         if (item.customerId) {
           await db.insert(timelineEventsTable).values({
             dealerId: item.dealerId,
