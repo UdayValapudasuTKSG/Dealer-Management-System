@@ -50,6 +50,7 @@ export const dealsTable = pgTable("deals", {
   divisionId: integer("division_id").references(() => divisionsTable.id),
   customerId: integer("customer_id"),
   leadId: integer("lead_id"),
+  quoteId: integer("quote_id"),
   vehicleId: integer("vehicle_id").notNull(),
   customerName: text("customer_name"),
   stage: text("stage").notNull().default("desking"),

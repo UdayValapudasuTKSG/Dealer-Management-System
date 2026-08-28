@@ -16,6 +16,8 @@ export interface ServiceOrder {
   customerId?: number | null;
   /** @nullable */
   customerName?: string | null;
+  /** @nullable */
+  customerPhoneSnapshot?: string | null;
   vehicleInfo: string;
   /** @nullable */
   vehicleId?: number | null;

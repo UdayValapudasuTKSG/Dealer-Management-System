@@ -12,6 +12,7 @@ import type { ServiceOrderInputType } from './serviceOrderInputType';
 export interface ServiceOrderInput {
   customerId?: number;
   customerName?: string;
+  customerPhoneSnapshot?: string;
   /** @minLength 3 */
   customerEmail?: string;
   /** @minLength 1 */

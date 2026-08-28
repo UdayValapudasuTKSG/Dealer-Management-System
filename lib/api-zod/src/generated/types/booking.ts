@@ -18,6 +18,8 @@ export interface Booking {
   /** @nullable */
   leadId?: number | null;
   /** @nullable */
+  quoteId?: number | null;
+  /** @nullable */
   dealId?: number | null;
   /** @nullable */
   waiverReason?: string | null;

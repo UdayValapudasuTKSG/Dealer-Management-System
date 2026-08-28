@@ -7,6 +7,7 @@
  */
 import type { DealCancellationReason } from './dealCancellationReason';
 import type { DealFinalPaymentMethod } from './dealFinalPaymentMethod';
+import type { DealItem } from './dealItem';
 import type { DealStage } from './dealStage';
 import type { QuoteTaxLine } from './quoteTaxLine';
 
@@ -18,6 +19,8 @@ export interface Deal {
   customerId?: number | null;
   /** @nullable */
   leadId?: number | null;
+  /** @nullable */
+  quoteId?: number | null;
   vehicleId: number;
   /** @nullable */
   customerName?: string | null;
@@ -45,5 +48,6 @@ export interface Deal {
   taxSnapshot?: QuoteTaxLine[] | null;
   /** @nullable */
   cancellationGateId?: number | null;
+  items?: DealItem[];
   createdAt: Date;
 }

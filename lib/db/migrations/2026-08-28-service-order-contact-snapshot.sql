@@ -1,0 +1,1 @@
+ALTER TABLE "service_orders" ADD COLUMN "customer_phone_snapshot" text;

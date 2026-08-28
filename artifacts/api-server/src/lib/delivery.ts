@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   dealsTable,
+  dealItemsTable,
   vehiclesTable,
   bookingsTable,
   deliveriesTable,
@@ -107,6 +108,16 @@ export async function ensureDeliveryForDeal(
     .where(
       and(eq(bookingsTable.dealId, dealId), eq(bookingsTable.status, "active")),
     );
+  const [dealItem] = await db
+    .select({ id: dealItemsTable.id })
+    .from(dealItemsTable)
+    .where(and(
+      eq(dealItemsTable.dealId, dealId),
+      eq(dealItemsTable.dealerId, deal.dealerId),
+      eq(dealItemsTable.vehicleId, deal.vehicleId),
+    ))
+    .orderBy(dealItemsTable.position)
+    .limit(1);
 
   // Round-robin a Delivery Advisor when the caller didn't name one.
   let autoAdvisor: { id: number; name: string; neverAssigned: boolean } | null =
@@ -124,6 +135,7 @@ export async function ensureDeliveryForDeal(
     .values({
       dealerId: deal.dealerId,
       dealId,
+      dealItemId: dealItem?.id ?? null,
       bookingId: booking?.id ?? null,
       vehicleId: deal.vehicleId,
       customerId: deal.customerId ?? null,

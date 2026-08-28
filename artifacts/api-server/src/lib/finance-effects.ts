@@ -13,9 +13,12 @@ import {
 } from "@workspace/db";
 import { onFinanceStatusChanged, onDealStageChanged } from "./email-triggers";
 import { notifyUsers } from "./email";
-import { ensureDeliveryForDeal } from "./delivery";
 import { ensureFinalInvoiceForDeal } from "./invoicing";
 import { logger } from "./logger";
+import {
+  commitDealInTransaction,
+  commitDealWithAllocations,
+} from "./deal-commit";
 
 const money = (n: number) =>
   `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
@@ -65,6 +68,11 @@ export async function applyFinanceStatusEffects(
   app: FinanceApplication,
   previousStatus: string,
   note: string,
+  committedByTransition?: {
+    before: typeof dealsTable.$inferSelect;
+    deal: typeof dealsTable.$inferSelect;
+    newlyCommitted: boolean;
+  } | null,
 ): Promise<void> {
   if (app.status === previousStatus) return;
   const label = STATUS_LABEL[app.status] ?? app.status;
@@ -153,30 +161,27 @@ export async function applyFinanceStatusEffects(
     } catch (err) {
       logger.error({ err, appId: app.id }, "delivery trigger receipt failed");
     }
-    if (app.dealId) {
-      try {
-        await ensureDeliveryForDeal(app.dealId, {
-          cause: `Finance application #${app.id} approved`,
-        });
-      } catch (err) {
-        logger.error({ err, appId: app.id }, "delivery workflow start failed");
-      }
-    }
   }
 
   if (app.status === "disbursed" && app.dealId) {
     try {
-      const [deal] = await db
+      const [loadedDeal] = await db
         .select()
         .from(dealsTable)
-        .where(eq(dealsTable.id, app.dealId));
-      if (deal && !["committed", "delivered", "lost"].includes(deal.stage)) {
-        const [updated] = await db
-          .update(dealsTable)
-          .set({ stage: "committed" })
-          .where(eq(dealsTable.id, deal.id))
-          .returning();
-        if (updated) {
+        .where(and(
+          eq(dealsTable.id, app.dealId),
+          eq(dealsTable.dealerId, app.dealerId),
+        ));
+      const committed = committedByTransition ??
+        (loadedDeal && !["committed", "delivered", "lost"].includes(loadedDeal.stage)
+          ? await commitDealWithAllocations({
+              dealId: loadedDeal.id,
+              dealerId: app.dealerId,
+            })
+          : null);
+      if (committed?.newlyCommitted) {
+          const deal = committed.before;
+          const updated = committed.deal;
           // Dual-invoice #2 (L6): auto-commit must also generate the final
           // settlement invoice, same as the manual PATCH commit path.
           try {
@@ -201,20 +206,19 @@ export async function applyFinanceStatusEffects(
             refType: "deal",
             refId: deal.id,
           });
-        }
       }
     } catch (err) {
       logger.error({ err, appId: app.id }, "deal auto-advance failed");
     }
-    // Safety net: approval normally opens the delivery workflow, but if that
-    // trigger failed (restart, transient error) the deal would sit Committed
-    // with no delivery to complete. ensureDeliveryForDeal is idempotent.
+    // Repeated disbursement callbacks are safe: the shared commit operation
+    // verifies the complete item/unit allocation and never creates extras.
     try {
-      await ensureDeliveryForDeal(app.dealId, {
-        cause: `Finance application #${app.id} disbursed`,
+      await commitDealWithAllocations({
+        dealId: app.dealId,
+        dealerId: app.dealerId,
       });
     } catch (err) {
-      logger.error({ err, appId: app.id }, "delivery workflow start failed");
+      logger.error({ err, appId: app.id }, "deal allocation verification failed");
     }
   }
 }
@@ -226,25 +230,51 @@ export async function transitionFinanceStatus(
   note: string,
   extra: Partial<typeof financeApplicationsTable.$inferInsert> = {},
 ): Promise<FinanceApplication | null> {
-  const [current] = await db
-    .select()
-    .from(financeApplicationsTable)
-    .where(eq(financeApplicationsTable.id, appId));
-  if (!current) return null;
-  const [updated] = await db
-    .update(financeApplicationsTable)
-    .set({
-      status: next,
-      statusHistory: [...current.statusHistory, statusEvent(next, note)],
-      ...(next === "approved" || next === "declined"
-        ? { decisionAt: new Date() }
-        : {}),
-      ...(next === "disbursed" ? { disbursedAt: new Date() } : {}),
-      ...extra,
-    })
-    .where(eq(financeApplicationsTable.id, appId))
-    .returning();
-  if (!updated) return null;
-  await applyFinanceStatusEffects(updated, current.status, note);
-  return updated;
+  const result = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(financeApplicationsTable)
+      .where(eq(financeApplicationsTable.id, appId))
+      .for("update");
+    if (!current) return null;
+    if (current.status === next)
+      return { current, updated: current, commitResult: null };
+
+    // Disbursement and deal commitment are one transaction. If inventory
+    // cannot satisfy every item quantity, neither the finance status nor any
+    // VIN/delivery allocation is persisted.
+    let commitResult: Awaited<ReturnType<typeof commitDealInTransaction>> | null =
+      null;
+    if (next === "disbursed" && current.dealId != null) {
+      commitResult = await commitDealInTransaction(tx, {
+        dealId: current.dealId,
+        dealerId: current.dealerId,
+      });
+    }
+    const [updated] = await tx
+      .update(financeApplicationsTable)
+      .set({
+        status: next,
+        statusHistory: [...current.statusHistory, statusEvent(next, note)],
+        ...(next === "approved" || next === "declined"
+          ? { decisionAt: new Date() }
+          : {}),
+        ...(next === "disbursed" ? { disbursedAt: new Date() } : {}),
+        ...extra,
+      })
+      .where(and(
+        eq(financeApplicationsTable.id, appId),
+        eq(financeApplicationsTable.dealerId, current.dealerId),
+      ))
+      .returning();
+    return updated ? { current, updated, commitResult } : null;
+  });
+  if (!result) return null;
+  await applyFinanceStatusEffects(
+    result.updated,
+    result.current.status,
+    note,
+    result.commitResult,
+  );
+  return result.updated;
 }

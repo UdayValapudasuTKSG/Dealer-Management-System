@@ -12,6 +12,7 @@ import type { LeadUpdatePhase } from './leadUpdatePhase';
 import type { LeadUpdatePriority } from './leadUpdatePriority';
 import type { LeadUpdatePurchaseType } from './leadUpdatePurchaseType';
 import type { LeadUpdateStatus } from './leadUpdateStatus';
+import type { LeadVehicleInterestInput } from './leadVehicleInterestInput';
 
 export interface LeadUpdate {
   /** @nullable */
@@ -29,6 +30,7 @@ export interface LeadUpdate {
   phase?: LeadUpdatePhase;
   status?: LeadUpdateStatus;
   interestedVehicleId?: number;
+  vehicleInterests?: LeadVehicleInterestInput[];
   /** @nullable */
   selectedModel?: string | null;
   variant?: string;

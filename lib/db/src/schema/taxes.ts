@@ -7,6 +7,7 @@ import {
   boolean,
   date,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -43,7 +44,13 @@ export const dealerTaxesTable = pgTable("dealer_taxes", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("dealer_taxes_dealer_code_effective_uq").on(
+    table.dealerId,
+    table.code,
+    table.effectiveFrom,
+  ),
+]);
 
 export const insertDealerTaxSchema = createInsertSchema(dealerTaxesTable, {
   kind: z.enum(TAX_KINDS),

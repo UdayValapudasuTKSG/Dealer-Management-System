@@ -75,10 +75,13 @@ import { activeDealerId } from "../middlewares/rbac";
 import { notifyRefundPaid } from "../lib/notify-triggers";
 import { idempotent } from "../middlewares/idempotency";
 import {
-  applyFinanceStatusEffects,
   transitionFinanceStatus,
   statusEvent,
 } from "../lib/finance-effects";
+import {
+  DealCommitConflictError,
+  InventoryAllocationError,
+} from "../lib/deal-commit";
 
 const router: IRouter = Router();
 
@@ -226,37 +229,58 @@ router.patch("/finance-applications/:id", async (req, res): Promise<void> => {
     ? `Status set manually by the finance desk.`
     : "";
 
-  const [application] = await db
-    .update(financeApplicationsTable)
-    .set({
-      ...rest,
-      ...(statusChanged
-        ? {
-            status,
-            statusHistory: [...before.statusHistory, statusEvent(status, note)],
-            ...(status === "approved" || status === "declined"
-              ? { decisionAt: new Date() }
-              : {}),
-            ...(status === "disbursed" ? { disbursedAt: new Date() } : {}),
-          }
-        : {}),
-    })
-    .where(
-      and(
-        eq(financeApplicationsTable.id, params.data.id),
-        eq(financeApplicationsTable.dealerId, activeDealerId(res)),
-      ),
-    )
-    .returning();
+  let application: typeof financeApplicationsTable.$inferSelect | null =
+    null;
+  try {
+    if (statusChanged) {
+      // In particular, disbursement must share the finance/deal/allocation
+      // transaction. A failed quantity allocation leaves every row untouched.
+      application = await transitionFinanceStatus(
+        params.data.id,
+        status!,
+        note,
+        rest,
+      );
+    } else {
+      [application] = await db
+        .update(financeApplicationsTable)
+        .set(rest)
+        .where(
+          and(
+            eq(financeApplicationsTable.id, params.data.id),
+            eq(financeApplicationsTable.dealerId, activeDealerId(res)),
+          ),
+        )
+        .returning();
+    }
+  } catch (err) {
+    if (
+      err instanceof InventoryAllocationError ||
+      err instanceof DealCommitConflictError
+    ) {
+      res.status(409).json({
+        error:
+          err instanceof InventoryAllocationError
+            ? "insufficient_inventory"
+            : "deal_commit_conflict",
+        detail: err.message,
+        ...(err instanceof InventoryAllocationError
+          ? {
+              dealItemId: err.itemId || null,
+              requested: err.requested,
+              allocated: err.allocated,
+            }
+          : {}),
+      });
+      return;
+    }
+    throw err;
+  }
 
   if (!application) {
     res.status(404).json({ error: "Finance application not found" });
     return;
   }
-  if (statusChanged) {
-    await applyFinanceStatusEffects(application, before.status, note);
-  }
-
   res.json(UpdateFinanceApplicationResponse.parse(application));
 });
 
@@ -350,6 +374,26 @@ router.post(
       res.json(UpdateFinanceApplicationResponse.parse(updated));
     } catch (err) {
       req.log.error({ err, appId: app.id }, "LOS submission failed");
+      if (
+        err instanceof InventoryAllocationError ||
+        err instanceof DealCommitConflictError
+      ) {
+        res.status(409).json({
+          error:
+            err instanceof InventoryAllocationError
+              ? "insufficient_inventory"
+              : "deal_commit_conflict",
+          detail: err.message,
+          ...(err instanceof InventoryAllocationError
+            ? {
+                dealItemId: err.itemId || null,
+                requested: err.requested,
+                allocated: err.allocated,
+              }
+            : {}),
+        });
+        return;
+      }
       await recordSubmission(
         app,
         "submit",
@@ -416,6 +460,26 @@ router.post(
       res.json(UpdateFinanceApplicationResponse.parse(updated));
     } catch (err) {
       req.log.error({ err, appId: app.id }, "LOS status sync failed");
+      if (
+        err instanceof InventoryAllocationError ||
+        err instanceof DealCommitConflictError
+      ) {
+        res.status(409).json({
+          error:
+            err instanceof InventoryAllocationError
+              ? "insufficient_inventory"
+              : "deal_commit_conflict",
+          detail: err.message,
+          ...(err instanceof InventoryAllocationError
+            ? {
+                dealItemId: err.itemId || null,
+                requested: err.requested,
+                allocated: err.allocated,
+              }
+            : {}),
+        });
+        return;
+      }
       res.status(502).json({
         error: "Could not reach the lender's loan origination system.",
       });

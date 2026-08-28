@@ -1636,6 +1636,8 @@ export interface Booking {
   /** @nullable */
   leadId?: number | null;
   /** @nullable */
+  quoteId?: number | null;
+  /** @nullable */
   dealId?: number | null;
   /** @nullable */
   waiverReason?: string | null;
@@ -1859,6 +1861,16 @@ export type DeliveryHandoverOverrides = {[key: string]: string};
 export interface Delivery {
   id: number;
   dealId: number;
+  /**
+     * Deal item fulfilled by this physical delivery
+     * @nullable
+     */
+  dealItemId?: number | null;
+  /**
+     * Zero-based unit number within the deal item's quantity
+     * @nullable
+     */
+  dealItemUnit?: number | null;
   /** @nullable */
   bookingId?: number | null;
   vehicleId: number;
@@ -2190,6 +2202,15 @@ export interface LeadAttachment {
   url: string;
 }
 
+export interface LeadVehicleInterestInput {
+  /** @minimum 1 */
+  vehicleId: number;
+  /** @minimum 1 */
+  quantity?: number;
+  /** @minimum 0 */
+  position?: number;
+}
+
 export type LeadChannel = typeof LeadChannel[keyof typeof LeadChannel];
 
 
@@ -2281,6 +2302,7 @@ export interface Lead {
   customerId?: number | null;
   /** @nullable */
   interestedVehicleId?: number | null;
+  vehicleInterests?: LeadVehicleInterestInput[];
   /** @nullable */
   selectedModel?: string | null;
   /** @nullable */
@@ -2404,6 +2426,8 @@ export interface LeadInput {
   phase?: LeadInputPhase;
   status?: LeadInputStatus;
   interestedVehicleId?: number;
+  /** Canonical dealer-scoped interests; first item projects to interestedVehicleId. */
+  vehicleInterests?: LeadVehicleInterestInput[];
   selectedModel?: string;
   variant?: string;
   color?: string;
@@ -2499,6 +2523,7 @@ export interface LeadUpdate {
   phase?: LeadUpdatePhase;
   status?: LeadUpdateStatus;
   interestedVehicleId?: number;
+  vehicleInterests?: LeadVehicleInterestInput[];
   /** @nullable */
   selectedModel?: string | null;
   variant?: string;
@@ -2796,6 +2821,46 @@ export interface QuoteTaxLine {
   amount: number;
 }
 
+export interface QuoteItem {
+  id: number;
+  quoteId: number;
+  vehicleId: number;
+  /** @minimum 1 */
+  quantity: number;
+  /** @minimum 0 */
+  position: number;
+  modelYear: number;
+  vehicleLine: string;
+  /** @nullable */
+  trim?: string | null;
+  /** @nullable */
+  color?: string | null;
+  manufacturer: string;
+  /** Unit price */
+  basePrice: number;
+  taxLines: QuoteTaxLine[];
+  totalTax: number;
+  total: number;
+}
+
+export interface DealItem {
+  id: number;
+  dealId: number;
+  /** @nullable */
+  quoteItemId?: number | null;
+  vehicleId: number;
+  /** @minimum 1 */
+  quantity: number;
+  /** @minimum 0 */
+  position: number;
+  /** Unit price */
+  vehiclePrice: number;
+  discount: number;
+  taxSnapshot: QuoteTaxLine[];
+  total: number;
+  status: string;
+}
+
 export type QuoteDiscountRequestInputRequestType = typeof QuoteDiscountRequestInputRequestType[keyof typeof QuoteDiscountRequestInputRequestType];
 
 
@@ -3055,6 +3120,8 @@ export interface Quote {
   taxSnapshot?: QuoteTaxLine[];
   totalTax: number;
   total: number;
+  /** Immutable per-interest snapshot for this revision. */
+  items?: QuoteItem[];
   issuedOn: string;
   validUntil: string;
   trigger: string;
@@ -3871,6 +3938,8 @@ export interface Deal {
   customerId?: number | null;
   /** @nullable */
   leadId?: number | null;
+  /** @nullable */
+  quoteId?: number | null;
   vehicleId: number;
   /** @nullable */
   customerName?: string | null;
@@ -3898,6 +3967,7 @@ export interface Deal {
   taxSnapshot?: QuoteTaxLine[] | null;
   /** @nullable */
   cancellationGateId?: number | null;
+  items?: DealItem[];
   createdAt: string;
 }
 
@@ -4596,6 +4666,8 @@ export interface ServiceOrder {
   customerId?: number | null;
   /** @nullable */
   customerName?: string | null;
+  /** @nullable */
+  customerPhoneSnapshot?: string | null;
   vehicleInfo: string;
   /** @nullable */
   vehicleId?: number | null;
@@ -4659,6 +4731,7 @@ export const ServiceOrderInputStatus = {
 export interface ServiceOrderInput {
   customerId?: number;
   customerName?: string;
+  customerPhoneSnapshot?: string;
   /** @minLength 3 */
   customerEmail?: string;
   /** @minLength 1 */
@@ -7355,6 +7428,14 @@ phase?: string;
 status?: string;
 divisionId?: number;
 includeDeleted?: boolean;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+createdFrom?: string;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+createdTo?: string;
 };
 
 export type ListLeadSourcesParams = {

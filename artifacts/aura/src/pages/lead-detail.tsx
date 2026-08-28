@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
+import { VehicleInterestsField } from "@/components/vehicle-interests-field";
 import {
   useGetLead,
   useListDivisions,
@@ -832,14 +833,18 @@ function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
       })),
     },
     {
-      name: "interestedVehicleId",
-      label: "Interested model",
-      type: "select",
+      name: "vehicleInterests",
+      label: "Interested vehicles",
+      type: "custom",
       span: "full",
-      defaultValue: lead.interestedVehicleId
-        ? String(lead.interestedVehicleId)
-        : undefined,
-      options: modelInterestOptions(vehicles, lead.interestedVehicleId),
+      defaultValue: lead.vehicleInterests?.length ? JSON.stringify(lead.vehicleInterests) : undefined,
+      render: (value, set) => (
+        <VehicleInterestsField
+          value={value}
+          onChange={set}
+          vehicles={vehicles}
+        />
+      ),
     },
     {
       name: "priority",
@@ -2702,16 +2707,46 @@ export default function LeadDetail() {
                                   : " · Not sent"}
                               </span>
                             </div>
-                            <div className="text-xs text-muted-foreground mt-1.5">
-                              {q.modelYear} {q.vehicleLine}
-                              {q.color ? ` · ${q.color}` : ""} · Base{" "}
-                              {money.gyd(q.basePrice)} · Taxes{" "}
-                              {money.gyd(q.totalTax)}
+                            <div className="mt-3 space-y-2">
+                              {(q.items && q.items.length > 0) ? (
+                                q.items.map((item: any) => (
+                                  <div key={item.id} className="text-xs flex items-center justify-between py-1 border-b border-white/5 last:border-0">
+                                    <div>
+                                      <span className="font-medium text-foreground mr-1">{item.quantity}x</span>
+                                      <span className="text-muted-foreground">
+                                        {item.modelYear} {item.vehicleLine}
+                                      </span>
+                                    </div>
+                                    <div className="text-muted-foreground">
+                                      {money.gyd(item.total)}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-xs text-muted-foreground">
+                                  {q.quantity && q.quantity > 1 ? `${q.quantity}x ` : ""}{q.modelYear} {q.vehicleLine}
+                                  {q.color ? ` · ${q.color}` : ""} · Base{" "}
+                                  {money.gyd(q.basePrice)} · Taxes{" "}
+                                  {money.gyd(q.totalTax)}
+                                </div>
+                              )}
                             </div>
-                            <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <div className="flex items-center gap-2 mt-3 flex-wrap">
                               <span className="text-sm font-semibold mr-auto">
                                 Total {money.dual(q.total)}
                               </span>
+
+                              {q.discountStatus === "approved" && (
+                                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-emerald-500/10 text-emerald-500 font-medium">
+                                  Discounted
+                                </span>
+                              )}
+                              {q.dutyFreeStatus === "approved" && (
+                                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm bg-amber-500/10 text-amber-500 font-medium">
+                                  Duty Free
+                                </span>
+                              )}
+
                               <a
                                 href={`${import.meta.env.BASE_URL}api/leads/${lead.id}/quotes/${q.id}/pdf`}
                                 target="_blank"
@@ -3605,18 +3640,25 @@ export default function LeadDetail() {
           fields={editLeadFields(lead, vehicles ?? [])}
           onSubmit={async (values) => {
             const payload = { ...values };
-            if (payload.interestedVehicleId != null) {
-              payload.interestedVehicleId = Number(payload.interestedVehicleId);
-              const v = (vehicles ?? []).find(
-                (x) => x.id === payload.interestedVehicleId,
-              );
-              if (v) {
-                const version = v.trim || v.variant;
-                if (version) payload.variant = version;
-                if (v.exteriorColor) payload.color = v.exteriorColor;
+            if (payload.vehicleInterests) {
+              try {
+                const parsedInterests = JSON.parse(payload.vehicleInterests as string);
+                payload.vehicleInterests = parsedInterests;
+
+                if (parsedInterests.length > 0 && parsedInterests[0].vehicleId != null) {
+                  const firstVehicleId = parsedInterests[0].vehicleId;
+                  const v = (vehicles ?? []).find((x) => x.id === firstVehicleId);
+                  if (v) {
+                    const version = v.trim || v.variant;
+                    if (version) payload.variant = version;
+                    if (v.exteriorColor) payload.color = v.exteriorColor;
+                  }
+                }
+              } catch {
+                delete payload.vehicleInterests;
               }
             }
-            await updateLead.mutateAsync({ id: lead.id, data: payload as never });
+            await updateLead.mutateAsync({ id: lead.id, data: payload as unknown as LeadUpdate });
           }}
         />
       )}

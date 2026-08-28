@@ -296,6 +296,11 @@ router.post("/service-orders", async (req, res): Promise<void> => {
   // confirmations and the completion invoice have a real recipient. Matches an
   // existing dealer customer first; otherwise creates one from name + email.
   const { customerEmail: bookingEmail, ...orderInput } = parsed.data;
+  const submittedPhone = orderInput.customerPhoneSnapshot?.trim() ?? null;
+  if (submittedPhone && !validPhone(submittedPhone)) {
+    res.status(422).json({ error: "customerPhoneSnapshot must be a valid phone number" });
+    return;
+  }
   let bookingCustomerId = orderInput.customerId;
   if (bookingEmail && bookingCustomerId == null) {
     const [existingCustomer] = await db
@@ -339,6 +344,17 @@ router.post("/service-orders", async (req, res): Promise<void> => {
       .returning({ id: customersTable.id });
     // ERPNext two-way sync: push the contact-field change.
     if (backfilled) queueCustomerSync(createDealerId, backfilled.id);
+  }
+  // This contact value is an immutable operational snapshot. An explicit,
+  // valid intake number wins; customer master data is only a creation-time
+  // fallback and is never consulted by PATCH.
+  const customerPhoneSnapshot =
+    submittedPhone ?? await resolveCustomerPhoneSnapshot(bookingCustomerId, createDealerId);
+  if (!customerPhoneSnapshot) {
+    res.status(422).json({
+      error: "A valid customer phone number is required to create a service order",
+    });
+    return;
   }
 
   const settings = await getServiceSettings(createDealerId);
@@ -425,6 +441,7 @@ router.post("/service-orders", async (req, res): Promise<void> => {
       .insert(serviceOrdersTable)
       .values({
         ...orderInput,
+        customerPhoneSnapshot,
         customerId: bookingCustomerId,
         payType,
         technician: technicianName,
@@ -466,6 +483,10 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
   const params = UpdateServiceOrderParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if ("customerPhoneSnapshot" in (req.body ?? {})) {
+    res.status(422).json({ error: "customerPhoneSnapshot is immutable after service-order creation" });
     return;
   }
 
@@ -910,7 +931,7 @@ async function autoCreateJobCard(
   order: typeof serviceOrdersTable.$inferSelect,
 ): Promise<void> {
   const surcharge = await computeLateSurcharge(order);
-  const customerPhoneSnapshot = await resolveCustomerPhoneSnapshot(
+  const customerPhoneSnapshot = (order as any).customerPhoneSnapshot ?? await resolveCustomerPhoneSnapshot(
     order.customerId,
     order.dealerId,
   );
@@ -1106,9 +1127,9 @@ router.post("/job-cards", async (req, res): Promise<void> => {
   }
   // An explicitly supplied job-card contact is a snapshot override, never a
   // customer-master update. Otherwise prefill from the dealer-scoped order's
-  // linked customer.
+  // snapshot or linked customer.
   const customerPhoneSnapshot =
-    submittedPhone || (await resolveCustomerPhoneSnapshot(order.customerId, order.dealerId));
+    submittedPhone || (order as any).customerPhoneSnapshot || (await resolveCustomerPhoneSnapshot(order.customerId, order.dealerId));
 
   let card: typeof jobCardsTable.$inferSelect | undefined;
   try {

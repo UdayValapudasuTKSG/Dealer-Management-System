@@ -5,6 +5,7 @@ import { eq, desc, and, or, isNull, isNotNull, ne, ilike, gte, lte, sql, inArray
 import {
   db,
   leadsTable,
+  leadVehicleInterestsTable,
   tasksTable,
   vehiclesTable,
   usersTable,
@@ -160,6 +161,7 @@ import {
   generateQuoteForLead,
   quoteById,
   quotePdfPayload,
+  withQuoteItems,
 } from "../lib/quotes";
 import { getChannelByDealerId } from "../lib/whatsapp-channel";
 import { ensureLeadSources } from "../lib/lead-sources";
@@ -253,6 +255,27 @@ async function logLeadEvent(
   });
 }
 
+async function withLeadVehicleInterests<T extends Lead>(leads: T[]): Promise<Array<T & { vehicleInterests: Array<{ vehicleId: number; quantity: number; position: number }> }>> {
+  if (!leads.length) return [];
+  const dealerId = leads[0]!.dealerId;
+  const interests = await db.select({
+    leadId: leadVehicleInterestsTable.leadId,
+    vehicleId: leadVehicleInterestsTable.vehicleId,
+    quantity: leadVehicleInterestsTable.quantity,
+    position: leadVehicleInterestsTable.position,
+  }).from(leadVehicleInterestsTable).where(and(
+    eq(leadVehicleInterestsTable.dealerId, dealerId),
+    inArray(leadVehicleInterestsTable.leadId, leads.map((lead) => lead.id)),
+  )).orderBy(leadVehicleInterestsTable.position);
+  const byLead = new Map<number, Array<{ vehicleId: number; quantity: number; position: number }>>();
+  for (const interest of interests) {
+    const items = byLead.get(interest.leadId) ?? [];
+    items.push({ vehicleId: interest.vehicleId, quantity: interest.quantity, position: interest.position });
+    byLead.set(interest.leadId, items);
+  }
+  return leads.map((lead) => ({ ...lead, vehicleInterests: byLead.get(lead.id) ?? [] }));
+}
+
 async function vehicleLabel(
   dealerId: number,
   id: number | null,
@@ -286,6 +309,24 @@ router.get("/leads", async (req, res): Promise<void> => {
     filters.push(eq(leadsTable.divisionId, query.data.divisionId));
   if (query.data.phase) filters.push(eq(leadsTable.phase, query.data.phase));
   if (query.data.status) filters.push(eq(leadsTable.status, query.data.status));
+  if ((query.data as any).createdFrom) {
+    const raw = (query.data as any).createdFrom;
+    const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+      ? new Date(`${raw}T00:00:00.000-04:00`) : new Date("");
+    if (!isNaN(fromDate.getTime())) {
+      filters.push(gte(leadsTable.createdAt, fromDate));
+    }
+  }
+  if ((query.data as any).createdTo) {
+    const raw = (query.data as any).createdTo;
+    const toDate = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+      ? new Date(`${raw}T00:00:00.000-04:00`) : new Date("");
+    if (!isNaN(toDate.getTime())) {
+      // Guyana-local next-day boundary, exclusive.
+      toDate.setUTCDate(toDate.getUTCDate() + 1);
+      filters.push(sql`${leadsTable.createdAt} < ${toDate}`);
+    }
+  }
 
   // RBAC visibility: every role with leads:view sees the full dealer
   // pipeline (Sales Advisors included — they browse everything but may only
@@ -299,7 +340,8 @@ router.get("/leads", async (req, res): Promise<void> => {
     .orderBy(desc(leadsTable.aiScore), desc(leadsTable.createdAt));
 
   const effectiveRows = await withEffectiveContactDates(dealerId, rows);
-  const visible = await redactHiddenFields(user, "leads", effectiveRows);
+  const withInterests = await withLeadVehicleInterests(effectiveRows);
+  const visible = await redactHiddenFields(user, "leads", withInterests);
   res.json(ListLeadsResponse.parse(visible));
 });
 
@@ -359,6 +401,38 @@ router.post("/leads", async (req, res): Promise<void> => {
   }
 
   const dealerId = activeDealerId(res);
+  const { vehicleInterests, ...leadData } = parsed.data;
+  const normalizedInterests = vehicleInterests
+    ? [...vehicleInterests].sort((a, b) => a.position - b.position)
+    : leadData.interestedVehicleId != null
+      ? [{ vehicleId: leadData.interestedVehicleId, quantity: 1, position: 0 }]
+      : [];
+  if (
+    vehicleInterests &&
+    new Set(vehicleInterests.map((interest) => interest.vehicleId)).size !==
+      vehicleInterests.length
+  ) {
+    res.status(422).json({
+      error: "duplicate_vehicle_interests",
+      detail: "Each vehicle may appear only once in vehicleInterests",
+    });
+    return;
+  }
+  if (normalizedInterests.length) {
+    const requestedIds = normalizedInterests.map((interest) => interest.vehicleId);
+    const available = await db
+      .select({ id: vehiclesTable.id })
+      .from(vehiclesTable)
+      .where(and(
+        eq(vehiclesTable.dealerId, dealerId),
+        inArray(vehiclesTable.id, requestedIds),
+        isNull(vehiclesTable.deletedAt),
+      ));
+    if (available.length !== new Set(requestedIds).size) {
+      res.status(404).json({ error: "One or more interested vehicles were not found" });
+      return;
+    }
+  }
   let divisionId = parsed.data.divisionId ?? null;
   if (
     divisionId != null &&
@@ -401,9 +475,31 @@ router.post("/leads", async (req, res): Promise<void> => {
 
   const [lead] = await db
     .insert(leadsTable)
-    .values({ ...parsed.data, divisionId, dealerId })
+    .values({
+      ...leadData,
+      // Legacy columns always mirror position zero for older consumers.
+      ...(normalizedInterests.length
+        ? { interestedVehicleId: normalizedInterests[0]!.vehicleId }
+        : {}),
+      divisionId,
+      dealerId,
+    })
     .returning();
+  if (lead && normalizedInterests.length) {
+    await db.insert(leadVehicleInterestsTable).values(
+      normalizedInterests.map((interest, position) => ({
+        dealerId,
+        leadId: lead.id,
+        vehicleId: interest.vehicleId,
+        quantity: interest.quantity,
+        position,
+      })),
+    );
+  }
 
+  const leadWithInterests = lead
+    ? (await withLeadVehicleInterests([lead]))[0]!
+    : lead;
   if (lead) onLeadCreated(lead);
   // R6.2 #1 New Lead → division sales managers (In-App + Email).
   if (lead) notifyLeadNew(lead);
@@ -434,7 +530,7 @@ router.post("/leads", async (req, res): Promise<void> => {
 
   res.status(201).json(
     CreateLeadResponse.parse({
-      lead: assigned ?? lead,
+        lead: assigned ? (await withLeadVehicleInterests([assigned]))[0]! : leadWithInterests,
       merged: false,
       mergeNotice: null,
     }),
@@ -466,10 +562,11 @@ router.get("/leads/:id", async (req, res): Promise<void> => {
   }
 
   const effectiveLeads = await withEffectiveContactDates(dealerId, [lead]);
+  const withInterests = await withLeadVehicleInterests(effectiveLeads);
   const [visible] = await redactHiddenFields(
     res.locals.user,
     "leads",
-    effectiveLeads,
+    withInterests,
   );
   res.json(GetLeadResponse.parse(visible));
 });
@@ -1133,7 +1230,7 @@ router.get("/leads/:id/quotes", async (req, res): Promise<void> => {
       ),
     )
     .orderBy(desc(quotesTable.version));
-  res.json(ListLeadQuotesResponse.parse(rows));
+  res.json(ListLeadQuotesResponse.parse(await withQuoteItems(rows)));
 });
 
 router.post("/leads/:id/quotes", async (req, res): Promise<void> => {
@@ -1168,7 +1265,7 @@ router.post("/leads/:id/quotes", async (req, res): Promise<void> => {
     });
     return;
   }
-  res.status(201).json(GenerateLeadQuoteResponse.parse(quote));
+  res.status(201).json(GenerateLeadQuoteResponse.parse((await withQuoteItems([quote]))[0]));
 });
 
 // Advisor requests a discount on the current quote; a manager gate must
@@ -2724,6 +2821,22 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const { vehicleInterests, ...leadPatch } = parsed.data;
+  const normalizedInterests = vehicleInterests
+    ? [...vehicleInterests].sort((a, b) => a.position - b.position)
+    : null;
+  if (
+    vehicleInterests &&
+    new Set(vehicleInterests.map((interest) => interest.vehicleId)).size !==
+      vehicleInterests.length
+  ) {
+    res.status(422).json({
+      error: "duplicate_vehicle_interests",
+      detail: "Each vehicle may appear only once in vehicleInterests",
+    });
+    return;
+  }
+  const primaryInterestId = normalizedInterests?.[0]?.vehicleId ?? null;
 
   // Field-level permissions: reject edits to restricted field groups.
   const blocked = await findBlockedEditField(res.locals.user, "leads", parsed.data);
@@ -2817,12 +2930,14 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
         swapFailure = { status: 404, body: { error: "Lead not found" } };
         throw SWAP_ABORT;
       }
+      const requestedPrimaryId =
+        normalizedInterests ? primaryInterestId : parsed.data.interestedVehicleId;
       const swapping =
-        parsed.data.interestedVehicleId !== undefined &&
-        parsed.data.interestedVehicleId !== locked.interestedVehicleId;
+        requestedPrimaryId !== undefined &&
+        requestedPrimaryId !== locked.interestedVehicleId;
       const feePaidAfter =
         parsed.data.reservationFeePaid ?? locked.reservationFeePaid;
-      if (swapping && parsed.data.interestedVehicleId != null) {
+      if (swapping && requestedPrimaryId != null) {
         const [newVehicle] = await tx
           .select({
             id: vehiclesTable.id,
@@ -2835,7 +2950,7 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
           .from(vehiclesTable)
           .where(
             and(
-              eq(vehiclesTable.id, parsed.data.interestedVehicleId),
+                eq(vehiclesTable.id, requestedPrimaryId),
               eq(vehiclesTable.dealerId, dealerId),
               isNull(vehiclesTable.deletedAt),
             ),
@@ -2881,11 +2996,36 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
           throw SWAP_ABORT;
         }
       }
+      if (normalizedInterests) {
+        const ids = normalizedInterests.map((interest) => interest.vehicleId);
+        const dealerVehicles = ids.length
+          ? await tx.select({ id: vehiclesTable.id }).from(vehiclesTable).where(and(
+              eq(vehiclesTable.dealerId, dealerId),
+              inArray(vehiclesTable.id, ids),
+              isNull(vehiclesTable.deletedAt),
+            ))
+          : [];
+        if (dealerVehicles.length !== new Set(ids).size) {
+          swapFailure = { status: 404, body: { error: "One or more interested vehicles were not found" } };
+          throw SWAP_ABORT;
+        }
+        await tx.delete(leadVehicleInterestsTable).where(and(
+          eq(leadVehicleInterestsTable.dealerId, dealerId),
+          eq(leadVehicleInterestsTable.leadId, locked.id),
+        ));
+        if (normalizedInterests.length) await tx.insert(leadVehicleInterestsTable).values(
+          normalizedInterests.map((interest, position) => ({
+            dealerId, leadId: locked.id, vehicleId: interest.vehicleId,
+            quantity: interest.quantity, position,
+          })),
+        );
+      }
 
       const [updated] = await tx
         .update(leadsTable)
         .set({
-          ...parsed.data,
+          ...leadPatch,
+          ...(normalizedInterests ? { interestedVehicleId: primaryInterestId } : {}),
           ...(parsed.data.phase && parsed.data.phase !== locked.phase
             ? { stageEnteredAt: new Date() }
             : {}),
@@ -3076,9 +3216,18 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
   if (before && lead) onLeadUpdated(before, lead);
   // Quote agent (A3): regenerate the Code when a pricing-relevant field
   // (vehicle, color, variant, financing) changed and a Code already exists.
-  if (before && lead) autoQuoteOnLeadUpdated(before, lead);
+  if (before && lead) {
+    // A normalized-interest replacement is one commercial edit regardless of
+    // whether its position-zero compatibility projection also changed.
+    autoQuoteOnLeadUpdated(
+      normalizedInterests && before.interestedVehicleId === lead.interestedVehicleId
+        ? { ...before, interestedVehicleId: -1 }
+        : before,
+      lead,
+    );
+  }
 
-  res.json(UpdateLeadResponse.parse(lead));
+  res.json(UpdateLeadResponse.parse((await withLeadVehicleInterests([lead!]))[0]));
 });
 
 router.delete("/leads/:id", async (req, res): Promise<void> => {

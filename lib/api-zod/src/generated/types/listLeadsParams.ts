@@ -11,4 +11,12 @@ phase?: string;
 status?: string;
 divisionId?: number;
 includeDeleted?: boolean;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+createdFrom?: string;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+createdTo?: string;
 };

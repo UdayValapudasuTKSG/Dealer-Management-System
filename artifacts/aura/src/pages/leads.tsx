@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import {
   useListDeals,
   useListLeads,
@@ -12,6 +12,8 @@ import {
   useLinkLeadAccount,
   getListCustomersQueryKey,
   type Lead,
+  type LeadInput,
+  type ListLeadsParams,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,7 @@ import { Page } from "@/components/layout/page";
 import { PageHero } from "@/components/layout/page-hero";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { VehicleCascade } from "@/components/vehicle-cascade";
+import { VehicleInterestsField } from "@/components/vehicle-interests-field";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useViewMode } from "@/hooks/use-view-mode";
@@ -158,7 +161,35 @@ function contactSla(lead: {
 type TabKey = "all" | "mine" | Macro | "lost";
 
 export default function Leads() {
-  const { data: leads, isLoading } = useListLeads();
+  const [, navigate] = useLocation();
+  const searchStr = useSearch();
+  const searchParams = new URLSearchParams(searchStr);
+  const createdFrom = searchParams.get("from") || "";
+  const createdTo = searchParams.get("to") || "";
+
+  const updateDateRange = (from: string, to: string) => {
+    const next = new URLSearchParams(searchStr);
+    if (from) next.set("from", from);
+    else next.delete("from");
+
+    if (to) next.set("to", to);
+    else next.delete("to");
+
+    navigate(`~?${next.toString()}`, { replace: true });
+  };
+
+  const isInvalidRange = Boolean(createdFrom && createdTo && new Date(createdFrom) > new Date(createdTo));
+
+  const leadQueryParams: ListLeadsParams = {
+    createdFrom: createdFrom || undefined,
+    createdTo: createdTo || undefined,
+  };
+  const { data: leads, isLoading } = useListLeads(leadQueryParams, {
+    query: {
+      queryKey: getListLeadsQueryKey(leadQueryParams),
+      enabled: !isInvalidRange,
+    },
+  });
   const { data: vehicles } = useListVehicles();
   const { data: deals } = useListDeals();
   const { data: leadSources } = useListLeadSources();
@@ -168,7 +199,6 @@ export default function Leads() {
   const createLead = useCreateLead();
   const { me } = useAuthz();
   const { density, setDensity, layout, setLayout } = useViewMode("pipeline");
-  const [, navigate] = useLocation();
   const [slaClock, setSlaClock] = useState(() => Date.now());
 
   // The data query need not refetch just to tick a visual countdown. Rebuild
@@ -637,26 +667,17 @@ export default function Leads() {
                     ]
                   : []),
                 {
-                  name: "interestedVehicleId",
-                  label: "Interested model",
+                  name: "vehicleInterests",
+                  label: "Interested vehicles",
                   type: "custom",
                   required: true,
                   span: "full",
                   section: "Enquiry",
-                  render: (_value, set) => (
-                    <VehicleCascade
-                      vehicles={(vehicles ?? []).map((v) => ({
-                        id: v.id,
-                        brand: v.make,
-                        model: v.model,
-                        version: v.trim || v.variant || "Standard specification",
-                        color: v.exteriorColor,
-                        year: v.year,
-                        vin: v.vin ?? null,
-                        price: v.price,
-                      }))}
-                      unitSelection={false}
-                      onResolve={(v) => set(v ? String(v.id) : "")}
+                  render: (value, set) => (
+                    <VehicleInterestsField
+                      value={value}
+                      onChange={set}
+                      vehicles={vehicles ?? []}
                     />
                   ),
                 },
@@ -704,27 +725,29 @@ export default function Leads() {
                     ? "walkin"
                     : "web";
                 payload.isRetailCustomer = payload.isRetailCustomer === "true";
-                if (payload.interestedVehicleId != null) {
-                  payload.interestedVehicleId = Number(
-                    payload.interestedVehicleId,
-                  );
-                  const v = (vehicles ?? []).find(
-                    (x) => x.id === payload.interestedVehicleId,
-                  );
-                  if (v) {
-                    const version = v.trim || v.variant;
-                    if (version) payload.variant = version;
-                    payload.color = v.exteriorColor;
-                    payload.selectedModel = [v.make, v.model, version]
-                      .filter(Boolean)
-                      .join(" ");
+                if (payload.vehicleInterests) {
+                  try {
+                    const parsedInterests = JSON.parse(payload.vehicleInterests as string);
+                    payload.vehicleInterests = parsedInterests;
+
+                    if (parsedInterests.length > 0 && parsedInterests[0].vehicleId != null) {
+                      const firstVehicleId = parsedInterests[0].vehicleId;
+                      const v = (vehicles ?? []).find((x) => x.id === firstVehicleId);
+                      if (v) {
+                        const version = v.trim || v.variant;
+                        if (version) payload.variant = version;
+                        if (v.exteriorColor) payload.color = v.exteriorColor;
+                        payload.selectedModel = [v.make, v.model, version]
+                          .filter(Boolean)
+                          .join(" ");
+                      }
+                    }
+                  } catch {
+                    delete payload.vehicleInterests;
                   }
-                  // The vehicle id records the MODEL of interest so the lead
-                  // page, quotes and deal desking can key off it; the actual
-                  // unit/VIN is still only bound at Vehicle Allocated.
                 }
                 const result = await createLead.mutateAsync({
-                  data: payload as never,
+                  data: payload as unknown as LeadInput,
                 });
                 queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
                 if (result.merged) {
@@ -794,6 +817,34 @@ export default function Leads() {
               ))}
             </select>
           )}
+          <div className={cn("flex items-center h-9 px-3 gap-2 rounded-full border text-sm", isInvalidRange ? "border-red-500/50 bg-red-500/5" : "border-white/10 bg-foreground/[0.04]")}>
+            <span className="text-muted-foreground text-[10px] uppercase tracking-wider font-semibold">Created</span>
+            <input
+              type="date"
+              value={createdFrom}
+              onChange={(e) => updateDateRange(e.target.value, createdTo)}
+              className="bg-transparent border-none focus:outline-none text-foreground/90 w-auto min-w-[110px]"
+            />
+            <span className="text-muted-foreground text-xs">to</span>
+            <input
+              type="date"
+              value={createdTo}
+              onChange={(e) => updateDateRange(createdFrom, e.target.value)}
+              className="bg-transparent border-none focus:outline-none text-foreground/90 w-auto min-w-[110px]"
+            />
+            {isInvalidRange && <span className="text-red-400 text-[10px] uppercase font-bold ml-1">Invalid</span>}
+            {(createdFrom || createdTo) && (
+               <button
+                 onClick={() => updateDateRange("", "")}
+                 className="ml-1 text-muted-foreground hover:text-foreground text-lg leading-none p-0.5 rounded-full h-4 w-4 flex items-center justify-center -translate-y-px"
+                 title="Clear dates"
+                 type="button"
+               >
+                 <span className="sr-only">Clear dates</span>
+                 &times;
+               </button>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-1.5">
           {TABS.map((t) => (
             <button

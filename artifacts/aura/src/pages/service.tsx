@@ -50,6 +50,7 @@ import {
   type ServiceOrder,
   type ServiceInvoice,
   type ServiceOrderAdvanceBodyTargetStatus,
+  useListCustomers,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -463,6 +464,8 @@ function CreateBookingDialog() {
   const { toast } = useToast();
   const createOrder = useCreateServiceOrder();
   const { data: technicians } = useListServiceTechnicians();
+  const { data: customers } = useListCustomers();
+
   return (
     <CreateRecordDialog
       title="Book Service"
@@ -476,8 +479,25 @@ function CreateBookingDialog() {
         </Button>
       }
       fields={[
-        { name: "customerName", label: "Customer", type: "text", span: "half", placeholder: "Nana Adjei" },
-        { name: "customerEmail", label: "Customer email (for confirmations & invoice)", type: "email", span: "half", placeholder: "customer@email.com" },
+        {
+          name: "customerId",
+          label: "Linked Customer (Optional)",
+          type: "select",
+          searchable: true,
+          span: "half",
+          options: customers?.map(c => ({ value: String(c.id), label: c.name })) ?? [],
+          onChange: (val, setField) => {
+            const customer = customers?.find(c => String(c.id) === val);
+            if (customer) {
+              setField("customerName", customer.name || "");
+              if (customer.email) setField("customerEmail", customer.email);
+              if (customer.phone) setField("customerPhoneSnapshot", customer.phone);
+            }
+          }
+        },
+        { name: "customerName", label: "Customer Name", type: "text", span: "half", placeholder: "Nana Adjei" },
+        { name: "customerPhoneSnapshot", label: "Contact Phone (Job Card)", type: "phone", span: "half", required: true, placeholder: "+592..." },
+        { name: "customerEmail", label: "Customer Email", type: "email", span: "half", placeholder: "customer@email.com" },
         { name: "vehicleInfo", label: "Vehicle", type: "text", required: true, span: "half", placeholder: "2022 BMW X5" },
         { name: "complaint", label: "Customer complaint", type: "textarea", span: "full", placeholder: "Grinding noise when braking..." },
         {
@@ -516,6 +536,11 @@ function CreateBookingDialog() {
       ]}
       onSubmit={async (values) => {
         const v = values as Record<string, unknown>;
+        if (v.customerId != null && v.customerId !== "") {
+          v.customerId = Number(v.customerId);
+        } else {
+          delete v.customerId;
+        }
         if (!v.customerEmail) delete v.customerEmail;
         if (v.odometer != null && v.odometer !== "") v.odometer = Number(v.odometer);
         if (v.estimatedHours != null && v.estimatedHours !== "") {

@@ -3,6 +3,7 @@ import {
   db,
   bookingsTable,
   dealsTable,
+  dealItemsTable,
   deliveriesTable,
   gatesTable,
   invoicesTable,
@@ -28,7 +29,7 @@ export async function refundBlockReason(opts: {
   vehicleId?: number | null;
 }): Promise<string | null> {
   if (opts.dealId != null) {
-    const [delivery] = await db
+    const deliveries = await db
       .select()
       .from(deliveriesTable)
       .where(
@@ -37,7 +38,8 @@ export async function refundBlockReason(opts: {
           eq(deliveriesTable.dealerId, opts.dealerId),
         ),
       );
-    if (delivery && delivery.status !== "cancelled") {
+    for (const delivery of deliveries) {
+      if (delivery.status === "cancelled") continue;
       const registrationDone = delivery.steps.some(
         (s) => s.key === "registration" && s.status === "completed",
       );
@@ -229,9 +231,38 @@ export async function cascadeDealCancellation(opts: {
         eq(deliveriesTable.status, "in_progress"),
       ),
     );
+  await db
+    .update(dealItemsTable)
+    .set({ status: "cancelled" })
+    .where(
+      and(
+        eq(dealItemsTable.dealId, deal.id),
+        eq(dealItemsTable.dealerId, deal.dealerId),
+      ),
+    );
   let vehicleReleased = false;
   if (opts.releaseVehicle) {
-    vehicleReleased = await releaseVehicleIfUnheld(deal.vehicleId, deal.dealerId);
+    const allocated = await db
+      .select({ vehicleId: deliveriesTable.vehicleId })
+      .from(deliveriesTable)
+      .where(
+        and(
+          eq(deliveriesTable.dealId, deal.id),
+          eq(deliveriesTable.dealerId, deal.dealerId),
+        ),
+      );
+    const vehicleIds = [
+      ...new Set([
+        deal.vehicleId,
+        ...allocated.map((row) => row.vehicleId),
+      ]),
+    ];
+    const results = await Promise.all(
+      vehicleIds.map((vehicleId) =>
+        releaseVehicleIfUnheld(vehicleId, deal.dealerId),
+      ),
+    );
+    vehicleReleased = results.some(Boolean);
   }
   return { vehicleReleased };
 }

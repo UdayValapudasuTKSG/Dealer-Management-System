@@ -5,6 +5,7 @@ import {
   gatesTable,
   graFilingsTable,
   dealsTable,
+  dealItemsTable,
   financeApplicationsTable,
   vehiclesTable,
   leadsTable,
@@ -424,22 +425,31 @@ async function applyCascade(
         inArray(paymentsTable.invoiceId, invoiceIds),
       )))[0]?.amount ?? 0;
       if (captured > 0.005) {
-        const [delivery] = await tx.select().from(deliveriesTable).where(and(
+        const dealDeliveries = await tx.select().from(deliveriesTable).where(and(
           eq(deliveriesTable.dealerId, gate.dealerId),
           eq(deliveriesTable.dealId, deal.id),
-        )).limit(1);
-        const [vehicle] = await tx.select({ status: vehiclesTable.status }).from(vehiclesTable).where(and(
+        ));
+        const allocatedIds = [
+          ...new Set([
+            deal.vehicleId,
+            ...dealDeliveries.map((delivery) => delivery.vehicleId),
+          ]),
+        ];
+        const vehicles = await tx.select({ status: vehiclesTable.status }).from(vehiclesTable).where(and(
           eq(vehiclesTable.dealerId, gate.dealerId),
-          eq(vehiclesTable.id, deal.vehicleId),
-        )).limit(1);
-        const registrationDone = delivery?.steps.some(
-          (step) => step.key === "registration" && step.status === "completed",
+          inArray(vehiclesTable.id, allocatedIds),
+        ));
+        const registrationDone = dealDeliveries.some((delivery) =>
+          delivery.steps.some(
+            (step) => step.key === "registration" && step.status === "completed",
+          ),
         );
         if (
           registrationDone ||
-          delivery?.status === "completed" ||
-          vehicle?.status === "delivered" ||
-          vehicle?.status === "sold"
+          dealDeliveries.some((delivery) => delivery.status === "completed") ||
+          vehicles.some((vehicle) =>
+            vehicle.status === "delivered" || vehicle.status === "sold"
+          )
         ) {
           return {
             title: "Deal cancellation approval stale",
@@ -465,6 +475,8 @@ async function applyCascade(
         .where(and(eq(bookingsTable.dealerId, gate.dealerId), eq(bookingsTable.dealId, deal.id), eq(bookingsTable.status, "active")));
       await tx.update(deliveriesTable).set({ status: "cancelled" })
         .where(and(eq(deliveriesTable.dealerId, gate.dealerId), eq(deliveriesTable.dealId, deal.id), eq(deliveriesTable.status, "in_progress")));
+      await tx.update(dealItemsTable).set({ status: "cancelled" })
+        .where(and(eq(dealItemsTable.dealerId, gate.dealerId), eq(dealItemsTable.dealId, deal.id)));
       let releaseDetail = "";
       if (captured > 0.005) {
         const [existingRefund] = await tx.select({ id: gatesTable.id }).from(gatesTable).where(and(
@@ -492,22 +504,34 @@ async function applyCascade(
         }).returning({ id: gatesTable.id }))[0]!;
         releaseDetail = ` Refund gate #${refundGate.id} was raised; the vehicle remains held until that approval.`;
       } else {
-        const [otherBooking] = await tx.select({ id: bookingsTable.id }).from(bookingsTable).where(and(
-          eq(bookingsTable.dealerId, gate.dealerId), eq(bookingsTable.vehicleId, deal.vehicleId),
-          eq(bookingsTable.status, "active"),
-        )).limit(1);
-        const [otherDeal] = await tx.select({ id: dealsTable.id }).from(dealsTable).where(and(
-          eq(dealsTable.dealerId, gate.dealerId), eq(dealsTable.vehicleId, deal.vehicleId),
-          notInArray(dealsTable.stage, ["cancelled", "lost", "delivered"]),
-        )).limit(1);
-        if (!otherBooking && !otherDeal) {
-          await tx.update(vehiclesTable).set({ status: "available", holdUntil: null, holdReason: null })
-            .where(and(eq(vehiclesTable.id, deal.vehicleId), eq(vehiclesTable.dealerId, gate.dealerId),
-              inArray(vehiclesTable.status, ["reserved", "booked"])));
-          releaseDetail = " The vehicle was returned to available stock.";
-        } else {
-          releaseDetail = " The vehicle remains held by other active work.";
+        const allocated = await tx.select({ vehicleId: deliveriesTable.vehicleId })
+          .from(deliveriesTable).where(and(
+            eq(deliveriesTable.dealerId, gate.dealerId),
+            eq(deliveriesTable.dealId, deal.id),
+          ));
+        const vehicleIds = [
+          ...new Set([deal.vehicleId, ...allocated.map((row) => row.vehicleId)]),
+        ];
+        let released = 0;
+        for (const vehicleId of vehicleIds) {
+          const [otherBooking] = await tx.select({ id: bookingsTable.id }).from(bookingsTable).where(and(
+            eq(bookingsTable.dealerId, gate.dealerId),
+            eq(bookingsTable.vehicleId, vehicleId),
+            eq(bookingsTable.status, "active"),
+          )).limit(1);
+          if (otherBooking) continue;
+          const rows = await tx.update(vehiclesTable)
+            .set({ status: "available", holdUntil: null, holdReason: null })
+            .where(and(
+              eq(vehiclesTable.id, vehicleId),
+              eq(vehiclesTable.dealerId, gate.dealerId),
+              inArray(vehiclesTable.status, ["reserved", "booked"]),
+            )).returning({ id: vehiclesTable.id });
+          if (rows.length) released += 1;
         }
+        releaseDetail = released
+          ? ` ${released} allocated vehicle(s) were returned to available stock.`
+          : " The allocated vehicles remain held by other active work.";
       }
       return { title: "Deal cancellation approved", detail: `Deal #${deal.id} was cancelled for ${reason.replace(/_/g, " ")}; linked booking and delivery work was closed.${releaseDetail}` };
     }
@@ -778,7 +802,34 @@ async function applyCascade(
                   eq(deliveriesTable.status, "in_progress"),
                 ),
               );
-            vinReturned = await releaseUnit(deal.vehicleId);
+            await tx
+              .update(dealItemsTable)
+              .set({ status: "cancelled" })
+              .where(
+                and(
+                  eq(dealItemsTable.dealId, deal.id),
+                  eq(dealItemsTable.dealerId, gate.dealerId),
+                ),
+              );
+            const allocated = await tx
+              .select({ vehicleId: deliveriesTable.vehicleId })
+              .from(deliveriesTable)
+              .where(
+                and(
+                  eq(deliveriesTable.dealId, deal.id),
+                  eq(deliveriesTable.dealerId, gate.dealerId),
+                ),
+              );
+            const vehicleIds = [
+              ...new Set([
+                deal.vehicleId,
+                ...allocated.map((row) => row.vehicleId),
+              ]),
+            ];
+            const released = await Promise.all(
+              vehicleIds.map((vehicleId) => releaseUnit(vehicleId)),
+            );
+            vinReturned = released.some(Boolean);
           }
         } else if (gate.refType === "booking") {
           const [booking] = await tx

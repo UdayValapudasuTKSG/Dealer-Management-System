@@ -961,6 +961,14 @@ paths:
           in: query
           required: false
           schema: { type: boolean }
+        - name: createdFrom
+          in: query
+          required: false
+          schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        - name: createdTo
+          in: query
+          required: false
+          schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
       responses:
         "200":
           description: List of leads
@@ -9009,6 +9017,7 @@ components:
         customerId: { type: ["integer", "null"] }
         customerName: { type: string }
         leadId: { type: ["integer", "null"] }
+        quoteId: { type: ["integer", "null"] }
         dealId: { type: ["integer", "null"] }
         waiverReason: { type: ["string", "null"] }
         bookingAmount: { type: number }
@@ -9092,6 +9101,12 @@ components:
       properties:
         id: { type: integer }
         dealId: { type: integer }
+        dealItemId:
+          type: ["integer", "null"]
+          description: Deal item fulfilled by this physical delivery
+        dealItemUnit:
+          type: ["integer", "null"]
+          description: Zero-based unit number within the deal item's quantity
         bookingId: { type: ["integer", "null"] }
         vehicleId: { type: integer }
         customerId: { type: ["integer", "null"] }
@@ -9329,6 +9344,13 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         url: { type: string, minLength: 1 }
+    LeadVehicleInterestInput:
+      type: object
+      required: [vehicleId]
+      properties:
+        vehicleId: { type: integer, minimum: 1 }
+        quantity: { type: integer, minimum: 1, default: 1 }
+        position: { type: integer, minimum: 0, default: 0 }
     Lead:
       type: object
       required: [id, name, channel, source, priority, phase, status, attachments, aiScore, createdAt, isRetailCustomer, quotationSent, reservationFeePaid, financingQualified, revisitIn3Months]
@@ -9346,6 +9368,9 @@ components:
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         customerId: { type: ["integer", "null"] }
         interestedVehicleId: { type: ["integer", "null"] }
+        vehicleInterests:
+          type: array
+          items: { $ref: "#/components/schemas/LeadVehicleInterestInput" }
         selectedModel: { type: ["string", "null"] }
         interestedModelText: { type: ["string", "null"] }
         variant: { type: ["string", "null"] }
@@ -9397,6 +9422,10 @@ components:
         phase: { type: string, enum: [new, contacted, qualified, proposal, negotiation, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         interestedVehicleId: { type: integer }
+        vehicleInterests:
+          type: array
+          description: Canonical dealer-scoped interests; first item projects to interestedVehicleId.
+          items: { $ref: "#/components/schemas/LeadVehicleInterestInput" }
         selectedModel: { type: string }
         variant: { type: string }
         color: { type: string }
@@ -9423,6 +9452,9 @@ components:
         phase: { type: string, enum: [new, contacted, qualified, proposal, negotiation, won, lost] }
         status: { type: string, enum: [new, assigned, contacted, qualified, test_drive, back_order, decision, engaged, converted, lost] }
         interestedVehicleId: { type: integer }
+        vehicleInterests:
+          type: array
+          items: { $ref: "#/components/schemas/LeadVehicleInterestInput" }
         selectedModel: { type: ["string", "null"] }
         variant: { type: string }
         color: { type: string }
@@ -9570,6 +9602,39 @@ components:
         kind: { type: string, enum: [percent, fixed] }
         rate: { type: number }
         amount: { type: number }
+    QuoteItem:
+      type: object
+      required: [id, quoteId, vehicleId, quantity, position, modelYear, vehicleLine, manufacturer, basePrice, taxLines, totalTax, total]
+      properties:
+        id: { type: integer }
+        quoteId: { type: integer }
+        vehicleId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
+        position: { type: integer, minimum: 0 }
+        modelYear: { type: integer }
+        vehicleLine: { type: string }
+        trim: { type: ["string", "null"] }
+        color: { type: ["string", "null"] }
+        manufacturer: { type: string }
+        basePrice: { type: number, description: Unit price }
+        taxLines: { type: array, items: { $ref: "#/components/schemas/QuoteTaxLine" } }
+        totalTax: { type: number }
+        total: { type: number }
+    DealItem:
+      type: object
+      required: [id, dealId, vehicleId, quantity, position, vehiclePrice, discount, taxSnapshot, total, status]
+      properties:
+        id: { type: integer }
+        dealId: { type: integer }
+        quoteItemId: { type: ["integer", "null"] }
+        vehicleId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
+        position: { type: integer, minimum: 0 }
+        vehiclePrice: { type: number, description: Unit price }
+        discount: { type: number }
+        taxSnapshot: { type: array, items: { $ref: "#/components/schemas/QuoteTaxLine" } }
+        total: { type: number }
+        status: { type: string }
     QuoteDiscountRequestInput:
       type: object
       required: [reason]
@@ -9718,6 +9783,10 @@ components:
             $ref: "#/components/schemas/QuoteTaxLine"
         totalTax: { type: number }
         total: { type: number }
+        items:
+          type: array
+          description: Immutable per-interest snapshot for this revision.
+          items: { $ref: "#/components/schemas/QuoteItem" }
         issuedOn: { type: string }
         validUntil: { type: string }
         trigger: { type: string }
@@ -10229,6 +10298,7 @@ components:
         divisionId: { type: ["integer", "null"] }
         customerId: { type: ["integer", "null"] }
         leadId: { type: ["integer", "null"] }
+        quoteId: { type: ["integer", "null"] }
         vehicleId: { type: integer }
         customerName: { type: ["string", "null"] }
         stage: { type: string, enum: [desking, committed, delivered, cancelled, lost] }
@@ -10250,6 +10320,9 @@ components:
           items:
             $ref: "#/components/schemas/QuoteTaxLine"
         cancellationGateId: { type: ["integer", "null"] }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DealItem" }
         createdAt: { type: string, format: date-time }
     DealInput:
       type: object
@@ -10606,6 +10679,7 @@ components:
         id: { type: integer }
         customerId: { type: ["integer", "null"] }
         customerName: { type: ["string", "null"] }
+        customerPhoneSnapshot: { type: ["string", "null"] }
         vehicleInfo: { type: string }
         vehicleId: { type: ["integer", "null"] }
         assetId: { type: ["integer", "null"] }
@@ -10643,6 +10717,7 @@ components:
       properties:
         customerId: { type: integer }
         customerName: { type: string }
+        customerPhoneSnapshot: { type: string }
         customerEmail: { type: string, minLength: 3 }
         vehicleInfo: { type: string, minLength: 1 }
         vehicleId: { type: integer }

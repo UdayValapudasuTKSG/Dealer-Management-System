@@ -62,6 +62,7 @@ export const serviceOrdersTable = pgTable("service_orders", {
   dealerId: integer("dealer_id").notNull(),
   customerId: integer("customer_id"),
   customerName: text("customer_name"),
+  customerPhoneSnapshot: text("customer_phone_snapshot"),
   vehicleInfo: text("vehicle_info").notNull(),
   vehicleId: integer("vehicle_id"),
   assetId: integer("asset_id"),

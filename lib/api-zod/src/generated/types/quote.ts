@@ -7,6 +7,7 @@
  */
 import type { QuoteDiscountStatus } from './quoteDiscountStatus';
 import type { QuoteDutyFreeStatus } from './quoteDutyFreeStatus';
+import type { QuoteItem } from './quoteItem';
 import type { QuoteRequestType } from './quoteRequestType';
 import type { QuoteStatus } from './quoteStatus';
 import type { QuoteTaxLine } from './quoteTaxLine';
@@ -53,6 +54,8 @@ export interface Quote {
   taxSnapshot?: QuoteTaxLine[];
   totalTax: number;
   total: number;
+  /** Immutable per-interest snapshot for this revision. */
+  items?: QuoteItem[];
   issuedOn: string;
   validUntil: string;
   trigger: string;

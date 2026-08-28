@@ -183,6 +183,11 @@ export const deliveriesTable = pgTable("deliveries", {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
   dealId: integer("deal_id").notNull(),
+  // The delivery follows one concrete deal item. Legacy deliveries use the
+  // deal's primary item after the additive migration backfill.
+  dealItemId: integer("deal_item_id"),
+  /** Zero-based physical unit within deal_items.quantity. */
+  dealItemUnit: integer("deal_item_unit"),
   bookingId: integer("booking_id"),
   vehicleId: integer("vehicle_id").notNull(),
   customerId: integer("customer_id"),

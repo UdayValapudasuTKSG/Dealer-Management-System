@@ -9,6 +9,7 @@ import type { LeadInputChannel } from './leadInputChannel';
 import type { LeadInputPhase } from './leadInputPhase';
 import type { LeadInputPriority } from './leadInputPriority';
 import type { LeadInputStatus } from './leadInputStatus';
+import type { LeadVehicleInterestInput } from './leadVehicleInterestInput';
 
 export interface LeadInput {
   divisionId?: number;
@@ -24,6 +25,8 @@ export interface LeadInput {
   phase?: LeadInputPhase;
   status?: LeadInputStatus;
   interestedVehicleId?: number;
+  /** Canonical dealer-scoped interests; first item projects to interestedVehicleId. */
+  vehicleInterests?: LeadVehicleInterestInput[];
   selectedModel?: string;
   variant?: string;
   color?: string;

@@ -179,59 +179,44 @@ export function buildQuotePdf(
       });
     y += 30;
 
-    // Description block: manufacturer, model, spec lines, year.
-    let specLines: string[] = [];
+    // Canonical item snapshots are supplied by quotePdfPayload. Legacy payloads
+    // fall back to the historical single-line layout.
+    let items: Array<{ model: string; manufacturer: string; year: number; variant: string; color: string; quantity: number; unitPrice: string; subtotal: string; tax: string; total: string }> = [];
     try {
-      const parsed = JSON.parse(data.specLines ?? "[]");
+      const parsed = JSON.parse(data.quoteItems ?? "[]");
       if (Array.isArray(parsed)) {
-        specLines = parsed
-          .filter((s): s is string => typeof s === "string" && !!s.trim())
-          .slice(0, 6); // keep the estimate to a single page
+        items = parsed.filter((item) => item && typeof item === "object").slice(0, 12);
       }
     } catch {
-      // Missing/legacy payloads have no spec lines.
+      // Legacy quote payload.
     }
-    const manufacturer = data.manufacturer?.trim() ?? "";
-    let model = val(data, "vehicle", val(data, "model", ""));
-    // De-duplicate "BYD" / "BYD SHARK" → "BYD" / "SHARK".
-    if (
-      manufacturer &&
-      model.toLowerCase().startsWith(`${manufacturer.toLowerCase()} `)
-    ) {
-      model = model.slice(manufacturer.length + 1).trim();
-    }
-    const descLines = [
-      manufacturer || model,
-      ...(manufacturer && model && model !== manufacturer ? [model] : []),
-      ...specLines,
-      ...(data.modelYear && data.modelYear.trim()
-        ? [`Year Make: ${data.modelYear.trim()}`]
-        : []),
-    ].filter(Boolean);
-
-    doc
-      .font("Times-Roman")
-      .fontSize(9.5)
-      .fillColor(TEXT)
-      .text(shortDate(val(data, "issuedOn", "")), colDate + 6, y);
-    let dy = y;
+    if (!items.length) items = [{
+      model: val(data, "vehicle", val(data, "model", "")),
+      manufacturer: data.manufacturer ?? "", year: Number(data.modelYear ?? 0),
+      variant: data.version ?? "", color: data.color ?? "", quantity: Number(data.quantity ?? 1),
+      unitPrice: data.unitPrice ?? "", subtotal: data.subtotal ?? data.total ?? "",
+      tax: data.totalTax ?? "0", total: data.total ?? "",
+    }];
     const descW = colQty - colDesc - 12;
-    for (const line of descLines) {
-      doc.font("Times-Roman").fontSize(9.5).fillColor(TEXT).text(line, colDesc, dy, {
-        width: descW,
-      });
-      dy += doc.heightOfString(line, { width: descW }) + 3;
+    for (const item of items) {
+      const descLines = [
+        [item.manufacturer, item.model].filter(Boolean).join(" "),
+        item.variant ? `Variant: ${item.variant}` : "",
+        item.color ? `Color: ${item.color}` : "",
+        item.year ? `Year: ${item.year}` : "",
+        `Unit ${bareAmount(item.unitPrice)} · Subtotal ${bareAmount(item.subtotal)} · Tax ${bareAmount(item.tax)} · Line total ${bareAmount(item.total)}`,
+      ].filter(Boolean);
+      doc.font("Times-Roman").fontSize(9.5).fillColor(TEXT)
+        .text(shortDate(val(data, "issuedOn", "")), colDate + 6, y);
+      let dy = y;
+      for (const line of descLines) {
+        doc.text(line, colDesc, dy, { width: descW });
+        dy += doc.heightOfString(line, { width: descW }) + 2;
+      }
+      doc.text(String(item.quantity), colQty, y, { width: 60, align: "right" })
+        .text(bareAmount(item.total), colAmt, y, { width: right - colAmt - 6, align: "right" });
+      y = Math.max(dy, y + 12) + 12;
     }
-    doc
-      .font("Times-Roman")
-      .fontSize(9.5)
-      .fillColor(TEXT)
-      .text(val(data, "quantity", "1"), colQty, y, { width: 60, align: "right" })
-      .text(bareAmount(val(data, "subtotal", val(data, "total"))), colAmt, y, {
-        width: right - colAmt - 6,
-        align: "right",
-      });
-    y = Math.max(dy, y + 14) + 14;
 
     doc
       .moveTo(left, y)
@@ -274,6 +259,14 @@ export function buildQuotePdf(
     };
     totalRow("SUBTOTAL", bareAmount(val(data, "subtotal", val(data, "total"))));
     totalRow("TAX", bareAmount(val(data, "totalTax", "0.00")), { rule: true });
+    try {
+      const treatments = JSON.parse(data.approvedTreatments ?? "[]");
+      if (Array.isArray(treatments)) {
+        for (const treatment of treatments.filter((v): v is string => typeof v === "string")) {
+          totalRow(treatment, "");
+        }
+      }
+    } catch { /* no approved treatments */ }
     totalRow("TOTAL", `GYD ${bareAmount(val(data, "totalGyd", val(data, "total")))}`, {
       bold: true,
     });

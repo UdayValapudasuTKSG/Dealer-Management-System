@@ -30,6 +30,13 @@ const MGR = "svcwf-test-mgr@aura-test.local";
 const TECH = "svcwf-test-tech@aura-test.local";
 const ADVISOR = "svcwf-test-advisor@aura-test.local";
 
+function futureDate(daysFromToday: number): string {
+  const date = new Date();
+  date.setUTCHours(12, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() + daysFromToday);
+  return date.toISOString().slice(0, 10);
+}
+
 let passed = 0;
 let failed = 0;
 const failures: string[] = [];
@@ -89,6 +96,10 @@ async function ensureUser(email: string, name: string, roleName: string) {
 
 async function main() {
   const cleanupEmails = [MGR, TECH, ADVISOR];
+  const scheduledDate = futureDate(1);
+  const firstRolloverDate = futureDate(2);
+  const partialRolloverDate = futureDate(3);
+  const reRequestDate = futureDate(10);
   let orderId: number | null = null;
   try {
     // ---- fixtures -----------------------------------------------------
@@ -102,7 +113,7 @@ async function main() {
       .values({
         dealerId: DEALER,
         vehicleInfo: "SVCWF Test Vehicle",
-        scheduledDate: "2026-08-10",
+        scheduledDate,
         status: "in_progress",
       })
       .returning();
@@ -117,9 +128,9 @@ async function main() {
         status: "in_progress",
         technicianUserId: tech.id,
         technicianName: "SvcWF Test Tech",
-        scheduledAt: new Date("2026-08-10T09:30:00-04:00"),
+        scheduledAt: new Date(`${scheduledDate}T09:30:00Z`),
         rolloverStatus: "pending",
-        rolloverToDate: "2026-08-12",
+        rolloverToDate: firstRolloverDate,
         rolloverRequestedBy: "SvcWF Test Manager",
         rolloverRequestedAt: new Date(),
       })
@@ -268,7 +279,7 @@ async function main() {
       "second signature approved the rollover and moved the schedule",
       final.rolloverStatus === "approved" &&
         final.scheduledAt != null &&
-        final.scheduledAt.toISOString().startsWith("2026-08-12"),
+        final.scheduledAt.toISOString().startsWith(firstRolloverDate),
       `status=${final.rolloverStatus} scheduledAt=${final.scheduledAt?.toISOString()}`,
     );
 
@@ -279,7 +290,7 @@ async function main() {
       .update(jobCardsTable)
       .set({
         rolloverStatus: "pending",
-        rolloverToDate: "2026-08-13",
+        rolloverToDate: partialRolloverDate,
         rolloverManagerApprovedBy: "SvcWF Test Manager",
         rolloverManagerApprovedAt: new Date(),
         rolloverTechApprovedBy: null,
@@ -287,7 +298,7 @@ async function main() {
       })
       .where(eq(jobCardsTable.id, card.id));
     const rr1 = await call("POST", `/job-cards/${card.id}/rollover`, ADVISOR, {
-      toDate: "2026-08-20",
+      toDate: reRequestDate,
       reason: "attempted overwrite",
     });
     const [afterRr1] = await db
@@ -297,8 +308,9 @@ async function main() {
     check(
       "re-request while pending (partial sign-off) → 422, signature intact",
       rr1.status === 422 &&
+        rr1.json?.error?.includes("already awaiting sign-off") &&
         afterRr1.rolloverManagerApprovedBy === "SvcWF Test Manager" &&
-        afterRr1.rolloverToDate === "2026-08-13",
+        afterRr1.rolloverToDate === partialRolloverDate,
       `got ${rr1.status} mgr=${afterRr1.rolloverManagerApprovedBy} to=${afterRr1.rolloverToDate}`,
     );
 
@@ -313,7 +325,7 @@ async function main() {
       })
       .where(eq(jobCardsTable.id, card.id));
     const rr2 = await call("POST", `/job-cards/${card.id}/rollover`, ADVISOR, {
-      toDate: "2026-08-20",
+      toDate: reRequestDate,
       reason: "second carry-over",
     });
     const [afterRr2] = await db

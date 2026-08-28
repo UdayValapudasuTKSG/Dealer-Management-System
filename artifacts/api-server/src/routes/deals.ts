@@ -12,6 +12,11 @@ import {
   timelineEventsTable,
   documentsTable,
   quotesTable,
+  quoteItemsTable,
+  dealItemsTable,
+  deliveriesTable,
+  defaultDeliverySteps,
+  DEFAULT_PDI_ITEMS,
   VIN_LENGTH,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
@@ -47,7 +52,6 @@ import {
 import { ObjectStorageService } from "../lib/objectStorage";
 import { processBankLetter } from "../lib/bank-letter";
 import { onDealStageChanged } from "../lib/email-triggers";
-import { ensureDeliveryForDeal } from "../lib/delivery";
 import {
   approvedFinanceAppForDeal,
   ensureFinalInvoiceForDeal,
@@ -69,8 +73,23 @@ import {
 import { getChannelByDealerId } from "../lib/whatsapp-channel";
 import { normalizeWhatsappPhone } from "../lib/whatsapp-phone";
 import { listWhatsappMessagesForLead } from "../lib/whatsapp-log";
+import {
+  commitDealInTransaction,
+  DealCommitConflictError,
+  InventoryAllocationError as SharedInventoryAllocationError,
+} from "../lib/deal-commit";
 
 const router: IRouter = Router();
+
+async function withDealItems<T extends typeof dealsTable.$inferSelect>(deals: T[]) {
+  if (!deals.length) return [];
+  const items = await db.select().from(dealItemsTable).where(inArray(
+    dealItemsTable.dealId, deals.map((deal) => deal.id),
+  )).orderBy(dealItemsTable.position);
+  const byDeal = new Map<number, typeof items>();
+  for (const item of items) byDeal.set(item.dealId, [...(byDeal.get(item.dealId) ?? []), item]);
+  return deals.map((deal) => ({ ...deal, items: byDeal.get(deal.id) ?? [] }));
+}
 
 // Deals move forward one stage at a time (backwards moves allowed for
 // corrections back to the immediately preceding stage only).
@@ -134,6 +153,188 @@ const VIN_LOCK_HOLD_HOURS = 72;
 type AllocationResult =
   | { ok: true }
   | { ok: false; status: number; body: Record<string, unknown> };
+
+type DealTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+class InventoryAllocationError extends Error {
+  constructor(
+    readonly itemId: number,
+    readonly requested: number,
+    readonly allocated: number,
+    readonly description: string,
+  ) {
+    super("INSUFFICIENT_ITEM_INVENTORY");
+  }
+}
+
+/**
+ * Atomically turns every item quantity into a concrete, distinct VIN and
+ * delivery. deal_items.vehicle_id remains the immutable model/variant/color
+ * seed; only the legacy deal.vehicle_id projection is repointed to unit zero.
+ */
+async function allocateDealItemUnits(
+  tx: DealTransaction,
+  deal: typeof dealsTable.$inferSelect,
+  dealerId: number,
+): Promise<number | null> {
+  const items = await tx
+    .select()
+    .from(dealItemsTable)
+    .where(
+      and(
+        eq(dealItemsTable.dealId, deal.id),
+        eq(dealItemsTable.dealerId, dealerId),
+      ),
+    )
+    .orderBy(dealItemsTable.position)
+    .for("update");
+  if (items.length === 0) {
+    throw new InventoryAllocationError(
+      0,
+      1,
+      0,
+      "The deal has no item commitments",
+    );
+  }
+
+  const [booking] = await tx
+    .select({ id: bookingsTable.id, vehicleId: bookingsTable.vehicleId })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.dealId, deal.id),
+        eq(bookingsTable.dealerId, dealerId),
+        eq(bookingsTable.status, "active"),
+      ),
+    )
+    .limit(1);
+  const holdUntil = new Date(
+    Date.now() + VIN_LOCK_HOLD_HOURS * 60 * 60 * 1000,
+  );
+  let primaryVehicleId: number | null = null;
+
+  for (const item of items) {
+    const [seed] = await tx
+      .select()
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.id, item.vehicleId),
+          eq(vehiclesTable.dealerId, dealerId),
+          isNull(vehiclesTable.deletedAt),
+        ),
+      )
+      .for("update");
+    if (!seed) {
+      throw new InventoryAllocationError(
+        item.id,
+        item.quantity,
+        0,
+        `Seed vehicle #${item.vehicleId} is not in this dealership`,
+      );
+    }
+
+    let allocated = 0;
+    for (let unit = 0; unit < item.quantity; unit += 1) {
+      // A paid booking may already hold the primary seed for this deal.
+      let chosen =
+        unit === 0 &&
+        item.position === 0 &&
+        booking?.vehicleId === seed.id &&
+        seed.status === "booked"
+          ? seed
+          : null;
+
+      if (!chosen) {
+        const [candidate] = await tx
+          .select()
+          .from(vehiclesTable)
+          .where(
+            and(
+              eq(vehiclesTable.dealerId, dealerId),
+              eq(vehiclesTable.model, seed.model),
+              seed.variant == null
+                ? isNull(vehiclesTable.variant)
+                : eq(vehiclesTable.variant, seed.variant),
+              eq(vehiclesTable.exteriorColor, seed.exteriorColor),
+              eq(vehiclesTable.status, "available"),
+              eq(vehiclesTable.recallFlag, false),
+              eq(vehiclesTable.damageFlag, false),
+              isNull(vehiclesTable.deletedAt),
+            ),
+          )
+          .orderBy(vehiclesTable.id)
+          .limit(1)
+          .for("update", { skipLocked: true });
+        chosen = candidate ?? null;
+      }
+
+      const identityValid =
+        chosen?.vin?.length === VIN_LENGTH &&
+        chosen.engineNumber?.length === VIN_LENGTH &&
+        (!chosen.registration ||
+          REGISTRATION_PATTERN.test(chosen.registration));
+      if (!chosen || !identityValid || chosen.recallFlag || chosen.damageFlag) {
+        throw new InventoryAllocationError(
+          item.id,
+          item.quantity,
+          allocated,
+          `${seed.model}${seed.variant ? ` ${seed.variant}` : ""} in ${seed.exteriorColor}`,
+        );
+      }
+
+      if (chosen.status !== "booked") {
+        const [locked] = await tx
+          .update(vehiclesTable)
+          .set({ status: "booked", holdUntil, holdReason: "vin_lock" })
+          .where(
+            and(
+              eq(vehiclesTable.id, chosen.id),
+              eq(vehiclesTable.dealerId, dealerId),
+              eq(vehiclesTable.status, "available"),
+            ),
+          )
+          .returning({ id: vehiclesTable.id });
+        if (!locked) {
+          throw new InventoryAllocationError(
+            item.id,
+            item.quantity,
+            allocated,
+            `${seed.model}${seed.variant ? ` ${seed.variant}` : ""} in ${seed.exteriorColor}`,
+          );
+        }
+      }
+
+      await tx.insert(deliveriesTable).values({
+        dealerId,
+        dealId: deal.id,
+        dealItemId: item.id,
+        dealItemUnit: unit,
+        bookingId:
+          booking?.vehicleId === chosen.id ? booking.id : null,
+        vehicleId: chosen.id,
+        customerId: deal.customerId,
+        customerName: deal.customerName,
+        status: "in_progress",
+        currentStep: "sales_order",
+        steps: defaultDeliverySteps(),
+        pdiItems: DEFAULT_PDI_ITEMS,
+      });
+      allocated += 1;
+      if (primaryVehicleId == null) primaryVehicleId = chosen.id;
+    }
+    await tx
+      .update(dealItemsTable)
+      .set({ status: "allocated" })
+      .where(
+        and(
+          eq(dealItemsTable.id, item.id),
+          eq(dealItemsTable.dealerId, dealerId),
+        ),
+      );
+  }
+  return primaryVehicleId;
+}
 
 // A11 deterministic VIN allocation (L5): runs inline on deal commit — NOT a
 // separate approval gate. Validates the physical unit's identity, blocks
@@ -541,7 +742,7 @@ router.get("/deals", async (req, res): Promise<void> => {
     )
     .orderBy(desc(dealsTable.createdAt));
 
-  const visible = await redactHiddenFields(res.locals.user, "deals", rows);
+  const visible = await redactHiddenFields(res.locals.user, "deals", await withDealItems(rows));
   res.json(ListDealsResponse.parse(visible));
 });
 
@@ -678,6 +879,7 @@ router.post("/deals", async (req, res): Promise<void> => {
   }
 
   let deal: typeof dealsTable.$inferSelect | undefined;
+  let quoteMismatch = false;
   try {
     deal = await db.transaction(async (tx) => {
       if (parsed.data.leadId != null) {
@@ -693,12 +895,43 @@ router.post("/deals", async (req, res): Promise<void> => {
           .for("update");
         if (!activeLead) throw new Error("LEAD_ARCHIVED");
       }
+      let boundQuote: { id: number; basePrice: number; discountAmount: number; taxSnapshot: typeof quotesTable.$inferSelect["taxSnapshot"]; total: number; vehicleId: number | null } | null = null;
+      if (linkedLead) {
+        const [current] = await tx.select({
+          id: quotesTable.id, basePrice: quotesTable.basePrice,
+          discountAmount: quotesTable.discountAmount, taxSnapshot: quotesTable.taxSnapshot,
+          total: quotesTable.total, vehicleId: quotesTable.vehicleId,
+        }).from(quotesTable).where(and(
+          eq(quotesTable.dealerId, dealerId), eq(quotesTable.leadId, linkedLead.id),
+          eq(quotesTable.status, "current"),
+        )).for("update");
+        if (!current) throw new Error("CURRENT_QUOTE_REQUIRED");
+        boundQuote = current;
+        if (
+          parsed.data.vehicleId !== current.vehicleId ||
+          Math.abs(parsed.data.vehiclePrice - current.basePrice) > 0.005 ||
+          (parsed.data.discount != null && Math.abs(parsed.data.discount - current.discountAmount) > 0.005)
+        ) {
+          quoteMismatch = true;
+          throw new Error("QUOTE_HEADER_MISMATCH");
+        }
+      }
       const [created] = await tx
         .insert(dealsTable)
         .values({
           ...parsed.data,
           ...(seededDiscount ?? {}),
           ...(inheritedDutyFree ?? {}),
+          // Linked-lead headers are projections of the one locked quote
+          // revision; no seed or client field may overwrite that binding.
+          ...(boundQuote ? {
+            quoteId: boundQuote.id,
+            vehicleId: boundQuote.vehicleId!,
+            vehiclePrice: boundQuote.basePrice,
+            discount: boundQuote.discountAmount,
+            taxSnapshot: boundQuote.taxSnapshot,
+            otdPrice: boundQuote.total,
+          } : {}),
           divisionId,
           salesAdvisorUserId,
           dealerId,
@@ -713,11 +946,81 @@ router.post("/deals", async (req, res): Promise<void> => {
           ...(linkedLead?.reservationFeePaid ? { depositPaid: true } : {}),
         })
         .returning();
+      // Snapshot every item from the current quote into the deal. The deal's
+      // historical vehicle/price columns remain the position-zero projection
+      // consumed by existing allocation and invoice workflows.
+      if (created && linkedLead) {
+        const [quote] = await tx
+          .select({ id: quotesTable.id, discountAmount: quotesTable.discountAmount })
+          .from(quotesTable)
+          .where(and(
+            eq(quotesTable.dealerId, dealerId),
+            eq(quotesTable.leadId, linkedLead.id),
+            eq(quotesTable.status, "current"),
+          ))
+          .orderBy(desc(quotesTable.version))
+          .limit(1);
+        if (quote) {
+          const items = await tx.select().from(quoteItemsTable).where(and(
+            eq(quoteItemsTable.dealerId, dealerId),
+            eq(quoteItemsTable.quoteId, quote.id),
+          )).orderBy(quoteItemsTable.position);
+          const subtotal = items.reduce((sum, item) => sum + item.basePrice * item.quantity, 0);
+          if (items.length) await tx.insert(dealItemsTable).values(items.map((item) => {
+            const share = subtotal > 0
+              ? Math.round(quote.discountAmount * (item.basePrice * item.quantity / subtotal) * 100) / 100
+              : 0;
+            return {
+              dealerId, dealId: created.id, quoteItemId: item.id, vehicleId: item.vehicleId,
+              quantity: item.quantity, position: item.position,
+              vehiclePrice: item.basePrice, discount: share,
+              taxSnapshot: item.taxLines, total: item.total - share,
+            };
+          }));
+        }
+      }
+      // Compatibility floor: direct/lead-less deals and legacy header-only
+      // quotes must still have one allocatable item. Header amounts are
+      // already aggregate deal amounts, so this is one unit and must never
+      // multiply them again.
+      if (created) {
+        const [item] = await tx
+          .select({ id: dealItemsTable.id })
+          .from(dealItemsTable)
+          .where(
+            and(
+              eq(dealItemsTable.dealId, created.id),
+              eq(dealItemsTable.dealerId, dealerId),
+            ),
+          )
+          .limit(1);
+        if (!item) {
+          await tx.insert(dealItemsTable).values({
+            dealerId,
+            dealId: created.id,
+            vehicleId: created.vehicleId,
+            quantity: 1,
+            position: 0,
+            vehiclePrice: created.vehiclePrice,
+            discount: created.discount,
+            taxSnapshot: created.taxSnapshot ?? [],
+            total: created.otdPrice,
+          });
+        }
+      }
       return created;
     });
   } catch (error) {
     if (error instanceof Error && error.message === "LEAD_ARCHIVED") {
       res.status(409).json({ error: "Archived leads cannot be linked to active deals" });
+      return;
+    }
+    if (error instanceof Error && error.message === "CURRENT_QUOTE_REQUIRED") {
+      res.status(422).json({ error: "A current quote is required before creating a deal for a lead" });
+      return;
+    }
+    if (quoteMismatch || (error instanceof Error && error.message === "QUOTE_HEADER_MISMATCH")) {
+      res.status(422).json({ error: "Deal vehicle and pricing must match the current quote aggregate" });
       return;
     }
     throw error;
@@ -729,7 +1032,7 @@ router.post("/deals", async (req, res): Promise<void> => {
     await logDealLinkEvent(linkedLead, deal!, "deal_created", dealActor(res));
   }
 
-  res.status(201).json(GetDealResponse.parse(deal));
+  res.status(201).json(GetDealResponse.parse((await withDealItems([deal!]))[0]));
 });
 
 router.get("/deals/:id", async (req, res): Promise<void> => {
@@ -754,7 +1057,7 @@ router.get("/deals/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [visible] = await redactHiddenFields(res.locals.user, "deals", [deal]);
+  const [visible] = await redactHiddenFields(res.locals.user, "deals", await withDealItems([deal]));
   res.json(GetDealResponse.parse(visible));
 });
 
@@ -1189,6 +1492,31 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
       res.status(202).json({ pending: true, gateId: created.id, message: "Cancellation requested for manager approval." });
       return;
     }
+    if (parsed.data.stage === "delivered") {
+      const [{ total, incomplete }] = await db
+        .select({
+          total: sql<number>`count(*)::int`,
+          incomplete: sql<number>`count(*) filter (where ${deliveriesTable.status} <> 'completed')::int`,
+        })
+        .from(deliveriesTable)
+        .where(
+          and(
+            eq(deliveriesTable.dealId, before.id),
+            eq(deliveriesTable.dealerId, dealerId),
+          ),
+        );
+      if (total === 0 || incomplete > 0) {
+        res.status(422).json({
+          error: "deliveries_incomplete",
+          unmet: [
+            total === 0
+              ? "Physical delivery workflows have not been created for this deal"
+              : `${incomplete} physical delivery workflow(s) must be completed before the deal is delivered`,
+          ],
+        });
+        return;
+      }
+    }
     // Commit gates (08-l6 §4b / 20-r2 §R2.2): collect EVERY unmet condition
     // and report them together as machine-readable codes in one 422, instead
     // of failing one at a time.
@@ -1341,20 +1669,6 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
         return;
       }
     }
-    // A11 VIN allocation (L5): committing hard-locks the physical unit.
-    // Runs BEFORE the deal row is written so a deal can never sit in
-    // "committed" without its VIN actually locked.
-    if (parsed.data.stage === "committed") {
-      const allocation = await allocateVehicleOnCommit(
-        before,
-        dealerId,
-        dealActor(res),
-      );
-      if (!allocation.ok) {
-        res.status(allocation.status).json(allocation.body);
-        return;
-      }
-    }
   }
 
   // Keep the advisor user ID in sync when the advisor name changes without
@@ -1380,6 +1694,27 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
   let deal: typeof dealsTable.$inferSelect | undefined;
   try {
     deal = await db.transaction(async (tx) => {
+      let commitDeal = before;
+      if (
+        before &&
+        parsed.data.stage === "committed" &&
+        before.stage !== "committed"
+      ) {
+        const [locked] = await tx
+          .select()
+          .from(dealsTable)
+          .where(
+            and(
+              eq(dealsTable.id, before.id),
+              eq(dealsTable.dealerId, dealerId),
+            ),
+          )
+          .for("update");
+        if (!locked || locked.stage !== before.stage) {
+          throw new Error("DEAL_STAGE_STALE");
+        }
+        commitDeal = locked;
+      }
       if (priceTouched) {
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtext(${`deal-pricing:${dealerId}:${params.data.id}`}))`,
@@ -1453,11 +1788,24 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
           .for("update");
         if (!activeLead) throw new Error("LEAD_ARCHIVED");
       }
+      if (
+        before &&
+        parsed.data.stage === "committed" &&
+        before.stage !== "committed"
+      ) {
+        const committed = await commitDealInTransaction(tx, {
+          dealId: commitDeal!.id,
+          dealerId,
+          updates: updateValues,
+        });
+        return committed.deal;
+      }
       const [updated] = await tx
         .update(dealsTable)
         .set(updateValues)
         .where(and(eq(dealsTable.id, params.data.id), eq(dealsTable.dealerId, dealerId)))
         .returning();
+      if (!updated) throw new Error("DEAL_STAGE_STALE");
       return updated;
     });
   } catch (error) {
@@ -1477,6 +1825,29 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
       res.status(409).json({
         error: "deal_pricing_changed",
         detail: "Deal pricing changed concurrently. Refresh and try again.",
+      });
+      return;
+    }
+    if (
+      error instanceof DealCommitConflictError ||
+      (error instanceof Error && error.message === "DEAL_STAGE_STALE")
+    ) {
+      res.status(409).json({
+        error: "deal_changed",
+        detail: "The deal changed concurrently. Refresh and try again.",
+      });
+      return;
+    }
+    if (
+      error instanceof InventoryAllocationError ||
+      error instanceof SharedInventoryAllocationError
+    ) {
+      res.status(409).json({
+        error: "insufficient_inventory",
+        dealItemId: error.itemId || null,
+        requested: error.requested,
+        allocated: error.allocated,
+        detail: `Unable to allocate ${error.requested} distinct physical unit(s) for ${error.description}; ${error.allocated} were available. No units were committed.`,
       });
       return;
     }
@@ -1554,21 +1925,6 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
     }
   }
 
-  // Delivering marks the unit sold (commit already VIN-locked it → booked).
-  if (before && before.stage !== deal.stage) {
-    if (deal.stage === "delivered") {
-      await db
-        .update(vehiclesTable)
-        .set({ status: "sold" })
-        .where(
-          and(
-            eq(vehiclesTable.id, deal.vehicleId),
-            eq(vehiclesTable.dealerId, dealerId),
-          ),
-        );
-    }
-  }
-
   // Cash decision / commitment → kick off the delivery workflow.
   if (before && before.stage !== "committed" && deal.stage === "committed") {
     // Dual-invoice #2 (L6): the final settlement invoice is generated at
@@ -1578,9 +1934,6 @@ router.patch("/deals/:id", idempotent("deals.update"), async (req, res): Promise
     } catch (err) {
       req.log.error({ err, dealId: deal.id }, "final invoice generation failed");
     }
-    void ensureDeliveryForDeal(deal.id, {
-      cause: `Deal #${deal.id} committed`,
-    }).catch(() => undefined);
   }
 
   res.json(UpdateDealResponse.parse(deal));

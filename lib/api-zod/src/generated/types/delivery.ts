@@ -16,6 +16,16 @@ import type { PdiItem } from './pdiItem';
 export interface Delivery {
   id: number;
   dealId: number;
+  /**
+     * Deal item fulfilled by this physical delivery
+     * @nullable
+     */
+  dealItemId?: number | null;
+  /**
+     * Zero-based unit number within the deal item's quantity
+     * @nullable
+     */
+  dealItemUnit?: number | null;
   /** @nullable */
   bookingId?: number | null;
   vehicleId: number;

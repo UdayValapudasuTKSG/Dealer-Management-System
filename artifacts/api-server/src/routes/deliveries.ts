@@ -5,6 +5,7 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   deliveriesTable,
+  dealItemsTable,
   dealsTable,
   leadsTable,
   dealersTable,
@@ -36,7 +37,6 @@ import {
   ListDeliveriesQueryParams,
   ListDeliveriesResponse,
   CreateDeliveryBody,
-  CreateDeliveryResponse,
   GetDeliveryParams,
   GetDeliveryResponse,
   UpdateDeliveryParams,
@@ -54,7 +54,6 @@ import {
   GetDeliveryHandoverPdfParams,
   ListDeliveryAdvisorsResponse,
 } from "@workspace/api-zod";
-import { ensureDeliveryForDeal } from "../lib/delivery";
 import {
   buildHandoverVerification,
   handoverExpectedFor,
@@ -423,15 +422,11 @@ router.post("/deliveries", async (req, res): Promise<void> => {
     res.status(409).json({ error: "A delivery already exists for this deal" });
     return;
   }
-  const delivery = await ensureDeliveryForDeal(parsed.data.dealId, {
-    advisorUserId: parsed.data.advisorUserId ?? null,
-    cause: "Delivery started manually",
+  res.status(409).json({
+    error: "deal_not_committed",
+    detail:
+      "Deliveries are created atomically for every deal item unit when the deal is committed.",
   });
-  if (!delivery) {
-    res.status(404).json({ error: "Deal not found or has no vehicle" });
-    return;
-  }
-  res.status(201).json(CreateDeliveryResponse.parse((await enrich([delivery], activeDealerId(res)))[0]));
 });
 
 router.get("/deliveries/:id", async (req, res): Promise<void> => {
@@ -978,13 +973,37 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
   if (isLast) {
     await db
       .update(vehiclesTable)
-      .set({ status: "delivered" })
+      .set({ status: "sold", holdUntil: null, holdReason: null })
       .where(
         and(
           eq(vehiclesTable.id, delivery.vehicleId),
           eq(vehiclesTable.dealerId, delivery.dealerId),
         ),
       );
+    if (delivery.dealItemId != null) {
+      const [{ remainingForItem }] = await db
+        .select({
+          remainingForItem: sql<number>`count(*) filter (where ${deliveriesTable.status} <> 'completed')::int`,
+        })
+        .from(deliveriesTable)
+        .where(
+          and(
+            eq(deliveriesTable.dealItemId, delivery.dealItemId),
+            eq(deliveriesTable.dealerId, delivery.dealerId),
+          ),
+        );
+      if (remainingForItem === 0) {
+        await db
+          .update(dealItemsTable)
+          .set({ status: "fulfilled" })
+          .where(
+            and(
+              eq(dealItemsTable.id, delivery.dealItemId),
+              eq(dealItemsTable.dealerId, delivery.dealerId),
+            ),
+          );
+      }
+    }
     if (delivery.bookingId) {
       await db
         .update(bookingsTable)
@@ -1055,7 +1074,18 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
         );
       }
     }
-    if (before && before.stage !== "delivered") {
+    const [{ remaining }] = await db
+      .select({
+        remaining: sql<number>`count(*) filter (where ${deliveriesTable.status} <> 'completed')::int`,
+      })
+      .from(deliveriesTable)
+      .where(
+        and(
+          eq(deliveriesTable.dealId, delivery.dealId),
+          eq(deliveriesTable.dealerId, delivery.dealerId),
+        ),
+      );
+    if (before && before.stage !== "delivered" && remaining === 0) {
       const [after] = await db
         .update(dealsTable)
         .set({ stage: "delivered" })
