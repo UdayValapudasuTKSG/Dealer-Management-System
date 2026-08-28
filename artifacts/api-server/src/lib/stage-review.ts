@@ -186,8 +186,9 @@ export function buildStageChecks(
         );
       return (row?.n ?? 0) > 0;
     },
-    // Vehicle Allocated (L5): a physical unit (VIN) must be bound to the
-    // lead, and that unit must be clear of recall/damage flags.
+    // Vehicle Allocated (L5): every physical unit committed by every deal
+    // item must have one distinct delivery/VIN. Leads and specification
+    // interests never own or reserve a physical vehicle directly.
     vin_allocated: async () => {
       const dealIds = leadDeals
         .filter((candidate) =>
@@ -195,17 +196,23 @@ export function buildStageChecks(
         )
         .map((candidate) => candidate.id);
       if (!dealIds.length) return false;
-      const [expected] = await db
+      const items = await db
         .select({
-          n: sql<number>`coalesce(sum(${dealItemsTable.quantity}), 0)::int`,
+          id: dealItemsTable.id,
+          quantity: dealItemsTable.quantity,
         })
         .from(dealItemsTable)
         .where(and(
           eq(dealItemsTable.dealerId, dealerId),
           inArray(dealItemsTable.dealId, dealIds),
         ));
-      const [allocated] = await db
-        .select({ n: sql<number>`count(*)::int` })
+      if (!items.length) return false;
+      const allocated = await db
+        .select({
+          dealItemId: deliveriesTable.dealItemId,
+          unit: deliveriesTable.dealItemUnit,
+          vehicleId: deliveriesTable.vehicleId,
+        })
         .from(deliveriesTable)
         .innerJoin(
           vehiclesTable,
@@ -219,8 +226,25 @@ export function buildStageChecks(
           inArray(deliveriesTable.dealId, dealIds),
           sql`length(${vehiclesTable.vin}) = 17`,
         ));
-      return (expected?.n ?? 0) > 0 &&
-        (allocated?.n ?? 0) === expected!.n;
+      const expectedCount = items.reduce(
+        (sum, item) => sum + item.quantity,
+        0,
+      );
+      if (allocated.length !== expectedCount) return false;
+      if (
+        new Set(allocated.map((delivery) => delivery.vehicleId)).size !==
+        allocated.length
+      ) {
+        return false;
+      }
+      return items.every((item) => {
+        const units = allocated
+          .filter((delivery) => delivery.dealItemId === item.id)
+          .map((delivery) => delivery.unit)
+          .sort((a, b) => (a ?? -1) - (b ?? -1));
+        return units.length === item.quantity &&
+          units.every((unit, index) => unit === index);
+      });
     },
     recall_clear: async () => {
       const dealIds = leadDeals
