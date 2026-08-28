@@ -2398,6 +2398,35 @@ paths:
                   gate: { type: string }
                   gateId: { type: integer }
 
+  /deals/{id}/reservation-hold/retry:
+    post:
+      operationId: retryDealReservationHold
+      tags: [deals]
+      summary: Retry the inventory soft-lock for a paid but unfulfilled reservation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: All requested units are now held
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationHoldRetryResult"
+        "404":
+          description: Deal not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Deal not retryable, or matching stock still unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /deals/{id}/whatsapp:
     get:
       operationId: getDealWhatsappThread
@@ -9941,6 +9970,25 @@ components:
         taxSnapshot: { type: array, items: { $ref: "#/components/schemas/QuoteTaxLine" } }
         total: { type: number }
         status: { type: string }
+        heldUnits:
+          type: array
+          description: Active reservation soft-locks for this line — VINs temporarily held after the reservation fee was fully paid.
+          items: { $ref: "#/components/schemas/DealItemHeldUnit" }
+    ReservationHoldRetryResult:
+      type: object
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          enum: [held, already_held]
+    DealItemHeldUnit:
+      type: object
+      required: [unit, vehicleId]
+      properties:
+        unit: { type: integer, minimum: 0, description: Zero-based physical unit within the line quantity }
+        vehicleId: { type: integer }
+        vin: { type: ["string", "null"] }
+        expiresAt: { type: ["string", "null"], format: date-time }
     QuoteDiscountRequestInput:
       type: object
       required: [reason]
@@ -10626,6 +10674,7 @@ components:
           items:
             $ref: "#/components/schemas/QuoteTaxLine"
         cancellationGateId: { type: ["integer", "null"] }
+        reservationHoldStatus: { type: ["string", "null"], enum: [held, unfulfilled, null], description: "Reservation soft-lock outcome after full reservation payment: held (every unit has a VIN temporarily locked) or unfulfilled (payment recorded, stock unavailable — needs inventory resolution)" }
         items:
           type: array
           items: { $ref: "#/components/schemas/DealItem" }

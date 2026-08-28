@@ -39,6 +39,7 @@ export * from "./notifications";
 export * from "./tasks";
 export * from "./commNotes";
 export * from "./bookings";
+export * from "./reservationAllocations";
 export * from "./webhookEvents";
 export * from "./whatsappConversations";
 export * from "./whatsappMessages";

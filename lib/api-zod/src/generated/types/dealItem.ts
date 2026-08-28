@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DealItemHeldUnit } from './dealItemHeldUnit';
 import type { QuoteTaxLine } from './quoteTaxLine';
 
 export interface DealItem {
@@ -34,4 +35,6 @@ export interface DealItem {
   taxSnapshot: QuoteTaxLine[];
   total: number;
   status: string;
+  /** Active reservation soft-locks for this line — VINs temporarily held after the reservation fee was fully paid. */
+  heldUnits?: DealItemHeldUnit[];
 }

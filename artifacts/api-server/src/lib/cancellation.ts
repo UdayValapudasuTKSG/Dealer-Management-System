@@ -8,12 +8,15 @@ import {
   gatesTable,
   invoicesTable,
   paymentsTable,
+  reservationAllocationsTable,
   timelineEventsTable,
   vehiclesTable,
   type Booking,
   type Deal,
   type GateEvidenceItem,
 } from "@workspace/db";
+
+import { releaseReservationHolds } from "./reservation-allocations";
 
 const money = (n: number) =>
   `GY$${Math.round(n).toLocaleString("en-US")}`;
@@ -173,6 +176,19 @@ export async function releaseVehicleIfUnheld(
       ),
     );
   if (other) return false;
+  // A live reservation soft-lock (another paid multi-unit reservation)
+  // claims the unit just like an active booking does.
+  const [heldByReservation] = await db
+    .select({ id: reservationAllocationsTable.id })
+    .from(reservationAllocationsTable)
+    .where(
+      and(
+        eq(reservationAllocationsTable.vehicleId, vehicleId),
+        eq(reservationAllocationsTable.dealerId, dealerId),
+        eq(reservationAllocationsTable.status, "active"),
+      ),
+    );
+  if (heldByReservation) return false;
   const [v] = await db
     .select({ status: vehiclesTable.status })
     .from(vehiclesTable)
@@ -240,6 +256,13 @@ export async function cascadeDealCancellation(opts: {
         eq(dealItemsTable.dealerId, deal.dealerId),
       ),
     );
+  // Close the deal's own reservation soft-locks first — the freed units
+  // become releasable below unless another live claim holds them.
+  await releaseReservationHolds({
+    dealId: deal.id,
+    dealerId: deal.dealerId,
+    reason: `deal_cancelled:${opts.reasonCode}`,
+  });
   let vehicleReleased = false;
   if (opts.releaseVehicle) {
     const allocated = await db

@@ -43,6 +43,13 @@ import { logger } from "../lib/logger";
 import { ensureAccountForLead } from "../lib/accounts";
 import { applyPayment, issueInvoice, logPaymentEvent } from "../lib/invoicing";
 import { recordAgentRun } from "../lib/agent-governance";
+import {
+  expireLapsedReservationHolds,
+  vehicleOtherwiseClaimed,
+} from "../lib/reservation-allocations";
+
+/** Thrown when the vehicle was claimed between pre-check and booking write. */
+class VehicleClaimRace extends Error {}
 import { defaultDivisionId } from "./divisions";
 import { activeDealerId } from "../middlewares/rbac";
 
@@ -87,6 +94,8 @@ async function releaseVehicle(
       ),
     );
   if (other) return;
+  // A live reservation soft-lock claims the unit like an active booking.
+  if (await vehicleOtherwiseClaimed(db, vehicleId, dealerId)) return;
   const [v] = await db
     .select({ status: vehiclesTable.status })
     .from(vehiclesTable)
@@ -111,6 +120,8 @@ async function releaseVehicle(
 
 /** Lazily expires lapsed active bookings and releases their vehicles. */
 export async function expireLapsedBookings(): Promise<void> {
+  // Reservation soft-locks share the same lazy expiry cadence.
+  await expireLapsedReservationHolds();
   const lapsed = await db
     .update(bookingsTable)
     .set({ status: "expired" })
@@ -565,41 +576,72 @@ router.post("/bookings", async (req, res): Promise<void> => {
         ? "partial"
         : "pending");
 
-  const [booking] = await db
-    .insert(bookingsTable)
-    .values({
-      dealerId,
-      vehicleId: parsed.data.vehicleId,
-      customerId,
-      customerName: parsed.data.customerName,
-      dealId: parsed.data.dealId ?? null,
-      leadId: parsed.data.leadId ?? null,
-      waiverReason,
-      bookingAmount: parsed.data.bookingAmount,
-      amountPaid: paid,
-      paymentStatus,
-      status: "active",
-      expiresAt: parsed.data.expiresAt,
-      notes: parsed.data.notes ?? null,
-      createdBy: res.locals.user?.name ?? res.locals.user?.email ?? null,
-    })
-    .returning();
-
-  await db
-    .update(vehiclesTable)
-    .set({
-      status: paymentStatus === "paid" ? "booked" : "reserved",
-      // Soft-lock the unit for the life of the reservation; expiry/cancel
-      // clears it via releaseVehicle.
-      holdUntil: parsed.data.expiresAt,
-      holdReason: "booking",
-    })
-    .where(
-      and(
-        eq(vehiclesTable.id, parsed.data.vehicleId),
-        eq(vehiclesTable.dealerId, dealerId),
-      ),
-    );
+  // Claim the vehicle atomically: lock the row, re-check that no reservation
+  // soft-lock or concurrent booking claimed it since the pre-checks above,
+  // then write the booking and status transition in one transaction.
+  let booking: typeof bookingsTable.$inferSelect;
+  try {
+    booking = await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ status: vehiclesTable.status })
+        .from(vehiclesTable)
+        .where(and(
+          eq(vehiclesTable.id, parsed.data.vehicleId),
+          eq(vehiclesTable.dealerId, dealerId),
+        ))
+        .for("update");
+      if (
+        !locked ||
+        locked.status !== "available" ||
+        (await vehicleOtherwiseClaimed(tx, parsed.data.vehicleId, dealerId))
+      ) {
+        throw new VehicleClaimRace();
+      }
+      const [created] = await tx
+        .insert(bookingsTable)
+        .values({
+          dealerId,
+          vehicleId: parsed.data.vehicleId,
+          customerId,
+          customerName: parsed.data.customerName,
+          dealId: parsed.data.dealId ?? null,
+          leadId: parsed.data.leadId ?? null,
+          waiverReason,
+          bookingAmount: parsed.data.bookingAmount,
+          amountPaid: paid,
+          paymentStatus,
+          status: "active",
+          expiresAt: parsed.data.expiresAt,
+          notes: parsed.data.notes ?? null,
+          createdBy: res.locals.user?.name ?? res.locals.user?.email ?? null,
+        })
+        .returning();
+      await tx
+        .update(vehiclesTable)
+        .set({
+          status: paymentStatus === "paid" ? "booked" : "reserved",
+          // Soft-lock the unit for the life of the reservation; expiry/cancel
+          // clears it via releaseVehicle.
+          holdUntil: parsed.data.expiresAt,
+          holdReason: "booking",
+        })
+        .where(
+          and(
+            eq(vehiclesTable.id, parsed.data.vehicleId),
+            eq(vehiclesTable.dealerId, dealerId),
+          ),
+        );
+      return created!;
+    });
+  } catch (err) {
+    if (err instanceof VehicleClaimRace) {
+      res.status(409).json({
+        error: "This vehicle was just claimed by another reservation — choose a different unit",
+      });
+      return;
+    }
+    throw err;
+  }
 
   // Trusted-bypass waiver: raise a pending manager-approval gate so the
   // zero-fee reservation is visible and reviewable.

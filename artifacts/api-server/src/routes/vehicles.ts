@@ -40,6 +40,7 @@ import {
 } from "../lib/field-permissions";
 import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
 import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
+import { vehicleActivelyAllocated } from "../lib/reservation-allocations";
 
 const router: IRouter = Router();
 
@@ -1260,6 +1261,18 @@ router.post(
           });
           continue;
         }
+        if (
+          resolvedDbId != null &&
+          (await vehicleActivelyAllocated(resolvedDbId, dealerId))
+        ) {
+          rowErrors.push({
+            row,
+            field: "status",
+            message:
+              "This VIN is temporarily held for a paid reservation — resolve the deal instead of importing a status change.",
+          });
+          continue;
+        }
       }
 
       // --- Unchanged detection ---
@@ -1730,6 +1743,11 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
     if (!current) return { kind: "not-found" as const };
 
     if (parsed.data.status && parsed.data.status !== current.status) {
+      // A VIN actively soft-locked by a paid reservation cannot have its
+      // status edited manually — release goes through the deal workflows.
+      if (await vehicleActivelyAllocated(params.data.id, dealerId, tx)) {
+        return { kind: "allocation-held" as const };
+      }
       const allowed =
         VEHICLE_STATUS_TRANSITIONS[current.status as VehicleStatus] ?? [];
       if (!allowed.includes(parsed.data.status as VehicleStatus)) {
@@ -1803,6 +1821,13 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
     });
     return;
   }
+  if (outcome.kind === "allocation-held") {
+    res.status(409).json({
+      error:
+        "This VIN is temporarily held for a paid reservation — resolve the deal (commit, cancel, or refund) instead of editing its status.",
+    });
+    return;
+  }
   if (outcome.kind === "invalid-status") {
     res.status(422).json({
       error: `Invalid status transition: ${outcome.currentStatus} → ${outcome.requestedStatus}`,
@@ -1828,6 +1853,14 @@ router.delete("/vehicles/:id", async (req, res): Promise<void> => {
   }
 
   // Soft delete (R4.8): never hard-remove from the data plane.
+  // A VIN actively soft-locked by a paid reservation cannot be removed.
+  if (await vehicleActivelyAllocated(params.data.id, activeDealerId(res))) {
+    res.status(409).json({
+      error:
+        "This VIN is temporarily held for a paid reservation — resolve the deal before deleting it.",
+    });
+    return;
+  }
   const actor = res.locals.user;
   const [vehicle] = await db
     .update(vehiclesTable)

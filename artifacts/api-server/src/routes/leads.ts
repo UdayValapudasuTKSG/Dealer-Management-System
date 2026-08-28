@@ -29,6 +29,7 @@ import {
   SOCIAL_SUB_PLATFORMS,
   type Lead,
   type ChecklistStage,
+  reservationAllocationsTable,
 } from "@workspace/db";
 import {
   CreateLeadBody,
@@ -3143,6 +3144,19 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
                       eq(bookingsTable.dealerId, dealerId),
                       eq(bookingsTable.vehicleId, oldVehicleId),
                       eq(bookingsTable.status, "active"),
+                    ),
+                  ),
+              ),
+              // A paid reservation's active soft-lock also keeps the unit.
+              notExists(
+                db
+                  .select({ id: reservationAllocationsTable.id })
+                  .from(reservationAllocationsTable)
+                  .where(
+                    and(
+                      eq(reservationAllocationsTable.dealerId, dealerId),
+                      eq(reservationAllocationsTable.vehicleId, oldVehicleId),
+                      eq(reservationAllocationsTable.status, "active"),
                     ),
                   ),
               ),

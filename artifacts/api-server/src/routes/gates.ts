@@ -15,6 +15,7 @@ import {
   invoicesTable,
   paymentsTable,
   quotesTable,
+  reservationAllocationsTable,
   type Gate,
 } from "@workspace/db";
 import {
@@ -32,6 +33,10 @@ import { computeDraftDuty, taxLinesMatch } from "../lib/gra-duty";
 import { computeTaxes, ensureDealerTaxes, isDutyOrStatutoryTax } from "../lib/taxes";
 import { activeDealerId } from "../middlewares/rbac";
 import { notifyRefundApproved } from "../lib/notify-triggers";
+import {
+  releaseReservationHolds,
+  vehicleOtherwiseClaimed,
+} from "../lib/reservation-allocations";
 import {
   ListGatesQueryParams,
   ListGatesResponse,
@@ -504,6 +509,14 @@ async function applyCascade(
         }).returning({ id: gatesTable.id }))[0]!;
         releaseDetail = ` Refund gate #${refundGate.id} was raised; the vehicle remains held until that approval.`;
       } else {
+        // No captured funds: close the deal's reservation soft-locks first
+        // so its own held units become releasable below.
+        await releaseReservationHolds({
+          dealId: deal.id,
+          dealerId: gate.dealerId,
+          reason: `deal_cancelled:${reason}`,
+          tx,
+        });
         const allocated = await tx.select({ vehicleId: deliveriesTable.vehicleId })
           .from(deliveriesTable).where(and(
             eq(deliveriesTable.dealerId, gate.dealerId),
@@ -514,12 +527,7 @@ async function applyCascade(
         ];
         let released = 0;
         for (const vehicleId of vehicleIds) {
-          const [otherBooking] = await tx.select({ id: bookingsTable.id }).from(bookingsTable).where(and(
-            eq(bookingsTable.dealerId, gate.dealerId),
-            eq(bookingsTable.vehicleId, vehicleId),
-            eq(bookingsTable.status, "active"),
-          )).limit(1);
-          if (otherBooking) continue;
+          if (await vehicleOtherwiseClaimed(tx, vehicleId, gate.dealerId)) continue;
           const rows = await tx.update(vehiclesTable)
             .set({ status: "available", holdUntil: null, holdReason: null })
             .where(and(
@@ -615,6 +623,16 @@ async function applyCascade(
         sql`${leadsTable.deletedAt} is null`)).returning();
       if (!lead) return { title: "Lead archive stale", detail: "The lead changed while approval was being recorded; no changes were made." };
       for (const deal of cancellableDeals) {
+        // Lead closure ends the deal's reservation soft-locks; deals with
+        // captured funds keep their vehicles held via heldVehicleIds below.
+        if ((capturedByDeal.get(deal.id) ?? 0) <= 0.005) {
+          await releaseReservationHolds({
+            dealId: deal.id,
+            dealerId: gate.dealerId,
+            reason: "lead_archived",
+            tx,
+          });
+        }
         await tx.update(dealsTable).set({
           stage: "cancelled",
           cancellationReason: "customer_changed_mind",
@@ -690,11 +708,8 @@ async function applyCascade(
           notInArray(dealsTable.stage, ["cancelled", "lost", "delivered"]),
           dealIds.length > 0 ? notInArray(dealsTable.id, dealIds) : undefined,
         )).limit(1);
-        const [otherBooking] = await tx.select({ id: bookingsTable.id }).from(bookingsTable).where(and(
-          eq(bookingsTable.dealerId, gate.dealerId), eq(bookingsTable.vehicleId, vehicleId),
-          eq(bookingsTable.status, "active"),
-        )).limit(1);
-        if (!otherDeal && !otherBooking) {
+        const otherClaim = await vehicleOtherwiseClaimed(tx, vehicleId, gate.dealerId);
+        if (!otherDeal && !otherClaim) {
           await tx.update(vehiclesTable).set({ status: "available", holdUntil: null, holdReason: null }).where(and(
             eq(vehiclesTable.dealerId, gate.dealerId), eq(vehiclesTable.id, vehicleId),
             inArray(vehiclesTable.status, ["reserved", "booked"]),
@@ -731,17 +746,10 @@ async function applyCascade(
       // a negative payment referencing this gate (422 until it's approved).
       let vinReturned = false;
       const releaseUnit = async (vehicleId: number) => {
-        const [otherHold] = await tx
-          .select({ id: bookingsTable.id })
-          .from(bookingsTable)
-          .where(
-            and(
-              eq(bookingsTable.vehicleId, vehicleId),
-              eq(bookingsTable.dealerId, gate.dealerId),
-              eq(bookingsTable.status, "active"),
-            ),
-          );
-        if (otherHold) return false;
+        // Honor other live claims: active bookings AND active reservation
+        // soft-locks from other paid reservations.
+        if (await vehicleOtherwiseClaimed(tx, vehicleId, gate.dealerId))
+          return false;
         const [updated] = await tx
           .update(vehiclesTable)
           .set({ status: "available", holdUntil: null, holdReason: null })
@@ -758,16 +766,9 @@ async function applyCascade(
 
       if (gate.refId) {
         if (gate.refType === "vehicle") {
-          await tx
-            .update(vehiclesTable)
-            .set({ status: "available", holdUntil: null, holdReason: null })
-            .where(
-              and(
-                eq(vehiclesTable.id, gate.refId),
-                eq(vehiclesTable.dealerId, gate.dealerId),
-              ),
-            );
-          vinReturned = true;
+          // Allocation-aware: never free a VIN another paid reservation or
+          // booking still actively claims.
+          vinReturned = await releaseUnit(gate.refId);
         } else if (gate.refType === "deal") {
           const [deal] = await tx
             .select()
@@ -779,6 +780,30 @@ async function applyCascade(
               ),
             );
           if (deal) {
+            // Snapshot the deal's active reservation soft-locks so every
+            // held VIN is returned below (an uncommitted multi-unit
+            // reservation has no deliveries to enumerate from).
+            const heldRows = await tx
+              .select({ vehicleId: reservationAllocationsTable.vehicleId })
+              .from(reservationAllocationsTable)
+              .where(
+                and(
+                  eq(reservationAllocationsTable.dealId, deal.id),
+                  eq(reservationAllocationsTable.dealerId, gate.dealerId),
+                  eq(reservationAllocationsTable.status, "active"),
+                ),
+              );
+            // Linked bookings' own units must also come back to stock.
+            const bookedRows = await tx
+              .select({ vehicleId: bookingsTable.vehicleId })
+              .from(bookingsTable)
+              .where(
+                and(
+                  eq(bookingsTable.dealId, deal.id),
+                  eq(bookingsTable.dealerId, gate.dealerId),
+                  eq(bookingsTable.status, "active"),
+                ),
+              );
             await tx
               .update(bookingsTable)
               .set({
@@ -811,6 +836,14 @@ async function applyCascade(
                   eq(dealItemsTable.dealerId, gate.dealerId),
                 ),
               );
+            // With the deal's own bookings cancelled, close its reservation
+            // soft-locks; then release every formerly held/delivered VIN.
+            await releaseReservationHolds({
+              dealId: deal.id,
+              dealerId: gate.dealerId,
+              reason: "refund_approved",
+              tx,
+            });
             const allocated = await tx
               .select({ vehicleId: deliveriesTable.vehicleId })
               .from(deliveriesTable)
@@ -824,6 +857,8 @@ async function applyCascade(
               ...new Set([
                 deal.vehicleId,
                 ...allocated.map((row) => row.vehicleId),
+                ...heldRows.map((row) => row.vehicleId),
+                ...bookedRows.map((row) => row.vehicleId),
               ]),
             ];
             const released = await Promise.all(
@@ -842,7 +877,35 @@ async function applyCascade(
               ),
             );
           if (booking) {
-            vinReturned = await releaseUnit(booking.vehicleId);
+            // A booking linked to a deal may carry reservation soft-locks
+            // for that deal — snapshot and close them, then return every
+            // formerly held VIN alongside the booking's own unit.
+            let heldVehicleIds: number[] = [];
+            if (booking.dealId != null) {
+              const heldRows = await tx
+                .select({ vehicleId: reservationAllocationsTable.vehicleId })
+                .from(reservationAllocationsTable)
+                .where(
+                  and(
+                    eq(reservationAllocationsTable.dealId, booking.dealId),
+                    eq(reservationAllocationsTable.dealerId, gate.dealerId),
+                    eq(reservationAllocationsTable.status, "active"),
+                  ),
+                );
+              heldVehicleIds = heldRows.map((row) => row.vehicleId);
+              await releaseReservationHolds({
+                dealId: booking.dealId,
+                dealerId: gate.dealerId,
+                reason: "refund_approved",
+                tx,
+              });
+            }
+            const released = await Promise.all(
+              [...new Set([booking.vehicleId, ...heldVehicleIds])].map(
+                (vehicleId) => releaseUnit(vehicleId),
+              ),
+            );
+            vinReturned = released.some(Boolean);
           }
         }
       }

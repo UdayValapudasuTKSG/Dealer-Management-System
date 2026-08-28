@@ -12,6 +12,7 @@
     "verify:lead-call-sla": "tsx src/scripts/test-lead-call-sla.ts",
     "verify:delivery-owner-contact": "tsx src/scripts/test-delivery-owner-contact.ts",
     "verify:finance-multi-item": "tsx src/scripts/verify-finance-multi-item-commit.ts",
+    "verify:reservation-soft-locks": "tsx src/scripts/verify-reservation-soft-locks.ts",
     "verify:erpnext-entities": "tsx src/scripts/verify-erpnext-entity-sync.ts"
   },
   "dependencies": {

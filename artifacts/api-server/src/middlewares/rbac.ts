@@ -744,7 +744,11 @@ const PATH_MODULES: Record<string, RouteRule> = {
   deals: {
     module: "deals",
     category: (req) =>
-      isWhatsappReplyPath(req)
+      isWhatsappReplyPath(req) ||
+      // Re-holding a paid reservation's inventory is a corrective action on
+      // an existing deal — edit, not create.
+      (req.method === "POST" &&
+        /^\/deals\/\d+\/reservation-hold\/retry\/?$/.test(req.path))
         ? "edit"
         : (METHOD_CATEGORY[req.method] ?? "view"),
   },

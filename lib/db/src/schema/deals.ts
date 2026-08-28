@@ -72,6 +72,13 @@ export const dealsTable = pgTable("deals", {
   dutyFreeApproved: boolean("duty_free_approved").notNull().default(false),
   taxSnapshot: jsonb("tax_snapshot").$type<QuoteTaxLine[]>(),
   cancellationGateId: integer("cancellation_gate_id"),
+  /**
+   * Reservation soft-lock outcome after the reservation invoice is fully
+   * paid: null (no paid reservation yet), "held" (every requested unit has
+   * an active reservation allocation) or "unfulfilled" (complete matching
+   * stock was unavailable — payment stays recorded, staff must resolve).
+   */
+  reservationHoldStatus: text("reservation_hold_status"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

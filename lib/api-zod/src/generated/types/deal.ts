@@ -8,6 +8,7 @@
 import type { DealCancellationReason } from './dealCancellationReason';
 import type { DealFinalPaymentMethod } from './dealFinalPaymentMethod';
 import type { DealItem } from './dealItem';
+import type { DealReservationHoldStatus } from './dealReservationHoldStatus';
 import type { DealStage } from './dealStage';
 import type { QuoteTaxLine } from './quoteTaxLine';
 
@@ -49,6 +50,11 @@ export interface Deal {
   taxSnapshot?: QuoteTaxLine[] | null;
   /** @nullable */
   cancellationGateId?: number | null;
+  /**
+     * Reservation soft-lock outcome after full reservation payment: held (every unit has a VIN temporarily locked) or unfulfilled (payment recorded, stock unavailable — needs inventory resolution)
+     * @nullable
+     */
+  reservationHoldStatus?: DealReservationHoldStatus;
   items?: DealItem[];
   createdAt: Date;
 }

@@ -5,6 +5,8 @@ import {
   dealsTable,
   dealItemsTable,
   deliveriesTable,
+  invoicesTable,
+  reservationAllocationsTable,
   vehiclesTable,
   defaultDeliverySteps,
   DEFAULT_PDI_ITEMS,
@@ -81,6 +83,11 @@ export async function commitDealInTransaction(
   deal: typeof dealsTable.$inferSelect;
   newlyCommitted: boolean;
 }> {
+  // Serialize with the reservation allocator (same advisory key): payment
+  // settlement, hold creation, and commitment on one deal never interleave.
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`reservation-alloc:${opts.dealerId}:${opts.dealId}`}))`,
+  );
   const [before] = await tx.select().from(dealsTable).where(and(
     eq(dealsTable.id, opts.dealId),
     eq(dealsTable.dealerId, opts.dealerId),
@@ -119,6 +126,78 @@ export async function commitDealInTransaction(
   const holdUntil = new Date(Date.now() + HOLD_HOURS * 60 * 60 * 1000);
   let primaryVehicleId: number | null = null;
 
+  // Paid-reservation adoption: a fully paid reservation soft-locked one VIN
+  // per requested unit. Commitment must adopt EXACTLY those vehicles rather
+  // than silently swapping inventory. Active holds that do not form a
+  // complete set are a conflict — resolve the reservation first.
+  const activeHolds = await tx.select().from(reservationAllocationsTable)
+    .where(and(
+      eq(reservationAllocationsTable.dealId, before.id),
+      eq(reservationAllocationsTable.dealerId, opts.dealerId),
+      eq(reservationAllocationsTable.status, "active"),
+    )).for("update");
+  const holdByItemUnit = new Map<string, typeof activeHolds[number]>();
+  for (const hold of activeHolds) {
+    holdByItemUnit.set(`${hold.dealItemId}:${hold.dealItemUnit}`, hold);
+  }
+  // Lapsed holds must not be adoptable: the lazy expiry sweep may not have
+  // run yet, so check expiry here, at the moment of commitment.
+  const now = Date.now();
+  if (
+    activeHolds.some(
+      (hold) => hold.expiresAt != null && hold.expiresAt.getTime() <= now,
+    )
+  ) {
+    throw new DealCommitConflictError(
+      "The paid reservation's inventory holds have lapsed — re-hold the units before committing",
+    );
+  }
+  if (activeHolds.length === 0 && before.reservationHoldStatus == null) {
+    // Race guard: a fully paid reservation invoice whose post-payment
+    // allocation hasn't run yet (payment tx committed, allocator pending)
+    // must not commit with ordinary replacement stock. Block until the
+    // allocator records holds or an explicit unfulfilled state.
+    const [paidReservation] = await tx.select({ id: invoicesTable.id })
+      .from(invoicesTable)
+      .where(and(
+        eq(invoicesTable.dealId, before.id),
+        eq(invoicesTable.dealerId, opts.dealerId),
+        eq(invoicesTable.kind, "reservation"),
+        eq(invoicesTable.status, "paid"),
+      )).limit(1);
+    if (paidReservation) {
+      throw new DealCommitConflictError(
+        "The reservation fee is paid but its inventory hold hasn't been recorded yet — retry in a moment",
+      );
+    }
+  }
+  if (activeHolds.length === 0 && before.reservationHoldStatus != null) {
+    // A fully paid reservation whose holds were never made (unfulfilled) or
+    // have since lapsed must NOT commit by silently picking replacement
+    // stock — inventory has to be resolved (re-held) first.
+    throw new DealCommitConflictError(
+      before.reservationHoldStatus === "unfulfilled"
+        ? "The reservation fee is paid but matching stock could not be held — resolve inventory before committing"
+        : "The paid reservation's inventory holds have lapsed — re-hold the units before committing",
+    );
+  }
+  if (activeHolds.length > 0) {
+    const totalUnits = items.reduce((sum, item) => sum + item.quantity, 0);
+    const complete =
+      activeHolds.length === totalUnits &&
+      new Set(activeHolds.map((h) => h.vehicleId)).size === activeHolds.length &&
+      items.every((item) =>
+        Array.from({ length: item.quantity }, (_, unit) =>
+          holdByItemUnit.has(`${item.id}:${unit}`),
+        ).every(Boolean),
+      );
+    if (!complete) {
+      throw new DealCommitConflictError(
+        "The paid reservation's inventory holds are incomplete — resolve the reservation holds before committing",
+      );
+    }
+  }
+
   for (const item of items) {
     const [legacySeed] = item.vehicleId
       ? await tx.select().from(vehiclesTable).where(and(
@@ -142,6 +221,72 @@ export async function commitDealInTransaction(
     }
     let allocated = 0;
     for (let unit = 0; unit < item.quantity; unit += 1) {
+      const hold = holdByItemUnit.get(`${item.id}:${unit}`);
+      if (hold) {
+        // Adopt the reservation's held VIN. The unit was locked FOR this
+        // deal — validate identity/flags, promote it to booked, create the
+        // delivery with the SAME vehicle, and finalize the hold row.
+        const [heldVehicle] = await tx.select().from(vehiclesTable).where(and(
+          eq(vehiclesTable.id, hold.vehicleId),
+          eq(vehiclesTable.dealerId, opts.dealerId),
+          isNull(vehiclesTable.deletedAt),
+        )).for("update");
+        const heldIdentityValid =
+          heldVehicle?.vin?.length === VIN_LENGTH &&
+          heldVehicle.engineNumber?.length === VIN_LENGTH &&
+          (!heldVehicle.registration || REGISTRATION_PATTERN.test(heldVehicle.registration));
+        // A conflicting claim by ANOTHER deal (active booking or another
+        // deal's active allocation) means the hold was subverted — refuse.
+        const [conflict] = await tx.select({ id: bookingsTable.id })
+          .from(bookingsTable)
+          .where(and(
+            eq(bookingsTable.vehicleId, hold.vehicleId),
+            eq(bookingsTable.status, "active"),
+            sql`${bookingsTable.dealId} is distinct from ${before.id}`,
+          )).limit(1);
+        if (
+          !heldVehicle || !heldIdentityValid || conflict ||
+          heldVehicle.recallFlag || heldVehicle.damageFlag ||
+          !["reserved", "booked", "available"].includes(heldVehicle.status)
+        ) {
+          throw new InventoryAllocationError(
+            item.id, item.quantity, allocated,
+            `Reserved unit ${heldVehicle?.vin ?? `#${hold.vehicleId}`} is no longer eligible — resolve the reservation hold`,
+          );
+        }
+        if (heldVehicle.status !== "booked") {
+          await tx.update(vehiclesTable).set({
+            status: "booked", holdUntil, holdReason: "vin_lock",
+          }).where(and(
+            eq(vehiclesTable.id, heldVehicle.id),
+            eq(vehiclesTable.dealerId, opts.dealerId),
+          ));
+        }
+        await tx.update(reservationAllocationsTable).set({
+          status: "finalized", finalizedAt: new Date(),
+        }).where(and(
+          eq(reservationAllocationsTable.id, hold.id),
+          eq(reservationAllocationsTable.dealerId, opts.dealerId),
+          eq(reservationAllocationsTable.status, "active"),
+        ));
+        await tx.insert(deliveriesTable).values({
+          dealerId: opts.dealerId,
+          dealId: before.id,
+          dealItemId: item.id,
+          dealItemUnit: unit,
+          bookingId: booking?.vehicleId === heldVehicle.id ? booking.id : null,
+          vehicleId: heldVehicle.id,
+          customerId: before.customerId,
+          customerName: before.customerName,
+          status: "in_progress",
+          currentStep: "sales_order",
+          steps: defaultDeliverySteps(),
+          pdiItems: DEFAULT_PDI_ITEMS,
+        });
+        allocated += 1;
+        primaryVehicleId ??= heldVehicle.id;
+        continue;
+      }
       let chosen =
         unit === 0 && item.position === 0 &&
         legacySeed && booking?.vehicleId === legacySeed.id &&
@@ -168,6 +313,16 @@ export async function commitDealInTransaction(
           eq(vehiclesTable.recallFlag, false),
           eq(vehiclesTable.damageFlag, false),
           isNull(vehiclesTable.deletedAt),
+          // Never adopt stock another paid reservation actively soft-locks
+          // or an active booking claims (even if its status was manually
+          // flipped back to available).
+          sql`not exists (select 1 from ${reservationAllocationsTable}
+            where ${reservationAllocationsTable.vehicleId} = ${vehiclesTable.id}
+              and ${reservationAllocationsTable.status} = 'active')`,
+          sql`not exists (select 1 from ${bookingsTable}
+            where ${bookingsTable.vehicleId} = ${vehiclesTable.id}
+              and ${bookingsTable.status} = 'active'
+              and ${bookingsTable.dealId} is distinct from ${before.id})`,
         )).orderBy(vehiclesTable.id).limit(1).for("update", { skipLocked: true });
         chosen = candidate ?? null;
       }
@@ -223,6 +378,8 @@ export async function commitDealInTransaction(
     ...(opts.updates ?? {}),
     stage: "committed",
     vehicleId: primaryVehicleId!,
+    // Reservation soft-locks are consumed (finalized) by commitment.
+    reservationHoldStatus: null,
   }).where(and(
     eq(dealsTable.id, before.id),
     eq(dealsTable.dealerId, opts.dealerId),

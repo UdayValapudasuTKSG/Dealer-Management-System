@@ -15,12 +15,14 @@ import {
   quoteItemsTable,
   dealItemsTable,
   deliveriesTable,
+  reservationAllocationsTable,
   defaultDeliverySteps,
   DEFAULT_PDI_ITEMS,
   VIN_LENGTH,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
 import { recordAgentRun } from "../lib/agent-governance";
+import { allocateReservationInventory } from "../lib/reservation-allocations";
 import { activeDealerId } from "../middlewares/rbac";
 import { idempotent } from "../middlewares/idempotency";
 import {
@@ -86,8 +88,39 @@ async function withDealItems<T extends typeof dealsTable.$inferSelect>(deals: T[
   const items = await db.select().from(dealItemsTable).where(inArray(
     dealItemsTable.dealId, deals.map((deal) => deal.id),
   )).orderBy(dealItemsTable.position);
-  const byDeal = new Map<number, typeof items>();
-  for (const item of items) byDeal.set(item.dealId, [...(byDeal.get(item.dealId) ?? []), item]);
+  // Active reservation soft-locks per deal line: which VINs are temporarily
+  // held for the paid reservation and until when.
+  const holds = items.length
+    ? await db.select({
+        dealItemId: reservationAllocationsTable.dealItemId,
+        dealItemUnit: reservationAllocationsTable.dealItemUnit,
+        vehicleId: reservationAllocationsTable.vehicleId,
+        expiresAt: reservationAllocationsTable.expiresAt,
+        vin: vehiclesTable.vin,
+      }).from(reservationAllocationsTable)
+        .leftJoin(vehiclesTable, eq(vehiclesTable.id, reservationAllocationsTable.vehicleId))
+        .where(and(
+          inArray(reservationAllocationsTable.dealItemId, items.map((item) => item.id)),
+          eq(reservationAllocationsTable.status, "active"),
+        ))
+        .orderBy(reservationAllocationsTable.dealItemId, reservationAllocationsTable.dealItemUnit)
+    : [];
+  const holdsByItem = new Map<number, typeof holds>();
+  for (const hold of holds)
+    holdsByItem.set(hold.dealItemId, [...(holdsByItem.get(hold.dealItemId) ?? []), hold]);
+  const byDeal = new Map<number, ReturnType<typeof decorate>[]>();
+  const decorate = (item: (typeof items)[number]) => ({
+    ...item,
+    heldUnits: (holdsByItem.get(item.id) ?? []).map((hold) => ({
+      unit: hold.dealItemUnit,
+      vehicleId: hold.vehicleId,
+      vin: hold.vin ?? null,
+      expiresAt: hold.expiresAt,
+    })),
+  });
+  for (const item of items) {
+    byDeal.set(item.dealId, [...(byDeal.get(item.dealId) ?? []), decorate(item)]);
+  }
   return deals.map((deal) => ({ ...deal, items: byDeal.get(deal.id) ?? [] }));
 }
 
@@ -1209,6 +1242,66 @@ router.get("/deals/:id/whatsapp", async (req, res): Promise<void> => {
     }),
   );
 });
+
+// Retry the reservation inventory soft-lock for a paid deal whose earlier
+// hold failed ("unfulfilled") — e.g. after new stock arrives. All-or-nothing,
+// same allocator as the payment-triggered path (audited + notified there).
+router.post(
+  "/deals/:id/reservation-hold/retry",
+  async (req, res): Promise<void> => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: "Invalid deal id" });
+      return;
+    }
+    const dealerId = activeDealerId(res);
+    const [deal] = await db
+      .select()
+      .from(dealsTable)
+      .where(and(eq(dealsTable.id, id), eq(dealsTable.dealerId, dealerId)));
+    if (!deal) {
+      res.status(404).json({ error: "Deal not found" });
+      return;
+    }
+    if (deal.stage !== "desking" || deal.reservationHoldStatus !== "unfulfilled") {
+      res.status(409).json({
+        error:
+          "Only a paid reservation currently blocked on inventory can retry its hold",
+      });
+      return;
+    }
+    const [paidInvoice] = await db
+      .select({ id: invoicesTable.id })
+      .from(invoicesTable)
+      .where(
+        and(
+          eq(invoicesTable.dealId, id),
+          eq(invoicesTable.dealerId, dealerId),
+          eq(invoicesTable.kind, "reservation"),
+          eq(invoicesTable.status, "paid"),
+        ),
+      )
+      .orderBy(desc(invoicesTable.id))
+      .limit(1);
+    const outcome = await allocateReservationInventory({
+      dealId: id,
+      dealerId,
+      invoiceId: paidInvoice?.id ?? null,
+      actor: res.locals.user?.name ?? res.locals.user?.email ?? "Manager",
+    });
+    if (outcome === "held" || outcome === "already_held") {
+      res.json({ outcome });
+      return;
+    }
+    res.status(409).json({
+      outcome,
+      error:
+        outcome === "unfulfilled"
+          ? "Matching stock is still unavailable — the deal stays blocked"
+          : "The deal is not in a state where its hold can be retried",
+    });
+  },
+);
 
 router.post("/deals/:id/whatsapp", async (req, res): Promise<void> => {
   const params = SendDealWhatsappReplyParams.safeParse(req.params);

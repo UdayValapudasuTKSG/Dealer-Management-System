@@ -3832,6 +3832,8 @@ export const ListDealsQueryParams = zod.object({
 
 export const listDealsResponseItemsItemPositionMin = 0;
 
+export const listDealsResponseItemsItemHeldUnitsItemUnitMin = 0;
+
 
 
 export const ListDealsResponseItem = zod.object({
@@ -3864,6 +3866,7 @@ export const ListDealsResponseItem = zod.object({
   "amount": zod.number()
 })).nullish(),
   "cancellationGateId": zod.number().nullish(),
+  "reservationHoldStatus": zod.union([zod.literal('held'),zod.literal('unfulfilled'),zod.literal(null)]).nullish().describe('Reservation soft-lock outcome after full reservation payment: held (every unit has a VIN temporarily locked) or unfulfilled (payment recorded, stock unavailable — needs inventory resolution)'),
   "items": zod.array(zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
@@ -3886,7 +3889,13 @@ export const ListDealsResponseItem = zod.object({
   "amount": zod.number()
 })),
   "total": zod.number(),
-  "status": zod.string()
+  "status": zod.string(),
+  "heldUnits": zod.array(zod.object({
+  "unit": zod.number().min(listDealsResponseItemsItemHeldUnitsItemUnitMin).describe('Zero-based physical unit within the line quantity'),
+  "vehicleId": zod.number(),
+  "vin": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish()
+})).optional().describe('Active reservation soft-locks for this line — VINs temporarily held after the reservation fee was fully paid.')
 })).optional(),
   "createdAt": zod.coerce.date()
 })
@@ -3914,6 +3923,8 @@ export const CreateDealBody = zod.object({
 
 
 export const createDealResponseItemsItemPositionMin = 0;
+
+export const createDealResponseItemsItemHeldUnitsItemUnitMin = 0;
 
 
 
@@ -3947,6 +3958,7 @@ export const CreateDealResponse = zod.object({
   "amount": zod.number()
 })).nullish(),
   "cancellationGateId": zod.number().nullish(),
+  "reservationHoldStatus": zod.union([zod.literal('held'),zod.literal('unfulfilled'),zod.literal(null)]).nullish().describe('Reservation soft-lock outcome after full reservation payment: held (every unit has a VIN temporarily locked) or unfulfilled (payment recorded, stock unavailable — needs inventory resolution)'),
   "items": zod.array(zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
@@ -3969,7 +3981,13 @@ export const CreateDealResponse = zod.object({
   "amount": zod.number()
 })),
   "total": zod.number(),
-  "status": zod.string()
+  "status": zod.string(),
+  "heldUnits": zod.array(zod.object({
+  "unit": zod.number().min(createDealResponseItemsItemHeldUnitsItemUnitMin).describe('Zero-based physical unit within the line quantity'),
+  "vehicleId": zod.number(),
+  "vin": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish()
+})).optional().describe('Active reservation soft-locks for this line — VINs temporarily held after the reservation fee was fully paid.')
 })).optional(),
   "createdAt": zod.coerce.date()
 })
@@ -3981,6 +3999,8 @@ export const GetDealParams = zod.object({
 
 
 export const getDealResponseItemsItemPositionMin = 0;
+
+export const getDealResponseItemsItemHeldUnitsItemUnitMin = 0;
 
 
 
@@ -4014,6 +4034,7 @@ export const GetDealResponse = zod.object({
   "amount": zod.number()
 })).nullish(),
   "cancellationGateId": zod.number().nullish(),
+  "reservationHoldStatus": zod.union([zod.literal('held'),zod.literal('unfulfilled'),zod.literal(null)]).nullish().describe('Reservation soft-lock outcome after full reservation payment: held (every unit has a VIN temporarily locked) or unfulfilled (payment recorded, stock unavailable — needs inventory resolution)'),
   "items": zod.array(zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
@@ -4036,7 +4057,13 @@ export const GetDealResponse = zod.object({
   "amount": zod.number()
 })),
   "total": zod.number(),
-  "status": zod.string()
+  "status": zod.string(),
+  "heldUnits": zod.array(zod.object({
+  "unit": zod.number().min(getDealResponseItemsItemHeldUnitsItemUnitMin).describe('Zero-based physical unit within the line quantity'),
+  "vehicleId": zod.number(),
+  "vin": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish()
+})).optional().describe('Active reservation soft-locks for this line — VINs temporarily held after the reservation fee was fully paid.')
 })).optional(),
   "createdAt": zod.coerce.date()
 })
@@ -4073,6 +4100,8 @@ export const UpdateDealBody = zod.object({
 
 export const updateDealResponseItemsItemPositionMin = 0;
 
+export const updateDealResponseItemsItemHeldUnitsItemUnitMin = 0;
+
 
 
 export const UpdateDealResponse = zod.object({
@@ -4105,6 +4134,7 @@ export const UpdateDealResponse = zod.object({
   "amount": zod.number()
 })).nullish(),
   "cancellationGateId": zod.number().nullish(),
+  "reservationHoldStatus": zod.union([zod.literal('held'),zod.literal('unfulfilled'),zod.literal(null)]).nullish().describe('Reservation soft-lock outcome after full reservation payment: held (every unit has a VIN temporarily locked) or unfulfilled (payment recorded, stock unavailable — needs inventory resolution)'),
   "items": zod.array(zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
@@ -4127,9 +4157,27 @@ export const UpdateDealResponse = zod.object({
   "amount": zod.number()
 })),
   "total": zod.number(),
-  "status": zod.string()
+  "status": zod.string(),
+  "heldUnits": zod.array(zod.object({
+  "unit": zod.number().min(updateDealResponseItemsItemHeldUnitsItemUnitMin).describe('Zero-based physical unit within the line quantity'),
+  "vehicleId": zod.number(),
+  "vin": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish()
+})).optional().describe('Active reservation soft-locks for this line — VINs temporarily held after the reservation fee was fully paid.')
 })).optional(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Retry the inventory soft-lock for a paid but unfulfilled reservation
+ */
+export const RetryDealReservationHoldParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RetryDealReservationHoldResponse = zod.object({
+  "outcome": zod.enum(['held', 'already_held'])
 })
 
 
@@ -7476,8 +7524,12 @@ export const getCustomerOverviewResponseOwnedVehiclesItemDutyFreeAmountMin = 0;
 
 export const getCustomerOverviewResponseActiveDealOneItemsItemPositionMin = 0;
 
+export const getCustomerOverviewResponseActiveDealOneItemsItemHeldUnitsItemUnitMin = 0;
+
 
 export const getCustomerOverviewResponseDealsItemItemsItemPositionMin = 0;
+
+export const getCustomerOverviewResponseDealsItemItemsItemHeldUnitsItemUnitMin = 0;
 
 
 
@@ -7728,6 +7780,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "amount": zod.number()
 })).nullish(),
   "cancellationGateId": zod.number().nullish(),
+  "reservationHoldStatus": zod.union([zod.literal('held'),zod.literal('unfulfilled'),zod.literal(null)]).nullish().describe('Reservation soft-lock outcome after full reservation payment: held (every unit has a VIN temporarily locked) or unfulfilled (payment recorded, stock unavailable — needs inventory resolution)'),
   "items": zod.array(zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
@@ -7750,7 +7803,13 @@ export const GetCustomerOverviewResponse = zod.object({
   "amount": zod.number()
 })),
   "total": zod.number(),
-  "status": zod.string()
+  "status": zod.string(),
+  "heldUnits": zod.array(zod.object({
+  "unit": zod.number().min(getCustomerOverviewResponseActiveDealOneItemsItemHeldUnitsItemUnitMin).describe('Zero-based physical unit within the line quantity'),
+  "vehicleId": zod.number(),
+  "vin": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish()
+})).optional().describe('Active reservation soft-locks for this line — VINs temporarily held after the reservation fee was fully paid.')
 })).optional(),
   "createdAt": zod.coerce.date()
 }),zod.null()]).optional(),
@@ -7784,6 +7843,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "amount": zod.number()
 })).nullish(),
   "cancellationGateId": zod.number().nullish(),
+  "reservationHoldStatus": zod.union([zod.literal('held'),zod.literal('unfulfilled'),zod.literal(null)]).nullish().describe('Reservation soft-lock outcome after full reservation payment: held (every unit has a VIN temporarily locked) or unfulfilled (payment recorded, stock unavailable — needs inventory resolution)'),
   "items": zod.array(zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
@@ -7806,7 +7866,13 @@ export const GetCustomerOverviewResponse = zod.object({
   "amount": zod.number()
 })),
   "total": zod.number(),
-  "status": zod.string()
+  "status": zod.string(),
+  "heldUnits": zod.array(zod.object({
+  "unit": zod.number().min(getCustomerOverviewResponseDealsItemItemsItemHeldUnitsItemUnitMin).describe('Zero-based physical unit within the line quantity'),
+  "vehicleId": zod.number(),
+  "vin": zod.string().nullish(),
+  "expiresAt": zod.coerce.date().nullish()
+})).optional().describe('Active reservation soft-locks for this line — VINs temporarily held after the reservation fee was fully paid.')
 })).optional(),
   "createdAt": zod.coerce.date()
 })),

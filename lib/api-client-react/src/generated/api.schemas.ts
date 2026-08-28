@@ -2867,6 +2867,19 @@ export interface QuoteItem {
   total: number;
 }
 
+export interface DealItemHeldUnit {
+  /**
+     * Zero-based physical unit within the line quantity
+     * @minimum 0
+     */
+  unit: number;
+  vehicleId: number;
+  /** @nullable */
+  vin?: string | null;
+  /** @nullable */
+  expiresAt?: string | null;
+}
+
 export interface DealItem {
   id: number;
   dealId: number;
@@ -2894,6 +2907,20 @@ export interface DealItem {
   taxSnapshot: QuoteTaxLine[];
   total: number;
   status: string;
+  /** Active reservation soft-locks for this line — VINs temporarily held after the reservation fee was fully paid. */
+  heldUnits?: DealItemHeldUnit[];
+}
+
+export type ReservationHoldRetryResultOutcome = typeof ReservationHoldRetryResultOutcome[keyof typeof ReservationHoldRetryResultOutcome];
+
+
+export const ReservationHoldRetryResultOutcome = {
+  held: 'held',
+  already_held: 'already_held',
+} as const;
+
+export interface ReservationHoldRetryResult {
+  outcome: ReservationHoldRetryResultOutcome;
 }
 
 export type QuoteDiscountRequestInputRequestType = typeof QuoteDiscountRequestInputRequestType[keyof typeof QuoteDiscountRequestInputRequestType];
@@ -3965,6 +3992,18 @@ export const DealCancellationReason = {
   other: 'other',
 } as const;
 
+/**
+ * Reservation soft-lock outcome after full reservation payment: held (every unit has a VIN temporarily locked) or unfulfilled (payment recorded, stock unavailable — needs inventory resolution)
+ * @nullable
+ */
+export type DealReservationHoldStatus = typeof DealReservationHoldStatus[keyof typeof DealReservationHoldStatus] | null;
+
+
+export const DealReservationHoldStatus = {
+  held: 'held',
+  unfulfilled: 'unfulfilled',
+} as const;
+
 export interface Deal {
   id: number;
   /** @nullable */
@@ -4003,6 +4042,11 @@ export interface Deal {
   taxSnapshot?: QuoteTaxLine[] | null;
   /** @nullable */
   cancellationGateId?: number | null;
+  /**
+     * Reservation soft-lock outcome after full reservation payment: held (every unit has a VIN temporarily locked) or unfulfilled (payment recorded, stock unavailable — needs inventory resolution)
+     * @nullable
+     */
+  reservationHoldStatus?: DealReservationHoldStatus;
   items?: DealItem[];
   createdAt: string;
 }

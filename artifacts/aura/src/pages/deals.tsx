@@ -15,6 +15,7 @@ import {
   useListOutstandingBalances,
   useUploadDealBankLetter,
   useSendTestDriveInvite,
+  useRetryDealReservationHold,
   getListGatesQueryKey,
   getListDocumentsQueryKey,
   getListDealsQueryKey,
@@ -155,6 +156,7 @@ export default function Deals() {
   const createDeal = useCreateDeal();
   const updateDeal = useUpdateDeal();
   const createBooking = useCreateBooking();
+  const retryReservationHold = useRetryDealReservationHold();
   const { data: bookings } = useListBookings();
   const { data: invoices } = useListInvoices();
   const { data: outstandingBalances } = useListOutstandingBalances();
@@ -1027,6 +1029,103 @@ export default function Deals() {
                             <div className="font-light text-lg mb-0.5 tracking-tight text-primary truncate">
                               {money.dual(deal.otdPrice)}
                             </div>
+
+                            {deal.reservationHoldStatus === "unfulfilled" && (
+                              <div
+                                className="mb-1.5 text-[11px] font-semibold text-amber-500 bg-amber-500/10 rounded-lg px-2 py-1"
+                                data-testid={`hold-unfulfilled-${deal.id}`}
+                              >
+                                Reservation paid — stock could not be held.
+                                Resolve inventory before commitment.
+                                <button
+                                  type="button"
+                                  data-testid={`retry-hold-${deal.id}`}
+                                  disabled={retryReservationHold.isPending}
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    try {
+                                      await retryReservationHold.mutateAsync({
+                                        id: deal.id,
+                                      });
+                                      queryClient.invalidateQueries({
+                                        queryKey: getListDealsQueryKey(),
+                                      });
+                                      queryClient.invalidateQueries({
+                                        predicate: (q) =>
+                                          String(q.queryKey[0] ?? "").includes(
+                                            "/vehicles",
+                                          ),
+                                      });
+                                      toast({
+                                        title: "Inventory held",
+                                        description:
+                                          "Every requested unit now has a reserved VIN.",
+                                      });
+                                    } catch {
+                                      toast({
+                                        title: "Still unavailable",
+                                        description:
+                                          "Matching stock could not be held — the deal stays blocked.",
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                  className="mt-1 block w-full rounded-md border border-amber-500/40 px-2 py-0.5 text-center font-semibold text-amber-500 hover:bg-amber-500/15 transition-colors disabled:opacity-50"
+                                >
+                                  {retryReservationHold.isPending
+                                    ? "Retrying hold…"
+                                    : "Retry inventory hold"}
+                                </button>
+                              </div>
+                            )}
+                            {(deal.items ?? []).some(
+                              (item) => (item.heldUnits ?? []).length > 0,
+                            ) && (
+                              <div
+                                className="mb-1.5 text-[11px] rounded-lg px-2 py-1 bg-emerald-500/10 space-y-0.5"
+                                data-testid={`held-units-${deal.id}`}
+                              >
+                                <div className="font-semibold text-emerald-500 uppercase tracking-wider text-[10px]">
+                                  Reserved VINs (temporary hold)
+                                </div>
+                                {(deal.items ?? []).map((item) =>
+                                  (item.heldUnits ?? []).map((held) => (
+                                    <div
+                                      key={`${item.id}-${held.unit}`}
+                                      className="flex justify-between gap-2 text-muted-foreground"
+                                    >
+                                      <span className="truncate">
+                                        {[item.modelYear, item.make, item.model]
+                                          .filter(Boolean)
+                                          .join(" ") || "Line"}{" "}
+                                        #{held.unit + 1}
+                                      </span>
+                                      <span className="font-mono text-foreground truncate">
+                                        {held.vin ?? `Unit ${held.vehicleId}`}
+                                      </span>
+                                    </div>
+                                  )),
+                                )}
+                                {(() => {
+                                  const expiry = (deal.items ?? [])
+                                    .flatMap((item) => item.heldUnits ?? [])
+                                    .map((held) => held.expiresAt)
+                                    .filter(Boolean)
+                                    .sort()[0];
+                                  return expiry ? (
+                                    <div className="text-[10px] text-muted-foreground">
+                                      Held until{" "}
+                                      {new Date(expiry).toLocaleString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                      })}
+                                    </div>
+                                  ) : null;
+                                })()}
+                              </div>
+                            )}
 
                             <div className="space-y-1.5 text-sm font-medium text-muted-foreground pt-2.5 mt-2.5 border-t border-border/50">
                               <div className="flex justify-between items-center">

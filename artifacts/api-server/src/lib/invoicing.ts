@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   bookingsTable,
@@ -21,8 +21,10 @@ import { computeTaxes, ensureDealerTaxes } from "./taxes";
 import { ensureAccountForLead } from "./accounts";
 import { logger } from "./logger";
 import { enqueueEmail, enqueueWhatsapp, notifyUsers } from "./email";
+import { generalManagers } from "./notify-matrix";
 import { financeUsers } from "./notify-matrix";
 import { queueInvoiceSync, queuePaymentSync } from "./erpnext/entities";
+import { allocateReservationInventory } from "./reservation-allocations";
 
 /**
  * Invoicing + payment ledger helpers (L6). All amounts in GYD; each
@@ -227,6 +229,10 @@ export async function applyPayment(args: ApplyPaymentArgs) {
   // Set inside the transaction when a reservation invoice is fully paid;
   // consumed after commit to ensure the lead has a linked account.
   let reservationLeadId: number | null = null;
+  // Set when THIS payment first fully settles a reservation invoice —
+  // consumed after commit to soft-lock matching inventory (own transaction,
+  // so a stock shortfall can never unwind the recorded payment).
+  let reservationPaidDealId: number | null = null;
   const result = await db.transaction(async (tx) => {
     // Serialize concurrent postings against this invoice.
     const [locked] = await tx
@@ -355,6 +361,9 @@ export async function applyPayment(args: ApplyPaymentArgs) {
       invoice.dealId != null &&
       args.amount > 0
     ) {
+      if (locked.status !== "paid") {
+        reservationPaidDealId = invoice.dealId;
+      }
       await tx
         .update(dealsTable)
         .set({ depositPaid: true })
@@ -428,6 +437,54 @@ export async function applyPayment(args: ApplyPaymentArgs) {
   // ERPNext accounting sync: post the ledger row as a Payment Entry
   // allocated against the mapped Sales Invoice (refunds post as Pay).
   queuePaymentSync(invoice.dealerId, result.payment.id);
+
+  // Post-commit: first full settlement of a reservation invoice soft-locks
+  // one matching VIN per requested deal-item unit (all-or-nothing; its own
+  // transaction so a shortfall can never unwind the recorded payment).
+  if (reservationPaidDealId != null) {
+    try {
+      await allocateReservationInventory({
+        dealId: reservationPaidDealId,
+        dealerId: invoice.dealerId,
+        invoiceId: invoice.id,
+        actor: args.receivedBy ?? null,
+      });
+    } catch (err) {
+      logger.error(
+        { err, dealId: reservationPaidDealId },
+        "reservation inventory soft-lock failed",
+      );
+      // Never leave a paid reservation silently eligible for normal
+      // replacement-stock commitment: persist the blocked state so the
+      // commit guard holds until inventory is (re-)held, and surface it.
+      try {
+        await db
+          .update(dealsTable)
+          .set({ reservationHoldStatus: "unfulfilled" })
+          .where(and(
+            eq(dealsTable.id, reservationPaidDealId),
+            eq(dealsTable.dealerId, invoice.dealerId),
+            isNull(dealsTable.reservationHoldStatus),
+          ));
+        const managers = await generalManagers(invoice.dealerId);
+        await notifyUsers(managers, {
+          dealerId: invoice.dealerId,
+          type: "reservation.pending",
+          entityType: "deal",
+          entityId: reservationPaidDealId,
+          title: `Reservation paid — inventory hold failed (deal #${reservationPaidDealId})`,
+          body:
+            "The reservation fee is fully paid but the inventory soft-lock could not run. The deal is blocked from commitment until the units are held — retry the hold once the issue is resolved.",
+          link: "/pipeline",
+        });
+      } catch (persistErr) {
+        logger.error(
+          { err: persistErr, dealId: reservationPaidDealId },
+          "failed to persist blocked reservation hold state",
+        );
+      }
+    }
+  }
 
   // Post-commit: a settled reservation means real business — make sure the
   // lead is linked to a customer account with a primary contact (the Pre-Book

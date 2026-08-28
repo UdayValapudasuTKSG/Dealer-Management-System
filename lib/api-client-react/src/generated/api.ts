@@ -274,6 +274,7 @@ import type {
   ReceiveMetaWebhook200,
   RemindAck,
   Report,
+  ReservationHoldRetryResult,
   Review,
   ReviewCreate,
   RoleFieldPermissionsInput,
@@ -6996,6 +6997,77 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getUpdateDealMutationOptions(options));
+    }
+
+export const getRetryDealReservationHoldUrl = (id: number,) => {
+
+
+
+
+  return `/api/deals/${id}/reservation-hold/retry`
+}
+
+/**
+ * @summary Retry the inventory soft-lock for a paid but unfulfilled reservation
+ */
+export const retryDealReservationHold = async (id: number, options?: RequestInit): Promise<ReservationHoldRetryResult> => {
+
+  return customFetch<ReservationHoldRetryResult>(getRetryDealReservationHoldUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryDealReservationHoldMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryDealReservationHold>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryDealReservationHold>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['retryDealReservationHold'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryDealReservationHold>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryDealReservationHold(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryDealReservationHoldMutationResult = NonNullable<Awaited<ReturnType<typeof retryDealReservationHold>>>
+
+    export type RetryDealReservationHoldMutationError = ErrorType<Error>
+
+    /**
+ * @summary Retry the inventory soft-lock for a paid but unfulfilled reservation
+ */
+export const useRetryDealReservationHold = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryDealReservationHold>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof retryDealReservationHold>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRetryDealReservationHoldMutationOptions(options));
     }
 
 export const getGetDealWhatsappThreadUrl = (id: number,) => {
