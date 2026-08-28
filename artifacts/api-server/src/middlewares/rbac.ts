@@ -34,6 +34,7 @@ export type DealerMembership = {
   brandName: string | null;
   logoUrl: string | null;
   themeColor: string | null;
+  timezone: string;
 };
 
 export type AuthedUser = User & {
@@ -254,6 +255,7 @@ async function loadMemberships(userId: number): Promise<DealerMembership[]> {
       brandName: dealersTable.brandName,
       logoUrl: dealersTable.logoUrl,
       themeColor: dealersTable.themeColor,
+      timezone: dealersTable.timezone,
     })
     .from(dealerUsersTable)
     .innerJoin(dealersTable, eq(dealerUsersTable.dealerId, dealersTable.id))
@@ -274,6 +276,7 @@ async function listAllDealers(): Promise<DealerMembership[]> {
       brandName: dealersTable.brandName,
       logoUrl: dealersTable.logoUrl,
       themeColor: dealersTable.themeColor,
+      timezone: dealersTable.timezone,
     })
     .from(dealersTable)
     .orderBy(dealersTable.id);
@@ -289,6 +292,7 @@ async function listAllDealers(): Promise<DealerMembership[]> {
     brandName: d.brandName,
     logoUrl: d.logoUrl,
     themeColor: d.themeColor,
+    timezone: d.timezone,
   }));
 }
 

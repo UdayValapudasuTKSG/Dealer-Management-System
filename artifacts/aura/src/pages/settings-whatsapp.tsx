@@ -27,6 +27,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuthz } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { formatGuyanaDateTime } from "@/lib/format";
 import {
   MessageSquare,
   Loader2,
@@ -231,7 +232,7 @@ export default function SettingsWhatsapp() {
                   </div>
                   <div className="text-xs text-muted-foreground mt-1" data-testid="status-text-subtitle">
                     {connected
-                      ? `Cloud API status: Active · last checked ${settings?.lastCheckedAt ? new Date(settings.lastCheckedAt).toLocaleString() : "—"}`
+                      ? `Cloud API status: Active · last checked ${settings?.lastCheckedAt ? formatGuyanaDateTime(settings.lastCheckedAt) : "—"}`
                       : configured
                         ? settings?.lastError ?? "Run “Test connection” to verify the credentials and subscribe the app."
                         : "Enter your WABA ID, Phone Number ID, and token to connect."}

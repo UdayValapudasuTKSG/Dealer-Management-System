@@ -42,5 +42,7 @@ export interface Dealer {
      * @nullable
      */
   metaPageId?: string | null;
+  /** IANA timezone identifier for this dealership (e.g. America/Guyana) */
+  timezone?: string;
   createdAt: Date;
 }

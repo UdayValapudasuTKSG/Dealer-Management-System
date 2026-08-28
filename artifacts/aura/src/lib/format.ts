@@ -1,12 +1,89 @@
 import { useAuthz } from "./auth";
 
 /**
- * Guyana localization helpers (DMS spec: GYD is the ONLY currency —
- * all amounts are stored and displayed in Guyana dollars; there is no
- * USD or exchange-rate concept. Dates in America/Guyana — GMT-4, no DST).
+ * Localization helpers (DMS spec: GYD is the ONLY currency — all amounts are
+ * stored and displayed in Guyana dollars). Dates render in the ACTIVE
+ * DEALERSHIP'S configured timezone (Settings → Localization); the historical
+ * default is America/Guyana (GMT-4, no DST).
  */
 
 export const GUYANA_TIME_ZONE = "America/Guyana";
+export const DEFAULT_TIME_ZONE = GUYANA_TIME_ZONE;
+
+// ---------------------------------------------------------------------------
+// Active dealership timezone (Task 266). AuthProvider sets this from the
+// active dealer's `timezone` field as soon as the session (or a dealership
+// switch) resolves; every formatter below reads it. Module-level is safe:
+// a dealer switch resets ALL queries, so every consumer re-renders anyway.
+// ---------------------------------------------------------------------------
+
+let activeTimeZone = DEFAULT_TIME_ZONE;
+
+/**
+ * Set the active dealership timezone. Called SYNCHRONOUSLY during
+ * AuthProvider's render (before any child renders), so the same render pass
+ * that observes a new `activeDealer.timezone` already formats with it.
+ * Returns true when the zone actually changed (AuthProvider then refreshes
+ * timezone-sensitive queries).
+ */
+export function setActiveTimeZone(tz: string | null | undefined): boolean {
+  let next = DEFAULT_TIME_ZONE;
+  if (tz) {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: tz });
+      next = tz;
+    } catch {
+      next = DEFAULT_TIME_ZONE;
+    }
+  }
+  const changed = next !== activeTimeZone;
+  activeTimeZone = next;
+  return changed;
+}
+
+/** The active dealership's IANA timezone. */
+export function activeDealerTimeZone(): string {
+  return activeTimeZone;
+}
+
+/** "YYYY-MM-DD" calendar-day key of an instant in the dealer timezone. */
+export function dealerDayKey(date: Date = new Date()): string {
+  return date.toLocaleDateString("en-CA", { timeZone: activeTimeZone });
+}
+
+/** Wall-clock parts of an instant in the dealer timezone. */
+export function dealerDateParts(date: Date = new Date()): {
+  year: number;
+  month: number; // 1-12
+  day: number;
+  hour: number;
+  minute: number;
+} {
+  const raw: Record<string, string> = {};
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: activeTimeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  for (const p of fmt.formatToParts(date)) raw[p.type] = p.value;
+  return {
+    year: Number(raw.year),
+    month: Number(raw.month),
+    day: Number(raw.day),
+    hour: Number(raw.hour) === 24 ? 0 : Number(raw.hour),
+    minute: Number(raw.minute),
+  };
+}
+
+/** Day key shifted by N calendar days in the dealer timezone. */
+export function dealerDayKeyPlus(days: number, from: Date = new Date()): string {
+  const [y, m, d] = dealerDayKey(from).split("-").map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! + days, 12)).toISOString().slice(0, 10);
+}
 
 const gydFormatter = new Intl.NumberFormat("en-GY", {
   style: "currency",
@@ -40,10 +117,14 @@ export function useMoney() {
 }
 
 // ---------------------------------------------------------------------------
-// Dates — always rendered in Guyana time (GMT-4)
+// Dates — rendered in the active dealership timezone
 // ---------------------------------------------------------------------------
 
 type DateInput = string | number | Date | null | undefined;
+
+/** Date-only strings are calendar dates — format them timezone-agnostically. */
+const isDateOnly = (value: DateInput): boolean =>
+  typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
 function toDate(value: DateInput): Date | null {
   if (value == null || value === "") return null;
@@ -57,24 +138,24 @@ function toDate(value: DateInput): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-/** "Jul 21, 2026" in Guyana time. */
+/** "Jul 21, 2026" in the dealership timezone. */
 export function formatGuyanaDate(value: DateInput): string {
   const date = toDate(value);
   if (!date) return "—";
   return date.toLocaleDateString("en-US", {
-    timeZone: GUYANA_TIME_ZONE,
+    timeZone: isDateOnly(value) ? "UTC" : activeTimeZone,
     month: "short",
     day: "numeric",
     year: "numeric",
   });
 }
 
-/** "Jul 21, 2026, 2:30 PM" in Guyana time. */
+/** "Jul 21, 2026, 2:30 PM" in the dealership timezone. */
 export function formatGuyanaDateTime(value: DateInput): string {
   const date = toDate(value);
   if (!date) return "—";
   return date.toLocaleString("en-US", {
-    timeZone: GUYANA_TIME_ZONE,
+    timeZone: activeTimeZone,
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -83,12 +164,47 @@ export function formatGuyanaDateTime(value: DateInput): string {
   });
 }
 
-/** "2:30 PM" in Guyana time. */
+/** "Jul 21" (no year) in the dealership timezone. */
+export function formatDealerDateShort(value: DateInput): string {
+  const date = toDate(value);
+  if (!date) return "—";
+  return date.toLocaleDateString("en-US", {
+    timeZone: isDateOnly(value) ? "UTC" : activeTimeZone,
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/** "Jul 21, 2:30 PM" (no year) in the dealership timezone. */
+export function formatDealerDayTime(value: DateInput): string {
+  const date = toDate(value);
+  if (!date) return "—";
+  return date.toLocaleString("en-US", {
+    timeZone: activeTimeZone,
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+/** "Jul 2026" in the dealership timezone. */
+export function formatDealerMonthYear(value: DateInput): string {
+  const date = toDate(value);
+  if (!date) return "—";
+  return date.toLocaleDateString("en-US", {
+    timeZone: isDateOnly(value) ? "UTC" : activeTimeZone,
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/** "2:30 PM" in the dealership timezone. */
 export function formatGuyanaTime(value: DateInput): string {
   const date = toDate(value);
   if (!date) return "—";
   return date.toLocaleTimeString("en-US", {
-    timeZone: GUYANA_TIME_ZONE,
+    timeZone: activeTimeZone,
     hour: "numeric",
     minute: "2-digit",
   });

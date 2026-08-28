@@ -39,6 +39,7 @@ import SettingsErpnext from "@/pages/settings-erpnext";
 import SettingsWhatsapp from "@/pages/settings-whatsapp";
 import SettingsProfile from "@/pages/settings-profile";
 import SettingsBranding from "@/pages/settings-branding";
+import SettingsLocalization from "@/pages/settings-localization";
 import SettingsRoles from "@/pages/settings-roles";
 import SettingsSources from "@/pages/settings-sources";
 import SettingsStages from "@/pages/settings-stages";
@@ -336,6 +337,11 @@ function AppRoutes() {
                 <Route path="/settings/branding">
                   <RequireSettings>
                     <SettingsBranding />
+                  </RequireSettings>
+                </Route>
+                <Route path="/settings/localization">
+                  <RequireSettings>
+                    <SettingsLocalization />
                   </RequireSettings>
                 </Route>
                 <Route path="/settings/email">

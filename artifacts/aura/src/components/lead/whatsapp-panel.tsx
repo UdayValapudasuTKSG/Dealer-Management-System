@@ -25,18 +25,26 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import {
+  activeDealerTimeZone,
+  dealerDateParts,
+  dealerDayKey,
+  dealerDayKeyPlus,
+} from "@/lib/format";
 
 function dayLabel(d: Date): string {
-  const today = new Date();
-  const yesterday = new Date(today.getTime() - 86400000);
-  const same = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-  if (same(d, today)) return "Today";
-  if (same(d, yesterday)) return "Yesterday";
+  const day = dealerDayKey(d);
+  if (day === dealerDayKey()) return "Today";
+  if (day === dealerDayKeyPlus(-1)) return "Yesterday";
   return d.toLocaleDateString(undefined, {
+    timeZone: activeDealerTimeZone(),
     weekday: "short",
     month: "short",
     day: "numeric",
-    year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
+    year:
+      dealerDateParts(d).year !== dealerDateParts().year
+        ? "numeric"
+        : undefined,
   });
 }
 
@@ -182,6 +190,7 @@ function WhatsappThreadUI({
                       {!inbound && (m.actor ?? "AURA")}
                       {!inbound && " · "}
                       {created.toLocaleTimeString(undefined, {
+                        timeZone: activeDealerTimeZone(),
                         hour: "numeric",
                         minute: "2-digit",
                       })}
@@ -227,7 +236,7 @@ function WhatsappThreadUI({
           <div className="flex items-center justify-between mt-3">
             <span className="text-[11px] text-muted-foreground">
               {thread?.windowExpiresAt
-                ? `Reply window open until ${new Date(thread.windowExpiresAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`
+                ? `Reply window open until ${new Date(thread.windowExpiresAt).toLocaleString(undefined, { timeZone: activeDealerTimeZone(), dateStyle: "medium", timeStyle: "short" })}`
                 : null}
             </span>
             <Button

@@ -6721,6 +6721,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /admin/localization:
+    get:
+      operationId: getDealerLocalization
+      tags: [admin]
+      summary: Get the active dealership's localization settings (timezone)
+      responses:
+        "200":
+          description: Localization settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealerLocalization"
+        "403":
+          description: Not a general manager of the active dealership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateDealerLocalization
+      tags: [admin]
+      summary: Update the active dealership's timezone (GM only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DealerLocalizationUpdate"
+      responses:
+        "200":
+          description: Updated localization settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DealerLocalization"
+        "403":
+          description: Not a general manager of the active dealership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid timezone identifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/service-settings:
     get:
       operationId: getServiceSettings
@@ -8561,6 +8608,7 @@ components:
         brandName: { type: ["string", "null"], description: "White-label display name (falls back to AURA branding when null)" }
         logoUrl: { type: ["string", "null"], description: "White-label logo object path (served via /api/storage/objects)" }
         themeColor: { type: ["string", "null"], pattern: "^#[0-9a-fA-F]{6}$", description: "Super-admin theme accent hex — light mode only; null = default bronze" }
+        timezone: { type: string, description: "IANA timezone identifier for this dealership (e.g. America/Guyana)" }
     DealerBranding:
       type: object
       required: [dealerId, dealerName]
@@ -8574,6 +8622,17 @@ components:
       properties:
         brandName: { type: ["string", "null"], maxLength: 80 }
         logoUrl: { type: ["string", "null"], description: "Object path returned by the upload flow (/objects/uploads/dealer-{id}/...)" }
+    DealerLocalization:
+      type: object
+      required: [dealerId, timezone]
+      properties:
+        dealerId: { type: integer }
+        timezone: { type: string, description: "IANA timezone identifier (e.g. America/Guyana)" }
+    DealerLocalizationUpdate:
+      type: object
+      required: [timezone]
+      properties:
+        timezone: { type: string, minLength: 1, maxLength: 64, description: "IANA timezone identifier; invalid identifiers are rejected with 422" }
     Entitlements:
       type: object
       description: "Per-dealer feature flags; a missing key means enabled"
@@ -8597,6 +8656,7 @@ components:
         exportUrl: { type: ["string", "null"], description: "Whole-tenant offboarding export bundle" }
         themeColor: { type: ["string", "null"], pattern: "^#[0-9a-fA-F]{6}$", description: "Super-admin theme accent hex — light mode only; null = default bronze" }
         metaPageId: { type: ["string", "null"], description: "Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected" }
+        timezone: { type: string, description: "IANA timezone identifier for this dealership (e.g. America/Guyana)" }
         createdAt: { type: string, format: date-time }
     DealerInput:
       type: object
@@ -8609,6 +8669,7 @@ components:
         usdExchangeRate: { type: number, exclusiveMinimum: 0, description: "GYD per 1 USD" }
         themeColor: { type: ["string", "null"], pattern: "^#[0-9a-fA-F]{6}$", description: "Theme accent hex applied to the dealer's workspace in light mode; null clears to default" }
         metaPageId: { type: ["string", "null"], description: "Facebook Page ID for Meta Lead Ads routing; must be unique across dealers; null/empty clears the mapping" }
+        timezone: { type: string, minLength: 1, description: "IANA timezone identifier (validated server-side; invalid identifiers are rejected)" }
         entitlements:
           $ref: "#/components/schemas/Entitlements"
         ownerEmail:

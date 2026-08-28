@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthz } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { formatGuyanaDateTime } from "@/lib/format";
 import {
   Plug,
   Loader2,
@@ -237,7 +238,7 @@ export default function SettingsErpnext() {
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {connected
-                      ? `${settings?.erpnextVersion ? `ERPNext v${settings.erpnextVersion} · ` : ""}last checked ${settings?.lastCheckedAt ? new Date(settings.lastCheckedAt).toLocaleString() : "—"}`
+                      ? `${settings?.erpnextVersion ? `ERPNext v${settings.erpnextVersion} · ` : ""}last checked ${settings?.lastCheckedAt ? formatGuyanaDateTime(settings.lastCheckedAt) : "—"}`
                       : configured
                         ? settings?.lastError ?? "Run “Test connection” to verify the credentials."
                         : "Enter your ERPNext site URL and API credentials to connect."}
@@ -695,7 +696,7 @@ export default function SettingsErpnext() {
                       </td>
                       <td className="px-5 py-3 text-muted-foreground">{j.attempts}</td>
                       <td className="px-5 py-3 text-xs text-muted-foreground">
-                        {new Date(j.createdAt).toLocaleString()}
+                        {formatGuyanaDateTime(j.createdAt)}
                       </td>
                       <td className="px-5 py-3 text-right">
                         {(j.status === "failed" || j.status === "dead") && (

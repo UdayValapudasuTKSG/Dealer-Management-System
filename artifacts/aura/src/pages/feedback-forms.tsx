@@ -40,6 +40,7 @@ import { PageHero } from "@/components/layout/page-hero";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuthz } from "@/lib/auth";
+import { formatGuyanaDate } from "@/lib/format";
 
 const TYPE_LABEL: Record<FeedbackQuestionType, string> = {
   text: "Short text",
@@ -701,7 +702,7 @@ export function InvitationRow({
             <span className="text-muted-foreground font-normal"> · {inv.formName}</span>
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-            <span>Sent {new Date(inv.createdAt).toLocaleDateString()}</span>
+            <span>Sent {formatGuyanaDate(inv.createdAt)}</span>
             {inv.delivery.map((d) => (
               <span
                 key={d.channel}
@@ -721,7 +722,7 @@ export function InvitationRow({
           )}
         >
           {answered
-            ? `Answered ${inv.submittedAt ? new Date(inv.submittedAt).toLocaleDateString() : ""}`
+            ? `Answered ${inv.submittedAt ? formatGuyanaDate(inv.submittedAt) : ""}`
             : "Awaiting reply"}
         </span>
       </button>

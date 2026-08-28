@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthz } from "@/lib/auth";
+import { formatGuyanaDateTime } from "@/lib/format";
 import {
   Select,
   SelectContent,
@@ -303,7 +304,7 @@ export default function SettingsUsers() {
                       </Badge>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">
-                      {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "Never"}
+                      {u.lastLoginAt ? formatGuyanaDateTime(u.lastLoginAt) : "Never"}
                     </td>
                     <td className="px-5 py-3 text-right">
                       {!isSelf && (

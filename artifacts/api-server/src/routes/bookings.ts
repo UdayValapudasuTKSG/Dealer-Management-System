@@ -52,6 +52,7 @@ import {
 class VehicleClaimRace extends Error {}
 import { defaultDivisionId } from "./divisions";
 import { activeDealerId } from "../middlewares/rbac";
+import { dealerTimezone, formatDealerDate } from "../lib/timezone";
 
 const router: IRouter = Router();
 
@@ -967,6 +968,7 @@ router.post("/bookings/:id/remind", async (req, res): Promise<void> => {
     res.status(422).json({ error: "Customer has no email on file" });
     return;
   }
+  const tz = await dealerTimezone(booking.dealerId);
   await enqueueEmail({
     template: "payment_reminder",
     to: email,
@@ -976,11 +978,7 @@ router.post("/bookings/:id/remind", async (req, res): Promise<void> => {
       name,
       vehicle: await vehicleLabel(booking.vehicleId, booking.dealerId),
       amount: money(outstanding),
-      due: booking.expiresAt.toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      }),
+      due: formatDealerDate(booking.expiresAt, tz),
     },
   });
   res.json(SendBookingPaymentReminderResponse.parse(booking));

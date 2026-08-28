@@ -37,6 +37,7 @@ import {
 import { getDealerPdfBranding } from "./dealer-branding";
 import { buildWarrantyBookletForDelivery } from "./warranty-doc";
 import { testDriveIcsFromPayload } from "./calendar";
+import { dealerTimezone, zonedAddDays, zonedDayKey } from "./timezone";
 import {
   sendWhatsappButtons,
   sendWhatsappDocument,
@@ -1738,7 +1739,11 @@ async function processWhatsappQueue(): Promise<void> {
           );
         }
         const branding = await getDealerPdfBranding(item.dealerId);
-        const pdf = await buildQuotePdf(quoteData, branding.logo);
+        const pdf = await buildQuotePdf(
+          quoteData,
+          await dealerTimezone(item.dealerId),
+          branding.logo,
+        );
         const fallbackRef = (quoteData.quoteRef ?? `Q-${item.id}`).replace(
           /[^A-Za-z0-9-]/g,
           "",
@@ -2008,6 +2013,7 @@ export async function processQueue(): Promise<void> {
         if (item.template === "invoice.generated") {
           const pdf = await buildInvoicePdfFromPayload(
             item.payload ?? {},
+            await dealerTimezone(item.dealerId),
             branding,
           );
           const ref = (item.payload?.invoiceNumber ?? `INV-${item.id}`).replace(
@@ -2033,7 +2039,11 @@ export async function processQueue(): Promise<void> {
               ),
             );
           if (receipt) {
-            const pdf = await buildReceiptPdf(receipt, branding);
+            const pdf = await buildReceiptPdf(
+              receipt,
+              await dealerTimezone(item.dealerId),
+              branding,
+            );
             attachments = [
               {
                 filename: `${filePrefix}-Receipt-${receipt.receiptNumber.replace(/[^A-Za-z0-9-]/g, "")}.pdf`,
@@ -2057,7 +2067,12 @@ export async function processQueue(): Promise<void> {
               ),
             );
           if (svcInvoice) {
-            const pdf = await buildServiceInvoicePdf(svcInvoice, 1, branding);
+            const pdf = await buildServiceInvoicePdf(
+              svcInvoice,
+              1,
+              await dealerTimezone(item.dealerId),
+              branding,
+            );
             const ref = `SV-${String(svcInvoice.id).padStart(5, "0")}`;
             attachments = [
               {
@@ -2083,7 +2098,11 @@ export async function processQueue(): Promise<void> {
           ];
         }
         if (item.template === "vehicle_quote") {
-          const pdf = await buildQuotePdf(item.payload ?? {}, branding.logo);
+          const pdf = await buildQuotePdf(
+            item.payload ?? {},
+            await dealerTimezone(item.dealerId),
+            branding.logo,
+          );
           const ref = (item.payload?.quoteRef ?? `Q-${item.id}`).replace(
             /[^A-Za-z0-9-]/g,
             "",
@@ -2202,17 +2221,8 @@ export async function processQueue(): Promise<void> {
 // Task due-date reminders — due-soon (within 24h) and overdue, once each
 // ---------------------------------------------------------------------------
 
-function localDateString(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 export async function processTaskReminders(): Promise<void> {
   const now = new Date();
-  const today = localDateString(now);
-  const tomorrow = localDateString(new Date(now.getTime() + 24 * 60 * 60 * 1000));
 
   const candidates = await db
     .select()
@@ -2222,15 +2232,18 @@ export async function processTaskReminders(): Promise<void> {
         ne(tasksTable.status, "done"),
         isNotNull(tasksTable.dueDate),
         isNotNull(tasksTable.assigneeUserId),
-        lte(tasksTable.dueDate, tomorrow),
         or(
           isNull(tasksTable.dueSoonNotifiedAt),
-          and(lt(tasksTable.dueDate, today), isNull(tasksTable.overdueNotifiedAt)),
+          isNull(tasksTable.overdueNotifiedAt),
         ),
       ),
     );
 
   for (const task of candidates) {
+    const tz = await dealerTimezone(task.dealerId);
+    const today = zonedDayKey(now, tz);
+    const tomorrow = zonedAddDays(now, tz, 1);
+    if (task.dueDate! > tomorrow) continue;
     const assigneeId = task.assigneeUserId!;
     const dueDate = task.dueDate!;
     try {

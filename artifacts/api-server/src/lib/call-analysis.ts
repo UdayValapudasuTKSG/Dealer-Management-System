@@ -20,6 +20,7 @@ import {
   handleTestDriveIntent,
   type TestDriveIntentExtraction,
 } from "./test-drive-intent";
+import { dealerTimezone, formatDealerDateTime } from "./timezone";
 
 // ---------------------------------------------------------------------------
 // Call sentiment loop — after a call wraps (browser/Twilio call completes, or
@@ -53,7 +54,10 @@ async function analyze(callLogId: number): Promise<void> {
     // a stated test-drive wish leaves a trace on the call itself.
     if (call.transcript) {
       try {
-        const extraction = await extractTestDriveIntentOnly(call.transcript);
+        const extraction = await extractTestDriveIntentOnly(
+          call.transcript,
+          await dealerTimezone(call.dealerId),
+        );
         await handleTestDriveIntent(call, null, extraction);
       } catch (err) {
         logger.error(
@@ -82,17 +86,10 @@ async function analyze(callLogId: number): Promise<void> {
     .orderBy(desc(timelineEventsTable.createdAt))
     .limit(5);
 
-  const nowGuyana = new Date().toLocaleString("en-US", {
-    timeZone: "America/Guyana",
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const tz = await dealerTimezone(call.dealerId);
+  const nowDealer = formatDealerDateTime(new Date(), tz);
   const facts = [
-    `Now (Guyana time, GMT-4): ${nowGuyana}`,
+    `Now (dealership time, ${tz}): ${nowDealer}`,
     `Direction: ${call.direction}`,
     `Outcome: ${call.status}`,
     call.durationSeconds != null
@@ -135,10 +132,10 @@ ${facts}
 
 ${untrusted ? guardUntrusted("call_context", untrusted) : "No notes were captured for this call — judge from the call facts alone and keep the summary factual."}
 
-Also screen the transcript for TEST-DRIVE INTENT: did the customer ask for or agree to a test drive on this call? If they stated an explicit date AND time, convert it to Guyana local time (GMT-4) using the "Now" fact above for relative dates ("Saturday at 10am"). NEVER invent or guess a time — if the customer was vague ("sometime next week", "I'll call back"), testDriveTime must be null.
+Also screen the transcript for TEST-DRIVE INTENT: did the customer ask for or agree to a test drive on this call? If they stated an explicit date AND time, convert it to dealership local time (${tz}) using the "Now" fact above for relative dates ("Saturday at 10am"). NEVER invent or guess a time — if the customer was vague ("sometime next week", "I'll call back"), testDriveTime must be null.
 
 Respond with ONLY a JSON object:
-{"sentiment": "positive"|"neutral"|"negative", "confidence": number (0 to 1 — how sure you are about the sentiment call), "summary": "1-2 sentence summary of the call and suggested next step", "testDriveIntent": boolean, "testDriveTime": "YYYY-MM-DDTHH:mm" or null (Guyana local time, only when explicitly stated), "testDriveTimeConfidence": number (0 to 1 — how sure you are the extracted time is what the customer meant; 0 when no time), "testDriveVehicle": "vehicle the customer mentioned" or null}`,
+{"sentiment": "positive"|"neutral"|"negative", "confidence": number (0 to 1 — how sure you are about the sentiment call), "summary": "1-2 sentence summary of the call and suggested next step", "testDriveIntent": boolean, "testDriveTime": "YYYY-MM-DDTHH:mm" or null (dealership local time, only when explicitly stated), "testDriveTimeConfidence": number (0 to 1 — how sure you are the extracted time is what the customer meant; 0 when no time), "testDriveVehicle": "vehicle the customer mentioned" or null}`,
             },
           ],
         },
@@ -299,20 +296,13 @@ Respond with ONLY a JSON object:
  * Intent-only extraction for calls with no live lead — the sentiment pass is
  * skipped (nothing to score against), but a stated test-drive wish should
  * still leave a trace on the call. Same rules as the combined pass: convert
- * explicit times to Guyana local, NEVER invent a time.
+ * explicit times to dealership local time, NEVER invent a time.
  */
 async function extractTestDriveIntentOnly(
   transcript: string,
+  tz: string,
 ): Promise<TestDriveIntentExtraction> {
-  const nowGuyana = new Date().toLocaleString("en-US", {
-    timeZone: "America/Guyana",
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const nowDealer = formatDealerDateTime(new Date(), tz);
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 250,
@@ -322,12 +312,12 @@ async function extractTestDriveIntentOnly(
         content: [
           {
             type: "text",
-            text: `You are a car-dealership sales assistant. Screen the call transcript below for TEST-DRIVE INTENT: did the customer ask for or agree to a test drive on this call? If they stated an explicit date AND time, convert it to Guyana local time (GMT-4) — "Now (Guyana time, GMT-4): ${nowGuyana}" — for relative dates ("Saturday at 10am"). NEVER invent or guess a time — if the customer was vague ("sometime next week", "I'll call back"), testDriveTime must be null.
+            text: `You are a car-dealership sales assistant. Screen the call transcript below for TEST-DRIVE INTENT: did the customer ask for or agree to a test drive on this call? If they stated an explicit date AND time, convert it to dealership local time (${tz}) — "Now (dealership time): ${nowDealer}" — for relative dates ("Saturday at 10am"). NEVER invent or guess a time — if the customer was vague ("sometime next week", "I'll call back"), testDriveTime must be null.
 
 ${guardUntrusted("call_transcript", transcript.slice(0, 6000))}
 
 Respond with ONLY a JSON object:
-{"testDriveIntent": boolean, "testDriveTime": "YYYY-MM-DDTHH:mm" or null (Guyana local time, only when explicitly stated), "testDriveTimeConfidence": number (0 to 1; 0 when no time), "testDriveVehicle": "vehicle the customer mentioned" or null}`,
+{"testDriveIntent": boolean, "testDriveTime": "YYYY-MM-DDTHH:mm" or null (dealership local time, only when explicitly stated), "testDriveTimeConfidence": number (0 to 1; 0 when no time), "testDriveVehicle": "vehicle the customer mentioned" or null}`,
           },
         ],
       },

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthz } from "@/lib/auth";
+import { LocalizationSettingsPanel } from "@/pages/settings-localization";
 import { Loader2, Paintbrush, Sparkles, Trash2, Upload } from "lucide-react";
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2MB is plenty for a logo
@@ -243,6 +244,16 @@ export default function SettingsBranding() {
             quotations, receipts and handover forms.
           </p>
         </div>
+
+        <section className="lg:col-span-2">
+          <div className="mb-3">
+            <h2 className="text-lg font-semibold">Localization</h2>
+            <p className="text-sm text-muted-foreground">
+              Choose the timezone used across the dealership.
+            </p>
+          </div>
+          <LocalizationSettingsPanel />
+        </section>
       </div>
     </Page>
   );

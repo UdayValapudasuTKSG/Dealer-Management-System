@@ -9,6 +9,14 @@ import {
 import { enqueueWhatsapp } from "./email";
 import { testDriveBookingUrl } from "./email-triggers";
 import { logger } from "./logger";
+import {
+  dealerTimezone,
+  formatDealerSlot,
+  zonedAddDays,
+  zonedParts,
+  zonedStartOfDay,
+  zonedTimeToUtc,
+} from "./timezone";
 
 // ---------------------------------------------------------------------------
 // A10 — Test Drive Scheduler helpers.
@@ -29,40 +37,39 @@ export const SLOT_LAST_HOUR = 16; // last slot starts 4:30 PM
 export const SLOT_WINDOW_DAYS = 14; // bookable window starts tomorrow
 export const SLOT_LENGTH_MS = 30 * 60 * 1000; // 30-minute drives
 
-export function slotWindowDays(): Date[] {
+export function slotWindowDays(tz: string): Date[] {
   const now = new Date();
-  const days: Date[] = [];
-  for (let offset = 1; offset <= SLOT_WINDOW_DAYS; offset++) {
-    days.push(
-      new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset),
-    );
-  }
-  return days;
+  return Array.from({ length: SLOT_WINDOW_DAYS }, (_, i) =>
+    zonedStartOfDay(zonedAddDays(now, tz, i + 1), tz),
+  );
 }
 
-export function offeredSlotTimes(): Date[] {
-  return slotWindowDays().flatMap((day) => daySlotTimes(day));
+export function offeredSlotTimes(tz: string): Date[] {
+  return slotWindowDays(tz).flatMap((day) => daySlotTimes(day, tz));
 }
 
 /** True when a time sits on the shared 30-minute booking grid. */
-export function slotGridAligned(d: Date): boolean {
+export function slotGridAligned(d: Date, tz: string): boolean {
+  const p = zonedParts(d, tz);
   return (
-    d.getMinutes() % 30 === 0 &&
-    d.getSeconds() === 0 &&
+    p.minute % 30 === 0 &&
+    p.second === 0 &&
     d.getMilliseconds() === 0
   );
 }
 
 /** 30-minute slot start times for one day: 9:00, 9:30, … 4:30 PM. */
-export function daySlotTimes(day: Date): Date[] {
+export function daySlotTimes(day: Date, tz: string): Date[] {
+  const p = zonedParts(day, tz);
   const halfHours = (SLOT_LAST_HOUR - SLOT_OPEN_HOUR + 1) * 2;
   return Array.from(
     { length: halfHours },
     (_, i) =>
-      new Date(
-        day.getFullYear(),
-        day.getMonth(),
-        day.getDate(),
+      zonedTimeToUtc(
+        tz,
+        p.year,
+        p.month,
+        p.day,
         SLOT_OPEN_HOUR + Math.floor(i / 2),
         (i % 2) * 30,
       ),
@@ -154,14 +161,8 @@ async function queueReminder(lead: Lead, when: Date, vehicle: string | null) {
     );
   const sendAt = new Date(when.getTime() - REMINDER_LEAD_MS);
   if (sendAt.getTime() <= Date.now()) return; // drive is under 24h away
-  const timeLabel = when.toLocaleString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/Guyana",
-  });
+  const tz = await dealerTimezone(lead.dealerId);
+  const timeLabel = formatDealerSlot(when, tz);
   const body =
     `Hi ${lead.name.split(" ")[0]}! Friendly reminder from AURA: your test drive` +
     `${vehicle ? ` of the ${vehicle}` : ""} is tomorrow — ${timeLabel}. ` +

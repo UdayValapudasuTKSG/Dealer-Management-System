@@ -34,6 +34,14 @@ import { divisionSalesManagers } from "./notify-matrix";
 import { autoAssignLead } from "./lead-assignment";
 import { logger } from "./logger";
 import { withEffectiveContactDates } from "./lead-contact";
+import {
+  dealerTimezone,
+  formatDealerDate,
+  formatDealerSlot,
+  zonedAddDays,
+  zonedDayKey,
+  zonedParts,
+} from "./timezone";
 
 /**
  * R6.2 scheduled-sweep triggers (#3, #4a/4b, #5, #17). Each sweep is
@@ -250,15 +258,9 @@ async function sweepTestDriveReminders(): Promise<void> {
           ),
         );
       if (!lead) continue;
+      const tz = await dealerTimezone(drive.dealerId);
       const key = `testdrive:remind24:${drive.leadId}:${drive.id}`;
-      const when = drive.scheduledAt.toLocaleString("en-US", {
-        timeZone: "America/Guyana",
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      });
+      const when = formatDealerSlot(drive.scheduledAt, tz);
       const data: TemplateData = {
         name: lead.name,
         date: when,
@@ -349,12 +351,9 @@ async function sweepServiceCadence(): Promise<void> {
           ),
         );
       if (!customer) continue;
+      const tz = await dealerTimezone(asset.dealerId);
       const key = `cadence:${asset.id}:${nextWindow}`;
-      const dueLabel = new Date(dueAt).toLocaleDateString("en-US", {
-        month: "long",
-        year: "numeric",
-        timeZone: "America/Guyana",
-      });
+      const dueLabel = formatDealerDate(new Date(dueAt), tz);
       const data: TemplateData = { name: customer.name, due: dueLabel };
       if (customer.email) {
         await enqueueEmail({
@@ -388,7 +387,7 @@ async function sweepServiceCadence(): Promise<void> {
           dealerId: asset.dealerId,
           type: "service.cadence.due",
           title: `Service window approaching — ${customer.name}`,
-          body: `The vehicle delivered ${new Date(asset.deliveredAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })} is due for its interval service around ${dueLabel}. The customer has been nudged to book.`,
+          body: `The vehicle delivered ${formatDealerDate(asset.deliveredAt, tz)} is due for its interval service around ${dueLabel}. The customer has been nudged to book.`,
           link: `/customers/${asset.accountId}`,
           entityType: "asset",
           entityId: asset.id,
@@ -412,29 +411,22 @@ const SUMMARY_LOOKAHEAD_DAYS: Record<"daily" | "weekly", number> = {
   weekly: 7,
 };
 
-/** Guyana-local YYYY-MM-DD for a Date. */
-function guyanaDate(d: Date): string {
-  return d.toLocaleDateString("en-CA", { timeZone: "America/Guyana" });
-}
-
 async function sweepServiceSummaries(): Promise<void> {
   const dealers = await db.select({ id: dealersTable.id }).from(dealersTable);
   const now = new Date();
-  const today = guyanaDate(now);
-  const weekday = now.toLocaleDateString("en-US", {
-    timeZone: "America/Guyana",
-    weekday: "short",
-  });
 
   for (const dealer of dealers) {
     try {
+      const tz = await dealerTimezone(dealer.id);
+      const today = zonedDayKey(now, tz);
+      const weekday = zonedParts(now, tz).weekday;
       const { summaryCadence } = await getServiceSettings(dealer.id);
       if (summaryCadence === "off") continue;
       // Weekly digests go out on Mondays only.
-      if (summaryCadence === "weekly" && weekday !== "Mon") continue;
+      if (summaryCadence === "weekly" && weekday !== 1) continue;
 
       const days = SUMMARY_LOOKAHEAD_DAYS[summaryCadence];
-      const until = guyanaDate(new Date(now.getTime() + days * 24 * HOUR));
+      const until = zonedAddDays(now, tz, days);
       const periodKey =
         summaryCadence === "weekly" ? `week:${today}` : `day:${today}`;
 
@@ -472,10 +464,7 @@ async function sweepServiceSummaries(): Promise<void> {
 
       const rows = upcoming
         .map((o) => {
-          const day = new Date(`${o.scheduledDate}T12:00:00`).toLocaleDateString(
-            "en-US",
-            { month: "short", day: "numeric" },
-          );
+          const day = formatDealerDate(o.scheduledDate, tz);
           const who = o.customerName ? ` (${o.customerName})` : "";
           const tech = o.technician ? ` — ${o.technician}` : "";
           return `<strong>${day}</strong> — ${o.vehicleInfo}, ${o.type}${who}${tech}`;

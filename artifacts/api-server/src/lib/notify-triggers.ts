@@ -7,6 +7,7 @@ import {
   notifyUsers,
   type TemplateData,
 } from "./email";
+import { dealerTimezone, formatDealerDateTime } from "./timezone";
 import {
   divisionSalesManagers,
   financeUsers,
@@ -190,6 +191,7 @@ export function notifyReservationPending(opts: {
   remindIndex?: number;
 }): void {
   fire("reservation.pending", async () => {
+    const tz = await dealerTimezone(opts.dealerId);
     const base = `booking:pending:${opts.bookingId}`;
     const key = opts.remindIndex ? `${base}:remind:${opts.remindIndex}` : base;
     const data: TemplateData = {
@@ -197,7 +199,7 @@ export function notifyReservationPending(opts: {
       vehicle: opts.vehicle,
       amount: opts.amount,
       ...(opts.expiresAt
-        ? { expires: opts.expiresAt.toLocaleString("en-US", { timeZone: "America/Guyana" }) }
+        ? { expires: formatDealerDateTime(opts.expiresAt, tz) }
         : {}),
     };
     if (opts.customerEmail) {

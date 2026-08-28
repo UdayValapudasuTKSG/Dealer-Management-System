@@ -170,6 +170,17 @@ import { getChannelByDealerId } from "../lib/whatsapp-channel";
 import { ensureLeadSources } from "../lib/lead-sources";
 import { getActiveChecklist } from "../lib/stage-checklists";
 import {
+  dealerTimezone,
+  formatDealerDate,
+  formatDealerSlot,
+  formatDealerTime,
+  zonedAddDays,
+  zonedDayKey,
+  zonedParts,
+  zonedStartOfDay,
+  zonedTimeToUtc,
+} from "../lib/timezone";
+import {
   findBlockedEditField,
   redactHiddenFields,
 } from "../lib/field-permissions";
@@ -323,22 +334,27 @@ router.get("/leads", async (req, res): Promise<void> => {
     filters.push(eq(leadsTable.divisionId, query.data.divisionId));
   if (query.data.phase) filters.push(eq(leadsTable.phase, query.data.phase));
   if (query.data.status) filters.push(eq(leadsTable.status, query.data.status));
+  const listTz = await dealerTimezone(dealerId);
   if ((query.data as any).createdFrom) {
     const raw = (query.data as any).createdFrom;
-    const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(raw)
-      ? new Date(`${raw}T00:00:00.000-04:00`) : new Date("");
-    if (!isNaN(fromDate.getTime())) {
-      filters.push(gte(leadsTable.createdAt, fromDate));
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      // Dealer-local start of the requested day.
+      filters.push(gte(leadsTable.createdAt, zonedStartOfDay(raw, listTz)));
     }
   }
   if ((query.data as any).createdTo) {
     const raw = (query.data as any).createdTo;
-    const toDate = /^\d{4}-\d{2}-\d{2}$/.test(raw)
-      ? new Date(`${raw}T00:00:00.000-04:00`) : new Date("");
-    if (!isNaN(toDate.getTime())) {
-      // Guyana-local next-day boundary, exclusive.
-      toDate.setUTCDate(toDate.getUTCDate() + 1);
-      filters.push(sql`${leadsTable.createdAt} < ${toDate}`);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      // Dealer-local next-day boundary, exclusive.
+      const [y, m, d] = raw.split("-").map(Number);
+      const nextKey = zonedAddDays(
+        zonedTimeToUtc(listTz, y!, m!, d!, 12),
+        listTz,
+        1,
+      );
+      filters.push(
+        sql`${leadsTable.createdAt} < ${zonedStartOfDay(nextKey, listTz)}`,
+      );
     }
   }
 
@@ -1098,8 +1114,8 @@ async function leadQuoteContext(
     .limit(1);
 
   // Fresh (never-emailed) quotes are dated today so validity isn't already expired.
-  const today = new Date();
-  const fallbackRef = `Q-${lead.id}-${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+  const today = zonedParts(new Date(), await dealerTimezone(dealerId));
+  const fallbackRef = `Q-${lead.id}-${today.year}${String(today.month).padStart(2, "0")}${String(today.day).padStart(2, "0")}`;
 
   return {
     lead,
@@ -1113,18 +1129,12 @@ async function leadQuoteContext(
 const quoteMoney = (n: number) =>
   `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
-const quoteLongDate = (d: Date) =>
-  d.toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-
 /** Build a fresh quote payload from inventory when no emailed quote exists. */
 function freshQuotePayload(
   lead: Lead,
   vehicle: typeof vehiclesTable.$inferSelect,
   quoteRef: string,
+  tz: string,
 ): Record<string, string> {
   const issued = new Date();
   const validUntil = new Date(issued.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -1139,8 +1149,8 @@ function freshQuotePayload(
     unitPrice: quoteMoney(vehicle.price),
     total: quoteMoney(vehicle.price),
     quoteRef,
-    issuedOn: quoteLongDate(issued),
-    validUntil: quoteLongDate(validUntil),
+    issuedOn: formatDealerDate(issued, tz),
+    validUntil: formatDealerDate(validUntil, tz),
   };
 }
 
@@ -1163,7 +1173,14 @@ router.get("/leads/:id/quote", async (req, res): Promise<void> => {
 
   const payload =
     ctx.sentPayload ??
-    (ctx.vehicle ? freshQuotePayload(ctx.lead, ctx.vehicle, ctx.quoteRef) : {});
+    (ctx.vehicle
+      ? freshQuotePayload(
+          ctx.lead,
+          ctx.vehicle,
+          ctx.quoteRef,
+          await dealerTimezone(ctx.lead.dealerId),
+        )
+      : {});
   res.json(
     GetLeadQuoteResponse.parse({
       available: true,
@@ -1191,7 +1208,12 @@ router.get("/leads/:id/quote.pdf", async (req, res): Promise<void> => {
   const payload =
     ctx.sentPayload ??
     (ctx.vehicle
-      ? freshQuotePayload(ctx.lead, ctx.vehicle, ctx.quoteRef)
+      ? freshQuotePayload(
+          ctx.lead,
+          ctx.vehicle,
+          ctx.quoteRef,
+          await dealerTimezone(ctx.lead.dealerId),
+        )
       : null);
   if (!payload) {
     res
@@ -1215,6 +1237,7 @@ router.get("/leads/:id/quote.pdf", async (req, res): Promise<void> => {
   }
   const pdf = await buildQuotePdf(
     payload,
+    await dealerTimezone(ctx.lead.dealerId),
     (await getDealerPdfBranding(ctx.lead.dealerId)).logo,
   );
   const safeName = `${ctx.lead.name} - ${ctx.quoteRef}.pdf`.replace(
@@ -1495,6 +1518,7 @@ router.get(
     }
     const pdf = await buildQuotePdf(
       await quotePdfPayload(quote),
+      await dealerTimezone(lead.dealerId),
       (await getDealerPdfBranding(lead.dealerId)).logo,
       attachment,
     );
@@ -2238,10 +2262,11 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
   }
 
   const when = new Date(parsed.data.scheduledAt);
+  const tz = await dealerTimezone(existing.dealerId);
 
   // All drives run on the shared 30-minute grid so overlap detection and the
   // customer self-service page stay in agreement.
-  if (!slotGridAligned(when)) {
+  if (!slotGridAligned(when, tz)) {
     res.status(422).json({
       error: "Test drives start on the half hour (e.g. 9:00 or 9:30) — pick a slot on the 30-minute grid.",
     });
@@ -2296,7 +2321,7 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
       vehicleIds: blockVehicleIds,
       advisorUserId: existing.ownerUserId,
     });
-    if (isSlotBlocked(blockedDays, when)) {
+    if (isSlotBlocked(blockedDays, when, tz)) {
       claimError =
         "That time is blocked in the capacity plan (vehicle or advisor unavailable) — pick another slot.";
       return null;
@@ -2364,15 +2389,8 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
   });
 
   const vehicle = await vehicleLabel(lead!.dealerId, lead!.interestedVehicleId);
-  const dateStr = when.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-  const timeStr = when.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const dateStr = formatDealerSlot(when, tz).split(" at ")[0]!;
+  const timeStr = formatDealerTime(when, tz);
 
   await logLeadEvent(
     lead!,
@@ -2491,7 +2509,8 @@ router.get(
 
     // The showroom runs one drive at a time — any other lead's booking blocks
     // the slot on the vehicle side.
-    const slots = offeredSlotTimes();
+    const tz = await dealerTimezone(dealerId);
+    const slots = offeredSlotTimes(tz);
     const windowStart = slots[0]!;
     const windowEnd = new Date(
       slots[slots.length - 1]!.getTime() + SLOT_LENGTH_MS,
@@ -2540,7 +2559,7 @@ router.get(
           vehicleFree:
             drivable &&
             !taken.has(start.getTime()) &&
-            !isSlotBlocked(blockedDays, start),
+            !isSlotBlocked(blockedDays, start, tz),
           customerFree: ownBooking !== start.getTime(),
         })),
       }),
@@ -3194,7 +3213,7 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
       title: `Follow-up call — reopened lead: ${lead!.name}`,
       description: `This lead was reopened from Lost into ${resultPhase}. Reach out to restart the conversation.`,
       assigneeUserId: lead!.ownerUserId ?? null,
-      dueDate: due.toLocaleDateString("en-CA", { timeZone: "America/Guyana" }),
+      dueDate: zonedDayKey(due, await dealerTimezone(lead!.dealerId)),
       dueAt: due,
       priority: "high",
     });

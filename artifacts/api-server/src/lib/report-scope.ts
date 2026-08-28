@@ -1,6 +1,13 @@
 import { and, eq } from "drizzle-orm";
 import { db, dealerUsersTable } from "@workspace/db";
 import type { AuthedUser } from "../middlewares/rbac";
+import {
+  formatDealerDate,
+  zonedAddDays,
+  zonedParts,
+  zonedStartOfDay,
+  zonedTimeToUtc,
+} from "./timezone";
 
 /**
  * Persona tiers for reports & dashboards (R5):
@@ -123,40 +130,45 @@ export const scopeDealRows = <
   });
 
 /* ------------------------------------------------------------------ */
-/* Guyana-local time + GYD money helpers (server-side serialization)   */
+/* Dealer-local time + GYD money helpers (server-side serialization)  */
 /* ------------------------------------------------------------------ */
 
-const GUYANA_OFFSET_MS = 4 * 60 * 60 * 1000; // GMT-4, no DST
-
-/** Shift a UTC instant so UTC getters read Guyana wall-clock values. */
-export function toGuyana(d: Date | string): Date {
-  return new Date(new Date(d).getTime() - GUYANA_OFFSET_MS);
+export function dealerMonthKey(d: Date | string, tz: string): string {
+  const p = zonedParts(new Date(d), tz);
+  return `${p.year}-${p.month - 1}`;
 }
 
-export function guyanaMonthKey(d: Date | string): string {
-  const g = toGuyana(d);
-  return `${g.getUTCFullYear()}-${g.getUTCMonth()}`;
-}
-
-export function guyanaDateLabel(d: Date | string | null | undefined): string {
+export function dealerDateLabel(
+  d: Date | string | null | undefined,
+  tz: string,
+): string {
   if (!d) return "—";
-  const g = toGuyana(d);
-  return g.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  const formatted = formatDealerDate(d, tz);
+  const match = /^([A-Z][a-z]{2}) (\d{1,2}), (\d{4})$/.exec(formatted);
+  return match ? `${match[2]!.padStart(2, "0")} ${match[1]} ${match[3]}` : formatted;
 }
 
-/** Parse a YYYY-MM-DD range as Guyana-local day boundaries (UTC-4). */
-export function parseGuyanaRange(fromRaw?: string, toRaw?: string) {
+/** Parse a YYYY-MM-DD range as dealer-local day boundaries. */
+export function parseDealerRange(tz: string, fromRaw?: string, toRaw?: string) {
   const to = toRaw
-    ? new Date(`${toRaw}T23:59:59.999-04:00`)
+    ? new Date(zonedStartOfDay(zonedAddDays(zonedStartOfDay(toRaw, tz), tz, 1), tz).getTime() - 1)
     : new Date();
-  const from = fromRaw
-    ? new Date(`${fromRaw}T00:00:00.000-04:00`)
-    : new Date(new Date(to).setMonth(to.getMonth() - 6));
+  let from: Date;
+  if (fromRaw) {
+    from = zonedStartOfDay(fromRaw, tz);
+  } else {
+    const p = zonedParts(to, tz);
+    const shifted = new Date(Date.UTC(p.year, p.month - 1 - 6, 1, 12));
+    from = zonedTimeToUtc(
+      tz,
+      shifted.getUTCFullYear(),
+      shifted.getUTCMonth() + 1,
+      p.day,
+      p.hour,
+      p.minute,
+      p.second,
+    );
+  }
   return { from, to };
 }
 

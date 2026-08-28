@@ -40,11 +40,17 @@ import {
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuthz } from "@/lib/auth";
+import {
+  activeDealerTimeZone,
+  dealerDateParts,
+  dealerDayKey,
+  dealerDayKeyPlus,
+} from "@/lib/format";
 import { Pagination } from "@/components/pagination";
 import type { TriageItem, TriageBucket } from "@/lib/triage";
 
 function greeting() {
-  const h = new Date().getHours();
+  const h = dealerDateParts().hour;
   if (h < 12) return "Good morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
@@ -189,21 +195,15 @@ const EVENT_META: Record<
   },
 };
 
-function ymd(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 function eventDateKey(e: CalendarEvent) {
   if (e.allDay) return e.startsAt.slice(0, 10);
-  return ymd(new Date(e.startsAt));
+  return dealerDayKey(new Date(e.startsAt));
 }
 
 function eventTime(e: CalendarEvent) {
   if (e.allDay) return "All day";
   return new Date(e.startsAt).toLocaleTimeString([], {
+    timeZone: activeDealerTimeZone(),
     hour: "numeric",
     minute: "2-digit",
   });
@@ -243,13 +243,10 @@ function ScheduleEvent({ e }: { e: CalendarEvent }) {
 
 function Schedule() {
   const [range, setRange] = useState<"day" | "week">("day");
-  const today = new Date();
-  const weekEnd = new Date(today);
-  weekEnd.setDate(weekEnd.getDate() + 6);
-  const params = { from: ymd(today), to: ymd(weekEnd) };
+  const params = { from: dealerDayKey(), to: dealerDayKeyPlus(6) };
   const { data, isLoading } = useGetCalendar(params);
 
-  const todayKey = ymd(today);
+  const todayKey = dealerDayKey();
   const events = useMemo(() => {
     const all = [...(data?.events ?? [])].sort((a, b) =>
       a.startsAt.localeCompare(b.startsAt),
@@ -344,7 +341,7 @@ function Schedule() {
 /* ---------- Personal tasks -> triage items ---------- */
 
 function taskToTriage(t: Task): TriageItem {
-  const today = ymd(new Date());
+  const today = dealerDayKey();
   const overdue = !!t.dueDate && t.dueDate.slice(0, 10) < today;
   const dueToday = !!t.dueDate && isTodayDateOnly(t.dueDate);
   const urgent = overdue || t.priority === "urgent" || t.priority === "high";
@@ -564,6 +561,7 @@ function DashboardInner() {
 
   const firstName = (myName ?? "").trim().split(" ")[0] || null;
   const dateLabel = new Date().toLocaleDateString([], {
+    timeZone: activeDealerTimeZone(),
     weekday: "long",
     month: "long",
     day: "numeric",

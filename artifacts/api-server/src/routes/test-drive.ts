@@ -34,6 +34,14 @@ import {
   modelUnitIds,
   type BlockedDays,
 } from "../lib/capacity-blocks";
+import {
+  dealerTimezone,
+  formatDealerSlot,
+  formatDealerTime,
+  zonedAddDays,
+  zonedDayKey,
+  zonedStartOfDay,
+} from "../lib/timezone";
 
 // ---------------------------------------------------------------------------
 // PUBLIC self-service test-drive booking — reached from the unique link
@@ -45,17 +53,14 @@ const router: IRouter = Router();
 
 const WINDOW_DAYS = 14; // bookable window starts tomorrow; 30-minute slots
 
-function windowDays(): Date[] {
+function windowDays(tz: string): Date[] {
   const now = new Date();
-  const days: Date[] = [];
-  for (let offset = 1; offset <= WINDOW_DAYS; offset++) {
-    days.push(new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset));
-  }
-  return days;
+  return Array.from({ length: WINDOW_DAYS }, (_, i) =>
+    zonedStartOfDay(zonedAddDays(now, tz, i + 1), tz),
+  );
 }
 
-const timeLabel = (t: Date) =>
-  t.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+const timeLabel = (t: Date, tz: string) => formatDealerTime(t, tz);
 
 /** Capacity-plan blocks for this lead's advisor + interested vehicle model. */
 async function leadCapacityBlocks(lead: Lead): Promise<BlockedDays> {
@@ -68,15 +73,7 @@ async function leadCapacityBlocks(lead: Lead): Promise<BlockedDays> {
   });
 }
 
-const fullLabel = (t: Date) =>
-  `${t.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  })} at ${timeLabel(t)}`;
-
-const localDateKey = (day: Date) =>
-  `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+const fullLabel = (t: Date, tz: string) => formatDealerSlot(t, tz);
 
 async function findLeadByToken(token: string): Promise<Lead | null> {
   const [lead] = await db
@@ -89,16 +86,12 @@ async function findLeadByToken(token: string): Promise<Lead | null> {
 async function takenSlotTimes(
   dealerId: number,
   excludeLeadId: number,
+  tz: string,
 ): Promise<Set<number>> {
-  const days = windowDays();
+  const days = windowDays(tz);
   const start = days[0]!;
   const end = new Date(
-    days[days.length - 1]!.getFullYear(),
-    days[days.length - 1]!.getMonth(),
-    days[days.length - 1]!.getDate(),
-    23,
-    59,
-    59,
+    zonedStartOfDay(zonedAddDays(days[days.length - 1]!, tz, 1), tz).getTime() - 1,
   );
   const rows = await db
     .select({ at: leadsTable.testDriveAt })
@@ -119,7 +112,7 @@ async function takenSlotTimes(
   for (const r of rows) {
     const at = r.at!.getTime();
     for (const day of days) {
-      for (const t of daySlotTimes(day)) {
+      for (const t of daySlotTimes(day, tz)) {
         const ms = t.getTime();
         if (Math.abs(ms - at) < SLOT_LENGTH_MS) taken.add(ms);
       }
@@ -129,6 +122,7 @@ async function takenSlotTimes(
 }
 
 async function buildInvite(lead: Lead) {
+  const tz = await dealerTimezone(lead.dealerId);
   const [v] = lead.interestedVehicleId
     ? await db
         .select()
@@ -140,21 +134,22 @@ async function buildInvite(lead: Lead) {
           ),
         )
     : [];
-  const taken = await takenSlotTimes(lead.dealerId, lead.id);
+  const taken = await takenSlotTimes(lead.dealerId, lead.id, tz);
   // Advisor/vehicle capacity blocks hide those slots from the customer.
   const blocked = await leadCapacityBlocks(lead);
 
-  const days = windowDays().map((day) => ({
-    date: localDateKey(day),
+  const days = windowDays(tz).map((day) => ({
+    date: zonedDayKey(day, tz),
     label: day.toLocaleDateString("en-US", {
+      timeZone: tz,
       weekday: "short",
       month: "short",
       day: "numeric",
     }),
-    slots: daySlotTimes(day).map((t) => ({
+    slots: daySlotTimes(day, tz).map((t) => ({
       iso: t.toISOString(),
-      label: timeLabel(t),
-      available: !taken.has(t.getTime()) && !isSlotBlocked(blocked, t),
+      label: timeLabel(t, tz),
+      available: !taken.has(t.getTime()) && !isSlotBlocked(blocked, t, tz),
     })),
   }));
 
@@ -164,7 +159,7 @@ async function buildInvite(lead: Lead) {
     vehicleImageUrl: v?.imageUrl ?? null,
     branch: lead.testDriveBranch ?? lead.preferredBranch ?? null,
     bookedAt: lead.testDriveAt ? lead.testDriveAt.toISOString() : null,
-    bookedLabel: lead.testDriveAt ? fullLabel(lead.testDriveAt) : null,
+    bookedLabel: lead.testDriveAt ? fullLabel(lead.testDriveAt, tz) : null,
     days,
   };
 }
@@ -214,6 +209,7 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
   }
 
   const when = new Date(body.data.slot);
+  const tz = await dealerTimezone(lead.dealerId);
   if (Number.isNaN(when.getTime())) {
     res.status(422).json({ error: "Invalid slot time" });
     return;
@@ -229,7 +225,9 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
   // The slot must be one the showroom actually offers (tomorrow → +14 days,
   // on the half-hour between opening hours).
   const offered = new Set(
-    windowDays().flatMap((day) => daySlotTimes(day).map((t) => t.getTime())),
+    windowDays(tz).flatMap((day) =>
+      daySlotTimes(day, tz).map((t) => t.getTime()),
+    ),
   );
   if (!offered.has(when.getTime())) {
     res
@@ -272,7 +270,7 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
       return null;
     }
     // Advisor/vehicle capacity blocks apply to self-service bookings too.
-    if (isSlotBlocked(await leadCapacityBlocks(lead), when)) {
+    if (isSlotBlocked(await leadCapacityBlocks(lead), when, tz)) {
       claimError =
         "That time is unavailable (your advisor or the vehicle is booked out) — please pick another slot";
       return null;
@@ -346,12 +344,8 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
         )
     : [];
   const vehicle = v ? `${v.year} ${v.make} ${v.model}` : null;
-  const dateStr = when.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-  const timeStr = timeLabel(when);
+  const dateStr = formatDealerSlot(when, tz).split(" at ")[0]!;
+  const timeStr = timeLabel(when, tz);
   const rescheduled = Boolean(lead.testDriveAt);
 
   await db.insert(timelineEventsTable).values({

@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import type { GraFiling } from "@workspace/db";
+import { formatDealerDateTime } from "./timezone";
 
 /**
  * GRA IMPORT DUTY PACK (R8.7) — Guyana Revenue Authority duty filing PDF.
@@ -9,6 +10,7 @@ import type { GraFiling } from "@workspace/db";
  */
 export type GraPdfContext = {
   dealerName: string;
+  timezone: string;
   divisionName?: string | null;
   dealerAddress?: string | null;
   dealerTin?: string | null;
@@ -40,15 +42,8 @@ export function buildGraDutyPackPdf(
     const rate = filing.exchangeRate;
     const toGyd = (n: number) => n; // amounts already GYD
 
-    const guyanaDate = (d: Date | null | undefined) =>
-      (d ?? new Date()).toLocaleString("en-GY", {
-        timeZone: "America/Guyana",
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+    const dealerDate = (d: Date | null | undefined) =>
+      formatDealerDateTime(d ?? new Date(), ctx.timezone);
 
     // ---- Header band -------------------------------------------------------
     doc.rect(0, 0, pageW, 118).fill("#0a0a0a");
@@ -89,7 +84,7 @@ export function buildGraDutyPackPdf(
         width: contentW,
         align: "right",
       })
-      .text(`Filed ${guyanaDate(filing.filedAt)} (Guyana)`, left, 82, {
+      .text(`Filed ${dealerDate(filing.filedAt)} (${ctx.timezone})`, left, 82, {
         width: contentW,
         align: "right",
       });
@@ -316,7 +311,7 @@ export function buildGraDutyPackPdf(
         [
           `Duty lines server-computed from the GRA rule set (age bands, fuel/cc excise bands, importer-type bases, 14% VAT); AI-extracted fields human-confirmed. Nothing on this document was AI-generated.`,
           `Gate #${filing.gateId} resolved by ${ctx.gateResolvedBy ?? filing.filedBy ?? "officer"}${ctx.gateResolution ? ` — "${ctx.gateResolution}"` : ""}.`,
-          `Filed by ${filing.filedBy ?? "—"} on ${guyanaDate(filing.filedAt)} (America/Guyana).`,
+          `Filed by ${filing.filedBy ?? "—"} on ${dealerDate(filing.filedAt)} (${ctx.timezone}).`,
           `Exchange rate snapshot: US$1 = GY$${rate} (locked at submission; later rate changes do not alter this filing).`,
         ].join("\n"),
         left,

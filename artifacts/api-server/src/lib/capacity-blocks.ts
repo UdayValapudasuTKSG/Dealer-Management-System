@@ -1,5 +1,6 @@
 import { and, eq, inArray, or, type SQL } from "drizzle-orm";
 import { db, capacityBlocksTable, vehiclesTable } from "@workspace/db";
+import { zonedDayKey, zonedParts } from "./timezone";
 
 // ---------------------------------------------------------------------------
 // Manager capacity-plan blocks (test drives) — shared between the staff
@@ -8,8 +9,8 @@ import { db, capacityBlocksTable, vehiclesTable } from "@workspace/db";
 // ---------------------------------------------------------------------------
 
 /** Local-timezone YYYY-MM-DD of a slot/booking time. */
-export function localDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+export function localDateStr(d: Date, tz: string): string {
+  return zonedDayKey(d, tz);
 }
 
 /** date -> hour windows; an empty array means the whole day is blocked. */
@@ -18,14 +19,18 @@ export type BlockedDays = Map<
   Array<{ startHour: number; endHour: number }>
 >;
 
-export function isSlotBlocked(blocked: BlockedDays, start: Date): boolean {
-  const windows = blocked.get(localDateStr(start));
+export function isSlotBlocked(
+  blocked: BlockedDays,
+  start: Date,
+  tz: string,
+): boolean {
+  const windows = blocked.get(localDateStr(start, tz));
   if (!windows) return false;
   if (windows.length === 0) return true; // full-day block
-  // Slots are generated with local wall-clock hours (new Date(y,m,d,hour)),
-  // so compare in the same frame as localDateStr — via getHours(). 30-minute
+  // Slots are generated with dealership wall-clock hours, so compare in the
+  // same timezone as localDateStr. 30-minute
   // slots fall inside their containing hour block (9:30 → hour 9).
-  const hour = start.getHours();
+  const hour = zonedParts(start, tz).hour;
   return windows.some((w) => hour >= w.startHour && hour < w.endHour);
 }
 

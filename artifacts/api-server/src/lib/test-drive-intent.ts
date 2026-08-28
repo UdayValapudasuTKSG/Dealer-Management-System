@@ -27,6 +27,12 @@ import { getActiveChecklist } from "./stage-checklists";
 import { buildStageChecks, nextAdvanceStage, ADVANCE_TARGET_PHASE, ADVANCE_STAGE_LABEL } from "./stage-review";
 import { ensureAccountForLead } from "./accounts";
 import { logger } from "./logger";
+import {
+  dealerTimezone,
+  formatDealerSlot,
+  formatDealerTime,
+  zonedTimeToUtc,
+} from "./timezone";
 
 // ---------------------------------------------------------------------------
 // Test-drive intent agent — after a call transcript is analyzed, the same
@@ -58,7 +64,7 @@ const MAX_DAYS_AHEAD = 30;
 export type TestDriveIntentExtraction = {
   /** Did the customer express interest in a test drive on this call? */
   intent: boolean;
-  /** "YYYY-MM-DDTHH:mm" in Guyana time (GMT-4) — only when explicitly stated. */
+  /** "YYYY-MM-DDTHH:mm" in dealership local time — only when explicitly stated. */
   timeText: string | null;
   /** Model confidence (0–1) that the extracted time is what the customer meant. */
   timeConfidence: number | null;
@@ -66,17 +72,22 @@ export type TestDriveIntentExtraction = {
   vehicleMention: string | null;
 };
 
-const GUYANA_OFFSET = "-04:00";
-
-/** Deterministic guardrail: parse the extracted Guyana-local time. Returns a
+/** Deterministic guardrail: parse the extracted dealer-local time. Returns a
  * UTC Date only when the time is plausible (future, showroom hours, near-term). */
-function plausibleDriveTime(timeText: string | null): Date | null {
+function plausibleDriveTime(timeText: string | null, tz: string): Date | null {
   if (!timeText) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(timeText.trim());
   if (!m) return null;
   const hour = Number(m[4]);
   if (hour < OPEN_HOUR || hour > LAST_HOUR) return null; // outside showroom hours
-  const when = new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00${GUYANA_OFFSET}`);
+  const when = zonedTimeToUtc(
+    tz,
+    Number(m[1]),
+    Number(m[2]),
+    Number(m[3]),
+    Number(m[4]),
+    Number(m[5]),
+  );
   if (Number.isNaN(when.getTime())) return null;
   const now = Date.now();
   if (when.getTime() < now + 30 * 60_000) return null; // past / too soon
@@ -90,15 +101,7 @@ export function showroomMapsUrl(branch: string | null | undefined): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
-const guyanaLabel = (d: Date) =>
-  d.toLocaleString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/Guyana",
-  });
+const dealerLabel = (d: Date, tz: string) => formatDealerSlot(d, tz);
 
 async function alreadyProcessed(call: CallLog): Promise<boolean> {
   const [run] = await db
@@ -310,6 +313,7 @@ async function rescheduleDrive(
   previousAt: Date,
   runBase: RunBase,
   started: number,
+  tz: string,
 ): Promise<void> {
   const [updated] = await db
     .update(leadsTable)
@@ -347,19 +351,10 @@ async function rescheduleDrive(
     })
     .returning();
 
-  const prevLabel = guyanaLabel(previousAt);
-  const whenLabel = guyanaLabel(when);
-  const dateStr = when.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    timeZone: "America/Guyana",
-  });
-  const timeStr = when.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/Guyana",
-  });
+  const prevLabel = dealerLabel(previousAt, tz);
+  const whenLabel = dealerLabel(when, tz);
+  const dateStr = formatDealerSlot(when, tz).split(" at ")[0]!;
+  const timeStr = formatDealerTime(when, tz);
   const mapsLink = showroomMapsUrl(updated.testDriveBranch);
 
   // Updated confirmation with a fresh .ics (calendars replace the event).
@@ -392,7 +387,7 @@ async function rescheduleDrive(
       to: phone,
       body:
         `Hi ${updated.name.split(/\s+/)[0]}! As discussed on the call, your test drive` +
-        `${vehicle ? ` of the ${vehicle}` : ""} has been moved to ${whenLabel} (Guyana time), ` +
+        `${vehicle ? ` of the ${vehicle}` : ""} has been moved to ${whenLabel} (dealership time), ` +
         `previously ${prevLabel}. An updated calendar invite is on its way to your email. ` +
         `Directions to the showroom: ${mapsLink}`,
       dealerId: updated.dealerId,
@@ -425,7 +420,7 @@ async function rescheduleDrive(
     call,
     "test_drive_scheduled",
     `Test drive rescheduled to ${dateStr}`,
-    `AURA detected a reschedule request on call #${call.id} and moved the test drive from ${prevLabel} to ${whenLabel} (Guyana time). Updated confirmation sent${email ? " by email (with calendar invite)" : ""}${email && phone ? " and" : ""}${phone ? " by WhatsApp" : ""}, and the advisor was notified.${skipped}`,
+    `AURA detected a reschedule request on call #${call.id} and moved the test drive from ${prevLabel} to ${whenLabel} (dealership time). Updated confirmation sent${email ? " by email (with calendar invite)" : ""}${email && phone ? " and" : ""}${phone ? " by WhatsApp" : ""}, and the advisor was notified.${skipped}`,
   );
 
   await recordAgentRun({
@@ -454,6 +449,7 @@ export async function handleTestDriveIntent(
 ): Promise<void> {
   try {
     if (await alreadyProcessed(call)) return; // duplicate transcription/webhook retry
+    const tz = await dealerTimezone(call.dealerId);
     const started = Date.now();
     const runBase = {
       dealerId: call.dealerId,
@@ -508,7 +504,7 @@ export async function handleTestDriveIntent(
     const confident =
       extraction.timeConfidence != null &&
       extraction.timeConfidence >= MIN_AGENT_CONFIDENCE;
-    const when = confident ? plausibleDriveTime(extraction.timeText) : null;
+    const when = confident ? plausibleDriveTime(extraction.timeText, tz) : null;
 
     // Vehicle must be drivable; a held/sold unit falls back to the link path.
     const vehicleProblem = await vehicleAvailabilityError(lead);
@@ -534,13 +530,22 @@ export async function handleTestDriveIntent(
       lead.testDriveAt != null && lead.testDriveAt.getTime() > Date.now();
     if (hasUpcoming) {
       const existingAt = lead.testDriveAt!;
-      const existingLabel = guyanaLabel(existingAt);
+      const existingLabel = dealerLabel(existingAt, tz);
       const sameTime =
         when != null && Math.abs(when.getTime() - existingAt.getTime()) < 60_000;
 
       // New clear, confident, plausible time → auto-RESCHEDULE the drive.
       if (when && !sameTime && !slotTaken && !vehicleProblem) {
-        await rescheduleDrive(lead, call, vehicle, when, existingAt, runBase, started);
+        await rescheduleDrive(
+          lead,
+          call,
+          vehicle,
+          when,
+          existingAt,
+          runBase,
+          started,
+          tz,
+        );
         return;
       }
 
@@ -646,18 +651,9 @@ export async function handleTestDriveIntent(
       })
       .returning();
 
-    const whenLabel = guyanaLabel(when);
-    const dateStr = when.toLocaleDateString("en-US", {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      timeZone: "America/Guyana",
-    });
-    const timeStr = when.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: "America/Guyana",
-    });
+    const whenLabel = dealerLabel(when, tz);
+    const dateStr = formatDealerSlot(when, tz).split(" at ")[0]!;
+    const timeStr = formatDealerTime(when, tz);
 
     // Confirmation email with the .ics calendar invite.
     const email = await leadEmailAddress(updated);
@@ -688,7 +684,7 @@ export async function handleTestDriveIntent(
         to: phone,
         body:
           `Hi ${updated.name.split(/\s+/)[0]}! Following up on your call — your test drive` +
-          `${vehicle ? ` of the ${vehicle}` : ""} is booked for ${whenLabel} (Guyana time). ` +
+          `${vehicle ? ` of the ${vehicle}` : ""} is booked for ${whenLabel} (dealership time). ` +
           `A calendar invite is on its way to your email. ` +
           `Directions to the showroom: ${showroomMapsUrl(updated.testDriveBranch)}` +
           `${link ? ` Need a different time? Pick one here: ${link}` : ""}`,
@@ -725,7 +721,7 @@ export async function handleTestDriveIntent(
       call,
       "test_drive_scheduled",
       `Test drive auto-booked for ${dateStr}`,
-      `AURA detected test-drive intent on call #${call.id} and booked ${vehicle ?? "the vehicle"} for ${whenLabel} (Guyana time). Confirmation sent${email ? " by email (with calendar invite)" : ""}${email && phone ? " and" : ""}${phone ? " by WhatsApp" : ""}.${skipped}${
+      `AURA detected test-drive intent on call #${call.id} and booked ${vehicle ?? "the vehicle"} for ${whenLabel} (dealership time). Confirmation sent${email ? " by email (with calendar invite)" : ""}${email && phone ? " and" : ""}${phone ? " by WhatsApp" : ""}.${skipped}${
         advance.advanced
           ? ` Stage auto-advanced to ${advance.advanced} — all checklist criteria met.`
           : advance.unmet.length > 0 && advance.unmet[0] !== "No next stage"

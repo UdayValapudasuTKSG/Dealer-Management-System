@@ -6,6 +6,7 @@ import type {
   ServiceInvoice,
   Vehicle,
 } from "@workspace/db";
+import { formatDealerDate } from "./timezone";
 
 /**
  * AURA-branded printable documents: payment receipt, vehicle handover form,
@@ -17,15 +18,28 @@ const LEFT = 54;
 
 const gyd = (n: number) =>
   `GY$${Math.round(n).toLocaleString("en-US")}`;
-const fmtDate = (d: Date | string | null | undefined) =>
-  d
-    ? new Date(d).toLocaleDateString("en-US", {
-        timeZone: "America/Guyana",
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      })
-    : "—";
+const fmtDate = (
+  d: Date | string | null | undefined,
+  tz: string,
+) =>
+  formatDealerDate(d, tz).replace(
+    /^([A-Z][a-z]{2}) /,
+    (short) =>
+      ({
+        Jan: "January ",
+        Feb: "February ",
+        Mar: "March ",
+        Apr: "April ",
+        May: "May ",
+        Jun: "June ",
+        Jul: "July ",
+        Aug: "August ",
+        Sep: "September ",
+        Oct: "October ",
+        Nov: "November ",
+        Dec: "December ",
+      })[short.trim()] ?? short,
+  );
 
 type Doc = InstanceType<typeof PDFDocument>;
 
@@ -173,12 +187,13 @@ function footer(doc: Doc, note: string, branding?: PdfBranding | null) {
 
 export function buildReceiptPdf(
   receipt: Receipt,
+  tz: string,
   branding?: PdfBranding | null,
 ): Promise<Buffer> {
   return collect((doc) => {
     let y = header(doc, "PAYMENT RECEIPT", [
       `Receipt ${receipt.receiptNumber}`,
-      `Issued ${fmtDate(receipt.createdAt)}`,
+      `Issued ${fmtDate(receipt.createdAt, tz)}`,
     ], branding);
 
     y = sectionLabel(doc, "RECEIVED FROM", y);
@@ -209,7 +224,7 @@ export function buildReceiptPdf(
         ["Against invoice", receipt.invoiceNumber],
         ["Method", receipt.method.replace(/_/g, " ")],
         ["Issued by", receipt.issuedBy ?? "—"],
-        ["Date", fmtDate(receipt.createdAt)],
+        ["Date", fmtDate(receipt.createdAt, tz)],
       ],
       y,
     );
@@ -240,13 +255,14 @@ export function buildReceiptPdf(
 
 export function buildInvoicePdfFromPayload(
   payload: Record<string, string>,
+  tz: string,
   branding?: PdfBranding | null,
 ): Promise<Buffer> {
   return collect((doc) => {
     const amount = Number(payload.amount) || 0;
     let y = header(doc, "INVOICE", [
       `Invoice ${payload.invoiceNumber ?? ""}`,
-      `Issued ${fmtDate(payload.issuedAt || new Date())}`,
+      `Issued ${fmtDate(payload.issuedAt || new Date(), tz)}`,
     ], branding);
 
     y = sectionLabel(doc, "BILLED TO", y);
@@ -274,7 +290,7 @@ export function buildInvoicePdfFromPayload(
       ["Invoice number", payload.invoiceNumber ?? "—"],
       ["Type", (payload.kind ?? "invoice").replace(/_/g, " ")],
       ["Description", payload.description || "—"],
-      ["Due date", payload.dueDate ? fmtDate(payload.dueDate) : "On receipt"],
+      ["Due date", payload.dueDate ? fmtDate(payload.dueDate, tz) : "On receipt"],
     ];
     try {
       const taxLines = JSON.parse(payload.taxLines ?? "[]") as {
@@ -418,6 +434,7 @@ export function buildHandoverPdf(
   delivery: Delivery,
   vehicle: Vehicle | undefined,
   advisorName: string | null,
+  tz: string,
   extras: HandoverPdfExtras = {},
 ): Promise<Buffer> {
   const ov = extras.overrides ?? {};
@@ -540,7 +557,7 @@ export function buildHandoverPdf(
     );
     ry = fieldLine(
       "DATE:",
-      ov.date ?? fmtDate(delivery.deliveredAt ?? delivery.appointmentAt ?? new Date()),
+      ov.date ?? fmtDate(delivery.deliveredAt ?? delivery.appointmentAt ?? new Date(), tz),
       rightX,
       ry,
       colW,
@@ -684,13 +701,14 @@ export function buildHandoverPdf(
 
 export function buildCoverageCertificatePdf(
   plan: CoveragePlan,
+  tz: string,
   branding?: PdfBranding | null,
 ): Promise<Buffer> {
   return collect((doc) => {
     const kind = plan.type === "amc" ? "AMC" : "WARRANTY";
     let y = header(doc, `${kind} CERTIFICATE`, [
       `Certificate #CP-${String(plan.id).padStart(5, "0")}`,
-      `Issued ${fmtDate(plan.createdAt)}`,
+      `Issued ${fmtDate(plan.createdAt, tz)}`,
     ], branding);
 
     y = sectionLabel(doc, "COVERED CUSTOMER", y);
@@ -713,8 +731,8 @@ export function buildCoverageCertificatePdf(
             : "Manufacturer / Dealer Warranty",
         ],
         ["Provider", plan.provider ?? "AURA Dealership"],
-        ["Valid from", fmtDate(plan.startDate)],
-        ["Valid until", fmtDate(plan.endDate)],
+        ["Valid from", fmtDate(plan.startDate, tz)],
+        ["Valid until", fmtDate(plan.endDate, tz)],
       ],
       y,
     );
@@ -759,12 +777,13 @@ export function buildCoverageCertificatePdf(
 export function buildServiceInvoicePdf(
   invoice: ServiceInvoice,
   exchangeRate: number,
+  tz: string,
   branding?: PdfBranding | null,
 ): Promise<Buffer> {
   return collect((doc) => {
     let y = header(doc, "SERVICE INVOICE", [
       `Invoice #SV-${String(invoice.id).padStart(5, "0")}`,
-      `Issued ${fmtDate(invoice.createdAt)}`,
+      `Issued ${fmtDate(invoice.createdAt, tz)}`,
       `Status ${invoice.status.toUpperCase()}`,
     ], branding);
 
@@ -871,6 +890,7 @@ export function buildServiceInvoicePdf(
 
 export function buildServiceReceiptPdf(
   invoice: ServiceInvoice,
+  tz: string,
   branding?: PdfBranding | null,
 ): Promise<Buffer> {
   return collect((doc) => {
@@ -878,7 +898,7 @@ export function buildServiceReceiptPdf(
       `Receipt #SR-${String(invoice.id).padStart(5, "0")}`,
       `Job card #JC-${String(invoice.jobCardId).padStart(5, "0")}`,
       `Invoice #SV-${String(invoice.id).padStart(5, "0")}`,
-      `Issued ${fmtDate(invoice.createdAt)}`,
+      `Issued ${fmtDate(invoice.createdAt, tz)}`,
     ], branding);
 
     y = sectionLabel(doc, "CUSTOMER", y);
@@ -960,7 +980,7 @@ export function buildServiceReceiptPdf(
       .fillColor("#555555")
       .text(
         invoice.signedCopyFiledAt
-          ? `Signed copy collected & filed by ${invoice.signedCopyFiledBy ?? "staff"} on ${fmtDate(invoice.signedCopyFiledAt)}.`
+          ? `Signed copy collected & filed by ${invoice.signedCopyFiledBy ?? "staff"} on ${fmtDate(invoice.signedCopyFiledAt, tz)}.`
           : "Customer signature confirms collection of the vehicle and acceptance of the charges above. " +
               "File the signed copy against this receipt number.",
         LEFT,

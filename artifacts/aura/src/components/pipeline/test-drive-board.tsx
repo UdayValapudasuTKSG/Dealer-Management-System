@@ -11,6 +11,11 @@ import {
   MapPin,
   UserRound,
 } from "lucide-react";
+import {
+  activeDealerTimeZone,
+  dealerDayKey,
+  dealerDayKeyPlus,
+} from "@/lib/format";
 
 const STATUS_LABEL: Record<string, string> = {
   new: "New",
@@ -29,12 +34,10 @@ const withBase = (url: string) =>
   `${import.meta.env.BASE_URL}${url.replace(/^\//, "")}`;
 
 function dayLabel(day: string) {
-  const d = new Date(day);
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow";
+  if (day === dealerDayKey()) return "Today";
+  if (day === dealerDayKeyPlus(1)) return "Tomorrow";
+  const [year, month, date] = day.split("-").map(Number);
+  const d = new Date(year!, month! - 1, date);
   return d.toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
@@ -55,6 +58,7 @@ function countdown(to: Date) {
 
 function timeOf(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, {
+    timeZone: activeDealerTimeZone(),
     hour: "numeric",
     minute: "2-digit",
   });
@@ -89,7 +93,7 @@ export function TestDriveBoard({
       const rest = upcoming.slice(1);
       const map = new Map<string, Lead[]>();
       for (const l of rest) {
-        const key = new Date(l.testDriveAt!).toDateString();
+        const key = dealerDayKey(new Date(l.testDriveAt!));
         map.set(key, [...(map.get(key) ?? []), l]);
       }
       return {
@@ -98,9 +102,7 @@ export function TestDriveBoard({
         upcomingByDay: [...map.entries()],
         past,
         todayCount: upcoming.filter(
-          (l) =>
-            new Date(l.testDriveAt!).toDateString() ===
-            new Date().toDateString(),
+          (l) => dealerDayKey(new Date(l.testDriveAt!)) === dealerDayKey(),
         ).length,
         weekCount: upcoming.filter(
           (l) => new Date(l.testDriveAt!).getTime() <= weekEnd,
@@ -187,7 +189,7 @@ export function TestDriveBoard({
                     {timeOf(next.testDriveAt!)}
                   </span>
                   <span className="text-sm text-muted-foreground">
-                    {dayLabel(new Date(next.testDriveAt!).toDateString())}
+                    {dayLabel(dealerDayKey(new Date(next.testDriveAt!)))}
                   </span>
                 </div>
                 <div className="mt-3 text-xl font-semibold group-hover:text-primary transition-colors">
@@ -368,6 +370,7 @@ export function TestDriveBoard({
                     </div>
                     <div className="text-[11px] text-muted-foreground truncate">
                       {d.toLocaleDateString(undefined, {
+                        timeZone: activeDealerTimeZone(),
                         month: "short",
                         day: "numeric",
                       })}{" "}

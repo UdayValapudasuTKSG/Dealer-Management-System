@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Page } from "@/components/layout/page";
 import { cn } from "@/lib/utils";
+import { formatGuyanaDate } from "@/lib/format";
 
 const STATUS_LABEL: Record<string, string> = {
   new: "New",
@@ -144,16 +145,12 @@ export default function TeamProfile() {
             )}
             <span>
               Member since{" "}
-              {new Date(member.memberSince).toLocaleDateString(undefined, {
-                dateStyle: "medium",
-              })}
+              {formatGuyanaDate(member.memberSince)}
             </span>
             {member.lastLoginAt && (
               <span>
                 Last active{" "}
-                {new Date(member.lastLoginAt).toLocaleDateString(undefined, {
-                  dateStyle: "medium",
-                })}
+                {formatGuyanaDate(member.lastLoginAt)}
               </span>
             )}
           </div>
@@ -208,9 +205,7 @@ export default function TeamProfile() {
                   {STATUS_LABEL[l.status] ?? l.status}
                 </span>
                 <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">
-                  {new Date(l.createdAt).toLocaleDateString(undefined, {
-                    dateStyle: "medium",
-                  })}
+                  {formatGuyanaDate(l.createdAt)}
                 </span>
                 <ArrowUpRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
               </Link>

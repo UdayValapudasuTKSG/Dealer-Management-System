@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Loader2, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatGuyanaDateTime } from "@/lib/format";
 
 type Stage = StageChecklistConfig["stage"];
 
@@ -133,7 +134,7 @@ export default function SettingsStages() {
                 </h2>
                 <p className="text-xs text-muted-foreground">
                   {selected?.updatedAt
-                    ? `Version ${selected.version} · updated ${new Date(selected.updatedAt).toLocaleString()}${selected.updatedBy ? ` by ${selected.updatedBy}` : ""}`
+                    ? `Version ${selected.version} · updated ${formatGuyanaDateTime(selected.updatedAt)}${selected.updatedBy ? ` by ${selected.updatedBy}` : ""}`
                     : "Default configuration — never customized."}
                 </p>
               </div>

@@ -34,6 +34,7 @@ import {
 } from "./whatsapp-ai-concierge";
 import { normalizeWhatsappPhone } from "./whatsapp-phone";
 import { handleConversationalWhatsapp } from "./whatsapp-agent";
+import { dealerTimezone, formatDealerSlot } from "./timezone";
 
 // ---------------------------------------------------------------------------
 // WhatsApp guided lead-capture bot — deterministic state machine, shared by
@@ -782,13 +783,8 @@ async function handleTestDriveReminderReply(
   const isNo = NO_RE.test(text);
   if (!isYes && !isNo) return false;
 
-  const whenLabel = lead.testDriveAt!.toLocaleString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const tz = await dealerTimezone(lead.dealerId);
+  const whenLabel = formatDealerSlot(lead.testDriveAt!, tz);
 
   if (isYes) {
     await db.insert(timelineEventsTable).values({

@@ -9,6 +9,11 @@ import {
   type Lead,
   type CallLog,
 } from "@workspace/db";
+import {
+  dealerTimezone,
+  formatDealerDateTime,
+  zonedDayKey,
+} from "./timezone";
 
 // ---------------------------------------------------------------------------
 // Layer 2 follow-up cadence — 48h → +3d → +3d → +7d.
@@ -39,9 +44,8 @@ function isCadenceEligible(lead: Lead): boolean {
   );
 }
 
-function guyanaDateString(d: Date): string {
-  // tasks.dueDate is a date-only column; render in dealer-local GMT-4.
-  return d.toLocaleDateString("en-CA", { timeZone: "America/Guyana" });
+function dealerDateString(d: Date, tz: string): string {
+  return zonedDayKey(d, tz);
 }
 
 /** Serialize cadence mutations per lead via a lock on the lead row. */
@@ -96,6 +100,7 @@ export async function scheduleCadenceAfterCall(
   call: CallLog,
 ): Promise<void> {
   if (call.direction !== "outbound") return;
+  const tz = await dealerTimezone(lead.dealerId);
 
   if (call.status === "completed") {
     await completeCadenceTasks(lead, "Customer reached — cadence complete.");
@@ -116,12 +121,9 @@ export async function scheduleCadenceAfterCall(
         leadId: lead.id,
         kind: "callback",
         title: `${CADENCE_TITLE_PREFIX} — customer requested callback: ${lead.name}`,
-        description: `The customer asked to be called back at ${callbackAt.toLocaleString(
-          "en-GB",
-          { timeZone: "America/Guyana", dateStyle: "medium", timeStyle: "short" },
-        )} (Guyana time). Lead #${lead.id}.`,
+        description: `The customer asked to be called back at ${formatDealerDateTime(callbackAt, tz)} (dealership time). Lead #${lead.id}.`,
         assigneeUserId: lead.ownerUserId ?? null,
-        dueDate: guyanaDateString(callbackAt),
+        dueDate: dealerDateString(callbackAt, tz),
         dueAt: callbackAt,
         priority: "high",
       });
@@ -191,7 +193,7 @@ export async function scheduleCadenceAfterCall(
       title: `${CADENCE_TITLE_PREFIX} (attempt ${attempt + 1} of ${CADENCE_MAX_ATTEMPTS}): ${lead.name}`,
       description: `No connect on attempt ${attempt}. Next cadence touch is due in ${offsetDays} days (24h → +3d → +3d → +7d).`,
       assigneeUserId: lead.ownerUserId ?? null,
-      dueDate: guyanaDateString(due),
+      dueDate: dealerDateString(due, tz),
       dueAt: due,
       priority: attempt >= 2 ? "high" : "normal",
     });

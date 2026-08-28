@@ -13,6 +13,7 @@ import {
 import { getDealerPdfBranding } from "./dealer-branding";
 import { buildWarrantyPdf } from "./warranty-pdf";
 import { resolveDeliveryOwnerContact } from "./delivery-owner-contact";
+import { dealerTimezone, formatDealerDate } from "./timezone";
 
 /**
  * Assembles the autofilled BYD warranty booklet for a delivery. Shared by the
@@ -149,15 +150,9 @@ export async function buildWarrantyBookletForDelivery(
     }
   }
   const branding = await getDealerPdfBranding(delivery.dealerId);
+  const tz = await dealerTimezone(delivery.dealerId);
   const fmt = (d: Date | null | undefined) =>
-    d
-      ? d.toLocaleDateString("en-US", {
-          timeZone: "America/Guyana",
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        })
-      : null;
+    d ? formatDealerDate(d, tz) : null;
   const ownerContact = resolveDeliveryOwnerContact(customer, lead);
   const address = ownerContact.address;
   const ownerPhone = ownerContact.phone;

@@ -39,13 +39,13 @@ import {
   scopeLeadRows,
   scopeDealRows,
   divisionMatch,
-  parseGuyanaRange,
-  guyanaMonthKey,
-  guyanaDateLabel,
-  toGuyana,
+  parseDealerRange,
+  dealerMonthKey,
+  dealerDateLabel,
   makeGyd,
   type PersonaScope,
 } from "../lib/report-scope";
+import { dealerTimezone, zonedParts } from "../lib/timezone";
 import { renderReportExport } from "../lib/report-export";
 import { fieldAccessFor } from "../lib/field-permissions";
 
@@ -97,12 +97,12 @@ const inRange = (d: Date | string | null | undefined, from: Date, to: Date) => {
   return t >= from.getTime() && t <= to.getTime();
 };
 
-function monthBuckets(from: Date, to: Date) {
+function monthBuckets(from: Date, to: Date, tz: string) {
   const buckets: { key: string; label: string }[] = [];
-  const gFrom = toGuyana(from);
-  const gTo = toGuyana(to);
-  const cur = new Date(Date.UTC(gFrom.getUTCFullYear(), gFrom.getUTCMonth(), 1));
-  const end = new Date(Date.UTC(gTo.getUTCFullYear(), gTo.getUTCMonth(), 1));
+  const fromParts = zonedParts(from, tz);
+  const toParts = zonedParts(to, tz);
+  const cur = new Date(Date.UTC(fromParts.year, fromParts.month - 1, 1));
+  const end = new Date(Date.UTC(toParts.year, toParts.month - 1, 1));
   while (cur <= end && buckets.length < 24) {
     buckets.push({
       key: `${cur.getUTCFullYear()}-${cur.getUTCMonth()}`,
@@ -148,6 +148,7 @@ type Ctx = {
   gyd: (usd: number) => string;
   gydNumber: (usd: number) => number;
   rate: number;
+  tz: string;
 };
 
 type Builder = (
@@ -319,11 +320,11 @@ const salesPerformance: Builder = async (ctx) => {
     e.gross += d.otdPrice;
     byDivision.set(key, e);
   }
-  const buckets = monthBuckets(from, to);
+  const buckets = monthBuckets(from, to, ctx.tz);
   const series = buckets.map((b) => {
     const rows = delivered.filter((d) => {
       const dAt = dealDeliveredAt(d);
-      return dAt != null && guyanaMonthKey(dAt) === b.key;
+      return dAt != null && dealerMonthKey(dAt, ctx.tz) === b.key;
     });
     return {
       label: b.label,
@@ -828,7 +829,7 @@ const revenueReceivables: Builder = async (ctx) => {
 
 /* 8 — tax_gra: tax basis & filing register */
 const taxGra: Builder = async (ctx) => {
-  const { from, to, dealerId, scope, divisionId, gyd, gydNumber } = ctx;
+  const { from, to, dealerId, scope, divisionId, gyd, gydNumber, tz } = ctx;
   const [allQuotes, filings, gates, allLeads] = await Promise.all([
     db.select().from(quotesTable).where(eq(quotesTable.dealerId, dealerId)),
     db.select().from(graFilingsTable).where(eq(graFilingsTable.dealerId, dealerId)),
@@ -888,7 +889,7 @@ const taxGra: Builder = async (ctx) => {
           `#${f.id}`,
           titleCase(f.status),
           titleCase(f.fuelType),
-          guyanaDateLabel(f.createdAt),
+          dealerDateLabel(f.createdAt, tz),
         ]),
     },
   };
@@ -896,7 +897,7 @@ const taxGra: Builder = async (ctx) => {
 
 /* 9 — delivery_operations: handover throughput & PDI/CSAT */
 const deliveryOperations: Builder = async (ctx) => {
-  const { from, to, dealerId, scope, divisionId } = ctx;
+  const { from, to, dealerId, scope, divisionId, tz } = ctx;
   const [allDeliveries, allDeals] = await Promise.all([
     db
       .select()
@@ -984,7 +985,7 @@ const deliveryOperations: Builder = async (ctx) => {
         .map((d) => [
           `#${d.id}`,
           `${Math.max(1, STEPS.indexOf(d.currentStep) + 1)}/9 ${titleCase(d.currentStep)}`,
-          d.deliveredAt ? guyanaDateLabel(d.deliveredAt) : "—",
+          d.deliveredAt ? dealerDateLabel(d.deliveredAt, tz) : "—",
           d.feedbackRating != null ? `${d.feedbackRating}/5` : "—",
         ]),
     },
@@ -1165,12 +1166,14 @@ router.get("/reports", async (req, res): Promise<void> => {
     return;
   }
   const dealerId = activeDealerId(res);
+  const tz = await dealerTimezone(dealerId);
   const scope = await resolvePersonaScope(user, dealerId);
   if (REPORT_MIN_TIER[type] === "manager" && scope.tier === "advisor") {
     res.status(403).json({ error: "forbidden_tier", required: "manager" });
     return;
   }
-  const { from, to } = parseGuyanaRange(
+  const { from, to } = parseDealerRange(
+    tz,
     typeof req.query.from === "string" ? req.query.from : undefined,
     typeof req.query.to === "string" ? req.query.to : undefined,
   );
@@ -1198,6 +1201,7 @@ router.get("/reports", async (req, res): Promise<void> => {
       gyd,
       gydNumber,
       rate,
+      tz,
     })),
   };
   const payload = await redactReportPayload(user, type, rawPayload);
@@ -1235,12 +1239,13 @@ router.get("/reports", async (req, res): Promise<void> => {
         isAi: false,
         action: `Exported ${payload.label} report (${format.toUpperCase()})`,
         entity: "report",
-        detail: `${type} · ${guyanaDateLabel(from)} – ${guyanaDateLabel(to)}`,
+        detail: `${type} · ${dealerDateLabel(from, tz)} – ${dealerDateLabel(to, tz)}`,
       }),
     ]);
     await renderReportExport(res, payload, format as "csv" | "xlsx" | "pdf", {
       dealerName: dealer?.name ?? `Dealer ${dealerId}`,
       usdExchangeRate: rate,
+      timezone: tz,
     });
     return;
   }

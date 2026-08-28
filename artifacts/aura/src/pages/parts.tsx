@@ -52,7 +52,7 @@ import {
 } from "lucide-react";
 import { useAuthz } from "@/lib/auth";
 import { ImportPartsDialog } from "@/components/parts/import-parts-dialog";
-import { format } from "date-fns";
+
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
 import { motion, AnimatePresence } from "framer-motion";
@@ -61,7 +61,7 @@ import { PageHero } from "@/components/layout/page-hero";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { useMoney } from "@/lib/format";
+import { formatGuyanaDate, useMoney } from "@/lib/format";
 
 const TABS = [
   { key: "parts", label: "Parts", icon: Package },
@@ -1045,9 +1045,9 @@ function PurchaseOrdersTab() {
                   </div>
                   <div className="text-sm text-muted-foreground">
                     {po.reference && `${po.reference} · `}
-                    Raised {format(new Date(po.createdAt), "MMM d, yyyy")}
+                    Raised {formatGuyanaDate(po.createdAt)}
                     {po.expectedDate &&
-                      ` · Expected ${format(new Date(`${String(po.expectedDate).slice(0, 10)}T12:00:00`), "MMM d, yyyy")}`}
+                      ` · Expected ${formatGuyanaDate(String(po.expectedDate).slice(0, 10))}`}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -1174,7 +1174,7 @@ function PurchasesTab() {
               <div className="text-sm text-muted-foreground">
                 {supplierName(p.supplierId)}
                 {p.reference && ` · ${p.reference}`} ·{" "}
-                {format(new Date(p.createdAt), "MMM d, yyyy")}
+                {formatGuyanaDate(p.createdAt)}
               </div>
             </div>
             <div className="flex items-center gap-4">

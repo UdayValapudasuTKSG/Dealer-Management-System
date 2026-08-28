@@ -69,6 +69,7 @@ import {
 } from "../lib/invoicing";
 import { queueInvoiceSync } from "../lib/erpnext/entities";
 import { buildReceiptPdf } from "../lib/document-pdfs";
+import { dealerTimezone } from "../lib/timezone";
 import { storage } from "../lib/storage";
 import { getLosConnector } from "../lib/los";
 import { activeDealerId } from "../middlewares/rbac";
@@ -1146,6 +1147,7 @@ router.get("/receipts/:id/pdf", async (req, res): Promise<void> => {
   }
   const pdf = await buildReceiptPdf(
     receipt,
+    await dealerTimezone(receipt.dealerId),
     await getDealerPdfBranding(receipt.dealerId),
   );
   res

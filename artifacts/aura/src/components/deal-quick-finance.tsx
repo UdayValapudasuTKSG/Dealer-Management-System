@@ -19,7 +19,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useMoney } from "@/lib/format";
+import { dealerDayKey, useMoney } from "@/lib/format";
 
 /**
  * Quick finance actions against a deal — issue an invoice (reservation or
@@ -248,7 +248,7 @@ export function DealQuickFinanceDialogs({
                 setInvoiceKind(value);
                 if (value === "reservation") {
                   // Reservation fees are paid on the spot — prefill today.
-                  setField("dueDate", new Date().toISOString().slice(0, 10));
+                  setField("dueDate", dealerDayKey());
                 } else {
                   setField("dueDate", "");
                 }

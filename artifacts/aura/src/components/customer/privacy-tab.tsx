@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { getGetCustomerOverviewQueryKey } from "@workspace/api-client-react";
+import { formatGuyanaDate } from "@/lib/format";
 
 const apiBase = () => `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
 
@@ -203,7 +204,7 @@ export function PrivacyTab({
                       <p className="text-sm font-medium capitalize">{channel}</p>
                       <p className="text-xs text-muted-foreground">
                         {entry.basis.replace(/_/g, " ")} ·{" "}
-                        {new Date(entry.capturedAt).toLocaleDateString()}
+                        {formatGuyanaDate(entry.capturedAt)}
                       </p>
                     </div>
                   </div>
@@ -226,7 +227,7 @@ export function PrivacyTab({
             <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-4 py-3 text-sm">
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               Personal data erased on{" "}
-              {new Date(erasedAt).toLocaleDateString()} — this is an anonymized
+              {formatGuyanaDate(erasedAt)} — this is an anonymized
               shell record retained for the financial ledger.
             </div>
           )}

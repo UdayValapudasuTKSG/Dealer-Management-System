@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import { zonedParts } from "./timezone";
 
 export type QuotePdfData = Record<string, string>;
 
@@ -11,7 +12,7 @@ const LABEL_GREY = "#8a8a8a";
 const TEXT = "#222222";
 
 /** "August 17, 2026" | ISO → "08/17/2026"; unparseable input passes through. */
-const shortDate = (s: string): string => {
+const shortDate = (s: string, tz: string): string => {
   const t = s.trim();
   if (!t) return t;
   // Date-only ISO values must not go through new Date() — it parses them as
@@ -20,9 +21,17 @@ const shortDate = (s: string): string => {
   if (iso) return `${iso[2]}/${iso[3]}/${iso[1]}`;
   const d = new Date(t);
   if (Number.isNaN(d.getTime())) return t;
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${mm}/${dd}/${d.getFullYear()}`;
+  // Human-readable quote dates are calendar dates, not instants. Node parses
+  // them at midnight, so applying a negative-offset zone would shift them.
+  if (!/[T]|(?:Z|[+-]\d{2}:?\d{2}|GMT)$/i.test(t)) {
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    return `${mm}/${dd}/${d.getUTCFullYear()}`;
+  }
+  const p = zonedParts(d, tz);
+  const mm = String(p.month).padStart(2, "0");
+  const dd = String(p.day).padStart(2, "0");
+  return `${mm}/${dd}/${p.year}`;
 };
 
 /**
@@ -46,6 +55,7 @@ const bareAmount = (s: string): string => {
  */
 export function buildQuotePdf(
   data: QuotePdfData,
+  tz: string,
   logo?: Buffer | null,
   attachment?: { data: Buffer; fileName: string } | null,
 ): Promise<Buffer> {
@@ -132,9 +142,9 @@ export function buildQuotePdf(
         .text(value, metaValueX, my, { width: 130 });
     };
     metaRow("ESTIMATE", val(data, "quoteRef", ""), y);
-    metaRow("DATE", shortDate(val(data, "issuedOn", "")), y + 16);
+    metaRow("DATE", shortDate(val(data, "issuedOn", ""), tz), y + 16);
     if (data.validUntil?.trim()) {
-      metaRow("EXPIRATION DATE", shortDate(data.validUntil), y + 32);
+      metaRow("EXPIRATION DATE", shortDate(data.validUntil, tz), y + 32);
     }
     y += 14;
     const custLines = [
@@ -211,7 +221,7 @@ export function buildQuotePdf(
         ].filter(Boolean).join(" · "),
       ].filter(Boolean);
       doc.font("Helvetica").fontSize(8.5).fillColor(TEXT)
-        .text(shortDate(val(data, "issuedOn", "")), colDate + 6, y);
+        .text(shortDate(val(data, "issuedOn", ""), tz), colDate + 6, y);
       let dy = y;
       for (const line of descLines) {
         doc.text(line, colDesc, dy, {

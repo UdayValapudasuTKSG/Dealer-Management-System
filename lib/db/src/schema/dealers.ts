@@ -68,6 +68,10 @@ export const dealersTable = pgTable(
   servicePhone: text("service_phone"),
   emergencyPhone: text("emergency_phone"),
   status: text("status").notNull().default("active"),
+  // IANA timezone identifier driving every date/time presentation, calendar
+  // boundary, schedule and generated document for this dealership. Historical
+  // timestamps stay in UTC — only rendering/derivation changes.
+  timezone: text("timezone").notNull().default("America/Guyana"),
   // GYD per 1 USD — used to convert USD amounts into Guyana dollars in the UI.
   usdExchangeRate: doublePrecision("usd_exchange_rate")
     .notNull()
@@ -170,8 +174,21 @@ export const dealerUsersTable = pgTable(
   (t) => [uniqueIndex("dealer_users_dealer_user_idx").on(t.dealerId, t.userId)],
 );
 
+/** True when tz is a recognized IANA timezone identifier in this runtime. */
+export function isValidTimezone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const insertDealerSchema = createInsertSchema(dealersTable, {
   status: z.enum(DEALER_STATUSES),
+  timezone: z
+    .string()
+    .refine(isValidTimezone, { message: "Invalid IANA timezone identifier" }),
 }).omit({ id: true, createdAt: true });
 export type InsertDealer = z.infer<typeof insertDealerSchema>;
 export type Dealer = typeof dealersTable.$inferSelect;

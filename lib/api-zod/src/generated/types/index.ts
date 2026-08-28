@@ -165,6 +165,8 @@ export * from './dealerAgentOverviewHealth';
 export * from './dealerBranding';
 export * from './dealerBrandingUpdate';
 export * from './dealerInput';
+export * from './dealerLocalization';
+export * from './dealerLocalizationUpdate';
 export * from './dealerMember';
 export * from './dealerMemberInput';
 export * from './dealerMembershipInfo';

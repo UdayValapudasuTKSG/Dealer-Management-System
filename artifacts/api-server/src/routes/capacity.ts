@@ -54,7 +54,9 @@ type RangeItem = {
 
 /** Generated zod coerces `format: date` params to Date — store as YYYY-MM-DD. */
 function dateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // Generated format:date values represent calendar keys, so preserve their
+  // UTC date rather than interpreting the instant as a dealership wall clock.
+  return d.toISOString().slice(0, 10);
 }
 
 /** Parse date-only values without converting them through the server timezone. */
@@ -80,6 +82,8 @@ function rangeDates(value: RangeRequest): { included: string[]; items: RangeItem
   for (let offset = 0; offset < days; offset++) {
     const d = new Date(start.getTime() + offset * 86_400_000);
     const date = d.toISOString().slice(0, 10);
+    // UTC weekday is intentional: `d` is a date-only calendar key at UTC
+    // midnight, not a stored timestamp requiring dealership-zone conversion.
     const weekday = d.getUTCDay();
     const use =
       value.days === "all" ||

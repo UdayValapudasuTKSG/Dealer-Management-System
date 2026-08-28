@@ -31,7 +31,7 @@ import {
   Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useMoney } from "@/lib/format";
+import { dealerDateParts, useMoney } from "@/lib/format";
 
 const ACCEPTED: Record<string, GraExtractRequestMediaType> = {
   "image/png": "image/png",
@@ -63,7 +63,11 @@ const EMPTY_DRAFT: GraFilingDraft = {
   fobValue: null,
   freightValue: null,
   insuranceValue: null,
-  yearOfImport: new Date().getFullYear(),
+  get yearOfImport() {
+    // Computed lazily so it reflects the ACTIVE dealership's calendar year
+    // (matters around New Year when the browser zone differs).
+    return dealerDateParts().year;
+  },
   sourceDocIds: null,
   fieldConfidence: null,
   notes: null,

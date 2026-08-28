@@ -6,6 +6,12 @@ import {
   buildServiceInvoicePdf,
   buildServiceReceiptPdf,
 } from "../lib/document-pdfs";
+import {
+  dealerTimezone,
+  zonedDayKey,
+  zonedParts,
+  zonedTimeToUtc,
+} from "../lib/timezone";
 import { getServiceSettings } from "../lib/service-settings";
 import { queueCustomerSync } from "../lib/erpnext/entities";
 import { dealerExchangeRate } from "../lib/invoicing";
@@ -393,7 +399,10 @@ router.post("/service-orders", async (req, res): Promise<void> => {
     if (parsed.data.type === "warranty" || parsed.data.type === "recall") {
       payType = "warranty";
     } else if (bookingCustomerId != null) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = zonedDayKey(
+        new Date(),
+        await dealerTimezone(createDealerId),
+      );
       const [plan] = await db
         .select({ id: coveragePlansTable.id })
         .from(coveragePlansTable)
@@ -1598,7 +1607,7 @@ router.post("/job-cards/:id/rollover", async (req, res): Promise<void> => {
     return;
   }
   const toDate = toDateString(parsed.data.toDate);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = zonedDayKey(new Date(), await dealerTimezone(dealerId));
   if (!toDate || toDate <= today) {
     res.status(422).json({ error: "Rollover date must be a future day" });
     return;
@@ -1743,10 +1752,19 @@ router.post(
           rolloverStatus: "approved",
         };
         if (signed.rolloverToDate) {
-          const prev = signed.scheduledAt ?? new Date();
-          const next = new Date(`${signed.rolloverToDate}T00:00:00`);
-          next.setHours(prev.getHours(), prev.getMinutes(), 0, 0);
-          finalPatch.scheduledAt = next;
+          // Keep the card's original wall-clock time on the approved
+          // carry-over day, evaluated in the dealership timezone.
+          const tz = await dealerTimezone(dealerId);
+          const prev = zonedParts(signed.scheduledAt ?? new Date(), tz);
+          const [ry, rm, rd] = signed.rolloverToDate.split("-").map(Number);
+          finalPatch.scheduledAt = zonedTimeToUtc(
+            tz,
+            ry!,
+            rm!,
+            rd!,
+            prev.hour,
+            prev.minute,
+          );
         }
         const [finalized] = await tx
           .update(jobCardsTable)
@@ -2668,6 +2686,7 @@ router.get(
     }
     const pdf = await buildServiceReceiptPdf(
       invoice,
+      await dealerTimezone(invoice.dealerId),
       await getDealerPdfBranding(invoice.dealerId),
     );
     res
@@ -2703,6 +2722,7 @@ router.get("/service-invoices/:id/pdf", async (req, res): Promise<void> => {
   const pdf = await buildServiceInvoicePdf(
     invoice,
     rate,
+    await dealerTimezone(invoice.dealerId),
     await getDealerPdfBranding(invoice.dealerId),
   );
   res
@@ -2778,6 +2798,7 @@ router.get("/coverage/:id/pdf", async (req, res): Promise<void> => {
   }
   const pdf = await buildCoverageCertificatePdf(
     plan,
+    await dealerTimezone(plan.dealerId),
     await getDealerPdfBranding(plan.dealerId),
   );
   res

@@ -40,6 +40,12 @@ export async function leadAdvisorContact(
 }
 import { ownerCalendarContact, testDriveCalendarFields } from "./calendar";
 import { logger } from "./logger";
+import {
+  dealerTimezone,
+  formatDealerDate,
+  formatDealerSlot,
+  formatDealerTime,
+} from "./timezone";
 
 // ---------------------------------------------------------------------------
 // Lifecycle email triggers — fire-and-forget, never fail the request
@@ -47,6 +53,29 @@ import { logger } from "./logger";
 
 const money = (n: number) =>
   `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+
+const fullMonthDate = (
+  value: string | Date,
+  tz: string,
+): string =>
+  formatDealerDate(value, tz).replace(
+    /^([A-Z][a-z]{2}) /,
+    (short) =>
+      ({
+        Jan: "January ",
+        Feb: "February ",
+        Mar: "March ",
+        Apr: "April ",
+        May: "May ",
+        Jun: "June ",
+        Jul: "July ",
+        Aug: "August ",
+        Sep: "September ",
+        Oct: "October ",
+        Nov: "November ",
+        Dec: "December ",
+      })[short.trim()] ?? short,
+  );
 
 async function customerEmail(
   dealerId: number,
@@ -119,9 +148,6 @@ async function leadRecipient(
   const c = await customerEmail(lead.dealerId, lead.customerId);
   return { to: c.email, name: c.name ?? lead.name };
 }
-
-const longDate = (d: Date) =>
-  d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
 /** Public origin for customer-facing links (production domain first). */
 function publicAppOrigin(): string | null {
@@ -237,6 +263,10 @@ export function onLeadUpdated(before: Lead, after: Lead): void {
     const { to } = await leadRecipient(after);
     if (!to) return;
     const vehicle = await vehicleName(after.dealerId, after.interestedVehicleId);
+    const tz = await dealerTimezone(after.dealerId);
+    const slot = after.testDriveAt
+      ? formatDealerSlot(after.testDriveAt, tz)
+      : null;
 
     if (after.assignedTo && after.assignedTo !== before.assignedTo) {
       await send({
@@ -265,15 +295,8 @@ export function onLeadUpdated(before: Lead, after: Lead): void {
           ...(vehicle ? { vehicle } : {}),
           ...(after.testDriveAt
             ? {
-                date: after.testDriveAt.toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                }),
-                time: after.testDriveAt.toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                }),
+                date: slot!.split(" at ")[0]!,
+                time: formatDealerTime(after.testDriveAt, tz),
               }
             : {}),
           ...testDriveCalendarFields(after, vehicle ?? null, owner),
@@ -480,11 +503,12 @@ export function onDeliveryCompleted(opts: {
 // in/out of on_hold, repeated PATCHes) can never spam the customer.
 // ---------------------------------------------------------------------------
 
-const serviceDateLabel = (value: string | Date | null | undefined): string => {
+const serviceDateLabel = (
+  value: string | Date | null | undefined,
+  tz: string,
+): string => {
   if (!value) return "";
-  const iso = value instanceof Date ? value.toISOString().slice(0, 10) : value.slice(0, 10);
-  const parsed = new Date(`${iso}T12:00:00`);
-  return Number.isNaN(parsed.getTime()) ? iso : longDate(parsed);
+  return fullMonthDate(value, tz);
 };
 
 /** Service order created → booking confirmation. */
@@ -492,6 +516,7 @@ export function onServiceOrderBooked(order: ServiceOrder): void {
   fire("service_booking_confirmed", async () => {
     const c = await customerEmail(order.dealerId, order.customerId);
     if (!c.email) return;
+    const tz = await dealerTimezone(order.dealerId);
     await enqueueEmail({
       dealerId: order.dealerId,
       template: "service.booking.confirmed",
@@ -502,7 +527,7 @@ export function onServiceOrderBooked(order: ServiceOrder): void {
         ...(c.name ? { name: c.name } : {}),
         vehicle: order.vehicleInfo,
         service: order.type,
-        date: serviceDateLabel(order.scheduledDate),
+        date: serviceDateLabel(order.scheduledDate, tz),
       },
     });
   });
@@ -622,6 +647,7 @@ export function onJobCardRolloverApproved(opts: {
   fire("service_rollover_approved", async () => {
     const c = await customerEmail(opts.dealerId, opts.customerId);
     if (!c.email) return;
+    const tz = await dealerTimezone(opts.dealerId);
     await enqueueEmail({
       dealerId: opts.dealerId,
       template: "service.delayed",
@@ -633,7 +659,7 @@ export function onJobCardRolloverApproved(opts: {
         vehicle: opts.vehicleInfo,
         service: opts.serviceType,
         reason: opts.reason?.trim() || "the work is carrying over to another day",
-        ...(opts.toDate ? { newDate: serviceDateLabel(opts.toDate) } : {}),
+        ...(opts.toDate ? { newDate: serviceDateLabel(opts.toDate, tz) } : {}),
       },
     });
   });

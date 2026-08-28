@@ -1,3 +1,5 @@
+import { dealerDayKey } from "./format";
+
 export const SLA_DAYS = 5;
 /** Leads must be contacted within 48 hours of showing interest. */
 export const CONTACT_SLA_HOURS = 48;
@@ -113,22 +115,13 @@ export function hoursSince(iso: string | null | undefined): number {
 
 export function isTodayLocal(iso: string | null | undefined): boolean {
   if (!iso) return false;
-  const d = new Date(iso);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
+  return dealerDayKey(new Date(iso)) === dealerDayKey();
 }
 
-/** Parse a date-only string (YYYY-MM-DD) as LOCAL midnight to avoid UTC day-shift. */
+/** Compare a date-only string (YYYY-MM-DD) with the dealership's current day. */
 export function isTodayDateOnly(iso: string | null | undefined): boolean {
   if (!iso) return false;
-  const datePart = iso.slice(0, 10);
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  return datePart === today;
+  return iso.slice(0, 10) === dealerDayKey();
 }
 
 export function buildTriage(

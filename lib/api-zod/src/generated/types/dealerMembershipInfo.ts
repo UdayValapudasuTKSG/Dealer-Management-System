@@ -32,4 +32,6 @@ export interface DealerMembershipInfo {
      * @pattern ^#[0-9a-fA-F]{6}$
      */
   themeColor?: string | null;
+  /** IANA timezone identifier for this dealership (e.g. America/Guyana) */
+  timezone?: string;
 }

@@ -13,7 +13,8 @@
     "verify:delivery-owner-contact": "tsx src/scripts/test-delivery-owner-contact.ts",
     "verify:finance-multi-item": "tsx src/scripts/verify-finance-multi-item-commit.ts",
     "verify:reservation-soft-locks": "tsx src/scripts/verify-reservation-soft-locks.ts",
-    "verify:erpnext-entities": "tsx src/scripts/verify-erpnext-entity-sync.ts"
+    "verify:erpnext-entities": "tsx src/scripts/verify-erpnext-entity-sync.ts",
+    "verify:timezone": "tsx src/scripts/verify-timezone.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.95",

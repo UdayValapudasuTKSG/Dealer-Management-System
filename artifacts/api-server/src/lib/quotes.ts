@@ -22,6 +22,7 @@ import { logger } from "./logger";
 import { recordAgentRun } from "./agent-governance";
 import { computeTaxes, dutyFreeTaxRules } from "./taxes";
 import { enqueueEmail } from "./email";
+import { dealerTimezone, zonedParts } from "./timezone";
 
 // ---------------------------------------------------------------------------
 // Quote agent (A3) — auto-generates the GT-format "Code" (estimate) for every
@@ -33,9 +34,14 @@ import { enqueueEmail } from "./email";
 
 export const QUOTE_AGENT_ACTOR = "AURA System";
 const AGENT_KEY = "quote_tax";
-
-const longDate = (d: Date) =>
-  d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const longDate = (d: Date, tz: string) => {
+  const p = zonedParts(d, tz);
+  return `${MONTHS[p.month - 1]} ${p.day}, ${p.year}`;
+};
 
 export type QuoteTrigger = "lead_created" | "lead_updated" | "manual";
 
@@ -81,6 +87,7 @@ export async function generateQuoteForLead(
   },
 ): Promise<Quote | null> {
   const now = new Date();
+  const tz = await dealerTimezone(lead.dealerId);
   const requestType = opts.requestType ?? "standard";
   const validUntil = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const committed = await db.transaction(async (tx) => {
@@ -287,8 +294,8 @@ export async function generateQuoteForLead(
          ? { discountAmount: Math.min(approvedDiscount, Math.max(basePrice + totalTax - 1, 0)), discountStatus: "approved" }
          : {}),
       taxSnapshot: pricedItems.flatMap((item) => item.computed.lines),
-      issuedOn: longDate(now),
-      validUntil: longDate(validUntil),
+      issuedOn: longDate(now, tz),
+      validUntil: longDate(validUntil, tz),
       trigger: opts.trigger,
       createdBy: opts.actor,
       isAgent: opts.isAgent,

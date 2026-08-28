@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { format } from "date-fns";
 import { useForm } from "react-hook-form";
 import {
   getGetCustomerOverviewQueryKey,
@@ -40,6 +39,7 @@ import {
 } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { formatGuyanaDateTime } from "@/lib/format";
 import { useMoney } from "@/lib/format";
 import { useAuthz } from "@/lib/auth";
 
@@ -146,7 +146,7 @@ export function QuoteDiscountDialog({
   const requestDate = gate?.createdAt ? new Date(gate.createdAt) : null;
   const requestDateLabel =
     requestDate && !Number.isNaN(requestDate.getTime())
-      ? format(requestDate, "PPp")
+      ? formatGuyanaDateTime(requestDate)
       : "Not recorded";
 
   const invalidateRelatedData = () => {

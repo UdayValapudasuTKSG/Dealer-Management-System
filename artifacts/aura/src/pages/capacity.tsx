@@ -34,6 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Page } from "@/components/layout/page";
 import { PageHero } from "@/components/layout/page-hero";
 import { cn } from "@/lib/utils";
+import { dealerDayKeyPlus } from "@/lib/format";
 import { Car, Users, Loader2 } from "lucide-react";
 
 /**
@@ -46,17 +47,13 @@ import { Car, Users, Loader2 } from "lucide-react";
  * single representative per make+model rather than the whole inventory.
  */
 
-function dateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function dateFromDayKey(day: string): Date {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Date(year!, month! - 1, date);
 }
 
-function windowDays(): Date[] {
-  const now = new Date();
-  const days: Date[] = [];
-  for (let offset = 1; offset <= 14; offset++) {
-    days.push(new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset));
-  }
-  return days;
+function windowDays(): string[] {
+  return Array.from({ length: 14 }, (_, index) => dealerDayKeyPlus(index + 1));
 }
 
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 8); // 8:00 – 19:00
@@ -70,8 +67,8 @@ export default function CapacityPage() {
   const [tab, setTab] = useState<"vehicle" | "advisor">("vehicle");
 
   const days = useMemo(windowDays, []);
-  const from = dateStr(days[0]!);
-  const to = dateStr(days[days.length - 1]!);
+  const from = days[0]!;
+  const to = days[days.length - 1]!;
 
   const { data: blocks, isLoading, error } = useListCapacityBlocks({ from, to });
   const { data: vehicles } = useListVehicles();
@@ -121,7 +118,7 @@ export default function CapacityPage() {
   const [target, setTarget] = useState<{
     refId: number;
     label: string;
-    day: Date;
+    day: string;
   } | null>(null);
   const [mode, setMode] = useState<"day" | "hours">("day");
   const [startHour, setStartHour] = useState("9");
@@ -145,7 +142,7 @@ export default function CapacityPage() {
   const applyRange = useApplyCapacityBlockRange();
   const rangeLoading = previewRange.isPending || applyRange.isPending;
 
-  const openBlockDialog = (refId: number, label: string, day: Date) => {
+  const openBlockDialog = (refId: number, label: string, day: string) => {
     setMode("hours");
     setStartHour("9");
     setEndHour("12");
@@ -202,7 +199,7 @@ export default function CapacityPage() {
   // Blocks for the resource/day currently open in the dialog (live — updates
   // as windows are added/removed without closing the dialog).
   const targetBlocks = target
-    ? (blockIndex.get(`${tab}:${target.refId}:${dateStr(target.day)}`) ?? [])
+    ? (blockIndex.get(`${tab}:${target.refId}:${target.day}`) ?? [])
     : [];
   const targetHasFullDay = targetBlocks.some((b) => b.startHour == null);
 
@@ -221,7 +218,7 @@ export default function CapacityPage() {
         data: {
           kind: tab,
           refId: target.refId,
-          date: dateStr(target.day),
+          date: target.day,
           ...(mode === "hours"
             ? { startHour: Number(startHour), endHour: Number(endHour) }
             : {}),
@@ -312,16 +309,19 @@ export default function CapacityPage() {
                   <th className="text-left font-semibold uppercase tracking-wider text-[10px] text-muted-foreground p-2 sticky left-0 bg-background/80 backdrop-blur min-w-[180px]">
                     {tab === "vehicle" ? "Model (demo unit)" : "Advisor"}
                   </th>
-                  {days.map((d) => (
+                  {days.map((day) => {
+                    const d = dateFromDayKey(day);
+                    return (
                     <th
-                      key={dateStr(d)}
+                      key={day}
                       className="p-1.5 font-semibold text-[10px] text-muted-foreground text-center whitespace-nowrap"
                     >
                       {d.toLocaleDateString("en-US", { weekday: "short" })}
                       <br />
                       {d.getDate()}/{d.getMonth() + 1}
                     </th>
-                  ))}
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -346,8 +346,8 @@ export default function CapacityPage() {
                         </div>
                       )}
                     </td>
-                    {days.map((d) => {
-                      const key = `${tab}:${r.id}:${dateStr(d)}`;
+                    {days.map((day) => {
+                      const key = `${tab}:${r.id}:${day}`;
                       const cellBlocks = blockIndex.get(key) ?? [];
                       const busy = busyCell === key;
                       const fullDay = cellBlocks.some(
@@ -362,7 +362,7 @@ export default function CapacityPage() {
                       return (
                         <td key={key} className="p-1 text-center align-middle">
                           <button
-                            aria-label={`${r.label} — ${dateStr(d)} — ${
+                            aria-label={`${r.label} — ${day} — ${
                               fullDay
                                 ? "blocked all day"
                                 : windows.length > 0
@@ -376,7 +376,7 @@ export default function CapacityPage() {
                                 .join("; ") || undefined
                             }
                             disabled={busy}
-                            onClick={() => openBlockDialog(r.id, r.label, d)}
+                            onClick={() => openBlockDialog(r.id, r.label, day)}
                             className={cn(
                               "min-w-9 h-9 px-1 rounded-lg border transition-colors inline-flex flex-col items-center justify-center leading-none",
                               fullDay
@@ -417,7 +417,7 @@ export default function CapacityPage() {
             <DialogTitle>Manage capacity</DialogTitle>
             <DialogDescription>
               {target
-                ? `${target.label} — ${target.day.toLocaleDateString("en-US", {
+                ? `${target.label} — ${dateFromDayKey(target.day).toLocaleDateString("en-US", {
                     weekday: "long",
                     month: "short",
                     day: "numeric",
@@ -449,7 +449,7 @@ export default function CapacityPage() {
                     className="h-7 rounded-full text-destructive hover:text-destructive"
                     disabled={deleteBlock.isPending}
                     onClick={() =>
-                      unblock(b, `${tab}:${target!.refId}:${dateStr(target!.day)}`)
+                      unblock(b, `${tab}:${target!.refId}:${target!.day}`)
                     }
                   >
                     Remove

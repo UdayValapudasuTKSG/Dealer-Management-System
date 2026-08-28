@@ -1,5 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { db, dealerTaxesTable, DEFAULT_DEALER_TAXES, type DealerTax } from "@workspace/db";
+import { dealerTimezone, zonedDayKey } from "./timezone";
 
 /**
  * Deterministic tax engine (no LLM). Given a taxable base (GYD) and a
@@ -100,7 +101,7 @@ export async function ensureDealerTaxes(dealerId: number): Promise<DealerTax[]> 
     .where(eq(dealerTaxesTable.dealerId, dealerId))
     .orderBy(asc(dealerTaxesTable.sortOrder), asc(dealerTaxesTable.id));
   if (rows.length > 0) return rows;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = zonedDayKey(new Date(), await dealerTimezone(dealerId));
   await db.insert(dealerTaxesTable).values(
     DEFAULT_DEALER_TAXES.map((t, i) => ({
       dealerId,

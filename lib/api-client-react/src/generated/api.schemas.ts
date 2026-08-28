@@ -479,6 +479,8 @@ export interface DealerMembershipInfo {
      * @pattern ^#[0-9a-fA-F]{6}$
      */
   themeColor?: string | null;
+  /** IANA timezone identifier for this dealership (e.g. America/Guyana) */
+  timezone?: string;
 }
 
 export interface CurrentUser {
@@ -553,6 +555,21 @@ export interface DealerBrandingUpdate {
   logoUrl?: string | null;
 }
 
+export interface DealerLocalization {
+  dealerId: number;
+  /** IANA timezone identifier (e.g. America/Guyana) */
+  timezone: string;
+}
+
+export interface DealerLocalizationUpdate {
+  /**
+     * IANA timezone identifier; invalid identifiers are rejected with 422
+     * @minLength 1
+     * @maxLength 64
+     */
+  timezone: string;
+}
+
 export type DealerStatus = typeof DealerStatus[keyof typeof DealerStatus];
 
 
@@ -598,6 +615,8 @@ export interface Dealer {
      * @nullable
      */
   metaPageId?: string | null;
+  /** IANA timezone identifier for this dealership (e.g. America/Guyana) */
+  timezone?: string;
   createdAt: string;
 }
 
@@ -626,6 +645,11 @@ export interface DealerInput {
      * @nullable
      */
   metaPageId?: string | null;
+  /**
+     * IANA timezone identifier (validated server-side; invalid identifiers are rejected)
+     * @minLength 1
+     */
+  timezone?: string;
   entitlements?: Entitlements;
   /**
      * First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)

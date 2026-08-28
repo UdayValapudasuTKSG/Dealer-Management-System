@@ -25,6 +25,7 @@ import { generalManagers } from "./notify-matrix";
 import { financeUsers } from "./notify-matrix";
 import { queueInvoiceSync, queuePaymentSync } from "./erpnext/entities";
 import { allocateReservationInventory } from "./reservation-allocations";
+import { dealerTimezone, zonedParts } from "./timezone";
 
 /**
  * Invoicing + payment ledger helpers (L6). All amounts in GYD; each
@@ -57,6 +58,8 @@ export type IssueInvoiceArgs = {
 /** Insert an issued invoice with a sequential number + rate snapshot. */
 export async function issueInvoice(args: IssueInvoiceArgs): Promise<Invoice> {
   const exchangeRate = await dealerExchangeRate(args.dealerId);
+  const tz = await dealerTimezone(args.dealerId);
+  const issueYear = zonedParts(new Date(), tz).year;
   return db.transaction(async (tx) => {
     const [row] = await tx
       .insert(invoicesTable)
@@ -80,7 +83,7 @@ export async function issueInvoice(args: IssueInvoiceArgs): Promise<Invoice> {
     const [numbered] = await tx
       .update(invoicesTable)
       .set({
-        invoiceNumber: `INV-${new Date().getFullYear()}-${String(row!.id).padStart(4, "0")}`,
+        invoiceNumber: `INV-${issueYear}-${String(row!.id).padStart(4, "0")}`,
       })
       .where(eq(invoicesTable.id, row!.id))
       .returning();
@@ -226,6 +229,8 @@ export class PaymentGuardError extends Error {
 export async function applyPayment(args: ApplyPaymentArgs) {
   const { invoice } = args;
   const exchangeRate = await dealerExchangeRate(invoice.dealerId);
+  const tz = await dealerTimezone(invoice.dealerId);
+  const receiptYear = zonedParts(new Date(), tz).year;
   // Set inside the transaction when a reservation invoice is fully paid;
   // consumed after commit to ensure the lead has a linked account.
   let reservationLeadId: number | null = null;
@@ -418,7 +423,7 @@ export async function applyPayment(args: ApplyPaymentArgs) {
       .insert(receiptsTable)
       .values({
         dealerId: invoice.dealerId,
-        receiptNumber: `RCT-${new Date().getFullYear()}-${String(row!.id).padStart(4, "0")}`,
+        receiptNumber: `RCT-${receiptYear}-${String(row!.id).padStart(4, "0")}`,
         paymentId: row!.id,
         invoiceId: invoice.id,
         invoiceNumber: invoice.invoiceNumber,

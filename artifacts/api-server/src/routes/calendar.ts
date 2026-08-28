@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, gte, inArray, isNotNull, lte, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, lte, ne } from "drizzle-orm";
 import {
   db,
   leadsTable,
@@ -12,6 +12,12 @@ import {
 import { GetCalendarResponse } from "@workspace/api-zod";
 import { activeDealerId } from "../middlewares/rbac";
 import { isTechnicianRole } from "./service";
+import {
+  dealerTimezone,
+  zonedAddDays,
+  zonedDayKey,
+  zonedStartOfDay,
+} from "../lib/timezone";
 
 // ---------------------------------------------------------------------------
 // Dealership calendar — a DERIVED view over existing scheduling data:
@@ -33,21 +39,26 @@ type CalendarEvent = {
   refId?: number;
 };
 
-/** date-string columns ("YYYY-MM-DD") → local midnight, avoiding the UTC shift. */
-function localDate(dateStr: string): Date {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y!, (m ?? 1) - 1, d ?? 1);
-}
-
 router.get("/calendar", async (req, res): Promise<void> => {
-  const from = new Date(String(req.query["from"] ?? ""));
-  const to = new Date(String(req.query["to"] ?? ""));
-  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+  const fromInput = String(req.query["from"] ?? "");
+  const toInput = String(req.query["to"] ?? "");
+  const parsedFrom = new Date(fromInput);
+  const parsedTo = new Date(toInput);
+  if (Number.isNaN(parsedFrom.getTime()) || Number.isNaN(parsedTo.getTime())) {
     res.status(400).json({ error: "from and to must be valid dates" });
     return;
   }
 
   const dealerId = activeDealerId(res);
+  const tz = await dealerTimezone(dealerId);
+  const fromKey = /^\d{4}-\d{2}-\d{2}/.test(fromInput)
+    ? fromInput.slice(0, 10)
+    : zonedDayKey(parsedFrom, tz);
+  const toKey = /^\d{4}-\d{2}-\d{2}/.test(toInput)
+    ? toInput.slice(0, 10)
+    : zonedDayKey(parsedTo, tz);
+  const from = zonedStartOfDay(fromKey, tz);
+  const toExclusive = zonedStartOfDay(zonedAddDays(zonedStartOfDay(toKey, tz), tz, 1), tz);
   const user = res.locals.user;
   const ownOnly = Boolean(user && user.roleName === "Sales Advisor");
   const scope = ownOnly ? "own" : "all";
@@ -70,7 +81,7 @@ router.get("/calendar", async (req, res): Promise<void> => {
         eq(leadsTable.dealerId, dealerId),
         isNotNull(leadsTable.testDriveAt),
         gte(leadsTable.testDriveAt, from),
-        lte(leadsTable.testDriveAt, to),
+        lt(leadsTable.testDriveAt, toExclusive),
         ...(ownOnly ? [eq(leadsTable.ownerUserId, user!.id)] : []),
       ),
     );
@@ -123,7 +134,7 @@ router.get("/calendar", async (req, res): Promise<void> => {
         eq(deliveriesTable.dealerId, dealerId),
         isNotNull(deliveriesTable.appointmentAt),
         gte(deliveriesTable.appointmentAt, from),
-        lte(deliveriesTable.appointmentAt, to),
+        lt(deliveriesTable.appointmentAt, toExclusive),
         ne(deliveriesTable.status, "cancelled"),
         ...(ownOnly ? [eq(deliveriesTable.advisorUserId, user!.id)] : []),
       ),
@@ -145,8 +156,6 @@ router.get("/calendar", async (req, res): Promise<void> => {
   }
 
   // Service appointments — scheduledDate (date-only → all-day).
-  const fromKey = from.toISOString().slice(0, 10);
-  const toKey = to.toISOString().slice(0, 10);
   const serviceRows = await db
     .select()
     .from(serviceOrdersTable)
@@ -168,7 +177,7 @@ router.get("/calendar", async (req, res): Promise<void> => {
       detail:
         [s.vehicleInfo, s.type.replace(/_/g, " ")].filter(Boolean).join(" · ") ||
         null,
-      startsAt: localDate(s.scheduledDate),
+      startsAt: zonedStartOfDay(s.scheduledDate, tz),
       allDay: true,
       assigneeName: s.technicianUserId
         ? (nameById.get(s.technicianUserId) ?? s.technician)
@@ -198,7 +207,7 @@ router.get("/calendar", async (req, res): Promise<void> => {
       kind: "follow_up",
       title: t.title,
       detail: t.description,
-      startsAt: localDate(t.dueDate!),
+      startsAt: zonedStartOfDay(t.dueDate!, tz),
       allDay: true,
       assigneeName: t.assigneeUserId
         ? (nameById.get(t.assigneeUserId) ?? null)

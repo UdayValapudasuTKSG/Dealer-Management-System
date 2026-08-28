@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthz } from "@/lib/auth";
+import { formatGuyanaDateTime } from "@/lib/format";
 import {
   Facebook,
   Loader2,
@@ -420,7 +421,7 @@ export default function SettingsMeta() {
                     ok={settings.lastStatus === "connected"}
                     label={
                       settings.lastStatus === "connected"
-                        ? `Last test passed${settings.lastCheckedAt ? ` · ${new Date(settings.lastCheckedAt).toLocaleString()}` : ""}`
+                        ? `Last test passed${settings.lastCheckedAt ? ` · ${formatGuyanaDateTime(settings.lastCheckedAt)}` : ""}`
                         : `Last test failed: ${settings.lastError ?? "unknown error"}`
                     }
                   />
@@ -446,7 +447,7 @@ export default function SettingsMeta() {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {new Date(settings.lastEvent.createdAt).toLocaleString()}{" "}
+                        {formatGuyanaDateTime(settings.lastEvent.createdAt)}{" "}
                         · Meta lead ID{" "}
                         <span className="font-mono">
                           {settings.lastEvent.externalId}

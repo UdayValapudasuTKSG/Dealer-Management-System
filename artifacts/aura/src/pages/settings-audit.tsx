@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, ScrollText } from "lucide-react";
+import { formatGuyanaDateTime } from "@/lib/format";
 
 const ACTIONS = [
   "create",
@@ -130,7 +131,7 @@ export default function SettingsAudit() {
               {(logs ?? []).map((log) => (
                 <tr key={log.id} className="border-b border-white/[0.04] hover:bg-foreground/[0.02]">
                   <td className="px-5 py-3 whitespace-nowrap text-muted-foreground">
-                    {log.createdAt ? new Date(log.createdAt).toLocaleString() : "—"}
+                    {log.createdAt ? formatGuyanaDateTime(log.createdAt) : "—"}
                   </td>
                   <td className="px-5 py-3">
                     <div className="font-medium text-foreground">{log.actorName ?? "System"}</div>

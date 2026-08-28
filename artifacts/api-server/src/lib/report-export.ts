@@ -2,22 +2,16 @@ import type { Response } from "express";
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import type { ReportPayload } from "../routes/reports";
-import { guyanaDateLabel } from "./report-scope";
+import { dealerDateLabel } from "./report-scope";
+import { formatDealerDateTime } from "./timezone";
 
 type ExportMeta = {
   dealerName: string;
   usdExchangeRate: number;
+  timezone: string;
 };
 
-const nowGuyana = () =>
-  new Date().toLocaleString("en-GB", {
-    timeZone: "America/Guyana",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+const generatedAt = (tz: string) => formatDealerDateTime(new Date(), tz);
 
 const fileBase = (payload: ReportPayload) =>
   `${payload.type}-${payload.from.slice(0, 10)}-${payload.to.slice(0, 10)}`;
@@ -30,10 +24,10 @@ function buildCsv(payload: ReportPayload, meta: ExportMeta): string {
   const lines: string[] = [];
   lines.push(`${payload.label} — ${meta.dealerName}`);
   lines.push(
-    `Range,${guyanaDateLabel(payload.from)} - ${guyanaDateLabel(payload.to)}`,
+    `Range,${dealerDateLabel(payload.from, meta.timezone)} - ${dealerDateLabel(payload.to, meta.timezone)}`,
   );
   lines.push(
-    `Money,GYD,Generated,${nowGuyana()} (Guyana)`,
+    `Money,GYD,Generated,${generatedAt(meta.timezone)} (${meta.timezone})`,
   );
   lines.push("");
   lines.push("KPI,Value,Note");
@@ -58,10 +52,10 @@ async function buildXlsx(
   ws.addRow([`${payload.label} — ${meta.dealerName}`]);
   ws.getRow(1).font = { bold: true, size: 14 };
   ws.addRow([
-    `Range: ${guyanaDateLabel(payload.from)} – ${guyanaDateLabel(payload.to)}`,
+    `Range: ${dealerDateLabel(payload.from, meta.timezone)} – ${dealerDateLabel(payload.to, meta.timezone)}`,
   ]);
   ws.addRow([
-    `Money in GYD · Generated ${nowGuyana()} (Guyana)`,
+    `Money in GYD · Generated ${generatedAt(meta.timezone)} (${meta.timezone})`,
   ]);
   ws.addRow([]);
   const kpiHeader = ws.addRow(["KPI", "Value", "Note"]);
@@ -102,10 +96,10 @@ function buildPdf(payload: ReportPayload, meta: ExportMeta): Promise<Buffer> {
       .font("Helvetica")
       .text(meta.dealerName)
       .text(
-        `Range: ${guyanaDateLabel(payload.from)} – ${guyanaDateLabel(payload.to)}`,
+        `Range: ${dealerDateLabel(payload.from, meta.timezone)} – ${dealerDateLabel(payload.to, meta.timezone)}`,
       )
       .text(
-        `Money in GYD · Generated ${nowGuyana()} (Guyana time)`,
+        `Money in GYD · Generated ${generatedAt(meta.timezone)} (${meta.timezone})`,
       );
     doc.moveDown(1);
 

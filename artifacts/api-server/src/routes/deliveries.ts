@@ -78,24 +78,37 @@ import {
   notifyFeedbackSurvey,
 } from "../lib/notify-triggers";
 import { usersWithPermission } from "../lib/notify-matrix";
+import {
+  dealerTimezone,
+  formatDealerDate,
+  formatDealerDateTime,
+  zonedAddDays,
+  zonedDayKey,
+  zonedParts,
+  zonedTimeToUtc,
+} from "../lib/timezone";
 
 const router: IRouter = Router();
 
 /**
  * Adds N business days (Mon–Fri) to a date, evaluated in the dealership's
- * GMT-4 calendar so weekend boundaries land on the right local day.
+ * dealership calendar so weekend boundaries land on the right local day.
  */
-function addBusinessDays(from: Date, days: number): Date {
-  const result = new Date(from.getTime());
+export function addBusinessDays(from: Date, days: number, tz: string): Date {
+  // Step whole dealer-local calendar days and re-pin the ORIGINAL wall-clock
+  // time on the landing day, so crossing a DST transition never shifts the
+  // due time by an hour.
+  const wall = zonedParts(from, tz);
+  let cursor = from;
   let remaining = days;
   while (remaining > 0) {
-    result.setTime(result.getTime() + 24 * 60 * 60 * 1000);
-    // Local dealership day-of-week at GMT-4.
-    const local = new Date(result.getTime() - 4 * 60 * 60 * 1000);
-    const dow = local.getUTCDay();
+    const nextKey = zonedAddDays(cursor, tz, 1);
+    const [y, m, d] = nextKey.split("-").map(Number);
+    cursor = zonedTimeToUtc(tz, y!, m!, d!, wall.hour, wall.minute, wall.second);
+    const dow = zonedParts(cursor, tz).weekday;
     if (dow !== 0 && dow !== 6) remaining -= 1;
   }
-  return result;
+  return cursor;
 }
 
 const money = (n: number) =>
@@ -785,6 +798,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       void (async () => {
         const { email, name } = await customerEmailFor(delivery);
         if (!email) return;
+        const tz = await dealerTimezone(delivery.dealerId);
         await enqueueEmail({
           template: "delivery_schedule",
           to: email,
@@ -793,13 +807,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
           data: {
             name,
             vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
-            date: at.toLocaleString("en-US", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            }),
+            date: formatDealerDateTime(at, tz),
           },
         });
       })().catch((err) =>
@@ -1257,17 +1265,19 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
 
           if (serviceAdvisor) {
             // Ownership-phase kickoff: the advisor calls the customer within
-            // 5 business days of delivery (GMT-4 business calendar).
+            // 5 business days of delivery (dealership business calendar).
+            const tz = await dealerTimezone(delivery.dealerId);
             const introDue = addBusinessDays(
               delivery.deliveredAt ?? new Date(),
               5,
+              tz,
             );
             await db.insert(tasksTable).values({
               dealerId: delivery.dealerId,
               title: `Intro call — ${delivery.customerName ?? `customer #${delivery.customerId}`}`,
               description: `Welcome ${delivery.customerName ?? "the customer"} to the ownership phase for ${label ?? `vehicle #${delivery.vehicleId}`}: introduce yourself as their Service Advisor, confirm first-service expectations, and log any concerns.`,
               assigneeUserId: serviceAdvisor.id,
-              dueDate: introDue.toISOString().slice(0, 10),
+              dueDate: zonedDayKey(introDue, tz),
               dueAt: introDue,
               kind: "manual",
               priority: "normal",
@@ -1486,7 +1496,10 @@ router.patch("/deliveries/:id/pdi", async (req, res): Promise<void> => {
         vehicleInfo: vehicleLabel,
         type: "repair",
         status: "open",
-        scheduledDate: new Date().toISOString().slice(0, 10),
+        scheduledDate: zonedDayKey(
+          new Date(),
+          await dealerTimezone(delivery.dealerId),
+        ),
         complaint: `PDI rectification for delivery #${delivery.id} — failed: ${failed.map((i) => i.label).join(", ")}`,
         jobs: failed.map((i) => `Rectify: ${i.label}${i.note ? ` (${i.note})` : ""}`),
       })
@@ -1579,6 +1592,7 @@ router.get("/deliveries/:id/invoice.pdf", async (req, res): Promise<void> => {
 
   // White-label header: GM-configured logo + brand name, AURA fallback.
   const branding = await getDealerPdfBranding(delivery.dealerId);
+  const tz = await dealerTimezone(delivery.dealerId);
   if (branding.displayName) {
     if (branding.logo) {
       try {
@@ -1619,7 +1633,7 @@ router.get("/deliveries/:id/invoice.pdf", async (req, res): Promise<void> => {
     .font("Helvetica")
     .fontSize(10)
     .fillColor("#555555")
-    .text(`Issued ${invoice.createdAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`)
+    .text(`Issued ${formatDealerDate(invoice.createdAt, tz)}`)
     .text(`Status: ${invoice.status.toUpperCase()}`);
   doc.moveDown(1);
 
@@ -1775,17 +1789,23 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
     invoiceNumber = inv?.invoiceNumber ?? null;
   }
   const handoverBranding = await getDealerPdfBranding(delivery.dealerId);
-  const pdf = await buildHandoverPdf(delivery, vehicle, advisorName, {
-    salesAdvisorName: deal?.salesAdvisor ?? null,
-    dealerName: handoverBranding.displayName ?? dealer?.name ?? null,
-    logo: handoverBranding.logo,
-    dealerAddress: [dealer?.city, dealer?.country].filter(Boolean).join(", "),
-    customerAddress: ownerContact.address,
-    customerEmail: ownerContact.email,
-    customerPhone: ownerContact.phone,
-    invoiceNumber,
-    overrides: delivery.handoverOverrides ?? {},
-  });
+  const pdf = await buildHandoverPdf(
+    delivery,
+    vehicle,
+    advisorName,
+    await dealerTimezone(delivery.dealerId),
+    {
+      salesAdvisorName: deal?.salesAdvisor ?? null,
+      dealerName: handoverBranding.displayName ?? dealer?.name ?? null,
+      logo: handoverBranding.logo,
+      dealerAddress: [dealer?.city, dealer?.country].filter(Boolean).join(", "),
+      customerAddress: ownerContact.address,
+      customerEmail: ownerContact.email,
+      customerPhone: ownerContact.phone,
+      invoiceNumber,
+      overrides: delivery.handoverOverrides ?? {},
+    },
+  );
   res
     .setHeader("Content-Type", "application/pdf")
     .setHeader(

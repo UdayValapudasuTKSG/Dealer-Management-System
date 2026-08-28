@@ -16,6 +16,7 @@ import {
 import { activeDealerId } from "../middlewares/rbac";
 import { idempotent } from "../middlewares/idempotency";
 import { buildGraDutyPackPdf } from "../lib/gra-pdf";
+import { dealerTimezone, zonedParts } from "../lib/timezone";
 import {
   isAgentEnabled,
   recordAgentRun,
@@ -392,7 +393,7 @@ router.post("/gra/review", async (req, res): Promise<void> => {
       gateId: gateRow.id,
       vehicleId,
       dealId,
-      filingRef: `GRA-${new Date().getFullYear()}-${String(gateRow.id).padStart(5, "0")}`,
+      filingRef: `GRA-${zonedParts(new Date(), await dealerTimezone(dealerId)).year}-${String(gateRow.id).padStart(5, "0")}`,
       status: "pending_gate",
       ownerName: d.ownerName,
       tin: d.tin,
@@ -678,6 +679,7 @@ router.get("/gra/filings/:id/pdf", async (req, res): Promise<void> => {
 
   const pdf = await buildGraDutyPackPdf(filing, {
     dealerName: dealer?.name ?? "AURA Dealership",
+    timezone: await dealerTimezone(filing.dealerId),
     divisionName: division?.name ?? null,
     dealerAddress: [dealer?.city, dealer?.country].filter(Boolean).join(", ") || null,
     dealerTin: dealer?.tin ?? null,

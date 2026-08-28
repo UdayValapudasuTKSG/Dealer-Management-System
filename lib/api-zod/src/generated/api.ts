@@ -9062,7 +9062,8 @@ export const GetCurrentUserResponse = zod.object({
   "usdExchangeRate": zod.number().optional().describe('GYD per 1 USD for this dealership'),
   "brandName": zod.string().nullish().describe('White-label display name (falls back to AURA branding when null)'),
   "logoUrl": zod.string().nullish().describe('White-label logo object path (served via \/api\/storage\/objects)'),
-  "themeColor": zod.string().regex(getCurrentUserResponseDealersItemThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze')
+  "themeColor": zod.string().regex(getCurrentUserResponseDealersItemThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
+  "timezone": zod.string().optional().describe('IANA timezone identifier for this dealership (e.g. America\/Guyana)')
 })),
   "permissions": zod.array(zod.object({
   "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
@@ -9148,6 +9149,7 @@ export const ListDealersResponseItem = zod.object({
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(listDealersResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
   "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
+  "timezone": zod.string().optional().describe('IANA timezone identifier for this dealership (e.g. America\/Guyana)'),
   "createdAt": zod.coerce.date()
 })
 export const ListDealersResponse = zod.array(ListDealersResponseItem)
@@ -9160,6 +9162,7 @@ export const ListDealersResponse = zod.array(ListDealersResponseItem)
 export const createDealerBodyUsdExchangeRateExclusiveMin = 0;
 
 export const createDealerBodyThemeColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+
 export const createDealerBodyOwnerEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
 
 
@@ -9171,6 +9174,7 @@ export const CreateDealerBody = zod.object({
   "usdExchangeRate": zod.number().gt(createDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
   "themeColor": zod.string().regex(createDealerBodyThemeColorRegExp).nullish().describe('Theme accent hex applied to the dealer\'s workspace in light mode; null clears to default'),
   "metaPageId": zod.string().nullish().describe('Facebook Page ID for Meta Lead Ads routing; must be unique across dealers; null\/empty clears the mapping'),
+  "timezone": zod.string().min(1).optional().describe('IANA timezone identifier (validated server-side; invalid identifiers are rejected)'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "ownerEmail": zod.string().regex(createDealerBodyOwnerEmailRegExp).optional().describe('First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)')
 })
@@ -9194,6 +9198,7 @@ export const CreateDealerResponse = zod.object({
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(createDealerResponseDealerThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
   "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
+  "timezone": zod.string().optional().describe('IANA timezone identifier for this dealership (e.g. America\/Guyana)'),
   "createdAt": zod.coerce.date()
 }),
   "saga": zod.object({
@@ -9348,6 +9353,7 @@ export const ActivateDealerResponse = zod.object({
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(activateDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
   "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
+  "timezone": zod.string().optional().describe('IANA timezone identifier for this dealership (e.g. America\/Guyana)'),
   "createdAt": zod.coerce.date()
 })
 
@@ -9386,6 +9392,7 @@ export const SuspendDealerResponse = zod.object({
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(suspendDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
   "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
+  "timezone": zod.string().optional().describe('IANA timezone identifier for this dealership (e.g. America\/Guyana)'),
   "createdAt": zod.coerce.date()
 })
 
@@ -9415,6 +9422,7 @@ export const ResumeDealerResponse = zod.object({
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(resumeDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
   "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
+  "timezone": zod.string().optional().describe('IANA timezone identifier for this dealership (e.g. America\/Guyana)'),
   "createdAt": zod.coerce.date()
 })
 
@@ -9452,6 +9460,7 @@ export const OffboardDealerResponse = zod.object({
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(offboardDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
   "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
+  "timezone": zod.string().optional().describe('IANA timezone identifier for this dealership (e.g. America\/Guyana)'),
   "createdAt": zod.coerce.date()
 })
 
@@ -9481,6 +9490,7 @@ export const RetryOffboardingResponse = zod.object({
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(retryOffboardingResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
   "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
+  "timezone": zod.string().optional().describe('IANA timezone identifier for this dealership (e.g. America\/Guyana)'),
   "createdAt": zod.coerce.date()
 })
 
@@ -9510,6 +9520,7 @@ export const CloseDealerResponse = zod.object({
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(closeDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
   "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
+  "timezone": zod.string().optional().describe('IANA timezone identifier for this dealership (e.g. America\/Guyana)'),
   "createdAt": zod.coerce.date()
 })
 
@@ -9556,6 +9567,7 @@ export const UpdateDealerParams = zod.object({
 export const updateDealerBodyUsdExchangeRateExclusiveMin = 0;
 
 export const updateDealerBodyThemeColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+
 export const updateDealerBodyOwnerEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
 
 
@@ -9567,6 +9579,7 @@ export const UpdateDealerBody = zod.object({
   "usdExchangeRate": zod.number().gt(updateDealerBodyUsdExchangeRateExclusiveMin).optional().describe('GYD per 1 USD'),
   "themeColor": zod.string().regex(updateDealerBodyThemeColorRegExp).nullish().describe('Theme accent hex applied to the dealer\'s workspace in light mode; null clears to default'),
   "metaPageId": zod.string().nullish().describe('Facebook Page ID for Meta Lead Ads routing; must be unique across dealers; null\/empty clears the mapping'),
+  "timezone": zod.string().min(1).optional().describe('IANA timezone identifier (validated server-side; invalid identifiers are rejected)'),
   "entitlements": zod.record(zod.string(), zod.boolean()).optional().describe('Per-dealer feature flags; a missing key means enabled'),
   "ownerEmail": zod.string().regex(updateDealerBodyOwnerEmailRegExp).optional().describe('First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)')
 })
@@ -9589,6 +9602,7 @@ export const UpdateDealerResponse = zod.object({
   "exportUrl": zod.string().nullish().describe('Whole-tenant offboarding export bundle'),
   "themeColor": zod.string().regex(updateDealerResponseThemeColorRegExp).nullish().describe('Super-admin theme accent hex — light mode only; null = default bronze'),
   "metaPageId": zod.string().nullish().describe('Facebook Page ID that routes Meta Lead Ads webhook events to this dealer; null = not connected'),
+  "timezone": zod.string().optional().describe('IANA timezone identifier for this dealership (e.g. America\/Guyana)'),
   "createdAt": zod.coerce.date()
 })
 
@@ -10264,6 +10278,32 @@ export const UpdateDealerBrandingResponse = zod.object({
   "dealerName": zod.string().describe('Legal\/registered dealership name'),
   "brandName": zod.string().nullish(),
   "logoUrl": zod.string().nullish()
+})
+
+
+/**
+ * @summary Get the active dealership's localization settings (timezone)
+ */
+export const GetDealerLocalizationResponse = zod.object({
+  "dealerId": zod.number(),
+  "timezone": zod.string().describe('IANA timezone identifier (e.g. America\/Guyana)')
+})
+
+
+/**
+ * @summary Update the active dealership's timezone (GM only)
+ */
+export const updateDealerLocalizationBodyTimezoneMax = 64;
+
+
+
+export const UpdateDealerLocalizationBody = zod.object({
+  "timezone": zod.string().min(1).max(updateDealerLocalizationBodyTimezoneMax).describe('IANA timezone identifier; invalid identifiers are rejected with 422')
+})
+
+export const UpdateDealerLocalizationResponse = zod.object({
+  "dealerId": zod.number(),
+  "timezone": zod.string().describe('IANA timezone identifier (e.g. America\/Guyana)')
 })
 
 

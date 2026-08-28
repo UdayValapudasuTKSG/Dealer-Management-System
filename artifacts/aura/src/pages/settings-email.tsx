@@ -25,6 +25,7 @@ import {
   type EmailTemplateInfo,
 } from "@workspace/api-client-react";
 import { Page } from "@/components/layout/page";
+import { formatGuyanaDateTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -389,7 +390,7 @@ export default function SettingsEmail() {
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">{l.attempts}</td>
                     <td className="px-5 py-3 text-xs text-muted-foreground">
-                      {new Date(l.createdAt).toLocaleString()}
+                      {formatGuyanaDateTime(l.createdAt)}
                     </td>
                     <td className="px-5 py-3 text-right">
                       {(l.status === "failed" || l.status === "queued") && (

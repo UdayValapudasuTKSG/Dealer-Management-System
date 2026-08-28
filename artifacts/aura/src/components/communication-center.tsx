@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { formatGuyanaDateTime } from "@/lib/format";
 import {
   Mail,
   Phone,
@@ -130,7 +131,7 @@ export function CommunicationCenter({
                     </Badge>
                   </div>
                   <div className="mt-1 text-[11px] text-muted-foreground">
-                    {e.template} · {new Date(e.createdAt).toLocaleString()}
+                    {e.template} · {formatGuyanaDateTime(e.createdAt)}
                   </div>
                 </div>
               ))}
@@ -171,7 +172,7 @@ export function CommunicationCenter({
                     <p className="mt-1.5 text-xs text-muted-foreground">{n.notes}</p>
                   )}
                   <div className="mt-1.5 text-[11px] text-muted-foreground/60">
-                    {n.loggedBy} · {new Date(n.createdAt).toLocaleString()}
+                    {n.loggedBy} · {formatGuyanaDateTime(n.createdAt)}
                   </div>
                 </div>
               ))}

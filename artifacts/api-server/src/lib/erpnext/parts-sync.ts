@@ -22,6 +22,7 @@ import {
 import { registerErpnextInboundHandler } from "../../routes/webhooks";
 import { notifyPartLowStock } from "../notify-triggers";
 import { logger } from "../logger";
+import { dealerTimezone, zonedDayKey } from "../timezone";
 
 // ---------------------------------------------------------------------------
 // Parts inventory & purchasing ↔ ERPNext.
@@ -424,7 +425,8 @@ async function purchaseOrderHandler(job: ErpnextSyncJob): Promise<{ docName: str
 
   const warehouse = await resolveWarehouse(conn, client);
   const scheduleDate =
-    po.expectedDate ?? new Date().toISOString().slice(0, 10);
+    po.expectedDate ??
+    zonedDayKey(new Date(), await dealerTimezone(job.dealerId));
   const items: Record<string, unknown>[] = [];
   for (const line of lines) {
     const part = partById.get(line.partId);

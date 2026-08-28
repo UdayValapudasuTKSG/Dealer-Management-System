@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { 
@@ -443,6 +443,20 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
   const [city, setCity] = useState(dealer.city || "");
   const [country, setCountry] = useState(dealer.country || "");
   const [themeColor, setThemeColor] = useState<string | null>(dealer.themeColor ?? null);
+  const [timezone, setTimezone] = useState(dealer.timezone ?? "America/Guyana");
+  const [tzSearch, setTzSearch] = useState("");
+  const [tzOpen, setTzOpen] = useState(false);
+  const allZones = useMemo<string[]>(() => {
+    try {
+      return Intl.supportedValuesOf("timeZone");
+    } catch {
+      return ["America/Guyana", "UTC"];
+    }
+  }, []);
+  const zoneMatches = useMemo(() => {
+    const q = tzSearch.trim().toLowerCase().replace(/\s+/g, "_");
+    return (q ? allZones.filter((z) => z.toLowerCase().includes(q)) : allZones).slice(0, 40);
+  }, [allZones, tzSearch]);
 
   const update = useUpdateDealer({
     mutation: {
@@ -465,7 +479,8 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
         name: name.trim(),
         city: city.trim() || null,
         country: country.trim() || null,
-        themeColor
+        themeColor,
+        timezone
       }
     });
   };
@@ -488,6 +503,37 @@ function GeneralSettingsPanel({ dealer }: { dealer: Dealer }) {
           <div className="space-y-1.5">
             <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Country</label>
             <Input value={country} onChange={e => setCountry(e.target.value)} className="bg-white/50 border-black/10 rounded-md focus-visible:ring-1 focus-visible:ring-black/20 h-10 text-[13px]" />
+          </div>
+          <div className="space-y-1.5 relative">
+            <label className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Timezone</label>
+            <Input
+              value={tzOpen ? tzSearch : timezone.replace(/_/g, " ")}
+              placeholder="Search IANA timezones…"
+              onFocus={() => { setTzOpen(true); setTzSearch(""); }}
+              onBlur={() => setTimeout(() => setTzOpen(false), 150)}
+              onChange={e => setTzSearch(e.target.value)}
+              data-testid="input-dealer-timezone"
+              className="bg-white/50 border-black/10 rounded-md focus-visible:ring-1 focus-visible:ring-black/20 h-10 text-[13px]"
+            />
+            {tzOpen && (
+              <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-black/10 bg-white shadow-lg">
+                {zoneMatches.map(z => (
+                  <button
+                    key={z}
+                    type="button"
+                    onMouseDown={() => { setTimezone(z); setTzOpen(false); }}
+                    data-testid={`option-timezone-${z}`}
+                    className={`block w-full px-3 py-1.5 text-left text-[12.5px] hover:bg-zinc-100 ${z === timezone ? "bg-zinc-50 font-medium" : ""}`}
+                  >
+                    {z.replace(/_/g, " ")}
+                  </button>
+                ))}
+                {zoneMatches.length === 0 && (
+                  <div className="px-3 py-1.5 text-[12px] text-zinc-400">No matches</div>
+                )}
+              </div>
+            )}
+            <p className="text-[10.5px] text-zinc-400">Every date, schedule and document for this dealership renders in this timezone.</p>
           </div>
         </div>
 

@@ -98,6 +98,8 @@ import type {
   DealerBranding,
   DealerBrandingUpdate,
   DealerInput,
+  DealerLocalization,
+  DealerLocalizationUpdate,
   DealerMember,
   DealerMemberInput,
   DealerTaxInput,
@@ -20452,6 +20454,154 @@ export const useUpdateDealerBranding = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getUpdateDealerBrandingMutationOptions(options));
+    }
+
+export const getGetDealerLocalizationUrl = () => {
+
+
+
+
+  return `/api/admin/localization`
+}
+
+/**
+ * @summary Get the active dealership's localization settings (timezone)
+ */
+export const getDealerLocalization = async ( options?: RequestInit): Promise<DealerLocalization> => {
+
+  return customFetch<DealerLocalization>(getGetDealerLocalizationUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDealerLocalizationQueryKey = () => {
+    return [
+    `/api/admin/localization`
+    ] as const;
+    }
+
+
+export const getGetDealerLocalizationQueryOptions = <TData = Awaited<ReturnType<typeof getDealerLocalization>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDealerLocalization>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDealerLocalizationQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDealerLocalization>>> = ({ signal }) => getDealerLocalization({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDealerLocalization>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDealerLocalizationQueryResult = NonNullable<Awaited<ReturnType<typeof getDealerLocalization>>>
+export type GetDealerLocalizationQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Get the active dealership's localization settings (timezone)
+ */
+
+export function useGetDealerLocalization<TData = Awaited<ReturnType<typeof getDealerLocalization>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDealerLocalization>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDealerLocalizationQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateDealerLocalizationUrl = () => {
+
+
+
+
+  return `/api/admin/localization`
+}
+
+/**
+ * @summary Update the active dealership's timezone (GM only)
+ */
+export const updateDealerLocalization = async (dealerLocalizationUpdate: DealerLocalizationUpdate, options?: RequestInit): Promise<DealerLocalization> => {
+
+  return customFetch<DealerLocalization>(getUpdateDealerLocalizationUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(dealerLocalizationUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateDealerLocalizationMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerLocalization>>, TError,{data: BodyType<DealerLocalizationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateDealerLocalization>>, TError,{data: BodyType<DealerLocalizationUpdate>}, TContext> => {
+
+const mutationKey = ['updateDealerLocalization'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateDealerLocalization>>, {data: BodyType<DealerLocalizationUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateDealerLocalization(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateDealerLocalizationMutationResult = NonNullable<Awaited<ReturnType<typeof updateDealerLocalization>>>
+    export type UpdateDealerLocalizationMutationBody = BodyType<DealerLocalizationUpdate>
+    export type UpdateDealerLocalizationMutationError = ErrorType<Error>
+
+    /**
+ * @summary Update the active dealership's timezone (GM only)
+ */
+export const useUpdateDealerLocalization = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateDealerLocalization>>, TError,{data: BodyType<DealerLocalizationUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateDealerLocalization>>,
+        TError,
+        {data: BodyType<DealerLocalizationUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateDealerLocalizationMutationOptions(options));
     }
 
 export const getGetServiceSettingsUrl = () => {

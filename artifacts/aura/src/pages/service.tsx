@@ -120,7 +120,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { format } from "date-fns";
+
 import { motion, AnimatePresence } from "framer-motion";
 import { Page } from "@/components/layout/page";
 import { PageHero } from "@/components/layout/page-hero";
@@ -130,7 +130,13 @@ import { useViewMode } from "@/hooks/use-view-mode";
 import { useAuthz } from "@/lib/auth";
 import { ViewControls } from "@/components/view-controls";
 import { cn } from "@/lib/utils";
-import { useMoney } from "@/lib/format";
+import {
+  formatDealerDateShort,
+  formatDealerDayTime,
+  formatDealerMonthYear,
+  formatGuyanaDate,
+  useMoney,
+} from "@/lib/format";
 
 /** "3h 25m" between two timestamps (wall-clock time the card was open). */
 function formatWorkDuration(start: Date, end: Date): string {
@@ -378,7 +384,7 @@ function HistoryTab() {
                         : "—"}
                   </td>
                   <td className="px-4 py-3 text-right text-muted-foreground whitespace-nowrap">
-                    {format(new Date(r.completedAt ?? r.createdAt), "MMM d, yyyy")}
+                    {formatGuyanaDate(r.completedAt ?? r.createdAt)}
                   </td>
                 </tr>
               ))}
@@ -906,7 +912,7 @@ function BookingsTab() {
                     {order.type}
                   </td>
                   <td className="px-4 py-2 tabular-nums">
-                    {format(new Date(order.scheduledDate), "MMM d")}
+                    {formatDealerDateShort(order.scheduledDate)}
                   </td>
                   <td className="px-4 py-2">
                     <span
@@ -1016,7 +1022,7 @@ function BookingsTab() {
                         <Calendar className="w-3 h-3" /> Scheduled
                       </div>
                       <div className="font-medium text-sm leading-tight">
-                        {format(new Date(order.scheduledDate), "MMM d")}
+                        {formatDealerDateShort(order.scheduledDate)}
                         <span className="text-muted-foreground"> · {order.estimatedHours}h</span>
                       </div>
                     </div>
@@ -1383,10 +1389,10 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
               <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
                 <Clock className="w-3 h-3" />
                 {card.startedAt && (
-                  <span>Started {format(new Date(card.startedAt), "MMM d, h:mm a")}</span>
+                  <span>Started {formatDealerDayTime(card.startedAt)}</span>
                 )}
                 {card.completedAt && (
-                  <span>· Finished {format(new Date(card.completedAt), "MMM d, h:mm a")}</span>
+                  <span>· Finished {formatDealerDayTime(card.completedAt)}</span>
                 )}
                 {card.startedAt && card.completedAt && (
                   <span className="text-foreground font-medium">
@@ -1592,7 +1598,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
             {card.quoteApprovedAt ? (
               <Badge className="bg-primary/15 text-primary border-none rounded-full text-[10px] font-bold uppercase tracking-widest gap-1">
                 <CheckCircle2 className="w-3 h-3" />
-                Approved {format(new Date(card.quoteApprovedAt), "MMM d")}
+                Approved {formatDealerDateShort(card.quoteApprovedAt)}
               </Badge>
             ) : technicianView ? (
               <Badge className="bg-white/[0.06] text-muted-foreground border-none rounded-full text-[10px] font-bold uppercase tracking-widest">
@@ -1633,7 +1639,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
                 <div key={note.id} className="text-xs border-l-2 border-primary/40 pl-2">
                   <p>{note.body}</p>
                   <p className="mt-0.5 text-muted-foreground">
-                    {note.authorName} · {format(new Date(note.createdAt), "MMM d, h:mm a")}
+                    {note.authorName} · {formatDealerDayTime(note.createdAt)}
                   </p>
                 </div>
               ))}
@@ -1888,7 +1894,7 @@ function SurchargeSection({ card, onChanged }: { card: JobCard; onChanged: () =>
             {card.surchargeDecidedBy && card.surchargeDecidedAt && (
               <>
                 {" "}· {card.surchargeStatus === "applied" ? "Applied" : "Waived"} by{" "}
-                {card.surchargeDecidedBy} on {format(new Date(card.surchargeDecidedAt), "MMM d")}
+                {card.surchargeDecidedBy} on {formatDealerDateShort(card.surchargeDecidedAt)}
               </>
             )}
           </div>
@@ -1967,7 +1973,7 @@ function RolloverSection({
         title: updated.rolloverStatus === "approved" ? "Rollover approved" : "Sign-off recorded",
         description:
           updated.rolloverStatus === "approved"
-            ? `Job carries over to ${updated.rolloverToDate ? format(new Date(`${updated.rolloverToDate}T00:00:00`), "MMM d") : "the new date"}.`
+            ? `Job carries over to ${updated.rolloverToDate ? formatDealerDateShort(updated.rolloverToDate) : "the new date"}.`
             : "Waiting on the second signature.",
       });
     } catch (e) {
@@ -2001,14 +2007,14 @@ function RolloverSection({
             Carry over to{" "}
             <span className="text-foreground font-medium">
               {card.rolloverToDate
-                ? format(new Date(`${card.rolloverToDate}T00:00:00`), "MMM d, yyyy")
+                ? formatGuyanaDate(card.rolloverToDate)
                 : "—"}
             </span>
             {card.rolloverReason && <> — “{card.rolloverReason}”</>}
             {card.rolloverRequestedBy && card.rolloverRequestedAt && (
               <>
                 {" "}· requested by {card.rolloverRequestedBy} on{" "}
-                {format(new Date(card.rolloverRequestedAt), "MMM d")}
+                {formatDealerDateShort(card.rolloverRequestedAt)}
               </>
             )}
           </div>
@@ -2017,7 +2023,7 @@ function RolloverSection({
               {card.rolloverManagerApprovedAt ? (
                 <>
                   ✓ Manager: {card.rolloverManagerApprovedBy} ·{" "}
-                  {format(new Date(card.rolloverManagerApprovedAt), "MMM d, HH:mm")}
+                  {formatDealerDayTime(card.rolloverManagerApprovedAt)}
                 </>
               ) : (
                 "○ Service Manager sign-off pending"
@@ -2027,7 +2033,7 @@ function RolloverSection({
               {card.rolloverTechApprovedAt ? (
                 <>
                   ✓ Technician: {card.rolloverTechApprovedBy} ·{" "}
-                  {format(new Date(card.rolloverTechApprovedAt), "MMM d, HH:mm")}
+                  {formatDealerDayTime(card.rolloverTechApprovedAt)}
                 </>
               ) : (
                 "○ Assigned technician sign-off pending"
@@ -2172,7 +2178,7 @@ function InvoiceCard({ inv }: { inv: ServiceInvoice }) {
             </div>
             <h3 className="font-bold text-lg">{inv.vehicleInfo}</h3>
             <div className="text-sm text-muted-foreground">
-              {inv.customerName ?? "Walk-in"} · {format(new Date(inv.createdAt), "MMM d, yyyy")}
+              {inv.customerName ?? "Walk-in"} · {formatGuyanaDate(inv.createdAt)}
             </div>
           </div>
           <div className="flex items-center gap-6">
@@ -2254,7 +2260,7 @@ function InvoiceCard({ inv }: { inv: ServiceInvoice }) {
             <Badge className="bg-primary/15 text-primary border-none rounded-full text-[10px] font-bold uppercase tracking-widest gap-1">
               <Archive className="w-3 h-3" />
               Signed copy filed by {inv.signedCopyFiledBy} ·{" "}
-              {format(new Date(inv.signedCopyFiledAt), "MMM d")}
+              {formatDealerDateShort(inv.signedCopyFiledAt)}
             </Badge>
           ) : (
             <Button
@@ -2285,7 +2291,7 @@ function InvoiceCard({ inv }: { inv: ServiceInvoice }) {
               <div key={i}>
                 Adjustment {a.amount >= 0 ? "+" : ""}
                 {money.gyd(a.amount)} — {a.reason} · {a.by} ·{" "}
-                {format(new Date(a.at), "MMM d, HH:mm")}
+                {formatDealerDayTime(a.at)}
               </div>
             ))}
           </div>
@@ -2330,7 +2336,7 @@ function DiscountRow({ inv, onChanged }: { inv: ServiceInvoice; onChanged: () =>
           <span className="text-muted-foreground">
             {money.gyd(inv.discountRequestedAmount ?? 0)} requested by {inv.discountRequestedBy}
             {inv.discountRequestedAt && (
-              <> on {format(new Date(inv.discountRequestedAt), "MMM d")}</>
+              <> on {formatDealerDateShort(inv.discountRequestedAt)}</>
             )}
             {inv.discountReason && <> — “{inv.discountReason}”</>} · awaiting approval
           </span>
@@ -2338,14 +2344,14 @@ function DiscountRow({ inv, onChanged }: { inv: ServiceInvoice; onChanged: () =>
         {inv.discountStatus === "approved" && (
           <span className="text-muted-foreground">
             {money.gyd(inv.discountTotal)} approved by {inv.discountDecidedBy}
-            {inv.discountDecidedAt && <> on {format(new Date(inv.discountDecidedAt), "MMM d")}</>}
+            {inv.discountDecidedAt && <> on {formatDealerDateShort(inv.discountDecidedAt)}</>}
             {" "}(requested by {inv.discountRequestedBy})
           </span>
         )}
         {inv.discountStatus === "rejected" && (
           <span className="text-muted-foreground">
             {money.gyd(inv.discountRequestedAmount ?? 0)} rejected by {inv.discountDecidedBy}
-            {inv.discountDecidedAt && <> on {format(new Date(inv.discountDecidedAt), "MMM d")}</>}
+            {inv.discountDecidedAt && <> on {formatDealerDateShort(inv.discountDecidedAt)}</>}
           </span>
         )}
       </div>
@@ -2615,8 +2621,8 @@ function CoverageTab() {
                 </div>
                 <h3 className="font-bold text-lg">{plan.vehicleInfo}</h3>
                 <div className="text-sm text-muted-foreground">
-                  {plan.customerName ?? "—"} · {format(new Date(plan.startDate), "MMM yyyy")} →{" "}
-                  {format(end, "MMM d, yyyy")}
+                  {plan.customerName ?? "—"} · {formatDealerMonthYear(plan.startDate)} →{" "}
+                  {formatGuyanaDate(end)}
                 </div>
                 <div
                   className={cn(

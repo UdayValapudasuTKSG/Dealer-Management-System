@@ -24,6 +24,7 @@ import {
   GetInventoryBreakdownResponse,
   GetPredictiveAnalyticsResponse,
 } from "@workspace/api-zod";
+import { dealerTimezone, zonedDayKey, zonedParts } from "../lib/timezone";
 
 const router: IRouter = Router();
 
@@ -96,6 +97,7 @@ const scopeServiceOrders = <T extends { technicianUserId: number | null; technic
 
 router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
+  const tz = await dealerTimezone(dealerId);
   const scope = requestScope(res);
   const [
     allLeads,
@@ -150,13 +152,14 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   const activeDeals = deals.filter((d) => ACTIVE_DEAL_STAGES.includes(d.stage)).length;
   const inventoryCount = vehicles.filter((v) => v.status === "available").length;
   const now = new Date();
+  const nowParts = zonedParts(now, tz);
   const monthlyRevenue = deals
     .filter((d) => {
       if (d.stage !== "delivered") return false;
-      const created = new Date(d.createdAt);
+      const created = zonedParts(new Date(d.createdAt), tz);
       return (
-        created.getFullYear() === now.getFullYear() &&
-        created.getMonth() === now.getMonth()
+        created.year === nowParts.year &&
+        created.month === nowParts.month
       );
     })
     .reduce((sum, d) => sum + (d.otdPrice || 0), 0);
@@ -169,27 +172,26 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
     : 0;
 
   /* --- R5 additions: MTD output, inventory value, AR, today's schedule --- */
-  const GUYANA_OFFSET_MS = 4 * 3600 * 1000; // GMT-4, no DST
-  const guyanaDayKey = (d: Date | string) =>
-    new Date(new Date(d).getTime() - GUYANA_OFFSET_MS).toISOString().slice(0, 10);
-  const guyanaMonth = (d: Date | string) => guyanaDayKey(d).slice(0, 7);
-  const todayKey = guyanaDayKey(now);
-  const thisMonth = guyanaMonth(now);
-  const prevMonth = guyanaMonth(
-    new Date(now.getFullYear(), now.getMonth() - 1, 15),
+  const dealerDayKey = (d: Date | string) => zonedDayKey(new Date(d), tz);
+  const dealerMonth = (d: Date | string) => dealerDayKey(d).slice(0, 7);
+  const todayKey = dealerDayKey(now);
+  const thisMonth = dealerMonth(now);
+  const previousMonthDate = new Date(
+    Date.UTC(nowParts.year, nowParts.month - 2, 15, 12),
   );
+  const prevMonth = previousMonthDate.toISOString().slice(0, 7);
 
   const deliveredMtd = deals.filter(
-    (d) => d.stage === "delivered" && guyanaMonth(d.createdAt) === thisMonth,
+    (d) => d.stage === "delivered" && dealerMonth(d.createdAt) === thisMonth,
   );
   const deliveredPrev = deals.filter(
-    (d) => d.stage === "delivered" && guyanaMonth(d.createdAt) === prevMonth,
+    (d) => d.stage === "delivered" && dealerMonth(d.createdAt) === prevMonth,
   );
   const mtdUnits = deliveredMtd.length;
   const mtdGross = deliveredMtd.reduce((s, d) => s + (d.otdPrice || 0), 0);
   const prevGross = deliveredPrev.reduce((s, d) => s + (d.otdPrice || 0), 0);
-  const leadsMtd = leads.filter((l) => guyanaMonth(l.createdAt) === thisMonth).length;
-  const leadsPrev = leads.filter((l) => guyanaMonth(l.createdAt) === prevMonth).length;
+  const leadsMtd = leads.filter((l) => dealerMonth(l.createdAt) === thisMonth).length;
+  const leadsPrev = leads.filter((l) => dealerMonth(l.createdAt) === prevMonth).length;
 
   const availableInventoryValue = vehicles
     .filter((v) => v.status === "available")
@@ -217,7 +219,7 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   const todayAppointments = scopedTestDrives.filter(
     (t) =>
       !["cancelled", "expired"].includes(t.status) &&
-      guyanaDayKey(t.scheduledAt) === todayKey,
+      dealerDayKey(t.scheduledAt) === todayKey,
   ).length;
 
   const deltaPct = (cur: number, prev: number) =>
@@ -273,6 +275,7 @@ router.get("/dashboard/pipeline", async (_req, res): Promise<void> => {
 
 router.get("/dashboard/sales-performance", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
+  const tz = await dealerTimezone(dealerId);
   const scope = requestScope(res);
   const user = res.locals.user as AuthedUser | undefined;
   const [allDeals, allLeads, divisions, allDeliveries] = await Promise.all([
@@ -294,19 +297,19 @@ router.get("/dashboard/sales-performance", async (_req, res): Promise<void> => {
   );
 
   const now = new Date();
+  const nowParts = zonedParts(now, tz);
   const months: { key: string; month: string }[] = [];
   for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const d = new Date(Date.UTC(nowParts.year, nowParts.month - 1 - i, 1, 12));
     months.push({
-      key: `${d.getFullYear()}-${d.getMonth()}`,
-      month: d.toLocaleString("en-US", { month: "short" }),
+      key: d.toISOString().slice(0, 7),
+      month: d.toLocaleString("en-US", { timeZone: "UTC", month: "short" }),
     });
   }
 
   const series = months.map(({ key, month }) => {
     const inMonth = closed.filter((d) => {
-      const created = new Date(d.createdAt);
-      return `${created.getFullYear()}-${created.getMonth()}` === key;
+      return zonedDayKey(new Date(d.createdAt), tz).slice(0, 7) === key;
     });
     return {
       month,
@@ -448,6 +451,7 @@ const PROJECTION_MONTHS = 3;
 
 router.get("/dashboard/predictions", async (_req, res): Promise<void> => {
   const dealerId = activeDealerId(res);
+  const tz = await dealerTimezone(dealerId);
   const scope = requestScope(res);
   const [allDeals, allLeads] = await Promise.all([
     db.select().from(dealsTable).where(eq(dealsTable.dealerId, dealerId)),
@@ -460,14 +464,15 @@ router.get("/dashboard/predictions", async (_req, res): Promise<void> => {
   );
 
   const now = new Date();
-  const monthKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}`;
+  const nowParts = zonedParts(now, tz);
+  const monthKey = (d: Date) => zonedDayKey(d, tz).slice(0, 7);
   const monthLabel = (d: Date) =>
-    d.toLocaleString("en-US", { month: "short" });
+    d.toLocaleString("en-US", { timeZone: "UTC", month: "short" });
 
   const history: { month: string; revenue: number; units: number; leadCount: number; conversion: number }[] = [];
   for (let i = HISTORY_MONTHS - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = monthKey(d);
+    const d = new Date(Date.UTC(nowParts.year, nowParts.month - 1 - i, 1, 12));
+    const key = d.toISOString().slice(0, 7);
     const inMonth = closed.filter((x) => monthKey(new Date(x.createdAt)) === key);
     const leadsInMonth = leads.filter(
       (l) => monthKey(new Date(l.createdAt)) === key,
@@ -514,7 +519,7 @@ router.get("/dashboard/predictions", async (_req, res): Promise<void> => {
   }[];
 
   for (let j = 1; j <= PROJECTION_MONTHS; j++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + j, 1);
+    const d = new Date(Date.UTC(nowParts.year, nowParts.month - 1 + j, 1, 12));
     forecast.push({
       month: monthLabel(d),
       revenue: null,

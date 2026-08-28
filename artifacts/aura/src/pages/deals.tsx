@@ -68,7 +68,7 @@ import { CreateRecordDialog } from "@/components/create-record-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
-import { useMoney } from "@/lib/format";
+import { activeDealerTimeZone, useMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const METHOD_LABEL: Record<string, string> = {
@@ -1116,6 +1116,7 @@ export default function Deals() {
                                     <div className="text-[10px] text-muted-foreground">
                                       Held until{" "}
                                       {new Date(expiry).toLocaleString("en-US", {
+                                        timeZone: activeDealerTimeZone(),
                                         month: "short",
                                         day: "numeric",
                                         hour: "numeric",

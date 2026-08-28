@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, MessageSquarePlus, Trash2 } from "lucide-react";
+import { formatGuyanaDate } from "@/lib/format";
 
 export function NotesPanel({
   customerId,
@@ -96,11 +97,7 @@ export function NotesPanel({
                 <div className="mt-2 flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">
                     {note.author ? `${note.author} · ` : ""}
-                    {new Date(note.createdAt).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
+                    {formatGuyanaDate(note.createdAt)}
                   </span>
                   <Button
                     variant="ghost"

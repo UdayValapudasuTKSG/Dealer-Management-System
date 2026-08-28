@@ -95,6 +95,7 @@ import {
   ActivateDealerParams,
 } from "@workspace/api-zod";
 import { invalidateGrantCache } from "../middlewares/rbac";
+import { invalidateDealerTimezone, isValidTimezone } from "../lib/timezone";
 import { logger } from "../lib/logger";
 
 // All /platform routes are gated to the super admin in middlewares/rbac.ts
@@ -263,6 +264,18 @@ router.post("/platform/dealers", async (req, res): Promise<void> => {
     res.status(409).json({ error: "A dealer with this name already exists" });
     return;
   }
+  // Timezone: validated IANA identifier; omitted = America/Guyana default.
+  let timezoneOnCreate: string | undefined;
+  if (body.data.timezone !== undefined) {
+    const tz = body.data.timezone.trim();
+    if (!isValidTimezone(tz)) {
+      res.status(400).json({
+        error: `"${tz}" is not a recognized IANA timezone identifier`,
+      });
+      return;
+    }
+    timezoneOnCreate = tz;
+  }
   // NC-3: create ALWAYS returns status=provisioning — the shell row is
   // written first, then the durable SAGA seeds defaults step by step.
   const [created] = await db
@@ -272,6 +285,7 @@ router.post("/platform/dealers", async (req, res): Promise<void> => {
       city: body.data.city ?? null,
       country: body.data.country ?? null,
       status: "provisioning",
+      ...(timezoneOnCreate !== undefined ? { timezone: timezoneOnCreate } : {}),
       // Exchange rates removed — the system is GYD-only; ignore any client value.
       ...(false
         ? { usdExchangeRate: 1 }
@@ -529,6 +543,20 @@ router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
     metaPatch = { metaPageId: pageId };
   }
 
+  // Timezone: validated IANA identifier; change is audited and the server
+  // cache invalidated so formatting picks it up immediately.
+  let timezonePatch: { timezone: string } | undefined;
+  if (body.data.timezone !== undefined) {
+    const tz = body.data.timezone.trim();
+    if (!isValidTimezone(tz)) {
+      res.status(400).json({
+        error: `"${tz}" is not a recognized IANA timezone identifier`,
+      });
+      return;
+    }
+    timezonePatch = { timezone: tz };
+  }
+
   // Status is NOT patchable here — lifecycle moves go through the dedicated
   // suspend/resume/offboard/close endpoints with their own gates.
   let updated;
@@ -555,6 +583,7 @@ router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
         ? { themeColor: body.data.themeColor }
         : {}),
         ...(metaPatch ?? {}),
+        ...(timezonePatch ?? {}),
       })
       .where(eq(dealersTable.id, params.data.id))
       .returning();
@@ -573,6 +602,16 @@ router.patch("/platform/dealers/:id", async (req, res): Promise<void> => {
   if (!updated) {
     res.status(404).json({ error: "Dealer not found" });
     return;
+  }
+  if (timezonePatch) {
+    invalidateDealerTimezone(updated.id);
+    await platformAudit(res, {
+      action: "update",
+      entityType: "dealer",
+      entityId: updated.id,
+      summary: `${res.locals.user?.name ?? "Super admin"} set ${updated.name}'s timezone to ${timezonePatch.timezone}`,
+      details: { dealerId: updated.id, timezone: timezonePatch.timezone },
+    });
   }
   const full = await dealerWithCount(updated.id);
   res.json(UpdateDealerResponse.parse(full));

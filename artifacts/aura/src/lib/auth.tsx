@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   type ReactNode,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -11,6 +12,8 @@ import type {
   CurrentUser,
   DealerMembershipInfo,
 } from "@workspace/api-client-react";
+
+import { setActiveTimeZone } from "./format";
 
 const DEALER_STORAGE_KEY = "aura-dealer-id";
 
@@ -43,6 +46,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const dealers = me?.dealers ?? [];
   const activeDealer =
     dealers.find((d) => d.dealerId === me?.activeDealerId) ?? null;
+
+  // Every date formatter renders in the active dealership's timezone.
+  // Applied SYNCHRONOUSLY during render so children of this provider —
+  // including the render pass in which `activeDealer.timezone` first
+  // resolves or changes — already format and derive day keys with the new
+  // zone (an effect would leave that render on the previous zone).
+  const activeTimezone = activeDealer?.timezone ?? null;
+  setActiveTimeZone(activeTimezone);
+
+  // When the zone CHANGES after data is on screen (a Localization save or
+  // an in-place membership update), previously rendered pages may hold
+  // day-grouped data and query ranges computed under the old zone. Refetch
+  // everything except the session query that carried the change.
+  const prevTimezoneRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevTimezoneRef.current;
+    prevTimezoneRef.current = activeTimezone;
+    if (prev === undefined || prev === activeTimezone) return;
+    void queryClient.invalidateQueries({
+      predicate: (q) => !String(q.queryKey[0] ?? "").includes("/auth/me"),
+    });
+  }, [activeTimezone, queryClient]);
 
   // Keep localStorage in sync with the server-resolved active dealer so the
   // X-Dealer-Id request header stays valid (e.g. after a membership change).

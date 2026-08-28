@@ -32,6 +32,11 @@ export interface DealerInput {
      * @nullable
      */
   metaPageId?: string | null;
+  /**
+     * IANA timezone identifier (validated server-side; invalid identifiers are rejected)
+     * @minLength 1
+     */
+  timezone?: string;
   entitlements?: Entitlements;
   /**
      * First GM (owner-admin) — invited via outbox email; membership attaches on first sign-in (Clerk JIT)

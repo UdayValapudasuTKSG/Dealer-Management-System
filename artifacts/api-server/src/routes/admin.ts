@@ -22,6 +22,12 @@ import {
 } from "@workspace/db";
 import { ensureDealerTaxes } from "../lib/taxes";
 import {
+  dealerTimezone,
+  invalidateDealerTimezone,
+  isValidTimezone,
+  zonedDayKey,
+} from "../lib/timezone";
+import {
   getServiceSettings,
   updateServiceSettings,
 } from "../lib/service-settings";
@@ -52,6 +58,9 @@ import {
   GetDealerBrandingResponse,
   UpdateDealerBrandingBody,
   UpdateDealerBrandingResponse,
+  GetDealerLocalizationResponse,
+  UpdateDealerLocalizationBody,
+  UpdateDealerLocalizationResponse,
   ListAdminLeadSourcesResponse,
   CreateAdminLeadSourceBody,
   CreateAdminLeadSourceResponse,
@@ -786,7 +795,7 @@ router.post("/admin/taxes", async (req, res): Promise<void> => {
       excludeEv: body.data.excludeEv ?? false,
       effectiveFrom:
         toDateOnly(body.data.effectiveFrom) ??
-        new Date().toISOString().slice(0, 10),
+        zonedDayKey(new Date(), await dealerTimezone(dealerId)),
       active: body.data.active ?? true,
       sortOrder: body.data.sortOrder ?? maxOrder + 1,
       notes: body.data.notes ?? null,
@@ -951,6 +960,60 @@ router.patch("/admin/branding", async (req, res): Promise<void> => {
     return;
   }
   res.json(UpdateDealerBrandingResponse.parse(updated));
+});
+
+// ---------------------------------------------------------------------------
+// Localization — dealership timezone (GM only). Changes are audited by the
+// auditTrail middleware; the timezone cache is invalidated so every date
+// rendered after the save uses the new zone immediately.
+// ---------------------------------------------------------------------------
+
+router.get("/admin/localization", async (_req, res): Promise<void> => {
+  if (!requireGeneralManager(res)) {
+    res.status(403).json({ error: "Only the general manager can manage localization" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [dealer] = await db
+    .select({ dealerId: dealersTable.id, timezone: dealersTable.timezone })
+    .from(dealersTable)
+    .where(eq(dealersTable.id, dealerId));
+  if (!dealer) {
+    res.status(404).json({ error: "Dealership not found" });
+    return;
+  }
+  res.json(GetDealerLocalizationResponse.parse(dealer));
+});
+
+router.patch("/admin/localization", async (req, res): Promise<void> => {
+  if (!requireGeneralManager(res)) {
+    res.status(403).json({ error: "Only the general manager can manage localization" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const body = UpdateDealerLocalizationBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  const timezone = body.data.timezone.trim();
+  if (!isValidTimezone(timezone)) {
+    res.status(422).json({
+      error: `"${timezone}" is not a recognized IANA timezone identifier`,
+    });
+    return;
+  }
+  const [updated] = await db
+    .update(dealersTable)
+    .set({ timezone })
+    .where(eq(dealersTable.id, dealerId))
+    .returning({ dealerId: dealersTable.id, timezone: dealersTable.timezone });
+  if (!updated) {
+    res.status(404).json({ error: "Dealership not found" });
+    return;
+  }
+  invalidateDealerTimezone(dealerId);
+  res.json(UpdateDealerLocalizationResponse.parse(updated));
 });
 
 export default router;

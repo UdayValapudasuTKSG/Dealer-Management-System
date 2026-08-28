@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useGetReport, GetReportType } from "@workspace/api-client-react";
 import type { Report, GetReportFormat } from "@workspace/api-client-react";
 import { useAuthz } from "@/lib/auth";
+import { dealerDayKeyPlus } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -82,9 +83,8 @@ const TOOLTIP_STYLE = {
 } as const;
 
 function isoDaysAgo(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  // Dealer-local calendar day, not browser/UTC.
+  return dealerDayKeyPlus(-days);
 }
 
 /* Server-side export: the API renders CSV/XLSX/PDF itself (and writes the
