@@ -77,7 +77,11 @@ import {
 } from "../middlewares/rbac";
 import { invalidateFieldPermCache } from "../lib/field-permissions";
 import { ensureLeadSources, slugifyCode } from "../lib/lead-sources";
-import { getAllActiveChecklists, getActiveChecklist } from "../lib/stage-checklists";
+import {
+  currentChecklistItems,
+  getAllActiveChecklists,
+  getActiveChecklist,
+} from "../lib/stage-checklists";
 
 const router: IRouter = Router();
 
@@ -703,13 +707,14 @@ router.put("/admin/stage-checklists/:stage", async (req, res): Promise<void> => 
   }
   // Versioned: every save is a NEW row; history is never rewritten.
   const current = await getActiveChecklist(dealerId, stage);
+  const items = currentChecklistItems(body.data.items);
   const [saved] = await db
     .insert(stageChecklistsTable)
     .values({
       dealerId,
       stage,
       version: current.version + 1,
-      items: body.data.items,
+      items,
       createdBy: res.locals.user?.clerkId ?? null,
     })
     .returning();
