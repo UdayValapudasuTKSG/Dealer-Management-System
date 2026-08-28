@@ -37,7 +37,7 @@ const bareAmount = (s: string): string => {
 
 /**
  * Render a dealer-branded vehicle estimate PDF matching the dealership's
- * reference estimate layout: serif letterhead (name/address/TIN/phone/email)
+ * reference estimate layout: clean sans-serif letterhead (name/address/TIN/phone/email)
  * top-left, logo top-right, green "Estimate" title, ADDRESS block +
  * ESTIMATE/DATE/EXPIRATION DATE meta, split green table header
  * (DATE | QTY/AMOUNT), spec-line vehicle description, SUBTOTAL/TAX/TOTAL
@@ -79,10 +79,10 @@ export function buildQuotePdf(
       }
     }
     if (!logoDrawn) {
-      doc.font("Times-Bold").fontSize(12).fillColor(TEXT).text(dealerName, left, 46);
+      doc.font("Helvetica-Bold").fontSize(12).fillColor(TEXT).text(dealerName, left, 46);
     }
     const headerLine = (text: string) => {
-      doc.font("Times-Roman").fontSize(8.5).fillColor("#333333").text(text, left, hy, {
+      doc.font("Helvetica").fontSize(8.5).fillColor("#333333").text(text, left, hy, {
         width: contentW / 2,
       });
       hy += 12;
@@ -108,25 +108,25 @@ export function buildQuotePdf(
 
     // ---- Title -------------------------------------------------------------
     let y = Math.max(150, hy + 24);
-    doc.font("Times-Roman").fontSize(16).fillColor(GREEN).text("Estimate", left, y);
+    doc.font("Helvetica").fontSize(16).fillColor(GREEN).text("Estimate", left, y);
     y += 28;
 
     // ---- Customer block (left) + estimate meta (right) ---------------------
     const metaLabelX = right - 250;
     const metaValueX = right - 130;
     doc
-      .font("Times-Roman")
+      .font("Helvetica")
       .fontSize(9)
       .fillColor(LABEL_GREY)
       .text("ADDRESS", left, y, { characterSpacing: 0.5 });
     const metaRow = (label: string, value: string, my: number) => {
       doc
-        .font("Times-Roman")
+        .font("Helvetica")
         .fontSize(9)
         .fillColor(LABEL_GREY)
         .text(label, metaLabelX, my, { characterSpacing: 0.5 });
       doc
-        .font("Times-Roman")
+        .font("Helvetica")
         .fontSize(9.5)
         .fillColor(TEXT)
         .text(value, metaValueX, my, { width: 130 });
@@ -145,9 +145,9 @@ export function buildQuotePdf(
             .map((p) => p.trim())
             .filter(Boolean)
         : []),
-    ];
+    ].slice(0, 5);
     for (const line of custLines) {
-      doc.font("Times-Roman").fontSize(9.5).fillColor(TEXT).text(line, left, y, {
+      doc.font("Helvetica").fontSize(9.5).fillColor(TEXT).text(line, left, y, {
         width: contentW / 2,
       });
       y += 14;
@@ -157,21 +157,21 @@ export function buildQuotePdf(
 
     // ---- Line-item table ---------------------------------------------------
     const colDate = left;
-    const colDesc = left + 165;
-    const colQty = right - 260;
-    const colAmt = right - 130;
+    const colDesc = left + 82;
+    const colQty = right - 165;
+    const colAmt = right - 120;
 
     // Split header band (left "DATE" band + right "QTY / AMOUNT" band) like
     // the reference estimate.
-    const gapX = colQty - 60;
+    const gapX = colQty - 14;
     doc.rect(left, y, gapX - left - 4, 18).fill(HEADER_BG);
     doc.rect(gapX, y, right - gapX, 18).fill(HEADER_BG);
     doc
-      .font("Times-Roman")
+      .font("Helvetica")
       .fontSize(9)
       .fillColor("#3c5a3c")
       .text("DATE", colDate + 6, y + 5, { characterSpacing: 0.5 })
-      .text("QTY", colQty, y + 5, { width: 60, align: "right", characterSpacing: 0.5 })
+        .text("QTY", colQty, y + 5, { width: 35, align: "right", characterSpacing: 0.5 })
       .text("AMOUNT", colAmt, y + 5, {
         width: right - colAmt - 6,
         align: "right",
@@ -199,23 +199,32 @@ export function buildQuotePdf(
     }];
     const descW = colQty - colDesc - 12;
     for (const item of items) {
+      // Keep each physical specification to two compact lines. The amount
+      // columns already carry quantity and line total, so repeating all price
+      // components in the description only causes accidental page overflow.
       const descLines = [
         [item.manufacturer, item.model].filter(Boolean).join(" "),
-        item.variant ? `Variant: ${item.variant}` : "",
-        item.color ? `Color: ${item.color}` : "",
-        item.year ? `Year: ${item.year}` : "",
-        `Unit ${bareAmount(item.unitPrice)} · Subtotal ${bareAmount(item.subtotal)} · Tax ${bareAmount(item.tax)} · Line total ${bareAmount(item.total)}`,
+        [
+          item.variant ? `Variant: ${item.variant}` : "",
+          item.color ? `Color: ${item.color}` : "",
+          item.year ? `Year: ${item.year}` : "",
+        ].filter(Boolean).join(" · "),
       ].filter(Boolean);
-      doc.font("Times-Roman").fontSize(9.5).fillColor(TEXT)
+      doc.font("Helvetica").fontSize(8.5).fillColor(TEXT)
         .text(shortDate(val(data, "issuedOn", "")), colDate + 6, y);
       let dy = y;
       for (const line of descLines) {
-        doc.text(line, colDesc, dy, { width: descW });
-        dy += doc.heightOfString(line, { width: descW }) + 2;
+        doc.text(line, colDesc, dy, {
+          width: descW,
+          height: 9,
+          ellipsis: true,
+          lineBreak: false,
+        });
+        dy += 9;
       }
-      doc.text(String(item.quantity), colQty, y, { width: 60, align: "right" })
+      doc.text(String(item.quantity), colQty, y, { width: 35, align: "right" })
         .text(bareAmount(item.total), colAmt, y, { width: right - colAmt - 6, align: "right" });
-      y = Math.max(dy, y + 12) + 12;
+      y = Math.max(dy, y + 12) + 3;
     }
 
     doc
@@ -236,12 +245,12 @@ export function buildQuotePdf(
       opts: { bold?: boolean; rule?: boolean } = {},
     ) => {
       doc
-        .font("Times-Roman")
+        .font("Helvetica")
         .fontSize(9.5)
         .fillColor(LABEL_GREY)
         .text(label, labelX, y + (opts.bold ? 4 : 1), { characterSpacing: 0.5 });
       doc
-        .font(opts.bold ? "Times-Bold" : "Times-Roman")
+        .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
         .fontSize(opts.bold ? 13 : 9.5)
         .fillColor(TEXT)
         .text(value, right - 200, y, { width: 200, align: "right" });
@@ -262,7 +271,9 @@ export function buildQuotePdf(
     try {
       const treatments = JSON.parse(data.approvedTreatments ?? "[]");
       if (Array.isArray(treatments)) {
-        for (const treatment of treatments.filter((v): v is string => typeof v === "string")) {
+        for (const treatment of treatments
+          .filter((v): v is string => typeof v === "string")
+          .slice(0, 4)) {
           totalRow(treatment, "");
         }
       }
@@ -270,13 +281,24 @@ export function buildQuotePdf(
     totalRow("TOTAL", `GYD ${bareAmount(val(data, "totalGyd", val(data, "total")))}`, {
       bold: true,
     });
-    y += 40;
+    y += 20;
 
     // ---- Acceptance --------------------------------------------------------
-    doc.font("Times-Roman").fontSize(9.5).fillColor(LABEL_GREY).text("Accepted By", left, y);
-    y += 34;
-    doc.text("Accepted Date", left, y);
-    y += 40;
+    doc
+      .font("Helvetica")
+      .fontSize(9.5)
+      .fillColor(LABEL_GREY)
+      .text("Accepted By", left, y)
+      .moveTo(left + 78, y + 10)
+      .lineTo(left + 245, y + 10)
+      .strokeColor("#b8b8b8")
+      .lineWidth(0.6)
+      .stroke()
+      .text("Accepted Date", left + 280, y)
+      .moveTo(left + 370, y + 10)
+      .lineTo(right, y + 10)
+      .stroke();
+    y += 32;
 
     // ---- Disclaimer ---------------------------------------------------------
     // Derive the validity wording from the quote's own dates so historical
@@ -298,25 +320,25 @@ export function buildQuotePdf(
       `${validityClause} and does not constitute a binding agreement.`;
     const discHeight =
       14 +
-      doc.font("Times-Roman").fontSize(8).heightOfString(disclaimer, { width: contentW });
+      doc.font("Helvetica").fontSize(8).heightOfString(disclaimer, { width: contentW });
     // Render just under the acceptance block, never above it (moving up would
     // overlap already-drawn content). If the page is unusually full, it sits
     // closer to the footer rather than colliding with the content above.
     const discY = y;
     doc
-      .font("Times-Bold")
+      .font("Helvetica-Bold")
       .fontSize(8.5)
       .fillColor(LABEL_GREY)
       .text("DISCLAIMER", left, discY, { characterSpacing: 0.5 });
     doc
-      .font("Times-Roman")
+      .font("Helvetica")
       .fontSize(8)
       .fillColor(LABEL_GREY)
       .text(disclaimer, left, discY + 14, { width: contentW, align: "justify" });
 
     // ---- Footer ------------------------------------------------------------
     doc
-      .font("Times-Roman")
+      .font("Helvetica")
       .fontSize(9)
       .fillColor(LABEL_GREY)
       .text(attachment ? "Page 1 of 2" : "Page 1 of 1", left, pageH - 46, {
@@ -327,12 +349,12 @@ export function buildQuotePdf(
     if (attachment) {
       doc.addPage({ size: "A4", margin: 0 });
       doc
-        .font("Times-Bold")
+        .font("Helvetica-Bold")
         .fontSize(13)
         .fillColor(TEXT)
         .text("Quote attachment", left, 42, { width: contentW });
       doc
-        .font("Times-Roman")
+        .font("Helvetica")
         .fontSize(8.5)
         .fillColor(LABEL_GREY)
         .text(attachment.fileName, left, 62, { width: contentW });
@@ -342,7 +364,7 @@ export function buildQuotePdf(
         valign: "center",
       });
       doc
-        .font("Times-Roman")
+        .font("Helvetica")
         .fontSize(9)
         .fillColor(LABEL_GREY)
         .text("Page 2 of 2", left, pageH - 46, {

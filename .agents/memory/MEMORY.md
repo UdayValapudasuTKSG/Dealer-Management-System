@@ -60,3 +60,4 @@
 - [AURA authenticated screenshots](aura-test-persona-screenshots.md) — add ?test-user=<seeded email> to any dev URL to bypass Clerk for signed-in UI screenshots; ?test-user=off clears.
 - [Reservation soft-locks](reservation-soft-locks.md) — full reservation payment holds VINs all-or-nothing in a ledger; commit adopts held VINs; every release path must check active allocations, not just bookings.
 - [Vehicle interests are specifications](vehicle-interest-specifications.md) — leads capture desired vehicle specs and price; physical VINs are assigned only when a deal commits.
+- [PDFKit bounded layouts](pdfkit-bounded-layouts.md) — narrow columns and explicit coordinates beyond A4 can explode one quote into many sparse pages; stress-test maximum payloads.
