@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Error</title>
+    </head>
+    <body>
+        <pre>
+            Error: Failed query: insert into &quot;feedback_invitations &quot;(&quot;id &quot;, &quot;dealer_id &quot;, &quot;form_id &quot;, &quot;lead_id &quot;, &quot;form_name &quot;, &quot;questions_snapshot &quot;, &quot;token &quot;, &quot;expires_at &quot;, &quot;status &quot;, &quot;channels &quot;, &quot;email_log_id &quot;, &quot;whatsapp_log_id &quot;, &quot;answers &quot;, &quot;submitted_at &quot;, &quot;created_by &quot;, &quot;created_at &quot;) values (default, $1, $2, $3, $4, $5, default, $6, $7, $8, default, default, default, default, $9, default) on conflict (&quot;dealer_id &quot;,&quot;form_id &quot;,&quot;lead_id &quot;) do nothing returning &quot;id &quot;, &quot;dealer_id &quot;, &quot;form_id &quot;, &quot;lead_id &quot;, &quot;form_name &quot;, &quot;questions_snapshot &quot;, &quot;token &quot;, &quot;expires_at &quot;, &quot;status &quot;, &quot;channels &quot;, &quot;email_log_id &quot;, &quot;whatsapp_log_id &quot;, &quot;answers &quot;, &quot;submitted_at &quot;, &quot;created_by &quot;, &quot;created_at &quot;<br>
+            params: 1,1,8443,test,[{&quot;id &quot;:&quot;q_efmhp7w6 &quot;,&quot;type &quot;:&quot;text &quot;,&quot;label &quot;:&quot;What is your name &quot;,&quot;required &quot;:true},{&quot;id &quot;:&quot;q_mikaqy1l &quot;,&quot;type &quot;:&quot;star_rating &quot;,&quot;label &quot;:&quot;How was your showroom visit?&quot;,&quot;maxStars &quot;:5,&quot;required &quot;:true}],2026-09-11T16:49:49.616Z,sent,[&quot;email &quot;,&quot;whatsapp &quot;],Kasyap<br>
+            &nbsp;&nbsp;at NodePgPreparedQuery.queryWithCache (/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_@types+pg@8.20.0_pg@8.22.0/node_modules/src/pg-core/session.ts:73:11)<br>
+            &nbsp;&nbsp;at process.processTicksAndRejections (node:internal/process/task_queues:103:5)<br>
+            &nbsp;&nbsp;at async &lt;anonymous &gt;(/home/runner/workspace/node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_@types+pg@8.20.0_pg@8.22.0/node_modules/src/node-postgres/session.ts:154:19)<br>&nbsp;&nbsp;at async &lt;anonymous &gt;(/home/runner/workspace/artifacts/api-server/src/routes/feedback-forms.ts:724:19)
+        </pre>
+    </body>
+</html>
