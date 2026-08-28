@@ -9432,6 +9432,9 @@ components:
         salesAdvisorUserId: { type: ["integer", "null"] }
         salesAdvisorName: { type: ["string", "null"] }
         vehicleLabel: { type: ["string", "null"] }
+        vin:
+          type: ["string", "null"]
+          description: VIN assigned to this delivery unit
         status: { type: string, enum: [in_progress, completed, cancelled] }
         currentStep: { type: string, enum: [sales_order, pdi_checklist, registration, insurance, invoice, appointment, warranty, delivery, signature, feedback] }
         steps:

@@ -104,6 +104,7 @@ const money = (n: number) =>
 type Enriched = Delivery & {
   advisorName: string | null;
   vehicleLabel: string | null;
+  vin: string | null;
   unmet: string[];
   registrationStuck: boolean;
   handoverVerification: HandoverVerification | null;
@@ -308,6 +309,7 @@ async function enrich(rows: Delivery[], dealerId: number): Promise<Enriched[]> {
         vehicleLabel: v
           ? `${v.year} ${v.make} ${v.model}${v.vin ? ` · ${v.vin}` : ""}`
           : null,
+        vin: v?.vin ?? null,
         unmet: await computeUnmet(r),
         registrationStuck: isRegistrationStuck(r),
         handoverVerification: await handoverVerificationFor(r),

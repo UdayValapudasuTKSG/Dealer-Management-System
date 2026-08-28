@@ -1888,6 +1888,11 @@ export interface Delivery {
   salesAdvisorName?: string | null;
   /** @nullable */
   vehicleLabel?: string | null;
+  /**
+     * VIN assigned to this delivery unit
+     * @nullable
+     */
+  vin?: string | null;
   status: DeliveryStatus;
   currentStep: DeliveryCurrentStep;
   steps: DeliveryStepState[];

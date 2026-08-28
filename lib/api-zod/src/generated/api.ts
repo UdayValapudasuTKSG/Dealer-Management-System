@@ -786,6 +786,7 @@ export const ListDeliveriesResponseItem = zod.object({
   "salesAdvisorUserId": zod.number().nullish(),
   "salesAdvisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
+  "vin": zod.string().nullish().describe('VIN assigned to this delivery unit'),
   "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'warranty', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
@@ -862,6 +863,7 @@ export const CreateDeliveryResponse = zod.object({
   "salesAdvisorUserId": zod.number().nullish(),
   "salesAdvisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
+  "vin": zod.string().nullish().describe('VIN assigned to this delivery unit'),
   "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'warranty', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
@@ -933,6 +935,7 @@ export const GetDeliveryResponse = zod.object({
   "salesAdvisorUserId": zod.number().nullish(),
   "salesAdvisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
+  "vin": zod.string().nullish().describe('VIN assigned to this delivery unit'),
   "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'warranty', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
@@ -1036,6 +1039,7 @@ export const UpdateDeliveryResponse = zod.object({
   "salesAdvisorUserId": zod.number().nullish(),
   "salesAdvisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
+  "vin": zod.string().nullish().describe('VIN assigned to this delivery unit'),
   "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'warranty', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
@@ -1130,6 +1134,7 @@ export const AdvanceDeliveryResponse = zod.object({
   "salesAdvisorUserId": zod.number().nullish(),
   "salesAdvisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
+  "vin": zod.string().nullish().describe('VIN assigned to this delivery unit'),
   "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'warranty', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
@@ -1209,6 +1214,7 @@ export const RevertDeliveryStepResponse = zod.object({
   "salesAdvisorUserId": zod.number().nullish(),
   "salesAdvisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
+  "vin": zod.string().nullish().describe('VIN assigned to this delivery unit'),
   "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'warranty', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({
@@ -1292,6 +1298,7 @@ export const UpdateDeliveryPdiResponse = zod.object({
   "salesAdvisorUserId": zod.number().nullish(),
   "salesAdvisorName": zod.string().nullish(),
   "vehicleLabel": zod.string().nullish(),
+  "vin": zod.string().nullish().describe('VIN assigned to this delivery unit'),
   "status": zod.enum(['in_progress', 'completed', 'cancelled']),
   "currentStep": zod.enum(['sales_order', 'pdi_checklist', 'registration', 'insurance', 'invoice', 'appointment', 'warranty', 'delivery', 'signature', 'feedback']),
   "steps": zod.array(zod.object({

@@ -1209,6 +1209,21 @@ export default function LeadDetail() {
         (lead.customerId != null && d.customerId === lead.customerId),
     )
     .sort((a, b) => dealRank(b.stage) - dealRank(a.stage))[0];
+  const allocatedUnitsByPosition = new Map(
+    (linkedDeal?.items ?? []).map((item) => [
+      item.position,
+      (allDeliveries ?? [])
+        .filter(
+          (delivery) =>
+            delivery.dealId === linkedDeal.id &&
+            delivery.dealItemId === item.id &&
+            delivery.status !== "cancelled",
+        )
+        .sort(
+          (a, b) => (a.dealItemUnit ?? 0) - (b.dealItemUnit ?? 0),
+        ),
+    ]),
+  );
 
   // Finance CTAs must NEVER use the customer-fallback heuristic above — an
   // invoice/payment goes only to a deal explicitly desked for THIS lead.
@@ -2110,7 +2125,10 @@ export default function LeadDetail() {
                       </Button>
                     )}
                   >
-                    {(lead.vehicleInterests ?? []).map((interest, index) => (
+                    {(lead.vehicleInterests ?? []).map((interest, index) => {
+                      const allocatedUnits =
+                        allocatedUnitsByPosition.get(interest.position ?? index) ?? [];
+                      return (
                       <div key={`${interest.position}-${interest.make}-${interest.model}`} className="rounded-lg border border-white/10 p-3 space-y-2">
                         <div className="text-xs font-semibold text-primary">
                           {index === 0 ? "Primary · " : ""}{interest.make} {interest.model}
@@ -2119,13 +2137,24 @@ export default function LeadDetail() {
                           <span>Version / Trim</span><strong>{interest.variant || "Base"}</strong>
                           <span>Color</span><strong>{interest.color || "Unspecified"}</strong>
                           <span>Year</span><strong>{interest.modelYear}</strong>
-                          <span>Unit / VIN</span><strong>Assigned at allocation</strong>
+                          <span>Unit / VIN</span>
+                          <strong>
+                            {allocatedUnits.length > 0
+                              ? allocatedUnits.map((unit, unitIndex) => (
+                                  <span key={unit.id} className="block">
+                                    Unit {(unit.dealItemUnit ?? unitIndex) + 1} ·{" "}
+                                    {unit.vin ?? `Vehicle #${unit.vehicleId}`}
+                                  </span>
+                                ))
+                              : "Assigned at allocation"}
+                          </strong>
                           <span>Unit price</span><strong>{money.gyd(interest.unitPrice)}</strong>
                           <span>Quantity</span><strong>{interest.quantity ?? 1}</strong>
                           <span>Line total</span><strong>{money.gyd(interest.unitPrice * (interest.quantity ?? 1))}</strong>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                     {!lead.vehicleInterests?.length && (
                       <span className="text-sm text-muted-foreground">No vehicle interests added</span>
                     )}
