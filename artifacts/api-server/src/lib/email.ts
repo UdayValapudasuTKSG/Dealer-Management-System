@@ -2133,7 +2133,7 @@ export async function processQueue(): Promise<void> {
           /"/g,
           "",
         );
-        await smtp.transport.sendMail({
+        const sendResult = await smtp.transport.sendMail({
           from: `"${(smtp.fromName ?? fromName).replace(/"/g, "")}" <${smtp.fromEmail}>`,
           ...(smtp.replyTo ? { replyTo: smtp.replyTo } : {}),
           to: item.recipient,
@@ -2145,9 +2145,22 @@ export async function processQueue(): Promise<void> {
           ...(attachments ? { attachments } : {}),
           ...(icalEvent ? { icalEvent } : {}),
         });
+        const intendedRecipient = item.recipient.trim().toLowerCase();
+        const accepted = (sendResult.accepted ?? []).some(
+          (recipient: unknown) =>
+            String(recipient).trim().toLowerCase() === intendedRecipient,
+        );
+        if (!accepted) {
+          throw new Error("SMTP provider did not accept the intended recipient");
+        }
         await db
           .update(emailLogsTable)
-          .set({ status: "sent", sentAt: new Date(), lastError: null })
+          .set({
+            status: "sent",
+            deliveryStatus: "accepted",
+            sentAt: new Date(),
+            lastError: null,
+          })
           .where(eq(emailLogsTable.id, item.id));
         await markQuoteDelivered(item, "email");
         if (item.customerId) {
