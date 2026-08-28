@@ -451,28 +451,37 @@ function InlineField({
 
 function Section({
   title,
+  action,
   children,
   defaultOpen = true,
 }: {
   title: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="rounded-2xl border border-white/10 overflow-hidden">
-      <button
+      <div
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-5 py-3 bg-foreground/[0.04] text-left hover:bg-foreground/[0.06] transition-colors"
+        className="w-full flex items-center justify-between px-5 py-3 bg-foreground/[0.04] hover:bg-foreground/[0.06] transition-colors cursor-pointer group"
       >
-        <ChevronDown
-          className={cn(
-            "w-4 h-4 text-primary transition-transform",
-            !open && "-rotate-90",
-          )}
-        />
-        <span className="text-sm font-semibold tracking-tight">{title}</span>
-      </button>
+        <div className="flex items-center gap-2">
+          <ChevronDown
+            className={cn(
+              "w-4 h-4 text-primary transition-transform",
+              !open && "-rotate-90",
+            )}
+          />
+          <span className="text-sm font-semibold tracking-tight">{title}</span>
+        </div>
+        {action && (
+          <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+            {action}
+          </div>
+        )}
+      </div>
       {open && (
         <div className="px-5 pb-2 grid grid-cols-1 md:grid-cols-2 gap-x-10">
           {children}
@@ -837,7 +846,11 @@ function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
       label: "Interested vehicles",
       type: "custom",
       span: "full",
-      defaultValue: lead.vehicleInterests?.length ? JSON.stringify(lead.vehicleInterests) : undefined,
+      defaultValue: lead.vehicleInterests?.length
+        ? JSON.stringify(lead.vehicleInterests)
+        : lead.interestedVehicleId
+          ? JSON.stringify([{ vehicleId: lead.interestedVehicleId, quantity: 1, position: 0 }])
+          : undefined,
       render: (value, set) => (
         <VehicleInterestsField
           value={value}
@@ -2074,7 +2087,29 @@ export default function LeadDetail() {
                     <InlineField label="Sales Advisor">{ownerDisplay}</InlineField>
                   </Section>
 
-                  <Section title="Product Interest">
+                  <Section
+                    title="Product Interest"
+                    action={(
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={!canEdit}
+                        title={
+                          canEdit
+                            ? "Add, remove, or update vehicle interests"
+                            : "You can view this lead, but only its assigned advisor or a manager can edit vehicle interests."
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (canEdit) setEditOpen(true);
+                        }}
+                        className="h-7 text-xs px-2 text-muted-foreground hover:text-primary disabled:opacity-60"
+                      >
+                        <Pencil className="w-3 h-3 mr-1" />
+                        Edit vehicle interests
+                      </Button>
+                    )}
+                  >
                     <InlineField label="Interested Model">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
