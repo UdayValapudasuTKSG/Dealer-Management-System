@@ -12,10 +12,15 @@ export interface DealInput {
   divisionId?: number;
   customerId?: number;
   leadId?: number;
-  vehicleId: number;
+  /**
+     * Required only for direct legacy deals; forbidden for linked-lead deals.
+     * @nullable
+     */
+  vehicleId?: number | null;
   customerName?: string;
   stage?: DealInputStage;
-  vehiclePrice: number;
+  /** Required only for direct legacy deals; linked deals use the current quote snapshot. */
+  vehiclePrice?: number;
   discount?: number;
   tradeInValue?: number;
   accessories?: number;

@@ -12,7 +12,18 @@ export interface DealItem {
   dealId: number;
   /** @nullable */
   quoteItemId?: number | null;
-  vehicleId: number;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** @nullable */
+  make?: string | null;
+  /** @nullable */
+  model?: string | null;
+  /** @nullable */
+  modelYear?: number | null;
+  /** @nullable */
+  variant?: string | null;
+  /** @nullable */
+  color?: string | null;
   /** @minimum 1 */
   quantity: number;
   /** @minimum 0 */

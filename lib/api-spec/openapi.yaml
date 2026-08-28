@@ -9346,11 +9346,23 @@ components:
         url: { type: string, minLength: 1 }
     LeadVehicleInterestInput:
       type: object
-      required: [vehicleId]
+      required: [make, model, modelYear, unitPrice]
       properties:
-        vehicleId: { type: integer, minimum: 1 }
+        make: { type: string, minLength: 1 }
+        model: { type: string, minLength: 1 }
+        modelYear: { type: integer, minimum: 1900 }
+        variant: { type: ["string", "null"] }
+        color: { type: ["string", "null"] }
+        unitPrice: { type: number, minimum: 0, description: Unit list price snapshot in GYD }
         quantity: { type: integer, minimum: 1, default: 1 }
         position: { type: integer, minimum: 0, default: 0 }
+    LeadVehicleInterest:
+      allOf:
+        - $ref: "#/components/schemas/LeadVehicleInterestInput"
+        - type: object
+          required: [vehicleId]
+          properties:
+            vehicleId: { type: ["integer", "null"], description: Historical provenance only. }
     Lead:
       type: object
       required: [id, name, channel, source, priority, phase, status, attachments, aiScore, createdAt, isRetailCustomer, quotationSent, reservationFeePaid, financingQualified, revisitIn3Months]
@@ -9370,7 +9382,7 @@ components:
         interestedVehicleId: { type: ["integer", "null"] }
         vehicleInterests:
           type: array
-          items: { $ref: "#/components/schemas/LeadVehicleInterestInput" }
+          items: { $ref: "#/components/schemas/LeadVehicleInterest" }
         selectedModel: { type: ["string", "null"] }
         interestedModelText: { type: ["string", "null"] }
         variant: { type: ["string", "null"] }
@@ -9604,11 +9616,13 @@ components:
         amount: { type: number }
     QuoteItem:
       type: object
-      required: [id, quoteId, vehicleId, quantity, position, modelYear, vehicleLine, manufacturer, basePrice, taxLines, totalTax, total]
+      required: [id, quoteId, make, model, quantity, position, modelYear, vehicleLine, manufacturer, basePrice, taxLines, totalTax, total]
       properties:
         id: { type: integer }
         quoteId: { type: integer }
-        vehicleId: { type: integer }
+        vehicleId: { type: ["integer", "null"] }
+        make: { type: string }
+        model: { type: string }
         quantity: { type: integer, minimum: 1 }
         position: { type: integer, minimum: 0 }
         modelYear: { type: integer }
@@ -9622,12 +9636,17 @@ components:
         total: { type: number }
     DealItem:
       type: object
-      required: [id, dealId, vehicleId, quantity, position, vehiclePrice, discount, taxSnapshot, total, status]
+      required: [id, dealId, quantity, position, vehiclePrice, discount, taxSnapshot, total, status]
       properties:
         id: { type: integer }
         dealId: { type: integer }
         quoteItemId: { type: ["integer", "null"] }
-        vehicleId: { type: integer }
+        vehicleId: { type: ["integer", "null"] }
+        make: { type: ["string", "null"] }
+        model: { type: ["string", "null"] }
+        modelYear: { type: ["integer", "null"] }
+        variant: { type: ["string", "null"] }
+        color: { type: ["string", "null"] }
         quantity: { type: integer, minimum: 1 }
         position: { type: integer, minimum: 0 }
         vehiclePrice: { type: number, description: Unit price }
@@ -10292,14 +10311,14 @@ components:
 
     Deal:
       type: object
-      required: [id, vehicleId, stage, vehiclePrice, discount, tradeInValue, accessories, otdPrice, depositPaid, createdAt]
+      required: [id, stage, vehiclePrice, discount, tradeInValue, accessories, otdPrice, depositPaid, createdAt]
       properties:
         id: { type: integer }
         divisionId: { type: ["integer", "null"] }
         customerId: { type: ["integer", "null"] }
         leadId: { type: ["integer", "null"] }
         quoteId: { type: ["integer", "null"] }
-        vehicleId: { type: integer }
+        vehicleId: { type: ["integer", "null"] }
         customerName: { type: ["string", "null"] }
         stage: { type: string, enum: [desking, committed, delivered, cancelled, lost] }
         vehiclePrice: { type: number }
@@ -10326,15 +10345,14 @@ components:
         createdAt: { type: string, format: date-time }
     DealInput:
       type: object
-      required: [vehicleId, vehiclePrice]
       properties:
         divisionId: { type: integer }
         customerId: { type: integer }
         leadId: { type: integer }
-        vehicleId: { type: integer }
+        vehicleId: { type: ["integer", "null"], description: Required only for direct legacy deals; forbidden for linked-lead deals. }
         customerName: { type: string }
         stage: { type: string, enum: [desking, committed, delivered, cancelled, lost] }
-        vehiclePrice: { type: number }
+        vehiclePrice: { type: number, description: Required only for direct legacy deals; linked deals use the current quote snapshot. }
         discount: { type: number }
         tradeInValue: { type: number }
         accessories: { type: number }

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   db,
   bookingsTable,
@@ -120,32 +120,50 @@ export async function commitDealInTransaction(
   let primaryVehicleId: number | null = null;
 
   for (const item of items) {
-    const [seed] = await tx.select().from(vehiclesTable).where(and(
-      eq(vehiclesTable.id, item.vehicleId),
-      eq(vehiclesTable.dealerId, opts.dealerId),
-      isNull(vehiclesTable.deletedAt),
-    )).for("update");
-    if (!seed) {
+    const [legacySeed] = item.vehicleId
+      ? await tx.select().from(vehiclesTable).where(and(
+          eq(vehiclesTable.id, item.vehicleId),
+          eq(vehiclesTable.dealerId, opts.dealerId),
+          isNull(vehiclesTable.deletedAt),
+        )).for("update")
+      : [];
+    const spec = {
+      make: item.make ?? legacySeed?.make,
+      model: item.model ?? legacySeed?.model,
+      year: item.modelYear ?? legacySeed?.year,
+      variant: item.variant ?? legacySeed?.trim ?? legacySeed?.variant ?? null,
+      color: item.color ?? legacySeed?.exteriorColor ?? null,
+    };
+    if (!spec.make || !spec.model || !spec.year) {
       throw new InventoryAllocationError(
         item.id, item.quantity, 0,
-        `Seed vehicle #${item.vehicleId} is not in this dealership`,
+        `Deal item #${item.id} has no allocatable vehicle specification`,
       );
     }
     let allocated = 0;
     for (let unit = 0; unit < item.quantity; unit += 1) {
       let chosen =
         unit === 0 && item.position === 0 &&
-        booking?.vehicleId === seed.id && seed.status === "booked"
-          ? seed
+        legacySeed && booking?.vehicleId === legacySeed.id &&
+        legacySeed.status === "booked" &&
+        legacySeed.make.toLowerCase() === spec.make.toLowerCase() &&
+        legacySeed.model.toLowerCase() === spec.model.toLowerCase() &&
+        legacySeed.year === spec.year &&
+        (legacySeed.trim ?? legacySeed.variant ?? "Base").toLowerCase() === (spec.variant ?? "Base").toLowerCase() &&
+        (legacySeed.exteriorColor ?? "").toLowerCase() === (spec.color ?? "").toLowerCase()
+          ? legacySeed
           : null;
       if (!chosen) {
         const [candidate] = await tx.select().from(vehiclesTable).where(and(
           eq(vehiclesTable.dealerId, opts.dealerId),
-          eq(vehiclesTable.model, seed.model),
-          seed.variant == null
-            ? isNull(vehiclesTable.variant)
-            : eq(vehiclesTable.variant, seed.variant),
-          eq(vehiclesTable.exteriorColor, seed.exteriorColor),
+           sql`lower(${vehiclesTable.make}) = lower(${spec.make})`,
+           sql`lower(${vehiclesTable.model}) = lower(${spec.model})`,
+           eq(vehiclesTable.year, spec.year),
+           sql`lower(coalesce(${vehiclesTable.trim}, ${vehiclesTable.variant}, 'Base')) =
+             lower(${spec.variant ?? "Base"})`,
+           spec.color == null
+             ? sql`coalesce(${vehiclesTable.exteriorColor}, '') = ''`
+             : sql`lower(coalesce(${vehiclesTable.exteriorColor}, '')) = lower(${spec.color})`,
           eq(vehiclesTable.status, "available"),
           eq(vehiclesTable.recallFlag, false),
           eq(vehiclesTable.damageFlag, false),
@@ -160,7 +178,7 @@ export async function commitDealInTransaction(
       if (!chosen || !identityValid || chosen.recallFlag || chosen.damageFlag) {
         throw new InventoryAllocationError(
           item.id, item.quantity, allocated,
-          `${seed.model}${seed.variant ? ` ${seed.variant}` : ""} in ${seed.exteriorColor}`,
+           `${spec.year} ${spec.make} ${spec.model}${spec.variant ? ` ${spec.variant}` : ""}${spec.color ? ` in ${spec.color}` : ""}`,
         );
       }
       if (chosen.status !== "booked") {
@@ -174,7 +192,7 @@ export async function commitDealInTransaction(
         if (!locked) {
           throw new InventoryAllocationError(
             item.id, item.quantity, allocated,
-            `${seed.model}${seed.variant ? ` ${seed.variant}` : ""} in ${seed.exteriorColor}`,
+             `${spec.year} ${spec.make} ${spec.model}${spec.variant ? ` ${spec.variant}` : ""}${spec.color ? ` in ${spec.color}` : ""}`,
           );
         }
       }

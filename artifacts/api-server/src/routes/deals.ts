@@ -214,6 +214,11 @@ async function allocateDealItemUnits(
   let primaryVehicleId: number | null = null;
 
   for (const item of items) {
+    // Legacy unused allocator compatibility; active commit paths use the
+    // frozen-spec allocator in lib/deal-commit.ts.
+    if (item.vehicleId == null) {
+      throw new InventoryAllocationError(item.id, item.quantity, 0, "Missing legacy vehicle provenance");
+    }
     const [seed] = await tx
       .select()
       .from(vehiclesTable)
@@ -774,6 +779,24 @@ router.post("/deals", async (req, res): Promise<void> => {
       res.status(403).json(LEAD_NOT_OWNED);
       return;
     }
+    if (parsed.data.vehicleId != null) {
+      res.status(422).json({ error: "Linked-lead deals must not select a physical vehicle; allocation occurs at commit." });
+      return;
+    }
+  } else {
+    if (parsed.data.vehicleId == null || parsed.data.vehiclePrice == null) {
+      res.status(422).json({ error: "Direct deals require a concrete vehicleId and vehiclePrice." });
+      return;
+    }
+    const [directVehicle] = await db.select({ id: vehiclesTable.id }).from(vehiclesTable).where(and(
+      eq(vehiclesTable.id, parsed.data.vehicleId),
+      eq(vehiclesTable.dealerId, dealerId),
+      isNull(vehiclesTable.deletedAt),
+    ));
+    if (!directVehicle) {
+      res.status(404).json({ error: "Vehicle not found" });
+      return;
+    }
   }
 
   // Stamp the advisor's user ID so briefing scoping matches by ID, not name.
@@ -791,7 +814,7 @@ router.post("/deals", async (req, res): Promise<void> => {
   }
   if (divisionId == null) {
     // Inherit the vehicle's division when desking a deal, else dealer default.
-    const [veh] = await db
+    const [veh] = parsed.data.vehicleId == null ? [] : await db
       .select({ divisionId: vehiclesTable.divisionId })
       .from(vehiclesTable)
       .where(
@@ -807,7 +830,7 @@ router.post("/deals", async (req, res): Promise<void> => {
   // when the desking form didn't set one — the customer was quoted the
   // reduced price, so the deal must not silently revert to list price.
   let seededDiscount: { discount: number; otdPrice: number } | null = null;
-  if (linkedLead && parsed.data.discount == null) {
+  if (linkedLead && parsed.data.discount == null && parsed.data.vehiclePrice != null && parsed.data.vehicleId != null) {
     const quoteDiscount = Math.min(
       await approvedQuoteDiscountForLead(dealerId, linkedLead.id),
       parsed.data.vehiclePrice,
@@ -838,7 +861,7 @@ router.post("/deals", async (req, res): Promise<void> => {
     taxSnapshot: Array<{ code: string; name: string; kind: "percent" | "fixed"; rate: number; amount: number }>;
     otdPrice: number;
   } | null = null;
-  if (linkedLead) {
+  if (linkedLead && parsed.data.vehiclePrice != null) {
     const [approvedDutyFreeQuote] = await db
       .select({ taxSnapshot: quotesTable.taxSnapshot })
       .from(quotesTable)
@@ -908,8 +931,7 @@ router.post("/deals", async (req, res): Promise<void> => {
         if (!current) throw new Error("CURRENT_QUOTE_REQUIRED");
         boundQuote = current;
         if (
-          parsed.data.vehicleId !== current.vehicleId ||
-          Math.abs(parsed.data.vehiclePrice - current.basePrice) > 0.005 ||
+          (parsed.data.vehiclePrice != null && Math.abs(parsed.data.vehiclePrice - current.basePrice) > 0.005) ||
           (parsed.data.discount != null && Math.abs(parsed.data.discount - current.discountAmount) > 0.005)
         ) {
           quoteMismatch = true;
@@ -920,6 +942,10 @@ router.post("/deals", async (req, res): Promise<void> => {
         .insert(dealsTable)
         .values({
           ...parsed.data,
+          // Runtime guards require these for direct deals; linked deals
+          // overwrite both from the locked current quote below.
+          vehicleId: parsed.data.vehicleId!,
+          vehiclePrice: parsed.data.vehiclePrice ?? 0,
           ...(seededDiscount ?? {}),
           ...(inheritedDutyFree ?? {}),
           // Linked-lead headers are projections of the one locked quote
@@ -970,8 +996,10 @@ router.post("/deals", async (req, res): Promise<void> => {
             const share = subtotal > 0
               ? Math.round(quote.discountAmount * (item.basePrice * item.quantity / subtotal) * 100) / 100
               : 0;
-            return {
-              dealerId, dealId: created.id, quoteItemId: item.id, vehicleId: item.vehicleId,
+             return {
+               dealerId, dealId: created.id, quoteItemId: item.id, vehicleId: item.vehicleId,
+               make: item.make, model: item.model, modelYear: item.modelYear,
+               variant: item.trim, color: item.color,
               quantity: item.quantity, position: item.position,
               vehiclePrice: item.basePrice, discount: share,
               taxSnapshot: item.taxLines, total: item.total - share,
@@ -994,11 +1022,25 @@ router.post("/deals", async (req, res): Promise<void> => {
             ),
           )
           .limit(1);
-        if (!item) {
-          await tx.insert(dealItemsTable).values({
+        if (!item && !linkedLead) {
+           const [legacyVehicle] = created.vehicleId
+             ? await tx.select().from(vehiclesTable).where(and(
+                 eq(vehiclesTable.id, created.vehicleId),
+                 eq(vehiclesTable.dealerId, dealerId),
+               )).limit(1)
+             : [];
+           if (!created.vehicleId || !legacyVehicle) {
+             throw new Error("DIRECT_DEAL_VEHICLE_REQUIRED");
+           }
+           await tx.insert(dealItemsTable).values({
             dealerId,
             dealId: created.id,
             vehicleId: created.vehicleId,
+             make: legacyVehicle.make,
+             model: legacyVehicle.model,
+             modelYear: legacyVehicle.year,
+             variant: legacyVehicle.trim ?? legacyVehicle.variant,
+             color: legacyVehicle.exteriorColor,
             quantity: 1,
             position: 0,
             vehiclePrice: created.vehiclePrice,

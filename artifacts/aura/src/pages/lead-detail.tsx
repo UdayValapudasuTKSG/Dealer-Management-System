@@ -847,10 +847,10 @@ function editLeadFields(lead: Lead, vehicles: Vehicle[]): FieldDef[] {
       type: "custom",
       span: "full",
       defaultValue: lead.vehicleInterests?.length
-        ? JSON.stringify(lead.vehicleInterests)
-        : lead.interestedVehicleId
-          ? JSON.stringify([{ vehicleId: lead.interestedVehicleId, quantity: 1, position: 0 }])
-          : undefined,
+        ? JSON.stringify(
+            lead.vehicleInterests.map(({ vehicleId: _historicalVehicleId, ...interest }) => interest),
+          )
+        : undefined,
       render: (value, set) => (
         <VehicleInterestsField
           value={value}
@@ -983,7 +983,6 @@ export default function LeadDetail() {
   // Quick finance actions against the lead's linked deal (header CTAs).
   const [invoiceDeal, setInvoiceDeal] = useState<Deal | null>(null);
   const [paymentDeal, setPaymentDeal] = useState<Deal | null>(null);
-  const [vehicleDialogOpen, setVehicleDialogOpen] = useState(false);
 
   const createDeal = useCreateDeal({
     mutation: {
@@ -1667,13 +1666,6 @@ export default function LeadDetail() {
         </div>
       </div>
 
-      <VehicleSwapDialog
-        open={vehicleDialogOpen}
-        onOpenChange={setVehicleDialogOpen}
-        vehicles={vehicles ?? []}
-        currentId={lead?.interestedVehicleId}
-        onSave={(id) => saveVehicle(String(id))}
-      />
       <CallDialog
         leadId={lead.id}
         leadName={lead.name}
@@ -2110,48 +2102,25 @@ export default function LeadDetail() {
                       </Button>
                     )}
                   >
-                    <InlineField label="Interested Model">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          {vehicleLink ?? (
-                            <span className="text-muted-foreground/60">—</span>
-                          )}
+                    {(lead.vehicleInterests ?? []).map((interest, index) => (
+                      <div key={`${interest.position}-${interest.make}-${interest.model}`} className="rounded-lg border border-white/10 p-3 space-y-2">
+                        <div className="text-xs font-semibold text-primary">
+                          {index === 0 ? "Primary · " : ""}{interest.make} {interest.model}
                         </div>
-                        {canEdit && (
-                          <button
-                            onClick={() => setVehicleDialogOpen(true)}
-                            aria-label="Change interested vehicle"
-                            data-testid="button-change-vehicle"
-                            className="text-muted-foreground hover:text-primary shrink-0 mt-0.5"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                          <span>Version / Trim</span><strong>{interest.variant || "Base"}</strong>
+                          <span>Color</span><strong>{interest.color || "Unspecified"}</strong>
+                          <span>Year</span><strong>{interest.modelYear}</strong>
+                          <span>Unit / VIN</span><strong>Assigned at allocation</strong>
+                          <span>Unit price</span><strong>{money.gyd(interest.unitPrice)}</strong>
+                          <span>Quantity</span><strong>{interest.quantity ?? 1}</strong>
+                          <span>Line total</span><strong>{money.gyd(interest.unitPrice * (interest.quantity ?? 1))}</strong>
+                        </div>
                       </div>
-                    </InlineField>
-                    <InlineField label="Vehicle Version">
-                      {vehicle?.trim || vehicle?.variant || lead.variant}
-                    </InlineField>
-                    <InlineField label="Vehicle Color">
-                      {vehicle?.exteriorColor || lead.color}
-                    </InlineField>
-                    <InlineField label="VIN">
-                      {vinAllocated && vehicle?.vin ? (
-                        <Link
-                          href={`/vehicle/${vehicle.id}`}
-                          className="font-mono text-xs tracking-wide text-primary hover:underline"
-                        >
-                          {vehicle.vin}
-                        </Link>
-                      ) : vehicle ? (
-                        <span className="text-xs text-muted-foreground">
-                          Assigned at allocation
-                        </span>
-                      ) : null}
-                    </InlineField>
-                    <InlineField label="Unit Price">
-                      {vehicle ? money.gyd(vehicle.price) : null}
-                    </InlineField>
+                    ))}
+                    {!lead.vehicleInterests?.length && (
+                      <span className="text-sm text-muted-foreground">No vehicle interests added</span>
+                    )}
                     <InlineField
                       label="Availability"
                       canEdit={canEdit}
@@ -3677,18 +3646,11 @@ export default function LeadDetail() {
             const payload = { ...values };
             if (payload.vehicleInterests) {
               try {
-                const parsedInterests = JSON.parse(payload.vehicleInterests as string);
+                const parsedInterests = JSON.parse(payload.vehicleInterests as string).map(
+                  ({ vehicleId: _historicalVehicleId, ...interest }: Record<string, unknown>) =>
+                    interest,
+                );
                 payload.vehicleInterests = parsedInterests;
-
-                if (parsedInterests.length > 0 && parsedInterests[0].vehicleId != null) {
-                  const firstVehicleId = parsedInterests[0].vehicleId;
-                  const v = (vehicles ?? []).find((x) => x.id === firstVehicleId);
-                  if (v) {
-                    const version = v.trim || v.variant;
-                    if (version) payload.variant = version;
-                    if (v.exteriorColor) payload.color = v.exteriorColor;
-                  }
-                }
               } catch {
                 delete payload.vehicleInterests;
               }
@@ -3709,25 +3671,6 @@ export default function LeadDetail() {
           pending={createDeal.isPending}
           fields={[
             {
-              name: "vehicleId",
-              label: "Vehicle",
-              type: "select",
-              required: true,
-              span: "full",
-              placeholder: "Select a vehicle",
-              defaultValue: lead.interestedVehicleId
-                ? String(lead.interestedVehicleId)
-                : undefined,
-              options: (vehicles ?? []).map((v) => ({
-                value: String(v.id),
-                label: `${v.year} ${v.make} ${v.model} — ${money.gyd(v.price)}`,
-              })),
-              onChange: (value, setField) => {
-                const v = (vehicles ?? []).find((x) => String(x.id) === value);
-                if (v) setField("vehiclePrice", String(v.price));
-              },
-            },
-            {
               name: "customerName",
               label: "Customer",
               type: "text",
@@ -3740,12 +3683,9 @@ export default function LeadDetail() {
               type: "number",
               required: true,
               span: "half",
-              defaultValue: (() => {
-                const v = (vehicles ?? []).find(
-                  (x) => x.id === lead.interestedVehicleId,
-                );
-                return v ? String(v.price) : undefined;
-              })(),
+              defaultValue: quoteVersions?.find((q) => q.status === "current")
+                ? String(quoteVersions.find((q) => q.status === "current")!.basePrice)
+                : undefined,
             },
             {
               name: "discount",
@@ -3758,7 +3698,8 @@ export default function LeadDetail() {
           onSubmit={async (values) => {
             await createDeal.mutateAsync({
               data: {
-                vehicleId: Number(values.vehicleId),
+                // Linked deals are bound by the API to the current quoted
+                // specification; no unit is selected at the lead stage.
                 vehiclePrice: Number(values.vehiclePrice),
                 ...(values.discount != null
                   ? { discount: Number(values.discount) }

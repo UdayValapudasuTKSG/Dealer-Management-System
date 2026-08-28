@@ -4,31 +4,32 @@ import { Trash2, Plus, GripVertical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 function VehicleCascade({
-  vehicleId,
+  interest,
   onChange,
   vehicles,
-  selectedIds,
 }: {
-  vehicleId: number | null;
-  onChange: (vehicleId: number | null) => void;
+  interest: any;
+  onChange: (interest: any) => void;
   vehicles: any[];
-  selectedIds: number[];
 }) {
-  const currentVehicle = useMemo(() => vehicles.find(v => v.id === vehicleId), [vehicleId, vehicles]);
-
-  const [make, setMake] = useState<string>(currentVehicle?.make || "");
-  const [model, setModel] = useState<string>(currentVehicle?.model || "");
-  const [variant, setVariant] = useState<string>(currentVehicle?.trim || currentVehicle?.variant || "");
-  const [color, setColor] = useState<string>(currentVehicle?.exteriorColor || "");
+  const legacyVehicle = useMemo(
+    () => vehicles.find(v => v.id === interest.vehicleId),
+    [interest.vehicleId, vehicles],
+  );
+  const [make, setMake] = useState<string>(interest.make || legacyVehicle?.make || "");
+  const [model, setModel] = useState<string>(interest.model || legacyVehicle?.model || "");
+  const [year, setYear] = useState<string>(String(interest.modelYear || legacyVehicle?.year || ""));
+  const [variant, setVariant] = useState<string>(interest.variant || legacyVehicle?.trim || legacyVehicle?.variant || "");
+  const [color, setColor] = useState<string>(interest.color || legacyVehicle?.exteriorColor || "");
 
   useEffect(() => {
-    if (currentVehicle) {
-      setMake(currentVehicle.make || "");
-      setModel(currentVehicle.model || "");
-      setVariant(currentVehicle.trim || currentVehicle.variant || "");
-      setColor(currentVehicle.exteriorColor || "");
-    }
-  }, [currentVehicle]);
+    if (!legacyVehicle || interest.make) return;
+    setMake(legacyVehicle.make || "");
+    setModel(legacyVehicle.model || "");
+    setYear(String(legacyVehicle.year || ""));
+    setVariant(legacyVehicle.trim || legacyVehicle.variant || "");
+    setColor(legacyVehicle.exteriorColor || "");
+  }, [legacyVehicle, interest.make]);
 
   const makes = useMemo(() => Array.from(new Set(vehicles.map(v => v.make).filter(Boolean))).sort(), [vehicles]);
 
@@ -42,65 +43,75 @@ function VehicleCascade({
     return Array.from(new Set(vehicles.filter(v => v.make === make && v.model === model).map(v => v.trim || v.variant || "Base"))).sort();
   }, [vehicles, make, model]);
 
-  const colors = useMemo(() => {
+  const years = useMemo(() => {
     if (!make || !model || !variant) return [];
-    return Array.from(new Set(vehicles.filter(v => v.make === make && v.model === model && (v.trim || v.variant || "Base") === variant).map(v => v.exteriorColor || "Unspecified"))).sort();
+    return Array.from(new Set(vehicles.filter(v =>
+      v.make === make && v.model === model &&
+      (v.trim || v.variant || "Base") === variant
+    ).map(v => v.year))).sort((a, b) => Number(b) - Number(a));
   }, [vehicles, make, model, variant]);
 
-  const units = useMemo(() => {
-    if (!make || !model || !variant || !color) return [];
-    return vehicles.filter(v =>
-      v.make === make &&
-      v.model === model &&
-      (v.trim || v.variant || "Base") === variant &&
-      (v.exteriorColor || "Unspecified") === color &&
-      (!selectedIds.includes(v.id) || v.id === vehicleId)
-    );
-  }, [vehicles, make, model, variant, color, selectedIds, vehicleId]);
+  const colors = useMemo(() => {
+    if (!make || !model || !variant || !year) return [];
+    return Array.from(new Set(vehicles.filter(v => v.make === make && v.model === model &&
+      (v.trim || v.variant || "Base") === variant && String(v.year) === year
+    ).map(v => v.exteriorColor || "Unspecified"))).sort();
+  }, [vehicles, make, model, variant, year]);
 
   const onMakeChange = (newMake: string) => {
     setMake(newMake);
     setModel("");
+    setYear("");
     setVariant("");
     setColor("");
-    onChange(null);
+    onChange({ make: newMake, model: "", modelYear: null, variant: null, color: null, unitPrice: null });
   };
 
   const onModelChange = (newModel: string) => {
     setModel(newModel);
     setVariant("");
+    setYear("");
     setColor("");
-    onChange(null);
+    onChange({ make, model: newModel, modelYear: null, variant: null, color: null, unitPrice: null });
   };
 
   const onVariantChange = (newVariant: string) => {
     setVariant(newVariant);
+    setYear("");
     setColor("");
-    onChange(null);
+    onChange({ make, model, modelYear: null, variant: newVariant, color: null, unitPrice: null });
+  };
+
+  const onYearChange = (newYear: string) => {
+    setYear(newYear);
+    setColor("");
+    onChange({ make, model, modelYear: Number(newYear), variant, color: null, unitPrice: null });
   };
 
   const onColorChange = (newColor: string) => {
     setColor(newColor);
-    onChange(null);
-    const matchedUnits = vehicles.filter(v =>
+    const representative = vehicles.find(v =>
       v.make === make &&
       v.model === model &&
       (v.trim || v.variant || "Base") === variant &&
-      (v.exteriorColor || "Unspecified") === newColor &&
-      (!selectedIds.includes(v.id) || v.id === vehicleId)
+      String(v.year) === year &&
+      (v.exteriorColor || "Unspecified") === newColor
     );
-    if (matchedUnits.length === 1) {
-      onChange(matchedUnits[0].id);
-    }
+    onChange({
+      make, model, modelYear: Number(year),
+      variant,
+      color: newColor === "Unspecified" ? null : newColor,
+      unitPrice: representative?.price ?? null,
+    });
   };
 
   const selectClass = "flex-1 h-9 rounded-md bg-foreground/[0.04] border border-white/10 px-3 text-sm focus:outline-none focus:border-primary/50 min-w-0 disabled:opacity-50";
 
   return (
     <div className="flex flex-col gap-2 w-full">
-      <div className="flex items-center gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <select value={make} onChange={e => onMakeChange(e.target.value)} className={selectClass}>
-          <option value="">Make...</option>
+          <option value="">Brand...</option>
           {makes.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
         <select value={model} onChange={e => onModelChange(e.target.value)} disabled={!make} className={selectClass}>
@@ -108,24 +119,26 @@ function VehicleCascade({
           {models.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
         <select value={variant} onChange={e => onVariantChange(e.target.value)} disabled={!model} className={selectClass}>
-          <option value="">Variant...</option>
+          <option value="">Version / Trim...</option>
           {variants.map(v => <option key={v} value={v}>{v}</option>)}
         </select>
-      </div>
-      <div className="flex items-center gap-2">
-        <select value={color} onChange={e => onColorChange(e.target.value)} disabled={!variant} className={selectClass}>
+        <select value={year} onChange={e => onYearChange(e.target.value)} disabled={!variant} className={selectClass}>
+          <option value="">Year...</option>
+          {years.map(y => <option key={String(y)} value={String(y)}>{String(y)}</option>)}
+        </select>
+        <select value={color} onChange={e => onColorChange(e.target.value)} disabled={!year} className={selectClass}>
           <option value="">Color...</option>
           {colors.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select value={vehicleId || ""} onChange={e => onChange(parseInt(e.target.value) || null)} disabled={!color || units.length === 0} className={selectClass}>
-          <option value="">{units.length === 0 && color ? "No units available" : "Unit..."}</option>
-          {units.map(u => (
-            <option key={u.id} value={u.id}>
-              {u.vin ? `VIN ${u.vin}` : `Unit #${u.id}`} ({u.status})
-            </option>
-          ))}
-        </select>
       </div>
+      {interest.modelYear && interest.unitPrice != null && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
+          <span>Year <strong className="text-foreground">{interest.modelYear}</strong></span>
+          <span>Unit / VIN <strong className="text-foreground">Assigned at allocation</strong></span>
+          <span>Unit price <strong className="text-foreground">GYD {Number(interest.unitPrice).toLocaleString()}</strong></span>
+          <span>Line total <strong className="text-foreground">GYD {(Number(interest.unitPrice) * Number(interest.quantity || 1)).toLocaleString()}</strong></span>
+        </div>
+      )}
     </div>
   );
 }
@@ -147,10 +160,11 @@ export function VehicleInterestsField({
     }
   }, [value]);
 
-  const selectedIds = useMemo(() => interests.map((i: any) => i.vehicleId).filter(Boolean), [interests]);
-
   const add = () => {
-    onChange(JSON.stringify([...interests, { vehicleId: null, quantity: 1, position: interests.length }]));
+    onChange(JSON.stringify([...interests, {
+      make: "", model: "", modelYear: null, variant: null,
+      color: null, unitPrice: null, quantity: 1, position: interests.length,
+    }]));
   };
 
   const update = (index: number, updates: any) => {
@@ -224,10 +238,9 @@ export function VehicleInterestsField({
           <div className="flex items-start gap-3">
             <div className="flex-1 min-w-0">
               <VehicleCascade
-                vehicleId={interest.vehicleId}
-                onChange={(id) => update(i, { vehicleId: id })}
+                interest={interest}
+                onChange={(spec) => update(i, spec)}
                 vehicles={vehicles}
-                selectedIds={selectedIds}
               />
             </div>
             <div className="w-20 shrink-0">

@@ -308,6 +308,10 @@ export default function Deals() {
   const submitDeposit = async () => {
     if (!blockedCommit) return;
     const deal = blockedCommit.deal;
+    if (deal.vehicleId == null) {
+      toast({ title: "No unit allocated", description: "A physical-unit booking cannot be created before spec allocation.", variant: "destructive" });
+      return;
+    }
     const amount = Number(depositAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
     try {
@@ -344,6 +348,10 @@ export default function Deals() {
   const submitBypass = async () => {
     if (!blockedCommit) return;
     const deal = blockedCommit.deal;
+    if (deal.vehicleId == null) {
+      toast({ title: "No unit allocated", description: "A physical-unit booking cannot be created before spec allocation.", variant: "destructive" });
+      return;
+    }
     if (!waiverReason.trim()) return;
     try {
       await createBooking.mutateAsync({

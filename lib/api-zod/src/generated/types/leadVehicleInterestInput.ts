@@ -7,8 +7,21 @@
  */
 
 export interface LeadVehicleInterestInput {
-  /** @minimum 1 */
-  vehicleId: number;
+  /** @minLength 1 */
+  make: string;
+  /** @minLength 1 */
+  model: string;
+  /** @minimum 1900 */
+  modelYear: number;
+  /** @nullable */
+  variant?: string | null;
+  /** @nullable */
+  color?: string | null;
+  /**
+     * Unit list price snapshot in GYD
+     * @minimum 0
+     */
+  unitPrice: number;
   /** @minimum 1 */
   quantity?: number;
   /** @minimum 0 */

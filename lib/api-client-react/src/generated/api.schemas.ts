@@ -2203,13 +2203,34 @@ export interface LeadAttachment {
 }
 
 export interface LeadVehicleInterestInput {
-  /** @minimum 1 */
-  vehicleId: number;
+  /** @minLength 1 */
+  make: string;
+  /** @minLength 1 */
+  model: string;
+  /** @minimum 1900 */
+  modelYear: number;
+  /** @nullable */
+  variant?: string | null;
+  /** @nullable */
+  color?: string | null;
+  /**
+     * Unit list price snapshot in GYD
+     * @minimum 0
+     */
+  unitPrice: number;
   /** @minimum 1 */
   quantity?: number;
   /** @minimum 0 */
   position?: number;
 }
+
+export type LeadVehicleInterest = LeadVehicleInterestInput & ({
+  /**
+     * Historical provenance only.
+     * @nullable
+     */
+  vehicleId: number | null;
+});
 
 export type LeadChannel = typeof LeadChannel[keyof typeof LeadChannel];
 
@@ -2302,7 +2323,7 @@ export interface Lead {
   customerId?: number | null;
   /** @nullable */
   interestedVehicleId?: number | null;
-  vehicleInterests?: LeadVehicleInterestInput[];
+  vehicleInterests?: LeadVehicleInterest[];
   /** @nullable */
   selectedModel?: string | null;
   /** @nullable */
@@ -2824,7 +2845,10 @@ export interface QuoteTaxLine {
 export interface QuoteItem {
   id: number;
   quoteId: number;
-  vehicleId: number;
+  /** @nullable */
+  vehicleId?: number | null;
+  make: string;
+  model: string;
   /** @minimum 1 */
   quantity: number;
   /** @minimum 0 */
@@ -2848,7 +2872,18 @@ export interface DealItem {
   dealId: number;
   /** @nullable */
   quoteItemId?: number | null;
-  vehicleId: number;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** @nullable */
+  make?: string | null;
+  /** @nullable */
+  model?: string | null;
+  /** @nullable */
+  modelYear?: number | null;
+  /** @nullable */
+  variant?: string | null;
+  /** @nullable */
+  color?: string | null;
   /** @minimum 1 */
   quantity: number;
   /** @minimum 0 */
@@ -3940,7 +3975,8 @@ export interface Deal {
   leadId?: number | null;
   /** @nullable */
   quoteId?: number | null;
-  vehicleId: number;
+  /** @nullable */
+  vehicleId?: number | null;
   /** @nullable */
   customerName?: string | null;
   stage: DealStage;
@@ -3995,10 +4031,15 @@ export interface DealInput {
   divisionId?: number;
   customerId?: number;
   leadId?: number;
-  vehicleId: number;
+  /**
+     * Required only for direct legacy deals; forbidden for linked-lead deals.
+     * @nullable
+     */
+  vehicleId?: number | null;
   customerName?: string;
   stage?: DealInputStage;
-  vehiclePrice: number;
+  /** Required only for direct legacy deals; linked deals use the current quote snapshot. */
+  vehiclePrice?: number;
   discount?: number;
   tradeInValue?: number;
   accessories?: number;

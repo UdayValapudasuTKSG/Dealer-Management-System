@@ -391,6 +391,7 @@ export * from './leadUpdatePhase';
 export * from './leadUpdatePriority';
 export * from './leadUpdatePurchaseType';
 export * from './leadUpdateStatus';
+export * from './leadVehicleInterest';
 export * from './leadVehicleInterestInput';
 export * from './lifecycleBlockersResponse';
 export * from './lifecycleBlockersResponseBlockersItem';

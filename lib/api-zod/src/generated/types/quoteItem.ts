@@ -10,7 +10,10 @@ import type { QuoteTaxLine } from './quoteTaxLine';
 export interface QuoteItem {
   id: number;
   quoteId: number;
-  vehicleId: number;
+  /** @nullable */
+  vehicleId?: number | null;
+  make: string;
+  model: string;
   /** @minimum 1 */
   quantity: number;
   /** @minimum 0 */

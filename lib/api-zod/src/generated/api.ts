@@ -1406,10 +1406,15 @@ export const ListLeadsQueryParams = zod.object({
 })
 
 
-export const listLeadsResponseVehicleInterestsItemQuantityDefault = 1;
 
-export const listLeadsResponseVehicleInterestsItemPositionDefault = 0;
-export const listLeadsResponseVehicleInterestsItemPositionMin = 0;
+export const listLeadsResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const listLeadsResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const listLeadsResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const listLeadsResponseVehicleInterestsItemOnePositionDefault = 0;
+export const listLeadsResponseVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -1430,10 +1435,17 @@ export const ListLeadsResponseItem = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(listLeadsResponseVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(listLeadsResponseVehicleInterestsItemPositionMin).default(listLeadsResponseVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(listLeadsResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(listLeadsResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(listLeadsResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(listLeadsResponseVehicleInterestsItemOnePositionMin).default(listLeadsResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -1478,6 +1490,11 @@ export const ListLeadsResponse = zod.array(ListLeadsResponseItem)
 
 
 
+
+export const createLeadBodyVehicleInterestsItemModelYearMin = 1900;
+
+export const createLeadBodyVehicleInterestsItemUnitPriceMin = 0;
+
 export const createLeadBodyVehicleInterestsItemQuantityDefault = 1;
 
 export const createLeadBodyVehicleInterestsItemPositionDefault = 0;
@@ -1498,7 +1515,12 @@ export const CreateLeadBody = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']).optional(),
   "interestedVehicleId": zod.number().optional(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(createLeadBodyVehicleInterestsItemModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(createLeadBodyVehicleInterestsItemUnitPriceMin).describe('Unit list price snapshot in GYD'),
   "quantity": zod.number().min(1).default(createLeadBodyVehicleInterestsItemQuantityDefault),
   "position": zod.number().min(createLeadBodyVehicleInterestsItemPositionMin).default(createLeadBodyVehicleInterestsItemPositionDefault)
 })).optional().describe('Canonical dealer-scoped interests; first item projects to interestedVehicleId.'),
@@ -1517,10 +1539,15 @@ export const CreateLeadBody = zod.object({
 })
 
 
-export const createLeadResponseLeadVehicleInterestsItemQuantityDefault = 1;
 
-export const createLeadResponseLeadVehicleInterestsItemPositionDefault = 0;
-export const createLeadResponseLeadVehicleInterestsItemPositionMin = 0;
+export const createLeadResponseLeadVehicleInterestsItemOneModelYearMin = 1900;
+
+export const createLeadResponseLeadVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const createLeadResponseLeadVehicleInterestsItemOneQuantityDefault = 1;
+
+export const createLeadResponseLeadVehicleInterestsItemOnePositionDefault = 0;
+export const createLeadResponseLeadVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -1542,10 +1569,17 @@ export const CreateLeadResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(createLeadResponseLeadVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(createLeadResponseLeadVehicleInterestsItemPositionMin).default(createLeadResponseLeadVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(createLeadResponseLeadVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(createLeadResponseLeadVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(createLeadResponseLeadVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(createLeadResponseLeadVehicleInterestsItemOnePositionMin).default(createLeadResponseLeadVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -1594,10 +1628,15 @@ export const GetLeadParams = zod.object({
 })
 
 
-export const getLeadResponseVehicleInterestsItemQuantityDefault = 1;
 
-export const getLeadResponseVehicleInterestsItemPositionDefault = 0;
-export const getLeadResponseVehicleInterestsItemPositionMin = 0;
+export const getLeadResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const getLeadResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const getLeadResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const getLeadResponseVehicleInterestsItemOnePositionDefault = 0;
+export const getLeadResponseVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -1618,10 +1657,17 @@ export const GetLeadResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(getLeadResponseVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(getLeadResponseVehicleInterestsItemPositionMin).default(getLeadResponseVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(getLeadResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(getLeadResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(getLeadResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(getLeadResponseVehicleInterestsItemOnePositionMin).default(getLeadResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -1669,6 +1715,11 @@ export const UpdateLeadParams = zod.object({
 
 
 
+
+export const updateLeadBodyVehicleInterestsItemModelYearMin = 1900;
+
+export const updateLeadBodyVehicleInterestsItemUnitPriceMin = 0;
+
 export const updateLeadBodyVehicleInterestsItemQuantityDefault = 1;
 
 export const updateLeadBodyVehicleInterestsItemPositionDefault = 0;
@@ -1691,7 +1742,12 @@ export const UpdateLeadBody = zod.object({
   "status": zod.enum(['new', 'assigned', 'contacted', 'qualified', 'test_drive', 'back_order', 'decision', 'engaged', 'converted', 'lost']).optional(),
   "interestedVehicleId": zod.number().optional(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(updateLeadBodyVehicleInterestsItemModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(updateLeadBodyVehicleInterestsItemUnitPriceMin).describe('Unit list price snapshot in GYD'),
   "quantity": zod.number().min(1).default(updateLeadBodyVehicleInterestsItemQuantityDefault),
   "position": zod.number().min(updateLeadBodyVehicleInterestsItemPositionMin).default(updateLeadBodyVehicleInterestsItemPositionDefault)
 })).optional(),
@@ -1727,10 +1783,15 @@ export const UpdateLeadBody = zod.object({
 })
 
 
-export const updateLeadResponseVehicleInterestsItemQuantityDefault = 1;
 
-export const updateLeadResponseVehicleInterestsItemPositionDefault = 0;
-export const updateLeadResponseVehicleInterestsItemPositionMin = 0;
+export const updateLeadResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const updateLeadResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const updateLeadResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const updateLeadResponseVehicleInterestsItemOnePositionDefault = 0;
+export const updateLeadResponseVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -1751,10 +1812,17 @@ export const UpdateLeadResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(updateLeadResponseVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(updateLeadResponseVehicleInterestsItemPositionMin).default(updateLeadResponseVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(updateLeadResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(updateLeadResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(updateLeadResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(updateLeadResponseVehicleInterestsItemOnePositionMin).default(updateLeadResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -1827,10 +1895,15 @@ export const RestoreLeadParams = zod.object({
 })
 
 
-export const restoreLeadResponseVehicleInterestsItemQuantityDefault = 1;
 
-export const restoreLeadResponseVehicleInterestsItemPositionDefault = 0;
-export const restoreLeadResponseVehicleInterestsItemPositionMin = 0;
+export const restoreLeadResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const restoreLeadResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const restoreLeadResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const restoreLeadResponseVehicleInterestsItemOnePositionDefault = 0;
+export const restoreLeadResponseVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -1851,10 +1924,17 @@ export const RestoreLeadResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(restoreLeadResponseVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(restoreLeadResponseVehicleInterestsItemPositionMin).default(restoreLeadResponseVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(restoreLeadResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(restoreLeadResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(restoreLeadResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(restoreLeadResponseVehicleInterestsItemOnePositionMin).default(restoreLeadResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -1917,10 +1997,15 @@ export const CreateEnquiryBody = zod.object({
 })
 
 
-export const createEnquiryResponseVehicleInterestsItemQuantityDefault = 1;
 
-export const createEnquiryResponseVehicleInterestsItemPositionDefault = 0;
-export const createEnquiryResponseVehicleInterestsItemPositionMin = 0;
+export const createEnquiryResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const createEnquiryResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const createEnquiryResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const createEnquiryResponseVehicleInterestsItemOnePositionDefault = 0;
+export const createEnquiryResponseVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -1941,10 +2026,17 @@ export const CreateEnquiryResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(createEnquiryResponseVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(createEnquiryResponseVehicleInterestsItemPositionMin).default(createEnquiryResponseVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(createEnquiryResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(createEnquiryResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(createEnquiryResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(createEnquiryResponseVehicleInterestsItemOnePositionMin).default(createEnquiryResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -2104,10 +2196,15 @@ export const AssignLeadBody = zod.object({
 })
 
 
-export const assignLeadResponseVehicleInterestsItemQuantityDefault = 1;
 
-export const assignLeadResponseVehicleInterestsItemPositionDefault = 0;
-export const assignLeadResponseVehicleInterestsItemPositionMin = 0;
+export const assignLeadResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const assignLeadResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const assignLeadResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const assignLeadResponseVehicleInterestsItemOnePositionDefault = 0;
+export const assignLeadResponseVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -2128,10 +2225,17 @@ export const AssignLeadResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(assignLeadResponseVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(assignLeadResponseVehicleInterestsItemPositionMin).default(assignLeadResponseVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(assignLeadResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(assignLeadResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(assignLeadResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(assignLeadResponseVehicleInterestsItemOnePositionMin).default(assignLeadResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -2208,10 +2312,15 @@ export const AdvanceLeadStageBody = zod.object({
 })
 
 
-export const advanceLeadStageResponseVehicleInterestsItemQuantityDefault = 1;
 
-export const advanceLeadStageResponseVehicleInterestsItemPositionDefault = 0;
-export const advanceLeadStageResponseVehicleInterestsItemPositionMin = 0;
+export const advanceLeadStageResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const advanceLeadStageResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const advanceLeadStageResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const advanceLeadStageResponseVehicleInterestsItemOnePositionDefault = 0;
+export const advanceLeadStageResponseVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -2232,10 +2341,17 @@ export const AdvanceLeadStageResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(advanceLeadStageResponseVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(advanceLeadStageResponseVehicleInterestsItemPositionMin).default(advanceLeadStageResponseVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(advanceLeadStageResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(advanceLeadStageResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(advanceLeadStageResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(advanceLeadStageResponseVehicleInterestsItemOnePositionMin).default(advanceLeadStageResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -2324,10 +2440,15 @@ export const ScheduleTestDriveBody = zod.object({
 })
 
 
-export const scheduleTestDriveResponseVehicleInterestsItemQuantityDefault = 1;
 
-export const scheduleTestDriveResponseVehicleInterestsItemPositionDefault = 0;
-export const scheduleTestDriveResponseVehicleInterestsItemPositionMin = 0;
+export const scheduleTestDriveResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const scheduleTestDriveResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const scheduleTestDriveResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const scheduleTestDriveResponseVehicleInterestsItemOnePositionDefault = 0;
+export const scheduleTestDriveResponseVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -2348,10 +2469,17 @@ export const ScheduleTestDriveResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(scheduleTestDriveResponseVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(scheduleTestDriveResponseVehicleInterestsItemPositionMin).default(scheduleTestDriveResponseVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(scheduleTestDriveResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(scheduleTestDriveResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(scheduleTestDriveResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(scheduleTestDriveResponseVehicleInterestsItemOnePositionMin).default(scheduleTestDriveResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -2416,10 +2544,15 @@ export const CheckLeadAvailabilityParams = zod.object({
 })
 
 
-export const checkLeadAvailabilityResponseVehicleInterestsItemQuantityDefault = 1;
 
-export const checkLeadAvailabilityResponseVehicleInterestsItemPositionDefault = 0;
-export const checkLeadAvailabilityResponseVehicleInterestsItemPositionMin = 0;
+export const checkLeadAvailabilityResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const checkLeadAvailabilityResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const checkLeadAvailabilityResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const checkLeadAvailabilityResponseVehicleInterestsItemOnePositionDefault = 0;
+export const checkLeadAvailabilityResponseVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -2440,10 +2573,17 @@ export const CheckLeadAvailabilityResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(checkLeadAvailabilityResponseVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(checkLeadAvailabilityResponseVehicleInterestsItemPositionMin).default(checkLeadAvailabilityResponseVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(checkLeadAvailabilityResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(checkLeadAvailabilityResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(checkLeadAvailabilityResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(checkLeadAvailabilityResponseVehicleInterestsItemOnePositionMin).default(checkLeadAvailabilityResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -2498,10 +2638,15 @@ export const RecordLeadDecisionBody = zod.object({
 })
 
 
-export const recordLeadDecisionResponseVehicleInterestsItemQuantityDefault = 1;
 
-export const recordLeadDecisionResponseVehicleInterestsItemPositionDefault = 0;
-export const recordLeadDecisionResponseVehicleInterestsItemPositionMin = 0;
+export const recordLeadDecisionResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const recordLeadDecisionResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const recordLeadDecisionResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const recordLeadDecisionResponseVehicleInterestsItemOnePositionDefault = 0;
+export const recordLeadDecisionResponseVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -2522,10 +2667,17 @@ export const RecordLeadDecisionResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(recordLeadDecisionResponseVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(recordLeadDecisionResponseVehicleInterestsItemPositionMin).default(recordLeadDecisionResponseVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(recordLeadDecisionResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(recordLeadDecisionResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(recordLeadDecisionResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(recordLeadDecisionResponseVehicleInterestsItemOnePositionMin).default(recordLeadDecisionResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -2706,10 +2858,15 @@ export const LinkLeadAccountBody = zod.object({
 })
 
 
-export const linkLeadAccountResponseVehicleInterestsItemQuantityDefault = 1;
 
-export const linkLeadAccountResponseVehicleInterestsItemPositionDefault = 0;
-export const linkLeadAccountResponseVehicleInterestsItemPositionMin = 0;
+export const linkLeadAccountResponseVehicleInterestsItemOneModelYearMin = 1900;
+
+export const linkLeadAccountResponseVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const linkLeadAccountResponseVehicleInterestsItemOneQuantityDefault = 1;
+
+export const linkLeadAccountResponseVehicleInterestsItemOnePositionDefault = 0;
+export const linkLeadAccountResponseVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -2730,10 +2887,17 @@ export const LinkLeadAccountResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(linkLeadAccountResponseVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(linkLeadAccountResponseVehicleInterestsItemPositionMin).default(linkLeadAccountResponseVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(linkLeadAccountResponseVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(linkLeadAccountResponseVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(linkLeadAccountResponseVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(linkLeadAccountResponseVehicleInterestsItemOnePositionMin).default(linkLeadAccountResponseVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),
@@ -2859,7 +3023,9 @@ export const ListLeadQuotesResponseItem = zod.object({
   "items": zod.array(zod.object({
   "id": zod.number(),
   "quoteId": zod.number(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "make": zod.string(),
+  "model": zod.string(),
   "quantity": zod.number().min(1),
   "position": zod.number().min(listLeadQuotesResponseItemsItemPositionMin),
   "modelYear": zod.number(),
@@ -2960,7 +3126,9 @@ export const GenerateLeadQuoteResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.number(),
   "quoteId": zod.number(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "make": zod.string(),
+  "model": zod.string(),
   "quantity": zod.number().min(1),
   "position": zod.number().min(generateLeadQuoteResponseItemsItemPositionMin),
   "modelYear": zod.number(),
@@ -3062,7 +3230,9 @@ export const RequestQuoteDiscountResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.number(),
   "quoteId": zod.number(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "make": zod.string(),
+  "model": zod.string(),
   "quantity": zod.number().min(1),
   "position": zod.number().min(requestQuoteDiscountResponseItemsItemPositionMin),
   "modelYear": zod.number(),
@@ -3670,7 +3840,7 @@ export const ListDealsResponseItem = zod.object({
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "quoteId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
@@ -3698,7 +3868,12 @@ export const ListDealsResponseItem = zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
   "quoteItemId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "make": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "modelYear": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
   "quantity": zod.number().min(1),
   "position": zod.number().min(listDealsResponseItemsItemPositionMin),
   "vehiclePrice": zod.number().describe('Unit price'),
@@ -3722,10 +3897,10 @@ export const CreateDealBody = zod.object({
   "divisionId": zod.number().optional(),
   "customerId": zod.number().optional(),
   "leadId": zod.number().optional(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish().describe('Required only for direct legacy deals; forbidden for linked-lead deals.'),
   "customerName": zod.string().optional(),
   "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']).optional(),
-  "vehiclePrice": zod.number(),
+  "vehiclePrice": zod.number().optional().describe('Required only for direct legacy deals; linked deals use the current quote snapshot.'),
   "discount": zod.number().optional(),
   "tradeInValue": zod.number().optional(),
   "accessories": zod.number().optional(),
@@ -3748,7 +3923,7 @@ export const CreateDealResponse = zod.object({
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "quoteId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
@@ -3776,7 +3951,12 @@ export const CreateDealResponse = zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
   "quoteItemId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "make": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "modelYear": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
   "quantity": zod.number().min(1),
   "position": zod.number().min(createDealResponseItemsItemPositionMin),
   "vehiclePrice": zod.number().describe('Unit price'),
@@ -3810,7 +3990,7 @@ export const GetDealResponse = zod.object({
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "quoteId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
@@ -3838,7 +4018,12 @@ export const GetDealResponse = zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
   "quoteItemId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "make": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "modelYear": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
   "quantity": zod.number().min(1),
   "position": zod.number().min(getDealResponseItemsItemPositionMin),
   "vehiclePrice": zod.number().describe('Unit price'),
@@ -3896,7 +4081,7 @@ export const UpdateDealResponse = zod.object({
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "quoteId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
@@ -3924,7 +4109,12 @@ export const UpdateDealResponse = zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
   "quoteItemId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "make": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "modelYear": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
   "quantity": zod.number().min(1),
   "position": zod.number().min(updateDealResponseItemsItemPositionMin),
   "vehiclePrice": zod.number().describe('Unit price'),
@@ -7290,10 +7480,15 @@ export const getCustomerOverviewResponseActiveDealOneItemsItemPositionMin = 0;
 export const getCustomerOverviewResponseDealsItemItemsItemPositionMin = 0;
 
 
-export const getCustomerOverviewResponseLeadsItemVehicleInterestsItemQuantityDefault = 1;
 
-export const getCustomerOverviewResponseLeadsItemVehicleInterestsItemPositionDefault = 0;
-export const getCustomerOverviewResponseLeadsItemVehicleInterestsItemPositionMin = 0;
+export const getCustomerOverviewResponseLeadsItemVehicleInterestsItemOneModelYearMin = 1900;
+
+export const getCustomerOverviewResponseLeadsItemVehicleInterestsItemOneUnitPriceMin = 0;
+
+export const getCustomerOverviewResponseLeadsItemVehicleInterestsItemOneQuantityDefault = 1;
+
+export const getCustomerOverviewResponseLeadsItemVehicleInterestsItemOnePositionDefault = 0;
+export const getCustomerOverviewResponseLeadsItemVehicleInterestsItemOnePositionMin = 0;
 
 
 
@@ -7509,7 +7704,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "quoteId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
@@ -7537,7 +7732,12 @@ export const GetCustomerOverviewResponse = zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
   "quoteItemId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "make": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "modelYear": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
   "quantity": zod.number().min(1),
   "position": zod.number().min(getCustomerOverviewResponseActiveDealOneItemsItemPositionMin),
   "vehiclePrice": zod.number().describe('Unit price'),
@@ -7560,7 +7760,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "customerId": zod.number().nullish(),
   "leadId": zod.number().nullish(),
   "quoteId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "stage": zod.enum(['desking', 'committed', 'delivered', 'cancelled', 'lost']),
   "vehiclePrice": zod.number(),
@@ -7588,7 +7788,12 @@ export const GetCustomerOverviewResponse = zod.object({
   "id": zod.number(),
   "dealId": zod.number(),
   "quoteItemId": zod.number().nullish(),
-  "vehicleId": zod.number(),
+  "vehicleId": zod.number().nullish(),
+  "make": zod.string().nullish(),
+  "model": zod.string().nullish(),
+  "modelYear": zod.number().nullish(),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
   "quantity": zod.number().min(1),
   "position": zod.number().min(getCustomerOverviewResponseDealsItemItemsItemPositionMin),
   "vehiclePrice": zod.number().describe('Unit price'),
@@ -7696,10 +7901,17 @@ export const GetCustomerOverviewResponse = zod.object({
   "customerId": zod.number().nullish(),
   "interestedVehicleId": zod.number().nullish(),
   "vehicleInterests": zod.array(zod.object({
-  "vehicleId": zod.number().min(1),
-  "quantity": zod.number().min(1).default(getCustomerOverviewResponseLeadsItemVehicleInterestsItemQuantityDefault),
-  "position": zod.number().min(getCustomerOverviewResponseLeadsItemVehicleInterestsItemPositionMin).default(getCustomerOverviewResponseLeadsItemVehicleInterestsItemPositionDefault)
-})).optional(),
+  "make": zod.string().min(1),
+  "model": zod.string().min(1),
+  "modelYear": zod.number().min(getCustomerOverviewResponseLeadsItemVehicleInterestsItemOneModelYearMin),
+  "variant": zod.string().nullish(),
+  "color": zod.string().nullish(),
+  "unitPrice": zod.number().min(getCustomerOverviewResponseLeadsItemVehicleInterestsItemOneUnitPriceMin).describe('Unit list price snapshot in GYD'),
+  "quantity": zod.number().min(1).default(getCustomerOverviewResponseLeadsItemVehicleInterestsItemOneQuantityDefault),
+  "position": zod.number().min(getCustomerOverviewResponseLeadsItemVehicleInterestsItemOnePositionMin).default(getCustomerOverviewResponseLeadsItemVehicleInterestsItemOnePositionDefault)
+}).and(zod.object({
+  "vehicleId": zod.number().nullable().describe('Historical provenance only.')
+}))).optional(),
   "selectedModel": zod.string().nullish(),
   "interestedModelText": zod.string().nullish(),
   "variant": zod.string().nullish(),

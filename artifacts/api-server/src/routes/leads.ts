@@ -255,22 +255,33 @@ async function logLeadEvent(
   });
 }
 
-async function withLeadVehicleInterests<T extends Lead>(leads: T[]): Promise<Array<T & { vehicleInterests: Array<{ vehicleId: number; quantity: number; position: number }> }>> {
+async function withLeadVehicleInterests<T extends Lead>(leads: T[]): Promise<Array<T & { vehicleInterests: Array<{
+  vehicleId: number | null; make: string; model: string; modelYear: number;
+  variant: string | null; color: string | null; unitPrice: number;
+  quantity: number; position: number;
+}> }>> {
   if (!leads.length) return [];
   const dealerId = leads[0]!.dealerId;
   const interests = await db.select({
     leadId: leadVehicleInterestsTable.leadId,
     vehicleId: leadVehicleInterestsTable.vehicleId,
+    make: leadVehicleInterestsTable.make,
+    model: leadVehicleInterestsTable.model,
+    modelYear: leadVehicleInterestsTable.modelYear,
+    variant: leadVehicleInterestsTable.variant,
+    color: leadVehicleInterestsTable.color,
+    unitPrice: leadVehicleInterestsTable.unitPrice,
     quantity: leadVehicleInterestsTable.quantity,
     position: leadVehicleInterestsTable.position,
   }).from(leadVehicleInterestsTable).where(and(
     eq(leadVehicleInterestsTable.dealerId, dealerId),
     inArray(leadVehicleInterestsTable.leadId, leads.map((lead) => lead.id)),
   )).orderBy(leadVehicleInterestsTable.position);
-  const byLead = new Map<number, Array<{ vehicleId: number; quantity: number; position: number }>>();
+  const byLead = new Map<number, Array<Omit<typeof interests[number], "leadId">>>();
   for (const interest of interests) {
     const items = byLead.get(interest.leadId) ?? [];
-    items.push({ vehicleId: interest.vehicleId, quantity: interest.quantity, position: interest.position });
+    const { leadId: _leadId, ...item } = interest;
+    items.push(item);
     byLead.set(interest.leadId, items);
   }
   return leads.map((lead) => ({ ...lead, vehicleInterests: byLead.get(lead.id) ?? [] }));
@@ -394,6 +405,13 @@ router.get("/leads/advisors", async (_req, res): Promise<void> => {
 });
 
 router.post("/leads", async (req, res): Promise<void> => {
+  if (Array.isArray(req.body?.vehicleInterests) && req.body.vehicleInterests.some(
+    (interest: unknown) => typeof interest === "object" && interest !== null &&
+      (interest as { vehicleId?: unknown }).vehicleId != null,
+  )) {
+    res.status(422).json({ error: "vehicleInterests must not contain vehicleId; physical units are assigned only at deal allocation." });
+    return;
+  }
   const parsed = CreateLeadBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -401,37 +419,27 @@ router.post("/leads", async (req, res): Promise<void> => {
   }
 
   const dealerId = activeDealerId(res);
+  if (parsed.data.interestedVehicleId != null) {
+    res.status(422).json({ error: "Physical vehicle selection is not allowed; submit vehicleInterests specifications." });
+    return;
+  }
   const { vehicleInterests, ...leadData } = parsed.data;
-  const normalizedInterests = vehicleInterests
+  let normalizedInterests = vehicleInterests
     ? [...vehicleInterests].sort((a, b) => a.position - b.position)
-    : leadData.interestedVehicleId != null
-      ? [{ vehicleId: leadData.interestedVehicleId, quantity: 1, position: 0 }]
-      : [];
+    : [];
   if (
     vehicleInterests &&
-    new Set(vehicleInterests.map((interest) => interest.vehicleId)).size !==
+    new Set(vehicleInterests.map((interest) =>
+      [interest.make, interest.model, interest.modelYear, interest.variant ?? "", interest.color ?? ""]
+        .join("|").toLocaleLowerCase(),
+    )).size !==
       vehicleInterests.length
   ) {
     res.status(422).json({
       error: "duplicate_vehicle_interests",
-      detail: "Each vehicle may appear only once in vehicleInterests",
+      detail: "Each vehicle specification may appear only once in vehicleInterests",
     });
     return;
-  }
-  if (normalizedInterests.length) {
-    const requestedIds = normalizedInterests.map((interest) => interest.vehicleId);
-    const available = await db
-      .select({ id: vehiclesTable.id })
-      .from(vehiclesTable)
-      .where(and(
-        eq(vehiclesTable.dealerId, dealerId),
-        inArray(vehiclesTable.id, requestedIds),
-        isNull(vehiclesTable.deletedAt),
-      ));
-    if (available.length !== new Set(requestedIds).size) {
-      res.status(404).json({ error: "One or more interested vehicles were not found" });
-      return;
-    }
   }
   let divisionId = parsed.data.divisionId ?? null;
   if (
@@ -473,29 +481,36 @@ router.post("/leads", async (req, res): Promise<void> => {
     return;
   }
 
-  const [lead] = await db
-    .insert(leadsTable)
-    .values({
-      ...leadData,
-      // Legacy columns always mirror position zero for older consumers.
-      ...(normalizedInterests.length
-        ? { interestedVehicleId: normalizedInterests[0]!.vehicleId }
-        : {}),
-      divisionId,
-      dealerId,
-    })
-    .returning();
-  if (lead && normalizedInterests.length) {
-    await db.insert(leadVehicleInterestsTable).values(
-      normalizedInterests.map((interest, position) => ({
+  const lead = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(leadsTable)
+      .values({
+        ...leadData,
+        // New canonical interests never project a physical unit onto the lead.
+        ...(vehicleInterests ? { interestedVehicleId: null } : {}),
+        divisionId,
         dealerId,
-        leadId: lead.id,
-        vehicleId: interest.vehicleId,
-        quantity: interest.quantity,
-        position,
-      })),
-    );
-  }
+      })
+      .returning();
+    if (created && normalizedInterests.length) {
+      await tx.insert(leadVehicleInterestsTable).values(
+        normalizedInterests.map((interest, position) => ({
+          dealerId,
+          leadId: created.id,
+          vehicleId: null,
+          make: interest.make,
+          model: interest.model,
+          modelYear: interest.modelYear,
+          variant: interest.variant,
+          color: interest.color,
+          unitPrice: interest.unitPrice,
+          quantity: interest.quantity,
+          position,
+        })),
+      );
+    }
+    return created;
+  });
 
   const leadWithInterests = lead
     ? (await withLeadVehicleInterests([lead]))[0]!
@@ -2816,27 +2831,42 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  if (Array.isArray(req.body?.vehicleInterests) && req.body.vehicleInterests.some(
+    (interest: unknown) => typeof interest === "object" && interest !== null &&
+      (interest as { vehicleId?: unknown }).vehicleId != null,
+  )) {
+    res.status(422).json({ error: "vehicleInterests must not contain vehicleId; physical units are assigned only at deal allocation." });
+    return;
+  }
   const parsed = UpdateLeadBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
   const { vehicleInterests, ...leadPatch } = parsed.data;
+  if (parsed.data.interestedVehicleId != null) {
+    res.status(422).json({ error: "Physical vehicle selection is read-only history; update vehicleInterests specifications instead." });
+    return;
+  }
   const normalizedInterests = vehicleInterests
     ? [...vehicleInterests].sort((a, b) => a.position - b.position)
     : null;
   if (
     vehicleInterests &&
-    new Set(vehicleInterests.map((interest) => interest.vehicleId)).size !==
+    new Set(vehicleInterests.map((interest) =>
+      [interest.make, interest.model, interest.modelYear, interest.variant ?? "", interest.color ?? ""]
+        .join("|").toLocaleLowerCase(),
+    )).size !==
       vehicleInterests.length
   ) {
     res.status(422).json({
       error: "duplicate_vehicle_interests",
-      detail: "Each vehicle may appear only once in vehicleInterests",
+      detail: "Each vehicle specification may appear only once in vehicleInterests",
     });
     return;
   }
-  const primaryInterestId = normalizedInterests?.[0]?.vehicleId ?? null;
+  // Canonical interests are demand specifications, never physical units.
+  const primaryInterestId = normalizedInterests ? null : undefined;
 
   // Field-level permissions: reject edits to restricted field groups.
   const blocked = await findBlockedEditField(res.locals.user, "leads", parsed.data);
@@ -2931,7 +2961,7 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
         throw SWAP_ABORT;
       }
       const requestedPrimaryId =
-        normalizedInterests ? primaryInterestId : parsed.data.interestedVehicleId;
+        normalizedInterests ? undefined : parsed.data.interestedVehicleId;
       const swapping =
         requestedPrimaryId !== undefined &&
         requestedPrimaryId !== locked.interestedVehicleId;
@@ -2997,35 +3027,34 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
         }
       }
       if (normalizedInterests) {
-        const ids = normalizedInterests.map((interest) => interest.vehicleId);
-        const dealerVehicles = ids.length
-          ? await tx.select({ id: vehiclesTable.id }).from(vehiclesTable).where(and(
-              eq(vehiclesTable.dealerId, dealerId),
-              inArray(vehiclesTable.id, ids),
-              isNull(vehiclesTable.deletedAt),
-            ))
-          : [];
-        if (dealerVehicles.length !== new Set(ids).size) {
-          swapFailure = { status: 404, body: { error: "One or more interested vehicles were not found" } };
-          throw SWAP_ABORT;
-        }
         await tx.delete(leadVehicleInterestsTable).where(and(
           eq(leadVehicleInterestsTable.dealerId, dealerId),
           eq(leadVehicleInterestsTable.leadId, locked.id),
         ));
         if (normalizedInterests.length) await tx.insert(leadVehicleInterestsTable).values(
           normalizedInterests.map((interest, position) => ({
-            dealerId, leadId: locked.id, vehicleId: interest.vehicleId,
+            dealerId, leadId: locked.id, vehicleId: null,
+            make: interest.make, model: interest.model, modelYear: interest.modelYear,
+            variant: interest.variant, color: interest.color, unitPrice: interest.unitPrice,
             quantity: interest.quantity, position,
           })),
         );
+        // A changed demand specification invalidates every commercial
+        // authority tied to the former snapshot in this same transaction.
+        // Deal creation only binds `current`, so stale quotes/discounts/duty
+        // approvals cannot be selected in the interval after the lead update.
+        await tx.update(quotesTable).set({ status: "superseded" }).where(and(
+          eq(quotesTable.dealerId, dealerId),
+          eq(quotesTable.leadId, locked.id),
+          eq(quotesTable.status, "current"),
+        ));
       }
 
       const [updated] = await tx
         .update(leadsTable)
         .set({
           ...leadPatch,
-          ...(normalizedInterests ? { interestedVehicleId: primaryInterestId } : {}),
+           ...(normalizedInterests ? { interestedVehicleId: null } : {}),
           ...(parsed.data.phase && parsed.data.phase !== locked.phase
             ? { stageEnteredAt: new Date() }
             : {}),
@@ -3103,73 +3132,6 @@ router.patch("/leads/:id", async (req, res): Promise<void> => {
       return;
     }
     throw err;
-  }
-
-  // Pre-booking blocks the unit: taking the reservation fee reserves the
-  // interested vehicle so it can't be double-sold from inventory.
-  if (
-    parsed.data.reservationFeePaid === true &&
-    !before.reservationFeePaid &&
-    lead?.interestedVehicleId
-  ) {
-    const [reserved] = await db
-      .update(vehiclesTable)
-      .set({ status: "reserved" })
-      .where(
-        and(
-          eq(vehiclesTable.id, lead.interestedVehicleId),
-          eq(vehiclesTable.dealerId, activeDealerId(res)),
-          eq(vehiclesTable.status, "available"),
-        ),
-      )
-      .returning({ id: vehiclesTable.id });
-    if (reserved) {
-      await logLeadEvent(
-        lead,
-        "vehicle_reserved",
-        "Unit blocked in inventory",
-        `${actorName(res)} recorded the reservation fee — the interested vehicle is now reserved.`,
-        actorName(res),
-      );
-    }
-  }
-
-  // Vehicle swap follow-through: timeline entries (audit only — the actual
-  // inventory moves happened inside the transaction above).
-  if (lead) {
-    if (releasedOldVehicle && swappedFromVehicleId != null) {
-      await logLeadEvent(
-        lead,
-        "vehicle_released",
-        "Previous unit released",
-        `${actorName(res)} changed the interested vehicle — the previous unit is back in available stock.`,
-        actorName(res),
-      );
-    }
-    const swapIn = swapInVehicle as {
-      id: number;
-      vin: string | null;
-      year: number | null;
-      make: string;
-      model: string;
-    } | null;
-    if (newVehicleReserved && swapIn) {
-      const unit = [
-        swapIn.year,
-        swapIn.make,
-        swapIn.model,
-        swapIn.vin ? `(VIN ${swapIn.vin})` : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      await logLeadEvent(
-        lead,
-        "vehicle_reserved",
-        "Replacement unit blocked in inventory",
-        `${actorName(res)} switched the interested vehicle to ${unit} — it is now reserved for this lead.`,
-        actorName(res),
-      );
-    }
   }
 
   if (goingLost) {

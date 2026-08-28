@@ -51,6 +51,8 @@ export const dealsTable = pgTable("deals", {
   customerId: integer("customer_id"),
   leadId: integer("lead_id"),
   quoteId: integer("quote_id"),
+  /** Database column is nullable for spec-only linked deals; most legacy
+   * consumers operate only after allocation and retain the concrete type. */
   vehicleId: integer("vehicle_id").notNull(),
   customerName: text("customer_name"),
   stage: text("stage").notNull().default("desking"),

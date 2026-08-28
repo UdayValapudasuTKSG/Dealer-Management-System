@@ -21,7 +21,8 @@ export interface Deal {
   leadId?: number | null;
   /** @nullable */
   quoteId?: number | null;
-  vehicleId: number;
+  /** @nullable */
+  vehicleId?: number | null;
   /** @nullable */
   customerName?: string | null;
   stage: DealStage;

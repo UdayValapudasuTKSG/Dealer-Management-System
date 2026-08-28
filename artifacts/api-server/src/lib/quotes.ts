@@ -63,37 +63,6 @@ export async function leadVehicle(lead: Lead): Promise<Vehicle | null> {
   return v ?? null;
 }
 
-/** Normalized interests are canonical; the old lead columns are a projection. */
-async function leadVehicles(lead: Lead): Promise<Array<{ vehicle: Vehicle; quantity: number; position: number }>> {
-  const interests = await db
-    .select({
-      vehicleId: leadVehicleInterestsTable.vehicleId,
-      quantity: leadVehicleInterestsTable.quantity,
-      position: leadVehicleInterestsTable.position,
-    })
-    .from(leadVehicleInterestsTable)
-    .where(and(
-      eq(leadVehicleInterestsTable.dealerId, lead.dealerId),
-      eq(leadVehicleInterestsTable.leadId, lead.id),
-    ))
-    .orderBy(leadVehicleInterestsTable.position);
-  const ids = interests.map((interest) => interest.vehicleId);
-  const vehicles = ids.length
-    ? await db.select().from(vehiclesTable).where(and(
-        eq(vehiclesTable.dealerId, lead.dealerId),
-        inArray(vehiclesTable.id, ids),
-      ))
-    : [];
-  const byId = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
-  const resolved = interests.flatMap((interest) => {
-    const vehicle = byId.get(interest.vehicleId);
-    return vehicle ? [{ vehicle, quantity: interest.quantity, position: interest.position }] : [];
-  });
-  if (resolved.length) return resolved;
-  const legacy = await leadVehicle(lead);
-  return legacy ? [{ vehicle: legacy, quantity: 1, position: 0 }] : [];
-}
-
 /**
  * Generate (or regenerate) the Code for a lead. Deterministic: price from the
  * inventory unit, taxes from the dealer's configured rules as of today.
@@ -126,20 +95,36 @@ export async function generateQuoteForLead(
       eq(leadVehicleInterestsTable.dealerId, currentLead.dealerId),
       eq(leadVehicleInterestsTable.leadId, currentLead.id),
     )).orderBy(leadVehicleInterestsTable.position);
-    const canonicalInterests = interestRows.length ? interestRows : currentLead.interestedVehicleId
-      ? [{ vehicleId: currentLead.interestedVehicleId, quantity: 1, position: 0 }]
-      : [];
+    let canonicalInterests = interestRows;
+    if (!canonicalInterests.length && currentLead.interestedVehicleId) {
+      const [legacy] = await tx.select().from(vehiclesTable).where(and(
+        eq(vehiclesTable.id, currentLead.interestedVehicleId),
+        eq(vehiclesTable.dealerId, currentLead.dealerId),
+      ));
+      canonicalInterests = legacy ? [{
+        id: 0, dealerId: currentLead.dealerId, leadId: currentLead.id,
+        vehicleId: legacy.id, make: legacy.make, model: legacy.model,
+        modelYear: legacy.year, variant: legacy.trim ?? legacy.variant,
+        color: legacy.exteriorColor, unitPrice: legacy.price,
+        quantity: 1, position: 0, createdAt: now,
+      }] : [];
+    }
     if (!canonicalInterests.length) return null;
-    const vehicles = await tx.select().from(vehiclesTable).where(and(
+    // Read inventory only for tax classification. It is not selected, locked,
+    // held, or persisted as the requested unit.
+    const inventory = await tx.select().from(vehiclesTable).where(
       eq(vehiclesTable.dealerId, currentLead.dealerId),
-      inArray(vehiclesTable.id, canonicalInterests.map((item) => item.vehicleId)),
-    )).for("update");
-    const vehicleById = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
-    const interests = canonicalInterests.flatMap((interest) => {
-      const vehicle = vehicleById.get(interest.vehicleId);
-      return vehicle ? [{ vehicle, quantity: interest.quantity, position: interest.position }] : [];
-    });
-    if (interests.length !== canonicalInterests.length) return null;
+    );
+    const interests = canonicalInterests.map((interest) => ({
+      interest,
+      representative: inventory.find((vehicle) =>
+        vehicle.make.toLowerCase() === interest.make.toLowerCase() &&
+        vehicle.model.toLowerCase() === interest.model.toLowerCase() &&
+        vehicle.year === interest.modelYear &&
+        (vehicle.trim ?? vehicle.variant ?? "Base").toLowerCase() === (interest.variant ?? "Base").toLowerCase() &&
+        (vehicle.exteriorColor ?? "").toLowerCase() === (interest.color ?? "").toLowerCase()
+      ),
+    }));
 
     // Quote serialization is per lead, but tax defaults are dealer-global.
     // Serialize the empty-check/seed path independently so two first quotes
@@ -179,21 +164,22 @@ export async function generateQuoteForLead(
     const latestItems = latest
       ? await tx.select().from(quoteItemsTable).where(eq(quoteItemsTable.quoteId, latest.id)).orderBy(quoteItemsTable.position)
       : [];
-    const normalItems = interests.map(({ vehicle, quantity, position }) => {
-      const computed = computeTaxes(vehicle.price * quantity, taxRules, { powertrain: vehicle.powertrain });
-      const modelYear = opts.overrides?.modelYear ?? vehicle.year;
+    const normalItems = interests.map(({ interest, representative }) => {
+      const computed = computeTaxes(interest.unitPrice * interest.quantity, taxRules, { powertrain: representative?.powertrain });
+      const modelYear = opts.overrides?.modelYear ?? interest.modelYear;
       const vehicleLine = opts.overrides?.modelName?.trim() ||
-        (vehicle.model.toLowerCase().startsWith(vehicle.make.toLowerCase()) ? vehicle.model : `${vehicle.make} ${vehicle.model}`);
-      return { vehicle, quantity, position, computed, modelYear, vehicleLine };
+        (interest.model.toLowerCase().startsWith(interest.make.toLowerCase()) ? interest.model : `${interest.make} ${interest.model}`);
+      return { interest, representative, quantity: interest.quantity, position: interest.position, computed, modelYear, vehicleLine };
     });
     const unchanged = latestItems.length === normalItems.length && latestItems.every((item, index) => {
       const next = normalItems[index]!;
-      return item.vehicleId === next.vehicle.id && item.quantity === next.quantity &&
-        item.position === next.position && item.basePrice === next.vehicle.price &&
+      return item.vehicleId === next.interest.vehicleId && item.make === next.interest.make &&
+        item.model === next.interest.model && item.quantity === next.quantity &&
+        item.position === next.position && item.basePrice === next.interest.unitPrice &&
         item.modelYear === next.modelYear && item.vehicleLine === next.vehicleLine &&
-        item.trim === (next.vehicle.trim || next.vehicle.variant || currentLead.variant || null) &&
-        item.color === (next.vehicle.exteriorColor || currentLead.color || null) &&
-        item.manufacturer === next.vehicle.make &&
+        item.trim === (next.interest.variant || currentLead.variant || null) &&
+        item.color === (next.interest.color || currentLead.color || null) &&
+        item.manufacturer === next.interest.make &&
         JSON.stringify(item.taxLines) === JSON.stringify(next.computed.lines) &&
         item.totalTax === next.computed.totalTax && item.total === next.computed.totalWithTax;
     });
@@ -202,10 +188,10 @@ export async function generateQuoteForLead(
     const effectiveRules = dutyFreeApproved ? dutyFreeTaxRules(taxRules) : taxRules;
     const pricedItems = normalItems.map((item) => ({
       ...item,
-      computed: computeTaxes(item.vehicle.price * item.quantity, effectiveRules, { powertrain: item.vehicle.powertrain }),
+       computed: computeTaxes(item.interest.unitPrice * item.quantity, effectiveRules, { powertrain: item.representative?.powertrain }),
     }));
     const primary = pricedItems[0]!;
-    const basePrice = pricedItems.reduce((sum, item) => sum + item.vehicle.price * item.quantity, 0);
+    const basePrice = pricedItems.reduce((sum, item) => sum + item.interest.unitPrice * item.quantity, 0);
     const totalTax = pricedItems.reduce((sum, item) => sum + item.computed.totalTax, 0);
     const total = Math.max(basePrice + totalTax - approvedDiscount, 0);
     let quoteNumber = latest?.quoteNumber;
@@ -242,7 +228,9 @@ export async function generateQuoteForLead(
       dealerId: currentLead.dealerId,
       leadId: currentLead.id,
       // Compatibility projection: the first interest is the primary vehicle.
-      vehicleId: primary.vehicle.id,
+       // Header-only compatibility provenance. This does not reserve, hold,
+       // or assign the unit; allocation is exclusively performed at commit.
+       vehicleId: primary.interest.vehicleId ?? primary.representative?.id ?? null,
       quoteNumber,
       version,
       status: "current",
@@ -250,9 +238,9 @@ export async function generateQuoteForLead(
       customerAddress: currentLead.address,
       modelYear: primary.modelYear,
       vehicleLine: primary.vehicleLine,
-      trim: primary.vehicle.trim || primary.vehicle.variant || currentLead.variant || null,
-      color: primary.vehicle.exteriorColor || currentLead.color || null,
-      manufacturer: primary.vehicle.make,
+       trim: primary.interest.variant || currentLead.variant || null,
+       color: primary.interest.color || currentLead.color || null,
+       manufacturer: primary.interest.make,
       mfgDate: String(primary.modelYear),
       quantity: pricedItems.reduce((sum, item) => sum + item.quantity, 0),
       basePrice,
@@ -278,12 +266,14 @@ export async function generateQuoteForLead(
     // staleness comparison. The parent header carries the approved effective
     // duty-free/discount presentation.
     await tx.insert(quoteItemsTable).values(normalItems.map((item) => ({
-      dealerId: currentLead.dealerId, quoteId: created!.id, vehicleId: item.vehicle.id,
+       dealerId: currentLead.dealerId, quoteId: created!.id,
+       vehicleId: item.interest.vehicleId ?? item.representative?.id ?? null,
+       make: item.interest.make, model: item.interest.model,
       quantity: item.quantity, position: item.position, modelYear: item.modelYear,
       vehicleLine: item.vehicleLine,
-      trim: item.vehicle.trim || item.vehicle.variant || currentLead.variant || null,
-      color: item.vehicle.exteriorColor || currentLead.color || null,
-      manufacturer: item.vehicle.make, basePrice: item.vehicle.price,
+       trim: item.interest.variant || currentLead.variant || null,
+       color: item.interest.color || currentLead.color || null,
+       manufacturer: item.interest.make, basePrice: item.interest.unitPrice,
       taxLines: item.computed.lines, totalTax: item.computed.totalTax,
       total: item.computed.totalWithTax,
     })));
