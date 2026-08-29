@@ -4,6 +4,7 @@ import {
   usersTable,
   dealerUsersTable,
   rolePermissionsTable,
+  rolesTable,
   type PermissionModule,
 } from "@workspace/db";
 
@@ -42,16 +43,26 @@ export async function usersWithPermission(
   return [...new Set(rows.map((r) => r.id))];
 }
 
-/** General managers of a dealer (dealer_users.isGeneralManager). */
+/**
+ * Active General Managers of a dealer.
+ *
+ * Older memberships may not have dealer_users.isGeneralManager populated, so
+ * also recognize the canonical General Manager role. This prevents manager
+ * notifications from silently having no recipients when the role is correct.
+ */
 export async function generalManagers(dealerId: number): Promise<number[]> {
   const rows = await db
     .select({ id: dealerUsersTable.userId })
     .from(dealerUsersTable)
     .innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
+    .leftJoin(rolesTable, eq(rolesTable.id, dealerUsersTable.roleId))
     .where(
       and(
         eq(dealerUsersTable.dealerId, dealerId),
-        eq(dealerUsersTable.isGeneralManager, true),
+        or(
+          eq(dealerUsersTable.isGeneralManager, true),
+          eq(rolesTable.name, "General Manager"),
+        ),
         eq(usersTable.status, "active"),
       ),
     );
