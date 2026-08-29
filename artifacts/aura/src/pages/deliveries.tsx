@@ -55,6 +55,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { StyledSelect } from "@/components/ui/styled-select";
 import {
   Select,
   SelectContent,
@@ -1801,18 +1802,15 @@ function BookingsTab({ bookings }: { bookings: Booking[] }) {
             <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
               Reason
             </label>
-            <select
+            <StyledSelect
               value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
+              onValueChange={setCancelReason}
+              options={[
+                { value: "", label: "Select a reason…" },
+                ...BOOKING_CANCEL_REASONS,
+              ]}
               className="mt-1.5 w-full bg-foreground/[0.04] border border-border rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary/60"
-            >
-              <option value="">Select a reason…</option>
-              {BOOKING_CANCEL_REASONS.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
+            />
           </div>
           <DialogFooter className="gap-2">
             <Button

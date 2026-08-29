@@ -45,6 +45,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { StyledSelect } from "@/components/ui/styled-select";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -408,19 +409,16 @@ function InlineField({
               </label>
             )}
             {editor!.kind === "select" && (
-              <select
+              <StyledSelect
                 autoFocus
                 value={draft as string}
-                onChange={(e) => setDraft(e.target.value)}
+                onValueChange={setDraft}
+                options={[
+                  ...(editor!.allowEmpty ? [{ value: "", label: "—" }] : []),
+                  ...editor!.options,
+                ]}
                 className="h-9 w-full rounded-md border border-white/15 bg-background/60 px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                {editor!.allowEmpty && <option value="">—</option>}
-                {editor!.options.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              />
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0 mt-1">
@@ -736,59 +734,54 @@ function VehicleSwapDialog({
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
               Vehicle model
             </div>
-            <select
+            <StyledSelect
               value={model}
-              onChange={(e) => pickModel(e.target.value)}
+              onValueChange={pickModel}
+              options={[
+                { value: "", label: "Select a model…" },
+                ...modelOptions.map((o) => ({
+                  value: o.value,
+                  label: `${o.label}${o.count > 0 ? ` · ${o.count} in stock` : ""}`,
+                })),
+              ]}
               className={selectClass}
               data-testid="select-swap-model"
-            >
-              <option value="">Select a model…</option>
-              {modelOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                  {o.count > 0 ? ` · ${o.count} in stock` : ""}
-                </option>
-              ))}
-            </select>
+            />
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
               Color
             </div>
-            <select
+            <StyledSelect
               value={color}
-              onChange={(e) => pickColor(e.target.value)}
+              onValueChange={pickColor}
               disabled={!model}
+              options={[
+                { value: "", label: "Select a color…" },
+                ...colorOptions.map((o) => ({
+                  value: o.value,
+                  label: `${o.value}${o.count > 0 ? ` · ${o.count} in stock` : ""}`,
+                })),
+              ]}
               className={selectClass}
               data-testid="select-swap-color"
-            >
-              <option value="">Select a color…</option>
-              {colorOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.value}
-                  {o.count > 0 ? ` · ${o.count} in stock` : ""}
-                </option>
-              ))}
-            </select>
+            />
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
               Available unit (VIN)
             </div>
-            <select
+            <StyledSelect
               value={unitId}
-              onChange={(e) => setUnitId(e.target.value)}
+              onValueChange={setUnitId}
               disabled={!model || !color}
+              options={[
+                { value: "", label: "Select a unit…" },
+                ...unitOptions,
+              ]}
               className={selectClass}
               data-testid="select-swap-unit"
-            >
-              <option value="">Select a unit…</option>
-              {unitOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            />
           </div>
         </div>
         <DialogFooter>
@@ -2646,10 +2639,16 @@ export default function LeadDetail() {
                           <div className="space-y-3">
                             <div className="space-y-1.5">
                               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Request type</p>
-                              <select value={quoteApprovalType} onChange={(e) => setQuoteApprovalType(e.target.value as "discount" | "duty_free")} data-testid="select-quote-approval-type" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-                                <option value="discount">Discount</option>
-                                <option value="duty_free">Duty Free</option>
-                              </select>
+                              <StyledSelect
+                                value={quoteApprovalType}
+                                onValueChange={(value) => setQuoteApprovalType(value as "discount" | "duty_free")}
+                                options={[
+                                  { value: "discount", label: "Discount" },
+                                  { value: "duty_free", label: "Duty Free" },
+                                ]}
+                                data-testid="select-quote-approval-type"
+                                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                              />
                             </div>
                             {quoteApprovalType === "discount" && (
                           <div className="space-y-1.5">

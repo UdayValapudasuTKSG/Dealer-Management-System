@@ -18,6 +18,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { StyledSelect } from "@/components/ui/styled-select";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -214,21 +215,21 @@ export function SendFeedbackDialog({
                   page.
                 </div>
               ) : (
-                <select
-                  value={formId ?? ""}
-                  onChange={(e) => {
-                    setFormId(e.target.value ? Number(e.target.value) : null);
+                <StyledSelect
+                  value={formId == null ? "" : String(formId)}
+                  onValueChange={(value) => {
+                    setFormId(value ? Number(value) : null);
                     setPreviewData(null);
                   }}
+                  options={[
+                    { value: "", label: "Choose a form…" },
+                    ...published.map((f) => ({
+                      value: String(f.id),
+                      label: `${f.name} (${f.questions.length} questions)`,
+                    })),
+                  ]}
                   className="mt-1 w-full h-10 rounded-lg bg-foreground/[0.05] border border-white/10 px-3 text-sm focus:outline-none focus:border-primary/50"
-                >
-                  <option value="">Choose a form…</option>
-                  {published.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name} ({f.questions.length} questions)
-                    </option>
-                  ))}
-                </select>
+                />
               )}
             </div>
 
@@ -281,10 +282,9 @@ export function SendFeedbackDialog({
               <div className="space-y-2">
                 {filters.map((f, i) => (
                   <div key={i} className="flex items-center gap-1.5">
-                    <select
+                    <StyledSelect
                       value={f.field}
-                      onChange={(e) => {
-                        const field = e.target.value;
+                      onValueChange={(field) => {
                         setFilters((fs) =>
                           fs.map((x, j) =>
                             j === i
@@ -298,32 +298,28 @@ export function SendFeedbackDialog({
                         );
                         setPreviewData(null);
                       }}
+                      options={Object.keys(FIELD_LABEL).map((k) => ({
+                        value: k,
+                        label: FIELD_LABEL[k],
+                      }))}
                       className="h-9 rounded-lg bg-foreground/[0.05] border border-white/10 px-2 text-xs focus:outline-none"
-                    >
-                      {Object.keys(FIELD_LABEL).map((k) => (
-                        <option key={k} value={k}>
-                          {FIELD_LABEL[k]}
-                        </option>
-                      ))}
-                    </select>
-                    <select
+                    />
+                    <StyledSelect
                       value={f.operator}
-                      onChange={(e) => {
+                      onValueChange={(value) => {
                         setFilters((fs) =>
                           fs.map((x, j) =>
-                            j === i ? { ...x, operator: e.target.value } : x,
+                            j === i ? { ...x, operator: value } : x,
                           ),
                         );
                         setPreviewData(null);
                       }}
+                      options={(FIELD_OPERATORS[f.field] ?? ["is"]).map((op) => ({
+                        value: op,
+                        label: OPERATOR_LABEL[op],
+                      }))}
                       className="h-9 rounded-lg bg-foreground/[0.05] border border-white/10 px-2 text-xs focus:outline-none"
-                    >
-                      {(FIELD_OPERATORS[f.field] ?? ["is"]).map((op) => (
-                        <option key={op} value={op}>
-                          {OPERATOR_LABEL[op]}
-                        </option>
-                      ))}
-                    </select>
+                    />
                     {f.field === "created" ? (
                       <input
                         type="date"
@@ -339,25 +335,22 @@ export function SendFeedbackDialog({
                         className="flex-1 h-9 rounded-lg bg-foreground/[0.05] border border-white/10 px-2 text-xs focus:outline-none"
                       />
                     ) : f.field === "phase" && f.operator !== "is_any_of" ? (
-                      <select
+                      <StyledSelect
                         value={f.value}
-                        onChange={(e) => {
+                        onValueChange={(value) => {
                           setFilters((fs) =>
                             fs.map((x, j) =>
-                              j === i ? { ...x, value: e.target.value } : x,
+                              j === i ? { ...x, value } : x,
                             ),
                           );
                           setPreviewData(null);
                         }}
+                        options={[
+                          { value: "", label: "Choose…" },
+                          ...PHASE_VALUES.map((p) => ({ value: p, label: p })),
+                        ]}
                         className="flex-1 h-9 rounded-lg bg-foreground/[0.05] border border-white/10 px-2 text-xs focus:outline-none"
-                      >
-                        <option value="">Choose…</option>
-                        {PHASE_VALUES.map((p) => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     ) : (
                       <input
                         value={f.value}

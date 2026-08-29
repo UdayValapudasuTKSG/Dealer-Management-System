@@ -32,6 +32,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { StyledSelect } from "@/components/ui/styled-select";
 import {
   Plus,
   Building,
@@ -873,18 +874,19 @@ function InvoiceDetailDialog({
                     <label className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
                       Method
                     </label>
-                    <select
+                    <StyledSelect
                       value={method}
-                      onChange={(e) => setMethod(e.target.value as PaymentInput["method"])}
+                      onValueChange={(value) => setMethod(value as PaymentInput["method"])}
+                      options={[
+                        { value: "cash", label: "Cash" },
+                        { value: "card", label: "Card" },
+                        { value: "bank_transfer", label: "Bank Transfer" },
+                        { value: "cheque", label: "Cheque" },
+                        { value: "mobile_money", label: "Mobile Money" },
+                        { value: "financing", label: "Financing" },
+                      ]}
                       className="w-full h-10 rounded-md border border-border/60 bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40"
-                    >
-                      <option value="cash">Cash</option>
-                      <option value="card">Card</option>
-                      <option value="bank_transfer">Bank Transfer</option>
-                      <option value="cheque">Cheque</option>
-                      <option value="mobile_money">Mobile Money</option>
-                      <option value="financing">Financing</option>
-                    </select>
+                    />
                   </div>
                 </div>
                 <div className="space-y-1.5">

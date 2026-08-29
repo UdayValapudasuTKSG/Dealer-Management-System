@@ -26,6 +26,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { StyledSelect } from "@/components/ui/styled-select";
 import {
   Dialog,
   DialogContent,
@@ -868,18 +869,18 @@ function CreatePurchaseOrderDialog() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Supplier</label>
-            <select
+            <StyledSelect
               value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
+              onValueChange={setSupplierId}
+              options={[
+                { value: "", label: "— None —" },
+                ...(suppliers?.map((s) => ({
+                  value: String(s.id),
+                  label: s.name,
+                })) ?? []),
+              ]}
               className="w-full h-10 rounded-xl bg-white/[0.04] border border-white/10 px-3 text-sm"
-            >
-              <option value="">— None —</option>
-              {suppliers?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Expected receipt</label>
@@ -909,24 +910,24 @@ function CreatePurchaseOrderDialog() {
           </div>
           {lines.map((line, i) => (
             <div key={i} className="grid grid-cols-[1fr_84px_110px_36px] gap-2">
-              <select
+              <StyledSelect
                 value={line.partId}
-                onChange={(e) => {
-                  const part = parts?.find((p) => p.id === Number(e.target.value));
+                onValueChange={(value) => {
+                  const part = parts?.find((p) => p.id === Number(value));
                   setLine(i, {
-                    partId: e.target.value,
+                    partId: value,
                     unitCost: part ? String(part.unitCost) : line.unitCost,
                   });
                 }}
+                options={[
+                  { value: "", label: "Select part…" },
+                  ...(parts?.map((p) => ({
+                    value: String(p.id),
+                    label: `${p.sku} — ${p.name}`,
+                  })) ?? []),
+                ]}
                 className="h-10 rounded-xl bg-white/[0.04] border border-white/10 px-3 text-sm min-w-0"
-              >
-                <option value="">Select part…</option>
-                {parts?.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.sku} — {p.name}
-                  </option>
-                ))}
-              </select>
+              />
               <Input
                 type="number"
                 min={1}

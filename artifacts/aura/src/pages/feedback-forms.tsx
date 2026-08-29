@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { StyledSelect } from "@/components/ui/styled-select";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListFeedbackForms,
@@ -480,10 +481,10 @@ function FormEditorDialog({
                   <span className="text-xs font-bold text-muted-foreground w-5">
                     {i + 1}.
                   </span>
-                  <select
+                  <StyledSelect
                     value={q.type}
-                    onChange={(e) => {
-                      const type = e.target.value as FeedbackQuestionType;
+                    onValueChange={(value) => {
+                      const type = value as FeedbackQuestionType;
                       patchQ(q.id, {
                         type,
                         options:
@@ -495,14 +496,12 @@ function FormEditorDialog({
                         maxStars: type === "star_rating" ? (q.maxStars ?? 5) : undefined,
                       });
                     }}
+                    options={(Object.keys(TYPE_LABEL) as FeedbackQuestionType[]).map((t) => ({
+                      value: t,
+                      label: TYPE_LABEL[t],
+                    }))}
                     className="h-8 rounded-lg bg-foreground/[0.05] border border-white/10 text-xs px-2 focus:outline-none"
-                  >
-                    {(Object.keys(TYPE_LABEL) as FeedbackQuestionType[]).map((t) => (
-                      <option key={t} value={t}>
-                        {TYPE_LABEL[t]}
-                      </option>
-                    ))}
-                  </select>
+                  />
                   <label className="flex items-center gap-1.5 text-xs text-muted-foreground ml-1 cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -578,19 +577,17 @@ function FormEditorDialog({
                 {q.type === "star_rating" && (
                   <div className="flex items-center gap-2 pl-6 text-xs text-muted-foreground">
                     Scale:
-                    <select
-                      value={q.maxStars ?? 5}
-                      onChange={(e) =>
-                        patchQ(q.id, { maxStars: Number(e.target.value) })
+                    <StyledSelect
+                      value={String(q.maxStars ?? 5)}
+                      onValueChange={(value) =>
+                        patchQ(q.id, { maxStars: Number(value) })
                       }
+                      options={[3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
+                        value: String(n),
+                        label: `1–${n} stars`,
+                      }))}
                       className="h-7 rounded-lg bg-foreground/[0.05] border border-white/10 px-2 focus:outline-none"
-                    >
-                      {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                        <option key={n} value={n}>
-                          1–{n} stars
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
                 )}
               </div>

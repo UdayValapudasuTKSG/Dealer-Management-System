@@ -67,6 +67,7 @@ import { Pagination } from "@/components/pagination";
 import { ViewControls } from "@/components/view-controls";
 import { useAuthz } from "@/lib/auth";
 import { SendFeedbackDialog } from "@/components/send-feedback-dialog";
+import { StyledSelect } from "@/components/ui/styled-select";
 import { CONTACT_SLA_HOURS, hoursSince, humanHours } from "@/lib/triage";
 
 const STAGES = [
@@ -715,21 +716,18 @@ export default function Leads() {
                         span: "half" as const,
                         section: "Enquiry",
                         render: (_value: string, set: (v: string) => void) => (
-                          <select
+                          <StyledSelect
                             value={sourceDetail}
-                            onChange={(e) => {
-                              setSourceDetail(e.target.value);
-                              set(e.target.value);
+                            onValueChange={(value) => {
+                              setSourceDetail(value);
+                              set(value);
                             }}
+                            options={[
+                              { value: "", label: "Pick a platform…" },
+                              ...SOCIAL_SUB_PLATFORMS,
+                            ]}
                             className="w-full h-10 rounded-md bg-white/[0.04] border border-white/10 px-3 text-sm focus:outline-none focus:border-primary/50"
-                          >
-                            <option value="">Pick a platform…</option>
-                            {SOCIAL_SUB_PLATFORMS.map((p) => (
-                              <option key={p.value} value={p.value}>
-                                {p.label}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         ),
                       },
                     ]

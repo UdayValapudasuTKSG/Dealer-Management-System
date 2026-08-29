@@ -31,6 +31,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { StyledSelect } from "@/components/ui/styled-select";
 import {
   Dialog,
   DialogContent,
@@ -608,19 +609,19 @@ export default function Deals() {
   const heroActions = (
     <div className="flex items-center gap-3">
           {isLeadership && advisorOptions.length > 0 && (
-            <select
+            <StyledSelect
               value={advisorFilter}
-              onChange={(e) => setAdvisorFilter(e.target.value)}
+              onValueChange={setAdvisorFilter}
+              options={[
+                { value: "all", label: "All advisors" },
+                ...advisorOptions.map((advisor) => ({
+                  value: advisor,
+                  label: advisor,
+                })),
+              ]}
               className="h-9 rounded-full bg-foreground/[0.05] border border-white/10 text-sm px-3 pr-8 text-foreground/90 focus:outline-none focus:ring-1 focus:ring-primary/50"
               aria-label="Filter by sales advisor"
-            >
-              <option value="all">All advisors</option>
-              {advisorOptions.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
+            />
           )}
           <ViewControls
             layout={layout}
@@ -1150,15 +1151,17 @@ export default function Deals() {
                                   Settlement
                                 </span>
                                 {canEditDeals && deal.stage === "desking" ? (
-                                  <select
+                                  <StyledSelect
                                     value={deal.finalPaymentMethod ?? "cash"}
-                                    onChange={async (e) => {
+                                    onValueChange={async (value) => {
                                       try {
                                         await updateDeal.mutateAsync({
                                           id: deal.id,
                                           data: {
-                                            finalPaymentMethod: e.target
-                                              .value as "cash" | "bank_financing" | "cheque",
+                                            finalPaymentMethod: value as
+                                              | "cash"
+                                              | "bank_financing"
+                                              | "cheque",
                                           },
                                         });
                                         queryClient.invalidateQueries({
@@ -1173,12 +1176,13 @@ export default function Deals() {
                                         });
                                       }
                                     }}
+                                    options={[
+                                      { value: "cash", label: "Cash" },
+                                      { value: "bank_financing", label: "Bank Financing" },
+                                      { value: "cheque", label: "Cheque" },
+                                    ]}
                                     className="bg-transparent border border-border/60 rounded-full px-2 py-0.5 text-xs font-semibold text-foreground focus:outline-none focus:border-primary/60"
-                                  >
-                                    <option value="cash">Cash</option>
-                                    <option value="bank_financing">Bank Financing</option>
-                                    <option value="cheque">Cheque</option>
-                                  </select>
+                                  />
                                 ) : (
                                   <span className="text-foreground text-xs">
                                     {deal.finalPaymentMethod
@@ -1764,20 +1768,15 @@ export default function Deals() {
               <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">
                 Primary Reason
               </label>
-              <select
+              <StyledSelect
                 value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
+                onValueChange={setCancelReason}
+                options={[
+                  { value: "", label: "Select a reason...", disabled: true },
+                  ...CANCEL_REASONS,
+                ]}
                 className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/10 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50"
-              >
-                <option value="" disabled>
-                  Select a reason...
-                </option>
-                {CANCEL_REASONS.map((r) => (
-                  <option key={r.value} value={r.value} className="bg-background">
-                    {r.label}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div>
               <label className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 block">

@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { StyledSelect } from "@/components/ui/styled-select";
 import { useToast } from "@/hooks/use-toast";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { ViewControls } from "@/components/view-controls";
@@ -1588,27 +1589,26 @@ function ReserveDialog({
             <label className="text-xs uppercase tracking-widest text-muted-foreground">
               Link to lead (optional)
             </label>
-            <select
+            <StyledSelect
               className="mt-1.5 w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
               value={leadId}
-              onChange={(e) => {
-                const value = e.target.value;
+              onValueChange={(value) => {
                 setLeadId(value);
                 if (value) {
                   const lead = leads?.find((l) => l.id === Number(value));
                   if (lead && !customerName.trim()) setCustomerName(lead.name);
                 }
               }}
-            >
-              <option value="">No linked lead</option>
-              {leads
-                ?.filter((l) => l.phase !== "won" && l.phase !== "lost")
-                .map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name} · {l.phase}
-                  </option>
-                ))}
-            </select>
+              options={[
+                { value: "", label: "No linked lead" },
+                ...(leads
+                  ?.filter((l) => l.phase !== "won" && l.phase !== "lost")
+                  .map((l) => ({
+                    value: String(l.id),
+                    label: `${l.name} · ${l.phase}`,
+                  })) ?? []),
+              ]}
+            />
             <p className="mt-1 text-[11px] text-muted-foreground">
               Linking a lead creates the account, records the selected model
               and marks the reservation on the lead.

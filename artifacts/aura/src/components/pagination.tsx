@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { StyledSelect } from "@/components/ui/styled-select";
 
 /** Windowed page list, e.g. 1 … 4 5 6 … 19 (always shows first/last). */
 export function pageNumbers(current: number, total: number): (number | "…")[] {
@@ -84,17 +85,12 @@ export function Pagination({
       {showSize && (
         <label className="ml-2 flex items-center gap-1.5 text-xs text-muted-foreground">
           Per page
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
+          <StyledSelect
+            value={String(pageSize)}
+            onValueChange={(value) => onPageSizeChange(Number(value))}
+            options={pageSizeOptions.map((n) => ({ value: String(n), label: String(n) }))}
             className="h-8 rounded-full bg-foreground/[0.04] border border-white/10 px-2.5 text-xs font-medium text-foreground focus:outline-none focus:border-primary/50"
-          >
-            {pageSizeOptions.map((n) => (
-              <option key={n} value={n} className="bg-background">
-                {n}
-              </option>
-            ))}
-          </select>
+          />
         </label>
       )}
     </div>

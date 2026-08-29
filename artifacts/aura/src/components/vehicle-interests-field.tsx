@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Trash2, Plus, GripVertical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { StyledSelect } from "@/components/ui/styled-select";
 
 function VehicleCascade({
   interest,
@@ -105,31 +106,16 @@ function VehicleCascade({
     });
   };
 
-  const selectClass = "flex-1 h-9 rounded-md bg-foreground/[0.04] border border-white/10 px-3 text-sm focus:outline-none focus:border-primary/50 min-w-0 disabled:opacity-50";
+  const selectClass = "flex-1 h-9 rounded-md bg-foreground/[0.04] border border-white/10 px-3 text-sm focus:border-primary/50 min-w-0 disabled:opacity-50";
 
   return (
     <div className="flex flex-col gap-2 w-full">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-        <select value={make} onChange={e => onMakeChange(e.target.value)} className={selectClass}>
-          <option value="">Brand...</option>
-          {makes.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <select value={model} onChange={e => onModelChange(e.target.value)} disabled={!make} className={selectClass}>
-          <option value="">Model...</option>
-          {models.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <select value={variant} onChange={e => onVariantChange(e.target.value)} disabled={!model} className={selectClass}>
-          <option value="">Version / Trim...</option>
-          {variants.map(v => <option key={v} value={v}>{v}</option>)}
-        </select>
-        <select value={year} onChange={e => onYearChange(e.target.value)} disabled={!variant} className={selectClass}>
-          <option value="">Year...</option>
-          {years.map(y => <option key={String(y)} value={String(y)}>{String(y)}</option>)}
-        </select>
-        <select value={color} onChange={e => onColorChange(e.target.value)} disabled={!year} className={selectClass}>
-          <option value="">Color...</option>
-          {colors.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        <StyledSelect value={make} onValueChange={onMakeChange} options={[{ value: "", label: "Brand..." }, ...makes.map(m => ({ value: m, label: m }))]} className={selectClass} />
+        <StyledSelect value={model} onValueChange={onModelChange} disabled={!make} options={[{ value: "", label: "Model..." }, ...models.map(m => ({ value: m, label: m }))]} className={selectClass} />
+        <StyledSelect value={variant} onValueChange={onVariantChange} disabled={!model} options={[{ value: "", label: "Version / Trim..." }, ...variants.map(v => ({ value: v, label: v }))]} className={selectClass} />
+        <StyledSelect value={year} onValueChange={onYearChange} disabled={!variant} options={[{ value: "", label: "Year..." }, ...years.map(y => ({ value: String(y), label: String(y) }))]} className={selectClass} />
+        <StyledSelect value={color} onValueChange={onColorChange} disabled={!year} options={[{ value: "", label: "Color..." }, ...colors.map(c => ({ value: c, label: c }))]} className={selectClass} />
       </div>
       {interest.modelYear && interest.unitPrice != null && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">

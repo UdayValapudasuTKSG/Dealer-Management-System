@@ -17,6 +17,7 @@ import { useUpload } from "@workspace/object-storage-web";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { StyledSelect } from "@/components/ui/styled-select";
 import {
   Dialog,
   DialogContent,
@@ -323,17 +324,15 @@ export function DocumentsCard({
               <label className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-1.5">
                 Document type
               </label>
-              <select
+              <StyledSelect
                 value={docType}
-                onChange={(e) => setDocType(e.target.value as DocumentInputType)}
+                onValueChange={(value) => setDocType(value as DocumentInputType)}
+                options={Object.entries(DOCUMENT_TYPE_LABEL).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
                 className="h-9 w-full rounded-md border border-white/15 bg-background/60 px-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                {Object.entries(DOCUMENT_TYPE_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+              />
             </div>}
             <div>
               <label className="text-[10px] uppercase tracking-widest text-muted-foreground block mb-1.5">
