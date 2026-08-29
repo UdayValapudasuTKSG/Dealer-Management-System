@@ -1919,6 +1919,10 @@ async function processWhatsappQueue(): Promise<void> {
 }
 
 export async function processQueue(): Promise<void> {
+  // Test seam: verification suites that enqueue fixture emails set this so
+  // no outbox pass (email or WhatsApp, fixture or otherwise) runs in their
+  // process. The real server never sets it.
+  if (process.env.OUTBOX_WORKER_DISABLED === "1") return;
   if (processing) return;
   processing = true;
   try {

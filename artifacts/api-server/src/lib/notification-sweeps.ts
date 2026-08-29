@@ -529,8 +529,15 @@ const escapeReportHtml = (s: string) =>
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-export async function sweepLeadSourceReports(): Promise<void> {
-  const dealers = await db.select({ id: dealersTable.id }).from(dealersTable);
+export async function sweepLeadSourceReports(
+  // Test seam: restrict the sweep to specific dealer ids so verification
+  // suites can exercise it against their own fixtures only. Production
+  // callers pass nothing and sweep every dealer.
+  onlyDealerIds?: number[],
+): Promise<void> {
+  const dealers = onlyDealerIds
+    ? onlyDealerIds.map((id) => ({ id }))
+    : await db.select({ id: dealersTable.id }).from(dealersTable);
   const now = new Date();
 
   for (const dealer of dealers) {
