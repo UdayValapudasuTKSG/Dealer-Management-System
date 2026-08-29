@@ -779,6 +779,67 @@ export function renderEmail(
   const ovBody = override?.body?.trim();
   const ovCtaLabel = override?.ctaLabel?.trim();
   const subject = ovSubject ? applyMergeTokens(ovSubject, x) : def.subject(x);
+  if (template === "leads.source.report.daily" && !override) {
+    const safeBrand = escapeHtml(brandName || "AURA Dealership");
+    const safeDate = escapeHtml(d(x, "date", "Yesterday"));
+    const safeTotal = escapeHtml(d(x, "total", "0"));
+    const logo = branding?.logoSrc
+      ? `<img src="${branding.logoSrc}" alt="${safeBrand}" style="display:block;max-height:38px;max-width:150px;height:auto;width:auto;border:0;" />`
+      : `<div style="color:#ffffff;font-size:13px;font-weight:700;letter-spacing:.8px;">${safeBrand}</div>`;
+    return {
+      subject,
+      html: `<!DOCTYPE html>
+<html lang="en">
+<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background-color:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);">
+        <tr>
+          <td style="background-color:#1a2b4c;padding:22px 30px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td valign="middle">${logo}<div style="color:#ffffff;font-size:21px;font-weight:700;margin-top:12px;">Daily Leads Report</div></td>
+                <td align="right" valign="bottom" style="color:#c7d0e0;font-size:13px;white-space:nowrap;">${safeDate}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:26px 30px 8px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td width="34%" align="center" style="padding:15px;border-right:1px solid #e5e7eb;">
+                  <div style="font-size:34px;line-height:1;font-weight:700;color:#1a2b4c;">${safeTotal}</div>
+                  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.7px;margin-top:7px;">Total Leads</div>
+                </td>
+                <td width="66%" style="padding:10px 0 10px 26px;font-size:14px;line-height:1.6;color:#374151;">
+                  ${d(x, "topline", "Here is yesterday's lead flow.")}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:22px 30px 10px;">
+            <div style="font-size:16px;font-weight:700;color:#1a2b4c;margin-bottom:14px;">Leads by Source</div>
+            ${d(x, "rows", "No leads were captured in this period.")}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 30px 28px;">
+            <div style="font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:14px;line-height:1.6;">
+              This is an automated summary of leads captured across all channels for the previous dealership-local day.<br/>
+              ${safeBrand} — Daily sales management report
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    };
+  }
   // Headings always end with a full stop for consistent punctuation.
   const headingRaw = (
     ovHeading ? applyMergeTokens(ovHeading, x) : def.heading(x)
