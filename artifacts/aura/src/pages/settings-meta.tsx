@@ -455,7 +455,7 @@ export default function SettingsMeta() {
                       </div>
                       {settings.lastEvent.leadId && (
                         <a
-                          href={`/leads/${settings.lastEvent.leadId}`}
+                          href={`/lead/${settings.lastEvent.leadId}`}
                           className="text-xs text-primary underline underline-offset-2"
                         >
                           Open lead
