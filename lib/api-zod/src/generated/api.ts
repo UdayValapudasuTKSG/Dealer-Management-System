@@ -10310,13 +10310,17 @@ export const UpdateDealerLocalizationResponse = zod.object({
 /**
  * @summary Dealer service settings (interval km + late surcharge fee)
  */
+export const getServiceSettingsResponseLeadSourceReportSendTimeRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+
+
 export const GetServiceSettingsResponse = zod.object({
   "serviceIntervalKm": zod.number(),
   "lateSurchargeFee": zod.number(),
   "summaryCadence": zod.enum(['daily', 'weekly', 'off']),
   "defaultJobHours": zod.number(),
   "techWorkHoursPerDay": zod.number(),
-  "leadSourceReportEnabled": zod.boolean()
+  "leadSourceReportEnabled": zod.boolean(),
+  "leadSourceReportSendTime": zod.string().regex(getServiceSettingsResponseLeadSourceReportSendTimeRegExp)
 })
 
 
@@ -10329,6 +10333,7 @@ export const updateServiceSettingsBodyDefaultJobHoursMax = 24;
 
 export const updateServiceSettingsBodyTechWorkHoursPerDayMax = 24;
 
+export const updateServiceSettingsBodyLeadSourceReportSendTimeRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
 
 
 export const UpdateServiceSettingsBody = zod.object({
@@ -10337,8 +10342,12 @@ export const UpdateServiceSettingsBody = zod.object({
   "summaryCadence": zod.enum(['daily', 'weekly', 'off']).optional(),
   "defaultJobHours": zod.number().min(updateServiceSettingsBodyDefaultJobHoursMin).max(updateServiceSettingsBodyDefaultJobHoursMax).optional(),
   "techWorkHoursPerDay": zod.number().min(1).max(updateServiceSettingsBodyTechWorkHoursPerDayMax).optional(),
-  "leadSourceReportEnabled": zod.boolean().optional()
+  "leadSourceReportEnabled": zod.boolean().optional(),
+  "leadSourceReportSendTime": zod.string().regex(updateServiceSettingsBodyLeadSourceReportSendTimeRegExp).optional()
 })
+
+export const updateServiceSettingsResponseLeadSourceReportSendTimeRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+
 
 export const UpdateServiceSettingsResponse = zod.object({
   "serviceIntervalKm": zod.number(),
@@ -10346,7 +10355,8 @@ export const UpdateServiceSettingsResponse = zod.object({
   "summaryCadence": zod.enum(['daily', 'weekly', 'off']),
   "defaultJobHours": zod.number(),
   "techWorkHoursPerDay": zod.number(),
-  "leadSourceReportEnabled": zod.boolean()
+  "leadSourceReportEnabled": zod.boolean(),
+  "leadSourceReportSendTime": zod.string().regex(updateServiceSettingsResponseLeadSourceReportSendTimeRegExp)
 })
 
 

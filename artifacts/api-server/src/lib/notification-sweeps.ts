@@ -505,8 +505,9 @@ async function sweepServiceSummaries(): Promise<void> {
 // ---------------------------------------------------------------------------
 // Task 269 — daily lead-source report to General Managers. Per-dealer opt-in
 // (leadSourceReportEnabled, default off). Sends once per dealer-local day,
-// from 6:00 AM local onwards (the 10-minute sweep loop lands within minutes
-// of 6). "Yesterday" is the dealer-local previous calendar day converted to
+// from the configured dealer-local send time onwards (default 06:00; the
+// 10-minute sweep loop lands within minutes of it). "Yesterday" is the
+// dealer-local previous calendar day converted to
 // UTC bounds. Idempotent via a per-dealer/day/recipient dedupe key, so
 // restarts and overlapping runs can never double-send.
 // ---------------------------------------------------------------------------
@@ -534,12 +535,15 @@ export async function sweepLeadSourceReports(): Promise<void> {
 
   for (const dealer of dealers) {
     try {
-      const { leadSourceReportEnabled } = await getServiceSettings(dealer.id);
+      const { leadSourceReportEnabled, leadSourceReportSendTime } =
+        await getServiceSettings(dealer.id);
       if (!leadSourceReportEnabled) continue;
 
       const tz = await dealerTimezone(dealer.id);
-      // Only send from 6:00 AM dealer-local time onwards.
-      if (zonedParts(now, tz).hour < 6) continue;
+      // Only send from the configured dealer-local time onwards.
+      const [sendH, sendM] = leadSourceReportSendTime.split(":").map(Number);
+      const parts = zonedParts(now, tz);
+      if (parts.hour * 60 + parts.minute < sendH * 60 + sendM) continue;
 
       const recipients = await generalManagers(dealer.id);
       if (recipients.length === 0) continue;

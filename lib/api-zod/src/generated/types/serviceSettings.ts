@@ -14,4 +14,6 @@ export interface ServiceSettings {
   defaultJobHours: number;
   techWorkHoursPerDay: number;
   leadSourceReportEnabled: boolean;
+  /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
+  leadSourceReportSendTime: string;
 }

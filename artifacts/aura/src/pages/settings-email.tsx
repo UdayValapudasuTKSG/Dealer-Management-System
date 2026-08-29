@@ -997,11 +997,14 @@ function LeadSourceReportCard() {
   const { data: settings } = useGetServiceSettings();
   const update = useUpdateServiceSettings({
     mutation: {
-      onSuccess: (next) => {
+      onSuccess: (next, vars) => {
         toast({
-          title: next.leadSourceReportEnabled
-            ? "Daily lead source report enabled"
-            : "Daily lead source report disabled",
+          title:
+            vars.data.leadSourceReportEnabled !== undefined
+              ? next.leadSourceReportEnabled
+                ? "Daily lead source report enabled"
+                : "Daily lead source report disabled"
+              : `Report time set to ${next.leadSourceReportSendTime}`,
         });
         qc.invalidateQueries({ queryKey: getGetServiceSettingsQueryKey() });
       },
@@ -1014,6 +1017,7 @@ function LeadSourceReportCard() {
     },
   });
   const enabled = settings?.leadSourceReportEnabled ?? false;
+  const sendTime = settings?.leadSourceReportSendTime ?? "06:00";
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
@@ -1024,7 +1028,7 @@ function LeadSourceReportCard() {
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             Emails General Managers a breakdown of yesterday's new leads by
-            source every morning around 6:00 AM dealership time.
+            source every morning, dealership time.
           </p>
         </div>
         <Switch
@@ -1035,6 +1039,32 @@ function LeadSourceReportCard() {
           }
           aria-label="Toggle daily lead source report"
         />
+      </div>
+      <div className="mt-4 flex items-center gap-3">
+        <label
+          htmlFor="lead-report-send-time"
+          className="text-xs font-semibold text-muted-foreground"
+        >
+          Send at
+        </label>
+        <input
+          id="lead-report-send-time"
+          type="time"
+          step={60}
+          value={sendTime}
+          disabled={!settings || update.isPending}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v && v !== sendTime) {
+              update.mutate({ data: { leadSourceReportSendTime: v } });
+            }
+          }}
+          className="rounded-lg border border-white/10 bg-foreground/[0.04] px-3 py-1.5 text-sm text-foreground outline-none focus:border-primary/50 disabled:opacity-60 [color-scheme:dark]"
+        />
+        <span className="text-[11px] text-muted-foreground">
+          Dealership-local time. Delivery starts within 10 minutes after this
+          time.
+        </span>
       </div>
     </div>
   );
