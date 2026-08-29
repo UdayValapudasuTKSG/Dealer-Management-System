@@ -560,11 +560,17 @@ export async function sweepLeadSourceReports(
       const start = zonedStartOfDay(yesterdayKey, tz);
       const end = zonedStartOfDay(zonedDayKey(now, tz), tz);
 
-      // Aggregate yesterday's non-deleted leads by source code.
-      const counts = await db
+      const dayLeads = await db
         .select({
+          name: leadsTable.name,
           source: leadsTable.source,
-          count: sql<number>`count(*)::int`,
+          priority: leadsTable.priority,
+          phase: leadsTable.phase,
+          contactedDate: leadsTable.contactedDate,
+          interestedModelText: leadsTable.interestedModelText,
+          selectedModel: leadsTable.selectedModel,
+          purchaseIntent: leadsTable.purchaseIntent,
+          createdAt: leadsTable.createdAt,
         })
         .from(leadsTable)
         .where(
@@ -574,8 +580,15 @@ export async function sweepLeadSourceReports(
             gte(leadsTable.createdAt, start),
             lt(leadsTable.createdAt, end),
           ),
-        )
-        .groupBy(leadsTable.source);
+        );
+      const countBySource = new Map<string, number>();
+      for (const lead of dayLeads) {
+        countBySource.set(lead.source, (countBySource.get(lead.source) ?? 0) + 1);
+      }
+      const counts = [...countBySource].map(([source, count]) => ({
+        source,
+        count,
+      }));
 
       // Pretty labels from the dealer's configured sources; legacy/unknown
       // codes fall back to a humanized code so no lead is ever dropped.
@@ -596,6 +609,75 @@ export async function sweepLeadSourceReports(
       const total = counts.reduce((sum, r) => sum + r.count, 0);
       const sorted = [...counts].sort((a, b) => b.count - a.count);
       const pct = (n: number) => (total === 0 ? 0 : Math.round((n / total) * 100));
+      const contacted = dayLeads.filter(
+        (lead) => lead.contactedDate != null || lead.phase !== "new",
+      ).length;
+      const priorityLeads = dayLeads.filter((lead) => lead.priority === "high");
+
+      const priorStart = zonedStartOfDay(zonedAddDays(now, tz, -2), tz);
+      const [{ count: priorTotal }] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(leadsTable)
+        .where(
+          and(
+            eq(leadsTable.dealerId, dealer.id),
+            isNull(leadsTable.deletedAt),
+            gte(leadsTable.createdAt, priorStart),
+            lt(leadsTable.createdAt, start),
+          ),
+        );
+      const change =
+        priorTotal === 0
+          ? total === 0
+            ? "0%"
+            : "New"
+          : `${total >= priorTotal ? "+" : ""}${Math.round(
+              ((total - priorTotal) / priorTotal) * 100,
+            )}%`;
+      const changeColor =
+        total > priorTotal ? "#1a7a3c" : total < priorTotal ? "#b91c1c" : "#1a2b4c";
+
+      const trendStart = zonedStartOfDay(zonedAddDays(now, tz, -7), tz);
+      const trendLeads = await db
+        .select({ createdAt: leadsTable.createdAt })
+        .from(leadsTable)
+        .where(
+          and(
+            eq(leadsTable.dealerId, dealer.id),
+            isNull(leadsTable.deletedAt),
+            gte(leadsTable.createdAt, trendStart),
+            lt(leadsTable.createdAt, end),
+          ),
+        );
+      const trendCounts = new Map<string, number>();
+      for (const lead of trendLeads) {
+        const key = zonedDayKey(lead.createdAt, tz);
+        trendCounts.set(key, (trendCounts.get(key) ?? 0) + 1);
+      }
+      const trendDays = Array.from({ length: 7 }, (_, index) => {
+        const key = zonedAddDays(now, tz, index - 7);
+        const dayStart = zonedStartOfDay(key, tz);
+        return {
+          label: new Intl.DateTimeFormat("en-US", {
+            weekday: "short",
+            timeZone: tz,
+          }).format(dayStart),
+          count: trendCounts.get(key) ?? 0,
+        };
+      });
+      const trendMax = Math.max(1, ...trendDays.map((day) => day.count));
+      const trendRows = trendDays
+        .map(
+          (day, index) => `<tr>
+  <td style="width:34px;padding:4px 8px 4px 0;color:#6b7280;font-size:11px;">${day.label}</td>
+  <td style="padding:4px 0;"><div style="height:12px;width:${Math.max(
+    day.count === 0 ? 0 : 4,
+    Math.round((day.count / trendMax) * 100),
+  )}%;background:${index === 6 ? "#1a2b4c" : "#c7d2e8"};border-radius:3px;"></div></td>
+  <td align="right" style="width:30px;padding:4px 0 4px 8px;color:#374151;font-size:11px;font-weight:700;">${day.count}</td>
+</tr>`,
+        )
+        .join("");
 
       const rows =
         total === 0
@@ -611,6 +693,51 @@ export async function sweepLeadSourceReports(
 </div>`;
               })
               .join("");
+      const sourceTableRows =
+        total === 0
+          ? `<tr><td colspan="3" style="padding:12px;color:#6b7280;">No leads were captured yesterday.</td></tr>`
+          : sorted
+              .map((row, index) => {
+                const shade = index % 2 === 1 ? "background:#fafafa;" : "";
+                return `<tr>
+  <td style="padding:9px 10px;border-bottom:1px solid #eeeeee;${shade}">${escapeReportHtml(labelFor(row.source))}</td>
+  <td align="center" style="padding:9px 10px;border-bottom:1px solid #eeeeee;${shade}">${row.count}</td>
+  <td align="center" style="padding:9px 10px;border-bottom:1px solid #eeeeee;${shade}">${pct(row.count)}%</td>
+</tr>`;
+              })
+              .join("");
+      const phaseLabel = (phase: string) =>
+        phase === "new"
+          ? "Not Contacted"
+          : phase === "contacted"
+            ? "Contacted"
+            : phase.charAt(0).toUpperCase() + phase.slice(1);
+      const phaseStyle = (phase: string) =>
+        phase === "new"
+          ? "background:#fee2e2;color:#b91c1c;"
+          : phase === "contacted"
+            ? "background:#dcfce7;color:#166534;"
+            : "background:#fef3c7;color:#92400e;";
+      const priorityRows =
+        priorityLeads.length === 0
+          ? `<tr><td colspan="4" style="padding:12px;color:#6b7280;">No high-priority leads from yesterday need highlighting.</td></tr>`
+          : priorityLeads
+              .slice(0, 5)
+              .map((lead, index) => {
+                const shade = index % 2 === 1 ? "background:#fafafa;" : "";
+                const interest =
+                  lead.selectedModel ??
+                  lead.interestedModelText ??
+                  lead.purchaseIntent ??
+                  "General enquiry";
+                return `<tr>
+  <td style="padding:9px 10px;border-bottom:1px solid #eeeeee;${shade}">${escapeReportHtml(lead.name)}</td>
+  <td style="padding:9px 10px;border-bottom:1px solid #eeeeee;${shade}">${escapeReportHtml(labelFor(lead.source))}</td>
+  <td style="padding:9px 10px;border-bottom:1px solid #eeeeee;${shade}">${escapeReportHtml(interest)}</td>
+  <td align="center" style="padding:9px 10px;border-bottom:1px solid #eeeeee;${shade}"><span style="${phaseStyle(lead.phase)}padding:2px 8px;border-radius:10px;font-size:11px;white-space:nowrap;">${phaseLabel(lead.phase)}</span></td>
+</tr>`;
+              })
+              .join("");
 
       const top = sorted[0];
       const topline =
@@ -622,8 +749,15 @@ export async function sweepLeadSourceReports(
       const data: TemplateData = {
         date: dateLabel,
         total: String(total),
+        change,
+        changeColor,
+        contacted: String(contacted),
+        priority: String(priorityLeads.length),
+        trendRows,
         topline,
         rows,
+        sourceTableRows,
+        priorityRows,
       };
 
       for (const userId of recipients) {

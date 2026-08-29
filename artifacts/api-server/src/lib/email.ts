@@ -651,9 +651,16 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     sample: {
       date: "Aug 28, 2026",
       total: "12",
+      change: "+20%",
+      changeColor: "#1a7a3c",
+      contacted: "7",
+      priority: "2",
+      trendRows: "",
       topline:
         "<strong>Facebook</strong> led the day with <strong>5 leads (42%)</strong>.",
       rows: "<strong>Facebook</strong> — 5 (42%)<br/><strong>Website</strong> — 4 (33%)<br/><strong>Walk-in</strong> — 3 (25%)",
+      sourceTableRows: "",
+      priorityRows: "",
     },
   },
 };
@@ -779,57 +786,111 @@ export function renderEmail(
   const ovBody = override?.body?.trim();
   const ovCtaLabel = override?.ctaLabel?.trim();
   const subject = ovSubject ? applyMergeTokens(ovSubject, x) : def.subject(x);
+  const safeName = escapeHtml(brandName || "AURA Dealership");
+  const headerHtml = branding?.logoSrc
+    ? `<img src="${branding.logoSrc}" alt="${safeName}" style="display:block;max-height:56px;max-width:240px;height:auto;width:auto;border:0;" />`
+    : brandName
+      ? `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#111111;">${escapeHtml(brandName)}</div>
+            <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Automotive Dealership</div>`
+      : `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#111111;">AURA<span style="color:#e01313;">.OS</span></div>
+            <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Dealership Operating System</div>`;
   if (template === "leads.source.report.daily" && !override) {
-    const safeBrand = escapeHtml(brandName || "AURA Dealership");
     const safeDate = escapeHtml(d(x, "date", "Yesterday"));
     const safeTotal = escapeHtml(d(x, "total", "0"));
-    const logo = branding?.logoSrc
-      ? `<img src="${branding.logoSrc}" alt="${safeBrand}" style="display:block;max-height:38px;max-width:150px;height:auto;width:auto;border:0;" />`
-      : `<div style="color:#ffffff;font-size:13px;font-weight:700;letter-spacing:.8px;">${safeBrand}</div>`;
+    const safeChange = escapeHtml(d(x, "change", "0%"));
+    const safeChangeColor = /^#[0-9a-f]{6}$/i.test(d(x, "changeColor", ""))
+      ? d(x, "changeColor", "#1a2b4c")
+      : "#1a2b4c";
+    const safeContacted = escapeHtml(d(x, "contacted", "0"));
+    const safePriority = escapeHtml(d(x, "priority", "0"));
     return {
       subject,
       html: `<!DOCTYPE html>
 <html lang="en">
 <body style="margin:0;padding:0;background-color:#f4f5f7;font-family:Arial,Helvetica,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:24px 12px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:40px 16px;">
     <tr><td align="center">
-      <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background-color:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);">
+      <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background-color:#ffffff;border:1px solid #e6e6e6;border-radius:16px;overflow:hidden;">
+        <tr><td style="height:5px;background:linear-gradient(90deg,#1fa34a 0%,#1fa34a 33%,#f5d800 33%,#f5d800 66%,#e01313 66%,#e01313 100%);font-size:0;line-height:0;">&nbsp;</td></tr>
         <tr>
-          <td style="background-color:#1a2b4c;padding:22px 30px;">
+          <td style="padding:34px 32px 14px;">${headerHtml}</td>
+        </tr>
+        <tr>
+          <td style="padding:18px 32px 8px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+              <td style="font-size:22px;font-weight:700;color:#1a2b4c;">Daily Leads Report</td>
+              <td align="right" style="font-size:13px;color:#6b7280;white-space:nowrap;">${safeDate}</td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px 8px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td valign="middle">${logo}<div style="color:#ffffff;font-size:21px;font-weight:700;margin-top:12px;">Daily Leads Report</div></td>
-                <td align="right" valign="bottom" style="color:#c7d0e0;font-size:13px;white-space:nowrap;">${safeDate}</td>
+                <td width="25%" align="center" style="padding:12px;">
+                  <div style="font-size:26px;font-weight:700;color:#1a2b4c;">${safeTotal}</div>
+                  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Total Leads</div>
+                </td>
+                <td width="25%" align="center" style="padding:12px;border-left:1px solid #e5e7eb;">
+                  <div style="font-size:26px;font-weight:700;color:${safeChangeColor};">${safeChange}</div>
+                  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">vs. Prior Day</div>
+                </td>
+                <td width="25%" align="center" style="padding:12px;border-left:1px solid #e5e7eb;">
+                  <div style="font-size:26px;font-weight:700;color:#1a2b4c;">${safeContacted}</div>
+                  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">Contacted</div>
+                </td>
+                <td width="25%" align="center" style="padding:12px;border-left:1px solid #e5e7eb;">
+                  <div style="font-size:26px;font-weight:700;color:#b45309;">${safePriority}</div>
+                  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;">High Priority</div>
+                </td>
               </tr>
             </table>
           </td>
         </tr>
         <tr>
-          <td style="padding:26px 30px 8px;">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-              <tr>
-                <td width="34%" align="center" style="padding:15px;border-right:1px solid #e5e7eb;">
-                  <div style="font-size:34px;line-height:1;font-weight:700;color:#1a2b4c;">${safeTotal}</div>
-                  <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.7px;margin-top:7px;">Total Leads</div>
-                </td>
-                <td width="66%" style="padding:10px 0 10px 26px;font-size:14px;line-height:1.6;color:#374151;">
-                  ${d(x, "topline", "Here is yesterday's lead flow.")}
-                </td>
-              </tr>
-            </table>
+          <td style="padding:18px 32px 8px;">
+            <div style="font-size:15px;font-weight:700;color:#1a2b4c;margin-bottom:10px;">Leads — Last 7 Days</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${d(x, "trendRows", "")}</table>
           </td>
         </tr>
         <tr>
-          <td style="padding:22px 30px 10px;">
-            <div style="font-size:16px;font-weight:700;color:#1a2b4c;margin-bottom:14px;">Leads by Source</div>
+          <td style="padding:20px 32px 8px;">
+            <div style="font-size:15px;font-weight:700;color:#1a2b4c;margin-bottom:8px;">Leads by Source</div>
+            <div style="font-size:13px;line-height:1.6;color:#374151;margin-bottom:14px;">${d(x, "topline", "Here is yesterday's lead flow.")}</div>
             ${d(x, "rows", "No leads were captured in this period.")}
           </td>
         </tr>
         <tr>
-          <td style="padding:20px 30px 28px;">
+          <td style="padding:16px 32px 8px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+              <tr style="background:#f4f5f7;">
+                <td style="padding:8px 10px;font-weight:700;color:#374151;border-bottom:2px solid #e5e7eb;">Source</td>
+                <td align="center" style="padding:8px 10px;font-weight:700;color:#374151;border-bottom:2px solid #e5e7eb;">Leads</td>
+                <td align="center" style="padding:8px 10px;font-weight:700;color:#374151;border-bottom:2px solid #e5e7eb;">Share</td>
+              </tr>
+              ${d(x, "sourceTableRows", "")}
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px 8px;">
+            <div style="font-size:15px;font-weight:700;color:#1a2b4c;margin-bottom:10px;">Priority Leads Needing Follow-Up</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;">
+              <tr style="background:#f4f5f7;">
+                <td style="padding:8px 10px;font-weight:700;color:#374151;border-bottom:2px solid #e5e7eb;">Name</td>
+                <td style="padding:8px 10px;font-weight:700;color:#374151;border-bottom:2px solid #e5e7eb;">Source</td>
+                <td style="padding:8px 10px;font-weight:700;color:#374151;border-bottom:2px solid #e5e7eb;">Interest</td>
+                <td align="center" style="padding:8px 10px;font-weight:700;color:#374151;border-bottom:2px solid #e5e7eb;">Status</td>
+              </tr>
+              ${d(x, "priorityRows", "")}
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:22px 32px 30px;">
             <div style="font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:14px;line-height:1.6;">
               This is an automated summary of leads captured across all channels for the previous dealership-local day.<br/>
-              ${safeBrand} — Daily sales management report
+              ${safeName} — Daily sales management report
             </div>
           </td>
         </tr>
@@ -857,14 +918,6 @@ export function renderEmail(
         ).toUpperCase(),
       }
     : undefined;
-  const safeName = escapeHtml(brandName || "AURA Dealership");
-  const headerHtml = branding?.logoSrc
-    ? `<img src="${branding.logoSrc}" alt="${safeName}" style="display:block;max-height:56px;max-width:240px;height:auto;width:auto;border:0;" />`
-    : brandName
-      ? `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#111111;">${escapeHtml(brandName)}</div>
-            <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Automotive Dealership</div>`
-      : `<div style="font-size:22px;font-weight:700;letter-spacing:1px;color:#111111;">AURA<span style="color:#e01313;">.OS</span></div>
-            <div style="font-size:10px;letter-spacing:3px;color:#8a8a8a;text-transform:uppercase;margin-top:4px;">Dealership Operating System</div>`;
   const footerName = escapeHtml(brandName || "AURA Dealership");
   const html = `<!DOCTYPE html>
 <html>
