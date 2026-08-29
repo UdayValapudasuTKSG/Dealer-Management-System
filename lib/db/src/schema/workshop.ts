@@ -463,6 +463,10 @@ export const dealerServiceSettingsTable = pgTable(
     techWorkHoursPerDay: doublePrecision("tech_work_hours_per_day")
       .notNull()
       .default(DEFAULT_TECH_WORK_HOURS_PER_DAY),
+    /** Task 269: daily lead-source report emailed to GMs ~6 AM local. Default off. */
+    leadSourceReportEnabled: boolean("lead_source_report_enabled")
+      .notNull()
+      .default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

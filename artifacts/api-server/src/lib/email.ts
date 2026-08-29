@@ -637,6 +637,25 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       rows: "<strong>Aug 12</strong> — 2025 BMW X7, maintenance (Alex Mensah)<br/><strong>Aug 13</strong> — Toyota Hilux, repair (Priya Persaud)<br/><strong>Aug 14</strong> — Audi e-tron GT, inspection (Nana Adjei)",
     },
   },
+  // Task 269: daily lead-source report for General Managers.
+  "leads.source.report.daily": {
+    label: "Daily Lead Source Report (Internal)",
+    description:
+      "Morning report to General Managers: yesterday's new leads broken down by source.",
+    subject: (x) =>
+      `Lead source report — ${d(x, "total", "0")} lead${x.total === "1" ? "" : "s"} on ${d(x, "date", "yesterday")}`,
+    heading: (x) => `${d(x, "total", "0")} new lead${x.total === "1" ? "" : "s"} yesterday`,
+    body: (x) =>
+      `${d(x, "topline", "Here is yesterday's lead flow.")}<br/><br/>${d(x, "rows", "No leads were captured in this period.")}`,
+    cta: () => ({ label: "Start the day informed" }),
+    sample: {
+      date: "Aug 28, 2026",
+      total: "12",
+      topline:
+        "<strong>Facebook</strong> led the day with <strong>5 leads (42%)</strong>.",
+      rows: "<strong>Facebook</strong> — 5 (42%)<br/><strong>Website</strong> — 4 (33%)<br/><strong>Walk-in</strong> — 3 (25%)",
+    },
+  },
 };
 
 /**

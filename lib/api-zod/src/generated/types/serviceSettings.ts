@@ -13,4 +13,5 @@ export interface ServiceSettings {
   summaryCadence: ServiceSettingsSummaryCadence;
   defaultJobHours: number;
   techWorkHoursPerDay: number;
+  leadSourceReportEnabled: boolean;
 }

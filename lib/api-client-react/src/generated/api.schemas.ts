@@ -5394,6 +5394,7 @@ export interface ServiceSettings {
   summaryCadence: ServiceSettingsSummaryCadence;
   defaultJobHours: number;
   techWorkHoursPerDay: number;
+  leadSourceReportEnabled: boolean;
 }
 
 export type ServiceSettingsUpdateSummaryCadence = typeof ServiceSettingsUpdateSummaryCadence[keyof typeof ServiceSettingsUpdateSummaryCadence];
@@ -5421,6 +5422,7 @@ export interface ServiceSettingsUpdate {
      * @maximum 24
      */
   techWorkHoursPerDay?: number;
+  leadSourceReportEnabled?: boolean;
 }
 
 export type CoveragePlanType = typeof CoveragePlanType[keyof typeof CoveragePlanType];

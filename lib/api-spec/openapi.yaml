@@ -11442,13 +11442,14 @@ components:
         reason: { type: string, minLength: 3 }
     ServiceSettings:
       type: object
-      required: [serviceIntervalKm, lateSurchargeFee, summaryCadence, defaultJobHours, techWorkHoursPerDay]
+      required: [serviceIntervalKm, lateSurchargeFee, summaryCadence, defaultJobHours, techWorkHoursPerDay, leadSourceReportEnabled]
       properties:
         serviceIntervalKm: { type: integer }
         lateSurchargeFee: { type: number }
         summaryCadence: { type: string, enum: [daily, weekly, "off"] }
         defaultJobHours: { type: number }
         techWorkHoursPerDay: { type: number }
+        leadSourceReportEnabled: { type: boolean }
     ServiceSettingsUpdate:
       type: object
       properties:
@@ -11457,6 +11458,7 @@ components:
         summaryCadence: { type: string, enum: [daily, weekly, "off"] }
         defaultJobHours: { type: number, minimum: 0.25, maximum: 24 }
         techWorkHoursPerDay: { type: number, minimum: 1, maximum: 24 }
+        leadSourceReportEnabled: { type: boolean }
 
     CoveragePlan:
       type: object

@@ -23,4 +23,5 @@ export interface ServiceSettingsUpdate {
      * @maximum 24
      */
   techWorkHoursPerDay?: number;
+  leadSourceReportEnabled?: boolean;
 }

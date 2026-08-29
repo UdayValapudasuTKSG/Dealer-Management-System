@@ -10315,7 +10315,8 @@ export const GetServiceSettingsResponse = zod.object({
   "lateSurchargeFee": zod.number(),
   "summaryCadence": zod.enum(['daily', 'weekly', 'off']),
   "defaultJobHours": zod.number(),
-  "techWorkHoursPerDay": zod.number()
+  "techWorkHoursPerDay": zod.number(),
+  "leadSourceReportEnabled": zod.boolean()
 })
 
 
@@ -10335,7 +10336,8 @@ export const UpdateServiceSettingsBody = zod.object({
   "lateSurchargeFee": zod.number().min(updateServiceSettingsBodyLateSurchargeFeeMin).optional(),
   "summaryCadence": zod.enum(['daily', 'weekly', 'off']).optional(),
   "defaultJobHours": zod.number().min(updateServiceSettingsBodyDefaultJobHoursMin).max(updateServiceSettingsBodyDefaultJobHoursMax).optional(),
-  "techWorkHoursPerDay": zod.number().min(1).max(updateServiceSettingsBodyTechWorkHoursPerDayMax).optional()
+  "techWorkHoursPerDay": zod.number().min(1).max(updateServiceSettingsBodyTechWorkHoursPerDayMax).optional(),
+  "leadSourceReportEnabled": zod.boolean().optional()
 })
 
 export const UpdateServiceSettingsResponse = zod.object({
@@ -10343,7 +10345,8 @@ export const UpdateServiceSettingsResponse = zod.object({
   "lateSurchargeFee": zod.number(),
   "summaryCadence": zod.enum(['daily', 'weekly', 'off']),
   "defaultJobHours": zod.number(),
-  "techWorkHoursPerDay": zod.number()
+  "techWorkHoursPerDay": zod.number(),
+  "leadSourceReportEnabled": zod.boolean()
 })
 
 

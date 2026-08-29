@@ -5,6 +5,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   asc,
   sql,
@@ -41,6 +42,7 @@ import {
   zonedAddDays,
   zonedDayKey,
   zonedParts,
+  zonedStartOfDay,
 } from "./timezone";
 
 /**
@@ -501,6 +503,137 @@ async function sweepServiceSummaries(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Task 269 — daily lead-source report to General Managers. Per-dealer opt-in
+// (leadSourceReportEnabled, default off). Sends once per dealer-local day,
+// from 6:00 AM local onwards (the 10-minute sweep loop lands within minutes
+// of 6). "Yesterday" is the dealer-local previous calendar day converted to
+// UTC bounds. Idempotent via a per-dealer/day/recipient dedupe key, so
+// restarts and overlapping runs can never double-send.
+// ---------------------------------------------------------------------------
+const REPORT_BAR_COLORS = [
+  "#6366f1",
+  "#06b6d4",
+  "#f59e0b",
+  "#10b981",
+  "#ec4899",
+  "#8b5cf6",
+  "#f43f5e",
+  "#84cc16",
+];
+
+const escapeReportHtml = (s: string) =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+export async function sweepLeadSourceReports(): Promise<void> {
+  const dealers = await db.select({ id: dealersTable.id }).from(dealersTable);
+  const now = new Date();
+
+  for (const dealer of dealers) {
+    try {
+      const { leadSourceReportEnabled } = await getServiceSettings(dealer.id);
+      if (!leadSourceReportEnabled) continue;
+
+      const tz = await dealerTimezone(dealer.id);
+      // Only send from 6:00 AM dealer-local time onwards.
+      if (zonedParts(now, tz).hour < 6) continue;
+
+      const recipients = await generalManagers(dealer.id);
+      if (recipients.length === 0) continue;
+
+      // Yesterday's dealer-local calendar day as UTC bounds.
+      const yesterdayKey = zonedAddDays(now, tz, -1);
+      const start = zonedStartOfDay(yesterdayKey, tz);
+      const end = zonedStartOfDay(zonedDayKey(now, tz), tz);
+
+      // Aggregate yesterday's non-deleted leads by source code.
+      const counts = await db
+        .select({
+          source: leadsTable.source,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(leadsTable)
+        .where(
+          and(
+            eq(leadsTable.dealerId, dealer.id),
+            isNull(leadsTable.deletedAt),
+            gte(leadsTable.createdAt, start),
+            lt(leadsTable.createdAt, end),
+          ),
+        )
+        .groupBy(leadsTable.source);
+
+      // Pretty labels from the dealer's configured sources; legacy/unknown
+      // codes fall back to a humanized code so no lead is ever dropped.
+      const { leadSourcesTable } = await import("@workspace/db");
+      const configured = await db
+        .select({ code: leadSourcesTable.code, name: leadSourcesTable.name })
+        .from(leadSourcesTable)
+        .where(eq(leadSourcesTable.dealerId, dealer.id));
+      const labelByCode = new Map(configured.map((s) => [s.code, s.name]));
+      const labelFor = (code: string) =>
+        labelByCode.get(code) ??
+        code
+          .split(/[_\s-]+/)
+          .filter(Boolean)
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(" ");
+
+      const total = counts.reduce((sum, r) => sum + r.count, 0);
+      const sorted = [...counts].sort((a, b) => b.count - a.count);
+      const pct = (n: number) => (total === 0 ? 0 : Math.round((n / total) * 100));
+
+      const rows =
+        total === 0
+          ? `<div style="padding:14px 16px;border-radius:12px;background:#f1f5f9;color:#475569;font-size:14px;">No new leads came in yesterday. A quiet day — worth checking that active campaigns and intake channels are all running.</div>`
+          : sorted
+              .map((r, i) => {
+                const color = REPORT_BAR_COLORS[i % REPORT_BAR_COLORS.length];
+                const percent = pct(r.count);
+                const label = escapeReportHtml(labelFor(r.source));
+                return `<div style="margin:0 0 10px 0;">
+  <div style="font-size:13px;margin-bottom:4px;"><strong>${label}</strong> — ${r.count} lead${r.count === 1 ? "" : "s"} (${percent}%)</div>
+  <div style="background:#e2e8f0;border-radius:6px;height:10px;overflow:hidden;"><div style="width:${Math.max(percent, 3)}%;height:10px;border-radius:6px;background:${color};"></div></div>
+</div>`;
+              })
+              .join("");
+
+      const top = sorted[0];
+      const topline =
+        total === 0
+          ? "No leads were captured yesterday — here's the summary anyway so nothing slips by unnoticed."
+          : `<strong>${escapeReportHtml(labelFor(top!.source))}</strong> led the day with <strong>${top!.count} lead${top!.count === 1 ? "" : "s"} (${pct(top!.count)}%)</strong> of ${total} total.`;
+
+      const dateLabel = formatDealerDate(start, tz);
+      const data: TemplateData = {
+        date: dateLabel,
+        total: String(total),
+        topline,
+        rows,
+      };
+
+      for (const userId of recipients) {
+        await enqueueInternalEmail({
+          dealerId: dealer.id,
+          userId,
+          template: "leads.source.report.daily",
+          dedupeKey: `leads:srcreport:${dealer.id}:${yesterdayKey}:u${userId}`,
+          data,
+        });
+      }
+    } catch (err) {
+      logger.error(
+        { err, dealerId: dealer.id },
+        "lead source report sweep failed",
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Assignment catch-up: a lead normally gets an owner synchronously at
 // creation (creator or round robin), but a crash/restart mid-intake can
 // strand it unowned. Re-route any unowned lead older than 5 minutes so no
@@ -630,6 +763,7 @@ export async function runNotificationSweeps(): Promise<void> {
   await sweepTestDriveReminders();
   await sweepServiceCadence();
   await sweepServiceSummaries();
+  await sweepLeadSourceReports();
   await sweepDeliveryFeedback();
 }
 

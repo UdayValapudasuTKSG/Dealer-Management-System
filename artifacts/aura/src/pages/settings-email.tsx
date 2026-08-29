@@ -233,6 +233,8 @@ export default function SettingsEmail() {
 
       <ServiceSummaryCadenceCard />
 
+      <LeadSourceReportCard />
+
       {/* Templates */}
       <div className="space-y-3">
         <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
@@ -984,6 +986,55 @@ function ServiceSummaryCadenceCard() {
             <div className="text-[11px] text-muted-foreground">{c.hint}</div>
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function LeadSourceReportCard() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { data: settings } = useGetServiceSettings();
+  const update = useUpdateServiceSettings({
+    mutation: {
+      onSuccess: (next) => {
+        toast({
+          title: next.leadSourceReportEnabled
+            ? "Daily lead source report enabled"
+            : "Daily lead source report disabled",
+        });
+        qc.invalidateQueries({ queryKey: getGetServiceSettingsQueryKey() });
+      },
+      onError: (e) =>
+        toast({
+          title: "Could not save",
+          description: e instanceof Error ? e.message : undefined,
+          variant: "destructive",
+        }),
+    },
+  });
+  const enabled = settings?.leadSourceReportEnabled ?? false;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+            Daily lead source report
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Emails General Managers a breakdown of yesterday's new leads by
+            source every morning around 6:00 AM dealership time.
+          </p>
+        </div>
+        <Switch
+          checked={enabled}
+          disabled={!settings || update.isPending}
+          onCheckedChange={(v) =>
+            update.mutate({ data: { leadSourceReportEnabled: v } })
+          }
+          aria-label="Toggle daily lead source report"
+        />
       </div>
     </div>
   );

@@ -26,6 +26,7 @@ type ServiceSettings = Pick<
   | "lateSurchargeFee"
   | "defaultJobHours"
   | "techWorkHoursPerDay"
+  | "leadSourceReportEnabled"
 > & { summaryCadence: ServiceSummaryCadence };
 
 function asCadence(value: string | undefined | null): ServiceSummaryCadence {
@@ -48,6 +49,7 @@ export async function getServiceSettings(
     defaultJobHours: row?.defaultJobHours ?? DEFAULT_JOB_HOURS,
     techWorkHoursPerDay:
       row?.techWorkHoursPerDay ?? DEFAULT_TECH_WORK_HOURS_PER_DAY,
+    leadSourceReportEnabled: row?.leadSourceReportEnabled ?? false,
   };
 }
 
@@ -59,6 +61,7 @@ export async function updateServiceSettings(
     summaryCadence?: ServiceSummaryCadence;
     defaultJobHours?: number;
     techWorkHoursPerDay?: number;
+    leadSourceReportEnabled?: boolean;
   },
 ): Promise<ServiceSettings> {
   const current = await getServiceSettings(dealerId);
@@ -69,6 +72,8 @@ export async function updateServiceSettings(
     defaultJobHours: patch.defaultJobHours ?? current.defaultJobHours,
     techWorkHoursPerDay:
       patch.techWorkHoursPerDay ?? current.techWorkHoursPerDay,
+    leadSourceReportEnabled:
+      patch.leadSourceReportEnabled ?? current.leadSourceReportEnabled,
   };
   await db
     .insert(dealerServiceSettingsTable)
