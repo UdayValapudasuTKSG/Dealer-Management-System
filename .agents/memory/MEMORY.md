@@ -63,3 +63,4 @@
 - [Dealership timezone conventions](dealer-timezone.md) — UTC storage, zoned presentation only; resolve dealerTimezone(dealerId) server-side, dealerDayKey client-side; date-only strings never shift a day.
 - [PDFKit bounded layouts](pdfkit-bounded-layouts.md) — narrow columns and explicit coordinates beyond A4 can explode one quote into many sparse pages; stress-test maximum payloads.
 - [Dev-only verify guards](dev-only-verify-guards.md) — fixture verify suites must allowlist the dev DB, guard before DB imports, scope sweeps to fixture dealers, and disable the outbox worker.
+- [Time-sensitive sweep priority](time-sensitive-sweep-priority.md) — scheduled reports must run before backlog sweeps, or overdue work can indefinitely delay their enqueue.

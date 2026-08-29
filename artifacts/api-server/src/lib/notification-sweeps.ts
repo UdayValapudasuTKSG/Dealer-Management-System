@@ -769,12 +769,15 @@ const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 let sweepTimer: ReturnType<typeof setInterval> | null = null;
 
 export async function runNotificationSweeps(): Promise<void> {
+  // Time-sensitive daily reports must run before backlog-oriented sweeps.
+  // A large assignment/SLA backlog can otherwise delay the report past its
+  // configured dealer-local send time (or indefinitely on short-lived workers).
+  await sweepLeadSourceReports();
   await sweepUnassignedLeads();
   await sweepLeadSla();
   await sweepTestDriveReminders();
   await sweepServiceCadence();
   await sweepServiceSummaries();
-  await sweepLeadSourceReports();
   await sweepDeliveryFeedback();
 }
 
