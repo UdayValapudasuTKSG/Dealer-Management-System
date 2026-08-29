@@ -29,6 +29,8 @@ import {
   Link2,
   UserPlus,
   Loader2,
+  X,
+  ChevronDown,
 } from "lucide-react";
 import {
   Dialog,
@@ -37,6 +39,20 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
 import { Page } from "@/components/layout/page";
@@ -159,7 +175,19 @@ function contactSla(lead: {
   return { left, overdue: left <= 0 };
 }
 
-type TabKey = "all" | "mine" | Macro | "lost";
+function removeToken(q: string, key: string): string {
+  const regex = new RegExp(`(?:^|\\s)${key}:(?:"[^"]+"|[^\\s]+)`, "gi");
+  return q.replace(regex, "").replace(/\s+/g, " ").trim();
+}
+
+function setToken(q: string, key: string, value: string): string {
+  let newQ = removeToken(q, key);
+  if (value) {
+    const safeValue = value.includes(" ") ? `"${value}"` : value;
+    newQ = `${newQ} ${key}:${safeValue}`.trim();
+  }
+  return newQ;
+}
 
 export default function Leads() {
   const [, navigate] = useLocation();
@@ -218,8 +246,55 @@ export default function Leads() {
     (s) => s.code === (newSource || "website"),
   );
 
-  const [search, setSearch] = useState("");
-  const [tab, setTab] = useState<TabKey>("all");
+  const [filterQuery, setFilterQuery] = useState("");
+
+  const filters = useMemo(() => {
+    const regex = /(?:([a-z0-9_-]+):"([^"]+)")|(?:([a-z0-9_-]+):([^\s]+))|(?:"([^"]+)")|([^\s]+)/gi;
+
+    let isMine = false;
+    let phase: Macro | "lost" | "all" = "all";
+    let source = "__all__";
+    let advisor = "all";
+    const text: string[] = [];
+
+    let match;
+    while ((match = regex.exec(filterQuery)) !== null) {
+      const key = (match[1] || match[3])?.toLowerCase();
+      const val = match[2] || match[4];
+      const textQuote = match[5];
+      const textPlain = match[6];
+
+      if (key && val) {
+        const vLower = val.toLowerCase();
+        if (key === "is" && vLower === "mine") isMine = true;
+        else if (
+          key === "phase" &&
+          (vLower === "lead" ||
+            vLower === "prebooking" ||
+            vLower === "payment" ||
+            vLower === "delivery" ||
+            vLower === "lost")
+        ) {
+          phase = vLower;
+        }
+        else if (key === "source") source = val;
+        else if (key === "advisor") advisor = val;
+        else text.push(match[0]);
+      } else if (textQuote) {
+        text.push(textQuote);
+      } else if (textPlain) {
+        text.push(textPlain);
+      }
+    }
+
+    return {
+      isMine,
+      phase,
+      source,
+      advisor,
+      search: text.join(" ").toLowerCase()
+    };
+  }, [filterQuery]);
 
   const compact = density === "compact";
   const myId = me?.id ?? null;
@@ -227,11 +302,6 @@ export default function Leads() {
   const isLeadership =
     !!me && (me.isSuperAdmin || me.roleName === "General Manager");
 
-  // Advisor filter (leadership only) + table sorting (everyone).
-  const [advisorFilter, setAdvisorFilter] = useState<string>("all");
-  // "__all__" sentinel: a dealer-configured source could legitimately use the
-  // code "all", so the unscoped option must not collide with it.
-  const [sourceFilter, setSourceFilter] = useState<string>("__all__");
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   // Three-state sort cycle: ascending → descending → off (original order).
@@ -312,7 +382,7 @@ export default function Leads() {
   // Enrich every lead once with its stage, macro phase, vehicle, customer
   // location, preferred branch and SLA.
   const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = filters.search;
     const customerById = new Map(
       (accounts ?? []).map((customer) => [customer.id, customer]),
     );
@@ -375,27 +445,7 @@ export default function Leads() {
           (l.assignedTo ?? "").toLowerCase().includes(q)
         );
       });
-  }, [leads, vehicles, accounts, stageOf, search, slaClock]);
-
-  const counts = useMemo(() => {
-    const c: Record<TabKey, number> = {
-      all: 0,
-      mine: 0,
-      lead: 0,
-      prebooking: 0,
-      payment: 0,
-      delivery: 0,
-      lost: 0,
-    };
-    for (const r of rows) {
-      c.all += 1;
-      if (isMine(r.lead)) c.mine += 1;
-      if (r.macro) c[r.macro] += 1;
-      else c.lost += 1;
-    }
-    return c;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, myId, myName]);
+  }, [leads, vehicles, accounts, stageOf, filters.search, slaClock]);
 
   const advisorOptions = useMemo(
     () =>
@@ -426,32 +476,31 @@ export default function Leads() {
 
   const visible = useMemo(() => {
     return rows.filter((r) => {
-      if (sourceFilter !== "__all__" && r.lead.source !== sourceFilter)
+      if (filters.source !== "__all__" && r.lead.source !== filters.source)
         return false;
       if (
-        advisorFilter !== "all" &&
-        (r.lead.assignedTo ?? "").trim() !== advisorFilter
+        filters.advisor !== "all" &&
+        (r.lead.assignedTo ?? "").trim() !== filters.advisor
       )
         return false;
-      switch (tab) {
-        case "all":
-          return true;
-        case "mine":
-          return isMine(r.lead);
-        case "lost":
-          return r.macro === null;
-        default:
-          return r.macro === tab;
+      if (filters.isMine && !isMine(r.lead)) return false;
+      if (filters.phase !== "all") {
+        if (filters.phase === "lost") {
+          if (r.macro !== null) return false;
+        } else {
+          if (r.macro !== filters.phase) return false;
+        }
       }
+      return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, tab, myId, myName, advisorFilter, sourceFilter]);
+  }, [rows, filters.phase, filters.isMine, filters.advisor, filters.source, myId, myName]);
 
   const PAGE_SIZE = layout === "list" ? 25 : compact ? 30 : 24;
   const [page, setPage] = useState(1);
   useEffect(() => {
     setPage(1);
-  }, [tab, search, layout, density, advisorFilter, sourceFilter]);
+  }, [filterQuery, createdFrom, createdTo, layout, density]);
   const sortedVisible = useMemo(() => {
     if (!sortKey) return visible;
     const dir = sortDir === "asc" ? 1 : -1;
@@ -585,13 +634,6 @@ export default function Leads() {
       });
     }
   };
-
-  const TABS: { key: TabKey; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "mine", label: "Mine" },
-    ...MACRO_ORDER.map((m) => ({ key: m as TabKey, label: MACRO_LABEL[m] })),
-    { key: "lost", label: "Lost" },
-  ];
 
   function SlaChip({ sla }: { sla: { left: number; overdue: boolean } | null }) {
     if (!sla) {
@@ -801,94 +843,188 @@ export default function Leads() {
         action={heroActions}
       />
       <Page className="space-y-3 pt-0">
-        {/* Command row: search + phase tabs on one line */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative w-full sm:w-[280px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search name, model, location, branch, phone or email…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full h-9 rounded-full bg-foreground/[0.04] border border-white/10 pl-9 pr-4 text-sm focus:outline-none focus:border-primary/50"
-            />
-          </div>
-          {sourceOptions.length > 0 && (
-            <select
-              value={sourceFilter}
-              onChange={(e) => setSourceFilter(e.target.value)}
-              className="h-9 rounded-full bg-foreground/[0.04] border border-white/10 text-sm px-3 pr-8 text-foreground/90 focus:outline-none focus:border-primary/50"
-              aria-label="Filter by lead source"
-            >
-              <option value="__all__">All sources</option>
-              {sourceOptions.map((s) => (
-                <option key={s.code} value={s.code}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          )}
-          {isLeadership && advisorOptions.length > 0 && (
-            <select
-              value={advisorFilter}
-              onChange={(e) => setAdvisorFilter(e.target.value)}
-              className="h-9 rounded-full bg-foreground/[0.04] border border-white/10 text-sm px-3 pr-8 text-foreground/90 focus:outline-none focus:border-primary/50"
-              aria-label="Filter by sales advisor"
-            >
-              <option value="all">All advisors</option>
-              {advisorOptions.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-          )}
-          <div className={cn("flex items-center h-9 px-3 gap-2 rounded-full border text-sm", isInvalidRange ? "border-red-500/50 bg-red-500/5" : "border-white/10 bg-foreground/[0.04]")}>
-            <span className="text-muted-foreground text-[10px] uppercase tracking-wider font-semibold">Created</span>
-            <input
-              type="date"
-              value={createdFrom}
-              onChange={(e) => updateDateRange(e.target.value, createdTo)}
-              className="bg-transparent border-none focus:outline-none text-foreground/90 w-auto min-w-[110px]"
-            />
-            <span className="text-muted-foreground text-xs">to</span>
-            <input
-              type="date"
-              value={createdTo}
-              onChange={(e) => updateDateRange(createdFrom, e.target.value)}
-              className="bg-transparent border-none focus:outline-none text-foreground/90 w-auto min-w-[110px]"
-            />
-            {isInvalidRange && <span className="text-red-400 text-[10px] uppercase font-bold ml-1">Invalid</span>}
-            {(createdFrom || createdTo) && (
-               <button
-                 onClick={() => updateDateRange("", "")}
-                 className="ml-1 text-muted-foreground hover:text-foreground text-lg leading-none p-0.5 rounded-full h-4 w-4 flex items-center justify-center -translate-y-px"
-                 title="Clear dates"
-                 type="button"
-               >
-                 <span className="sr-only">Clear dates</span>
-                 &times;
-               </button>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={cn(
-                "rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wider transition-colors",
-                tab === t.key
-                  ? "bg-primary text-white"
-                  : "bg-foreground/[0.05] text-muted-foreground hover:text-foreground",
+        <div className="flex flex-col gap-3 mt-2 mb-2">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1 flex items-center group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+              <Input
+                value={filterQuery}
+                onChange={e => setFilterQuery(e.target.value)}
+                className="w-full pl-9 bg-foreground/[0.02] border-white/10 font-mono text-sm focus-visible:ring-1 focus-visible:ring-primary/50"
+                placeholder="Filter by text or tags (e.g. is:mine phase:lead source:website)"
+                data-testid="input-pipeline-search"
+              />
+              {filterQuery && (
+                 <button
+                   type="button"
+                   onClick={() => setFilterQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  data-testid="btn-clear-query"
+                   aria-label="Clear filter query"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               )}
-            >
-              {t.label}
-              <span className="ml-1.5 tabular-nums opacity-70">
-                {counts[t.key] ?? 0}
-              </span>
-            </button>
-          ))}
+            </div>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2 bg-foreground/[0.02] border-white/10 whitespace-nowrap shrink-0" data-testid="btn-filters-menu">
+                  Filters <ChevronDown className="w-4 h-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[320px] p-4 flex flex-col gap-4 border-white/10 bg-card/95 backdrop-blur-xl shadow-2xl">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Ownership</Label>
+                  <Select value={filters.isMine ? "mine" : "all"} onValueChange={v => setFilterQuery(setToken(filterQuery, 'is', v === 'mine' ? 'mine' : ''))}>
+                    <SelectTrigger className="bg-foreground/[0.02] border-white/10 h-8 text-sm" data-testid="select-filter-ownership">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Everything</SelectItem>
+                      <SelectItem value="mine">Assigned to me</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Phase</Label>
+                  <Select value={filters.phase} onValueChange={v => setFilterQuery(setToken(filterQuery, 'phase', v === 'all' ? '' : v))}>
+                    <SelectTrigger className="bg-foreground/[0.02] border-white/10 h-8 text-sm" data-testid="select-filter-phase">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All phases</SelectItem>
+                      {MACRO_ORDER.map(m => <SelectItem key={m} value={m}>{MACRO_LABEL[m]}</SelectItem>)}
+                      <SelectItem value="lost">Lost</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Source</Label>
+                  <Select value={filters.source} onValueChange={v => setFilterQuery(setToken(filterQuery, 'source', v === '__all__' ? '' : v))}>
+                    <SelectTrigger className="bg-foreground/[0.02] border-white/10 h-8 text-sm" data-testid="select-filter-source">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All sources</SelectItem>
+                      {sourceOptions.map(s => <SelectItem key={s.code} value={s.code}>{s.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {isLeadership && advisorOptions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Advisor</Label>
+                    <Select value={filters.advisor} onValueChange={v => setFilterQuery(setToken(filterQuery, 'advisor', v === 'all' ? '' : v))}>
+                      <SelectTrigger className="bg-foreground/[0.02] border-white/10 h-8 text-sm" data-testid="select-filter-advisor">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All advisors</SelectItem>
+                        {advisorOptions.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Created Date</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      value={createdFrom}
+                      onChange={e => updateDateRange(e.target.value, createdTo)}
+                      className="flex-1 bg-foreground/[0.02] border-white/10 h-8 text-xs"
+                      data-testid="input-filter-date-from"
+                    />
+                    <Input
+                      type="date"
+                      value={createdTo}
+                      onChange={e => updateDateRange(createdFrom, e.target.value)}
+                      className="flex-1 bg-foreground/[0.02] border-white/10 h-8 text-xs"
+                      data-testid="input-filter-date-to"
+                    />
+                  </div>
+                  {isInvalidRange && (
+                    <p className="text-xs text-red-400" role="alert" data-testid="error-filter-date-range">
+                      Start date must be before or equal to end date.
+                    </p>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 min-h-[24px]">
+            <div className="flex flex-wrap items-center gap-2">
+              {(filters.isMine || filters.phase !== "all" || filters.source !== "__all__" || filters.advisor !== "all" || createdFrom || createdTo) && (
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-1 flex items-center h-6">Active:</span>
+              )}
+
+              {filters.isMine && (
+                <Badge variant="secondary" className="gap-1.5 bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 transition-colors h-6 rounded-md px-2" data-testid="badge-filter-ownership">
+                  Owner: Mine
+                   <button type="button" aria-label="Remove ownership filter" onClick={() => setFilterQuery(removeToken(filterQuery, 'is'))} className="opacity-70 hover:opacity-100" data-testid="btn-remove-filter-ownership"><X className="w-3 h-3" /></button>
+                </Badge>
+              )}
+
+              {filters.phase !== "all" && (
+                <Badge variant="secondary" className="gap-1.5 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 border-sky-500/20 transition-colors h-6 rounded-md px-2" data-testid="badge-filter-phase">
+                  Phase: {filters.phase === "lost" ? "Lost" : MACRO_LABEL[filters.phase as Macro]}
+                   <button type="button" aria-label="Remove phase filter" onClick={() => setFilterQuery(removeToken(filterQuery, 'phase'))} className="opacity-70 hover:opacity-100" data-testid="btn-remove-filter-phase"><X className="w-3 h-3" /></button>
+                </Badge>
+              )}
+
+              {filters.source !== "__all__" && (
+                <Badge variant="secondary" className="gap-1.5 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 border-violet-500/20 transition-colors h-6 rounded-md px-2" data-testid="badge-filter-source">
+                  Source: {SOURCE_LABEL[filters.source] || filters.source}
+                   <button type="button" aria-label="Remove source filter" onClick={() => setFilterQuery(removeToken(filterQuery, 'source'))} className="opacity-70 hover:opacity-100" data-testid="btn-remove-filter-source"><X className="w-3 h-3" /></button>
+                </Badge>
+              )}
+
+              {filters.advisor !== "all" && (
+                <Badge variant="secondary" className="gap-1.5 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border-amber-500/20 transition-colors h-6 rounded-md px-2" data-testid="badge-filter-advisor">
+                  Advisor: {filters.advisor}
+                   <button type="button" aria-label="Remove advisor filter" onClick={() => setFilterQuery(removeToken(filterQuery, 'advisor'))} className="opacity-70 hover:opacity-100" data-testid="btn-remove-filter-advisor"><X className="w-3 h-3" /></button>
+                </Badge>
+              )}
+
+              {(createdFrom || createdTo) && (
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "gap-1.5 transition-colors h-6 rounded-md px-2",
+                    isInvalidRange
+                      ? "bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20"
+                      : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20",
+                  )}
+                  data-testid="badge-filter-date"
+                >
+                  Date: {[createdFrom, createdTo].filter(Boolean).join(" - ")}
+                   <button type="button" aria-label="Remove created date filter" onClick={() => updateDateRange("", "")} className="opacity-70 hover:opacity-100" data-testid="btn-remove-filter-date"><X className="w-3 h-3" /></button>
+                </Badge>
+              )}
+
+              {(filters.isMine || filters.phase !== "all" || filters.source !== "__all__" || filters.advisor !== "all" || createdFrom || createdTo) && (
+                <button
+                   type="button"
+                  onClick={() => {
+                    setFilterQuery("");
+                    updateDateRange("", "");
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2 ml-1"
+                  data-testid="btn-clear-all-filters"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+
+            <div className="text-sm font-medium text-muted-foreground" data-testid="text-filter-count">
+              <span className="text-foreground">{sortedVisible.length}</span> {sortedVisible.length === 1 ? 'result' : 'results'}
+            </div>
           </div>
         </div>
 
