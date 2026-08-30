@@ -41,6 +41,7 @@ export * from "./commNotes";
 export * from "./bookings";
 export * from "./reservationAllocations";
 export * from "./webhookEvents";
+export * from "./amber";
 export * from "./whatsappConversations";
 export * from "./whatsappMessages";
 export * from "./deliveries";

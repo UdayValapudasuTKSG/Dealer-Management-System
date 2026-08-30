@@ -23,6 +23,7 @@ export const PERMISSION_MODULES = [
   "customers",
   "approvals",
   "gra",
+  "amber",
   "capacity",
   "settings",
 ] as const;

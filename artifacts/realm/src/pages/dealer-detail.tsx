@@ -28,9 +28,15 @@ const ENTITLEMENT_MODULES = [
   { key: "parts_module", label: "Parts & Suppliers", desc: "Parts inventory, purchases, suppliers" },
   { key: "gra_module", label: "GRA Compliance", desc: "Duty filing and customs workflows" },
   { key: "ai_agents", label: "AI Agents", desc: "Agentic automations for this dealership" },
+  { key: "amber_connect", label: "Amber Connect", desc: "Vehicle telematics — GPS, odometer, device health (off by default)" },
 ];
 
+// Opt-in modules are disabled unless explicitly enabled; legacy flags keep
+// deny-list semantics (missing = on). Must mirror the API's isEntitlementEnabled.
+const DEFAULT_OFF_ENTITLEMENTS = ["amber_connect"];
+
 function entitlementOn(flags: Record<string, boolean> | undefined, key: string) {
+  if (DEFAULT_OFF_ENTITLEMENTS.includes(key)) return flags?.[key] === true;
   return flags?.[key] !== false;
 }
 

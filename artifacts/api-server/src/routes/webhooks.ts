@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import crypto from "node:crypto";
+import { z } from "zod/v4";
 import { and, eq, inArray, or } from "drizzle-orm";
 import {
   db,
@@ -72,6 +73,102 @@ export function registerErpnextInboundHandler(
 ): void {
   erpnextInboundHandlers.set(doctype, handler);
 }
+
+// ---------------------------------------------------------------------------
+// Amber Connect telematics ingestion (AURA's own signed seam — NOT a
+// fabricated Amber contract). Sender signs the raw body with the per-dealer
+// shared secret: x-amber-signature: sha256=<hex hmac>. Entitlement + enabled
+// connection are checked before ANY processing, so disabling the module
+// stops webhook processing immediately.
+// ---------------------------------------------------------------------------
+router.post("/webhooks/amber/:dealerId", async (req, res): Promise<void> => {
+  const dealerId = Number(req.params["dealerId"]);
+  if (!Number.isInteger(dealerId) || dealerId <= 0) {
+    res.status(404).json({ error: "Unknown dealer" });
+    return;
+  }
+  const { getAmberConnection, amberEntitled } = await import(
+    "../lib/amber/connection"
+  );
+  if (!(await amberEntitled(dealerId))) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const conn = await getAmberConnection(dealerId);
+  if (!conn || !conn.enabled) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+  const signature = req.get("x-amber-signature") ?? "";
+  const expected =
+    "sha256=" +
+    crypto.createHmac("sha256", conn.webhookSecret).update(raw).digest("hex");
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(signature, "utf8");
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    req.log.warn({ dealerId }, "Amber webhook rejected: bad signature");
+    res.status(403).json({ error: "Invalid signature" });
+    return;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw.toString("utf8"));
+  } catch {
+    res.status(400).json({ error: "Invalid JSON body" });
+    return;
+  }
+  const eventSchema = z.object({
+    externalId: z.string().min(1),
+    deviceId: z.string().min(1),
+    type: z
+      .enum([
+        "location",
+        "odometer",
+        "ignition_on",
+        "ignition_off",
+        "device_health",
+        "other",
+      ])
+      .catch("other"),
+    occurredAt: z.coerce.date(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
+    odometerKm: z.number().optional(),
+    deviceHealth: z.string().optional(),
+  });
+  const bodySchema = z.union([
+    z.object({ events: z.array(z.unknown()) }),
+    z.record(z.string(), z.unknown()),
+  ]);
+  if (!bodySchema.safeParse(parsed).success) {
+    res.status(400).json({ error: "Invalid payload" });
+    return;
+  }
+  const rawEvents = Array.isArray(
+    (parsed as { events?: unknown[] }).events,
+  )
+    ? (parsed as { events: unknown[] }).events
+    : [parsed];
+
+  const { processAmberEvent } = await import("../lib/amber/ingest");
+  const results: Record<string, number> = {};
+  for (const rawEvent of rawEvents.slice(0, 500)) {
+    const ev = eventSchema.safeParse(rawEvent);
+    if (!ev.success) {
+      results["invalid"] = (results["invalid"] ?? 0) + 1;
+      continue;
+    }
+    const raw0 = (rawEvent ?? {}) as Record<string, unknown>;
+    const outcome = await processAmberEvent(dealerId, {
+      ...ev.data,
+      raw: raw0,
+    });
+    results[outcome] = (results[outcome] ?? 0) + 1;
+  }
+  res.json({ ok: true, results });
+});
 
 router.post("/webhooks/erpnext/:dealerId", async (req, res): Promise<void> => {
   const dealerId = Number(req.params["dealerId"]);

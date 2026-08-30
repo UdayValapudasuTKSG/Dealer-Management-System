@@ -19,6 +19,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify-provisioning-saga": "tsx ./src/verify-provisioning-saga.ts",
     "verify-isolation-p5": "tsx ./src/verify-isolation-p5.ts",
+    "verify-amber": "tsx ./src/verify-amber.ts",
     "verify-feedback-forms": "tsx ./src/verify-feedback-forms.ts",
     "seed-payment-demo": "tsx ./src/seed-payment-demo.ts",
     "verify-gra-duty": "tsx ./src/verify-gra-duty.ts",

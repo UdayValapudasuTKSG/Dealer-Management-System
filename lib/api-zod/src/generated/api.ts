@@ -9066,7 +9066,7 @@ export const GetCurrentUserResponse = zod.object({
   "timezone": zod.string().optional().describe('IANA timezone identifier for this dealership (e.g. America\/Guyana)')
 })),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'amber', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 }))
 })
@@ -9971,7 +9971,7 @@ export const ListAdminRolesResponseItem = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'amber', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "fieldPermissions": zod.array(zod.object({
@@ -9998,7 +9998,7 @@ export const CreateAdminRoleResponse = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'amber', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "fieldPermissions": zod.array(zod.object({
@@ -10028,7 +10028,7 @@ export const UpdateAdminRoleResponse = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'amber', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "fieldPermissions": zod.array(zod.object({
@@ -10055,7 +10055,7 @@ export const SetRolePermissionsParams = zod.object({
 
 export const SetRolePermissionsBody = zod.object({
   "grants": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'amber', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 }))
 })
@@ -10067,7 +10067,7 @@ export const SetRolePermissionsResponse = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'amber', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "fieldPermissions": zod.array(zod.object({
@@ -10114,7 +10114,7 @@ export const SetRoleFieldPermissionsResponse = zod.object({
   "isSystem": zod.boolean(),
   "userCount": zod.number(),
   "permissions": zod.array(zod.object({
-  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'settings']),
+  "module": zod.enum(['dashboard', 'inventory', 'leads', 'deals', 'appraisals', 'finance', 'service', 'parts', 'deliveries', 'customers', 'approvals', 'gra', 'capacity', 'amber', 'settings']),
   "category": zod.enum(['view', 'create', 'edit', 'delete', 'approve', 'reject', 'export', 'assign', 'admin'])
 })),
   "fieldPermissions": zod.array(zod.object({
@@ -11661,6 +11661,239 @@ export const RetryErpnextSyncJobResponse = zod.object({
   "nextAttemptAt": zod.coerce.date().nullish(),
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Amber Connect connection settings (credentials never returned)
+ */
+export const GetAmberSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "enabled": zod.boolean(),
+  "apiBaseUrl": zod.string().nullish(),
+  "apiKeyHint": zod.string().nullish(),
+  "hasApiKey": zod.boolean(),
+  "contractStatus": zod.enum(['pending_documentation', 'configured']),
+  "webhookSecret": zod.string().nullish(),
+  "webhookPath": zod.string().nullish(),
+  "lastStatus": zod.string().nullish(),
+  "lastError": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
+  "lastSyncStatus": zod.string().nullish(),
+  "lastSyncAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Create or update the Amber Connect connection for the active dealership
+ */
+
+
+
+export const UpdateAmberSettingsBody = zod.object({
+  "apiBaseUrl": zod.string().nullish(),
+  "apiKey": zod.string().min(1).optional(),
+  "enabled": zod.boolean().optional()
+})
+
+export const UpdateAmberSettingsResponse = zod.object({
+  "configured": zod.boolean(),
+  "enabled": zod.boolean(),
+  "apiBaseUrl": zod.string().nullish(),
+  "apiKeyHint": zod.string().nullish(),
+  "hasApiKey": zod.boolean(),
+  "contractStatus": zod.enum(['pending_documentation', 'configured']),
+  "webhookSecret": zod.string().nullish(),
+  "webhookPath": zod.string().nullish(),
+  "lastStatus": zod.string().nullish(),
+  "lastError": zod.string().nullish(),
+  "lastCheckedAt": zod.coerce.date().nullish(),
+  "lastSyncStatus": zod.string().nullish(),
+  "lastSyncAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Test the stored Amber connection (reports pending_contract until the partner API contract is configured)
+ */
+export const TestAmberConnectionResponse = zod.object({
+  "ok": zod.boolean(),
+  "status": zod.enum(['connected', 'error', 'pending_contract']),
+  "detail": zod.string()
+})
+
+
+/**
+ * @summary Generate a new Amber webhook shared secret (GM only)
+ */
+export const RotateAmberWebhookSecretResponse = zod.object({
+  "webhookSecret": zod.string()
+})
+
+
+/**
+ * @summary List Amber devices and their vehicle-mapping state
+ */
+export const ListAmberDevicesResponseItem = zod.object({
+  "id": zod.number(),
+  "deviceId": zod.string(),
+  "reportedVin": zod.string().nullish(),
+  "label": zod.string().nullish(),
+  "vehicleId": zod.number().nullish(),
+  "mappingStatus": zod.enum(['unmatched', 'mapped', 'conflict']),
+  "conflictReason": zod.string().nullish(),
+  "mappedBy": zod.string().nullish(),
+  "mappedAt": zod.coerce.date().nullish(),
+  "lastSeenAt": zod.coerce.date().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "vehicleVin": zod.string().nullish()
+})
+export const ListAmberDevicesResponse = zod.array(ListAmberDevicesResponseItem)
+
+
+/**
+ * @summary Register or update a device identity (manual import while the provider contract is pending)
+ */
+
+
+
+export const RegisterAmberDeviceBody = zod.object({
+  "deviceId": zod.string().min(1),
+  "reportedVin": zod.string().nullish(),
+  "label": zod.string().nullish()
+})
+
+export const RegisterAmberDeviceResponse = zod.object({
+  "id": zod.number(),
+  "deviceId": zod.string(),
+  "reportedVin": zod.string().nullish(),
+  "label": zod.string().nullish(),
+  "vehicleId": zod.number().nullish(),
+  "mappingStatus": zod.enum(['unmatched', 'mapped', 'conflict']),
+  "conflictReason": zod.string().nullish(),
+  "mappedBy": zod.string().nullish(),
+  "mappedAt": zod.coerce.date().nullish(),
+  "lastSeenAt": zod.coerce.date().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "vehicleVin": zod.string().nullish()
+})
+
+
+/**
+ * @summary Explicitly map a device to an AURA vehicle (VIN-confirmed)
+ */
+export const MapAmberDeviceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const MapAmberDeviceBody = zod.object({
+  "vehicleId": zod.number(),
+  "confirmVin": zod.string().min(1)
+})
+
+export const MapAmberDeviceResponse = zod.object({
+  "id": zod.number(),
+  "deviceId": zod.string(),
+  "reportedVin": zod.string().nullish(),
+  "label": zod.string().nullish(),
+  "vehicleId": zod.number().nullish(),
+  "mappingStatus": zod.enum(['unmatched', 'mapped', 'conflict']),
+  "conflictReason": zod.string().nullish(),
+  "mappedBy": zod.string().nullish(),
+  "mappedAt": zod.coerce.date().nullish(),
+  "lastSeenAt": zod.coerce.date().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "vehicleVin": zod.string().nullish()
+})
+
+
+/**
+ * @summary Remove a device's vehicle mapping
+ */
+export const UnmapAmberDeviceParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UnmapAmberDeviceResponse = zod.object({
+  "id": zod.number(),
+  "deviceId": zod.string(),
+  "reportedVin": zod.string().nullish(),
+  "label": zod.string().nullish(),
+  "vehicleId": zod.number().nullish(),
+  "mappingStatus": zod.enum(['unmatched', 'mapped', 'conflict']),
+  "conflictReason": zod.string().nullish(),
+  "mappedBy": zod.string().nullish(),
+  "mappedAt": zod.coerce.date().nullish(),
+  "lastSeenAt": zod.coerce.date().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "vehicleVin": zod.string().nullish()
+})
+
+
+/**
+ * @summary Latest normalized telemetry per device (location redacted without amber admin)
+ */
+export const ListAmberFleetStateResponseItem = zod.object({
+  "id": zod.number(),
+  "deviceId": zod.string(),
+  "vehicleId": zod.number().nullish(),
+  "vehicleLabel": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "locationAt": zod.coerce.date().nullish(),
+  "locationRestricted": zod.boolean().optional(),
+  "odometerKm": zod.number().nullish(),
+  "odometerAt": zod.coerce.date().nullish(),
+  "ignitionOn": zod.boolean().nullish(),
+  "ignitionAt": zod.coerce.date().nullish(),
+  "deviceHealth": zod.string().nullish(),
+  "deviceHealthAt": zod.coerce.date().nullish(),
+  "lastEventAt": zod.coerce.date().nullish(),
+  "freshness": zod.enum(['live', 'recent', 'stale', 'offline', 'never'])
+})
+export const ListAmberFleetStateResponse = zod.array(ListAmberFleetStateResponseItem)
+
+
+/**
+ * @summary Recent telematics events (bounded history)
+ */
+export const ListAmberEventsQueryParams = zod.object({
+  "deviceId": zod.coerce.string().optional()
+})
+
+export const ListAmberEventsResponseItem = zod.object({
+  "id": zod.number(),
+  "deviceId": zod.string(),
+  "externalId": zod.string(),
+  "type": zod.string(),
+  "occurredAt": zod.coerce.date(),
+  "status": zod.string(),
+  "error": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListAmberEventsResponse = zod.array(ListAmberEventsResponseItem)
+
+
+/**
+ * @summary Freshness-labelled Amber status for one vehicle
+ */
+export const GetAmberVehicleStatusParams = zod.object({
+  "vehicleId": zod.coerce.number()
+})
+
+export const GetAmberVehicleStatusResponse = zod.object({
+  "mapped": zod.boolean(),
+  "deviceId": zod.string().nullish(),
+  "odometerKm": zod.number().nullish(),
+  "odometerAt": zod.coerce.date().nullish(),
+  "ignitionOn": zod.boolean().nullish(),
+  "ignitionAt": zod.coerce.date().nullish(),
+  "deviceHealth": zod.string().nullish(),
+  "lastEventAt": zod.coerce.date().nullish(),
+  "freshness": zod.enum(['live', 'recent', 'stale', 'offline', 'never'])
 })
 
 

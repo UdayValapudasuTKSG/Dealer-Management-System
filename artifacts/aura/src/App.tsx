@@ -36,6 +36,7 @@ import TeamProfile from "@/pages/team-profile";
 import SettingsUsers from "@/pages/settings-users";
 import SettingsEmail from "@/pages/settings-email";
 import SettingsErpnext from "@/pages/settings-erpnext";
+import Amber from "@/pages/amber";
 import SettingsWhatsapp from "@/pages/settings-whatsapp";
 import SettingsProfile from "@/pages/settings-profile";
 import SettingsBranding from "@/pages/settings-branding";
@@ -275,6 +276,11 @@ function AppRoutes() {
                 <Route path="/parts">
                   <RequireModule module="parts" label="Parts">
                     <Parts />
+                  </RequireModule>
+                </Route>
+                <Route path="/amber">
+                  <RequireModule module="amber" label="Amber Connect">
+                    <Amber />
                   </RequireModule>
                 </Route>
                 {/* Workshop is merged into Service as the "My Jobs" tab (2026-07) */}

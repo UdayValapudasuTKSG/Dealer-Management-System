@@ -34,6 +34,13 @@ import type {
   AgentRun,
   AgentRunReview,
   AgentUpdate,
+  AmberDevice,
+  AmberEvent,
+  AmberSettings,
+  AmberTestResult,
+  AmberVehicleState,
+  AmberVehicleStatus,
+  AmberWebhookSecret,
   AnthropicConversation,
   AnthropicConversationInput,
   AnthropicConversationWithMessages,
@@ -204,6 +211,7 @@ import type {
   LinkLeadAccountInput,
   ListActivityParams,
   ListAgentRunsParams,
+  ListAmberEventsParams,
   ListAuditLogsParams,
   ListBookingsParams,
   ListCapacityBlocksParams,
@@ -231,6 +239,7 @@ import type {
   ListTestDrivesParams,
   ListTimelineParams,
   ListVehiclesParams,
+  MapAmberDeviceRequest,
   MarkNotificationsReadRequest,
   MarkNotificationsReadResult,
   MetaConnectionStatus,
@@ -274,6 +283,7 @@ import type {
   ReasonedApprovalRequest,
   Receipt,
   ReceiveMetaWebhook200,
+  RegisterAmberDeviceRequest,
   RemindAck,
   Report,
   ReservationHoldRetryResult,
@@ -329,6 +339,7 @@ import type {
   TimelineEvent,
   UnmetError,
   UnmetResponse,
+  UpdateAmberSettingsRequest,
   UpdateDeal422,
   UpdateErpnextSettingsRequest,
   UpdateMetaSettingsRequest,
@@ -24570,6 +24581,825 @@ export const useRetryErpnextSyncJob = <TError = ErrorType<Error>,
       > => {
       return useMutation(getRetryErpnextSyncJobMutationOptions(options));
     }
+
+export const getGetAmberSettingsUrl = () => {
+
+
+
+
+  return `/api/amber/settings`
+}
+
+/**
+ * @summary Amber Connect connection settings (credentials never returned)
+ */
+export const getAmberSettings = async ( options?: RequestInit): Promise<AmberSettings> => {
+
+  return customFetch<AmberSettings>(getGetAmberSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAmberSettingsQueryKey = () => {
+    return [
+    `/api/amber/settings`
+    ] as const;
+    }
+
+
+export const getGetAmberSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getAmberSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAmberSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAmberSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAmberSettings>>> = ({ signal }) => getAmberSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAmberSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAmberSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getAmberSettings>>>
+export type GetAmberSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Amber Connect connection settings (credentials never returned)
+ */
+
+export function useGetAmberSettings<TData = Awaited<ReturnType<typeof getAmberSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAmberSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAmberSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateAmberSettingsUrl = () => {
+
+
+
+
+  return `/api/amber/settings`
+}
+
+/**
+ * @summary Create or update the Amber Connect connection for the active dealership
+ */
+export const updateAmberSettings = async (updateAmberSettingsRequest: UpdateAmberSettingsRequest, options?: RequestInit): Promise<AmberSettings> => {
+
+  return customFetch<AmberSettings>(getUpdateAmberSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateAmberSettingsRequest)
+  }
+);}
+
+
+
+
+
+export const getUpdateAmberSettingsMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAmberSettings>>, TError,{data: BodyType<UpdateAmberSettingsRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAmberSettings>>, TError,{data: BodyType<UpdateAmberSettingsRequest>}, TContext> => {
+
+const mutationKey = ['updateAmberSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAmberSettings>>, {data: BodyType<UpdateAmberSettingsRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateAmberSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAmberSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateAmberSettings>>>
+    export type UpdateAmberSettingsMutationBody = BodyType<UpdateAmberSettingsRequest>
+    export type UpdateAmberSettingsMutationError = ErrorType<Error>
+
+    /**
+ * @summary Create or update the Amber Connect connection for the active dealership
+ */
+export const useUpdateAmberSettings = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAmberSettings>>, TError,{data: BodyType<UpdateAmberSettingsRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAmberSettings>>,
+        TError,
+        {data: BodyType<UpdateAmberSettingsRequest>},
+        TContext
+      > => {
+      return useMutation(getUpdateAmberSettingsMutationOptions(options));
+    }
+
+export const getTestAmberConnectionUrl = () => {
+
+
+
+
+  return `/api/amber/settings/test`
+}
+
+/**
+ * @summary Test the stored Amber connection (reports pending_contract until the partner API contract is configured)
+ */
+export const testAmberConnection = async ( options?: RequestInit): Promise<AmberTestResult> => {
+
+  return customFetch<AmberTestResult>(getTestAmberConnectionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTestAmberConnectionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testAmberConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testAmberConnection>>, TError,void, TContext> => {
+
+const mutationKey = ['testAmberConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testAmberConnection>>, void> = () => {
+
+
+          return  testAmberConnection(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestAmberConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof testAmberConnection>>>
+
+    export type TestAmberConnectionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Test the stored Amber connection (reports pending_contract until the partner API contract is configured)
+ */
+export const useTestAmberConnection = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testAmberConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testAmberConnection>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getTestAmberConnectionMutationOptions(options));
+    }
+
+export const getRotateAmberWebhookSecretUrl = () => {
+
+
+
+
+  return `/api/amber/settings/rotate-webhook-secret`
+}
+
+/**
+ * @summary Generate a new Amber webhook shared secret (GM only)
+ */
+export const rotateAmberWebhookSecret = async ( options?: RequestInit): Promise<AmberWebhookSecret> => {
+
+  return customFetch<AmberWebhookSecret>(getRotateAmberWebhookSecretUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRotateAmberWebhookSecretMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rotateAmberWebhookSecret>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rotateAmberWebhookSecret>>, TError,void, TContext> => {
+
+const mutationKey = ['rotateAmberWebhookSecret'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rotateAmberWebhookSecret>>, void> = () => {
+
+
+          return  rotateAmberWebhookSecret(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RotateAmberWebhookSecretMutationResult = NonNullable<Awaited<ReturnType<typeof rotateAmberWebhookSecret>>>
+
+    export type RotateAmberWebhookSecretMutationError = ErrorType<Error>
+
+    /**
+ * @summary Generate a new Amber webhook shared secret (GM only)
+ */
+export const useRotateAmberWebhookSecret = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rotateAmberWebhookSecret>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rotateAmberWebhookSecret>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRotateAmberWebhookSecretMutationOptions(options));
+    }
+
+export const getListAmberDevicesUrl = () => {
+
+
+
+
+  return `/api/amber/devices`
+}
+
+/**
+ * @summary List Amber devices and their vehicle-mapping state
+ */
+export const listAmberDevices = async ( options?: RequestInit): Promise<AmberDevice[]> => {
+
+  return customFetch<AmberDevice[]>(getListAmberDevicesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAmberDevicesQueryKey = () => {
+    return [
+    `/api/amber/devices`
+    ] as const;
+    }
+
+
+export const getListAmberDevicesQueryOptions = <TData = Awaited<ReturnType<typeof listAmberDevices>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAmberDevices>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAmberDevicesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAmberDevices>>> = ({ signal }) => listAmberDevices({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAmberDevices>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAmberDevicesQueryResult = NonNullable<Awaited<ReturnType<typeof listAmberDevices>>>
+export type ListAmberDevicesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List Amber devices and their vehicle-mapping state
+ */
+
+export function useListAmberDevices<TData = Awaited<ReturnType<typeof listAmberDevices>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAmberDevices>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAmberDevicesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRegisterAmberDeviceUrl = () => {
+
+
+
+
+  return `/api/amber/devices`
+}
+
+/**
+ * @summary Register or update a device identity (manual import while the provider contract is pending)
+ */
+export const registerAmberDevice = async (registerAmberDeviceRequest: RegisterAmberDeviceRequest, options?: RequestInit): Promise<AmberDevice> => {
+
+  return customFetch<AmberDevice>(getRegisterAmberDeviceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(registerAmberDeviceRequest)
+  }
+);}
+
+
+
+
+
+export const getRegisterAmberDeviceMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerAmberDevice>>, TError,{data: BodyType<RegisterAmberDeviceRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerAmberDevice>>, TError,{data: BodyType<RegisterAmberDeviceRequest>}, TContext> => {
+
+const mutationKey = ['registerAmberDevice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerAmberDevice>>, {data: BodyType<RegisterAmberDeviceRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerAmberDevice(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterAmberDeviceMutationResult = NonNullable<Awaited<ReturnType<typeof registerAmberDevice>>>
+    export type RegisterAmberDeviceMutationBody = BodyType<RegisterAmberDeviceRequest>
+    export type RegisterAmberDeviceMutationError = ErrorType<Error>
+
+    /**
+ * @summary Register or update a device identity (manual import while the provider contract is pending)
+ */
+export const useRegisterAmberDevice = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerAmberDevice>>, TError,{data: BodyType<RegisterAmberDeviceRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerAmberDevice>>,
+        TError,
+        {data: BodyType<RegisterAmberDeviceRequest>},
+        TContext
+      > => {
+      return useMutation(getRegisterAmberDeviceMutationOptions(options));
+    }
+
+export const getMapAmberDeviceUrl = (id: number,) => {
+
+
+
+
+  return `/api/amber/devices/${id}/map`
+}
+
+/**
+ * @summary Explicitly map a device to an AURA vehicle (VIN-confirmed)
+ */
+export const mapAmberDevice = async (id: number,
+    mapAmberDeviceRequest: MapAmberDeviceRequest, options?: RequestInit): Promise<AmberDevice> => {
+
+  return customFetch<AmberDevice>(getMapAmberDeviceUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mapAmberDeviceRequest)
+  }
+);}
+
+
+
+
+
+export const getMapAmberDeviceMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mapAmberDevice>>, TError,{id: number;data: BodyType<MapAmberDeviceRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof mapAmberDevice>>, TError,{id: number;data: BodyType<MapAmberDeviceRequest>}, TContext> => {
+
+const mutationKey = ['mapAmberDevice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof mapAmberDevice>>, {id: number;data: BodyType<MapAmberDeviceRequest>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  mapAmberDevice(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MapAmberDeviceMutationResult = NonNullable<Awaited<ReturnType<typeof mapAmberDevice>>>
+    export type MapAmberDeviceMutationBody = BodyType<MapAmberDeviceRequest>
+    export type MapAmberDeviceMutationError = ErrorType<Error>
+
+    /**
+ * @summary Explicitly map a device to an AURA vehicle (VIN-confirmed)
+ */
+export const useMapAmberDevice = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof mapAmberDevice>>, TError,{id: number;data: BodyType<MapAmberDeviceRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof mapAmberDevice>>,
+        TError,
+        {id: number;data: BodyType<MapAmberDeviceRequest>},
+        TContext
+      > => {
+      return useMutation(getMapAmberDeviceMutationOptions(options));
+    }
+
+export const getUnmapAmberDeviceUrl = (id: number,) => {
+
+
+
+
+  return `/api/amber/devices/${id}/unmap`
+}
+
+/**
+ * @summary Remove a device's vehicle mapping
+ */
+export const unmapAmberDevice = async (id: number, options?: RequestInit): Promise<AmberDevice> => {
+
+  return customFetch<AmberDevice>(getUnmapAmberDeviceUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnmapAmberDeviceMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unmapAmberDevice>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unmapAmberDevice>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['unmapAmberDevice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unmapAmberDevice>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unmapAmberDevice(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnmapAmberDeviceMutationResult = NonNullable<Awaited<ReturnType<typeof unmapAmberDevice>>>
+
+    export type UnmapAmberDeviceMutationError = ErrorType<Error>
+
+    /**
+ * @summary Remove a device's vehicle mapping
+ */
+export const useUnmapAmberDevice = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unmapAmberDevice>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unmapAmberDevice>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getUnmapAmberDeviceMutationOptions(options));
+    }
+
+export const getListAmberFleetStateUrl = () => {
+
+
+
+
+  return `/api/amber/fleet`
+}
+
+/**
+ * @summary Latest normalized telemetry per device (location redacted without amber admin)
+ */
+export const listAmberFleetState = async ( options?: RequestInit): Promise<AmberVehicleState[]> => {
+
+  return customFetch<AmberVehicleState[]>(getListAmberFleetStateUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAmberFleetStateQueryKey = () => {
+    return [
+    `/api/amber/fleet`
+    ] as const;
+    }
+
+
+export const getListAmberFleetStateQueryOptions = <TData = Awaited<ReturnType<typeof listAmberFleetState>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAmberFleetState>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAmberFleetStateQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAmberFleetState>>> = ({ signal }) => listAmberFleetState({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAmberFleetState>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAmberFleetStateQueryResult = NonNullable<Awaited<ReturnType<typeof listAmberFleetState>>>
+export type ListAmberFleetStateQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Latest normalized telemetry per device (location redacted without amber admin)
+ */
+
+export function useListAmberFleetState<TData = Awaited<ReturnType<typeof listAmberFleetState>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAmberFleetState>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAmberFleetStateQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAmberEventsUrl = (params?: ListAmberEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/amber/events?${stringifiedParams}` : `/api/amber/events`
+}
+
+/**
+ * @summary Recent telematics events (bounded history)
+ */
+export const listAmberEvents = async (params?: ListAmberEventsParams, options?: RequestInit): Promise<AmberEvent[]> => {
+
+  return customFetch<AmberEvent[]>(getListAmberEventsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAmberEventsQueryKey = (params?: ListAmberEventsParams,) => {
+    return [
+    `/api/amber/events`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAmberEventsQueryOptions = <TData = Awaited<ReturnType<typeof listAmberEvents>>, TError = ErrorType<unknown>>(params?: ListAmberEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAmberEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAmberEventsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAmberEvents>>> = ({ signal }) => listAmberEvents(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAmberEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAmberEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listAmberEvents>>>
+export type ListAmberEventsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Recent telematics events (bounded history)
+ */
+
+export function useListAmberEvents<TData = Awaited<ReturnType<typeof listAmberEvents>>, TError = ErrorType<unknown>>(
+ params?: ListAmberEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAmberEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAmberEventsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAmberVehicleStatusUrl = (vehicleId: number,) => {
+
+
+
+
+  return `/api/amber/vehicles/${vehicleId}/status`
+}
+
+/**
+ * @summary Freshness-labelled Amber status for one vehicle
+ */
+export const getAmberVehicleStatus = async (vehicleId: number, options?: RequestInit): Promise<AmberVehicleStatus> => {
+
+  return customFetch<AmberVehicleStatus>(getGetAmberVehicleStatusUrl(vehicleId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAmberVehicleStatusQueryKey = (vehicleId: number,) => {
+    return [
+    `/api/amber/vehicles/${vehicleId}/status`
+    ] as const;
+    }
+
+
+export const getGetAmberVehicleStatusQueryOptions = <TData = Awaited<ReturnType<typeof getAmberVehicleStatus>>, TError = ErrorType<Error>>(vehicleId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAmberVehicleStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAmberVehicleStatusQueryKey(vehicleId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAmberVehicleStatus>>> = ({ signal }) => getAmberVehicleStatus(vehicleId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: vehicleId !== null && vehicleId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAmberVehicleStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAmberVehicleStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getAmberVehicleStatus>>>
+export type GetAmberVehicleStatusQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Freshness-labelled Amber status for one vehicle
+ */
+
+export function useGetAmberVehicleStatus<TData = Awaited<ReturnType<typeof getAmberVehicleStatus>>, TError = ErrorType<Error>>(
+ vehicleId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAmberVehicleStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAmberVehicleStatusQueryOptions(vehicleId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListFeedbackFormsUrl = () => {
 

@@ -11,6 +11,7 @@ tags:
   - name: health
     description: Health operations
   - name: erpnext
+  - name: amber
     description: ERPNext integration settings and sync
   - name: vehicles
     description: Inventory of vehicles
@@ -8035,6 +8036,246 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /amber/settings:
+    get:
+      operationId: getAmberSettings
+      tags: [amber]
+      summary: Amber Connect connection settings (credentials never returned)
+      responses:
+        "200":
+          description: Amber connection settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmberSettings"
+    put:
+      operationId: updateAmberSettings
+      tags: [amber]
+      summary: Create or update the Amber Connect connection for the active dealership
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAmberSettingsRequest"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmberSettings"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /amber/settings/test:
+    post:
+      operationId: testAmberConnection
+      tags: [amber]
+      summary: Test the stored Amber connection (reports pending_contract until the partner API contract is configured)
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmberTestResult"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Connection not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /amber/settings/rotate-webhook-secret:
+    post:
+      operationId: rotateAmberWebhookSecret
+      tags: [amber]
+      summary: Generate a new Amber webhook shared secret (GM only)
+      responses:
+        "200":
+          description: New secret
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmberWebhookSecret"
+        "403":
+          description: Not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Connection not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /amber/devices:
+    get:
+      operationId: listAmberDevices
+      tags: [amber]
+      summary: List Amber devices and their vehicle-mapping state
+      responses:
+        "200":
+          description: Devices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AmberDevice"
+    post:
+      operationId: registerAmberDevice
+      tags: [amber]
+      summary: Register or update a device identity (manual import while the provider contract is pending)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterAmberDeviceRequest"
+      responses:
+        "200":
+          description: Upserted device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmberDevice"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /amber/devices/{id}/map:
+    post:
+      operationId: mapAmberDevice
+      tags: [amber]
+      summary: Explicitly map a device to an AURA vehicle (VIN-confirmed)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MapAmberDeviceRequest"
+      responses:
+        "200":
+          description: Updated device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmberDevice"
+        "404":
+          description: Device or vehicle not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Mapping conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /amber/devices/{id}/unmap:
+    post:
+      operationId: unmapAmberDevice
+      tags: [amber]
+      summary: Remove a device's vehicle mapping
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmberDevice"
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /amber/fleet:
+    get:
+      operationId: listAmberFleetState
+      tags: [amber]
+      summary: Latest normalized telemetry per device (location redacted without amber admin)
+      responses:
+        "200":
+          description: Latest states
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AmberVehicleState"
+  /amber/events:
+    get:
+      operationId: listAmberEvents
+      tags: [amber]
+      summary: Recent telematics events (bounded history)
+      parameters:
+        - name: deviceId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AmberEvent"
+  /amber/vehicles/{vehicleId}/status:
+    get:
+      operationId: getAmberVehicleStatus
+      tags: [amber]
+      summary: Freshness-labelled Amber status for one vehicle
+      parameters:
+        - name: vehicleId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Vehicle telematics status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmberVehicleStatus"
+        "404":
+          description: Vehicle not found or no mapped device
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /feedback-forms:
     get:
       operationId: listFeedbackForms
@@ -8552,7 +8793,7 @@ components:
       properties:
         module:
           type: string
-          enum: [dashboard, inventory, leads, deals, appraisals, finance, service, parts, deliveries, customers, approvals, gra, capacity, settings]
+          enum: [dashboard, inventory, leads, deals, appraisals, finance, service, parts, deliveries, customers, approvals, gra, capacity, amber, settings]
         category:
           type: string
           enum: [view, create, edit, delete, approve, reject, export, assign, admin]
@@ -13140,3 +13381,112 @@ components:
         answers:
           type: array
           items: { $ref: "#/components/schemas/PublicFeedbackAnswer" }
+    AmberSettings:
+      type: object
+      required: [configured, enabled, hasApiKey, contractStatus]
+      properties:
+        configured: { type: boolean }
+        enabled: { type: boolean }
+        apiBaseUrl: { type: ["string", "null"] }
+        apiKeyHint: { type: ["string", "null"] }
+        hasApiKey: { type: boolean }
+        contractStatus: { type: string, enum: [pending_documentation, configured] }
+        webhookSecret: { type: ["string", "null"] }
+        webhookPath: { type: ["string", "null"] }
+        lastStatus: { type: ["string", "null"] }
+        lastError: { type: ["string", "null"] }
+        lastCheckedAt: { type: ["string", "null"], format: date-time }
+        lastSyncStatus: { type: ["string", "null"] }
+        lastSyncAt: { type: ["string", "null"], format: date-time }
+    UpdateAmberSettingsRequest:
+      type: object
+      properties:
+        apiBaseUrl: { type: ["string", "null"] }
+        apiKey: { type: string, minLength: 1 }
+        enabled: { type: boolean }
+    AmberTestResult:
+      type: object
+      required: [ok, status, detail]
+      properties:
+        ok: { type: boolean }
+        status: { type: string, enum: [connected, error, pending_contract] }
+        detail: { type: string }
+    AmberWebhookSecret:
+      type: object
+      required: [webhookSecret]
+      properties:
+        webhookSecret: { type: string }
+    AmberDevice:
+      type: object
+      required: [id, deviceId, mappingStatus]
+      properties:
+        id: { type: integer }
+        deviceId: { type: string }
+        reportedVin: { type: ["string", "null"] }
+        label: { type: ["string", "null"] }
+        vehicleId: { type: ["integer", "null"] }
+        mappingStatus: { type: string, enum: [unmatched, mapped, conflict] }
+        conflictReason: { type: ["string", "null"] }
+        mappedBy: { type: ["string", "null"] }
+        mappedAt: { type: ["string", "null"], format: date-time }
+        lastSeenAt: { type: ["string", "null"], format: date-time }
+        vehicleLabel: { type: ["string", "null"] }
+        vehicleVin: { type: ["string", "null"] }
+    RegisterAmberDeviceRequest:
+      type: object
+      required: [deviceId]
+      properties:
+        deviceId: { type: string, minLength: 1 }
+        reportedVin: { type: ["string", "null"] }
+        label: { type: ["string", "null"] }
+    MapAmberDeviceRequest:
+      type: object
+      required: [vehicleId, confirmVin]
+      properties:
+        vehicleId: { type: integer }
+        confirmVin: { type: string, minLength: 1 }
+    AmberVehicleState:
+      type: object
+      required: [id, deviceId, freshness]
+      properties:
+        id: { type: integer }
+        deviceId: { type: string }
+        vehicleId: { type: ["integer", "null"] }
+        vehicleLabel: { type: ["string", "null"] }
+        latitude: { type: ["number", "null"] }
+        longitude: { type: ["number", "null"] }
+        locationAt: { type: ["string", "null"], format: date-time }
+        locationRestricted: { type: boolean }
+        odometerKm: { type: ["number", "null"] }
+        odometerAt: { type: ["string", "null"], format: date-time }
+        ignitionOn: { type: ["boolean", "null"] }
+        ignitionAt: { type: ["string", "null"], format: date-time }
+        deviceHealth: { type: ["string", "null"] }
+        deviceHealthAt: { type: ["string", "null"], format: date-time }
+        lastEventAt: { type: ["string", "null"], format: date-time }
+        freshness: { type: string, enum: [live, recent, stale, offline, never] }
+    AmberEvent:
+      type: object
+      required: [id, deviceId, externalId, type, occurredAt, status, createdAt]
+      properties:
+        id: { type: integer }
+        deviceId: { type: string }
+        externalId: { type: string }
+        type: { type: string }
+        occurredAt: { type: string, format: date-time }
+        status: { type: string }
+        error: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    AmberVehicleStatus:
+      type: object
+      required: [mapped, freshness]
+      properties:
+        mapped: { type: boolean }
+        deviceId: { type: ["string", "null"] }
+        odometerKm: { type: ["number", "null"] }
+        odometerAt: { type: ["string", "null"], format: date-time }
+        ignitionOn: { type: ["boolean", "null"] }
+        ignitionAt: { type: ["string", "null"], format: date-time }
+        deviceHealth: { type: ["string", "null"] }
+        lastEventAt: { type: ["string", "null"], format: date-time }
+        freshness: { type: string, enum: [live, recent, stale, offline, never] }

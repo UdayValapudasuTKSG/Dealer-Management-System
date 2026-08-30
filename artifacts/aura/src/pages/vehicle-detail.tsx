@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
-import { useGetVehicle, useListGraFilings } from "@workspace/api-client-react";
+import {
+  useGetVehicle,
+  useListGraFilings,
+  useGetAmberVehicleStatus,
+} from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity,
@@ -23,6 +27,7 @@ import {
   Settings2,
   ShieldCheck,
   Zap,
+  Radio,
 } from "lucide-react";
 import { DutyFiling } from "@/components/gra/duty-filing";
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +91,60 @@ function Spec({
   );
 }
 
+const AMBER_FRESHNESS_LABEL: Record<string, { label: string; cls: string }> = {
+  live: { label: "Live", cls: "text-emerald-500" },
+  recent: { label: "Recent", cls: "text-emerald-500" },
+  stale: { label: "Stale (>1h)", cls: "text-amber-500" },
+  offline: { label: "Offline (>24h)", cls: "text-red-500" },
+  never: { label: "No data", cls: "text-muted-foreground" },
+};
+
+/** Freshness-labelled Amber Connect status for one vehicle (entitlement +
+ * amber:view gated by the caller; the API enforces both regardless). */
+function AmberTelematicsCard({ vehicleId }: { vehicleId: number }) {
+  const { data: status } = useGetAmberVehicleStatus(vehicleId);
+  if (!status) return null;
+  const fresh = AMBER_FRESHNESS_LABEL[status.freshness] ?? AMBER_FRESHNESS_LABEL["never"]!;
+  return (
+    <div
+      className="mt-5 rounded-2xl border border-white/10 bg-foreground/[0.03] p-4 space-y-2"
+      data-testid="card-amber-telematics"
+    >
+      <div className="flex items-center gap-2">
+        <Radio className="w-4 h-4 text-primary" />
+        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex-1">
+          Amber Connect Telematics
+        </span>
+        <span className={`text-[11px] font-semibold ${fresh.cls}`}>{fresh.label}</span>
+      </div>
+      {!status.mapped ? (
+        <p className="text-sm text-muted-foreground">
+          No Amber device is mapped to this vehicle.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <span className="text-muted-foreground">Device</span>
+          <span className="font-mono text-xs">{status.deviceId}</span>
+          <span className="text-muted-foreground">Odometer</span>
+          <span>
+            {status.odometerKm != null
+              ? `${Math.round(status.odometerKm).toLocaleString()} km`
+              : "—"}
+          </span>
+          <span className="text-muted-foreground">Ignition</span>
+          <span>{status.ignitionOn == null ? "—" : status.ignitionOn ? "On" : "Off"}</span>
+          <span className="text-muted-foreground">Device health</span>
+          <span>{status.deviceHealth ?? "—"}</span>
+          <span className="text-muted-foreground">Last event</span>
+          <span>
+            {status.lastEventAt ? new Date(status.lastEventAt).toLocaleString() : "never"}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function VehicleDetailPage() {
   const [, params] = useRoute("/vehicle/:id");
   const id = params ? Number(params.id) : NaN;
@@ -93,7 +152,7 @@ export default function VehicleDetailPage() {
   const [mode, setMode] = useState<"photo" | "spin">("photo");
   const [showDuty, setShowDuty] = useState(false);
   const money = useMoney();
-  const { can } = useAuthz();
+  const { can, entitled } = useAuthz();
 
   const { data: vehicle, isLoading, isError } = useGetVehicle(id);
   const canDuty = can("finance", "view") || can("inventory", "edit");
@@ -383,6 +442,10 @@ export default function VehicleDetailPage() {
               canEdit={can("inventory", "edit")}
             />
           </div>
+
+          {entitled("amber_connect") && can("amber", "view") && (
+            <AmberTelematicsCard vehicleId={vehicle.id} />
+          )}
 
           {canDuty && (
             <div className="mt-5 rounded-2xl border border-white/10 bg-foreground/[0.03] overflow-hidden">

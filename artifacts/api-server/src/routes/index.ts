@@ -46,6 +46,7 @@ import reviewsRouter from "./reviews";
 import casesRouter from "./cases";
 import telephonyRouter from "./telephony";
 import erpnextRouter from "./erpnext";
+import amberRouter from "./amber";
 import whatsappRouter from "./whatsapp";
 import metaRouter from "./meta";
 import { requireAuth, authorize, auditTrail } from "../middlewares/rbac";
@@ -125,6 +126,7 @@ router.use(storageRouter);
 router.use(documentsRouter);
 router.use(telephonyRouter);
 router.use(erpnextRouter);
+router.use(amberRouter);
 router.use(whatsappRouter);
 router.use(metaRouter);
 

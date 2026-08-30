@@ -21,6 +21,7 @@ import {
   Truck,
   Wrench,
   Package,
+  Radio,
   Handshake,
   Users,
   Settings,
@@ -74,6 +75,7 @@ const CLUSTERS: Cluster[] = [
       { name: "Deliveries", href: "/deliveries", module: "deliveries", icon: Truck },
       { name: "Service", href: "/service", module: "service", icon: Wrench, ent: "service_module" },
       { name: "Parts", href: "/parts", module: "parts", icon: Package, ent: "parts_module" },
+      { name: "Amber Connect", href: "/amber", module: "amber", icon: Radio, ent: "amber_connect" },
     ],
   },
   {

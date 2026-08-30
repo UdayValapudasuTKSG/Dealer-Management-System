@@ -415,6 +415,7 @@ export const PermissionGrantModule = {
   approvals: 'approvals',
   gra: 'gra',
   capacity: 'capacity',
+  amber: 'amber',
   settings: 'settings',
 } as const;
 
@@ -7768,6 +7769,198 @@ export interface PublicFeedbackSubmission {
   answers: PublicFeedbackAnswer[];
 }
 
+export type AmberSettingsContractStatus = typeof AmberSettingsContractStatus[keyof typeof AmberSettingsContractStatus];
+
+
+export const AmberSettingsContractStatus = {
+  pending_documentation: 'pending_documentation',
+  configured: 'configured',
+} as const;
+
+export interface AmberSettings {
+  configured: boolean;
+  enabled: boolean;
+  /** @nullable */
+  apiBaseUrl?: string | null;
+  /** @nullable */
+  apiKeyHint?: string | null;
+  hasApiKey: boolean;
+  contractStatus: AmberSettingsContractStatus;
+  /** @nullable */
+  webhookSecret?: string | null;
+  /** @nullable */
+  webhookPath?: string | null;
+  /** @nullable */
+  lastStatus?: string | null;
+  /** @nullable */
+  lastError?: string | null;
+  /** @nullable */
+  lastCheckedAt?: string | null;
+  /** @nullable */
+  lastSyncStatus?: string | null;
+  /** @nullable */
+  lastSyncAt?: string | null;
+}
+
+export interface UpdateAmberSettingsRequest {
+  /** @nullable */
+  apiBaseUrl?: string | null;
+  /** @minLength 1 */
+  apiKey?: string;
+  enabled?: boolean;
+}
+
+export type AmberTestResultStatus = typeof AmberTestResultStatus[keyof typeof AmberTestResultStatus];
+
+
+export const AmberTestResultStatus = {
+  connected: 'connected',
+  error: 'error',
+  pending_contract: 'pending_contract',
+} as const;
+
+export interface AmberTestResult {
+  ok: boolean;
+  status: AmberTestResultStatus;
+  detail: string;
+}
+
+export interface AmberWebhookSecret {
+  webhookSecret: string;
+}
+
+export type AmberDeviceMappingStatus = typeof AmberDeviceMappingStatus[keyof typeof AmberDeviceMappingStatus];
+
+
+export const AmberDeviceMappingStatus = {
+  unmatched: 'unmatched',
+  mapped: 'mapped',
+  conflict: 'conflict',
+} as const;
+
+export interface AmberDevice {
+  id: number;
+  deviceId: string;
+  /** @nullable */
+  reportedVin?: string | null;
+  /** @nullable */
+  label?: string | null;
+  /** @nullable */
+  vehicleId?: number | null;
+  mappingStatus: AmberDeviceMappingStatus;
+  /** @nullable */
+  conflictReason?: string | null;
+  /** @nullable */
+  mappedBy?: string | null;
+  /** @nullable */
+  mappedAt?: string | null;
+  /** @nullable */
+  lastSeenAt?: string | null;
+  /** @nullable */
+  vehicleLabel?: string | null;
+  /** @nullable */
+  vehicleVin?: string | null;
+}
+
+export interface RegisterAmberDeviceRequest {
+  /** @minLength 1 */
+  deviceId: string;
+  /** @nullable */
+  reportedVin?: string | null;
+  /** @nullable */
+  label?: string | null;
+}
+
+export interface MapAmberDeviceRequest {
+  vehicleId: number;
+  /** @minLength 1 */
+  confirmVin: string;
+}
+
+export type AmberVehicleStateFreshness = typeof AmberVehicleStateFreshness[keyof typeof AmberVehicleStateFreshness];
+
+
+export const AmberVehicleStateFreshness = {
+  live: 'live',
+  recent: 'recent',
+  stale: 'stale',
+  offline: 'offline',
+  never: 'never',
+} as const;
+
+export interface AmberVehicleState {
+  id: number;
+  deviceId: string;
+  /** @nullable */
+  vehicleId?: number | null;
+  /** @nullable */
+  vehicleLabel?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+  /** @nullable */
+  locationAt?: string | null;
+  locationRestricted?: boolean;
+  /** @nullable */
+  odometerKm?: number | null;
+  /** @nullable */
+  odometerAt?: string | null;
+  /** @nullable */
+  ignitionOn?: boolean | null;
+  /** @nullable */
+  ignitionAt?: string | null;
+  /** @nullable */
+  deviceHealth?: string | null;
+  /** @nullable */
+  deviceHealthAt?: string | null;
+  /** @nullable */
+  lastEventAt?: string | null;
+  freshness: AmberVehicleStateFreshness;
+}
+
+export interface AmberEvent {
+  id: number;
+  deviceId: string;
+  externalId: string;
+  type: string;
+  occurredAt: string;
+  status: string;
+  /** @nullable */
+  error?: string | null;
+  createdAt: string;
+}
+
+export type AmberVehicleStatusFreshness = typeof AmberVehicleStatusFreshness[keyof typeof AmberVehicleStatusFreshness];
+
+
+export const AmberVehicleStatusFreshness = {
+  live: 'live',
+  recent: 'recent',
+  stale: 'stale',
+  offline: 'offline',
+  never: 'never',
+} as const;
+
+export interface AmberVehicleStatus {
+  mapped: boolean;
+  /** @nullable */
+  deviceId?: string | null;
+  /** @nullable */
+  odometerKm?: number | null;
+  /** @nullable */
+  odometerAt?: string | null;
+  /** @nullable */
+  ignitionOn?: boolean | null;
+  /** @nullable */
+  ignitionAt?: string | null;
+  /** @nullable */
+  deviceHealth?: string | null;
+  /** @nullable */
+  lastEventAt?: string | null;
+  freshness: AmberVehicleStatusFreshness;
+}
+
 export type VerifyMetaWebhookParams = {
 'hub.mode'?: string;
 'hub.verify_token'?: string;
@@ -8116,5 +8309,9 @@ export const ListDocumentsEntityType = {
 
 export type RotateErpnextWebhookSecret200 = {
   webhookSecret: string;
+};
+
+export type ListAmberEventsParams = {
+deviceId?: string;
 };
 

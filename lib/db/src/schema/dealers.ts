@@ -41,9 +41,30 @@ export const ENTITLEMENT_KEYS = [
   "gra_module",
   "service_module",
   "parts_module",
+  "amber_connect",
 ] as const;
 export type EntitlementKey = (typeof ENTITLEMENT_KEYS)[number];
 export type DealerEntitlements = Partial<Record<EntitlementKey, boolean>>;
+
+/**
+ * Entitlements that are DISABLED unless explicitly enabled (opt-in modules).
+ * Legacy flags keep deny-list semantics (missing = enabled) so existing
+ * dealers retain full functionality; new opt-in modules invert that so a
+ * missing key means "off" for new AND existing dealerships.
+ */
+export const DEFAULT_DISABLED_ENTITLEMENTS: readonly EntitlementKey[] = [
+  "amber_connect",
+] as const;
+
+/** Single source of truth for whether a dealer entitlement flag is on. */
+export function isEntitlementEnabled(
+  flags: DealerEntitlements | null | undefined,
+  key: EntitlementKey,
+): boolean {
+  const v = flags?.[key];
+  if (DEFAULT_DISABLED_ENTITLEMENTS.includes(key)) return v === true;
+  return v !== false;
+}
 
 export const dealersTable = pgTable(
   "dealers",

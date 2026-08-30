@@ -149,9 +149,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           (p.category === "admin" && category !== "view")),
     );
 
-  // Missing key = enabled (per-dealer entitlements are deny-list flags).
+  // Legacy flags: missing key = enabled (deny-list). Opt-in modules (Amber
+  // Connect) are DISABLED unless explicitly true. Mirrors the server's
+  // isEntitlementEnabled — the backend remains the enforcement boundary.
+  const DEFAULT_OFF_ENTITLEMENTS = ["amber_connect"];
   const entitled = (key: string) => {
     const flags = me?.entitlements as Record<string, boolean> | undefined;
+    if (DEFAULT_OFF_ENTITLEMENTS.includes(key)) return flags?.[key] === true;
     return flags?.[key] !== false;
   };
 

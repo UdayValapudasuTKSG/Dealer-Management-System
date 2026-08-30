@@ -6,6 +6,7 @@ import { startAdvanceProposalWorker } from "./lib/advance-proposals";
 import { startNotificationSweeps } from "./lib/notification-sweeps";
 import { startRetentionSweeps } from "./lib/retention-sweeps";
 import { startErpnextSyncWorker } from "./lib/erpnext/sync";
+import { startAmberSyncWorker } from "./lib/amber/sync";
 import { registerErpnextPartsSync } from "./lib/erpnext/parts-sync";
 import { migrateLegacyAttachments } from "./lib/documents-migrate";
 import { startMetricsFlusher } from "./lib/metrics";
@@ -42,6 +43,7 @@ app.listen(port, (err) => {
   registerErpnextPartsSync();
   registerErpnextEntitySync();
   startErpnextSyncWorker();
+  startAmberSyncWorker();
   void migrateLegacyAttachments();
   startMetricsFlusher();
   startMetaLeadPolling();

@@ -36,6 +36,7 @@ export const ROLE_DEFAULTS: {
       customers: ["view", "create", "edit", "assign", "export"],
       approvals: ["view", "approve", "reject"],
       gra: ["view"],
+      amber: ["view"],
       capacity: ["view", "edit"],
     },
   },
@@ -49,6 +50,7 @@ export const ROLE_DEFAULTS: {
       parts: ["view", "create", "edit"],
       customers: ["view", "edit"],
       approvals: ["view", "approve", "reject"],
+      amber: ["view"],
     },
   },
   {

@@ -16,6 +16,7 @@ import {
   type User,
   type PermissionModule,
   type PermissionCategory,
+  isEntitlementEnabled,
   type DealerEntitlements,
   type EntitlementKey,
 } from "@workspace/db";
@@ -819,6 +820,13 @@ const PATH_MODULES: Record<string, RouteRule> = {
     },
   },
   gra: { module: "gra" },
+  // Amber Connect telematics: POST actions (test, map, unmap, register) map
+  // to "edit" so a GM/manager role with amber:edit can operate; credential
+  // routes additionally enforce GM-or-super-admin themselves.
+  amber: {
+    module: "amber",
+    category: (req) => (req.method === "GET" ? "view" : "edit"),
+  },
   dashboard: { module: "dashboard" },
   activity: { module: "dashboard" },
   agents: { module: "dashboard" },
@@ -1010,10 +1018,13 @@ export const authorize: RequestHandler = (req, res, next) => {
   // Entitlement / feature-flag gate (pipeline stage 5, INV-ENT-1, NC-9):
   // AFTER RBAC. An unentitled module is hidden as 404 — indistinguishable
   // from "does not exist". Missing keys default to enabled.
+  // Semantics come from isEntitlementEnabled: legacy flags are deny-list
+  // (missing = enabled) while opt-in modules (e.g. amber_connect) are
+  // DISABLED unless explicitly true.
   const entitlementKey = segmentEntitlement(segment, required?.module);
   if (
     entitlementKey &&
-    res.locals.dealerEntitlements?.[entitlementKey] === false
+    !isEntitlementEnabled(res.locals.dealerEntitlements ?? {}, entitlementKey)
   ) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -1028,6 +1039,7 @@ const MODULE_ENTITLEMENTS: Record<string, EntitlementKey> = {
   gra: "gra_module",
   service: "service_module",
   parts: "parts_module",
+  amber: "amber_connect",
 };
 function segmentEntitlement(
   segment: string,

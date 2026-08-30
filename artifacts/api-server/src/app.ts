@@ -48,7 +48,9 @@ const isCopilotKit = (url: string): boolean =>
 // exact raw bytes — keep the raw body for those paths.
 const isMetaWebhook = (url: string): boolean =>
   url.startsWith("/api/webhooks/meta") ||
-  url.startsWith("/api/webhooks/whatsapp");
+  url.startsWith("/api/webhooks/whatsapp") ||
+  // Amber Connect webhook signature is HMAC over the exact raw bytes too.
+  url.startsWith("/api/webhooks/amber");
 const rawParser = express.raw({ type: "*/*", limit: "1mb" });
 // GRA document extraction posts a base64 image in the JSON body — needs a
 // larger limit than the 100kb express default.
