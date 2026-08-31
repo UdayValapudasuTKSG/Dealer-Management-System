@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import ExcelJS from "exceljs";
 import { activeDealerId } from "../middlewares/rbac";
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 import {
   db,
   partsTable,
@@ -44,9 +44,14 @@ import {
   ReceivePurchaseOrderBody,
   ReceivePurchaseOrderResponse,
 } from "@workspace/api-zod";
-import { jobCardPartsTable, jobCardsTable } from "@workspace/db";
+import {
+  jobCardPartsTable,
+  jobCardsTable,
+  collisionClaimsTable,
+} from "@workspace/db";
 import { inArray } from "drizzle-orm";
 import { notifyPartLowStock } from "../lib/notify-triggers";
+import { coordinateCollisionClaim } from "../lib/collision-coordinator";
 import {
   enqueuePartItemSync,
   enqueueSupplierSync,
@@ -63,6 +68,13 @@ export type BackorderRelease = {
   available: number;
   /** Job-card lines filled by this release — each is a stock issue. */
   filledLines: { id: number; partId: number; quantity: number; jobCardId: number }[];
+  resumedClaims: {
+    id: number;
+    dealerId: number;
+    vehicleInfo: string;
+    status: string;
+    pausedSeconds: number;
+  }[];
 };
 
 /**
@@ -90,6 +102,7 @@ export async function releaseBackorders(
     .orderBy(jobCardPartsTable.createdAt);
   const touchedCards = new Set<number>();
   const filledLines: BackorderRelease["filledLines"] = [];
+  const resumedClaims: BackorderRelease["resumedClaims"] = [];
   for (const line of waiting) {
     if (line.quantity > available) continue;
     available -= line.quantity;
@@ -136,8 +149,91 @@ export async function releaseBackorders(
           ),
         );
     }
+    // Collision cycle-time auto-resume (Task 279): when a paused claim's
+    // repair order no longer has ANY backordered line waiting, fold the open
+    // pause segment so cycle time starts accruing again.
+    const cards = await tx
+      .select({
+        id: jobCardsTable.id,
+        serviceOrderId: jobCardsTable.serviceOrderId,
+      })
+      .from(jobCardsTable)
+      .where(
+        and(
+          eq(jobCardsTable.dealerId, dealerId),
+          inArray(jobCardsTable.id, [...touchedCards]),
+        ),
+      );
+    const orderIds = [...new Set(cards.map((c) => c.serviceOrderId))];
+    if (orderIds.length > 0) {
+      const pausedClaims = await tx
+        .select()
+        .from(collisionClaimsTable)
+        .where(
+          and(
+            eq(collisionClaimsTable.dealerId, dealerId),
+            inArray(collisionClaimsTable.serviceOrderId, orderIds),
+            isNotNull(collisionClaimsTable.pausedAt),
+          ),
+        )
+        .for("update");
+      for (const claim of pausedClaims) {
+        const [stillBackordered] = await tx
+          .select({ id: jobCardPartsTable.id })
+          .from(jobCardPartsTable)
+          .innerJoin(
+            jobCardsTable,
+            eq(jobCardsTable.id, jobCardPartsTable.jobCardId),
+          )
+          .where(
+            and(
+              eq(jobCardPartsTable.dealerId, dealerId),
+              eq(jobCardsTable.serviceOrderId, claim.serviceOrderId),
+              eq(jobCardPartsTable.backordered, true),
+            ),
+          )
+          .limit(1);
+        if (stillBackordered || !claim.pausedAt) continue;
+        const now = new Date();
+        const [resumed] = await tx
+          .update(collisionClaimsTable)
+          .set({
+            pausedSeconds:
+              claim.pausedSeconds +
+              Math.max(
+                0,
+                Math.floor((now.getTime() - claim.pausedAt.getTime()) / 1000),
+              ),
+            pausedAt: null,
+            history: [
+              ...claim.history,
+              {
+                kind: "resume" as const,
+                note: "Backordered parts received — cycle time resumed",
+                byUserId: null,
+                byName: "System",
+                at: now.toISOString(),
+              },
+            ],
+          })
+          .where(
+            and(
+              eq(collisionClaimsTable.id, claim.id),
+              eq(collisionClaimsTable.dealerId, dealerId),
+            ),
+          )
+          .returning({
+            id: collisionClaimsTable.id,
+            dealerId: collisionClaimsTable.dealerId,
+            vehicleInfo: collisionClaimsTable.vehicleInfo,
+            status: collisionClaimsTable.status,
+            pausedSeconds: collisionClaimsTable.pausedSeconds,
+          });
+        if (resumed) resumedClaims.push(resumed);
+      }
+    }
   }
-  return { available, filledLines };
+  return { available, filledLines, resumedClaims };
 }
 
 /** Post ERPNext Material Issues for job-card lines filled by a backorder
@@ -463,7 +559,12 @@ router.post("/part-purchases/:id/receive", async (req, res): Promise<void> => {
       part.id,
       onHand + received,
     );
-    return { po, leftover: release.available, filled: release.filledLines };
+    return {
+      po,
+      leftover: release.available,
+      filled: release.filledLines,
+      resumedClaims: release.resumedClaims,
+    };
   });
 
   checkLowStockCrossing(part, part.stock, updated.leftover);
@@ -480,6 +581,13 @@ router.post("/part-purchases/:id/receive", async (req, res): Promise<void> => {
     dedupeKey: `erp:se:pp:${dealerId}:${purchase.id}:${newQtyReceived}`,
   });
   syncFilledBackorderLines(dealerId, updated.filled);
+  for (const claim of updated.resumedClaims) {
+    coordinateCollisionClaim({
+      ...claim,
+      event: "resumed",
+      eventKey: `resume:${claim.pausedSeconds}`,
+    });
+  }
   res.json(ReceivePartPurchaseResponse.parse(updated.po));
 });
 
@@ -1293,6 +1401,7 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
 
   const lowStockChecks: { part: Part; prevStock: number; leftover: number }[] = [];
   const filledBackorderLines: BackorderRelease["filledLines"] = [];
+  const resumedCollisionClaims: BackorderRelease["resumedClaims"] = [];
   const receivedForErpnext: {
     partId: number;
     qty: number;
@@ -1339,6 +1448,7 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
         leftover: release.available,
       });
       filledBackorderLines.push(...release.filledLines);
+      resumedCollisionClaims.push(...release.resumedClaims);
       receivedForErpnext.push({
         partId: part.id,
         qty,
@@ -1388,6 +1498,13 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
       .join(",")}`,
   });
   syncFilledBackorderLines(dealerId, filledBackorderLines);
+  for (const claim of resumedCollisionClaims) {
+    coordinateCollisionClaim({
+      ...claim,
+      event: "resumed",
+      eventKey: `resume:${claim.pausedSeconds}`,
+    });
+  }
 
   res.json(ReceivePurchaseOrderResponse.parse(await loadPurchaseOrder(dealerId, params.data.id)));
 });

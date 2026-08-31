@@ -956,6 +956,7 @@ const AUTONOMOUS_AGENT_KEYS = new Set([
   "intake_dedup",
   "call_sentiment",
   "case_classifier",
+  "collision_coordinator",
 ]);
 
 type AgentMetricRow = {

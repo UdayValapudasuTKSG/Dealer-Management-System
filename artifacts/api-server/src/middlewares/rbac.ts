@@ -805,6 +805,25 @@ const PATH_MODULES: Record<string, RouteRule> = {
     },
   },
   "service-invoices": { module: "service" },
+  "collision-claims": {
+    module: "service",
+    category: (req) => {
+      // Workflow actions on an EXISTING claim are edits, reachable by roles
+      // with service:edit but not service:create (e.g. Technicians resuming
+      // after a backorder). Decision endpoints (advance to approved/denied/
+      // total-loss/sign-off, supplement decisions) additionally enforce
+      // Service Manager / Management identity inside the routes.
+      if (
+        req.method === "POST" &&
+        /^\/collision-claims\/\d+\/(advance|resume|supplements(\/\d+\/decision)?|settlements)\/?$/.test(
+          req.path,
+        )
+      ) {
+        return "edit";
+      }
+      return METHOD_CATEGORY[req.method] ?? "view";
+    },
+  },
   coverage: { module: "service" },
   parts: { module: "parts" },
   suppliers: { module: "parts" },

@@ -20,6 +20,7 @@ export * from "./invoices";
 export * from "./payments";
 export * from "./serviceOrders";
 export * from "./workshop";
+export * from "./collisionClaims";
 export * from "./capacityBlocks";
 export * from "./agents";
 export * from "./agentRuns";

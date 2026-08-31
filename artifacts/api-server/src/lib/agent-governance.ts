@@ -36,6 +36,7 @@ export const AUTONOMOUS_AGENT_KEYS = [
   "intake_dedup",
   "call_sentiment",
   "case_classifier",
+  "collision_coordinator",
 ] as const;
 
 export const HITL_AGENT_KEYS = [

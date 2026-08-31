@@ -34,6 +34,9 @@ import {
   purchaseOrderLinesTable,
   partCreditNotesTable,
   jobCardTechnicianNotesTable,
+  collisionClaimsTable,
+  collisionSettlementsTable,
+  collisionSupplementsTable,
   type JobCard,
   type ServiceInvoice,
 } from "@workspace/db";
@@ -127,6 +130,7 @@ import { activeDealerId } from "../middlewares/rbac";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
 import { computeServiceTax, ensureDealerTaxes } from "../lib/taxes";
 import { logger } from "../lib/logger";
+import { coordinateCollisionClaim } from "../lib/collision-coordinator";
 
 const router: IRouter = Router();
 
@@ -697,6 +701,29 @@ router.post("/service-orders/:id/advance", async (req, res): Promise<void> => {
         )
         .limit(1);
       if (!invoice) unmet.push("No service invoice issued for this case yet");
+    }
+    // Collision repairs cannot close around the claim: the claim must have
+    // completed insurer sign-off + invoicing (or exited as denied/total-loss)
+    // before the repair order itself closes (Task 279).
+    const [claim] = await db
+      .select({
+        id: collisionClaimsTable.id,
+        status: collisionClaimsTable.status,
+      })
+      .from(collisionClaimsTable)
+      .where(
+        and(
+          eq(collisionClaimsTable.serviceOrderId, order.id),
+          eq(collisionClaimsTable.dealerId, dealerId),
+        ),
+      );
+    if (
+      claim &&
+      !["invoiced", "closed", "denied", "total_loss"].includes(claim.status)
+    ) {
+      unmet.push(
+        `Collision claim #${claim.id} is still ${claim.status.replace(/_/g, " ")} — it needs insurer sign-off and invoicing (or a denied/total-loss outcome) first`,
+      );
     }
     // Recall work and dealer-funded pay types need explicit manager approval
     // before the case closes (mirrors the pipeline stage_advance gate).
@@ -2031,6 +2058,47 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
     return inserted;
   });
 
+  // Collision cycle-time pause: a backordered part on a claim's repair order
+  // stops the clock until parts arrive (auto-resume on PO receipt or the
+  // explicit resume endpoint). Purely a measurement pause — the workshop
+  // lifecycle above is untouched (Task 279).
+  if (backordered) {
+    await db.transaction(async (tx) => {
+      const [claim] = await tx
+        .select()
+        .from(collisionClaimsTable)
+        .where(
+          and(
+            eq(collisionClaimsTable.serviceOrderId, card.serviceOrderId),
+            eq(collisionClaimsTable.dealerId, card.dealerId),
+          ),
+        )
+        .for("update");
+      if (
+        claim &&
+        claim.pausedAt == null &&
+        !["closed", "denied", "total_loss"].includes(claim.status)
+      ) {
+        await tx
+          .update(collisionClaimsTable)
+          .set({
+          pausedAt: new Date(),
+          history: [
+            ...claim.history,
+            {
+              kind: "pause" as const,
+              note: `${currentPart.name} backordered — cycle time paused`,
+              byUserId: res.locals.user?.id ?? null,
+              byName: res.locals.user?.name ?? res.locals.user?.email ?? "System",
+              at: new Date().toISOString(),
+            },
+          ],
+          })
+          .where(eq(collisionClaimsTable.id, claim.id));
+      }
+    });
+  }
+
   // MRQ alert: fire only when this issuance CROSSES the reorder threshold.
   if (!backordered && kind === "issue") {
     checkLowStockCrossing(
@@ -2245,6 +2313,48 @@ async function issueServiceInvoice(
     return { ok: false, status: 404, error: "Service order not found" };
   }
 
+  // Collision claims gate invoicing on insurer sign-off: the invoice defines
+  // the insurer/deductible split, so it cannot be issued before the insurer
+  // has signed off on the completed repair (Task 279).
+  const [claim] = await db
+    .select()
+    .from(collisionClaimsTable)
+    .where(
+      and(
+        eq(collisionClaimsTable.serviceOrderId, order.id),
+        eq(collisionClaimsTable.dealerId, order.dealerId),
+      ),
+    );
+  if (claim && !["insurer_signoff", "invoiced"].includes(claim.status)) {
+    return {
+      ok: false,
+      status: 422,
+      error:
+        "This repair has a collision claim awaiting insurer sign-off — the claim must reach Insurer Sign-off before invoicing",
+    };
+  }
+  if (claim) {
+    const [pendingSupplement] = await db
+      .select({ id: collisionSupplementsTable.id })
+      .from(collisionSupplementsTable)
+      .where(
+        and(
+          eq(collisionSupplementsTable.claimId, claim.id),
+          eq(collisionSupplementsTable.dealerId, claim.dealerId),
+          eq(collisionSupplementsTable.status, "pending"),
+        ),
+      )
+      .limit(1);
+    if (pendingSupplement) {
+      return {
+        ok: false,
+        status: 422,
+        error:
+          "Decide all pending collision supplements before generating the invoice",
+      };
+    }
+  }
+
   const lines = await db
     .select()
     .from(jobCardPartsTable)
@@ -2280,29 +2390,211 @@ async function issueServiceInvoice(
     taxRules,
   );
 
-  const [invoice] = await db
-    .insert(serviceInvoicesTable)
-    .values({
-      dealerId: order.dealerId,
-      serviceOrderId: order.id,
-      jobCardId: card.id,
-      customerId: order.customerId,
-      customerName: order.customerName,
-      vehicleInfo: order.vehicleInfo,
-      partsTotal: Math.round(partsTotal * 100) / 100,
-      laborTotal: Math.round(laborTotal * 100) / 100,
-      surchargeTotal: Math.round(surchargeTotal * 100) / 100,
-      tax,
-      total,
-      status: "issued",
-      // Totals lock at issue (FR-SR-09); discount approval and the
-      // adjustment endpoint are the only sanctioned paths that change them.
-      lockedAt: new Date(),
-    })
-    .returning();
+  // Issue + collision binding in ONE transaction with the claim row locked
+  // FOR UPDATE: the invoice can never exist while the split stamping loses a
+  // race to a concurrent claim transition — if the stamp cannot apply, the
+  // whole issue rolls back.
+  let issued: ServiceInvoice | undefined;
+  try {
+    issued = await db.transaction(async (tx) => {
+      // Serialize against collision-claim intake on the shared repair order,
+      // then re-read the claim after the lock. This closes the "both observed
+      // no row" race between normal invoicing and claim creation.
+      const [lockedOrder] = await tx
+        .select({ id: serviceOrdersTable.id })
+        .from(serviceOrdersTable)
+        .where(
+          and(
+            eq(serviceOrdersTable.id, order.id),
+            eq(serviceOrdersTable.dealerId, order.dealerId),
+          ),
+        )
+        .for("update");
+      if (!lockedOrder) {
+        throw Object.assign(new Error("service-order-missing"), {
+          issueCode: 404,
+        });
+      }
+      const [lockedClaim] = await tx
+        .select()
+        .from(collisionClaimsTable)
+        .where(
+          and(
+            eq(collisionClaimsTable.serviceOrderId, lockedOrder.id),
+            eq(collisionClaimsTable.dealerId, order.dealerId),
+          ),
+        )
+        .for("update");
+      if (lockedClaim) {
+        // Only an exactly insurer_signoff claim with no bound invoice may be
+        // invoiced: a concurrent issue that already stamped the claim leaves
+        // it invoiced/bound, and this second attempt must not create an
+        // unbound duplicate receivable.
+        if (
+          !lockedClaim ||
+          lockedClaim.status !== "insurer_signoff" ||
+          lockedClaim.serviceInvoiceId != null
+        ) {
+          const code =
+            lockedClaim &&
+            (lockedClaim.status === "invoiced" ||
+              lockedClaim.serviceInvoiceId != null)
+              ? 409
+              : 422;
+          throw Object.assign(new Error("collision-gate"), { issueCode: code });
+        }
+        const [pendingSupplement] = await tx
+          .select({ id: collisionSupplementsTable.id })
+          .from(collisionSupplementsTable)
+          .where(
+            and(
+              eq(collisionSupplementsTable.claimId, lockedClaim.id),
+              eq(collisionSupplementsTable.dealerId, lockedClaim.dealerId),
+              eq(collisionSupplementsTable.status, "pending"),
+            ),
+          )
+          .limit(1);
+        if (pendingSupplement) {
+          throw Object.assign(new Error("pending-supplements"), {
+            issueCode: 422,
+          });
+        }
+      }
+      // Re-check the one-invoice-per-job-card invariant AFTER taking the
+      // claim lock: two concurrent issues both pass the pre-transaction
+      // check, but the loser serializes behind the winner here and bails
+      // without inserting. The service_invoices_job_card_unique DB index
+      // backstops the non-collision path.
+      const [dupe] = await tx
+        .select({ id: serviceInvoicesTable.id })
+        .from(serviceInvoicesTable)
+        .where(
+          and(
+            eq(serviceInvoicesTable.jobCardId, card.id),
+            eq(serviceInvoicesTable.dealerId, card.dealerId),
+          ),
+        );
+      if (dupe) {
+        throw Object.assign(new Error("invoice-exists"), { issueCode: 409 });
+      }
+      const [created] = await tx
+        .insert(serviceInvoicesTable)
+        .values({
+          dealerId: order.dealerId,
+          serviceOrderId: order.id,
+          jobCardId: card.id,
+          customerId: order.customerId,
+          customerName: order.customerName,
+          vehicleInfo: order.vehicleInfo,
+          partsTotal: Math.round(partsTotal * 100) / 100,
+          laborTotal: Math.round(laborTotal * 100) / 100,
+          surchargeTotal: Math.round(surchargeTotal * 100) / 100,
+          tax,
+          total,
+          status: "issued",
+          // Totals lock at issue (FR-SR-09); discount approval and the
+          // adjustment endpoint are the only sanctioned paths that change them.
+          lockedAt: new Date(),
+        })
+        .returning();
+
+      // Stamp the collision split on the claim: the customer owes the
+      // deductible (capped at the invoice total); the insurer owes the rest.
+      // The claim auto-advances insurer_signoff → invoiced with an audit event.
+      if (created && lockedClaim && lockedClaim.status === "insurer_signoff") {
+        const deductibleDue =
+          Math.round(Math.min(lockedClaim.deductible, created.total) * 100) /
+          100;
+        const insurerDue =
+          Math.round((created.total - deductibleDue) * 100) / 100;
+        const [stamped] = await tx
+          .update(collisionClaimsTable)
+          .set({
+            status: "invoiced",
+            serviceInvoiceId: created.id,
+            insurerDue,
+            deductibleDue,
+            history: [
+              ...lockedClaim.history,
+              {
+                kind: "status" as const,
+                from: "insurer_signoff",
+                to: "invoiced",
+                note: `Invoice #${created.id} issued — insurer ${insurerDue.toFixed(2)}, deductible ${deductibleDue.toFixed(2)}`,
+                byUserId: null,
+                byName: "System",
+                at: new Date().toISOString(),
+              },
+            ],
+          })
+          .where(
+            and(
+              eq(collisionClaimsTable.id, lockedClaim.id),
+              eq(collisionClaimsTable.dealerId, lockedClaim.dealerId),
+              eq(collisionClaimsTable.status, "insurer_signoff"),
+            ),
+          )
+          .returning();
+        // Row is locked, so a miss means something is deeply wrong — roll the
+        // invoice back rather than leave it unbound.
+        if (!stamped) {
+          throw Object.assign(new Error("collision-race"), { issueCode: 409 });
+        }
+      }
+      return created;
+    });
+  } catch (err) {
+    const code = (err as { issueCode?: number }).issueCode;
+    if (code === 404) {
+      return { ok: false, status: 404, error: "Service order not found" };
+    }
+    if (code === 422) {
+      return {
+        ok: false,
+        status: 422,
+        error:
+          (err as Error).message === "pending-supplements"
+            ? "Decide all pending collision supplements before generating the invoice"
+            : "This repair has a collision claim awaiting insurer sign-off — the claim must reach Insurer Sign-off before invoicing",
+      };
+    }
+    if (code === 409) {
+      return {
+        ok: false,
+        status: 409,
+        error:
+          (err as Error).message === "invoice-exists"
+            ? "An invoice already exists for this job card"
+            : "This repair's collision claim is already invoiced",
+      };
+    }
+    // DB unique backstop (service_invoices_job_card_unique) for concurrent
+    // issues that slipped past every check — drizzle wraps pg in err.cause.
+    const pg = err as { code?: string; cause?: { code?: string } };
+    if (pg?.code === "23505" || pg?.cause?.code === "23505") {
+      return {
+        ok: false,
+        status: 409,
+        error: "An invoice already exists for this job card",
+      };
+    }
+    throw err;
+  }
+  const invoice = issued;
 
   // FR-COM: customer gets the invoice PDF by email (deduped per invoice).
   if (invoice) onServiceInvoiceIssued(invoice);
+  if (invoice && claim) {
+    coordinateCollisionClaim({
+      id: claim.id,
+      dealerId: claim.dealerId,
+      vehicleInfo: claim.vehicleInfo,
+      status: "invoiced",
+      event: "status",
+      eventKey: "status:insurer_signoff:invoiced",
+      detail: `Invoice #${invoice.id} generated; insurer and deductible collection can begin.`,
+    });
+  }
 
   return { ok: true, invoice };
 }
@@ -2367,68 +2659,123 @@ router.patch("/service-invoices/:id", async (req, res): Promise<void> => {
   // Locked totals (FR-SR-09): PATCH only ever touches lifecycle status and
   // the signed-copy acknowledgement — monetary fields are not accepted here.
   const dealerId = activeDealerId(res);
-  const [current] = await db
-    .select()
-    .from(serviceInvoicesTable)
-    .where(
-      and(
-        eq(serviceInvoicesTable.id, params.data.id),
-        eq(serviceInvoicesTable.dealerId, dealerId),
-      ),
-    );
-  if (!current) {
-    res.status(404).json({ error: "Invoice not found" });
-    return;
-  }
   const { signedCopyFiled, status } = parsed.data;
-  // Irreversible lifecycle: issued → paid | void only. Paid and void are
-  // terminal — a paid invoice can never be reopened into an adjustable state.
-  if (status !== undefined && status !== current.status) {
-    const allowed =
-      current.status === "issued" && (status === "paid" || status === "void");
-    if (!allowed) {
-      res.status(422).json({
-        error: `Invalid status transition ${current.status} → ${status}; paid and void invoices are final`,
-      });
-      return;
+  // One transaction with the invoice row locked FOR UPDATE: the collision
+  // advance route locks the same row before binding it to a claim, so a
+  // manual void can never slip in between "claim reads issued invoice" and
+  // "claim binds it" — one of the two serializes behind the other.
+  const outcome = await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(serviceInvoicesTable)
+      .where(
+        and(
+          eq(serviceInvoicesTable.id, params.data.id),
+          eq(serviceInvoicesTable.dealerId, dealerId),
+        ),
+      )
+      .for("update");
+    if (!current) return { code: 404 as const, error: "Invoice not found" };
+    // Irreversible lifecycle: issued → paid | void only. Paid and void are
+    // terminal — a paid invoice can never be reopened into an adjustable state.
+    if (status !== undefined && status !== current.status) {
+      const allowed =
+        current.status === "issued" && (status === "paid" || status === "void");
+      if (!allowed) {
+        return {
+          code: 422 as const,
+          error: `Invalid status transition ${current.status} → ${status}; paid and void invoices are final`,
+        };
+      }
     }
-  }
-  if (signedCopyFiled !== undefined && current.status === "void") {
-    res.status(422).json({ error: "Cannot record acknowledgements on a void invoice" });
+    if (signedCopyFiled !== undefined && current.status === "void") {
+      return {
+        code: 422 as const,
+        error: "Cannot record acknowledgements on a void invoice",
+      };
+    }
+    // Collision-claim invoices settle through the split receivable (insurer +
+    // deductible settlements), not a manual flip: paid requires both shares
+    // collected, and void is blocked outright while a live claim exists on
+    // this repair — linked already or still awaiting binding (Task 279).
+    if (status !== undefined && status !== current.status) {
+      const [claim] = await tx
+        .select()
+        .from(collisionClaimsTable)
+        .where(
+          and(
+            eq(collisionClaimsTable.serviceOrderId, current.serviceOrderId),
+            eq(collisionClaimsTable.dealerId, dealerId),
+          ),
+        );
+      if (
+        claim &&
+        (claim.serviceInvoiceId === current.id ||
+          !["denied", "total_loss", "closed"].includes(claim.status))
+      ) {
+        if (status === "void") {
+          return {
+            code: 422 as const,
+            error:
+              "Cannot void a collision-claim invoice — resolve it through the claim (denied / total loss) instead",
+          };
+        }
+        const [sums] = await tx
+          .select({
+            insurerPaid: sql<number>`coalesce(sum(case when ${collisionSettlementsTable.payer} = 'insurer' then ${collisionSettlementsTable.amount} else 0 end), 0)`,
+            deductiblePaid: sql<number>`coalesce(sum(case when ${collisionSettlementsTable.payer} = 'customer' then ${collisionSettlementsTable.amount} else 0 end), 0)`,
+          })
+          .from(collisionSettlementsTable)
+          .where(
+            and(
+              eq(collisionSettlementsTable.claimId, claim.id),
+              eq(collisionSettlementsTable.dealerId, dealerId),
+            ),
+          );
+        if (
+          status === "paid" &&
+          (claim.serviceInvoiceId !== current.id ||
+            (sums?.insurerPaid ?? 0) < (claim.insurerDue ?? 0) - 0.005 ||
+            (sums?.deductiblePaid ?? 0) < (claim.deductibleDue ?? 0) - 0.005)
+        ) {
+          return {
+            code: 422 as const,
+            error:
+              "This invoice belongs to a collision claim — record the insurer and deductible settlements on the claim; it flips to paid automatically once both are collected",
+          };
+        }
+      }
+    }
+    const patch: Partial<typeof serviceInvoicesTable.$inferInsert> = {};
+    if (status !== undefined) patch.status = status;
+    if (signedCopyFiled) {
+      patch.signedCopyFiledBy =
+        res.locals.user?.name ?? res.locals.user?.email ?? "Staff";
+      patch.signedCopyFiledAt = new Date();
+    } else if (signedCopyFiled === false) {
+      patch.signedCopyFiledBy = null;
+      patch.signedCopyFiledAt = null;
+    }
+    if (Object.keys(patch).length === 0) {
+      return { code: 200 as const, invoice: current };
+    }
+    const [invoice] = await tx
+      .update(serviceInvoicesTable)
+      .set(patch)
+      .where(
+        and(
+          eq(serviceInvoicesTable.id, current.id),
+          eq(serviceInvoicesTable.dealerId, dealerId),
+        ),
+      )
+      .returning();
+    return { code: 200 as const, invoice: invoice! };
+  });
+  if (outcome.code !== 200) {
+    res.status(outcome.code).json({ error: outcome.error });
     return;
   }
-  const patch: Partial<typeof serviceInvoicesTable.$inferInsert> = {};
-  if (status !== undefined) patch.status = status;
-  if (signedCopyFiled) {
-    patch.signedCopyFiledBy =
-      res.locals.user?.name ?? res.locals.user?.email ?? "Staff";
-    patch.signedCopyFiledAt = new Date();
-  } else if (signedCopyFiled === false) {
-    patch.signedCopyFiledBy = null;
-    patch.signedCopyFiledAt = null;
-  }
-  if (Object.keys(patch).length === 0) {
-    res.json(UpdateServiceInvoiceResponse.parse(current));
-    return;
-  }
-  // CAS on the observed status so a concurrent transition can't be raced past
-  // the lifecycle guard above.
-  const [invoice] = await db
-    .update(serviceInvoicesTable)
-    .set(patch)
-    .where(
-      and(
-        eq(serviceInvoicesTable.id, current.id),
-        eq(serviceInvoicesTable.dealerId, dealerId),
-        eq(serviceInvoicesTable.status, current.status),
-      ),
-    )
-    .returning();
-  if (!invoice) {
-    res.status(409).json({ error: "Invoice changed — reload and retry" });
-    return;
-  }
-  res.json(UpdateServiceInvoiceResponse.parse(invoice));
+  res.json(UpdateServiceInvoiceResponse.parse(outcome.invoice));
 });
 
 // ---------------------------------------------------------------------------
@@ -2458,6 +2805,23 @@ router.post(
       );
     if (!invoice) {
       res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+    const [collisionClaim] = await db
+      .select({ id: collisionClaimsTable.id })
+      .from(collisionClaimsTable)
+      .where(
+        and(
+          eq(collisionClaimsTable.serviceInvoiceId, invoice.id),
+          eq(collisionClaimsTable.dealerId, dealerId),
+        ),
+      )
+      .limit(1);
+    if (collisionClaim) {
+      res.status(422).json({
+        error:
+          "Collision invoice totals are locked to the insurer/deductible split; use the claim supplement and settlement workflow",
+      });
       return;
     }
     if (invoice.status !== "issued") {
@@ -2537,6 +2901,23 @@ router.post(
       res.status(404).json({ error: "Invoice not found" });
       return;
     }
+    const [collisionClaim] = await db
+      .select({ id: collisionClaimsTable.id })
+      .from(collisionClaimsTable)
+      .where(
+        and(
+          eq(collisionClaimsTable.serviceInvoiceId, invoice.id),
+          eq(collisionClaimsTable.dealerId, dealerId),
+        ),
+      )
+      .limit(1);
+    if (collisionClaim) {
+      res.status(422).json({
+        error:
+          "Collision invoice totals are locked to the insurer/deductible split; use the claim supplement and settlement workflow",
+      });
+      return;
+    }
     if (invoice.discountStatus !== "pending") {
       res.status(422).json({ error: "No pending discount on this invoice" });
       return;
@@ -2607,6 +2988,23 @@ router.post("/service-invoices/:id/adjust", async (req, res): Promise<void> => {
     );
   if (!invoice) {
     res.status(404).json({ error: "Invoice not found" });
+    return;
+  }
+  const [collisionClaim] = await db
+    .select({ id: collisionClaimsTable.id })
+    .from(collisionClaimsTable)
+    .where(
+      and(
+        eq(collisionClaimsTable.serviceInvoiceId, invoice.id),
+        eq(collisionClaimsTable.dealerId, dealerId),
+      ),
+    )
+    .limit(1);
+  if (collisionClaim) {
+    res.status(422).json({
+      error:
+        "Collision invoice totals are locked to the insurer/deductible split; use the claim supplement and settlement workflow",
+    });
     return;
   }
   // Adjustments change a locked financial record, so they are restricted to

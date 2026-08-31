@@ -150,12 +150,25 @@ async function main() {
         lockedAt: new Date(),
       })
       .returning();
+    // Separate job card for the paid invoice: service_invoices enforces one
+    // invoice per job card (collision-claims invariant).
+    const [paidCard] = await db
+      .insert(jobCardsTable)
+      .values({
+        dealerId: DEALER,
+        serviceOrderId: order.id,
+        title: "SVCWF paid-invoice job",
+        status: "completed",
+        technicianUserId: tech.id,
+        technicianName: "SvcWF Test Tech",
+      })
+      .returning();
     const [paid] = await db
       .insert(serviceInvoicesTable)
       .values({
         dealerId: DEALER,
         serviceOrderId: order.id,
-        jobCardId: card.id,
+        jobCardId: paidCard.id,
         vehicleInfo: "SVCWF Test Vehicle",
         partsTotal: 50,
         laborTotal: 50,

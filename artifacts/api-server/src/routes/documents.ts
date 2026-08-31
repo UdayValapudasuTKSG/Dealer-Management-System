@@ -8,6 +8,8 @@ import {
   vehiclesTable,
   deliveriesTable,
   jobCardsTable,
+  collisionClaimsTable,
+  serviceOrdersTable,
   quotesTable,
   auditLogsTable,
   timelineEventsTable,
@@ -27,6 +29,7 @@ import {
   hasPermission,
   type AuthedUser,
 } from "../middlewares/rbac";
+import { isTechnicianRole } from "./service";
 import {
   ObjectStorageService,
   ObjectNotFoundError,
@@ -64,6 +67,7 @@ function moduleFor(entityType: string): string {
   if (entityType === "quote") return "leads";
   if (entityType === "delivery") return "deliveries";
   if (entityType === "job_card") return "service";
+  if (entityType === "collision_claim") return "service";
   return "inventory";
 }
 
@@ -83,12 +87,54 @@ function requirePermission(
   return true;
 }
 
+/**
+ * Collision evidence follows the collision routes' technician boundary: a
+ * technician may only reach claims on service orders assigned to them, so a
+ * same-dealer claim id is not enough to list or download accident photos.
+ */
+async function canAccessCollisionClaim(
+  dealerId: number,
+  claimId: number,
+  viewer: unknown,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ serviceOrderId: collisionClaimsTable.serviceOrderId })
+    .from(collisionClaimsTable)
+    .where(
+      and(
+        eq(collisionClaimsTable.id, claimId),
+        eq(collisionClaimsTable.dealerId, dealerId),
+      ),
+    );
+  if (!row) return false;
+  const user = viewer as
+    | { id: number; roleName?: string | null; isSuperAdmin?: boolean }
+    | undefined;
+  if (isTechnicianRole(user)) {
+    const [order] = await db
+      .select({ technicianUserId: serviceOrdersTable.technicianUserId })
+      .from(serviceOrdersTable)
+      .where(
+        and(
+          eq(serviceOrdersTable.id, row.serviceOrderId),
+          eq(serviceOrdersTable.dealerId, dealerId),
+        ),
+      );
+    if (!order || order.technicianUserId !== user!.id) return false;
+  }
+  return true;
+}
+
 /** 404 unless the parent lead/vehicle/delivery exists in the active dealer. */
 async function parentExists(
   dealerId: number,
-  entityType: "lead" | "vehicle" | "delivery" | "job_card" | "quote",
+  entityType: "lead" | "vehicle" | "delivery" | "job_card" | "quote" | "collision_claim",
   entityId: number,
+  viewer?: unknown,
 ): Promise<boolean> {
+  if (entityType === "collision_claim") {
+    return canAccessCollisionClaim(dealerId, entityId, viewer);
+  }
   if (entityType === "quote") {
     const [row] = await db
       .select({ id: quotesTable.id })
@@ -145,7 +191,7 @@ router.get("/documents", async (req: Request, res: Response): Promise<void> => {
   const dealerId = activeDealerId(res);
   const { entityType, entityId } = parsed.data;
   if (!requirePermission(res, entityType, "view")) return;
-  if (!(await parentExists(dealerId, entityType, entityId))) {
+  if (!(await parentExists(dealerId, entityType, entityId, res.locals.user))) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -173,7 +219,7 @@ router.post("/documents", async (req: Request, res: Response): Promise<void> => 
   const body = parsed.data;
 
   if (!requirePermission(res, body.entityType, "create")) return;
-  if (!(await parentExists(dealerId, body.entityType, body.entityId))) {
+  if (!(await parentExists(dealerId, body.entityType, body.entityId, res.locals.user))) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -322,6 +368,13 @@ router.get(
       return;
     }
     if (!requirePermission(res, doc.entityType, "view")) return;
+    if (
+      doc.entityType === "collision_claim" &&
+      !(await canAccessCollisionClaim(dealerId, doc.entityId, res.locals.user))
+    ) {
+      res.status(404).json({ error: "Document not found" });
+      return;
+    }
     if (!doc.storageKey) {
       if (doc.externalUrl) {
         res.redirect(doc.externalUrl);

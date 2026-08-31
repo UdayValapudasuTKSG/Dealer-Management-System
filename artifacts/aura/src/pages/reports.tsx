@@ -20,6 +20,7 @@ import {
   Boxes,
   Receipt,
   Bot,
+  CarFront,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -63,6 +64,7 @@ const REPORT_TYPES: {
   { type: "tax_gra", label: "Tax & GRA", module: "gra", minTier: "manager", icon: Receipt },
   { type: "delivery_operations", label: "Delivery Operations", module: "deliveries", minTier: "advisor", icon: Truck },
   { type: "agent_activity", label: "Agent Activity", module: "settings", minTier: "manager", icon: Bot },
+  { type: "collision_claims", label: "Collision Claims", module: "service", minTier: "manager", icon: CarFront },
 ];
 
 const PIE_COLORS = [

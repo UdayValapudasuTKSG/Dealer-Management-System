@@ -34,6 +34,7 @@ export const DEFAULT_AGENTS: {
   { key: "intake_dedup", name: "Intake & Dedup", domain: "Lead Intake", description: "Parses inbound enquiries (email/WhatsApp/web), dedupes against existing leads and creates or merges the lead record.", status: "active" },
   { key: "call_sentiment", name: "Call Sentiment", domain: "Sales Calls", description: "Analyzes call transcripts and notes, writing sentiment and summary onto the call log.", status: "active" },
   { key: "case_classifier", name: "Case Classifier", domain: "Aftersales", description: "Classifies new service cases (type and severity) so they route to the right queue.", status: "active" },
+  { key: "collision_coordinator", name: "Collision Coordinator", domain: "Service & Repair", description: "Routes collision claim handoffs, approval reminders and finance actions while leaving protected decisions to staff.", status: "active" },
   // HITL / advisory — draft, suggest, extract or navigate; a human commits every action.
   { key: "doc_prefill", name: "Document Prefill", domain: "Documents", description: "Extracts fields from uploaded customer documents to prefill forms — a human verifies before use.", status: "active" },
   { key: "outreach", name: "Outreach Drafts", domain: "Sales & Pipeline", description: "Drafts customer messages for human Approve & Send — never sends on its own.", status: "active" },

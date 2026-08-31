@@ -2112,6 +2112,7 @@ export const DocumentEntityType = {
   delivery: 'delivery',
   job_card: 'job_card',
   quote: 'quote',
+  collision_claim: 'collision_claim',
 } as const;
 
 export type DocumentType = typeof DocumentType[keyof typeof DocumentType];
@@ -2173,6 +2174,7 @@ export const DocumentInputEntityType = {
   delivery: 'delivery',
   job_card: 'job_card',
   quote: 'quote',
+  collision_claim: 'collision_claim',
 } as const;
 
 export type DocumentInputType = typeof DocumentInputType[keyof typeof DocumentInputType];
@@ -5380,6 +5382,355 @@ export interface ServiceInvoiceAdjustmentInput {
   reason: string;
 }
 
+export type CollisionDamagePointZone = typeof CollisionDamagePointZone[keyof typeof CollisionDamagePointZone];
+
+
+export const CollisionDamagePointZone = {
+  front_bumper: 'front_bumper',
+  hood: 'hood',
+  windshield: 'windshield',
+  front_left_fender: 'front_left_fender',
+  front_right_fender: 'front_right_fender',
+  left_door_front: 'left_door_front',
+  left_door_rear: 'left_door_rear',
+  right_door_front: 'right_door_front',
+  right_door_rear: 'right_door_rear',
+  left_quarter_panel: 'left_quarter_panel',
+  right_quarter_panel: 'right_quarter_panel',
+  roof: 'roof',
+  rear_glass: 'rear_glass',
+  trunk: 'trunk',
+  rear_bumper: 'rear_bumper',
+  undercarriage: 'undercarriage',
+} as const;
+
+export type CollisionDamagePointSeverity = typeof CollisionDamagePointSeverity[keyof typeof CollisionDamagePointSeverity];
+
+
+export const CollisionDamagePointSeverity = {
+  minor: 'minor',
+  moderate: 'moderate',
+  severe: 'severe',
+} as const;
+
+export interface CollisionDamagePoint {
+  zone: CollisionDamagePointZone;
+  severity: CollisionDamagePointSeverity;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export type CollisionClaimEventKind = typeof CollisionClaimEventKind[keyof typeof CollisionClaimEventKind];
+
+
+export const CollisionClaimEventKind = {
+  created: 'created',
+  status: 'status',
+  estimate: 'estimate',
+  supplement: 'supplement',
+  payment: 'payment',
+  pause: 'pause',
+  resume: 'resume',
+  note: 'note',
+} as const;
+
+export interface CollisionClaimEvent {
+  kind: CollisionClaimEventKind;
+  /** @nullable */
+  from?: string | null;
+  /** @nullable */
+  to?: string | null;
+  /** @nullable */
+  note?: string | null;
+  /** @nullable */
+  amount?: number | null;
+  /** @nullable */
+  byUserId?: number | null;
+  byName: string;
+  at: string;
+}
+
+export type CollisionClaimSeverity = typeof CollisionClaimSeverity[keyof typeof CollisionClaimSeverity];
+
+
+export const CollisionClaimSeverity = {
+  minor: 'minor',
+  moderate: 'moderate',
+  severe: 'severe',
+} as const;
+
+export type CollisionClaimStatus = typeof CollisionClaimStatus[keyof typeof CollisionClaimStatus];
+
+
+export const CollisionClaimStatus = {
+  intake: 'intake',
+  estimate_drafted: 'estimate_drafted',
+  submitted: 'submitted',
+  adjuster_review: 'adjuster_review',
+  approved: 'approved',
+  parts_ordered: 'parts_ordered',
+  in_repair: 'in_repair',
+  quality_check: 'quality_check',
+  insurer_signoff: 'insurer_signoff',
+  invoiced: 'invoiced',
+  closed: 'closed',
+  denied: 'denied',
+  total_loss: 'total_loss',
+} as const;
+
+export interface CollisionClaim {
+  id: number;
+  serviceOrderId: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  vehicleInfo: string;
+  /** @nullable */
+  vehicleId?: number | null;
+  lossDate: string;
+  insurerName: string;
+  /** @nullable */
+  policyNumber?: string | null;
+  /** @nullable */
+  claimNumber?: string | null;
+  /** @nullable */
+  adjusterName?: string | null;
+  /** @nullable */
+  adjusterContact?: string | null;
+  severity: CollisionClaimSeverity;
+  /** @nullable */
+  damageNotes?: string | null;
+  damagePoints: CollisionDamagePoint[];
+  status: CollisionClaimStatus;
+  initialEstimate: number;
+  /** @nullable */
+  contestedEstimate?: number | null;
+  /** @nullable */
+  approvedEstimate?: number | null;
+  deductible: number;
+  /** @nullable */
+  totalLossValue?: number | null;
+  /** @nullable */
+  outcomeReason?: string | null;
+  pausedSeconds: number;
+  /** @nullable */
+  pausedAt?: string | null;
+  /** @nullable */
+  serviceInvoiceId?: number | null;
+  /** @nullable */
+  insurerDue?: number | null;
+  /** @nullable */
+  deductibleDue?: number | null;
+  history: CollisionClaimEvent[];
+  /** @nullable */
+  closedAt?: string | null;
+  /** @nullable */
+  createdBy?: string | null;
+  createdAt: string;
+}
+
+export type CollisionClaimInputSeverity = typeof CollisionClaimInputSeverity[keyof typeof CollisionClaimInputSeverity];
+
+
+export const CollisionClaimInputSeverity = {
+  minor: 'minor',
+  moderate: 'moderate',
+  severe: 'severe',
+} as const;
+
+export interface CollisionClaimInput {
+  serviceOrderId: number;
+  lossDate: string;
+  /** @minLength 1 */
+  insurerName: string;
+  policyNumber?: string;
+  claimNumber?: string;
+  adjusterName?: string;
+  adjusterContact?: string;
+  severity?: CollisionClaimInputSeverity;
+  damageNotes?: string;
+  damagePoints?: CollisionDamagePoint[];
+  /** @minimum 0 */
+  initialEstimate?: number;
+  /** @minimum 0 */
+  deductible?: number;
+}
+
+export type CollisionClaimUpdateSeverity = typeof CollisionClaimUpdateSeverity[keyof typeof CollisionClaimUpdateSeverity];
+
+
+export const CollisionClaimUpdateSeverity = {
+  minor: 'minor',
+  moderate: 'moderate',
+  severe: 'severe',
+} as const;
+
+export interface CollisionClaimUpdate {
+  lossDate?: string;
+  /** @minLength 1 */
+  insurerName?: string;
+  /** @nullable */
+  policyNumber?: string | null;
+  /** @nullable */
+  claimNumber?: string | null;
+  /** @nullable */
+  adjusterName?: string | null;
+  /** @nullable */
+  adjusterContact?: string | null;
+  severity?: CollisionClaimUpdateSeverity;
+  /** @nullable */
+  damageNotes?: string | null;
+  damagePoints?: CollisionDamagePoint[];
+  /** @minimum 0 */
+  initialEstimate?: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  contestedEstimate?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  approvedEstimate?: number | null;
+  /** @minimum 0 */
+  deductible?: number;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  totalLossValue?: number | null;
+}
+
+export type CollisionClaimAdvanceBodyTargetStatus = typeof CollisionClaimAdvanceBodyTargetStatus[keyof typeof CollisionClaimAdvanceBodyTargetStatus];
+
+
+export const CollisionClaimAdvanceBodyTargetStatus = {
+  estimate_drafted: 'estimate_drafted',
+  submitted: 'submitted',
+  adjuster_review: 'adjuster_review',
+  approved: 'approved',
+  parts_ordered: 'parts_ordered',
+  in_repair: 'in_repair',
+  quality_check: 'quality_check',
+  insurer_signoff: 'insurer_signoff',
+  invoiced: 'invoiced',
+  closed: 'closed',
+  denied: 'denied',
+  total_loss: 'total_loss',
+} as const;
+
+export interface CollisionClaimAdvanceBody {
+  targetStatus: CollisionClaimAdvanceBodyTargetStatus;
+  note?: string;
+  /** @minimum 0 */
+  totalLossValue?: number;
+}
+
+export interface CollisionClaimAdvanceUnmet {
+  unmet: string[];
+}
+
+export type CollisionSupplementStatus = typeof CollisionSupplementStatus[keyof typeof CollisionSupplementStatus];
+
+
+export const CollisionSupplementStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  denied: 'denied',
+} as const;
+
+export interface CollisionSupplement {
+  id: number;
+  claimId: number;
+  description: string;
+  amount: number;
+  status: CollisionSupplementStatus;
+  /** @nullable */
+  decisionNote?: string | null;
+  /** @nullable */
+  requestedBy?: string | null;
+  /** @nullable */
+  decidedBy?: string | null;
+  /** @nullable */
+  decidedAt?: string | null;
+  createdAt: string;
+}
+
+export interface CollisionSupplementInput {
+  /** @minLength 3 */
+  description: string;
+  /** @minimum 0.01 */
+  amount: number;
+}
+
+export type CollisionSupplementDecisionAction = typeof CollisionSupplementDecisionAction[keyof typeof CollisionSupplementDecisionAction];
+
+
+export const CollisionSupplementDecisionAction = {
+  approve: 'approve',
+  deny: 'deny',
+} as const;
+
+export interface CollisionSupplementDecision {
+  action: CollisionSupplementDecisionAction;
+  note?: string;
+}
+
+export type CollisionSettlementPayer = typeof CollisionSettlementPayer[keyof typeof CollisionSettlementPayer];
+
+
+export const CollisionSettlementPayer = {
+  insurer: 'insurer',
+  customer: 'customer',
+} as const;
+
+export interface CollisionSettlement {
+  id: number;
+  claimId: number;
+  payer: CollisionSettlementPayer;
+  amount: number;
+  /** @nullable */
+  method?: string | null;
+  /** @nullable */
+  reference?: string | null;
+  /** @nullable */
+  recordedBy?: string | null;
+  createdAt: string;
+}
+
+export type CollisionSettlementInputPayer = typeof CollisionSettlementInputPayer[keyof typeof CollisionSettlementInputPayer];
+
+
+export const CollisionSettlementInputPayer = {
+  insurer: 'insurer',
+  customer: 'customer',
+} as const;
+
+export interface CollisionSettlementInput {
+  payer: CollisionSettlementInputPayer;
+  /** @minimum 0.01 */
+  amount: number;
+  method?: string;
+  reference?: string;
+}
+
+export interface CollisionClaimDetail {
+  claim: CollisionClaim;
+  supplements: CollisionSupplement[];
+  settlements: CollisionSettlement[];
+  /**
+     * Approved estimate plus approved supplements (null until an approved estimate is recorded)
+     * @nullable
+     */
+  approvedTotal: number | null;
+  insurerPaid: number;
+  deductiblePaid: number;
+  /** Elapsed claim cycle time excluding backorder pauses */
+  cycleSeconds: number;
+}
+
 export type ServiceSettingsSummaryCadence = typeof ServiceSettingsSummaryCadence[keyof typeof ServiceSettingsSummaryCadence];
 
 
@@ -8101,6 +8452,14 @@ export type ListCoveragePlansParams = {
 type?: string;
 };
 
+export type ListCollisionClaimsParams = {
+status?: string;
+insurer?: string;
+lossFrom?: string;
+lossTo?: string;
+serviceOrderId?: number;
+};
+
 export type ListPartsParams = {
 search?: string;
 lowStock?: string;
@@ -8209,6 +8568,7 @@ export const GetReportType = {
   tax_gra: 'tax_gra',
   delivery_operations: 'delivery_operations',
   agent_activity: 'agent_activity',
+  collision_claims: 'collision_claims',
 } as const;
 
 export type GetReportFormat = typeof GetReportFormat[keyof typeof GetReportFormat];
@@ -8305,6 +8665,7 @@ export const ListDocumentsEntityType = {
   delivery: 'delivery',
   job_card: 'job_card',
   quote: 'quote',
+  collision_claim: 'collision_claim',
 } as const;
 
 export type RotateErpnextWebhookSecret200 = {

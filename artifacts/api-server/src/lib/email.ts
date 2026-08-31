@@ -637,6 +637,28 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       rows: "<strong>Aug 12</strong> — 2025 BMW X7, maintenance (Alex Mensah)<br/><strong>Aug 13</strong> — Toyota Hilux, repair (Priya Persaud)<br/><strong>Aug 14</strong> — Audi e-tron GT, inspection (Nana Adjei)",
     },
   },
+  "collision.claim.action": {
+    label: "Collision Claim Action (Internal)",
+    description:
+      "Routes collision claim handoffs, approvals and collection actions to the responsible dealership team.",
+    subject: (x) =>
+      `${d(x, "action", "Collision claim update")} — ${d(x, "claimRef", "claim")}`,
+    heading: (x) => d(x, "action", "Collision claim needs attention"),
+    body: (x) =>
+      `<strong>${d(x, "claimRef", "Collision claim")}</strong> for ${d(x, "vehicle", "the vehicle")} is now <strong>${d(x, "status", "updated")}</strong>.<br/><br/>${d(x, "body", "Open AURA to review the claim and complete the next step.")}`,
+    cta: (x) => ({
+      label: "Open Collision Claims",
+      ...(x.link ? { href: x.link } : {}),
+    }),
+    sample: {
+      action: "Insurer sign-off required",
+      claimRef: "Claim #68",
+      vehicle: "2025 Toyota Hilux",
+      status: "Quality Check",
+      body: "Review the completed repair and record insurer sign-off.",
+      link: "/service?tab=collision",
+    },
+  },
   // Task 269: daily lead-source report for General Managers.
   "leads.source.report.daily": {
     label: "Daily Lead Source Report (Internal)",

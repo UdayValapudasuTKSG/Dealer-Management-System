@@ -75,6 +75,17 @@ import type {
   Case,
   CaseCreate,
   CaseUpdate,
+  CollisionClaim,
+  CollisionClaimAdvanceBody,
+  CollisionClaimAdvanceUnmet,
+  CollisionClaimDetail,
+  CollisionClaimInput,
+  CollisionClaimUpdate,
+  CollisionSettlement,
+  CollisionSettlementInput,
+  CollisionSupplement,
+  CollisionSupplementDecision,
+  CollisionSupplementInput,
   CommNote,
   CommNoteInput,
   Contact,
@@ -216,6 +227,7 @@ import type {
   ListBookingsParams,
   ListCapacityBlocksParams,
   ListCasesParams,
+  ListCollisionClaimsParams,
   ListCoveragePlansParams,
   ListCustomersParams,
   ListDealsParams,
@@ -11530,6 +11542,671 @@ export const useSendCoverageReminder = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getSendCoverageReminderMutationOptions(options));
+    }
+
+export const getListCollisionClaimsUrl = (params?: ListCollisionClaimsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/collision-claims?${stringifiedParams}` : `/api/collision-claims`
+}
+
+/**
+ * @summary List collision claims (filterable by status, insurer, loss date)
+ */
+export const listCollisionClaims = async (params?: ListCollisionClaimsParams, options?: RequestInit): Promise<CollisionClaim[]> => {
+
+  return customFetch<CollisionClaim[]>(getListCollisionClaimsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCollisionClaimsQueryKey = (params?: ListCollisionClaimsParams,) => {
+    return [
+    `/api/collision-claims`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListCollisionClaimsQueryOptions = <TData = Awaited<ReturnType<typeof listCollisionClaims>>, TError = ErrorType<unknown>>(params?: ListCollisionClaimsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCollisionClaims>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCollisionClaimsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCollisionClaims>>> = ({ signal }) => listCollisionClaims(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCollisionClaims>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCollisionClaimsQueryResult = NonNullable<Awaited<ReturnType<typeof listCollisionClaims>>>
+export type ListCollisionClaimsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List collision claims (filterable by status, insurer, loss date)
+ */
+
+export function useListCollisionClaims<TData = Awaited<ReturnType<typeof listCollisionClaims>>, TError = ErrorType<unknown>>(
+ params?: ListCollisionClaimsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCollisionClaims>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCollisionClaimsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateCollisionClaimUrl = () => {
+
+
+
+
+  return `/api/collision-claims`
+}
+
+/**
+ * @summary Attach a collision claim to an existing same-dealer repair order
+ */
+export const createCollisionClaim = async (collisionClaimInput: CollisionClaimInput, options?: RequestInit): Promise<CollisionClaim> => {
+
+  return customFetch<CollisionClaim>(getCreateCollisionClaimUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionClaimInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCollisionClaimMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionClaim>>, TError,{data: BodyType<CollisionClaimInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCollisionClaim>>, TError,{data: BodyType<CollisionClaimInput>}, TContext> => {
+
+const mutationKey = ['createCollisionClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCollisionClaim>>, {data: BodyType<CollisionClaimInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCollisionClaim(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCollisionClaimMutationResult = NonNullable<Awaited<ReturnType<typeof createCollisionClaim>>>
+    export type CreateCollisionClaimMutationBody = BodyType<CollisionClaimInput>
+    export type CreateCollisionClaimMutationError = ErrorType<Error>
+
+    /**
+ * @summary Attach a collision claim to an existing same-dealer repair order
+ */
+export const useCreateCollisionClaim = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionClaim>>, TError,{data: BodyType<CollisionClaimInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCollisionClaim>>,
+        TError,
+        {data: BodyType<CollisionClaimInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCollisionClaimMutationOptions(options));
+    }
+
+export const getGetCollisionClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}`
+}
+
+/**
+ * @summary Claim detail with supplements, settlements and timeline
+ */
+export const getCollisionClaim = async (id: number, options?: RequestInit): Promise<CollisionClaimDetail> => {
+
+  return customFetch<CollisionClaimDetail>(getGetCollisionClaimUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCollisionClaimQueryKey = (id: number,) => {
+    return [
+    `/api/collision-claims/${id}`
+    ] as const;
+    }
+
+
+export const getGetCollisionClaimQueryOptions = <TData = Awaited<ReturnType<typeof getCollisionClaim>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCollisionClaim>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCollisionClaimQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCollisionClaim>>> = ({ signal }) => getCollisionClaim(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCollisionClaim>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCollisionClaimQueryResult = NonNullable<Awaited<ReturnType<typeof getCollisionClaim>>>
+export type GetCollisionClaimQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Claim detail with supplements, settlements and timeline
+ */
+
+export function useGetCollisionClaim<TData = Awaited<ReturnType<typeof getCollisionClaim>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCollisionClaim>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCollisionClaimQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateCollisionClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}`
+}
+
+/**
+ * @summary Update claim details, damage evidence and estimate values
+ */
+export const updateCollisionClaim = async (id: number,
+    collisionClaimUpdate: CollisionClaimUpdate, options?: RequestInit): Promise<CollisionClaim> => {
+
+  return customFetch<CollisionClaim>(getUpdateCollisionClaimUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionClaimUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateCollisionClaimMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCollisionClaim>>, TError,{id: number;data: BodyType<CollisionClaimUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCollisionClaim>>, TError,{id: number;data: BodyType<CollisionClaimUpdate>}, TContext> => {
+
+const mutationKey = ['updateCollisionClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCollisionClaim>>, {id: number;data: BodyType<CollisionClaimUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateCollisionClaim(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCollisionClaimMutationResult = NonNullable<Awaited<ReturnType<typeof updateCollisionClaim>>>
+    export type UpdateCollisionClaimMutationBody = BodyType<CollisionClaimUpdate>
+    export type UpdateCollisionClaimMutationError = ErrorType<Error>
+
+    /**
+ * @summary Update claim details, damage evidence and estimate values
+ */
+export const useUpdateCollisionClaim = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCollisionClaim>>, TError,{id: number;data: BodyType<CollisionClaimUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCollisionClaim>>,
+        TError,
+        {id: number;data: BodyType<CollisionClaimUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateCollisionClaimMutationOptions(options));
+    }
+
+export const getAdvanceCollisionClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/advance`
+}
+
+/**
+ * @summary Move a claim one step through the workflow (or record a denied / total-loss outcome)
+ */
+export const advanceCollisionClaim = async (id: number,
+    collisionClaimAdvanceBody: CollisionClaimAdvanceBody, options?: RequestInit): Promise<CollisionClaim> => {
+
+  return customFetch<CollisionClaim>(getAdvanceCollisionClaimUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionClaimAdvanceBody)
+  }
+);}
+
+
+
+
+
+export const getAdvanceCollisionClaimMutationOptions = <TError = ErrorType<Error | CollisionClaimAdvanceUnmet>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof advanceCollisionClaim>>, TError,{id: number;data: BodyType<CollisionClaimAdvanceBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof advanceCollisionClaim>>, TError,{id: number;data: BodyType<CollisionClaimAdvanceBody>}, TContext> => {
+
+const mutationKey = ['advanceCollisionClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof advanceCollisionClaim>>, {id: number;data: BodyType<CollisionClaimAdvanceBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  advanceCollisionClaim(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdvanceCollisionClaimMutationResult = NonNullable<Awaited<ReturnType<typeof advanceCollisionClaim>>>
+    export type AdvanceCollisionClaimMutationBody = BodyType<CollisionClaimAdvanceBody>
+    export type AdvanceCollisionClaimMutationError = ErrorType<Error | CollisionClaimAdvanceUnmet>
+
+    /**
+ * @summary Move a claim one step through the workflow (or record a denied / total-loss outcome)
+ */
+export const useAdvanceCollisionClaim = <TError = ErrorType<Error | CollisionClaimAdvanceUnmet>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof advanceCollisionClaim>>, TError,{id: number;data: BodyType<CollisionClaimAdvanceBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof advanceCollisionClaim>>,
+        TError,
+        {id: number;data: BodyType<CollisionClaimAdvanceBody>},
+        TContext
+      > => {
+      return useMutation(getAdvanceCollisionClaimMutationOptions(options));
+    }
+
+export const getResumeCollisionClaimUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/resume`
+}
+
+/**
+ * @summary Resume cycle-time measurement after a backorder pause
+ */
+export const resumeCollisionClaim = async (id: number, options?: RequestInit): Promise<CollisionClaim> => {
+
+  return customFetch<CollisionClaim>(getResumeCollisionClaimUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResumeCollisionClaimMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeCollisionClaim>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resumeCollisionClaim>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['resumeCollisionClaim'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resumeCollisionClaim>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  resumeCollisionClaim(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResumeCollisionClaimMutationResult = NonNullable<Awaited<ReturnType<typeof resumeCollisionClaim>>>
+
+    export type ResumeCollisionClaimMutationError = ErrorType<Error>
+
+    /**
+ * @summary Resume cycle-time measurement after a backorder pause
+ */
+export const useResumeCollisionClaim = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resumeCollisionClaim>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resumeCollisionClaim>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getResumeCollisionClaimMutationOptions(options));
+    }
+
+export const getCreateCollisionSupplementUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/supplements`
+}
+
+/**
+ * @summary Submit an itemized supplement for hidden damage
+ */
+export const createCollisionSupplement = async (id: number,
+    collisionSupplementInput: CollisionSupplementInput, options?: RequestInit): Promise<CollisionSupplement> => {
+
+  return customFetch<CollisionSupplement>(getCreateCollisionSupplementUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionSupplementInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCollisionSupplementMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionSupplement>>, TError,{id: number;data: BodyType<CollisionSupplementInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCollisionSupplement>>, TError,{id: number;data: BodyType<CollisionSupplementInput>}, TContext> => {
+
+const mutationKey = ['createCollisionSupplement'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCollisionSupplement>>, {id: number;data: BodyType<CollisionSupplementInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createCollisionSupplement(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCollisionSupplementMutationResult = NonNullable<Awaited<ReturnType<typeof createCollisionSupplement>>>
+    export type CreateCollisionSupplementMutationBody = BodyType<CollisionSupplementInput>
+    export type CreateCollisionSupplementMutationError = ErrorType<Error>
+
+    /**
+ * @summary Submit an itemized supplement for hidden damage
+ */
+export const useCreateCollisionSupplement = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionSupplement>>, TError,{id: number;data: BodyType<CollisionSupplementInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCollisionSupplement>>,
+        TError,
+        {id: number;data: BodyType<CollisionSupplementInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCollisionSupplementMutationOptions(options));
+    }
+
+export const getDecideCollisionSupplementUrl = (id: number,
+    supplementId: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/supplements/${supplementId}/decision`
+}
+
+/**
+ * @summary Approve or deny a pending supplement (Service Manager / Management)
+ */
+export const decideCollisionSupplement = async (id: number,
+    supplementId: number,
+    collisionSupplementDecision: CollisionSupplementDecision, options?: RequestInit): Promise<CollisionSupplement> => {
+
+  return customFetch<CollisionSupplement>(getDecideCollisionSupplementUrl(id,supplementId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionSupplementDecision)
+  }
+);}
+
+
+
+
+
+export const getDecideCollisionSupplementMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideCollisionSupplement>>, TError,{id: number;supplementId: number;data: BodyType<CollisionSupplementDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideCollisionSupplement>>, TError,{id: number;supplementId: number;data: BodyType<CollisionSupplementDecision>}, TContext> => {
+
+const mutationKey = ['decideCollisionSupplement'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideCollisionSupplement>>, {id: number;supplementId: number;data: BodyType<CollisionSupplementDecision>}> = (props) => {
+          const {id,supplementId,data} = props ?? {};
+
+          return  decideCollisionSupplement(id,supplementId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideCollisionSupplementMutationResult = NonNullable<Awaited<ReturnType<typeof decideCollisionSupplement>>>
+    export type DecideCollisionSupplementMutationBody = BodyType<CollisionSupplementDecision>
+    export type DecideCollisionSupplementMutationError = ErrorType<Error>
+
+    /**
+ * @summary Approve or deny a pending supplement (Service Manager / Management)
+ */
+export const useDecideCollisionSupplement = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideCollisionSupplement>>, TError,{id: number;supplementId: number;data: BodyType<CollisionSupplementDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decideCollisionSupplement>>,
+        TError,
+        {id: number;supplementId: number;data: BodyType<CollisionSupplementDecision>},
+        TContext
+      > => {
+      return useMutation(getDecideCollisionSupplementMutationOptions(options));
+    }
+
+export const getCreateCollisionSettlementUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/settlements`
+}
+
+/**
+ * @summary Record an insurer or customer-deductible payment against the invoiced split
+ */
+export const createCollisionSettlement = async (id: number,
+    collisionSettlementInput: CollisionSettlementInput, options?: RequestInit): Promise<CollisionSettlement> => {
+
+  return customFetch<CollisionSettlement>(getCreateCollisionSettlementUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionSettlementInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCollisionSettlementMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionSettlement>>, TError,{id: number;data: BodyType<CollisionSettlementInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCollisionSettlement>>, TError,{id: number;data: BodyType<CollisionSettlementInput>}, TContext> => {
+
+const mutationKey = ['createCollisionSettlement'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCollisionSettlement>>, {id: number;data: BodyType<CollisionSettlementInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createCollisionSettlement(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCollisionSettlementMutationResult = NonNullable<Awaited<ReturnType<typeof createCollisionSettlement>>>
+    export type CreateCollisionSettlementMutationBody = BodyType<CollisionSettlementInput>
+    export type CreateCollisionSettlementMutationError = ErrorType<Error>
+
+    /**
+ * @summary Record an insurer or customer-deductible payment against the invoiced split
+ */
+export const useCreateCollisionSettlement = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionSettlement>>, TError,{id: number;data: BodyType<CollisionSettlementInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCollisionSettlement>>,
+        TError,
+        {id: number;data: BodyType<CollisionSettlementInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCollisionSettlementMutationOptions(options));
     }
 
 export const getListPartsUrl = (params?: ListPartsParams,) => {

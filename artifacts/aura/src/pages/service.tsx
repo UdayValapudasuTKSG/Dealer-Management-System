@@ -87,8 +87,10 @@ import {
   History,
   Search,
   Phone,
+  CarFront,
 } from "lucide-react";
 import { DocumentsCard } from "@/components/documents-card";
+import { CollisionTab, CreateClaimDialog } from "@/components/collision-claims";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -151,6 +153,7 @@ const TABS = [
   { key: "bookings", label: "Bookings", icon: Calendar },
   { key: "jobcards", label: "Job Cards", icon: ClipboardList },
   { key: "myjobs", label: "My Jobs", icon: Wrench },
+  { key: "collision", label: "Collision", icon: CarFront },
   { key: "invoices", label: "Invoices", icon: Receipt },
   { key: "coverage", label: "Warranty & AMC", icon: ShieldCheck },
   { key: "history", label: "History", icon: History },
@@ -195,7 +198,12 @@ export default function Service() {
   const isTechnician = (me?.roleName ?? "").toLowerCase().includes("tech");
   // `me` loads async, so keep the tab unset until the user picks one and
   // derive the default from the (eventually loaded) role.
-  const [pickedTab, setTab] = useState<TabKey | null>(null);
+  const [pickedTab, setTab] = useState<TabKey | null>(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    return TABS.some((item) => item.key === requested)
+      ? (requested as TabKey)
+      : null;
+  });
   /* Triage deep link: /service?order=<id> lands on the Bookings tab and
      highlights that repair order. */
   const focusOrderId = useFocusParam("order");
@@ -266,6 +274,7 @@ export default function Service() {
           {tab === "bookings" && <BookingsTab />}
           {tab === "jobcards" && <JobCardsTab />}
           {tab === "myjobs" && <MyJobsTab />}
+          {tab === "collision" && <CollisionTab />}
           {tab === "invoices" && <InvoicesTab />}
           {tab === "coverage" && <CoverageTab />}
           {tab === "history" && <HistoryTab />}
@@ -279,6 +288,7 @@ export default function Service() {
 function HeaderAction({ tab }: { tab: TabKey }) {
   if (tab === "bookings") return <CreateBookingDialog />;
   if (tab === "jobcards") return <CreateJobCardDialog />;
+  if (tab === "collision") return <CreateClaimDialog />;
   if (tab === "coverage") return <CreateCoverageDialog />;
   return null;
 }

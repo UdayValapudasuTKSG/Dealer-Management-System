@@ -380,7 +380,9 @@ export type InvoiceAdjustment = {
   at: string;
 };
 
-export const serviceInvoicesTable = pgTable("service_invoices", {
+export const serviceInvoicesTable = pgTable(
+  "service_invoices",
+  {
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull(),
   serviceOrderId: integer("service_order_id").notNull(),
@@ -418,7 +420,13 @@ export const serviceInvoicesTable = pgTable("service_invoices", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+  },
+  // One invoice per job card — DB-level backstop against concurrent issue
+  // requests (Task 279 review).
+  (t) => [
+    uniqueIndex("service_invoices_job_card_unique").on(t.dealerId, t.jobCardId),
+  ],
+);
 
 export const insertServiceInvoiceSchema = createInsertSchema(
   serviceInvoicesTable,

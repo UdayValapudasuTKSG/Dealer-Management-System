@@ -44,7 +44,7 @@ async function userEmails(userIds: number[]): Promise<Map<number, string>> {
 }
 
 /** In-App (primary) + Email (outbox) fan-out to a set of internal users. */
-async function notifyInternal(opts: {
+export async function notifyInternal(opts: {
   dealerId: number;
   userIds: number[];
   type: Parameters<typeof notifyUser>[0]["type"];

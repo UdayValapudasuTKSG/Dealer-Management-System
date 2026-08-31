@@ -4257,7 +4257,7 @@ export const UploadDealBankLetterBody = zod.object({
 export const UploadDealBankLetterResponse = zod.object({
   "document": zod.object({
   "id": zod.number(),
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote', 'collision_claim']),
   "entityId": zod.number(),
   "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "version": zod.number(),
@@ -6401,6 +6401,524 @@ export const SendCoverageReminderResponse = zod.object({
 })
 
 
+/**
+ * @summary List collision claims (filterable by status, insurer, loss date)
+ */
+export const ListCollisionClaimsQueryParams = zod.object({
+  "status": zod.coerce.string().optional(),
+  "insurer": zod.coerce.string().optional(),
+  "lossFrom": zod.date().optional(),
+  "lossTo": zod.date().optional(),
+  "serviceOrderId": zod.coerce.number().optional()
+})
+
+export const ListCollisionClaimsResponseItem = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "vehicleId": zod.number().nullish(),
+  "lossDate": zod.coerce.date(),
+  "insurerName": zod.string(),
+  "policyNumber": zod.string().nullish(),
+  "claimNumber": zod.string().nullish(),
+  "adjusterName": zod.string().nullish(),
+  "adjusterContact": zod.string().nullish(),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "damageNotes": zod.string().nullish(),
+  "damagePoints": zod.array(zod.object({
+  "zone": zod.enum(['front_bumper', 'hood', 'windshield', 'front_left_fender', 'front_right_fender', 'left_door_front', 'left_door_rear', 'right_door_front', 'right_door_rear', 'left_quarter_panel', 'right_quarter_panel', 'roof', 'rear_glass', 'trunk', 'rear_bumper', 'undercarriage']),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "notes": zod.string().nullish()
+})),
+  "status": zod.enum(['intake', 'estimate_drafted', 'submitted', 'adjuster_review', 'approved', 'parts_ordered', 'in_repair', 'quality_check', 'insurer_signoff', 'invoiced', 'closed', 'denied', 'total_loss']),
+  "initialEstimate": zod.number(),
+  "contestedEstimate": zod.number().nullish(),
+  "approvedEstimate": zod.number().nullish(),
+  "deductible": zod.number(),
+  "totalLossValue": zod.number().nullish(),
+  "outcomeReason": zod.string().nullish(),
+  "pausedSeconds": zod.number(),
+  "pausedAt": zod.coerce.date().nullish(),
+  "serviceInvoiceId": zod.number().nullish(),
+  "insurerDue": zod.number().nullish(),
+  "deductibleDue": zod.number().nullish(),
+  "history": zod.array(zod.object({
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "from": zod.string().nullish(),
+  "to": zod.string().nullish(),
+  "note": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})),
+  "closedAt": zod.coerce.date().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCollisionClaimsResponse = zod.array(ListCollisionClaimsResponseItem)
+
+
+/**
+ * @summary Attach a collision claim to an existing same-dealer repair order
+ */
+
+export const createCollisionClaimBodyInitialEstimateMin = 0;
+
+export const createCollisionClaimBodyDeductibleMin = 0;
+
+
+
+export const CreateCollisionClaimBody = zod.object({
+  "serviceOrderId": zod.number(),
+  "lossDate": zod.coerce.date(),
+  "insurerName": zod.string().min(1),
+  "policyNumber": zod.string().optional(),
+  "claimNumber": zod.string().optional(),
+  "adjusterName": zod.string().optional(),
+  "adjusterContact": zod.string().optional(),
+  "severity": zod.enum(['minor', 'moderate', 'severe']).optional(),
+  "damageNotes": zod.string().optional(),
+  "damagePoints": zod.array(zod.object({
+  "zone": zod.enum(['front_bumper', 'hood', 'windshield', 'front_left_fender', 'front_right_fender', 'left_door_front', 'left_door_rear', 'right_door_front', 'right_door_rear', 'left_quarter_panel', 'right_quarter_panel', 'roof', 'rear_glass', 'trunk', 'rear_bumper', 'undercarriage']),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "notes": zod.string().nullish()
+})).optional(),
+  "initialEstimate": zod.number().min(createCollisionClaimBodyInitialEstimateMin).optional(),
+  "deductible": zod.number().min(createCollisionClaimBodyDeductibleMin).optional()
+})
+
+export const CreateCollisionClaimResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "vehicleId": zod.number().nullish(),
+  "lossDate": zod.coerce.date(),
+  "insurerName": zod.string(),
+  "policyNumber": zod.string().nullish(),
+  "claimNumber": zod.string().nullish(),
+  "adjusterName": zod.string().nullish(),
+  "adjusterContact": zod.string().nullish(),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "damageNotes": zod.string().nullish(),
+  "damagePoints": zod.array(zod.object({
+  "zone": zod.enum(['front_bumper', 'hood', 'windshield', 'front_left_fender', 'front_right_fender', 'left_door_front', 'left_door_rear', 'right_door_front', 'right_door_rear', 'left_quarter_panel', 'right_quarter_panel', 'roof', 'rear_glass', 'trunk', 'rear_bumper', 'undercarriage']),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "notes": zod.string().nullish()
+})),
+  "status": zod.enum(['intake', 'estimate_drafted', 'submitted', 'adjuster_review', 'approved', 'parts_ordered', 'in_repair', 'quality_check', 'insurer_signoff', 'invoiced', 'closed', 'denied', 'total_loss']),
+  "initialEstimate": zod.number(),
+  "contestedEstimate": zod.number().nullish(),
+  "approvedEstimate": zod.number().nullish(),
+  "deductible": zod.number(),
+  "totalLossValue": zod.number().nullish(),
+  "outcomeReason": zod.string().nullish(),
+  "pausedSeconds": zod.number(),
+  "pausedAt": zod.coerce.date().nullish(),
+  "serviceInvoiceId": zod.number().nullish(),
+  "insurerDue": zod.number().nullish(),
+  "deductibleDue": zod.number().nullish(),
+  "history": zod.array(zod.object({
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "from": zod.string().nullish(),
+  "to": zod.string().nullish(),
+  "note": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})),
+  "closedAt": zod.coerce.date().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Claim detail with supplements, settlements and timeline
+ */
+export const GetCollisionClaimParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetCollisionClaimResponse = zod.object({
+  "claim": zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "vehicleId": zod.number().nullish(),
+  "lossDate": zod.coerce.date(),
+  "insurerName": zod.string(),
+  "policyNumber": zod.string().nullish(),
+  "claimNumber": zod.string().nullish(),
+  "adjusterName": zod.string().nullish(),
+  "adjusterContact": zod.string().nullish(),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "damageNotes": zod.string().nullish(),
+  "damagePoints": zod.array(zod.object({
+  "zone": zod.enum(['front_bumper', 'hood', 'windshield', 'front_left_fender', 'front_right_fender', 'left_door_front', 'left_door_rear', 'right_door_front', 'right_door_rear', 'left_quarter_panel', 'right_quarter_panel', 'roof', 'rear_glass', 'trunk', 'rear_bumper', 'undercarriage']),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "notes": zod.string().nullish()
+})),
+  "status": zod.enum(['intake', 'estimate_drafted', 'submitted', 'adjuster_review', 'approved', 'parts_ordered', 'in_repair', 'quality_check', 'insurer_signoff', 'invoiced', 'closed', 'denied', 'total_loss']),
+  "initialEstimate": zod.number(),
+  "contestedEstimate": zod.number().nullish(),
+  "approvedEstimate": zod.number().nullish(),
+  "deductible": zod.number(),
+  "totalLossValue": zod.number().nullish(),
+  "outcomeReason": zod.string().nullish(),
+  "pausedSeconds": zod.number(),
+  "pausedAt": zod.coerce.date().nullish(),
+  "serviceInvoiceId": zod.number().nullish(),
+  "insurerDue": zod.number().nullish(),
+  "deductibleDue": zod.number().nullish(),
+  "history": zod.array(zod.object({
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "from": zod.string().nullish(),
+  "to": zod.string().nullish(),
+  "note": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})),
+  "closedAt": zod.coerce.date().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+}),
+  "supplements": zod.array(zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'denied']),
+  "decisionNote": zod.string().nullish(),
+  "requestedBy": zod.string().nullish(),
+  "decidedBy": zod.string().nullish(),
+  "decidedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "settlements": zod.array(zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "payer": zod.enum(['insurer', 'customer']),
+  "amount": zod.number(),
+  "method": zod.string().nullish(),
+  "reference": zod.string().nullish(),
+  "recordedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})),
+  "approvedTotal": zod.number().nullable().describe('Approved estimate plus approved supplements (null until an approved estimate is recorded)'),
+  "insurerPaid": zod.number(),
+  "deductiblePaid": zod.number(),
+  "cycleSeconds": zod.number().describe('Elapsed claim cycle time excluding backorder pauses')
+})
+
+
+/**
+ * @summary Update claim details, damage evidence and estimate values
+ */
+export const UpdateCollisionClaimParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const updateCollisionClaimBodyInitialEstimateMin = 0;
+
+export const updateCollisionClaimBodyContestedEstimateMin = 0;
+
+export const updateCollisionClaimBodyApprovedEstimateMin = 0;
+
+export const updateCollisionClaimBodyDeductibleMin = 0;
+
+export const updateCollisionClaimBodyTotalLossValueMin = 0;
+
+
+
+export const UpdateCollisionClaimBody = zod.object({
+  "lossDate": zod.coerce.date().optional(),
+  "insurerName": zod.string().min(1).optional(),
+  "policyNumber": zod.string().nullish(),
+  "claimNumber": zod.string().nullish(),
+  "adjusterName": zod.string().nullish(),
+  "adjusterContact": zod.string().nullish(),
+  "severity": zod.enum(['minor', 'moderate', 'severe']).optional(),
+  "damageNotes": zod.string().nullish(),
+  "damagePoints": zod.array(zod.object({
+  "zone": zod.enum(['front_bumper', 'hood', 'windshield', 'front_left_fender', 'front_right_fender', 'left_door_front', 'left_door_rear', 'right_door_front', 'right_door_rear', 'left_quarter_panel', 'right_quarter_panel', 'roof', 'rear_glass', 'trunk', 'rear_bumper', 'undercarriage']),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "notes": zod.string().nullish()
+})).optional(),
+  "initialEstimate": zod.number().min(updateCollisionClaimBodyInitialEstimateMin).optional(),
+  "contestedEstimate": zod.number().min(updateCollisionClaimBodyContestedEstimateMin).nullish(),
+  "approvedEstimate": zod.number().min(updateCollisionClaimBodyApprovedEstimateMin).nullish(),
+  "deductible": zod.number().min(updateCollisionClaimBodyDeductibleMin).optional(),
+  "totalLossValue": zod.number().min(updateCollisionClaimBodyTotalLossValueMin).nullish()
+})
+
+export const UpdateCollisionClaimResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "vehicleId": zod.number().nullish(),
+  "lossDate": zod.coerce.date(),
+  "insurerName": zod.string(),
+  "policyNumber": zod.string().nullish(),
+  "claimNumber": zod.string().nullish(),
+  "adjusterName": zod.string().nullish(),
+  "adjusterContact": zod.string().nullish(),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "damageNotes": zod.string().nullish(),
+  "damagePoints": zod.array(zod.object({
+  "zone": zod.enum(['front_bumper', 'hood', 'windshield', 'front_left_fender', 'front_right_fender', 'left_door_front', 'left_door_rear', 'right_door_front', 'right_door_rear', 'left_quarter_panel', 'right_quarter_panel', 'roof', 'rear_glass', 'trunk', 'rear_bumper', 'undercarriage']),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "notes": zod.string().nullish()
+})),
+  "status": zod.enum(['intake', 'estimate_drafted', 'submitted', 'adjuster_review', 'approved', 'parts_ordered', 'in_repair', 'quality_check', 'insurer_signoff', 'invoiced', 'closed', 'denied', 'total_loss']),
+  "initialEstimate": zod.number(),
+  "contestedEstimate": zod.number().nullish(),
+  "approvedEstimate": zod.number().nullish(),
+  "deductible": zod.number(),
+  "totalLossValue": zod.number().nullish(),
+  "outcomeReason": zod.string().nullish(),
+  "pausedSeconds": zod.number(),
+  "pausedAt": zod.coerce.date().nullish(),
+  "serviceInvoiceId": zod.number().nullish(),
+  "insurerDue": zod.number().nullish(),
+  "deductibleDue": zod.number().nullish(),
+  "history": zod.array(zod.object({
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "from": zod.string().nullish(),
+  "to": zod.string().nullish(),
+  "note": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})),
+  "closedAt": zod.coerce.date().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Move a claim one step through the workflow (or record a denied / total-loss outcome)
+ */
+export const AdvanceCollisionClaimParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const advanceCollisionClaimBodyTotalLossValueMin = 0;
+
+
+
+export const AdvanceCollisionClaimBody = zod.object({
+  "targetStatus": zod.enum(['estimate_drafted', 'submitted', 'adjuster_review', 'approved', 'parts_ordered', 'in_repair', 'quality_check', 'insurer_signoff', 'invoiced', 'closed', 'denied', 'total_loss']),
+  "note": zod.string().optional(),
+  "totalLossValue": zod.number().min(advanceCollisionClaimBodyTotalLossValueMin).optional()
+})
+
+export const AdvanceCollisionClaimResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "vehicleId": zod.number().nullish(),
+  "lossDate": zod.coerce.date(),
+  "insurerName": zod.string(),
+  "policyNumber": zod.string().nullish(),
+  "claimNumber": zod.string().nullish(),
+  "adjusterName": zod.string().nullish(),
+  "adjusterContact": zod.string().nullish(),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "damageNotes": zod.string().nullish(),
+  "damagePoints": zod.array(zod.object({
+  "zone": zod.enum(['front_bumper', 'hood', 'windshield', 'front_left_fender', 'front_right_fender', 'left_door_front', 'left_door_rear', 'right_door_front', 'right_door_rear', 'left_quarter_panel', 'right_quarter_panel', 'roof', 'rear_glass', 'trunk', 'rear_bumper', 'undercarriage']),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "notes": zod.string().nullish()
+})),
+  "status": zod.enum(['intake', 'estimate_drafted', 'submitted', 'adjuster_review', 'approved', 'parts_ordered', 'in_repair', 'quality_check', 'insurer_signoff', 'invoiced', 'closed', 'denied', 'total_loss']),
+  "initialEstimate": zod.number(),
+  "contestedEstimate": zod.number().nullish(),
+  "approvedEstimate": zod.number().nullish(),
+  "deductible": zod.number(),
+  "totalLossValue": zod.number().nullish(),
+  "outcomeReason": zod.string().nullish(),
+  "pausedSeconds": zod.number(),
+  "pausedAt": zod.coerce.date().nullish(),
+  "serviceInvoiceId": zod.number().nullish(),
+  "insurerDue": zod.number().nullish(),
+  "deductibleDue": zod.number().nullish(),
+  "history": zod.array(zod.object({
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "from": zod.string().nullish(),
+  "to": zod.string().nullish(),
+  "note": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})),
+  "closedAt": zod.coerce.date().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Resume cycle-time measurement after a backorder pause
+ */
+export const ResumeCollisionClaimParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ResumeCollisionClaimResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "vehicleId": zod.number().nullish(),
+  "lossDate": zod.coerce.date(),
+  "insurerName": zod.string(),
+  "policyNumber": zod.string().nullish(),
+  "claimNumber": zod.string().nullish(),
+  "adjusterName": zod.string().nullish(),
+  "adjusterContact": zod.string().nullish(),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "damageNotes": zod.string().nullish(),
+  "damagePoints": zod.array(zod.object({
+  "zone": zod.enum(['front_bumper', 'hood', 'windshield', 'front_left_fender', 'front_right_fender', 'left_door_front', 'left_door_rear', 'right_door_front', 'right_door_rear', 'left_quarter_panel', 'right_quarter_panel', 'roof', 'rear_glass', 'trunk', 'rear_bumper', 'undercarriage']),
+  "severity": zod.enum(['minor', 'moderate', 'severe']),
+  "notes": zod.string().nullish()
+})),
+  "status": zod.enum(['intake', 'estimate_drafted', 'submitted', 'adjuster_review', 'approved', 'parts_ordered', 'in_repair', 'quality_check', 'insurer_signoff', 'invoiced', 'closed', 'denied', 'total_loss']),
+  "initialEstimate": zod.number(),
+  "contestedEstimate": zod.number().nullish(),
+  "approvedEstimate": zod.number().nullish(),
+  "deductible": zod.number(),
+  "totalLossValue": zod.number().nullish(),
+  "outcomeReason": zod.string().nullish(),
+  "pausedSeconds": zod.number(),
+  "pausedAt": zod.coerce.date().nullish(),
+  "serviceInvoiceId": zod.number().nullish(),
+  "insurerDue": zod.number().nullish(),
+  "deductibleDue": zod.number().nullish(),
+  "history": zod.array(zod.object({
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "from": zod.string().nullish(),
+  "to": zod.string().nullish(),
+  "note": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})),
+  "closedAt": zod.coerce.date().nullish(),
+  "createdBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Submit an itemized supplement for hidden damage
+ */
+export const CreateCollisionSupplementParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createCollisionSupplementBodyDescriptionMin = 3;
+
+export const createCollisionSupplementBodyAmountMin = 0.01;
+
+
+
+export const CreateCollisionSupplementBody = zod.object({
+  "description": zod.string().min(createCollisionSupplementBodyDescriptionMin),
+  "amount": zod.number().min(createCollisionSupplementBodyAmountMin)
+})
+
+export const CreateCollisionSupplementResponse = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'denied']),
+  "decisionNote": zod.string().nullish(),
+  "requestedBy": zod.string().nullish(),
+  "decidedBy": zod.string().nullish(),
+  "decidedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Approve or deny a pending supplement (Service Manager / Management)
+ */
+export const DecideCollisionSupplementParams = zod.object({
+  "id": zod.coerce.number(),
+  "supplementId": zod.coerce.number()
+})
+
+export const DecideCollisionSupplementBody = zod.object({
+  "action": zod.enum(['approve', 'deny']),
+  "note": zod.string().optional()
+})
+
+export const DecideCollisionSupplementResponse = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "status": zod.enum(['pending', 'approved', 'denied']),
+  "decisionNote": zod.string().nullish(),
+  "requestedBy": zod.string().nullish(),
+  "decidedBy": zod.string().nullish(),
+  "decidedAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Record an insurer or customer-deductible payment against the invoiced split
+ */
+export const CreateCollisionSettlementParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createCollisionSettlementBodyAmountMin = 0.01;
+
+
+
+export const CreateCollisionSettlementBody = zod.object({
+  "payer": zod.enum(['insurer', 'customer']),
+  "amount": zod.number().min(createCollisionSettlementBodyAmountMin),
+  "method": zod.string().optional(),
+  "reference": zod.string().optional()
+})
+
+export const CreateCollisionSettlementResponse = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "payer": zod.enum(['insurer', 'customer']),
+  "amount": zod.number(),
+  "method": zod.string().nullish(),
+  "reference": zod.string().nullish(),
+  "recordedBy": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
 export const ListPartsQueryParams = zod.object({
   "search": zod.coerce.string().optional(),
   "lowStock": zod.coerce.string().optional()
@@ -7432,7 +7950,7 @@ export const GetSentimentAnalysisResponse = zod.object({
  * @summary Aggregated report over live data for a date range
  */
 export const GetReportQueryParams = zod.object({
-  "type": zod.enum(['sales_pipeline', 'sales_performance', 'inventory_aging', 'finance_applications', 'service_workshop', 'parts_inventory', 'revenue_receivables', 'tax_gra', 'delivery_operations', 'agent_activity']),
+  "type": zod.enum(['sales_pipeline', 'sales_performance', 'inventory_aging', 'finance_applications', 'service_workshop', 'parts_inventory', 'revenue_receivables', 'tax_gra', 'delivery_operations', 'agent_activity', 'collision_claims']),
   "from": zod.coerce.string().optional(),
   "to": zod.coerce.string().optional(),
   "divisionId": zod.coerce.number().optional(),
@@ -11140,13 +11658,13 @@ export const CreateCommNoteResponse = zod.object({
  * @summary List documents for a lead or vehicle (all versions, newest first)
  */
 export const ListDocumentsQueryParams = zod.object({
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote', 'collision_claim']),
   "entityId": zod.coerce.number()
 })
 
 export const ListDocumentsResponseItem = zod.object({
   "id": zod.number(),
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote', 'collision_claim']),
   "entityId": zod.number(),
   "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "version": zod.number(),
@@ -11182,7 +11700,7 @@ export const createDocumentBodySizeBytesMin = 0;
 
 
 export const CreateDocumentBody = zod.object({
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote', 'collision_claim']),
   "entityId": zod.number(),
   "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "fileName": zod.string().min(1),
@@ -11194,7 +11712,7 @@ export const CreateDocumentBody = zod.object({
 
 export const CreateDocumentResponse = zod.object({
   "id": zod.number(),
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote', 'collision_claim']),
   "entityId": zod.number(),
   "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "version": zod.number(),
@@ -11245,7 +11763,7 @@ export const ReviewDocumentExtractionBody = zod.object({
 
 export const ReviewDocumentExtractionResponse = zod.object({
   "id": zod.number(),
-  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote']),
+  "entityType": zod.enum(['lead', 'vehicle', 'delivery', 'job_card', 'quote', 'collision_claim']),
   "entityId": zod.number(),
   "type": zod.enum(['id_document', 'financing', 'test_drive', 'insurance', 'registration', 'customs', 'invoice', 'quote', 'signed_handover', 'other']),
   "version": zod.number(),

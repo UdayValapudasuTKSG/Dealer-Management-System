@@ -20,4 +20,5 @@ export const GetReportType = {
   tax_gra: 'tax_gra',
   delivery_operations: 'delivery_operations',
   agent_activity: 'agent_activity',
+  collision_claims: 'collision_claims',
 } as const;

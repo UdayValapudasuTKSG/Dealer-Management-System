@@ -27,6 +27,9 @@ import {
   usersTable,
   auditLogsTable,
   activityTable,
+  collisionClaimsTable,
+  collisionSupplementsTable,
+  collisionSettlementsTable,
 } from "@workspace/db";
 import { GetReportResponse } from "@workspace/api-zod";
 import {
@@ -67,6 +70,7 @@ const REPORT_MODULE: Record<string, string> = {
   tax_gra: "gra",
   delivery_operations: "deliveries",
   agent_activity: "settings",
+  collision_claims: "service",
 };
 
 /** Minimum persona tier per type (spec R5.1 visibility column). */
@@ -81,6 +85,7 @@ const REPORT_MIN_TIER: Record<string, "advisor" | "manager"> = {
   tax_gra: "manager",
   delivery_operations: "advisor",
   agent_activity: "manager",
+  collision_claims: "manager",
 };
 
 const pct = (n: number) => `${Math.round(n * 10) / 10}%`;
@@ -1135,6 +1140,206 @@ async function redactReportPayload(
   };
 }
 
+/* 11 — collision_claims: cycle time by insurer, supplements, split balances */
+const collisionClaims: Builder = async (ctx) => {
+  const { from, to, dealerId, gyd } = ctx;
+  const [claims, supplements, settlements] = await Promise.all([
+    db
+      .select()
+      .from(collisionClaimsTable)
+      .where(eq(collisionClaimsTable.dealerId, dealerId)),
+    db
+      .select()
+      .from(collisionSupplementsTable)
+      .where(eq(collisionSupplementsTable.dealerId, dealerId)),
+    db
+      .select()
+      .from(collisionSettlementsTable)
+      .where(eq(collisionSettlementsTable.dealerId, dealerId)),
+  ]);
+  const inWindow = claims.filter((c) => inRange(c.createdAt, from, to));
+  const claimIds = new Set(inWindow.map((c) => c.id));
+  const supps = supplements.filter((s) => claimIds.has(s.claimId));
+  const paidByClaim = new Map<number, { insurer: number; customer: number }>();
+  for (const s of settlements) {
+    const e = paidByClaim.get(s.claimId) ?? { insurer: 0, customer: 0 };
+    if (s.payer === "insurer") e.insurer += s.amount;
+    else e.customer += s.amount;
+    paidByClaim.set(s.claimId, e);
+  }
+  /** Cycle days excluding backorder pauses (open pause segments included). */
+  const cycleDays = (c: (typeof claims)[number]) => {
+    const end = c.closedAt ? new Date(c.closedAt) : new Date();
+    let paused = c.pausedSeconds;
+    if (c.pausedAt) {
+      paused += Math.max(
+        0,
+        Math.floor((end.getTime() - new Date(c.pausedAt).getTime()) / 1000),
+      );
+    }
+    return Math.max(
+      0,
+      (end.getTime() - new Date(c.createdAt).getTime()) / 86400000 -
+        paused / 86400,
+    );
+  };
+  const closed = inWindow.filter((c) => c.status === "closed");
+  const totalLoss = inWindow.filter((c) => c.status === "total_loss");
+  const denied = inWindow.filter((c) => c.status === "denied");
+  const decidedOutcomes = closed.length + totalLoss.length + denied.length;
+  const decidedSupps = supps.filter((s) => s.status !== "pending");
+  const approvedSupps = supps.filter((s) => s.status === "approved");
+  const suppTurnaroundDays =
+    decidedSupps.length > 0
+      ? decidedSupps.reduce(
+          (s, x) =>
+            s +
+            (x.decidedAt
+              ? (new Date(x.decidedAt).getTime() -
+                  new Date(x.createdAt).getTime()) /
+                86400000
+              : 0),
+          0,
+        ) / decidedSupps.length
+      : 0;
+  const openBalances = inWindow.map((c) => {
+    const paid = paidByClaim.get(c.id) ?? { insurer: 0, customer: 0 };
+    return {
+      claim: c,
+      insurerOpen: Math.max(0, (c.insurerDue ?? 0) - paid.insurer),
+      deductibleOpen: Math.max(0, (c.deductibleDue ?? 0) - paid.customer),
+    };
+  });
+  const insurerOpenTotal = openBalances.reduce((s, b) => s + b.insurerOpen, 0);
+  const deductibleOpenTotal = openBalances.reduce(
+    (s, b) => s + b.deductibleOpen,
+    0,
+  );
+  const pausedDays = inWindow.reduce((s, c) => {
+    let p = c.pausedSeconds;
+    if (c.pausedAt) {
+      p += Math.max(
+        0,
+        Math.floor((Date.now() - new Date(c.pausedAt).getTime()) / 1000),
+      );
+    }
+    return s + p / 86400;
+  }, 0);
+
+  type InsurerAgg = {
+    claims: number;
+    closed: number;
+    closedDays: number;
+    totalLoss: number;
+    suppTotal: number;
+    suppApproved: number;
+    insurerOpen: number;
+    deductibleOpen: number;
+  };
+  const byInsurer = new Map<string, InsurerAgg>();
+  for (const b of openBalances) {
+    const c = b.claim;
+    const key = c.insurerName;
+    const e =
+      byInsurer.get(key) ??
+      ({
+        claims: 0,
+        closed: 0,
+        closedDays: 0,
+        totalLoss: 0,
+        suppTotal: 0,
+        suppApproved: 0,
+        insurerOpen: 0,
+        deductibleOpen: 0,
+      } satisfies InsurerAgg);
+    e.claims += 1;
+    if (c.status === "closed") {
+      e.closed += 1;
+      e.closedDays += cycleDays(c);
+    }
+    if (c.status === "total_loss") e.totalLoss += 1;
+    const cs = supps.filter((s) => s.claimId === c.id && s.status !== "pending");
+    e.suppTotal += cs.length;
+    e.suppApproved += cs.filter((s) => s.status === "approved").length;
+    e.insurerOpen += b.insurerOpen;
+    e.deductibleOpen += b.deductibleOpen;
+    byInsurer.set(key, e);
+  }
+
+  return {
+    label: "Collision Claims",
+    kpis: [
+      {
+        label: "Claims in window",
+        value: String(inWindow.length),
+        sub: `${inWindow.length - decidedOutcomes} still in progress`,
+      },
+      {
+        label: "Avg claim duration",
+        value:
+          closed.length > 0
+            ? `${(closed.reduce((s, c) => s + cycleDays(c), 0) / closed.length).toFixed(1)} days`
+            : "—",
+        sub: `${pausedDays.toFixed(1)} days paused on backorders`,
+      },
+      {
+        label: "Supplement approvals",
+        value:
+          decidedSupps.length > 0
+            ? pct((approvedSupps.length / decidedSupps.length) * 100)
+            : "—",
+        sub:
+          decidedSupps.length > 0
+            ? `${suppTurnaroundDays.toFixed(1)} day turnaround`
+            : `${supps.length} submitted`,
+      },
+      {
+        label: "Total-loss rate",
+        value:
+          decidedOutcomes > 0
+            ? pct((totalLoss.length / decidedOutcomes) * 100)
+            : "—",
+        sub: `${closed.length} repaired · ${denied.length} denied`,
+      },
+      {
+        label: "Open insurer balance",
+        value: gyd(insurerOpenTotal),
+        sub: `${gyd(deductibleOpenTotal)} deductibles outstanding`,
+      },
+    ],
+    chart: {
+      kind: "bar",
+      valueLabel: "Avg days to close",
+      points: [...byInsurer.entries()].map(([name, e]) => ({
+        label: name,
+        value: e.closed > 0 ? Math.round((e.closedDays / e.closed) * 10) / 10 : 0,
+      })),
+    },
+    table: {
+      columns: [
+        "Insurer",
+        "Claims",
+        "Avg days",
+        "Supplement approval",
+        "Total-loss rate",
+        "Open insurer balance",
+        "Open deductibles",
+      ],
+      rows: [...byInsurer.entries()]
+        .sort((a, b) => b[1].claims - a[1].claims)
+        .map(([name, e]) => [
+          name,
+          String(e.claims),
+          e.closed > 0 ? (e.closedDays / e.closed).toFixed(1) : "—",
+          e.suppTotal > 0 ? pct((e.suppApproved / e.suppTotal) * 100) : "—",
+          pct((e.totalLoss / Math.max(1, e.claims)) * 100),
+          gyd(e.insurerOpen),
+          gyd(e.deductibleOpen),
+        ]),
+    },
+  };
+};
+
 const builders: Record<string, Builder> = {
   sales_pipeline: salesPipeline,
   sales_performance: salesPerformance,
@@ -1146,6 +1351,7 @@ const builders: Record<string, Builder> = {
   tax_gra: taxGra,
   delivery_operations: deliveryOperations,
   agent_activity: agentActivity,
+  collision_claims: collisionClaims,
 };
 
 /* ------------------------------------------------------------------ */

@@ -3964,6 +3964,326 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+
+  /collision-claims:
+    get:
+      operationId: listCollisionClaims
+      tags: [service]
+      summary: List collision claims (filterable by status, insurer, loss date)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: insurer
+          in: query
+          required: false
+          schema: { type: string }
+        - name: lossFrom
+          in: query
+          required: false
+          schema: { type: string, format: date }
+        - name: lossTo
+          in: query
+          required: false
+          schema: { type: string, format: date }
+        - name: serviceOrderId
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: List of collision claims
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CollisionClaim"
+    post:
+      operationId: createCollisionClaim
+      tags: [service]
+      summary: Attach a collision claim to an existing same-dealer repair order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollisionClaimInput"
+      responses:
+        "201":
+          description: Created claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollisionClaim"
+        "404":
+          description: Repair order not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Repair order already has a claim or duplicate insurer claim number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid claim input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /collision-claims/{id}:
+    get:
+      operationId: getCollisionClaim
+      tags: [service]
+      summary: Claim detail with supplements, settlements and timeline
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Claim detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollisionClaimDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateCollisionClaim
+      tags: [service]
+      summary: Update claim details, damage evidence and estimate values
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollisionClaimUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollisionClaim"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Duplicate insurer claim number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Claim is closed or values invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /collision-claims/{id}/advance:
+    post:
+      operationId: advanceCollisionClaim
+      tags: [service]
+      summary: Move a claim one step through the workflow (or record a denied / total-loss outcome)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollisionClaimAdvanceBody"
+      responses:
+        "200":
+          description: Advanced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollisionClaim"
+        "403":
+          description: Decision transitions need a Service Manager / Management sign-off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Non-adjacent transition or unmet requirements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollisionClaimAdvanceUnmet"
+  /collision-claims/{id}/resume:
+    post:
+      operationId: resumeCollisionClaim
+      tags: [service]
+      summary: Resume cycle-time measurement after a backorder pause
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Resumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollisionClaim"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Claim is not paused
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /collision-claims/{id}/supplements:
+    post:
+      operationId: createCollisionSupplement
+      tags: [service]
+      summary: Submit an itemized supplement for hidden damage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollisionSupplementInput"
+      responses:
+        "201":
+          description: Supplement submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollisionSupplement"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Claim state does not accept supplements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /collision-claims/{id}/supplements/{supplementId}/decision:
+    post:
+      operationId: decideCollisionSupplement
+      tags: [service]
+      summary: Approve or deny a pending supplement (Service Manager / Management)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: supplementId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollisionSupplementDecision"
+      responses:
+        "200":
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollisionSupplement"
+        "403":
+          description: Not allowed to decide supplements
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Supplement already decided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /collision-claims/{id}/settlements:
+    post:
+      operationId: createCollisionSettlement
+      tags: [service]
+      summary: Record an insurer or customer-deductible payment against the invoiced split
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollisionSettlementInput"
+      responses:
+        "201":
+          description: Settlement recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollisionSettlement"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Claim not invoiced yet or amount exceeds the remaining balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /parts:
     get:
       operationId: listParts
@@ -4866,6 +5186,7 @@ paths:
               - tax_gra
               - delivery_operations
               - agent_activity
+              - collision_claims
         - name: from
           in: query
           required: false
@@ -7530,7 +7851,7 @@ paths:
         - name: entityType
           in: query
           required: true
-          schema: { type: string, enum: [lead, vehicle, delivery, job_card, quote] }
+          schema: { type: string, enum: [lead, vehicle, delivery, job_card, quote, collision_claim] }
         - name: entityId
           in: query
           required: true
@@ -9886,7 +10207,7 @@ components:
         ]
       properties:
         id: { type: integer }
-        entityType: { type: string, enum: [lead, vehicle, delivery, job_card, quote] }
+        entityType: { type: string, enum: [lead, vehicle, delivery, job_card, quote, collision_claim] }
         entityId: { type: integer }
         type:
           type: string
@@ -9923,7 +10244,7 @@ components:
       type: object
       required: [entityType, entityId, type, fileName, storageKey, mimeType, sizeBytes]
       properties:
-        entityType: { type: string, enum: [lead, vehicle, delivery, job_card, quote] }
+        entityType: { type: string, enum: [lead, vehicle, delivery, job_card, quote, collision_claim] }
         entityId: { type: integer }
         type:
           type: string
@@ -11681,6 +12002,191 @@ components:
       properties:
         amount: { type: number }
         reason: { type: string, minLength: 3 }
+
+    CollisionDamagePoint:
+      type: object
+      required: [zone, severity]
+      properties:
+        zone:
+          type: string
+          enum: [front_bumper, hood, windshield, front_left_fender, front_right_fender, left_door_front, left_door_rear, right_door_front, right_door_rear, left_quarter_panel, right_quarter_panel, roof, rear_glass, trunk, rear_bumper, undercarriage]
+        severity: { type: string, enum: [minor, moderate, severe] }
+        notes: { type: ["string", "null"] }
+    CollisionClaimEvent:
+      type: object
+      required: [kind, byName, at]
+      properties:
+        kind: { type: string, enum: [created, status, estimate, supplement, payment, pause, resume, note] }
+        from: { type: ["string", "null"] }
+        to: { type: ["string", "null"] }
+        note: { type: ["string", "null"] }
+        amount: { type: ["number", "null"] }
+        byUserId: { type: ["integer", "null"] }
+        byName: { type: string }
+        at: { type: string }
+    CollisionClaim:
+      type: object
+      required: [id, serviceOrderId, vehicleInfo, lossDate, insurerName, severity, damagePoints, status, initialEstimate, deductible, pausedSeconds, history, createdAt]
+      properties:
+        id: { type: integer }
+        serviceOrderId: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        vehicleInfo: { type: string }
+        vehicleId: { type: ["integer", "null"] }
+        lossDate: { type: string, format: date }
+        insurerName: { type: string }
+        policyNumber: { type: ["string", "null"] }
+        claimNumber: { type: ["string", "null"] }
+        adjusterName: { type: ["string", "null"] }
+        adjusterContact: { type: ["string", "null"] }
+        severity: { type: string, enum: [minor, moderate, severe] }
+        damageNotes: { type: ["string", "null"] }
+        damagePoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/CollisionDamagePoint"
+        status:
+          type: string
+          enum: [intake, estimate_drafted, submitted, adjuster_review, approved, parts_ordered, in_repair, quality_check, insurer_signoff, invoiced, closed, denied, total_loss]
+        initialEstimate: { type: number }
+        contestedEstimate: { type: ["number", "null"] }
+        approvedEstimate: { type: ["number", "null"] }
+        deductible: { type: number }
+        totalLossValue: { type: ["number", "null"] }
+        outcomeReason: { type: ["string", "null"] }
+        pausedSeconds: { type: integer }
+        pausedAt: { type: ["string", "null"], format: date-time }
+        serviceInvoiceId: { type: ["integer", "null"] }
+        insurerDue: { type: ["number", "null"] }
+        deductibleDue: { type: ["number", "null"] }
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/CollisionClaimEvent"
+        closedAt: { type: ["string", "null"], format: date-time }
+        createdBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    CollisionClaimInput:
+      type: object
+      required: [serviceOrderId, lossDate, insurerName]
+      properties:
+        serviceOrderId: { type: integer }
+        lossDate: { type: string, format: date }
+        insurerName: { type: string, minLength: 1 }
+        policyNumber: { type: string }
+        claimNumber: { type: string }
+        adjusterName: { type: string }
+        adjusterContact: { type: string }
+        severity: { type: string, enum: [minor, moderate, severe] }
+        damageNotes: { type: string }
+        damagePoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/CollisionDamagePoint"
+        initialEstimate: { type: number, minimum: 0 }
+        deductible: { type: number, minimum: 0 }
+    CollisionClaimUpdate:
+      type: object
+      properties:
+        lossDate: { type: string, format: date }
+        insurerName: { type: string, minLength: 1 }
+        policyNumber: { type: ["string", "null"] }
+        claimNumber: { type: ["string", "null"] }
+        adjusterName: { type: ["string", "null"] }
+        adjusterContact: { type: ["string", "null"] }
+        severity: { type: string, enum: [minor, moderate, severe] }
+        damageNotes: { type: ["string", "null"] }
+        damagePoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/CollisionDamagePoint"
+        initialEstimate: { type: number, minimum: 0 }
+        contestedEstimate: { type: ["number", "null"], minimum: 0 }
+        approvedEstimate: { type: ["number", "null"], minimum: 0 }
+        deductible: { type: number, minimum: 0 }
+        totalLossValue: { type: ["number", "null"], minimum: 0 }
+    CollisionClaimAdvanceBody:
+      type: object
+      required: [targetStatus]
+      properties:
+        targetStatus:
+          type: string
+          enum: [estimate_drafted, submitted, adjuster_review, approved, parts_ordered, in_repair, quality_check, insurer_signoff, invoiced, closed, denied, total_loss]
+        note: { type: string }
+        totalLossValue: { type: number, minimum: 0 }
+    CollisionClaimAdvanceUnmet:
+      type: object
+      required: [unmet]
+      properties:
+        unmet:
+          type: array
+          items: { type: string }
+    CollisionSupplement:
+      type: object
+      required: [id, claimId, description, amount, status, createdAt]
+      properties:
+        id: { type: integer }
+        claimId: { type: integer }
+        description: { type: string }
+        amount: { type: number }
+        status: { type: string, enum: [pending, approved, denied] }
+        decisionNote: { type: ["string", "null"] }
+        requestedBy: { type: ["string", "null"] }
+        decidedBy: { type: ["string", "null"] }
+        decidedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    CollisionSupplementInput:
+      type: object
+      required: [description, amount]
+      properties:
+        description: { type: string, minLength: 3 }
+        amount: { type: number, minimum: 0.01 }
+    CollisionSupplementDecision:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [approve, deny] }
+        note: { type: string }
+    CollisionSettlement:
+      type: object
+      required: [id, claimId, payer, amount, createdAt]
+      properties:
+        id: { type: integer }
+        claimId: { type: integer }
+        payer: { type: string, enum: [insurer, customer] }
+        amount: { type: number }
+        method: { type: ["string", "null"] }
+        reference: { type: ["string", "null"] }
+        recordedBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+    CollisionSettlementInput:
+      type: object
+      required: [payer, amount]
+      properties:
+        payer: { type: string, enum: [insurer, customer] }
+        amount: { type: number, minimum: 0.01 }
+        method: { type: string }
+        reference: { type: string }
+    CollisionClaimDetail:
+      type: object
+      required: [claim, supplements, settlements, approvedTotal, insurerPaid, deductiblePaid, cycleSeconds]
+      properties:
+        claim:
+          $ref: "#/components/schemas/CollisionClaim"
+        supplements:
+          type: array
+          items:
+            $ref: "#/components/schemas/CollisionSupplement"
+        settlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/CollisionSettlement"
+        approvedTotal: { type: ["number", "null"], description: "Approved estimate plus approved supplements (null until an approved estimate is recorded)" }
+        insurerPaid: { type: number }
+        deductiblePaid: { type: number }
+        cycleSeconds: { type: integer, description: "Elapsed claim cycle time excluding backorder pauses" }
+
     ServiceSettings:
       type: object
       required: [serviceIntervalKm, lateSurchargeFee, summaryCadence, defaultJobHours, techWorkHoursPerDay, leadSourceReportEnabled, leadSourceReportSendTime]

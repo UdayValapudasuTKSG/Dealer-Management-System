@@ -15,4 +15,5 @@ export const DocumentInputEntityType = {
   delivery: 'delivery',
   job_card: 'job_card',
   quote: 'quote',
+  collision_claim: 'collision_claim',
 } as const;
