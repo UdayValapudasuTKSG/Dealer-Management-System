@@ -5033,6 +5033,72 @@ export const ListOutstandingBalancesResponseItem = zod.object({
 export const ListOutstandingBalancesResponse = zod.array(ListOutstandingBalancesResponseItem)
 
 
+/**
+ * Every distinct normalized make/model in dealership inventory, joined with its GL code mapping (missing until Finance assigns one). Orphan mappings whose model left inventory are included with vehicleCount 0.
+ * @summary Vehicle model GL code mappings for the active dealership
+ */
+export const ListVehicleModelGlCodesResponse = zod.object({
+  "models": zod.array(zod.object({
+  "make": zod.string(),
+  "model": zod.string(),
+  "makeKey": zod.string(),
+  "modelKey": zod.string(),
+  "vehicleCount": zod.number(),
+  "glCode": zod.string().nullish(),
+  "accountName": zod.string().nullish(),
+  "status": zod.enum(['configured', 'missing']),
+  "erpnext": zod.enum(['verified', 'invalid', 'unchecked', 'not_connected']),
+  "erpnextCheckedAt": zod.coerce.date().nullish(),
+  "updatedBy": zod.string().nullish(),
+  "updatedAt": zod.coerce.date().nullish()
+})),
+  "erpnextConnected": zod.boolean()
+})
+
+
+/**
+ * @summary Create or update the GL code for one normalized make/model
+ */
+export const UpsertVehicleModelGlCodeBody = zod.object({
+  "make": zod.string(),
+  "model": zod.string(),
+  "glCode": zod.string(),
+  "accountName": zod.string().nullish()
+})
+
+export const UpsertVehicleModelGlCodeResponse = zod.object({
+  "make": zod.string(),
+  "model": zod.string(),
+  "makeKey": zod.string(),
+  "modelKey": zod.string(),
+  "vehicleCount": zod.number(),
+  "glCode": zod.string().nullish(),
+  "accountName": zod.string().nullish(),
+  "status": zod.enum(['configured', 'missing']),
+  "erpnext": zod.enum(['verified', 'invalid', 'unchecked', 'not_connected']),
+  "erpnextCheckedAt": zod.coerce.date().nullish(),
+  "updatedBy": zod.string().nullish(),
+  "updatedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Validate configured GL codes against the ERPNext Chart of Accounts
+ */
+export const ValidateVehicleModelGlCodesResponse = zod.object({
+  "checked": zod.number(),
+  "verified": zod.number(),
+  "invalid": zod.number(),
+  "results": zod.array(zod.object({
+  "makeKey": zod.string(),
+  "modelKey": zod.string(),
+  "glCode": zod.string(),
+  "status": zod.enum(['verified', 'invalid']),
+  "message": zod.string().nullish()
+}))
+})
+
+
 export const ListServiceOrdersQueryParams = zod.object({
   "status": zod.coerce.string().optional()
 })

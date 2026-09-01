@@ -765,6 +765,13 @@ const PATH_MODULES: Record<string, RouteRule> = {
   payments: { module: "finance" },
   receipts: { module: "finance" },
   "outstanding-balances": { module: "finance" },
+  // Vehicle model GL codes: PUT upsert + POST validate are both mapping
+  // maintenance — a single finance:edit grant covers them (POST would
+  // otherwise demand create).
+  "vehicle-model-gl-codes": {
+    module: "finance",
+    category: (req) => (req.method === "GET" ? "view" : "edit"),
+  },
   "service-orders": {
     module: "service",
     category: (req) => {

@@ -4731,6 +4731,81 @@ export interface OutstandingBalance {
   createdAt: string;
 }
 
+export type VehicleModelGlCodeStatus = typeof VehicleModelGlCodeStatus[keyof typeof VehicleModelGlCodeStatus];
+
+
+export const VehicleModelGlCodeStatus = {
+  configured: 'configured',
+  missing: 'missing',
+} as const;
+
+export type VehicleModelGlCodeErpnext = typeof VehicleModelGlCodeErpnext[keyof typeof VehicleModelGlCodeErpnext];
+
+
+export const VehicleModelGlCodeErpnext = {
+  verified: 'verified',
+  invalid: 'invalid',
+  unchecked: 'unchecked',
+  not_connected: 'not_connected',
+} as const;
+
+export interface VehicleModelGlCode {
+  make: string;
+  model: string;
+  makeKey: string;
+  modelKey: string;
+  vehicleCount: number;
+  /** @nullable */
+  glCode?: string | null;
+  /** @nullable */
+  accountName?: string | null;
+  status: VehicleModelGlCodeStatus;
+  erpnext: VehicleModelGlCodeErpnext;
+  /** @nullable */
+  erpnextCheckedAt?: string | null;
+  /** @nullable */
+  updatedBy?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+}
+
+export interface VehicleModelGlCodeList {
+  models: VehicleModelGlCode[];
+  erpnextConnected: boolean;
+}
+
+export interface VehicleModelGlCodeInput {
+  make: string;
+  model: string;
+  glCode: string;
+  /** @nullable */
+  accountName?: string | null;
+}
+
+export type VehicleModelGlCodeValidationItemStatus = typeof VehicleModelGlCodeValidationItemStatus[keyof typeof VehicleModelGlCodeValidationItemStatus];
+
+
+export const VehicleModelGlCodeValidationItemStatus = {
+  verified: 'verified',
+  invalid: 'invalid',
+} as const;
+
+export interface VehicleModelGlCodeValidationItem {
+  makeKey: string;
+  modelKey: string;
+  glCode: string;
+  status: VehicleModelGlCodeValidationItemStatus;
+  /** @nullable */
+  message?: string | null;
+}
+
+export interface VehicleModelGlCodeValidationResult {
+  checked: number;
+  verified: number;
+  invalid: number;
+  results: VehicleModelGlCodeValidationItem[];
+}
+
 export type ServiceOrderType = typeof ServiceOrderType[keyof typeof ServiceOrderType];
 
 

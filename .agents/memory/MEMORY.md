@@ -65,4 +65,5 @@
 - [Dev-only verify guards](dev-only-verify-guards.md) — fixture verify suites must allowlist the dev DB, guard before DB imports, scope sweeps to fixture dealers, and disable the outbox worker.
 - [Amber Connect module](amber-connect-module.md) — first OPT-IN entitlement (missing = disabled) via isEntitlementEnabled + mirrored client lists; provider adapter seam, no invented Amber endpoints.
 - [Collision claims module](collision-claims.md) — claims layer over repair orders; in-route approver checks, FOR UPDATE settlement caps, drizzle 23505 lives in err.cause.
+- [Vehicle model GL codes](vehicle-model-gl-codes.md) — one shared normalizeModelKey everywhere; ERPNext posting snapshots the resolved account on the job payload; no cross-code fallback.
 - [Time-sensitive sweep priority](time-sensitive-sweep-priority.md) — scheduled reports must run before backlog sweeps, or overdue work can indefinitely delay their enqueue.

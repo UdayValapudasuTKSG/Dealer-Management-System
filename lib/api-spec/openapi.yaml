@@ -3083,6 +3083,79 @@ paths:
                 items:
                   $ref: "#/components/schemas/OutstandingBalance"
 
+  /vehicle-model-gl-codes:
+    get:
+      operationId: listVehicleModelGlCodes
+      tags: [finance]
+      summary: Vehicle model GL code mappings for the active dealership
+      description: "Every distinct normalized make/model in dealership inventory, joined with its GL code mapping (missing until Finance assigns one). Orphan mappings whose model left inventory are included with vehicleCount 0."
+      responses:
+        "200":
+          description: Model GL code mapping list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleModelGlCodeList"
+    put:
+      operationId: upsertVehicleModelGlCode
+      tags: [finance]
+      summary: Create or update the GL code for one normalized make/model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleModelGlCodeInput"
+      responses:
+        "200":
+          description: Saved mapping
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleModelGlCode"
+        "400":
+          description: Blank or ambiguous make/model or blank GL code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Model not present in this dealership's inventory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: GL code already used by another model in this dealership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /vehicle-model-gl-codes/validate:
+    post:
+      operationId: validateVehicleModelGlCodes
+      tags: [finance]
+      summary: Validate configured GL codes against the ERPNext Chart of Accounts
+      responses:
+        "200":
+          description: Validation results per configured mapping
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleModelGlCodeValidationResult"
+        "400":
+          description: ERPNext is not connected for this dealership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: ERPNext could not be reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /service-orders:
     get:
       operationId: listServiceOrders
@@ -11651,6 +11724,60 @@ components:
         status: { type: string }
         dueDate: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
+
+    VehicleModelGlCode:
+      type: object
+      required: [make, model, makeKey, modelKey, vehicleCount, status, erpnext]
+      properties:
+        make: { type: string }
+        model: { type: string }
+        makeKey: { type: string }
+        modelKey: { type: string }
+        vehicleCount: { type: integer }
+        glCode: { type: ["string", "null"] }
+        accountName: { type: ["string", "null"] }
+        status: { type: string, enum: [configured, missing] }
+        erpnext: { type: string, enum: [verified, invalid, unchecked, not_connected] }
+        erpnextCheckedAt: { type: ["string", "null"], format: date-time }
+        updatedBy: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"], format: date-time }
+    VehicleModelGlCodeList:
+      type: object
+      required: [models, erpnextConnected]
+      properties:
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/VehicleModelGlCode"
+        erpnextConnected: { type: boolean }
+    VehicleModelGlCodeInput:
+      type: object
+      required: [make, model, glCode]
+      properties:
+        make: { type: string }
+        model: { type: string }
+        glCode: { type: string }
+        accountName: { type: ["string", "null"] }
+    VehicleModelGlCodeValidationItem:
+      type: object
+      required: [makeKey, modelKey, glCode, status]
+      properties:
+        makeKey: { type: string }
+        modelKey: { type: string }
+        glCode: { type: string }
+        status: { type: string, enum: [verified, invalid] }
+        message: { type: ["string", "null"] }
+    VehicleModelGlCodeValidationResult:
+      type: object
+      required: [checked, verified, invalid, results]
+      properties:
+        checked: { type: integer }
+        verified: { type: integer }
+        invalid: { type: integer }
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/VehicleModelGlCodeValidationItem"
 
     ServiceOrder:
       type: object

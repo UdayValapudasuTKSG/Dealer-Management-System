@@ -4,6 +4,10 @@ import {
   customersTable,
   invoicesTable,
   paymentsTable,
+  dealsTable,
+  vehiclesTable,
+  vehicleModelGlCodesTable,
+  normalizeModelKey,
   erpnextSyncJobsTable,
   erpnextRefsTable,
   type Customer,
@@ -222,6 +226,66 @@ export function normalizeErpnextDueDate(
   return value < postingDate ? postingDate : value;
 }
 
+/**
+ * Resolve the income account for an invoice: when the invoice belongs to a
+ * deal whose vehicle's normalized make/model has a Finance GL-code mapping,
+ * that mapping wins; otherwise the dealer-wide default income account is
+ * used. Never falls back to a DIFFERENT model's code.
+ */
+async function resolveInvoiceIncomeAccount(
+  dealerId: number,
+  invoice: { dealId: number | null },
+  defaultAccount: string | null,
+): Promise<{
+  account: string | null;
+  source: "model-mapping" | "dealer-default";
+  modelKey: string | null;
+}> {
+  if (invoice.dealId != null) {
+    const [deal] = await db
+      .select({ vehicleId: dealsTable.vehicleId })
+      .from(dealsTable)
+      .where(
+        and(eq(dealsTable.id, invoice.dealId), eq(dealsTable.dealerId, dealerId)),
+      );
+    if (deal?.vehicleId != null) {
+      const [vehicle] = await db
+        .select({ make: vehiclesTable.make, model: vehiclesTable.model })
+        .from(vehiclesTable)
+        .where(
+          and(
+            eq(vehiclesTable.id, deal.vehicleId),
+            eq(vehiclesTable.dealerId, dealerId),
+          ),
+        );
+      if (vehicle) {
+        const makeKey = normalizeModelKey(vehicle.make);
+        const modelKey = normalizeModelKey(vehicle.model);
+        if (makeKey && modelKey) {
+          const [mapping] = await db
+            .select({ glCode: vehicleModelGlCodesTable.glCode })
+            .from(vehicleModelGlCodesTable)
+            .where(
+              and(
+                eq(vehicleModelGlCodesTable.dealerId, dealerId),
+                eq(vehicleModelGlCodesTable.makeKey, makeKey),
+                eq(vehicleModelGlCodesTable.modelKey, modelKey),
+              ),
+            );
+          if (mapping?.glCode) {
+            return {
+              account: mapping.glCode,
+              source: "model-mapping",
+              modelKey: `${makeKey}|${modelKey}`,
+            };
+          }
+        }
+      }
+    }
+  }
+  return { account: defaultAccount, source: "dealer-default", modelKey: null };
+}
+
 async function handleSalesInvoiceJob(
   job: ErpnextSyncJob,
 ): Promise<{ docName: string | null }> {
@@ -264,9 +328,14 @@ async function handleSalesInvoiceJob(
     );
   }
 
-  if (!conn.incomeAccount) {
+  const resolved = await resolveInvoiceIncomeAccount(
+    job.dealerId,
+    invoice,
+    conn.incomeAccount,
+  );
+  if (!resolved.account) {
     throw configError(
-      "Set the income account in Settings → ERPNext (accounting mapping) before invoices can sync",
+      "Set the income account in Settings → ERPNext (accounting mapping) or a vehicle-model GL code before invoices can sync",
     );
   }
   if (!conn.companyName) {
@@ -323,7 +392,7 @@ async function handleSalesInvoiceJob(
         qty: 1,
         rate: base,
         uom: "Nos",
-        income_account: conn.incomeAccount,
+        income_account: resolved.account,
       },
     ],
     taxes: taxLines.map((tl) => ({
@@ -336,6 +405,20 @@ async function handleSalesInvoiceJob(
   // Persist the mapping BEFORE submit: if we crash after submit, the ref is
   // already in place and the retry just re-verifies via ensureSubmitted.
   await saveErpnextRef(job.dealerId, "invoice", invoice.id, "Sales Invoice", created.name);
+  // Snapshot the resolved GL account on the durable job row: later edits to
+  // the vehicle-model mapping must never rewrite what this posting used.
+  await db
+    .update(erpnextSyncJobsTable)
+    .set({
+      payload: {
+        ...job.payload,
+        resolvedIncomeAccount: resolved.account,
+        incomeAccountSource: resolved.source,
+        ...(resolved.modelKey ? { modelKey: resolved.modelKey } : {}),
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(erpnextSyncJobsTable.id, job.id));
   await client.submitDoc("Sales Invoice", created.name);
   return { docName: created.name };
 }

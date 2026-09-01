@@ -24,6 +24,7 @@ import Inventory from "@/pages/inventory";
 import Leads from "@/pages/leads";
 import Deals from "@/pages/deals";
 import Finance from "@/pages/finance";
+import FinanceGlCodes from "@/pages/finance-gl-codes";
 import Service from "@/pages/service";
 import Parts from "@/pages/parts";
 import Deliveries from "@/pages/deliveries";
@@ -264,6 +265,7 @@ function AppRoutes() {
                 <Route path="/reports" component={Reports} />
                 <Route path="/inventory" component={Inventory} />
                 <Route path="/deals" component={Deals} />
+                <Route path="/finance/gl-codes" component={FinanceGlCodes} />
                 <Route path="/finance" component={Finance} />
                 <Route path="/approvals">
                   <Redirect to="/deals" />

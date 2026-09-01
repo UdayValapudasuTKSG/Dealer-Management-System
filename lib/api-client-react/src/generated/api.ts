@@ -363,6 +363,10 @@ import type {
   Vehicle,
   VehicleImportResult,
   VehicleInput,
+  VehicleModelGlCode,
+  VehicleModelGlCodeInput,
+  VehicleModelGlCodeList,
+  VehicleModelGlCodeValidationResult,
   VehicleUpdate,
   VerifyMetaWebhookParams,
   WhatsappMessage,
@@ -9156,6 +9160,226 @@ export function useListOutstandingBalances<TData = Awaited<ReturnType<typeof lis
 
 
 
+
+export const getListVehicleModelGlCodesUrl = () => {
+
+
+
+
+  return `/api/vehicle-model-gl-codes`
+}
+
+/**
+ * Every distinct normalized make/model in dealership inventory, joined with its GL code mapping (missing until Finance assigns one). Orphan mappings whose model left inventory are included with vehicleCount 0.
+ * @summary Vehicle model GL code mappings for the active dealership
+ */
+export const listVehicleModelGlCodes = async ( options?: RequestInit): Promise<VehicleModelGlCodeList> => {
+
+  return customFetch<VehicleModelGlCodeList>(getListVehicleModelGlCodesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVehicleModelGlCodesQueryKey = () => {
+    return [
+    `/api/vehicle-model-gl-codes`
+    ] as const;
+    }
+
+
+export const getListVehicleModelGlCodesQueryOptions = <TData = Awaited<ReturnType<typeof listVehicleModelGlCodes>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVehicleModelGlCodes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVehicleModelGlCodesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVehicleModelGlCodes>>> = ({ signal }) => listVehicleModelGlCodes({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVehicleModelGlCodes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVehicleModelGlCodesQueryResult = NonNullable<Awaited<ReturnType<typeof listVehicleModelGlCodes>>>
+export type ListVehicleModelGlCodesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Vehicle model GL code mappings for the active dealership
+ */
+
+export function useListVehicleModelGlCodes<TData = Awaited<ReturnType<typeof listVehicleModelGlCodes>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVehicleModelGlCodes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVehicleModelGlCodesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpsertVehicleModelGlCodeUrl = () => {
+
+
+
+
+  return `/api/vehicle-model-gl-codes`
+}
+
+/**
+ * @summary Create or update the GL code for one normalized make/model
+ */
+export const upsertVehicleModelGlCode = async (vehicleModelGlCodeInput: VehicleModelGlCodeInput, options?: RequestInit): Promise<VehicleModelGlCode> => {
+
+  return customFetch<VehicleModelGlCode>(getUpsertVehicleModelGlCodeUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vehicleModelGlCodeInput)
+  }
+);}
+
+
+
+
+
+export const getUpsertVehicleModelGlCodeMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertVehicleModelGlCode>>, TError,{data: BodyType<VehicleModelGlCodeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof upsertVehicleModelGlCode>>, TError,{data: BodyType<VehicleModelGlCodeInput>}, TContext> => {
+
+const mutationKey = ['upsertVehicleModelGlCode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof upsertVehicleModelGlCode>>, {data: BodyType<VehicleModelGlCodeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  upsertVehicleModelGlCode(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpsertVehicleModelGlCodeMutationResult = NonNullable<Awaited<ReturnType<typeof upsertVehicleModelGlCode>>>
+    export type UpsertVehicleModelGlCodeMutationBody = BodyType<VehicleModelGlCodeInput>
+    export type UpsertVehicleModelGlCodeMutationError = ErrorType<Error>
+
+    /**
+ * @summary Create or update the GL code for one normalized make/model
+ */
+export const useUpsertVehicleModelGlCode = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof upsertVehicleModelGlCode>>, TError,{data: BodyType<VehicleModelGlCodeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof upsertVehicleModelGlCode>>,
+        TError,
+        {data: BodyType<VehicleModelGlCodeInput>},
+        TContext
+      > => {
+      return useMutation(getUpsertVehicleModelGlCodeMutationOptions(options));
+    }
+
+export const getValidateVehicleModelGlCodesUrl = () => {
+
+
+
+
+  return `/api/vehicle-model-gl-codes/validate`
+}
+
+/**
+ * @summary Validate configured GL codes against the ERPNext Chart of Accounts
+ */
+export const validateVehicleModelGlCodes = async ( options?: RequestInit): Promise<VehicleModelGlCodeValidationResult> => {
+
+  return customFetch<VehicleModelGlCodeValidationResult>(getValidateVehicleModelGlCodesUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getValidateVehicleModelGlCodesMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateVehicleModelGlCodes>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof validateVehicleModelGlCodes>>, TError,void, TContext> => {
+
+const mutationKey = ['validateVehicleModelGlCodes'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof validateVehicleModelGlCodes>>, void> = () => {
+
+
+          return  validateVehicleModelGlCodes(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ValidateVehicleModelGlCodesMutationResult = NonNullable<Awaited<ReturnType<typeof validateVehicleModelGlCodes>>>
+
+    export type ValidateVehicleModelGlCodesMutationError = ErrorType<Error>
+
+    /**
+ * @summary Validate configured GL codes against the ERPNext Chart of Accounts
+ */
+export const useValidateVehicleModelGlCodes = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof validateVehicleModelGlCodes>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof validateVehicleModelGlCodes>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getValidateVehicleModelGlCodesMutationOptions(options));
+    }
 
 export const getListServiceOrdersUrl = (params?: ListServiceOrdersParams,) => {
   const normalizedParams = new URLSearchParams();

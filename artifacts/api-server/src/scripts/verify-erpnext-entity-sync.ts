@@ -31,6 +31,9 @@ import {
   erpnextConnectionsTable,
   erpnextSyncJobsTable,
   erpnextRefsTable,
+  dealsTable,
+  vehiclesTable,
+  vehicleModelGlCodesTable,
 } from "@workspace/db";
 import { processQueue } from "../lib/erpnext/sync";
 import {
@@ -272,6 +275,80 @@ async function main() {
     const items = siDocs[0]?.["items"] as Array<Record<string, unknown>> | undefined;
     check("Sales Invoice base = amount − taxes", items?.[0]?.["rate"] === 1000);
 
+    // 2b — vehicle-model GL code mapping: a deal-linked invoice must post
+    // with the model mapping's income account (matched via the shared
+    // normalizer), the resolved code must be snapshotted on the job payload,
+    // and LATER mapping edits must never rewrite the historical posting.
+    const [veh] = await db
+      .insert(vehiclesTable)
+      .values({ dealerId, make: "BYD", model: "SEAL   ev", year: 2026, price: 9000, powertrain: "ev", mileageKm: 0, exteriorColor: "White", bodyType: "sedan" } as never)
+      .returning();
+    await db.insert(vehicleModelGlCodesTable).values({
+      dealerId,
+      makeKey: "byd",
+      modelKey: "seal ev",
+      makeLabel: "BYD",
+      modelLabel: "SEAL EV",
+      glCode: "4110 - Vehicle Sales - GD",
+    });
+    const [deal] = await db
+      .insert(dealsTable)
+      .values({ dealerId, customerId: cust!.id, vehicleId: veh!.id, vehiclePrice: 9000 } as never)
+      .returning();
+    const [invM] = await db
+      .insert(invoicesTable)
+      .values({ dealerId, invoiceNumber: "INV-ES-MODEL", customerId: cust!.id, customerName: "Ann Persaud", dealId: deal!.id, amount: 9000, kind: "final", status: "issued", taxLines: [], currency: "GYD" } as never)
+      .returning();
+    queueInvoiceSync(dealerId, invM!.id, "create");
+    await settle();
+    await drain(dealerId, 4);
+    const modelDoc = [...bucket("Sales Invoice").values()].find(
+      (d) => d["remarks"] === "AURA INV-ES-MODEL (final)",
+    );
+    const modelItems = modelDoc?.["items"] as Array<Record<string, unknown>> | undefined;
+    check(
+      "deal-linked invoice posts with the vehicle-model GL code",
+      modelItems?.[0]?.["income_account"] === "4110 - Vehicle Sales - GD",
+      String(modelItems?.[0]?.["income_account"]),
+    );
+    const [modelJob] = await db
+      .select()
+      .from(erpnextSyncJobsTable)
+      .where(and(eq(erpnextSyncJobsTable.dealerId, dealerId), eq(erpnextSyncJobsTable.entityType, "invoice"), eq(erpnextSyncJobsTable.entityId, invM!.id)));
+    const snap = modelJob?.payload as Record<string, unknown> | null;
+    check(
+      "resolved GL code snapshotted on the sync job payload",
+      snap?.["resolvedIncomeAccount"] === "4110 - Vehicle Sales - GD" && snap?.["incomeAccountSource"] === "model-mapping",
+      JSON.stringify({ acct: snap?.["resolvedIncomeAccount"], src: snap?.["incomeAccountSource"] }),
+    );
+    // Change the mapping, replay the queue: the existing ref short-circuit
+    // must leave both the remote doc and the snapshot untouched.
+    await db
+      .update(vehicleModelGlCodesTable)
+      .set({ glCode: "4999 - Changed Later - GD" })
+      .where(eq(vehicleModelGlCodesTable.dealerId, dealerId));
+    queueInvoiceSync(dealerId, invM!.id, "create", { dedupeKey: `verify-model-replay-${Date.now()}` });
+    await settle();
+    await drain(dealerId, 4);
+    const [modelJobAfter] = await db
+      .select()
+      .from(erpnextSyncJobsTable)
+      .where(and(eq(erpnextSyncJobsTable.dealerId, dealerId), eq(erpnextSyncJobsTable.entityType, "invoice"), eq(erpnextSyncJobsTable.entityId, invM!.id), eq(erpnextSyncJobsTable.id, modelJob!.id)));
+    check(
+      "later mapping edits never rewrite the historical posting or snapshot",
+      (modelItems?.[0]?.["income_account"] === "4110 - Vehicle Sales - GD") &&
+        (modelJobAfter?.payload as Record<string, unknown>)?.["resolvedIncomeAccount"] === "4110 - Vehicle Sales - GD",
+    );
+    // Default fallback: invoice with no deal keeps the dealer-wide account.
+    const defaultDoc = [...bucket("Sales Invoice").values()].find(
+      (d) => d["remarks"] === "AURA INV-ES-2 (final)",
+    );
+    const defaultItems = defaultDoc?.["items"] as Array<Record<string, unknown>> | undefined;
+    check(
+      "invoice without a deal keeps the dealer default income account",
+      defaultItems === undefined || defaultItems?.[0]?.["income_account"] === "Sales - GD",
+    );
+
     // 3 — orphan adoption: doc exists remotely with no local ref (simulated
     // crash between insertDoc and saveErpnextRef on an older code path).
     const [inv2] = await db
@@ -291,7 +368,10 @@ async function main() {
       .select()
       .from(erpnextRefsTable)
       .where(and(eq(erpnextRefsTable.dealerId, dealerId), eq(erpnextRefsTable.entityType, "invoice"), eq(erpnextRefsTable.entityId, inv2!.id)));
-    check("orphaned remote doc adopted (no duplicate)", orphanRef[0]?.docName === "SI-ORPHAN" && [...bucket("Sales Invoice").values()].length === 2);
+    const inv2Docs = [...bucket("Sales Invoice").values()].filter(
+      (d) => d["remarks"] === "AURA INV-ES-2 (final)" || d.name === "SI-ORPHAN",
+    );
+    check("orphaned remote doc adopted (no duplicate)", orphanRef[0]?.docName === "SI-ORPHAN" && inv2Docs.length === 1);
     check("adopted orphan submitted", bucket("Sales Invoice").get("SI-ORPHAN")?.docstatus === 1);
 
     // 4 — payments: receive + refund allocations
@@ -364,6 +444,9 @@ async function main() {
     await db.delete(erpnextRefsTable).where(eq(erpnextRefsTable.dealerId, dealerId));
     await db.delete(erpnextConnectionsTable).where(eq(erpnextConnectionsTable.dealerId, dealerId));
     await db.delete(paymentsTable).where(eq(paymentsTable.dealerId, dealerId));
+    await db.delete(vehicleModelGlCodesTable).where(eq(vehicleModelGlCodesTable.dealerId, dealerId));
+    await db.delete(dealsTable).where(eq(dealsTable.dealerId, dealerId));
+    await db.delete(vehiclesTable).where(eq(vehiclesTable.dealerId, dealerId));
     await db.delete(invoicesTable).where(eq(invoicesTable.dealerId, dealerId));
     await db.delete(contactsTable).where(eq(contactsTable.dealerId, dealerId));
     await db.delete(leadsTable).where(eq(leadsTable.dealerId, dealerId));

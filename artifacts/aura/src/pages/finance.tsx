@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearch } from "wouter";
+import { Link, useSearch } from "wouter";
 import {
   useListFinanceApplications,
   useListGates,
@@ -42,6 +42,7 @@ import {
   Wallet,
   FileText,
   Wifi,
+  BookOpen,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -215,6 +216,16 @@ export default function Finance() {
           ))}
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/finance/gl-codes">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full h-8 gap-1.5 text-xs"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              Vehicle Model GL Codes
+            </Button>
+          </Link>
           <ViewControls
             layout={layout}
             onLayoutChange={setLayout}

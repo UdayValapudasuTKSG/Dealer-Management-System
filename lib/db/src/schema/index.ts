@@ -1,4 +1,5 @@
 export * from "./vehicles";
+export * from "./vehicleModelGlCodes";
 export * from "./leads";
 export * from "./leadVehicleInterests";
 export * from "./customers";
