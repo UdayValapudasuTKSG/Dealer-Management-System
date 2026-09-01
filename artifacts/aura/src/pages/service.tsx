@@ -134,6 +134,7 @@ import { ViewControls } from "@/components/view-controls";
 import { cn } from "@/lib/utils";
 import {
   formatDealerDateShort,
+  formatCalendarDateShort,
   formatDealerDayTime,
   formatDealerMonthYear,
   formatGuyanaDate,
@@ -922,7 +923,7 @@ function BookingsTab() {
                     {order.type}
                   </td>
                   <td className="px-4 py-2 tabular-nums">
-                    {formatDealerDateShort(order.scheduledDate)}
+                    {formatCalendarDateShort(order.scheduledDate)}
                   </td>
                   <td className="px-4 py-2">
                     <span
@@ -1032,7 +1033,7 @@ function BookingsTab() {
                         <Calendar className="w-3 h-3" /> Scheduled
                       </div>
                       <div className="font-medium text-sm leading-tight">
-                        {formatDealerDateShort(order.scheduledDate)}
+                        {formatCalendarDateShort(order.scheduledDate)}
                         <span className="text-muted-foreground"> · {order.estimatedHours}h</span>
                       </div>
                     </div>

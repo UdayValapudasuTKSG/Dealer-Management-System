@@ -126,6 +126,25 @@ type DateInput = string | number | Date | null | undefined;
 const isDateOnly = (value: DateInput): boolean =>
   typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
+/**
+ * Normalize an API date value to its calendar-day key.
+ *
+ * OpenAPI date responses can arrive as a full UTC-midnight ISO string even
+ * though the database value has no time zone. Reading the first ISO date
+ * segment preserves the selected calendar day instead of shifting it into the
+ * previous evening for dealerships west of UTC.
+ */
+export function calendarDateKey(value: DateInput): string | null {
+  if (value == null || value === "") return null;
+  if (typeof value === "string") {
+    const key = value.slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
 function toDate(value: DateInput): Date | null {
   if (value == null || value === "") return null;
   // Date-only strings (YYYY-MM-DD) are UTC midnight; keep the calendar date
@@ -173,6 +192,21 @@ export function formatDealerDateShort(value: DateInput): string {
     month: "short",
     day: "numeric",
   });
+}
+
+/** "Jul 21" for a calendar date, including API-coerced UTC-midnight values. */
+export function formatCalendarDateShort(value: DateInput): string {
+  const key = calendarDateKey(value);
+  if (!key) return "—";
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(Date.UTC(year!, month! - 1, day!, 12)).toLocaleDateString(
+    "en-US",
+    {
+      timeZone: "UTC",
+      month: "short",
+      day: "numeric",
+    },
+  );
 }
 
 /** "Jul 21, 2:30 PM" (no year) in the dealership timezone. */
