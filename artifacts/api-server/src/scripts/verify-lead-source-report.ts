@@ -41,7 +41,7 @@ process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
 // rows for ALL dealers in the shared dev database, not just our fixtures.
 process.env.OUTBOX_WORKER_DISABLED = "1";
 {
-  const raw = process.env.DEV_DATABASE_URL ?? process.env.DATABASE_URL;
+  const raw = process.env.DATABASE_URL ?? process.env.DEV_DATABASE_URL;
   if (!raw) refuse("DEV_DATABASE_URL or DATABASE_URL is not set.");
   let host: string;
   try {

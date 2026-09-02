@@ -4,13 +4,13 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-// Keep explicit development and production connections separate. DATABASE_URL
-// remains a fallback so Replit's runtime-managed database binding continues to
-// work when no environment-specific override is configured.
+// Production may intentionally override the managed database. Development
+// prefers Replit's runtime-managed DATABASE_URL; DEV_DATABASE_URL is retained
+// only as a compatibility fallback for environments without that binding.
 const connectionString =
   process.env.NODE_ENV === "production"
     ? process.env.EXTERNAL_DATABASE_URL ?? process.env.DATABASE_URL
-    : process.env.DEV_DATABASE_URL ?? process.env.DATABASE_URL;
+    : process.env.DATABASE_URL ?? process.env.DEV_DATABASE_URL;
 
 if (!connectionString) {
   throw new Error(

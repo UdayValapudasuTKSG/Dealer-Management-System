@@ -9,7 +9,7 @@ import { pool } from "@workspace/db";
 
 const BASE = process.env.API_BASE ?? "http://localhost:80/api";
 const developmentDatabaseUrl =
-  process.env.DEV_DATABASE_URL ?? process.env.DATABASE_URL;
+  process.env.DATABASE_URL ?? process.env.DEV_DATABASE_URL;
 
 // Dev-DB allowlist guard (never run fixtures against prod).
 if (

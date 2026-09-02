@@ -2,7 +2,7 @@ import { defineConfig } from "drizzle-kit";
 import path from "path";
 
 const developmentDatabaseUrl =
-  process.env.DEV_DATABASE_URL ?? process.env.DATABASE_URL;
+  process.env.DATABASE_URL ?? process.env.DEV_DATABASE_URL;
 
 if (!developmentDatabaseUrl) {
   throw new Error(
