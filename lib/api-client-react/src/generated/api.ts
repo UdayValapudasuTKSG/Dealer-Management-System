@@ -286,6 +286,7 @@ import type {
   ProvisioningStatus,
   PublicFeedbackForm,
   PublicFeedbackSubmission,
+  PublicServiceEstimate,
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderReceiveBody,
@@ -317,6 +318,7 @@ import type {
   SentimentAnalysis,
   ServiceDiscountDecision,
   ServiceDiscountRequest,
+  ServiceEstimateDecisionInput,
   ServiceInvoice,
   ServiceInvoiceAdjustmentInput,
   ServiceInvoiceUpdate,
@@ -9379,6 +9381,155 @@ export const useValidateVehicleModelGlCodes = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getValidateVehicleModelGlCodesMutationOptions(options));
+    }
+
+export const getGetPublicServiceEstimateUrl = (token: string,) => {
+
+
+
+
+  return `/api/service-estimates/${token}`
+}
+
+/**
+ * @summary View an expiring whole-service estimate using its bearer token
+ */
+export const getPublicServiceEstimate = async (token: string, options?: RequestInit): Promise<PublicServiceEstimate> => {
+
+  return customFetch<PublicServiceEstimate>(getGetPublicServiceEstimateUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicServiceEstimateQueryKey = (token: string,) => {
+    return [
+    `/api/service-estimates/${token}`
+    ] as const;
+    }
+
+
+export const getGetPublicServiceEstimateQueryOptions = <TData = Awaited<ReturnType<typeof getPublicServiceEstimate>>, TError = ErrorType<Error>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicServiceEstimate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicServiceEstimateQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicServiceEstimate>>> = ({ signal }) => getPublicServiceEstimate(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicServiceEstimate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPublicServiceEstimateQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicServiceEstimate>>>
+export type GetPublicServiceEstimateQueryError = ErrorType<Error>
+
+
+/**
+ * @summary View an expiring whole-service estimate using its bearer token
+ */
+
+export function useGetPublicServiceEstimate<TData = Awaited<ReturnType<typeof getPublicServiceEstimate>>, TError = ErrorType<Error>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPublicServiceEstimate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPublicServiceEstimateQueryOptions(token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDecidePublicServiceEstimateUrl = (token: string,) => {
+
+
+
+
+  return `/api/service-estimates/${token}`
+}
+
+/**
+ * @summary Approve or decline the whole estimate once
+ */
+export const decidePublicServiceEstimate = async (token: string,
+    serviceEstimateDecisionInput: ServiceEstimateDecisionInput, options?: RequestInit): Promise<PublicServiceEstimate> => {
+
+  return customFetch<PublicServiceEstimate>(getDecidePublicServiceEstimateUrl(token),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(serviceEstimateDecisionInput)
+  }
+);}
+
+
+
+
+
+export const getDecidePublicServiceEstimateMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decidePublicServiceEstimate>>, TError,{token: string;data: BodyType<ServiceEstimateDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decidePublicServiceEstimate>>, TError,{token: string;data: BodyType<ServiceEstimateDecisionInput>}, TContext> => {
+
+const mutationKey = ['decidePublicServiceEstimate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decidePublicServiceEstimate>>, {token: string;data: BodyType<ServiceEstimateDecisionInput>}> = (props) => {
+          const {token,data} = props ?? {};
+
+          return  decidePublicServiceEstimate(token,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecidePublicServiceEstimateMutationResult = NonNullable<Awaited<ReturnType<typeof decidePublicServiceEstimate>>>
+    export type DecidePublicServiceEstimateMutationBody = BodyType<ServiceEstimateDecisionInput>
+    export type DecidePublicServiceEstimateMutationError = ErrorType<Error>
+
+    /**
+ * @summary Approve or decline the whole estimate once
+ */
+export const useDecidePublicServiceEstimate = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decidePublicServiceEstimate>>, TError,{token: string;data: BodyType<ServiceEstimateDecisionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decidePublicServiceEstimate>>,
+        TError,
+        {token: string;data: BodyType<ServiceEstimateDecisionInput>},
+        TContext
+      > => {
+      return useMutation(getDecidePublicServiceEstimateMutationOptions(options));
     }
 
 export const getListServiceOrdersUrl = (params?: ListServiceOrdersParams,) => {

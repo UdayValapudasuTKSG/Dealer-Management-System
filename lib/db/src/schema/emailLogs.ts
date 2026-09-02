@@ -55,6 +55,13 @@ export const EMAIL_TEMPLATES = [
   "service.cadence.due",
   // FR-COM-01..03 service milestone + management summary templates
   "service.booking.confirmed",
+  "service.booking.received",
+  "service.appointment.confirmed",
+  "service.appointment.reminder",
+  "service.checkin.receipt",
+  "service.estimate.ready",
+  "service.estimate.decision",
+  "service.quality.complete",
   "service.started",
   "service.delayed",
   "service.invoice.issued",

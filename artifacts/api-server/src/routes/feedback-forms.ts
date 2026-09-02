@@ -357,7 +357,7 @@ async function classifyRecipients(
           ),
         ),
       );
-    for (const r of rows) alreadySent.add(r.leadId);
+    for (const r of rows) if (r.leadId != null) alreadySent.add(r.leadId);
   }
   for (const lead of leads) {
     if (alreadySent.has(lead.id)) {
@@ -744,6 +744,10 @@ router.post("/feedback-forms/:id/send", async (req, res): Promise<void> => {
       .returning();
     if (!inv) {
       excluded.push({ leadId: lead.id, name: lead.name, reason: "already_sent" });
+      continue;
+    }
+    if (!inv.token) {
+      excluded.push({ leadId: lead.id, name: lead.name, reason: "invite_token_failed" });
       continue;
     }
     const link = feedbackFormUrl(inv.token);

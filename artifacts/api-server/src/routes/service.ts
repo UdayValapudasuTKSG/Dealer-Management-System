@@ -37,6 +37,7 @@ import {
   collisionClaimsTable,
   collisionSettlementsTable,
   collisionSupplementsTable,
+  serviceEstimateDecisionsTable,
   type JobCard,
   type ServiceInvoice,
 } from "@workspace/db";
@@ -124,6 +125,9 @@ import {
   onServiceOrderStatusChanged,
   onJobCardRolloverApproved,
   onServiceInvoiceIssued,
+  onJobCardIntakeRecorded,
+  onServiceEstimateReady,
+  onServiceAppointmentChanged,
 } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { activeDealerId } from "../middlewares/rbac";
@@ -558,7 +562,40 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  if (before && dateStr && dateStr !== before.scheduledDate) {
+    const [currentCard] = await db
+      .select({ id: jobCardsTable.id, scheduledAt: jobCardsTable.scheduledAt })
+      .from(jobCardsTable)
+      .where(
+        and(
+          eq(jobCardsTable.serviceOrderId, order.id),
+          eq(jobCardsTable.dealerId, dealerId),
+        ),
+      )
+      .limit(1);
+    if (currentCard?.scheduledAt) {
+      const hhmmss = currentCard.scheduledAt.toISOString().slice(11, 19);
+      await db
+        .update(jobCardsTable)
+        .set({ scheduledAt: new Date(`${dateStr}T${hhmmss}Z`) })
+        .where(
+          and(
+            eq(jobCardsTable.id, currentCard.id),
+            eq(jobCardsTable.dealerId, dealerId),
+          ),
+        );
+    }
+  }
+
   if (before) onServiceOrderStatusChanged(before, order);
+  if (
+    before &&
+    order.status === "acknowledged" &&
+    (before.scheduledDate !== order.scheduledDate ||
+      before.technicianUserId !== order.technicianUserId)
+  ) {
+    onServiceAppointmentChanged(order);
+  }
 
   res.json(UpdateServiceOrderResponse.parse(order));
 });
@@ -1373,9 +1410,107 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
       and(
         eq(jobCardsTable.id, params.data.id),
         eq(jobCardsTable.dealerId, existing.dealerId),
+        (parsed.data.quoteTotal !== undefined ||
+          parsed.data.laborHours !== undefined ||
+          parsed.data.laborRate !== undefined)
+          ? isNull(jobCardsTable.quoteApprovedAt)
+          : undefined,
       ),
     )
     .returning();
+
+  // An edited quote invalidates every open public decision before the fresh
+  // secure invitation is queued. Public approval also compares its snapshot
+  // total transactionally, so an edit/approve race fails closed.
+  if (
+    card &&
+    (parsed.data.quoteTotal !== undefined ||
+      parsed.data.laborHours !== undefined ||
+      parsed.data.laborRate !== undefined) &&
+    (card.quoteTotal !== existing.quoteTotal ||
+      card.laborHours !== existing.laborHours ||
+      card.laborRate !== existing.laborRate)
+  ) {
+    await db
+      .update(serviceEstimateDecisionsTable)
+      .set({ invalidatedAt: new Date() })
+      .where(
+        and(
+          eq(serviceEstimateDecisionsTable.dealerId, card.dealerId),
+          eq(serviceEstimateDecisionsTable.jobCardId, card.id),
+          isNull(serviceEstimateDecisionsTable.decision),
+          isNull(serviceEstimateDecisionsTable.invalidatedAt),
+        ),
+      );
+  }
+
+  if (card) {
+    const [order] = await db
+      .select()
+      .from(serviceOrdersTable)
+      .where(
+        and(
+          eq(serviceOrdersTable.id, card.serviceOrderId),
+          eq(serviceOrdersTable.dealerId, card.dealerId),
+        ),
+      );
+    if (order && !existing.intake && card.intake) {
+      onJobCardIntakeRecorded(order, card);
+    }
+    if (
+      order &&
+      card.quoteTotal > 0 &&
+      (existing.quoteTotal !== card.quoteTotal ||
+        existing.laborHours !== card.laborHours ||
+        existing.laborRate !== card.laborRate ||
+        existing.quoteTotal <= 0)
+    ) {
+      onServiceEstimateReady(order, card);
+    }
+    if (
+      order &&
+      order.status === "acknowledged" &&
+      existing.scheduledAt?.toISOString() !== card.scheduledAt?.toISOString()
+    ) {
+      onServiceAppointmentChanged(order);
+    }
+    if (order && !existing.quoteApprovedAt && card.quoteApprovedAt) {
+      const recipient = await customerEmail(order.customerId, order.dealerId);
+      if (recipient.email) {
+        await enqueueEmail({
+          dealerId: order.dealerId,
+          template: "service.estimate.decision",
+          to: recipient.email,
+          customerId: order.customerId,
+          dedupeKey: `svc:${order.id}:estimate-approved`,
+          data: {
+            vehicle: order.vehicleInfo,
+            decision: "approve",
+            total: `GY$${card.quoteTotal.toLocaleString("en-US")}`,
+          },
+        });
+      }
+    }
+    if (
+      parsed.data.status === "completed" &&
+      existing.status !== "completed"
+    ) {
+      const recipient = await customerEmail(order?.customerId, card.dealerId);
+      if (order && recipient.email) {
+        await enqueueEmail({
+          dealerId: card.dealerId,
+          template: "service.quality.complete",
+          to: recipient.email,
+          customerId: order.customerId,
+          dedupeKey: `svc:${order.id}:quality-complete`,
+          data: {
+            vehicle: order.vehicleInfo,
+            ...(card.workPerformed ? { work: card.workPerformed } : {}),
+          },
+        });
+      }
+    }
+  }
 
   // Service completed → automatically issue the invoice and email it to the
   // customer (PDF attached). Best-effort: an undecided surcharge or an
@@ -2123,6 +2258,30 @@ router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {
       remark: `AURA job card #${card.id} — part ${kind} (${currentPart.sku})`,
       dedupeKey: `erp:se:jcp:${card.dealerId}:${line.id}`,
     });
+  }
+
+  // Parts are part of the read-only public estimate snapshot. Any issued or
+  // returned line makes a pending decision stale, even when staff have not
+  // recalculated the headline quote total yet.
+  if (card.quoteTotal > 0) {
+    const invalidated = await db
+      .update(serviceEstimateDecisionsTable)
+      .set({ invalidatedAt: new Date() })
+      .where(
+        and(
+          eq(serviceEstimateDecisionsTable.dealerId, card.dealerId),
+          eq(serviceEstimateDecisionsTable.jobCardId, card.id),
+          isNull(serviceEstimateDecisionsTable.decision),
+          isNull(serviceEstimateDecisionsTable.invalidatedAt),
+        ),
+      )
+      .returning({ id: serviceEstimateDecisionsTable.id });
+    if (invalidated.length) {
+      const [order] = await db.select().from(serviceOrdersTable).where(
+        and(eq(serviceOrdersTable.id, card.serviceOrderId), eq(serviceOrdersTable.dealerId, card.dealerId)),
+      );
+      if (order) onServiceEstimateReady(order, card);
+    }
   }
 
   res.status(201).json(AddJobCardPartResponse.parse(line));

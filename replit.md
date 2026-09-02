@@ -40,6 +40,7 @@ AURA is an agentic automotive dealership operating system (DMS): a full-stack we
 ## Key architecture decisions
 
 - Contract-first: define endpoints in `openapi.yaml`, run codegen, then implement server routes + client hooks against generated types.
+- Service customer communications are email-only through each dealership's configured SMTP connection; do not add WhatsApp service reminders or service-status messages.
 - MULTI-DEALER TENANCY: active dealer from the `x-dealer-id` header; routes filter EVERY query by it, stamp it on EVERY insert, and 404 cross-dealer ids. Non-member header → 403 `dealer_forbidden`. Details in `docs/agent/auth-rbac.md` + `docs/agent/platform-realm.md`.
 - Canonical NC-3 state machines: lead.phase = new → contacted → qualified → proposal → negotiation → won (terminal lost); deal.stage = desking → committed → delivered (terminal cancelled/lost); vehicle.status = available/reserved/sold/delivered (+in_prep etc); delivery = 9-step SAGA; service cases = 7-status machine with adjacent-only transitions (routes/cases.ts). Every lead phase hop is gated one-step via stage checklists (`ADVANCE_TARGET_PHASE` in api-server/src/lib/stage-review.ts); pipeline stage labels are label-only mappings.
 - Lead/deal advances are gated: `POST /leads/{id}/advance` validates per-dealer requirement checklists (422 `unmet[]`); deal PATCH enforces an allowed-transition map. AUTO-DESK AGENT: advancing into Negotiation with a vehicle and no linked deal auto-desks a draft deal (kill-switch governed). Deal create is RBAC `deals:create`.

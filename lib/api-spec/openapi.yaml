@@ -3156,6 +3156,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /service-estimates/{token}:
+    get:
+      operationId: getPublicServiceEstimate
+      tags: [service]
+      summary: View an expiring whole-service estimate using its bearer token
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
+      responses:
+        "200":
+          description: Public estimate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicServiceEstimate"
+        "404":
+          description: Invalid link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "410":
+          description: Expired link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: decidePublicServiceEstimate
+      tags: [service]
+      summary: Approve or decline the whole estimate once
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string, minLength: 32, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceEstimateDecisionInput"
+      responses:
+        "200":
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicServiceEstimate"
+        "404":
+          description: Invalid link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Already decided
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "410":
+          description: Expired link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /service-orders:
     get:
       operationId: listServiceOrders
@@ -11779,6 +11844,34 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/VehicleModelGlCodeValidationItem"
+
+    ServiceEstimateLine:
+      type: object
+      required: [kind, description, amount]
+      properties:
+        kind: { type: string, enum: [part, labour] }
+        description: { type: string }
+        quantity: { type: number }
+        amount: { type: number }
+    PublicServiceEstimate:
+      type: object
+      required: [state, brandName, vehicle, service, total, lines, expiresAt]
+      properties:
+        state: { type: string, enum: [open, approved, declined] }
+        brandName: { type: string }
+        vehicle: { type: string }
+        service: { type: string }
+        total: { type: number }
+        lines:
+          type: array
+          items: { $ref: "#/components/schemas/ServiceEstimateLine" }
+        expiresAt: { type: string, format: date-time }
+        decidedAt: { type: ["string", "null"], format: date-time }
+    ServiceEstimateDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approved, declined] }
 
     ServiceOrder:
       type: object

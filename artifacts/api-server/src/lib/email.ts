@@ -10,6 +10,8 @@ import {
   notificationsTable,
   receiptsTable,
   serviceInvoicesTable,
+  serviceOrdersTable,
+  jobCardsTable,
   tasksTable,
   timelineEventsTable,
   whatsappConversationsTable,
@@ -36,7 +38,7 @@ import {
 } from "./document-pdfs";
 import { getDealerPdfBranding } from "./dealer-branding";
 import { buildWarrantyBookletForDelivery } from "./warranty-doc";
-import { testDriveIcsFromPayload } from "./calendar";
+import { serviceIcsFromPayload, testDriveIcsFromPayload } from "./calendar";
 import { dealerTimezone, zonedAddDays, zonedDayKey } from "./timezone";
 import {
   sendWhatsappButtons,
@@ -277,9 +279,9 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     subject: (x) => `Your ${d(x, "vehicle", "vehicle")} is ready`,
     heading: () => "Your vehicle is ready",
     body: (x) =>
-      `Great news — the <strong>${d(x, "service", "requested work")}</strong> on your <strong>${d(x, "vehicle", "vehicle")}</strong> is complete. It has been washed, quality-checked and is waiting for you at the service reception. Collect it at your convenience, or reply and we'll arrange drop-off.`,
+      `Great news — the <strong>${d(x, "service", "requested work")}</strong> on your <strong>${d(x, "vehicle", "vehicle")}</strong> is complete. It has been quality-checked and is waiting at service reception.${x.balance ? ` Balance due: <strong>${x.balance}</strong>.` : ""} Please reply for current collection hours, payment options, or collection assistance.`,
     cta: () => ({ label: "Ready when you are" }),
-    sample: { vehicle: "2025 BMW X7", service: "20,000 km service" },
+    sample: { vehicle: "2025 BMW X7", service: "20,000 km service", balance: "GY$45,200" },
   },
   delivery_schedule: {
     label: "Delivery Schedule",
@@ -579,6 +581,67 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       date: "August 14, 2026",
     },
   },
+  "service.booking.received": {
+    label: "Service Booking Request Received",
+    description: "Acknowledges the customer's requested service date before confirmation.",
+    subject: (x) => `We received your service request — ${d(x, "vehicle", "your vehicle")}`,
+    heading: () => "Your service request is with us",
+    body: (x) =>
+      `We received your request for <strong>${d(x, "service", "service")}</strong> for your <strong>${d(x, "vehicle", "vehicle")}</strong>, with a preferred date of <strong>${d(x, "date", "the date requested")}</strong>${x.dealer ? ` at <strong>${x.dealer}</strong>` : ""}. This is a request receipt, not yet an appointment confirmation. Your service team will confirm the time shortly.`,
+    sample: { name: "Alex", vehicle: "2025 BMW X7", service: "maintenance", date: "August 14, 2026", dealer: "Main Service Centre" },
+  },
+  "service.appointment.confirmed": {
+    label: "Service Appointment Confirmed",
+    description: "Confirms the appointment and attaches an RFC 5545 calendar invitation.",
+    subject: (x) => `Confirmed: service appointment — ${d(x, "vehicle", "your vehicle")}`,
+    heading: () => "Your service appointment is confirmed",
+    body: (x) =>
+      `We have confirmed <strong>${d(x, "date", "your appointment")}</strong> at <strong>${d(x, "time", "the agreed time")}</strong> for your <strong>${d(x, "vehicle", "vehicle")}</strong>. ${x.advisor ? `Your advisor is <strong>${x.advisor}</strong>. ` : ""}${x.location ? `Please arrive at <strong>${x.location}</strong>. ` : ""}Please remove valuables, bring the vehicle key and service documents, and allow a few minutes for check-in. A calendar invitation is attached.`,
+    sample: { vehicle: "2025 BMW X7", date: "August 14, 2026", time: "9:00 AM", advisor: "Jordan", location: "Main Service Centre" },
+  },
+  "service.appointment.reminder": {
+    label: "Service Appointment Reminder",
+    description: "Automatic 48-hour or 3-hour appointment reminder.",
+    subject: (x) => `${d(x, "window", "Upcoming")}: your service appointment`,
+    heading: () => "A reminder about your service appointment",
+    body: (x) =>
+      `Your <strong>${d(x, "service", "service")}</strong> appointment for the <strong>${d(x, "vehicle", "vehicle")}</strong> is on <strong>${d(x, "date", "the confirmed date")}</strong> at <strong>${d(x, "time", "the confirmed time")}</strong>. Please reply if anything has changed.`,
+    sample: { window: "In 48 hours", vehicle: "2025 BMW X7", service: "maintenance", date: "August 14, 2026", time: "9:00 AM" },
+  },
+  "service.checkin.receipt": {
+    label: "Digital Service Check-in Receipt",
+    description: "Receipts the first recorded vehicle intake.",
+    subject: (x) => `Checked in: ${d(x, "vehicle", "your vehicle")}`,
+    heading: () => "Your vehicle is checked in",
+    body: (x) =>
+      `We have checked in your <strong>${d(x, "vehicle", "vehicle")}</strong>${x.mileage ? ` at <strong>${x.mileage}</strong>` : ""}. Recorded concerns: ${d(x, "concerns", "none noted")}.${x.condition ? ` Condition notes: ${x.condition}.` : ""}${x.advisor ? ` Your advisor is <strong>${x.advisor}</strong>.` : ""}`,
+    sample: { vehicle: "2025 BMW X7", mileage: "42,000 km", concerns: "Brake noise", condition: "Half tank; minor scratch noted", advisor: "Jordan" },
+  },
+  "service.estimate.ready": {
+    label: "Service Estimate Ready",
+    description: "Provides a secure expiring whole-estimate decision link.",
+    subject: (x) => `Your service estimate is ready — ${d(x, "total", "")}`,
+    heading: () => "Please review your estimate",
+    body: (x) => `Your estimate for the <strong>${d(x, "vehicle", "vehicle")}</strong> totals <strong>${d(x, "total", "")}</strong>. Review the read-only parts and labour breakdown, then approve or decline the whole estimate using the secure link. The link expires on ${d(x, "expires", "the date shown")}.`,
+    cta: (x) => ({ label: "Review estimate", href: x.link }),
+    sample: { vehicle: "2025 BMW X7", total: "GY$45,200", expires: "August 16, 2026", link: "https://example.com/service-estimate/token" },
+  },
+  "service.estimate.decision": {
+    label: "Service Estimate Decision",
+    description: "Confirms a customer's whole-estimate decision.",
+    subject: (x) => `Estimate ${d(x, "decision", "decision received")}`,
+    heading: () => "Your decision has been recorded",
+    body: (x) => `We recorded your decision to <strong>${d(x, "decision", "respond to")}</strong> the <strong>${d(x, "total", "")}</strong> estimate for your <strong>${d(x, "vehicle", "vehicle")}</strong>. Your service advisor will take it from here.`,
+    sample: { decision: "approve", total: "GY$45,200", vehicle: "2025 BMW X7" },
+  },
+  "service.quality.complete": {
+    label: "Service Quality Check Complete",
+    description: "Confirms completed work has reached quality/completion state.",
+    subject: (x) => `Quality check complete — ${d(x, "vehicle", "your vehicle")}`,
+    heading: () => "Work and quality checks are complete",
+    body: (x) => `The work on your <strong>${d(x, "vehicle", "vehicle")}</strong> has been completed and recorded.${x.work ? ` Completed work: ${x.work}.` : ""} We are preparing the final handover details.`,
+    sample: { vehicle: "2025 BMW X7", work: "Oil and filter service; brake inspection" },
+  },
   "service.started": {
     label: "Service Work Started",
     description: "Tells the customer the workshop has begun their job.",
@@ -612,13 +675,15 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
     subject: (x) => `Your service invoice for ${d(x, "vehicle", "your vehicle")}`,
     heading: () => "Your vehicle is ready — invoice enclosed",
     body: (x) =>
-      `Work on your <strong>${d(x, "vehicle", "vehicle")}</strong> is complete. Your invoice <strong>${d(x, "invoiceRef", "")}</strong> for <strong>${d(x, "total", "")}</strong> is attached as a PDF. You can settle it at pickup — our team will have everything ready.`,
+      `Work on your <strong>${d(x, "vehicle", "vehicle")}</strong> is complete. Your invoice <strong>${d(x, "invoiceRef", "")}</strong> for <strong>${d(x, "total", "")}</strong> is attached as a PDF.${x.completedWork ? ` Completed work: ${x.completedWork}.` : ""}${x.recommendedMaintenance ? ` Recommended maintenance/notes: ${x.recommendedMaintenance}.` : ""} You can settle it at pickup — our team will have everything ready.`,
     cta: () => ({ label: "See you at pickup" }),
     sample: {
       name: "Alex Mensah",
       vehicle: "2025 BMW X7",
       invoiceRef: "SV-00012",
       total: "GYD 45,200",
+      completedWork: "Oil and filter service",
+      recommendedMaintenance: "Recheck front brakes in 5,000 km",
     },
   },
   "service.summary.management": {
@@ -807,7 +872,8 @@ export function renderEmail(
   const ovHeading = override?.heading?.trim();
   const ovBody = override?.body?.trim();
   const ovCtaLabel = override?.ctaLabel?.trim();
-  const subject = ovSubject ? applyMergeTokens(ovSubject, x) : def.subject(x);
+  const subject = (ovSubject ? applyMergeTokens(ovSubject, x) : def.subject(x))
+    .replace(/[\r\n]+/g, " ");
   const safeName = escapeHtml(brandName || "AURA Dealership");
   const headerHtml = branding?.logoSrc
     ? `<img src="${branding.logoSrc}" alt="${safeName}" style="display:block;max-height:56px;max-width:240px;height:auto;width:auto;border:0;" />`
@@ -923,19 +989,25 @@ export function renderEmail(
 </html>`,
     };
   }
+  // Built-in copy contains intentional markup, so escape payload values before
+  // interpolating them. This covers all customer-entered lifecycle fields and
+  // dealer override merge tokens without allowing markup injection.
+  const safeX: TemplateData = Object.fromEntries(
+    Object.entries(x).map(([key, value]) => [key, escapeHtml(value)]),
+  );
   // Headings always end with a full stop for consistent punctuation.
   const headingRaw = (
-    ovHeading ? applyMergeTokens(ovHeading, x) : def.heading(x)
+    ovHeading ? applyMergeTokens(ovHeading, safeX) : def.heading(safeX)
   ).trim();
   const heading = /[.!?…]$/.test(headingRaw) ? headingRaw : `${headingRaw}.`;
-  const body = ovBody ? applyMergeTokens(ovBody, x) : def.body(x);
-  const ctaRaw = def.cta?.(x);
+  const body = ovBody ? applyMergeTokens(ovBody, safeX) : def.body(safeX);
+  const ctaRaw = def.cta?.(safeX);
   // Button/CTA text is always upper-case.
   const cta = ctaRaw
     ? {
         ...ctaRaw,
         label: (ovCtaLabel
-          ? applyMergeTokens(ovCtaLabel, x)
+          ? applyMergeTokens(ovCtaLabel, safeX)
           : ctaRaw.label
         ).toUpperCase(),
       }
@@ -2117,6 +2189,48 @@ export async function processQueue(): Promise<void> {
         )
         .returning();
       if (!item) continue; // another worker claimed it
+      // Scheduled service reminders are revalidated after the outbox CAS and
+      // immediately before transport. A cancellation, stage change, or
+      // reschedule therefore cannot leak a stale reminder even if it raced
+      // the periodic queue selection.
+      if (item.template === "service.appointment.reminder") {
+        const orderId = Number(item.payload?.serviceOrderId);
+        const expected = item.payload?.reminderScheduledAt;
+        const [current] = Number.isInteger(orderId)
+          ? await db
+              .select({
+                status: serviceOrdersTable.status,
+                scheduledAt: jobCardsTable.scheduledAt,
+              })
+              .from(serviceOrdersTable)
+              .innerJoin(
+                jobCardsTable,
+                and(
+                  eq(jobCardsTable.serviceOrderId, serviceOrdersTable.id),
+                  eq(jobCardsTable.dealerId, serviceOrdersTable.dealerId),
+                ),
+              )
+              .where(
+                and(
+                  eq(serviceOrdersTable.id, orderId),
+                  eq(serviceOrdersTable.dealerId, item.dealerId),
+                ),
+              )
+              .limit(1)
+          : [];
+        if (
+          !current ||
+          current.status !== "acknowledged" ||
+          !current.scheduledAt ||
+          current.scheduledAt.toISOString() !== expected
+        ) {
+          await db
+            .update(emailLogsTable)
+            .set({ status: "cancelled", nextAttemptAt: null })
+            .where(eq(emailLogsTable.id, item.id));
+          continue;
+        }
+      }
       // Consent recheck at send time: opt-out may have been enabled after
       // this row was queued (or between scheduled retries) — never deliver.
       if (await isRecipientEmailOptedOut(item.dealerId, item.recipient)) {
@@ -2281,13 +2395,23 @@ export async function processQueue(): Promise<void> {
           | undefined;
         if (
           item.template === "test_drive_confirmation" ||
-          item.template === "test_drive_owner_invite"
+          item.template === "test_drive_owner_invite" ||
+          item.template === "service.appointment.confirmed"
         ) {
           try {
-            const ics = testDriveIcsFromPayload(item.payload ?? {});
+            const ics =
+              item.template === "service.appointment.confirmed"
+                ? serviceIcsFromPayload({
+                    ...(item.payload ?? {}),
+                    organizerEmail: smtp.fromEmail,
+                  })
+                : testDriveIcsFromPayload(item.payload ?? {});
             if (ics) {
               icalEvent = {
-                filename: "test-drive.ics",
+                filename:
+                  item.template === "service.appointment.confirmed"
+                    ? "service-appointment.ics"
+                    : "test-drive.ics",
                 method: "REQUEST",
                 content: ics,
               };

@@ -42,6 +42,7 @@ import enquiriesRouter from "./enquiries";
 import webhooksRouter from "./webhooks";
 import testDriveRouter from "./test-drive";
 import feedbackRouter from "./feedback";
+import serviceEstimateRouter from "./service-estimate";
 import feedbackFormsRouter from "./feedback-forms";
 import testDrivesRouter from "./test-drives";
 import reviewsRouter from "./reviews";
@@ -68,12 +69,14 @@ router.use("/enquiries", publicRateLimit);
 router.use("/webhooks", publicRateLimit);
 router.use("/test-drive", publicRateLimit);
 router.use("/feedback", publicRateLimit);
+router.use("/service-estimates", publicRateLimit);
 router.use(enquiriesRouter);
 router.use(webhooksRouter);
 // Public: customer self-service test-drive booking (token-authenticated link).
 router.use(testDriveRouter);
 // Public: customer feedback form (token-authenticated link).
 router.use(feedbackRouter);
+router.use(serviceEstimateRouter);
 
 // Everything below requires a signed-in user, then a role permission
 // matching the route (see middlewares/rbac.ts), and mutations are audited.

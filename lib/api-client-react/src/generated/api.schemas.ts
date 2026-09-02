@@ -4806,6 +4806,54 @@ export interface VehicleModelGlCodeValidationResult {
   results: VehicleModelGlCodeValidationItem[];
 }
 
+export type ServiceEstimateLineKind = typeof ServiceEstimateLineKind[keyof typeof ServiceEstimateLineKind];
+
+
+export const ServiceEstimateLineKind = {
+  part: 'part',
+  labour: 'labour',
+} as const;
+
+export interface ServiceEstimateLine {
+  kind: ServiceEstimateLineKind;
+  description: string;
+  quantity?: number;
+  amount: number;
+}
+
+export type PublicServiceEstimateState = typeof PublicServiceEstimateState[keyof typeof PublicServiceEstimateState];
+
+
+export const PublicServiceEstimateState = {
+  open: 'open',
+  approved: 'approved',
+  declined: 'declined',
+} as const;
+
+export interface PublicServiceEstimate {
+  state: PublicServiceEstimateState;
+  brandName: string;
+  vehicle: string;
+  service: string;
+  total: number;
+  lines: ServiceEstimateLine[];
+  expiresAt: string;
+  /** @nullable */
+  decidedAt?: string | null;
+}
+
+export type ServiceEstimateDecisionInputDecision = typeof ServiceEstimateDecisionInputDecision[keyof typeof ServiceEstimateDecisionInputDecision];
+
+
+export const ServiceEstimateDecisionInputDecision = {
+  approved: 'approved',
+  declined: 'declined',
+} as const;
+
+export interface ServiceEstimateDecisionInput {
+  decision: ServiceEstimateDecisionInputDecision;
+}
+
 export type ServiceOrderType = typeof ServiceOrderType[keyof typeof ServiceOrderType];
 
 

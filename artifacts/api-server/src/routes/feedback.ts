@@ -1,11 +1,15 @@
 import { Router, type IRouter } from "express";
-import { and, eq, isNull } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, eq, isNull, or } from "drizzle-orm";
 import {
   db,
   feedbackInvitationsTable,
   leadsTable,
   dealersTable,
   timelineEventsTable,
+  customersTable,
+  serviceOrdersTable,
+  reviewsTable,
   type FeedbackInvitation,
   type FeedbackQuestion,
 } from "@workspace/db";
@@ -27,7 +31,15 @@ async function findInvitation(token: string): Promise<FeedbackInvitation | null>
   const [inv] = await db
     .select()
     .from(feedbackInvitationsTable)
-    .where(eq(feedbackInvitationsTable.token, token));
+    .where(
+      or(
+        eq(feedbackInvitationsTable.token, token),
+        eq(
+          feedbackInvitationsTable.tokenHash,
+          createHash("sha256").update(token).digest("hex"),
+        ),
+      ),
+    );
   return inv ?? null;
 }
 
@@ -40,6 +52,30 @@ async function brandNameFor(dealerId: number): Promise<string> {
 }
 
 async function serializePublic(inv: FeedbackInvitation) {
+  if (inv.serviceOrderId != null) {
+    const [order] = await db.select().from(serviceOrdersTable).where(
+      and(
+        eq(serviceOrdersTable.id, inv.serviceOrderId),
+        eq(serviceOrdersTable.dealerId, inv.dealerId),
+        eq(serviceOrdersTable.customerId, inv.customerId!),
+      ),
+    );
+    const [customer] = inv.customerId != null
+      ? await db.select({ name: customersTable.name }).from(customersTable).where(
+          and(eq(customersTable.id, inv.customerId), eq(customersTable.dealerId, inv.dealerId)),
+        )
+      : [];
+    if (!order || !customer) return null;
+    return {
+      state: inv.submittedAt ? "submitted" : "open",
+      formName: inv.formName,
+      brandName: await brandNameFor(inv.dealerId),
+      leadName: customer.name ?? null,
+      questions: (inv.questionsSnapshot ?? []) as FeedbackQuestion[],
+      submittedAt: inv.submittedAt ? inv.submittedAt.toISOString() : null,
+    };
+  }
+  if (inv.leadId == null) return null;
   const [lead] = await db
     .select({ name: leadsTable.name })
     .from(leadsTable)
@@ -76,7 +112,12 @@ router.get("/feedback/:token", async (req, res): Promise<void> => {
     res.status(410).json(EXPIRED);
     return;
   }
-  res.json(await serializePublic(inv));
+  const serialized = await serializePublic(inv);
+  if (!serialized) {
+    res.status(404).json(INVALID);
+    return;
+  }
+  res.json(serialized);
 });
 
 type Answer = { questionId: string; text?: string; choices?: string[]; rating?: number };
@@ -172,28 +213,59 @@ router.post("/feedback/:token/submit", async (req, res): Promise<void> => {
   }
   // Single-submission guard: compare-and-set on submitted_at IS NULL so two
   // concurrent submits can never both win.
-  const [updated] = await db
-    .update(feedbackInvitationsTable)
-    .set({
-      answers: result.values,
-      submittedAt: new Date(),
-      status: "completed",
-    })
-    .where(
-      and(
-        eq(feedbackInvitationsTable.id, inv.id),
-        isNull(feedbackInvitationsTable.submittedAt),
-      ),
-    )
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [claimed] = await tx
+      .update(feedbackInvitationsTable)
+      .set({
+        answers: result.values,
+        submittedAt: new Date(),
+        status: "completed",
+      })
+      .where(
+        and(
+          eq(feedbackInvitationsTable.id, inv.id),
+          eq(feedbackInvitationsTable.dealerId, inv.dealerId),
+          isNull(feedbackInvitationsTable.submittedAt),
+        ),
+      )
+      .returning();
+    if (!claimed) return null;
+    if (claimed.serviceOrderId != null && claimed.customerId != null) {
+      const [order] = await tx.select().from(serviceOrdersTable).where(
+        and(
+          eq(serviceOrdersTable.id, claimed.serviceOrderId),
+          eq(serviceOrdersTable.dealerId, claimed.dealerId),
+          eq(serviceOrdersTable.customerId, claimed.customerId),
+        ),
+      );
+      if (!order) throw new Error("service_feedback_binding_invalid");
+      const answers = result.values as Record<string, unknown>;
+      const rating = Object.values(answers).find((value) => typeof value === "number");
+      const comment = Object.values(answers).find((value) => typeof value === "string");
+      if (typeof rating !== "number") throw new Error("service_feedback_rating_missing");
+      await tx.insert(reviewsTable).values({
+        dealerId: claimed.dealerId,
+        customerId: claimed.customerId,
+        customerName: null,
+        source: "service_csat",
+        rating,
+        comment: typeof comment === "string" ? comment : null,
+        refType: "service_order",
+        refId: order.id,
+        vehicleLabel: order.vehicleInfo,
+        capturedBy: "Customer",
+      });
+    }
+    return claimed;
+  });
   if (!updated) {
     res.status(409).json({ error: "This form was already submitted — thank you!" });
     return;
   }
-  const [lead] = await db
+  const [lead] = inv.leadId != null ? await db
     .select()
     .from(leadsTable)
-    .where(eq(leadsTable.id, inv.leadId));
+    .where(and(eq(leadsTable.id, inv.leadId), eq(leadsTable.dealerId, inv.dealerId))) : [];
   if (lead) {
     await db.insert(timelineEventsTable).values({
       dealerId: inv.dealerId,
@@ -208,7 +280,12 @@ router.post("/feedback/:token/submit", async (req, res): Promise<void> => {
       refId: lead.id,
     });
   }
-  res.json(await serializePublic(updated));
+  const serialized = await serializePublic(updated);
+  if (!serialized) {
+    res.status(404).json(INVALID);
+    return;
+  }
+  res.json(serialized);
 });
 
 export default router;

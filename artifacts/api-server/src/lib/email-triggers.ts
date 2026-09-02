@@ -1,4 +1,5 @@
-import { and, eq } from "drizzle-orm";
+import { createHash, randomBytes } from "node:crypto";
+import { and, eq, isNull, like } from "drizzle-orm";
 import {
   db,
   customersTable,
@@ -10,6 +11,15 @@ import {
   type ServiceInvoice,
   usersTable,
   dealerUsersTable,
+  dealersTable,
+  emailLogsTable,
+  jobCardsTable,
+  jobCardPartsTable,
+  serviceEstimateDecisionsTable,
+  serviceInvoicesTable,
+  feedbackInvitationsTable,
+  type JobCard,
+  type ServiceEstimateLine,
 } from "@workspace/db";
 import { enqueueEmail, type TemplateData } from "./email";
 
@@ -38,7 +48,11 @@ export async function leadAdvisorContact(
   if (!u) return null;
   return { name: u.name ?? u.email ?? null, phone: u.phone ?? null };
 }
-import { ownerCalendarContact, testDriveCalendarFields } from "./calendar";
+import {
+  ownerCalendarContact,
+  serviceCalendarFields,
+  testDriveCalendarFields,
+} from "./calendar";
 import { logger } from "./logger";
 import {
   dealerTimezone,
@@ -511,15 +525,19 @@ const serviceDateLabel = (
   return fullMonthDate(value, tz);
 };
 
-/** Service order created → booking confirmation. */
+/** Service order created → request receipt (not a confirmed appointment). */
 export function onServiceOrderBooked(order: ServiceOrder): void {
-  fire("service_booking_confirmed", async () => {
+  fire("service_booking_received", async () => {
     const c = await customerEmail(order.dealerId, order.customerId);
     if (!c.email) return;
     const tz = await dealerTimezone(order.dealerId);
+    const [dealer] = await db
+      .select({ name: dealersTable.name })
+      .from(dealersTable)
+      .where(eq(dealersTable.id, order.dealerId));
     await enqueueEmail({
       dealerId: order.dealerId,
-      template: "service.booking.confirmed",
+      template: "service.booking.received",
       to: c.email,
       customerId: order.customerId,
       dedupeKey: `svc:${order.id}:booked`,
@@ -528,6 +546,200 @@ export function onServiceOrderBooked(order: ServiceOrder): void {
         vehicle: order.vehicleInfo,
         service: order.type,
         date: serviceDateLabel(order.scheduledDate, tz),
+        ...(dealer?.name ? { dealer: dealer.name } : {}),
+      },
+    });
+  });
+}
+
+async function cancelServiceReminders(orderId: number, dealerId: number) {
+  await db
+    .update(emailLogsTable)
+    .set({ status: "cancelled", nextAttemptAt: null })
+    .where(
+      and(
+        eq(emailLogsTable.dealerId, dealerId),
+        eq(emailLogsTable.status, "queued"),
+        like(emailLogsTable.dedupeKey, `svc:${orderId}:reminder:%`),
+      ),
+    );
+}
+
+/** Cancel stale reminders, confirm an acknowledged appointment, and schedule 48h/3h. */
+async function confirmServiceAppointment(order: ServiceOrder): Promise<void> {
+  await cancelServiceReminders(order.id, order.dealerId);
+  const c = await customerEmail(order.dealerId, order.customerId);
+  if (!c.email) return;
+  const [card] = await db
+    .select()
+    .from(jobCardsTable)
+    .where(
+      and(
+        eq(jobCardsTable.serviceOrderId, order.id),
+        eq(jobCardsTable.dealerId, order.dealerId),
+      ),
+    )
+    .limit(1);
+  if (!card?.scheduledAt) return;
+  const [dealer] = await db
+    .select({ name: dealersTable.name, address: dealersTable.address })
+    .from(dealersTable)
+    .where(eq(dealersTable.id, order.dealerId));
+  const tz = await dealerTimezone(order.dealerId);
+  const base: TemplateData = {
+    ...(c.name ? { name: c.name } : {}),
+    vehicle: order.vehicleInfo,
+    service: order.type,
+    date: serviceDateLabel(card.scheduledAt, tz),
+    time: formatDealerTime(card.scheduledAt, tz),
+    ...(card.technicianName ? { advisor: card.technicianName } : {}),
+    ...(dealer?.address || dealer?.name
+      ? { location: dealer.address || dealer.name }
+      : {}),
+    serviceOrderId: String(order.id),
+    reminderScheduledAt: card.scheduledAt.toISOString(),
+  };
+  await enqueueEmail({
+    dealerId: order.dealerId,
+    template: "service.appointment.confirmed",
+    to: c.email,
+    customerId: order.customerId,
+    dedupeKey: `svc:${order.id}:confirmed:${card.scheduledAt.getTime()}`,
+    data: {
+      ...base,
+      ...serviceCalendarFields({
+        orderId: order.id,
+        startsAt: card.scheduledAt,
+        durationMins: card.durationMins,
+        vehicle: order.vehicleInfo,
+        service: order.type,
+        customerEmail: c.email,
+        customerName: c.name,
+        advisor: card.technicianName,
+        location: dealer?.address || dealer?.name,
+      }),
+    },
+  });
+  for (const [hours, window] of [[48, "In 48 hours"], [3, "In 3 hours"]] as const) {
+    const sendAt = new Date(card.scheduledAt.getTime() - hours * 60 * 60 * 1000);
+    if (sendAt.getTime() <= Date.now()) continue;
+    await enqueueEmail({
+      dealerId: order.dealerId,
+      template: "service.appointment.reminder",
+      to: c.email,
+      customerId: order.customerId,
+      dedupeKey: `svc:${order.id}:reminder:${hours}h:${card.scheduledAt.getTime()}`,
+      sendAt,
+      data: { ...base, window },
+    });
+  }
+}
+
+export function onServiceAppointmentChanged(order: ServiceOrder): void {
+  fire("service_appointment_changed", () => confirmServiceAppointment(order));
+}
+
+/** First persisted job-card intake → digital check-in receipt. */
+export function onJobCardIntakeRecorded(order: ServiceOrder, card: JobCard): void {
+  fire("service_checkin", async () => {
+    const c = await customerEmail(order.dealerId, order.customerId);
+    if (!c.email || !card.intake) return;
+    const condition = [
+      card.intake.fuelLevel ? `fuel ${card.intake.fuelLevel}` : "",
+      card.intake.notes || "",
+    ].filter(Boolean).join("; ");
+    await enqueueEmail({
+      dealerId: order.dealerId,
+      template: "service.checkin.receipt",
+      to: c.email,
+      customerId: order.customerId,
+      dedupeKey: `svc:${order.id}:checkin`,
+      data: {
+        ...(c.name ? { name: c.name } : {}),
+        vehicle: order.vehicleInfo,
+        concerns: order.complaint || card.title,
+        ...(card.intake.odometer != null
+          ? { mileage: `${card.intake.odometer.toLocaleString("en-US")} km` }
+          : order.odometer != null
+            ? { mileage: `${order.odometer.toLocaleString("en-US")} km` }
+            : {}),
+        ...(condition ? { condition } : {}),
+        ...(card.technicianName ? { advisor: card.technicianName } : {}),
+      },
+    });
+  });
+}
+
+/** Quote total first becomes available → secure whole-estimate decision link. */
+export function onServiceEstimateReady(order: ServiceOrder, card: JobCard): void {
+  fire("service_estimate_ready", async () => {
+    if (card.quoteTotal <= 0) return;
+    const c = await customerEmail(order.dealerId, order.customerId);
+    if (!c.email) return;
+    const [existing] = await db
+      .select({ id: serviceEstimateDecisionsTable.id })
+      .from(serviceEstimateDecisionsTable)
+      .where(
+        and(
+          eq(serviceEstimateDecisionsTable.dealerId, order.dealerId),
+          eq(serviceEstimateDecisionsTable.jobCardId, card.id),
+          isNull(serviceEstimateDecisionsTable.decision),
+          isNull(serviceEstimateDecisionsTable.invalidatedAt),
+        ),
+      )
+      .limit(1);
+    if (existing) return;
+    const parts = await db
+      .select()
+      .from(jobCardPartsTable)
+      .where(
+        and(
+          eq(jobCardPartsTable.dealerId, order.dealerId),
+          eq(jobCardPartsTable.jobCardId, card.id),
+        ),
+      )
+      .orderBy(jobCardPartsTable.id);
+    const lines: ServiceEstimateLine[] = parts
+      .filter((p) => p.kind === "issue")
+      .map((p) => ({
+        kind: "part",
+        description: p.partName,
+        quantity: p.quantity,
+        amount: p.quantity * p.unitPrice,
+      }));
+    if (card.laborHours > 0) {
+      lines.push({
+        kind: "labour",
+        description: "Labour",
+        quantity: card.laborHours,
+        amount: card.laborHours * card.laborRate,
+      });
+    }
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await db.insert(serviceEstimateDecisionsTable).values({
+      dealerId: order.dealerId,
+      serviceOrderId: order.id,
+      jobCardId: card.id,
+      tokenHash,
+      estimateTotal: card.quoteTotal,
+      linesSnapshot: lines,
+      expiresAt,
+    });
+    const origin = publicAppOrigin();
+    if (!origin) return;
+    await enqueueEmail({
+      dealerId: order.dealerId,
+      template: "service.estimate.ready",
+      to: c.email,
+      customerId: order.customerId,
+      dedupeKey: `svc:${order.id}:estimate:${card.id}:${card.quoteTotal}`,
+      data: {
+        vehicle: order.vehicleInfo,
+        total: money(card.quoteTotal),
+        expires: expiresAt.toISOString().slice(0, 10),
+        link: `${origin}/service-estimate/${token}`,
       },
     });
   });
@@ -542,6 +754,19 @@ export function onServiceInvoiceIssued(invoice: ServiceInvoice): void {
   fire("service_invoice_issued", async () => {
     const c = await customerEmail(invoice.dealerId, invoice.customerId);
     if (!c.email) return;
+    const [card] = await db
+      .select({
+        workPerformed: jobCardsTable.workPerformed,
+        serviceAnalysis: jobCardsTable.serviceAnalysis,
+        notes: jobCardsTable.notes,
+      })
+      .from(jobCardsTable)
+      .where(
+        and(
+          eq(jobCardsTable.id, invoice.jobCardId),
+          eq(jobCardsTable.dealerId, invoice.dealerId),
+        ),
+      );
     await enqueueEmail({
       dealerId: invoice.dealerId,
       template: "service.invoice.issued",
@@ -554,6 +779,12 @@ export function onServiceInvoiceIssued(invoice: ServiceInvoice): void {
         invoiceRef: `SV-${String(invoice.id).padStart(5, "0")}`,
         total: money(invoice.total),
         serviceInvoiceId: String(invoice.id),
+        ...(card?.workPerformed
+          ? { completedWork: card.workPerformed }
+          : {}),
+        ...(card?.notes || card?.serviceAnalysis
+          ? { recommendedMaintenance: card.notes || card.serviceAnalysis || "" }
+          : {}),
       },
     });
   });
@@ -578,7 +809,11 @@ export function onServiceOrderStatusChanged(
       service: after.type,
     };
     switch (after.status) {
+      case "acknowledged":
+        await confirmServiceAppointment(after);
+        break;
       case "in_progress":
+        await cancelServiceReminders(after.id, after.dealerId);
         // Re-entering in_progress after on_hold dedupes to the first send.
         await enqueueEmail({
           dealerId: after.dealerId,
@@ -590,6 +825,7 @@ export function onServiceOrderStatusChanged(
         });
         break;
       case "on_hold":
+        await cancelServiceReminders(after.id, after.dealerId);
         await enqueueEmail({
           dealerId: after.dealerId,
           template: "service.delayed",
@@ -600,20 +836,75 @@ export function onServiceOrderStatusChanged(
         });
         break;
       case "resolved":
+        await cancelServiceReminders(after.id, after.dealerId);
+        const [readyInvoice] = await db
+          .select({ total: serviceInvoicesTable.total })
+          .from(serviceInvoicesTable)
+          .where(
+            and(
+              eq(serviceInvoicesTable.serviceOrderId, after.id),
+              eq(serviceInvoicesTable.dealerId, after.dealerId),
+            ),
+          )
+          .limit(1);
         await enqueueEmail({
           dealerId: after.dealerId,
           template: "vehicle_ready",
           to: c.email,
           customerId: after.customerId,
           dedupeKey: `svc:${after.id}:ready`,
-          data: base,
+          data: {
+            ...base,
+            ...(readyInvoice ? { balance: money(readyInvoice.total) } : {}),
+          },
         });
         break;
       case "closed":
-        // FR-COM-02: post-service feedback request. The dedupe key matches
-        // notifyFeedbackSurvey's email leg exactly (`csat:{entityType}:{id}:email`),
-        // so if any other code path also fires a feedback survey for this
-        // service order, the customer still receives at most one email.
+        await cancelServiceReminders(after.id, after.dealerId);
+        // A service invitation is deliberately customer/order-bound (not
+        // lead-bound). Store only its digest and schedule the existing branded
+        // feedback email after collection, never immediately on closure.
+        const origin = publicAppOrigin();
+        if (!origin || after.customerId == null) break;
+        const [existingInvitation] = await db
+          .select({ id: feedbackInvitationsTable.id })
+          .from(feedbackInvitationsTable)
+          .where(
+            and(
+              eq(feedbackInvitationsTable.dealerId, after.dealerId),
+              eq(feedbackInvitationsTable.serviceOrderId, after.id),
+            ),
+          )
+          .limit(1);
+        if (existingInvitation) break;
+        const feedbackToken = randomBytes(32).toString("base64url");
+        const feedbackHash = createHash("sha256")
+          .update(feedbackToken)
+          .digest("hex");
+        const feedbackExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        const [invitation] = await db
+          .insert(feedbackInvitationsTable)
+          .values({
+            dealerId: after.dealerId,
+            formId: 0,
+            leadId: null,
+            serviceOrderId: after.id,
+            customerId: after.customerId,
+            vehicleLabel: after.vehicleInfo,
+            token: null,
+            tokenHash: feedbackHash,
+            formName: "Your service feedback",
+            questionsSnapshot: [
+              { id: "rating", type: "star_rating", label: "How would you rate your service experience?", required: true, maxStars: 5 },
+              { id: "comment", type: "long_text", label: "Is there anything else you would like us to know?", required: false },
+            ],
+            expiresAt: feedbackExpiresAt,
+            channels: ["email"],
+            createdBy: "Service lifecycle",
+          })
+          .onConflictDoNothing()
+          .returning({ id: feedbackInvitationsTable.id });
+        if (!invitation) break;
         await enqueueEmail({
           dealerId: after.dealerId,
           template: "feedback.survey",
@@ -623,8 +914,13 @@ export function onServiceOrderStatusChanged(
           data: {
             ...(c.name ? { name: c.name } : {}),
             context: `your recent ${after.type} service on the ${after.vehicleInfo}`,
+            link: `${origin}/feedback/${feedbackToken}`,
           },
+          sendAt: new Date(Date.now() + 36 * 60 * 60 * 1000),
         });
+        break;
+      case "cancelled":
+        await cancelServiceReminders(after.id, after.dealerId);
         break;
     }
   });

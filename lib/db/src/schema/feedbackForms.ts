@@ -11,6 +11,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { leadsTable } from "./leads";
+import { customersTable } from "./customers";
+import { serviceOrdersTable } from "./serviceOrders";
 
 /** Supported question kinds — no branching/scoring/file upload (out of scope). */
 export const FEEDBACK_QUESTION_TYPES = [
@@ -75,15 +77,19 @@ export const feedbackInvitationsTable = pgTable(
     dealerId: integer("dealer_id").notNull(),
     formId: integer("form_id").notNull(),
     leadId: integer("lead_id")
-      .notNull()
       .references(() => leadsTable.id, { onDelete: "cascade" }),
+    /** Service invitations are customer/order-bound and intentionally leadless. */
+    serviceOrderId: integer("service_order_id").references(() => serviceOrdersTable.id),
+    customerId: integer("customer_id").references(() => customersTable.id),
+    vehicleLabel: text("vehicle_label"),
     /** Snapshot: survives later edits/archive of the reusable form. */
     formName: text("form_name").notNull(),
     questionsSnapshot: jsonb("questions_snapshot").notNull(),
     token: text("token")
-      .notNull()
       .unique()
       .default(sql`gen_random_uuid()`),
+    /** New public links persist only this digest; legacy plaintext tokens remain readable. */
+    tokenHash: text("token_hash").unique(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     status: text("status").notNull().default("sent"),
     /** Channels actually queued, e.g. ["email","whatsapp"]. */

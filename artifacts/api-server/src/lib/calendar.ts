@@ -151,3 +151,76 @@ export function testDriveIcsFromPayload(
   ];
   return lines.map(fold).join("\r\n");
 }
+
+/** Calendar payload carried by a service appointment confirmation. */
+export function serviceCalendarFields(opts: {
+  orderId: number;
+  startsAt: Date;
+  durationMins?: number | null;
+  vehicle: string;
+  service: string;
+  customerEmail: string;
+  customerName?: string | null;
+  advisor?: string | null;
+  location?: string | null;
+}): Record<string, string> {
+  return {
+    serviceStartsAtIso: opts.startsAt.toISOString(),
+    serviceDurationMins: String(opts.durationMins || DEFAULT_DURATION_MINS),
+    serviceOrderId: String(opts.orderId),
+    vehicle: opts.vehicle,
+    service: opts.service,
+    customerEmail: opts.customerEmail,
+    ...(opts.customerName ? { customerName: opts.customerName } : {}),
+    ...(opts.advisor ? { advisor: opts.advisor } : {}),
+    ...(opts.location ? { location: opts.location } : {}),
+    calSequence: String(Math.floor(Date.now() / 1000)),
+  };
+}
+
+/** Build a stable RFC 5545 service appointment invite from an outbox payload. */
+export function serviceIcsFromPayload(payload: Record<string, string>): string | null {
+  const start = new Date(payload.serviceStartsAtIso ?? "");
+  if (Number.isNaN(start.getTime())) return null;
+  const end = new Date(
+    start.getTime() +
+      (Number.parseInt(payload.serviceDurationMins ?? "", 10) ||
+        DEFAULT_DURATION_MINS) *
+        60_000,
+  );
+  const organizerEmail = payload.organizerEmail || process.env.GMAIL_USER;
+  if (!organizerEmail) return null;
+  const vehicle = payload.vehicle || "Vehicle";
+  const service = payload.service || "Service appointment";
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "PRODID:-//AURA Dealership OS//Service Appointment//EN",
+    "VERSION:2.0",
+    "CALSCALE:GREGORIAN",
+    "METHOD:REQUEST",
+    "BEGIN:VEVENT",
+    `UID:aura-service-order-${payload.serviceOrderId || "0"}@aura-dealership`,
+    `DTSTAMP:${icsUtc(new Date())}`,
+    `DTSTART:${icsUtc(start)}`,
+    `DTEND:${icsUtc(end)}`,
+    `SEQUENCE:${Number.parseInt(payload.calSequence ?? "", 10) || 0}`,
+    "STATUS:CONFIRMED",
+    `SUMMARY:${esc(`Service — ${vehicle}`)}`,
+    `DESCRIPTION:${esc(`${service} for ${vehicle}. Please remove valuables and bring the vehicle key and service documents.`)}`,
+    `LOCATION:${esc(payload.location || "Service reception")}`,
+    `ORGANIZER;CN=${esc(payload.advisor || "Service Advisor")}:mailto:${organizerEmail}`,
+    ...(payload.customerEmail
+      ? [
+          `ATTENDEE;CN=${esc(payload.customerName || "Customer")};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${payload.customerEmail}`,
+        ]
+      : []),
+    "BEGIN:VALARM",
+    "TRIGGER:-PT3H",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:Service appointment in three hours",
+    "END:VALARM",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ];
+  return lines.map(fold).join("\r\n");
+}

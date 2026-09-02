@@ -5099,6 +5099,68 @@ export const ValidateVehicleModelGlCodesResponse = zod.object({
 })
 
 
+/**
+ * @summary View an expiring whole-service estimate using its bearer token
+ */
+export const getPublicServiceEstimatePathTokenMin = 32;
+export const getPublicServiceEstimatePathTokenMax = 128;
+
+
+
+export const GetPublicServiceEstimateParams = zod.object({
+  "token": zod.coerce.string().min(getPublicServiceEstimatePathTokenMin).max(getPublicServiceEstimatePathTokenMax)
+})
+
+export const GetPublicServiceEstimateResponse = zod.object({
+  "state": zod.enum(['open', 'approved', 'declined']),
+  "brandName": zod.string(),
+  "vehicle": zod.string(),
+  "service": zod.string(),
+  "total": zod.number(),
+  "lines": zod.array(zod.object({
+  "kind": zod.enum(['part', 'labour']),
+  "description": zod.string(),
+  "quantity": zod.number().optional(),
+  "amount": zod.number()
+})),
+  "expiresAt": zod.coerce.date(),
+  "decidedAt": zod.coerce.date().nullish()
+})
+
+
+/**
+ * @summary Approve or decline the whole estimate once
+ */
+export const decidePublicServiceEstimatePathTokenMin = 32;
+export const decidePublicServiceEstimatePathTokenMax = 128;
+
+
+
+export const DecidePublicServiceEstimateParams = zod.object({
+  "token": zod.coerce.string().min(decidePublicServiceEstimatePathTokenMin).max(decidePublicServiceEstimatePathTokenMax)
+})
+
+export const DecidePublicServiceEstimateBody = zod.object({
+  "decision": zod.enum(['approved', 'declined'])
+})
+
+export const DecidePublicServiceEstimateResponse = zod.object({
+  "state": zod.enum(['open', 'approved', 'declined']),
+  "brandName": zod.string(),
+  "vehicle": zod.string(),
+  "service": zod.string(),
+  "total": zod.number(),
+  "lines": zod.array(zod.object({
+  "kind": zod.enum(['part', 'labour']),
+  "description": zod.string(),
+  "quantity": zod.number().optional(),
+  "amount": zod.number()
+})),
+  "expiresAt": zod.coerce.date(),
+  "decidedAt": zod.coerce.date().nullish()
+})
+
+
 export const ListServiceOrdersQueryParams = zod.object({
   "status": zod.coerce.string().optional()
 })
