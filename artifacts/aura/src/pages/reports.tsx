@@ -543,19 +543,37 @@ function SalesAdvisorActivityReport({
     return report.table.rows.map((row) => ({
       advisor: row[0],
       leadsReceived: Number(row[1]) || 0,
-      contacted: Number(row[2]) || 0,
-      quotesSent: Number(row[3]) || 0,
-      testDrives: Number(row[4]) || 0,
-      converted: Number(row[5]) || 0,
-      conversion: row[6],
+      sources: row[2],
+      contacted: Number(row[3]) || 0,
+      quotesSent: Number(row[4]) || 0,
+      testDrives: Number(row[5]) || 0,
+      converted: Number(row[6]) || 0,
+      conversion: row[7],
     }));
   }, [report]);
+
+  const sourceData = useMemo(
+    () =>
+      report.chart.points.map((point) => ({
+        source: point.label,
+        leads: point.value,
+      })),
+    [report.chart.points],
+  );
 
   const navToPipeline = (advisorName: string) => {
     const qs = new URLSearchParams();
     qs.set("from", from);
     qs.set("to", to);
     qs.set("advisor", advisorName);
+    setLocation(`/pipeline?${qs.toString()}`);
+  };
+
+  const navToSource = (source: string) => {
+    const qs = new URLSearchParams();
+    qs.set("from", from);
+    qs.set("to", to);
+    qs.set("source", source);
     setLocation(`/pipeline?${qs.toString()}`);
   };
 
@@ -697,6 +715,41 @@ function SalesAdvisorActivityReport({
         </Card>
       </div>
       
+      {/* Lead sources */}
+      <Card className="glass-panel border-none shadow-xl flex flex-col h-[280px]">
+        <div className="px-4 pt-3 pb-1">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+            Where Leads Came From
+          </h3>
+        </div>
+        <CardContent className="p-2 flex-1 min-h-0">
+          {sourceData.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+              No lead sources in this range.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={sourceData}
+                layout="vertical"
+                margin={{ top: 8, right: 24, left: 24, bottom: 8 }}
+                onClick={(state) => {
+                  if (state?.activePayload?.[0]) {
+                    navToSource(state.activePayload[0].payload.source);
+                  }
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                <XAxis type="number" allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis type="category" dataKey="source" width={100} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} itemStyle={{ color: "hsl(var(--foreground))" }} cursor={{ fill: "hsl(var(--foreground) / 0.04)", cursor: "pointer" }} />
+                <Bar dataKey="leads" name="Leads" fill="hsl(var(--primary))" radius={[0, 5, 5, 0]} maxBarSize={24} cursor="pointer" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Activity Mix */}
       <Card className="glass-panel border-none shadow-xl flex flex-col h-[280px]">
           <div className="px-4 pt-3 pb-1">

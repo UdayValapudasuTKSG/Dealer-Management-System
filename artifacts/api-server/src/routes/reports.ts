@@ -417,6 +417,7 @@ const salesAdvisorActivity: Builder = async (ctx) => {
 
   type AdvisorRow = {
     leads: number;
+    sources: Map<string, number>;
     contacted: number;
     quotes: Set<string>;
     testDrives: number;
@@ -426,6 +427,7 @@ const salesAdvisorActivity: Builder = async (ctx) => {
   const rowFor = (name: string) => {
     const row = byAdvisor.get(name) ?? {
       leads: 0,
+      sources: new Map<string, number>(),
       contacted: 0,
       quotes: new Set<string>(),
       testDrives: 0,
@@ -434,10 +436,16 @@ const salesAdvisorActivity: Builder = async (ctx) => {
     byAdvisor.set(name, row);
     return row;
   };
+  const leadSources = new Map<string, number>();
 
   for (const lead of leads) {
     const row = rowFor(advisorName(lead));
-    if (inRange(lead.createdAt, from, to)) row.leads += 1;
+    if (inRange(lead.createdAt, from, to)) {
+      const source = titleCase(lead.source?.trim() || "Unknown");
+      row.leads += 1;
+      row.sources.set(source, (row.sources.get(source) ?? 0) + 1);
+      leadSources.set(source, (leadSources.get(source) ?? 0) + 1);
+    }
     if (inRange(lead.contactedDate, from, to)) row.contacted += 1;
   }
   for (const quote of quotes) {
@@ -496,13 +504,16 @@ const salesAdvisorActivity: Builder = async (ctx) => {
     ],
     chart: {
       kind: "pie",
-      valueLabel: "Leads by advisor",
-      points: rows.map(([name, row]) => ({ label: name, value: row.leads })),
+      valueLabel: "Lead sources",
+      points: [...leadSources.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([source, count]) => ({ label: source, value: count })),
     },
     table: {
       columns: [
         "Advisor",
         "Leads received",
+        "Lead sources",
         "Contacted",
         "Quotes sent",
         "Test drives",
@@ -512,6 +523,10 @@ const salesAdvisorActivity: Builder = async (ctx) => {
       rows: rows.map(([name, row]) => [
         name,
         String(row.leads),
+        [...row.sources.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([source, count]) => `${source}: ${count}`)
+          .join(" · ") || "—",
         String(row.contacted),
         String(row.quotes.size),
         String(row.testDrives),
