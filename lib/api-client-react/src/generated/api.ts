@@ -245,6 +245,7 @@ import type {
   ListJobCardsParams,
   ListLeadSourcesParams,
   ListLeadsParams,
+  ListPartRequisitionsParams,
   ListPartsParams,
   ListPlatformAuditParams,
   ListReviewsParams,
@@ -276,6 +277,12 @@ import type {
   PartPurchase,
   PartPurchaseInput,
   PartPurchaseReceiveBody,
+  PartRequisition,
+  PartRequisitionDecision,
+  PartRequisitionDetail,
+  PartRequisitionFulfillmentInput,
+  PartRequisitionInput,
+  PartRequisitionOrderUpdate,
   PartUpdate,
   PartsSettings,
   PartsSettingsUpdate,
@@ -11197,6 +11204,526 @@ export const useCreateJobCardInvoice = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getCreateJobCardInvoiceMutationOptions(options));
+    }
+
+export const getListJobCardPartRequisitionsUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/part-requisitions`
+}
+
+/**
+ * @summary List parts requisitions attached to a job card
+ */
+export const listJobCardPartRequisitions = async (id: number, options?: RequestInit): Promise<PartRequisition[]> => {
+
+  return customFetch<PartRequisition[]>(getListJobCardPartRequisitionsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListJobCardPartRequisitionsQueryKey = (id: number,) => {
+    return [
+    `/api/job-cards/${id}/part-requisitions`
+    ] as const;
+    }
+
+
+export const getListJobCardPartRequisitionsQueryOptions = <TData = Awaited<ReturnType<typeof listJobCardPartRequisitions>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobCardPartRequisitions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListJobCardPartRequisitionsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJobCardPartRequisitions>>> = ({ signal }) => listJobCardPartRequisitions(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJobCardPartRequisitions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListJobCardPartRequisitionsQueryResult = NonNullable<Awaited<ReturnType<typeof listJobCardPartRequisitions>>>
+export type ListJobCardPartRequisitionsQueryError = ErrorType<Error>
+
+
+/**
+ * @summary List parts requisitions attached to a job card
+ */
+
+export function useListJobCardPartRequisitions<TData = Awaited<ReturnType<typeof listJobCardPartRequisitions>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobCardPartRequisitions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListJobCardPartRequisitionsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateJobCardPartRequisitionUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/part-requisitions`
+}
+
+/**
+ * @summary Submit a parts requisition from a job card
+ */
+export const createJobCardPartRequisition = async (id: number,
+    partRequisitionInput: PartRequisitionInput, options?: RequestInit): Promise<PartRequisitionDetail> => {
+
+  return customFetch<PartRequisitionDetail>(getCreateJobCardPartRequisitionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partRequisitionInput)
+  }
+);}
+
+
+
+
+
+export const getCreateJobCardPartRequisitionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJobCardPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createJobCardPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionInput>}, TContext> => {
+
+const mutationKey = ['createJobCardPartRequisition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createJobCardPartRequisition>>, {id: number;data: BodyType<PartRequisitionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createJobCardPartRequisition(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateJobCardPartRequisitionMutationResult = NonNullable<Awaited<ReturnType<typeof createJobCardPartRequisition>>>
+    export type CreateJobCardPartRequisitionMutationBody = BodyType<PartRequisitionInput>
+    export type CreateJobCardPartRequisitionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Submit a parts requisition from a job card
+ */
+export const useCreateJobCardPartRequisition = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJobCardPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createJobCardPartRequisition>>,
+        TError,
+        {id: number;data: BodyType<PartRequisitionInput>},
+        TContext
+      > => {
+      return useMutation(getCreateJobCardPartRequisitionMutationOptions(options));
+    }
+
+export const getListPartRequisitionsUrl = (params?: ListPartRequisitionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/part-requisitions?${stringifiedParams}` : `/api/part-requisitions`
+}
+
+/**
+ * @summary List dealer parts requisitions
+ */
+export const listPartRequisitions = async (params?: ListPartRequisitionsParams, options?: RequestInit): Promise<PartRequisition[]> => {
+
+  return customFetch<PartRequisition[]>(getListPartRequisitionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPartRequisitionsQueryKey = (params?: ListPartRequisitionsParams,) => {
+    return [
+    `/api/part-requisitions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPartRequisitionsQueryOptions = <TData = Awaited<ReturnType<typeof listPartRequisitions>>, TError = ErrorType<unknown>>(params?: ListPartRequisitionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPartRequisitions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPartRequisitionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPartRequisitions>>> = ({ signal }) => listPartRequisitions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPartRequisitions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPartRequisitionsQueryResult = NonNullable<Awaited<ReturnType<typeof listPartRequisitions>>>
+export type ListPartRequisitionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List dealer parts requisitions
+ */
+
+export function useListPartRequisitions<TData = Awaited<ReturnType<typeof listPartRequisitions>>, TError = ErrorType<unknown>>(
+ params?: ListPartRequisitionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPartRequisitions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPartRequisitionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPartRequisitionUrl = (id: number,) => {
+
+
+
+
+  return `/api/part-requisitions/${id}`
+}
+
+export const getPartRequisition = async (id: number, options?: RequestInit): Promise<PartRequisitionDetail> => {
+
+  return customFetch<PartRequisitionDetail>(getGetPartRequisitionUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPartRequisitionQueryKey = (id: number,) => {
+    return [
+    `/api/part-requisitions/${id}`
+    ] as const;
+    }
+
+
+export const getGetPartRequisitionQueryOptions = <TData = Awaited<ReturnType<typeof getPartRequisition>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPartRequisition>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPartRequisitionQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPartRequisition>>> = ({ signal }) => getPartRequisition(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPartRequisition>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPartRequisitionQueryResult = NonNullable<Awaited<ReturnType<typeof getPartRequisition>>>
+export type GetPartRequisitionQueryError = ErrorType<Error>
+
+
+
+export function useGetPartRequisition<TData = Awaited<ReturnType<typeof getPartRequisition>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPartRequisition>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPartRequisitionQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDecidePartRequisitionUrl = (id: number,) => {
+
+
+
+
+  return `/api/part-requisitions/${id}/decision`
+}
+
+/**
+ * @summary Approve or reject a submitted requisition
+ */
+export const decidePartRequisition = async (id: number,
+    partRequisitionDecision: PartRequisitionDecision, options?: RequestInit): Promise<PartRequisitionDetail> => {
+
+  return customFetch<PartRequisitionDetail>(getDecidePartRequisitionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partRequisitionDecision)
+  }
+);}
+
+
+
+
+
+export const getDecidePartRequisitionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decidePartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decidePartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionDecision>}, TContext> => {
+
+const mutationKey = ['decidePartRequisition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decidePartRequisition>>, {id: number;data: BodyType<PartRequisitionDecision>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  decidePartRequisition(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecidePartRequisitionMutationResult = NonNullable<Awaited<ReturnType<typeof decidePartRequisition>>>
+    export type DecidePartRequisitionMutationBody = BodyType<PartRequisitionDecision>
+    export type DecidePartRequisitionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Approve or reject a submitted requisition
+ */
+export const useDecidePartRequisition = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decidePartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionDecision>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof decidePartRequisition>>,
+        TError,
+        {id: number;data: BodyType<PartRequisitionDecision>},
+        TContext
+      > => {
+      return useMutation(getDecidePartRequisitionMutationOptions(options));
+    }
+
+export const getMarkPartRequisitionOrderedUrl = (id: number,) => {
+
+
+
+
+  return `/api/part-requisitions/${id}/ordered`
+}
+
+/**
+ * @summary Mark an approved requisition ordered
+ */
+export const markPartRequisitionOrdered = async (id: number,
+    partRequisitionOrderUpdate: PartRequisitionOrderUpdate, options?: RequestInit): Promise<PartRequisitionDetail> => {
+
+  return customFetch<PartRequisitionDetail>(getMarkPartRequisitionOrderedUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partRequisitionOrderUpdate)
+  }
+);}
+
+
+
+
+
+export const getMarkPartRequisitionOrderedMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markPartRequisitionOrdered>>, TError,{id: number;data: BodyType<PartRequisitionOrderUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markPartRequisitionOrdered>>, TError,{id: number;data: BodyType<PartRequisitionOrderUpdate>}, TContext> => {
+
+const mutationKey = ['markPartRequisitionOrdered'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markPartRequisitionOrdered>>, {id: number;data: BodyType<PartRequisitionOrderUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  markPartRequisitionOrdered(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkPartRequisitionOrderedMutationResult = NonNullable<Awaited<ReturnType<typeof markPartRequisitionOrdered>>>
+    export type MarkPartRequisitionOrderedMutationBody = BodyType<PartRequisitionOrderUpdate>
+    export type MarkPartRequisitionOrderedMutationError = ErrorType<Error>
+
+    /**
+ * @summary Mark an approved requisition ordered
+ */
+export const useMarkPartRequisitionOrdered = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markPartRequisitionOrdered>>, TError,{id: number;data: BodyType<PartRequisitionOrderUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markPartRequisitionOrdered>>,
+        TError,
+        {id: number;data: BodyType<PartRequisitionOrderUpdate>},
+        TContext
+      > => {
+      return useMutation(getMarkPartRequisitionOrderedMutationOptions(options));
+    }
+
+export const getFulfillPartRequisitionUrl = (id: number,) => {
+
+
+
+
+  return `/api/part-requisitions/${id}/fulfill`
+}
+
+/**
+ * @summary Fulfill internal or external requisition line quantities
+ */
+export const fulfillPartRequisition = async (id: number,
+    partRequisitionFulfillmentInput: PartRequisitionFulfillmentInput, options?: RequestInit): Promise<PartRequisitionDetail> => {
+
+  return customFetch<PartRequisitionDetail>(getFulfillPartRequisitionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partRequisitionFulfillmentInput)
+  }
+);}
+
+
+
+
+
+export const getFulfillPartRequisitionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof fulfillPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionFulfillmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof fulfillPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionFulfillmentInput>}, TContext> => {
+
+const mutationKey = ['fulfillPartRequisition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof fulfillPartRequisition>>, {id: number;data: BodyType<PartRequisitionFulfillmentInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  fulfillPartRequisition(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FulfillPartRequisitionMutationResult = NonNullable<Awaited<ReturnType<typeof fulfillPartRequisition>>>
+    export type FulfillPartRequisitionMutationBody = BodyType<PartRequisitionFulfillmentInput>
+    export type FulfillPartRequisitionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Fulfill internal or external requisition line quantities
+ */
+export const useFulfillPartRequisition = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof fulfillPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionFulfillmentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof fulfillPartRequisition>>,
+        TError,
+        {id: number;data: BodyType<PartRequisitionFulfillmentInput>},
+        TContext
+      > => {
+      return useMutation(getFulfillPartRequisitionMutationOptions(options));
     }
 
 export const getListServiceInvoicesUrl = (params?: ListServiceInvoicesParams,) => {

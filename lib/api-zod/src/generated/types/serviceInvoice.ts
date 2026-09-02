@@ -19,6 +19,8 @@ export interface ServiceInvoice {
   customerName?: string | null;
   vehicleInfo: string;
   partsTotal: number;
+  /** Fulfilled external-part charges included in partsTotal, GYD */
+  externalPartsTotal?: number;
   laborTotal: number;
   surchargeTotal: number;
   discountTotal: number;

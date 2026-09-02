@@ -1,0 +1,564 @@
+import { Router, type IRouter, type Response } from "express";
+import { and, desc, eq, sql } from "drizzle-orm";
+import {
+  db,
+  externalJobCardPartsTable,
+  jobCardPartsTable,
+  jobCardsTable,
+  partRequisitionFulfillmentsTable,
+  partRequisitionLinesTable,
+  partRequisitionsTable,
+  partsTable,
+  serviceInvoicesTable,
+  serviceOrdersTable,
+} from "@workspace/db";
+import {
+  CreateJobCardPartRequisitionBody,
+  CreateJobCardPartRequisitionParams,
+  CreateJobCardPartRequisitionResponse,
+  DecidePartRequisitionBody,
+  DecidePartRequisitionParams,
+  DecidePartRequisitionResponse,
+  FulfillPartRequisitionBody,
+  FulfillPartRequisitionParams,
+  FulfillPartRequisitionResponse,
+  GetPartRequisitionParams,
+  GetPartRequisitionResponse,
+  ListJobCardPartRequisitionsParams,
+  ListJobCardPartRequisitionsResponse,
+  ListPartRequisitionsQueryParams,
+  ListPartRequisitionsResponse,
+  MarkPartRequisitionOrderedBody,
+  MarkPartRequisitionOrderedParams,
+  MarkPartRequisitionOrderedResponse,
+} from "@workspace/api-zod";
+import { activeDealerId, hasPermission, type AuthedUser } from "../middlewares/rbac";
+import { enqueueStockEntrySync } from "../lib/erpnext/parts-sync";
+
+const router: IRouter = Router();
+
+function actorName(user: AuthedUser | undefined): string {
+  return user?.name ?? user?.email ?? "Staff";
+}
+
+function isApprover(user: AuthedUser | undefined): boolean {
+  if (!user) return false;
+  return (
+    user.isSuperAdmin ||
+    /service manager|general manager|leadership|management|owner.?admin|admin/i.test(
+      user.roleName ?? "",
+    )
+  );
+}
+
+function canPartsView(user: AuthedUser | undefined): boolean {
+  return !!user && (isApprover(user) || hasPermission(user, "parts", "view"));
+}
+
+function canProcess(user: AuthedUser | undefined): boolean {
+  return (
+    !!user &&
+    (isApprover(user) ||
+      hasPermission(user, "parts", "edit") ||
+      hasPermission(user, "parts", "admin"))
+  );
+}
+
+function isAssigned(
+  user: AuthedUser | undefined,
+  card: { technicianUserId: number | null },
+  order: { technicianUserId: number | null },
+): boolean {
+  return !!user && /technician/i.test(user.roleName ?? "") &&
+    (card.technicianUserId === user.id || order.technicianUserId === user.id);
+}
+
+async function loadCardAndOrder(dealerId: number, jobCardId: number) {
+  const [row] = await db
+    .select({ card: jobCardsTable, order: serviceOrdersTable })
+    .from(jobCardsTable)
+    .innerJoin(
+      serviceOrdersTable,
+      and(
+        eq(serviceOrdersTable.id, jobCardsTable.serviceOrderId),
+        eq(serviceOrdersTable.dealerId, jobCardsTable.dealerId),
+      ),
+    )
+    .where(and(eq(jobCardsTable.id, jobCardId), eq(jobCardsTable.dealerId, dealerId)));
+  return row ?? null;
+}
+
+async function loadDetail(dealerId: number, id: number) {
+  const [header] = await db
+    .select()
+    .from(partRequisitionsTable)
+    .where(and(eq(partRequisitionsTable.id, id), eq(partRequisitionsTable.dealerId, dealerId)));
+  if (!header) return null;
+  const lines = await db
+    .select()
+    .from(partRequisitionLinesTable)
+    .where(
+      and(
+        eq(partRequisitionLinesTable.requisitionId, id),
+        eq(partRequisitionLinesTable.dealerId, dealerId),
+      ),
+    )
+    .orderBy(partRequisitionLinesTable.id);
+  return { ...header, lines };
+}
+
+async function canViewRequisition(user: AuthedUser | undefined, dealerId: number, jobCardId: number) {
+  if (canPartsView(user)) return true;
+  const linked = await loadCardAndOrder(dealerId, jobCardId);
+  return !!linked && isAssigned(user, linked.card, linked.order);
+}
+
+router.post("/job-cards/:id/part-requisitions", async (req, res): Promise<void> => {
+  const params = CreateJobCardPartRequisitionParams.safeParse(req.params);
+  const parsed = CreateJobCardPartRequisitionBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: (params.success ? parsed : params).error?.message ?? "Invalid" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const linked = await loadCardAndOrder(dealerId, params.data.id);
+  if (!linked || linked.order.id !== parsed.data.serviceOrderId) {
+    res.status(404).json({ error: "Job card and service order were not found together" });
+    return;
+  }
+  const user = res.locals.user;
+  if (!isAssigned(user, linked.card, linked.order) && !canProcess(user)) {
+    res.status(403).json({ error: "Only the assigned technician, a service approver, or Parts staff may submit this requisition" });
+    return;
+  }
+
+  const internalIds = [
+    ...new Set(parsed.data.lines.filter((line) => line.source === "INTERNAL").map((line) => line.partId)),
+  ];
+  if (internalIds.some((id) => id == null)) {
+    res.status(422).json({ error: "INTERNAL lines require partId" });
+    return;
+  }
+  for (const line of parsed.data.lines) {
+    if (line.source === "EXTERNAL" && (!line.description?.trim() || line.partId != null)) {
+      res.status(422).json({ error: "EXTERNAL lines require description and cannot specify partId" });
+      return;
+    }
+    if (line.source === "EXTERNAL" && line.unitPrice == null) {
+      res.status(422).json({ error: "EXTERNAL lines require the GYD unitPrice charged to the customer" });
+      return;
+    }
+  }
+  const internalParts = internalIds.length
+    ? await db
+        .select()
+        .from(partsTable)
+        .where(
+          and(
+            eq(partsTable.dealerId, dealerId),
+            sql`${partsTable.id} in (${sql.join(internalIds.map((id) => sql`${id}`), sql`,`)})`,
+          ),
+        )
+    : [];
+  const partById = new Map(internalParts.map((part) => [part.id, part]));
+  if (internalIds.some((id) => !partById.has(id!))) {
+    res.status(404).json({ error: "One or more internal parts were not found in this dealership" });
+    return;
+  }
+
+  const requisition = await db.transaction(async (tx) => {
+    const [header] = await tx
+      .insert(partRequisitionsTable)
+      .values({
+        dealerId,
+        serviceOrderId: linked.order.id,
+        jobCardId: linked.card.id,
+        requesterUserId: user?.id ?? null,
+        requesterName: actorName(user),
+        status: "submitted",
+        urgency: parsed.data.urgency,
+        needBy: parsed.data.needBy
+          ? parsed.data.needBy instanceof Date
+            ? parsed.data.needBy.toISOString().slice(0, 10)
+            : String(parsed.data.needBy).slice(0, 10)
+          : null,
+        notes: parsed.data.notes ?? null,
+      })
+      .returning();
+    await tx.insert(partRequisitionLinesTable).values(
+      parsed.data.lines.map((line) => {
+        const part = line.partId == null ? undefined : partById.get(line.partId);
+        return {
+          dealerId,
+          requisitionId: header.id,
+          source: line.source,
+          partId: part?.id ?? null,
+          skuSnapshot: part?.sku ?? null,
+          descriptionSnapshot: part?.name ?? line.description!.trim(),
+          supplierSnapshot: line.supplier?.trim() || null,
+          quantity: line.quantity,
+          unitCost: part?.unitCost ?? line.unitCost ?? 0,
+          unitPrice: part?.unitPrice ?? line.unitPrice ?? 0,
+          taxCost: line.taxCost ?? 0,
+          freightCost: line.freightCost ?? 0,
+        };
+      }),
+    );
+    return header;
+  });
+  res.status(201).json(CreateJobCardPartRequisitionResponse.parse(await loadDetail(dealerId, requisition.id)));
+});
+
+router.get("/job-cards/:id/part-requisitions", async (req, res): Promise<void> => {
+  const params = ListJobCardPartRequisitionsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const linked = await loadCardAndOrder(dealerId, params.data.id);
+  if (!linked) {
+    const [orphanCard] = await db
+      .select({ id: jobCardsTable.id })
+      .from(jobCardsTable)
+      .where(
+        and(
+          eq(jobCardsTable.id, params.data.id),
+          eq(jobCardsTable.dealerId, dealerId),
+        ),
+      );
+    if (!orphanCard || !canPartsView(res.locals.user)) {
+      res.status(404).json({ error: "Job card not found" });
+      return;
+    }
+  } else if (
+    !canPartsView(res.locals.user) &&
+    !isAssigned(res.locals.user, linked.card, linked.order)
+  ) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(partRequisitionsTable)
+    .where(
+      and(
+        eq(partRequisitionsTable.dealerId, dealerId),
+        eq(partRequisitionsTable.jobCardId, params.data.id),
+      ),
+    )
+    .orderBy(desc(partRequisitionsTable.createdAt));
+  res.json(ListJobCardPartRequisitionsResponse.parse(rows));
+});
+
+router.get("/part-requisitions", async (req, res): Promise<void> => {
+  const query = ListPartRequisitionsQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
+  if (!canPartsView(res.locals.user)) {
+    res.status(403).json({ error: "Dealer-wide requisitions require Service approver or Parts access" });
+    return;
+  }
+  const filters = [eq(partRequisitionsTable.dealerId, activeDealerId(res))];
+  if (query.data.status) filters.push(eq(partRequisitionsTable.status, query.data.status));
+  if (query.data.urgency) filters.push(eq(partRequisitionsTable.urgency, query.data.urgency));
+  if (query.data.serviceOrderId) filters.push(eq(partRequisitionsTable.serviceOrderId, query.data.serviceOrderId));
+  if (query.data.jobCardId) filters.push(eq(partRequisitionsTable.jobCardId, query.data.jobCardId));
+  const rows = await db.select().from(partRequisitionsTable).where(and(...filters)).orderBy(desc(partRequisitionsTable.createdAt));
+  res.json(ListPartRequisitionsResponse.parse(rows));
+});
+
+router.get("/part-requisitions/:id", async (req, res): Promise<void> => {
+  const params = GetPartRequisitionParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const detail = await loadDetail(dealerId, params.data.id);
+  if (!detail || !(await canViewRequisition(res.locals.user, dealerId, detail.jobCardId))) {
+    res.status(404).json({ error: "Requisition not found" });
+    return;
+  }
+  res.json(GetPartRequisitionResponse.parse(detail));
+});
+
+function rejectProcessor(res: Response): boolean {
+  if (canProcess(res.locals.user)) return false;
+  res.status(403).json({ error: "Only a service approver or Parts processor may perform this action" });
+  return true;
+}
+
+router.post("/part-requisitions/:id/decision", async (req, res): Promise<void> => {
+  const params = DecidePartRequisitionParams.safeParse(req.params);
+  const parsed = DecidePartRequisitionBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: (params.success ? parsed : params).error?.message ?? "Invalid" });
+    return;
+  }
+  if (rejectProcessor(res)) return;
+  if (parsed.data.action === "reject" && !parsed.data.reason?.trim()) {
+    res.status(422).json({ error: "A rejection reason is required" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [updated] = await db
+    .update(partRequisitionsTable)
+    .set({
+      status: parsed.data.action === "approve" ? "approved" : "rejected",
+      decisionReason: parsed.data.reason?.trim() || null,
+      decidedByUserId: res.locals.user?.id ?? null,
+      decidedByName: actorName(res.locals.user),
+      decidedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(partRequisitionsTable.id, params.data.id),
+        eq(partRequisitionsTable.dealerId, dealerId),
+        eq(partRequisitionsTable.status, "submitted"),
+      ),
+    )
+    .returning();
+  if (!updated) {
+    const existing = await loadDetail(dealerId, params.data.id);
+    res.status(existing ? 422 : 404).json({ error: existing ? `Cannot decide a ${existing.status} requisition` : "Requisition not found" });
+    return;
+  }
+  res.json(DecidePartRequisitionResponse.parse(await loadDetail(dealerId, updated.id)));
+});
+
+router.post("/part-requisitions/:id/ordered", async (req, res): Promise<void> => {
+  const params = MarkPartRequisitionOrderedParams.safeParse(req.params);
+  const parsed = MarkPartRequisitionOrderedBody.safeParse(req.body ?? {});
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: (params.success ? parsed : params).error?.message ?? "Invalid" });
+    return;
+  }
+  if (rejectProcessor(res)) return;
+  const dealerId = activeDealerId(res);
+  const [updated] = await db
+    .update(partRequisitionsTable)
+    .set({
+      status: "ordered",
+      orderReference: parsed.data.reference?.trim() || null,
+      orderedByUserId: res.locals.user?.id ?? null,
+      orderedByName: actorName(res.locals.user),
+      orderedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(partRequisitionsTable.id, params.data.id),
+        eq(partRequisitionsTable.dealerId, dealerId),
+        eq(partRequisitionsTable.status, "approved"),
+      ),
+    )
+    .returning();
+  if (!updated) {
+    const existing = await loadDetail(dealerId, params.data.id);
+    res.status(existing ? 422 : 404).json({ error: existing ? `Cannot order a ${existing.status} requisition` : "Requisition not found" });
+    return;
+  }
+  res.json(MarkPartRequisitionOrderedResponse.parse(await loadDetail(dealerId, updated.id)));
+});
+
+router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> => {
+  const params = FulfillPartRequisitionParams.safeParse(req.params);
+  const parsed = FulfillPartRequisitionBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: (params.success ? parsed : params).error?.message ?? "Invalid" });
+    return;
+  }
+  if (rejectProcessor(res)) return;
+  if (new Set(parsed.data.lines.map((line) => line.lineId)).size !== parsed.data.lines.length) {
+    res.status(422).json({ error: "Each requisition line may appear only once per fulfillment" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const user = res.locals.user;
+  const issuedInternal: Array<{
+    partId: number;
+    quantity: number;
+    jobCardId: number;
+    jobCardPartId: number;
+  }> = [];
+  try {
+    await db.transaction(async (tx) => {
+      const [header] = await tx
+        .select()
+        .from(partRequisitionsTable)
+        .where(and(eq(partRequisitionsTable.id, params.data.id), eq(partRequisitionsTable.dealerId, dealerId)))
+        .for("update");
+      if (!header) throw Object.assign(new Error("Requisition not found"), { status: 404 });
+      if (header.status === "fulfilled") {
+        const prior = await tx
+          .select({ lineId: partRequisitionFulfillmentsTable.lineId })
+          .from(partRequisitionFulfillmentsTable)
+          .where(
+            and(
+              eq(partRequisitionFulfillmentsTable.dealerId, dealerId),
+              eq(partRequisitionFulfillmentsTable.requisitionId, header.id),
+              eq(partRequisitionFulfillmentsTable.idempotencyKey, parsed.data.idempotencyKey),
+            ),
+          );
+        const priorIds = new Set(prior.map((row) => row.lineId));
+        if (parsed.data.lines.every((line) => priorIds.has(line.lineId))) return;
+      }
+      if (!["approved", "ordered", "partially_fulfilled"].includes(header.status)) {
+        throw Object.assign(new Error(`Cannot fulfill a ${header.status} requisition`), { status: 422 });
+      }
+      const [invoice] = await tx
+        .select({ id: serviceInvoicesTable.id })
+        .from(serviceInvoicesTable)
+        .where(and(eq(serviceInvoicesTable.dealerId, dealerId), eq(serviceInvoicesTable.jobCardId, header.jobCardId)));
+      if (invoice) throw Object.assign(new Error(`Invoice #${invoice.id} is already issued`), { status: 422 });
+
+      for (const requestLine of parsed.data.lines) {
+        const [prior] = await tx
+          .select({ id: partRequisitionFulfillmentsTable.id })
+          .from(partRequisitionFulfillmentsTable)
+          .where(
+            and(
+              eq(partRequisitionFulfillmentsTable.dealerId, dealerId),
+              eq(partRequisitionFulfillmentsTable.requisitionId, header.id),
+              eq(partRequisitionFulfillmentsTable.lineId, requestLine.lineId),
+              eq(partRequisitionFulfillmentsTable.idempotencyKey, parsed.data.idempotencyKey),
+            ),
+          );
+        if (prior) continue;
+        const [line] = await tx
+          .select()
+          .from(partRequisitionLinesTable)
+          .where(
+            and(
+              eq(partRequisitionLinesTable.id, requestLine.lineId),
+              eq(partRequisitionLinesTable.requisitionId, header.id),
+              eq(partRequisitionLinesTable.dealerId, dealerId),
+            ),
+          )
+          .for("update");
+        if (!line) throw Object.assign(new Error(`Line #${requestLine.lineId} not found`), { status: 404 });
+        if (requestLine.quantity > line.quantity - line.fulfilledQuantity) {
+          throw Object.assign(new Error(`Line #${line.id} has only ${line.quantity - line.fulfilledQuantity} unit(s) outstanding`), { status: 422 });
+        }
+        const [fulfillment] = await tx
+          .insert(partRequisitionFulfillmentsTable)
+          .values({
+            dealerId,
+            requisitionId: header.id,
+            lineId: line.id,
+            idempotencyKey: parsed.data.idempotencyKey,
+            quantity: requestLine.quantity,
+            fulfilledByUserId: user?.id ?? null,
+            fulfilledByName: actorName(user),
+          })
+          .returning();
+        if (line.source === "INTERNAL") {
+          const [part] = await tx
+            .update(partsTable)
+            .set({ stock: sql`${partsTable.stock} - ${requestLine.quantity}` })
+            .where(
+              and(
+                eq(partsTable.id, line.partId!),
+                eq(partsTable.dealerId, dealerId),
+                sql`${partsTable.stock} >= ${requestLine.quantity}`,
+              ),
+            )
+            .returning();
+          if (!part) {
+            throw Object.assign(new Error(`Insufficient current stock for ${line.descriptionSnapshot}`), { status: 409 });
+          }
+          const [jobLine] = await tx
+            .insert(jobCardPartsTable)
+            .values({
+              dealerId,
+              jobCardId: header.jobCardId,
+              partId: part.id,
+              partName: line.descriptionSnapshot,
+              kind: "issue",
+              quantity: requestLine.quantity,
+              unitPrice: line.unitPrice,
+              unitCost: line.unitCost,
+              backordered: false,
+            })
+            .returning({ id: jobCardPartsTable.id });
+          await tx
+            .update(partRequisitionFulfillmentsTable)
+            .set({ jobCardPartId: jobLine.id })
+            .where(eq(partRequisitionFulfillmentsTable.id, fulfillment.id));
+          issuedInternal.push({
+            partId: part.id,
+            quantity: requestLine.quantity,
+            jobCardId: header.jobCardId,
+            jobCardPartId: jobLine.id,
+          });
+        } else {
+          const [externalLine] = await tx
+            .insert(externalJobCardPartsTable)
+            .values({
+              dealerId,
+              jobCardId: header.jobCardId,
+              requisitionLineId: line.id,
+              fulfillmentId: fulfillment.id,
+              description: `External part — ${line.descriptionSnapshot}`,
+              supplierSnapshot: line.supplierSnapshot,
+              quantity: requestLine.quantity,
+              unitCost: line.unitCost,
+              unitPrice: line.unitPrice,
+              taxCost: line.taxCost,
+              freightCost: line.freightCost,
+            })
+            .returning({ id: externalJobCardPartsTable.id });
+          await tx
+            .update(partRequisitionFulfillmentsTable)
+            .set({ externalJobCardPartId: externalLine.id })
+            .where(eq(partRequisitionFulfillmentsTable.id, fulfillment.id));
+        }
+        await tx
+          .update(partRequisitionLinesTable)
+          .set({ fulfilledQuantity: line.fulfilledQuantity + requestLine.quantity })
+          .where(eq(partRequisitionLinesTable.id, line.id));
+      }
+      const freshLines = await tx
+        .select({ quantity: partRequisitionLinesTable.quantity, fulfilledQuantity: partRequisitionLinesTable.fulfilledQuantity })
+        .from(partRequisitionLinesTable)
+        .where(and(eq(partRequisitionLinesTable.dealerId, dealerId), eq(partRequisitionLinesTable.requisitionId, header.id)));
+      const complete = freshLines.every((line) => line.fulfilledQuantity >= line.quantity);
+      await tx
+        .update(partRequisitionsTable)
+        .set({
+          status: complete ? "fulfilled" : "partially_fulfilled",
+          fulfilledByUserId: user?.id ?? null,
+          fulfilledByName: actorName(user),
+          fulfilledAt: complete ? new Date() : null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(partRequisitionsTable.id, header.id), eq(partRequisitionsTable.dealerId, dealerId)));
+    });
+  } catch (error) {
+    const failure = error as Error & { status?: number };
+    if (failure.status) {
+      res.status(failure.status).json({ error: failure.message });
+      return;
+    }
+    throw error;
+  }
+  for (const issue of issuedInternal) {
+    enqueueStockEntrySync({
+      dealerId,
+      partId: issue.partId,
+      qty: issue.quantity,
+      direction: "out",
+      entityType: "job_card_part",
+      entityId: issue.jobCardPartId,
+      remark: `AURA job card #${issue.jobCardId} — requisition issue`,
+      dedupeKey: `erp:se:jcp:${dealerId}:${issue.jobCardPartId}`,
+    });
+  }
+  res.json(FulfillPartRequisitionResponse.parse(await loadDetail(dealerId, params.data.id)));
+});
+
+export default router;

@@ -3840,6 +3840,209 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /job-cards/{id}/part-requisitions:
+    get:
+      operationId: listJobCardPartRequisitions
+      tags: [service]
+      summary: List parts requisitions attached to a job card
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Requisitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PartRequisition" }
+        "404":
+          description: Job card not found or inaccessible
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: createJobCardPartRequisition
+      tags: [service]
+      summary: Submit a parts requisition from a job card
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartRequisitionInput" }
+      responses:
+        "201":
+          description: Submitted requisition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartRequisitionDetail" }
+        "404":
+          description: Job card or part not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid line
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /part-requisitions:
+    get:
+      operationId: listPartRequisitions
+      tags: [service, parts]
+      summary: List dealer parts requisitions
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [submitted, approved, rejected, ordered, partially_fulfilled, fulfilled, cancelled] }
+        - name: urgency
+          in: query
+          schema: { type: string, enum: [routine, urgent, vehicle_down] }
+        - name: serviceOrderId
+          in: query
+          schema: { type: integer }
+        - name: jobCardId
+          in: query
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Dealer requisitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PartRequisition" }
+
+  /part-requisitions/{id}:
+    get:
+      operationId: getPartRequisition
+      tags: [service, parts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Requisition detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartRequisitionDetail" }
+        "404":
+          description: Not found or inaccessible
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /part-requisitions/{id}/decision:
+    post:
+      operationId: decidePartRequisition
+      tags: [service, parts]
+      summary: Approve or reject a submitted requisition
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartRequisitionDecision" }
+      responses:
+        "200":
+          description: Decision recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartRequisitionDetail" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid transition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /part-requisitions/{id}/ordered:
+    post:
+      operationId: markPartRequisitionOrdered
+      tags: [service, parts]
+      summary: Mark an approved requisition ordered
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartRequisitionOrderUpdate" }
+      responses:
+        "200":
+          description: Order audit recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartRequisitionDetail" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid transition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /part-requisitions/{id}/fulfill:
+    post:
+      operationId: fulfillPartRequisition
+      tags: [service, parts]
+      summary: Fulfill internal or external requisition line quantities
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartRequisitionFulfillmentInput" }
+      responses:
+        "200":
+          description: Fulfillment recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartRequisitionDetail" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Insufficient current inventory
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid transition or quantity
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /service-invoices:
     get:
       operationId: listServiceInvoices
@@ -12354,6 +12557,112 @@ components:
         quantity: { type: integer, minimum: 1 }
         kind: { type: string, enum: [issue, return] }
 
+    PartRequisition:
+      type: object
+      required: [id, serviceOrderId, jobCardId, requesterName, status, urgency, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        serviceOrderId: { type: integer }
+        jobCardId: { type: integer }
+        requesterUserId: { type: ["integer", "null"] }
+        requesterName: { type: string }
+        status: { type: string, enum: [submitted, approved, rejected, ordered, partially_fulfilled, fulfilled, cancelled] }
+        urgency: { type: string, enum: [routine, urgent, vehicle_down] }
+        needBy: { type: ["string", "null"], format: date }
+        notes: { type: ["string", "null"] }
+        decisionReason: { type: ["string", "null"] }
+        decidedByUserId: { type: ["integer", "null"] }
+        decidedByName: { type: ["string", "null"] }
+        decidedAt: { type: ["string", "null"], format: date-time }
+        orderedByUserId: { type: ["integer", "null"] }
+        orderedByName: { type: ["string", "null"] }
+        orderedAt: { type: ["string", "null"], format: date-time }
+        orderReference: { type: ["string", "null"] }
+        fulfilledByUserId: { type: ["integer", "null"] }
+        fulfilledByName: { type: ["string", "null"] }
+        fulfilledAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PartRequisitionLine:
+      type: object
+      required: [id, requisitionId, source, descriptionSnapshot, quantity, fulfilledQuantity, unitCost, unitPrice, taxCost, freightCost, createdAt]
+      properties:
+        id: { type: integer }
+        requisitionId: { type: integer }
+        source: { type: string, enum: [INTERNAL, EXTERNAL] }
+        partId: { type: ["integer", "null"] }
+        skuSnapshot: { type: ["string", "null"] }
+        descriptionSnapshot: { type: string }
+        supplierSnapshot: { type: ["string", "null"] }
+        quantity: { type: integer }
+        fulfilledQuantity: { type: integer }
+        unitCost: { type: number, description: "Procurement cost in GYD" }
+        unitPrice: { type: number, description: "Customer invoice unit price in GYD" }
+        taxCost: { type: number, description: "Procurement tax cost in GYD" }
+        freightCost: { type: number, description: "Procurement freight cost in GYD" }
+        createdAt: { type: string, format: date-time }
+    PartRequisitionDetail:
+      allOf:
+        - $ref: "#/components/schemas/PartRequisition"
+        - type: object
+          required: [lines]
+          properties:
+            lines:
+              type: array
+              items: { $ref: "#/components/schemas/PartRequisitionLine" }
+    PartRequisitionLineInput:
+      type: object
+      required: [source, quantity]
+      properties:
+        source: { type: string, enum: [INTERNAL, EXTERNAL] }
+        partId: { type: integer }
+        description: { type: string, minLength: 1, maxLength: 500 }
+        supplier: { type: string, maxLength: 250 }
+        quantity: { type: integer, minimum: 1 }
+        unitCost: { type: number, minimum: 0, description: "GYD only" }
+        unitPrice: { type: number, minimum: 0, description: "GYD customer charge" }
+        taxCost: { type: number, minimum: 0, description: "GYD only" }
+        freightCost: { type: number, minimum: 0, description: "GYD only" }
+    PartRequisitionInput:
+      type: object
+      required: [serviceOrderId, urgency, lines]
+      properties:
+        serviceOrderId: { type: integer }
+        urgency: { type: string, enum: [routine, urgent, vehicle_down] }
+        needBy: { type: string, format: date }
+        notes: { type: string, maxLength: 4000 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/PartRequisitionLineInput" }
+    PartRequisitionDecision:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [approve, reject] }
+        reason: { type: string, maxLength: 2000 }
+    PartRequisitionOrderUpdate:
+      type: object
+      properties:
+        reference: { type: string, maxLength: 250 }
+    PartRequisitionFulfillmentLineInput:
+      type: object
+      required: [lineId, quantity]
+      properties:
+        lineId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
+    PartRequisitionFulfillmentInput:
+      type: object
+      required: [idempotencyKey, lines]
+      properties:
+        idempotencyKey: { type: string, minLength: 8, maxLength: 100 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/PartRequisitionFulfillmentLineInput" }
+
     ServiceInvoice:
       type: object
       required: [id, serviceOrderId, jobCardId, vehicleInfo, partsTotal, laborTotal, surchargeTotal, discountTotal, discountStatus, tax, total, status, adjustments, createdAt]
@@ -12365,6 +12674,7 @@ components:
         customerName: { type: ["string", "null"] }
         vehicleInfo: { type: string }
         partsTotal: { type: number }
+        externalPartsTotal: { type: number, description: "Fulfilled external-part charges included in partsTotal, GYD" }
         laborTotal: { type: number }
         surchargeTotal: { type: number }
         discountTotal: { type: number }

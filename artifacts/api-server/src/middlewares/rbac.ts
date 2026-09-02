@@ -808,6 +808,14 @@ const PATH_MODULES: Record<string, RouteRule> = {
       ) {
         return "edit";
       }
+      // An assigned technician submits a requisition as an edit to their
+      // existing work package; service:create is intentionally not required.
+      if (
+        req.method === "POST" &&
+        /^\/job-cards\/\d+\/part-requisitions\/?$/.test(req.path)
+      ) {
+        return "edit";
+      }
       return METHOD_CATEGORY[req.method] ?? "view";
     },
   },
@@ -837,6 +845,10 @@ const PATH_MODULES: Record<string, RouteRule> = {
   "part-purchases": { module: "parts" },
   "purchase-orders": { module: "parts" },
   "parts-settings": { module: "parts" },
+  "part-requisitions": {
+    module: "service",
+    category: (req) => (req.method === "GET" ? "view" : "edit"),
+  },
   gates: {
     module: "approvals",
     category: (req) => {
@@ -1034,7 +1046,11 @@ export const authorize: RequestHandler = (req, res, next) => {
     }
   }
   const required = routePermission(req);
-  if (required && !hasPermission(user, required.module, required.category)) {
+  const requisitionPermission =
+    segment === "part-requisitions" &&
+    (hasPermission(user, "service", required?.category ?? "view") ||
+      hasPermission(user, "parts", required?.category ?? "view"));
+  if (required && !requisitionPermission && !hasPermission(user, required.module, required.category)) {
     res.status(403).json({
       error: `Missing permission: ${required.category} on ${required.module}`,
       requiredPermission: `${required.module}:${required.category}`,

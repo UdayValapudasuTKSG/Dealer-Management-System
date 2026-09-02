@@ -5530,6 +5530,205 @@ export interface JobCardPartInput {
   kind?: JobCardPartInputKind;
 }
 
+export type PartRequisitionStatus = typeof PartRequisitionStatus[keyof typeof PartRequisitionStatus];
+
+
+export const PartRequisitionStatus = {
+  submitted: 'submitted',
+  approved: 'approved',
+  rejected: 'rejected',
+  ordered: 'ordered',
+  partially_fulfilled: 'partially_fulfilled',
+  fulfilled: 'fulfilled',
+  cancelled: 'cancelled',
+} as const;
+
+export type PartRequisitionUrgency = typeof PartRequisitionUrgency[keyof typeof PartRequisitionUrgency];
+
+
+export const PartRequisitionUrgency = {
+  routine: 'routine',
+  urgent: 'urgent',
+  vehicle_down: 'vehicle_down',
+} as const;
+
+export interface PartRequisition {
+  id: number;
+  serviceOrderId: number;
+  jobCardId: number;
+  /** @nullable */
+  requesterUserId?: number | null;
+  requesterName: string;
+  status: PartRequisitionStatus;
+  urgency: PartRequisitionUrgency;
+  /** @nullable */
+  needBy?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  /** @nullable */
+  decisionReason?: string | null;
+  /** @nullable */
+  decidedByUserId?: number | null;
+  /** @nullable */
+  decidedByName?: string | null;
+  /** @nullable */
+  decidedAt?: string | null;
+  /** @nullable */
+  orderedByUserId?: number | null;
+  /** @nullable */
+  orderedByName?: string | null;
+  /** @nullable */
+  orderedAt?: string | null;
+  /** @nullable */
+  orderReference?: string | null;
+  /** @nullable */
+  fulfilledByUserId?: number | null;
+  /** @nullable */
+  fulfilledByName?: string | null;
+  /** @nullable */
+  fulfilledAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PartRequisitionLineSource = typeof PartRequisitionLineSource[keyof typeof PartRequisitionLineSource];
+
+
+export const PartRequisitionLineSource = {
+  INTERNAL: 'INTERNAL',
+  EXTERNAL: 'EXTERNAL',
+} as const;
+
+export interface PartRequisitionLine {
+  id: number;
+  requisitionId: number;
+  source: PartRequisitionLineSource;
+  /** @nullable */
+  partId?: number | null;
+  /** @nullable */
+  skuSnapshot?: string | null;
+  descriptionSnapshot: string;
+  /** @nullable */
+  supplierSnapshot?: string | null;
+  quantity: number;
+  fulfilledQuantity: number;
+  /** Procurement cost in GYD */
+  unitCost: number;
+  /** Customer invoice unit price in GYD */
+  unitPrice: number;
+  /** Procurement tax cost in GYD */
+  taxCost: number;
+  /** Procurement freight cost in GYD */
+  freightCost: number;
+  createdAt: string;
+}
+
+export type PartRequisitionDetail = PartRequisition & {
+  lines: PartRequisitionLine[];
+};
+
+export type PartRequisitionLineInputSource = typeof PartRequisitionLineInputSource[keyof typeof PartRequisitionLineInputSource];
+
+
+export const PartRequisitionLineInputSource = {
+  INTERNAL: 'INTERNAL',
+  EXTERNAL: 'EXTERNAL',
+} as const;
+
+export interface PartRequisitionLineInput {
+  source: PartRequisitionLineInputSource;
+  partId?: number;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  description?: string;
+  /** @maxLength 250 */
+  supplier?: string;
+  /** @minimum 1 */
+  quantity: number;
+  /**
+     * GYD only
+     * @minimum 0
+     */
+  unitCost?: number;
+  /**
+     * GYD customer charge
+     * @minimum 0
+     */
+  unitPrice?: number;
+  /**
+     * GYD only
+     * @minimum 0
+     */
+  taxCost?: number;
+  /**
+     * GYD only
+     * @minimum 0
+     */
+  freightCost?: number;
+}
+
+export type PartRequisitionInputUrgency = typeof PartRequisitionInputUrgency[keyof typeof PartRequisitionInputUrgency];
+
+
+export const PartRequisitionInputUrgency = {
+  routine: 'routine',
+  urgent: 'urgent',
+  vehicle_down: 'vehicle_down',
+} as const;
+
+export interface PartRequisitionInput {
+  serviceOrderId: number;
+  urgency: PartRequisitionInputUrgency;
+  needBy?: string;
+  /** @maxLength 4000 */
+  notes?: string;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  lines: PartRequisitionLineInput[];
+}
+
+export type PartRequisitionDecisionAction = typeof PartRequisitionDecisionAction[keyof typeof PartRequisitionDecisionAction];
+
+
+export const PartRequisitionDecisionAction = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+export interface PartRequisitionDecision {
+  action: PartRequisitionDecisionAction;
+  /** @maxLength 2000 */
+  reason?: string;
+}
+
+export interface PartRequisitionOrderUpdate {
+  /** @maxLength 250 */
+  reference?: string;
+}
+
+export interface PartRequisitionFulfillmentLineInput {
+  lineId: number;
+  /** @minimum 1 */
+  quantity: number;
+}
+
+export interface PartRequisitionFulfillmentInput {
+  /**
+     * @minLength 8
+     * @maxLength 100
+     */
+  idempotencyKey: string;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  lines: PartRequisitionFulfillmentLineInput[];
+}
+
 export type ServiceInvoiceDiscountStatus = typeof ServiceInvoiceDiscountStatus[keyof typeof ServiceInvoiceDiscountStatus];
 
 
@@ -5566,6 +5765,8 @@ export interface ServiceInvoice {
   customerName?: string | null;
   vehicleInfo: string;
   partsTotal: number;
+  /** Fulfilled external-part charges included in partsTotal, GYD */
+  externalPartsTotal?: number;
   laborTotal: number;
   surchargeTotal: number;
   discountTotal: number;
@@ -8714,6 +8915,35 @@ export type ListJobCardHistoryParams = {
  */
 q?: string;
 };
+
+export type ListPartRequisitionsParams = {
+status?: ListPartRequisitionsStatus;
+urgency?: ListPartRequisitionsUrgency;
+serviceOrderId?: number;
+jobCardId?: number;
+};
+
+export type ListPartRequisitionsStatus = typeof ListPartRequisitionsStatus[keyof typeof ListPartRequisitionsStatus];
+
+
+export const ListPartRequisitionsStatus = {
+  submitted: 'submitted',
+  approved: 'approved',
+  rejected: 'rejected',
+  ordered: 'ordered',
+  partially_fulfilled: 'partially_fulfilled',
+  fulfilled: 'fulfilled',
+  cancelled: 'cancelled',
+} as const;
+
+export type ListPartRequisitionsUrgency = typeof ListPartRequisitionsUrgency[keyof typeof ListPartRequisitionsUrgency];
+
+
+export const ListPartRequisitionsUrgency = {
+  routine: 'routine',
+  urgent: 'urgent',
+  vehicle_down: 'vehicle_down',
+} as const;
 
 export type ListServiceInvoicesParams = {
 status?: string;

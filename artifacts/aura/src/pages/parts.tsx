@@ -50,6 +50,7 @@ import {
   Percent,
   Pencil,
   Download,
+  FileText,
 } from "lucide-react";
 import { useAuthz } from "@/lib/auth";
 import { ImportPartsDialog } from "@/components/parts/import-parts-dialog";
@@ -64,8 +65,11 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatGuyanaDate, useMoney } from "@/lib/format";
 
+import { RequisitionsWorkspace } from "@/components/parts/requisitions-workspace";
+
 const TABS = [
   { key: "parts", label: "Parts", icon: Package },
+  { key: "requisitions", label: "Requisitions", icon: FileText },
   { key: "suppliers", label: "Suppliers", icon: Truck },
   { key: "orders", label: "Purchase Orders", icon: ClipboardList },
   { key: "purchases", label: "Quick Purchases", icon: ShoppingCart },
@@ -159,12 +163,24 @@ function ExportPartsButton() {
 }
 
 export default function Parts() {
-  const [tab, setTab] = useState<TabKey>("parts");
+  const [tab, setTab] = useState<TabKey>(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    return TABS.some((item) => item.key === requested)
+      ? (requested as TabKey)
+      : "parts";
+  });
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("tab") !== tab) {
+      url.searchParams.set("tab", tab);
+      window.history.replaceState({}, "", url.pathname + url.search);
+    }
+  }, [tab]);
 
   return (
     <>
     <PageHero
-
       eyebrow="Supply Line"
       title="Parts"
       accent="Operations"
@@ -176,9 +192,9 @@ export default function Parts() {
           <CreateSupplierDialog />
         ) : tab === "orders" ? (
           <CreatePurchaseOrderDialog />
-        ) : (
+        ) : tab === "purchases" ? (
           <CreatePurchaseDialog />
-        )
+        ) : null
       }
     />
     <Page className="space-y-5">
@@ -216,6 +232,7 @@ export default function Parts() {
           transition={{ duration: 0.2 }}
         >
           {tab === "parts" && <PartsTab />}
+          {tab === "requisitions" && <RequisitionsWorkspace />}
           {tab === "suppliers" && <SuppliersTab />}
           {tab === "orders" && <PurchaseOrdersTab />}
           {tab === "purchases" && <PurchasesTab />}

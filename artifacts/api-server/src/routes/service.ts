@@ -34,6 +34,7 @@ import {
   purchaseOrderLinesTable,
   partCreditNotesTable,
   jobCardTechnicianNotesTable,
+  externalJobCardPartsTable,
   collisionClaimsTable,
   collisionSettlementsTable,
   collisionSupplementsTable,
@@ -2727,11 +2728,25 @@ async function issueServiceInvoice(
         eq(jobCardPartsTable.dealerId, card.dealerId),
       ),
     );
-  const partsTotal = lines.reduce(
+  const internalPartsTotal = lines.reduce(
     (sum, l) =>
       sum + l.unitPrice * l.quantity * (l.kind === "return" ? -1 : 1),
     0,
   );
+  const externalLines = await db
+    .select()
+    .from(externalJobCardPartsTable)
+    .where(
+      and(
+        eq(externalJobCardPartsTable.jobCardId, card.id),
+        eq(externalJobCardPartsTable.dealerId, card.dealerId),
+      ),
+    );
+  const externalPartsTotal = externalLines.reduce(
+    (sum, line) => sum + line.unitPrice * line.quantity,
+    0,
+  );
+  const partsTotal = internalPartsTotal + externalPartsTotal;
   const laborTotal = card.laborHours * card.laborRate;
   // A suggested-but-undecided surcharge blocks invoicing: staff must apply
   // or waive it so the decision is on record before totals lock.
@@ -2850,6 +2865,7 @@ async function issueServiceInvoice(
           customerName: order.customerName,
           vehicleInfo: order.vehicleInfo,
           partsTotal: Math.round(partsTotal * 100) / 100,
+          externalPartsTotal: Math.round(externalPartsTotal * 100) / 100,
           laborTotal: Math.round(laborTotal * 100) / 100,
           surchargeTotal: Math.round(surchargeTotal * 100) / 100,
           tax,

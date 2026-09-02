@@ -813,10 +813,17 @@ export function buildServiceInvoicePdf(
       .text("AMOUNT", colAmt, y + 8.5, { width: 110 - 12, align: "right" });
     y += 26;
 
+    const externalPartsTotal =
+      "externalPartsTotal" in invoice && typeof invoice.externalPartsTotal === "number"
+        ? invoice.externalPartsTotal
+        : 0;
     const lines: [string, number][] = [
-      ["Parts & consumables", invoice.partsTotal],
+      ["Parts & consumables", invoice.partsTotal - externalPartsTotal],
       ["Labour", invoice.laborTotal],
     ];
+    if (externalPartsTotal > 0) {
+      lines.splice(1, 0, ["External parts", externalPartsTotal]);
+    }
     if (invoice.surchargeTotal > 0) {
       lines.push(["Late-service surcharge", invoice.surchargeTotal]);
     }

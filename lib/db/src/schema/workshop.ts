@@ -391,6 +391,7 @@ export const serviceInvoicesTable = pgTable(
   customerName: text("customer_name"),
   vehicleInfo: text("vehicle_info").notNull(),
   partsTotal: doublePrecision("parts_total").notNull().default(0),
+    externalPartsTotal: doublePrecision("external_parts_total").notNull().default(0),
   laborTotal: doublePrecision("labor_total").notNull().default(0),
   surchargeTotal: doublePrecision("surcharge_total").notNull().default(0),
   tax: doublePrecision("tax").notNull().default(0),
