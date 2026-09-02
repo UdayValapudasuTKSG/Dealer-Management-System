@@ -74,7 +74,8 @@ async function call(
 
 async function clearGrants(userEmail: string) {
   await pool.query(
-    `DELETE FROM impersonation_grants WHERE user_id = (SELECT id FROM users WHERE email = $1)`,
+    `DELETE FROM impersonation_grants
+     WHERE user_id IN (SELECT id FROM users WHERE lower(email) = lower($1))`,
     [userEmail],
   );
 }

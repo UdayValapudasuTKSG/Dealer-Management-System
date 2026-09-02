@@ -39,7 +39,11 @@ const clerkPubKey = publishableKeyFromHost(
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
 );
 
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+// The proxy is production-only. In development Clerk must load its assets
+// directly from the development Frontend API rather than protected /api.
+const clerkProxyUrl = import.meta.env.PROD
+  ? import.meta.env.VITE_CLERK_PROXY_URL
+  : undefined;
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function stripBase(path: string): string {

@@ -230,7 +230,9 @@ async function run(userA: string) {
     await pool.query(
       `update impersonation_grants set expires_at = now()
        where expires_at > now()
-         and user_id = (select id from users where email = $1)`,
+          and user_id in (
+            select id from users where lower(email) = lower($1)
+          )`,
       [SUPER],
     );
     const r = await req("POST", "/leads", {

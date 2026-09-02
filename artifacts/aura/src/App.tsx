@@ -74,8 +74,11 @@ const clerkPubKey = publishableKeyFromHost(
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
 );
 
-// REQUIRED — empty in dev (Clerk hits dev FAPI directly), auto-set in prod.
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+// The same environment can expose the production proxy URL to Vite in dev.
+// Never send development Clerk assets through the protected /api router.
+const clerkProxyUrl = import.meta.env.PROD
+  ? import.meta.env.VITE_CLERK_PROXY_URL
+  : undefined;
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 

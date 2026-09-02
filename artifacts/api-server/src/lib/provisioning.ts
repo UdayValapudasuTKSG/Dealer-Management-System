@@ -55,19 +55,35 @@ export async function ensureDefaultRoles(tx: Tx | typeof db = db) {
     .where(inArray(rolesTable.name, ROLE_DEFAULTS.map((r) => r.name)));
   const byName = new Map(existing.map((r) => [r.name, r.id]));
   for (const role of ROLE_DEFAULTS) {
-    if (byName.has(role.name)) continue;
-    const [created] = await tx
-      .insert(rolesTable)
-      .values({
-        name: role.name,
-        description: role.description,
-        isSystem: true,
-        createdBy: "system",
-      })
-      .returning();
+    let roleId = byName.get(role.name);
+    if (!roleId) {
+      const [created] = await tx
+        .insert(rolesTable)
+        .values({
+          name: role.name,
+          description: role.description,
+          isSystem: true,
+          createdBy: "system",
+        })
+        .onConflictDoNothing({ target: rolesTable.name })
+        .returning({ id: rolesTable.id });
+      roleId = created?.id;
+      if (!roleId) {
+        roleId = await tx
+          .select({ id: rolesTable.id })
+          .from(rolesTable)
+          .where(eq(rolesTable.name, role.name))
+          .limit(1)
+          .then((rows) => rows[0]?.id);
+      }
+      if (!roleId) {
+        throw new Error(`Failed to ensure default role: ${role.name}`);
+      }
+      byName.set(role.name, roleId);
+    }
     const rows = Object.entries(role.grants).flatMap(([module, categories]) =>
       (categories ?? []).map((category) => ({
-        roleId: created!.id,
+        roleId,
         module,
         category,
       })),

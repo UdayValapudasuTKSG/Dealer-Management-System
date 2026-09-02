@@ -5,6 +5,7 @@
 - [Generated payload casts](generated-payload-casts.md) — never `as never`/`as any` a generated mutation payload; it hides fields missing from the OpenAPI schema (Zod strips them → empty update → 500).
 - [Server output Zod validation](server-output-validation.md) — list endpoints validate EVERY returned row against Zod; one bad seed row 500s the whole endpoint (invalid_enum_value).
 - [CopilotKit runtime](copilotkit-runtime.md) — non-obvious constraints for CopilotKit runtime behind the Replit reverse proxy (headers, body-parsing exclusion, req.url).
+- [Clerk proxy dev boundary](clerk-proxy-dev-boundary.md) — Vite may see production proxy env vars in dev; only pass Clerk proxyUrl when import.meta.env.PROD is true.
 - [Anthropic SSE chat](anthropic-sse-chat.md) — correctness rules for the streaming AI chat (server SSE + client fetch stream, persist-on-abort).
 - [Drizzle date + Zod coercion](drizzle-date-zod.md) — `date({mode:"string"})` columns break inserts when Orval Zod coerces to Date; convert to YYYY-MM-DD before insert/update.
 - [AURA dashboard conventions](aura-dashboard.md) — non-obvious KPI semantics (percentages pre-scaled 0–100, monthlyRevenue, server-side aggregates).
