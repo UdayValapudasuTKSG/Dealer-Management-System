@@ -5073,11 +5073,19 @@ export const ServiceOrderInputStatus = {
 
 export interface ServiceOrderInput {
   customerId?: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
   customerName?: string;
+  /** @maxLength 40 */
   customerPhoneSnapshot?: string;
   /** @minLength 3 */
   customerEmail?: string;
-  /** @minLength 1 */
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
   vehicleInfo: string;
   vehicleId?: number;
   assetId?: number;
@@ -5137,6 +5145,23 @@ export const ServiceOrderUpdateStatus = {
 } as const;
 
 export interface ServiceOrderUpdate {
+  /** @nullable */
+  customerId?: number | null;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  customerName?: string;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  customerPhoneSnapshot?: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  vehicleInfo?: string;
   type?: ServiceOrderUpdateType;
   payType?: ServiceOrderUpdatePayType;
   status?: ServiceOrderUpdateStatus;

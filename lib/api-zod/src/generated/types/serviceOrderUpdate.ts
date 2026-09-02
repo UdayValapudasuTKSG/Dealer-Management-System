@@ -10,6 +10,23 @@ import type { ServiceOrderUpdateStatus } from './serviceOrderUpdateStatus';
 import type { ServiceOrderUpdateType } from './serviceOrderUpdateType';
 
 export interface ServiceOrderUpdate {
+  /** @nullable */
+  customerId?: number | null;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  customerName?: string;
+  /**
+     * @maxLength 40
+     * @nullable
+     */
+  customerPhoneSnapshot?: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  vehicleInfo?: string;
   type?: ServiceOrderUpdateType;
   payType?: ServiceOrderUpdatePayType;
   status?: ServiceOrderUpdateStatus;

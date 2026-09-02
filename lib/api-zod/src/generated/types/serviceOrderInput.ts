@@ -11,11 +11,19 @@ import type { ServiceOrderInputType } from './serviceOrderInputType';
 
 export interface ServiceOrderInput {
   customerId?: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
   customerName?: string;
+  /** @maxLength 40 */
   customerPhoneSnapshot?: string;
   /** @minLength 3 */
   customerEmail?: string;
-  /** @minLength 1 */
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
   vehicleInfo: string;
   vehicleId?: number;
   assetId?: number;

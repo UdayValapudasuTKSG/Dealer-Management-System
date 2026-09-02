@@ -5211,8 +5211,13 @@ export const ListServiceOrdersResponseItem = zod.object({
 export const ListServiceOrdersResponse = zod.array(ListServiceOrdersResponseItem)
 
 
+export const createServiceOrderBodyCustomerNameMax = 200;
+
+export const createServiceOrderBodyCustomerPhoneSnapshotMax = 40;
+
 export const createServiceOrderBodyCustomerEmailMin = 3;
 
+export const createServiceOrderBodyVehicleInfoMax = 200;
 
 export const createServiceOrderBodyEstimatedHoursMin = 0.25;
 export const createServiceOrderBodyEstimatedHoursMax = 24;
@@ -5221,10 +5226,10 @@ export const createServiceOrderBodyEstimatedHoursMax = 24;
 
 export const CreateServiceOrderBody = zod.object({
   "customerId": zod.number().optional(),
-  "customerName": zod.string().optional(),
-  "customerPhoneSnapshot": zod.string().optional(),
+  "customerName": zod.string().min(1).max(createServiceOrderBodyCustomerNameMax).optional(),
+  "customerPhoneSnapshot": zod.string().max(createServiceOrderBodyCustomerPhoneSnapshotMax).optional(),
   "customerEmail": zod.string().min(createServiceOrderBodyCustomerEmailMin).optional(),
-  "vehicleInfo": zod.string().min(1),
+  "vehicleInfo": zod.string().min(1).max(createServiceOrderBodyVehicleInfoMax),
   "vehicleId": zod.number().optional(),
   "assetId": zod.number().optional(),
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection', 'comeback', 'unscheduled']),
@@ -5286,12 +5291,22 @@ export const UpdateServiceOrderParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateServiceOrderBodyCustomerNameMax = 200;
+
+export const updateServiceOrderBodyCustomerPhoneSnapshotMax = 40;
+
+export const updateServiceOrderBodyVehicleInfoMax = 200;
+
 export const updateServiceOrderBodyEstimatedHoursMin = 0.25;
 export const updateServiceOrderBodyEstimatedHoursMax = 24;
 
 
 
 export const UpdateServiceOrderBody = zod.object({
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().min(1).max(updateServiceOrderBodyCustomerNameMax).optional(),
+  "customerPhoneSnapshot": zod.string().max(updateServiceOrderBodyCustomerPhoneSnapshotMax).nullish(),
+  "vehicleInfo": zod.string().min(1).max(updateServiceOrderBodyVehicleInfoMax).optional(),
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection', 'comeback', 'unscheduled']).optional(),
   "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']).optional(),
   "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']).optional(),

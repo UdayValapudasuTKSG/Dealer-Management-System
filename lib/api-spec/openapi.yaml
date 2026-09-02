@@ -12105,10 +12105,10 @@ components:
       required: [vehicleInfo, type, scheduledDate]
       properties:
         customerId: { type: integer }
-        customerName: { type: string }
-        customerPhoneSnapshot: { type: string }
+        customerName: { type: string, minLength: 1, maxLength: 200 }
+        customerPhoneSnapshot: { type: string, maxLength: 40 }
         customerEmail: { type: string, minLength: 3 }
-        vehicleInfo: { type: string, minLength: 1 }
+        vehicleInfo: { type: string, minLength: 1, maxLength: 200 }
         vehicleId: { type: integer }
         assetId: { type: integer }
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection, comeback, unscheduled] }
@@ -12128,6 +12128,10 @@ components:
     ServiceOrderUpdate:
       type: object
       properties:
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: string, minLength: 1, maxLength: 200 }
+        customerPhoneSnapshot: { type: ["string", "null"], maxLength: 40 }
+        vehicleInfo: { type: string, minLength: 1, maxLength: 200 }
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection, comeback, unscheduled] }
         payType: { type: string, enum: [customer, warranty, goodwill, rectify] }
         status: { type: string, enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled] }

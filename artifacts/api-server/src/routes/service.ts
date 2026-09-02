@@ -507,12 +507,20 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  if ("customerPhoneSnapshot" in (req.body ?? {})) {
-    res.status(422).json({ error: "customerPhoneSnapshot is immutable after service-order creation" });
-    return;
+  // Normalize human-entered identity fields before generated min/max checks:
+  // names/vehicle labels reject whitespace-only values, while a blank phone
+  // deliberately clears the optional snapshot.
+  const normalizedBody = { ...(req.body ?? {}) };
+  for (const field of ["customerName", "vehicleInfo"] as const) {
+    if (typeof normalizedBody[field] === "string") {
+      normalizedBody[field] = normalizedBody[field].trim();
+    }
   }
-
-  const parsed = UpdateServiceOrderBody.safeParse(req.body);
+  if (typeof normalizedBody.customerPhoneSnapshot === "string") {
+    normalizedBody.customerPhoneSnapshot =
+      normalizedBody.customerPhoneSnapshot.trim() || null;
+  }
+  const parsed = UpdateServiceOrderBody.safeParse(normalizedBody);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -532,7 +540,7 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
       ),
     );
 
-  if (before && !technicianOwnsOrder(res, before)) {
+  if (!before || !technicianOwnsOrder(res, before)) {
     res.status(404).json({ error: "Service order not found" });
     return;
   }
@@ -543,6 +551,42 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
   const updateValues: Partial<typeof serviceOrdersTable.$inferInsert> = {
     ...rest,
   };
+  if (
+    rest.customerPhoneSnapshot != null &&
+    !validPhone(rest.customerPhoneSnapshot)
+  ) {
+    res.status(422).json({
+      error: "Customer phone must contain 7–15 digits and sensible phone punctuation only",
+    });
+    return;
+  }
+  if (rest.customerId != null) {
+    const [selectedCustomer] = await db
+      .select({
+        name: customersTable.name,
+        phone: customersTable.phone,
+      })
+      .from(customersTable)
+      .where(
+        and(
+          eq(customersTable.id, rest.customerId),
+          eq(customersTable.dealerId, dealerId),
+          isNull(customersTable.deletedAt),
+          isNull(customersTable.erasedAt),
+        ),
+      );
+    if (!selectedCustomer) {
+      res.status(404).json({ error: "Customer not found" });
+      return;
+    }
+    if (rest.customerName === undefined) {
+      updateValues.customerName = selectedCustomer.name;
+    }
+    if (rest.customerPhoneSnapshot === undefined) {
+      const selectedPhone = selectedCustomer.phone?.trim() || null;
+      updateValues.customerPhoneSnapshot = selectedPhone;
+    }
+  }
   if (rest.technician !== undefined && rest.technicianUserId === undefined) {
     updateValues.technicianUserId = await resolveDealerUserIdByName(
       dealerId,

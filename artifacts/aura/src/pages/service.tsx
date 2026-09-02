@@ -4,6 +4,7 @@ import { useFocusParam, useFocusHighlight } from "@/lib/use-focus-param";
 import {
   useListServiceOrders,
   useCreateServiceOrder,
+  useUpdateServiceOrder,
   useAdvanceServiceOrder,
   useDeleteServiceOrder,
   getListServiceOrdersQueryKey,
@@ -50,6 +51,8 @@ import {
   getListReviewsQueryKey,
   type JobCard,
   type ServiceOrder,
+  type ServiceOrderUpdate,
+  type ServiceOrderUpdateType,
   type ServiceInvoice,
   type ServiceOrderAdvanceBodyTargetStatus,
   useListCustomers,
@@ -90,6 +93,8 @@ import {
   Search,
   Phone,
   CarFront,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react";
 import { DocumentsCard } from "@/components/documents-card";
 import { CollisionTab, CreateClaimDialog } from "@/components/collision-claims";
@@ -117,6 +122,19 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Select,
   SelectContent,
@@ -592,6 +610,356 @@ function CreateBookingDialog() {
         }
       }}
     />
+  );
+}
+
+/* Edit an existing booking's scheduling and details */
+function EditBookingDialog({ order }: { order: ServiceOrder }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const update = useUpdateServiceOrder();
+  const { data: technicians } = useListServiceTechnicians();
+  const { data: customers } = useListCustomers();
+  const [open, setOpen] = useState(false);
+
+  // States
+  const [customerId, setCustomerId] = useState<string>("none");
+  const [customerName, setCustomerName] = useState<string>("");
+  const [customerPhoneSnapshot, setCustomerPhoneSnapshot] = useState<string>("");
+  const [vehicleInfo, setVehicleInfo] = useState<string>("");
+  const [type, setType] = useState<string>("");
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [complaint, setComplaint] = useState("");
+  const [odometer, setOdometer] = useState("");
+  const [estimatedCost, setEstimatedCost] = useState("");
+  const [estimatedHours, setEstimatedHours] = useState("");
+  const [technicianUserId, setTechnicianUserId] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setCustomerId(order.customerId != null ? String(order.customerId) : "none");
+      setCustomerName(order.customerName ?? "");
+      setCustomerPhoneSnapshot(order.customerPhoneSnapshot ?? "");
+      setVehicleInfo(order.vehicleInfo ?? "");
+      setType(order.type);
+      setScheduledDate(order.scheduledDate ? order.scheduledDate.split("T")[0] : "");
+      setComplaint(order.complaint ?? "");
+      setOdometer(order.odometer != null ? String(order.odometer) : "");
+      setEstimatedCost(order.estimatedCost != null ? String(order.estimatedCost) : "");
+      setEstimatedHours(order.estimatedHours != null ? String(order.estimatedHours) : "");
+      setTechnicianUserId(order.technicianUserId != null ? String(order.technicianUserId) : "none");
+    }
+  }, [open, order]);
+
+  // UI state for the searchable combo box
+  const [customerSelectOpen, setCustomerSelectOpen] = useState(false);
+  const selectedCustomer = customers?.find(c => String(c.id) === customerId);
+
+  const handleCustomerChange = (val: string) => {
+    setCustomerId(val);
+    if (val !== "none") {
+      const customer = customers?.find(c => String(c.id) === val);
+      if (customer) {
+        if (customer.name) setCustomerName(customer.name);
+        if (customer.phone) setCustomerPhoneSnapshot(customer.phone);
+      }
+    } else {
+      setCustomerName("");
+      setCustomerPhoneSnapshot("");
+    }
+    setCustomerSelectOpen(false);
+  };
+
+  const canSubmit = type !== "" && scheduledDate !== "" && vehicleInfo.trim() !== "" && !update.isPending;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+
+    try {
+      const payload: ServiceOrderUpdate = {
+        type: type as ServiceOrderUpdateType,
+        scheduledDate,
+        vehicleInfo: vehicleInfo.trim(),
+        customerId: customerId !== "none" ? Number(customerId) : null,
+      };
+
+      if (customerName.trim()) {
+        payload.customerName = customerName.trim();
+      }
+
+      if (customerPhoneSnapshot.trim()) {
+        payload.customerPhoneSnapshot = customerPhoneSnapshot.trim();
+      } else {
+        payload.customerPhoneSnapshot = null;
+      }
+
+      if (complaint.trim()) {
+        payload.complaint = complaint.trim();
+      } else {
+        payload.complaint = "";
+      }
+
+      if (odometer !== "") {
+        payload.odometer = Number(odometer);
+      }
+
+      if (estimatedCost !== "") {
+        payload.estimatedCost = Number(estimatedCost);
+      }
+
+      if (estimatedHours !== "") {
+        payload.estimatedHours = Number(estimatedHours);
+      }
+
+      if (technicianUserId && technicianUserId !== "none" && technicianUserId !== "auto") {
+        payload.technicianUserId = Number(technicianUserId);
+        const tech = technicians?.find(t => String(t.id) === technicianUserId);
+        if (tech) payload.technician = tech.name;
+      } else {
+        payload.technicianUserId = null;
+        payload.technician = "";
+      }
+
+      await update.mutateAsync({ id: order.id, data: payload });
+      queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
+      toast({ title: "Booking updated", description: `RO #${order.id} updated successfully.` });
+      setOpen(false);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Could not update booking.";
+      toast({ title: "Update failed", description: msg, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="rounded-full border-white/15 gap-1.5 text-xs h-8" aria-label={`Edit booking #${order.id}`}>
+          <PenTool className="w-3.5 h-3.5" /> Edit
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-xl max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-white/10 shrink-0">
+          <DialogTitle>Edit Booking</DialogTitle>
+          <DialogDescription>
+            Update scheduling and details for RO #{order.id}.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          <form id={`edit-booking-${order.id}`} onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+
+            <div className="col-span-2 space-y-1.5">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Customer & Vehicle</Label>
+              <div className="h-px w-full bg-white/10 my-2" />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Linked Customer</Label>
+              <Popover open={customerSelectOpen} onOpenChange={setCustomerSelectOpen} modal>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={customerSelectOpen}
+                    className="h-9 w-full justify-between bg-white/[0.04] border-white/10 px-3 font-normal text-sm"
+                  >
+                    <span className={cn("truncate", !selectedCustomer && "text-muted-foreground")}>
+                      {selectedCustomer ? selectedCustomer.name : "Unlinked"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-[--radix-popover-trigger-width] max-h-none" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search customers..." className="h-9 text-xs" />
+                    <CommandList className="max-h-56">
+                      <CommandEmpty>No matches.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="none"
+                          onSelect={() => handleCustomerChange("none")}
+                          className="text-sm"
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", customerId === "none" ? "opacity-100" : "opacity-0")} />
+                          Unlinked (None)
+                        </CommandItem>
+                        {customers?.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.name}
+                            onSelect={() => handleCustomerChange(String(c.id))}
+                            className="text-sm"
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", customerId === String(c.id) ? "opacity-100" : "opacity-0")} />
+                            {c.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Customer Name</Label>
+              <Input
+                type="text"
+                placeholder="Nana Adjei"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="h-9 bg-white/[0.04]"
+              />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Contact Phone (Job Card)</Label>
+              <Input
+                type="tel"
+                placeholder="+592..."
+                value={customerPhoneSnapshot}
+                onChange={(e) => setCustomerPhoneSnapshot(e.target.value)}
+                className="h-9 bg-white/[0.04]"
+              />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Vehicle Info</Label>
+              <Input
+                type="text"
+                required
+                placeholder="2022 BMW X5"
+                value={vehicleInfo}
+                onChange={(e) => setVehicleInfo(e.target.value)}
+                className="h-9 bg-white/[0.04]"
+              />
+            </div>
+
+            <div className="col-span-2 space-y-1.5 mt-2">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Appointment</Label>
+              <div className="h-px w-full bg-white/10 my-2" />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Service Type</Label>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger className="h-9 bg-white/[0.04]">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="maintenance">Maintenance</SelectItem>
+                  <SelectItem value="repair">Repair</SelectItem>
+                  <SelectItem value="warranty">Warranty</SelectItem>
+                  <SelectItem value="recall">Recall</SelectItem>
+                  <SelectItem value="inspection">Inspection</SelectItem>
+                  <SelectItem value="comeback">Comeback</SelectItem>
+                  <SelectItem value="unscheduled">Unscheduled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Scheduled Date</Label>
+              <Input
+                type="date"
+                required
+                value={scheduledDate}
+                onChange={(e) => setScheduledDate(e.target.value)}
+                className="h-9 bg-white/[0.04]"
+              />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Odometer (km)</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={odometer}
+                onChange={(e) => setOdometer(e.target.value)}
+                className="h-9 bg-white/[0.04]"
+              />
+            </div>
+
+            <div className="col-span-2 space-y-1.5 mt-2">
+              <Label className="text-muted-foreground text-xs uppercase tracking-wider font-semibold">Workshop Assignment</Label>
+              <div className="h-px w-full bg-white/10 my-2" />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Estimated Cost</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={estimatedCost}
+                onChange={(e) => setEstimatedCost(e.target.value)}
+                className="h-9 bg-white/[0.04]"
+              />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Booked Hours</Label>
+              <Input
+                type="number"
+                step="0.1"
+                placeholder="e.g. 2.5"
+                value={estimatedHours}
+                onChange={(e) => setEstimatedHours(e.target.value)}
+                className="h-9 bg-white/[0.04]"
+              />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Technician</Label>
+              <Select value={technicianUserId} onValueChange={setTechnicianUserId}>
+                <SelectTrigger className="h-9 bg-white/[0.04]">
+                  <SelectValue placeholder="Select technician" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {technicians?.map(t => (
+                    <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="col-span-2 space-y-1.5">
+              <Label>Complaint</Label>
+              <Textarea
+                placeholder="Customer complaint..."
+                rows={3}
+                value={complaint}
+                onChange={(e) => setComplaint(e.target.value)}
+                className="bg-white/[0.04] resize-none"
+              />
+            </div>
+
+          </form>
+        </div>
+
+        <DialogFooter className="px-6 py-4 border-t border-white/10 shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setOpen(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form={`edit-booking-${order.id}`}
+            disabled={!canSubmit}
+            className="bg-primary hover:bg-primary/90 text-white gap-2"
+          >
+            {update.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1086,6 +1454,7 @@ function BookingsTab() {
                       refId={order.id}
                       contextLabel={`RO #${order.id.toString().padStart(5, "0")} — ${order.vehicleInfo}`}
                     />
+                    <EditBookingDialog order={order} />
                     <DeleteOrderButton order={order} />
                   </div>
                 </div>
@@ -2807,7 +3176,6 @@ function EmptyState({ icon: Icon, text }: { icon: typeof Calendar; text: string 
   );
 }
 function SelfOnboardButton({ order }: { order: ServiceOrder }) {
-  const queryClient = useQueryClient();
   const { toast } = useToast();
   const invite = useCreateVehicleOnboardingInvite();
   if (!order.customerId) return null; // Needs a linked customer
@@ -2819,7 +3187,7 @@ function SelfOnboardButton({ order }: { order: ServiceOrder }) {
       className="rounded-full border-white/15 gap-1.5 text-xs h-8"
       onClick={async () => {
         try {
-          await invite.mutateAsync({ id: order.id });
+          await invite.mutateAsync({ id: order.customerId! });
           toast({ title: "Invite sent", description: `Vehicle self-onboarding email sent to ${order.customerName || "customer"}.` });
         } catch (e: unknown) {
           const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Could not send invite.";
