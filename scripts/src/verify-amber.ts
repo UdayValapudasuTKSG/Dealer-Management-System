@@ -8,14 +8,16 @@ import { pool } from "@workspace/db";
 // duplicate/out-of-order events, webhook signature + entitlement gating.
 
 const BASE = process.env.API_BASE ?? "http://localhost:80/api";
+const developmentDatabaseUrl =
+  process.env.DEV_DATABASE_URL ?? process.env.DATABASE_URL;
 
 // Dev-DB allowlist guard (never run fixtures against prod).
 if (
-  process.env.DATABASE_URL &&
+  developmentDatabaseUrl &&
   /neon|amazonaws|prod/i.test(process.env.PROD_DATABASE_URL ?? "") &&
-  process.env.DATABASE_URL === process.env.PROD_DATABASE_URL
+  developmentDatabaseUrl === process.env.PROD_DATABASE_URL
 ) {
-  console.error("Refusing to run: DATABASE_URL points at the production DB");
+  console.error("Refusing to run: development database points at production");
   process.exit(1);
 }
 

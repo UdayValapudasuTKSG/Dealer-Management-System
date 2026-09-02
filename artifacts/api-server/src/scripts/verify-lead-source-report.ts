@@ -41,13 +41,13 @@ process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
 // rows for ALL dealers in the shared dev database, not just our fixtures.
 process.env.OUTBOX_WORKER_DISABLED = "1";
 {
-  const raw = process.env.DATABASE_URL;
-  if (!raw) refuse("DATABASE_URL is not set.");
+  const raw = process.env.DEV_DATABASE_URL ?? process.env.DATABASE_URL;
+  if (!raw) refuse("DEV_DATABASE_URL or DATABASE_URL is not set.");
   let host: string;
   try {
     host = new URL(raw).hostname.toLowerCase();
   } catch {
-    refuse("DATABASE_URL is not a parseable URL.");
+    refuse("The development database URL is not parseable.");
   }
   const allowedHosts = new Set(["helium", "localhost", "127.0.0.1"]);
   if (process.env.PGHOST) allowedHosts.add(process.env.PGHOST.toLowerCase());
@@ -71,7 +71,7 @@ process.env.OUTBOX_WORKER_DISABLED = "1";
       const prod = new URL(process.env.PROD_DATABASE_URL);
       const dev = new URL(raw);
       if (prod.hostname === dev.hostname && prod.pathname === dev.pathname) {
-        refuse("DATABASE_URL matches PROD_DATABASE_URL.");
+        refuse("The development database URL matches PROD_DATABASE_URL.");
       }
     } catch {
       /* unparseable prod URL — host allowlist above already protects us */
