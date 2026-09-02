@@ -8016,7 +8016,7 @@ export const GetSentimentAnalysisResponse = zod.object({
  * @summary Aggregated report over live data for a date range
  */
 export const GetReportQueryParams = zod.object({
-  "type": zod.enum(['sales_pipeline', 'sales_performance', 'inventory_aging', 'finance_applications', 'service_workshop', 'parts_inventory', 'revenue_receivables', 'tax_gra', 'delivery_operations', 'agent_activity', 'collision_claims']),
+  "type": zod.enum(['sales_pipeline', 'sales_performance', 'sales_advisor_activity', 'inventory_aging', 'finance_applications', 'service_workshop', 'parts_inventory', 'revenue_receivables', 'tax_gra', 'delivery_operations', 'agent_activity', 'collision_claims']),
   "from": zod.coerce.string().optional(),
   "to": zod.coerce.string().optional(),
   "divisionId": zod.coerce.number().optional(),

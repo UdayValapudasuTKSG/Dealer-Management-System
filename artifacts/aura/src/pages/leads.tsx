@@ -197,6 +197,18 @@ export default function Leads() {
   const createdFrom = searchParams.get("from") || "";
   const createdTo = searchParams.get("to") || "";
 
+  const initialAdvisor = searchParams.get("advisor");
+  const initialSource = searchParams.get("source");
+  const initialPhase = searchParams.get("phase");
+
+  const [filterQuery, setFilterQuery] = useState(() => {
+    let q = "";
+    if (initialAdvisor) q += `advisor:"${initialAdvisor}" `;
+    if (initialSource) q += `source:"${initialSource}" `;
+    if (initialPhase) q += `phase:"${initialPhase}" `;
+    return q.trim();
+  });
+
   const updateDateRange = (from: string, to: string) => {
     const next = new URLSearchParams(searchStr);
     if (from) next.set("from", from);
@@ -246,8 +258,6 @@ export default function Leads() {
   const selectedSourceCfg = (leadSources ?? []).find(
     (s) => s.code === (newSource || "website"),
   );
-
-  const [filterQuery, setFilterQuery] = useState("");
 
   const filters = useMemo(() => {
     const regex = /(?:([a-z0-9_-]+):"([^"]+)")|(?:([a-z0-9_-]+):([^\s]+))|(?:"([^"]+)")|([^\s]+)/gi;

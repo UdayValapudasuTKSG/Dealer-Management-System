@@ -27,6 +27,7 @@ import {
   usersTable,
   auditLogsTable,
   activityTable,
+  testDrivesTable,
   collisionClaimsTable,
   collisionSupplementsTable,
   collisionSettlementsTable,
@@ -71,6 +72,7 @@ const REPORT_MODULE: Record<string, string> = {
   delivery_operations: "deliveries",
   agent_activity: "settings",
   collision_claims: "service",
+  sales_advisor_activity: "leads",
 };
 
 /** Minimum persona tier per type (spec R5.1 visibility column). */
@@ -86,6 +88,7 @@ const REPORT_MIN_TIER: Record<string, "advisor" | "manager"> = {
   delivery_operations: "advisor",
   agent_activity: "manager",
   collision_claims: "manager",
+  sales_advisor_activity: "manager",
 };
 
 const pct = (n: number) => `${Math.round(n * 10) / 10}%`;
@@ -389,6 +392,132 @@ const salesPerformance: Builder = async (ctx) => {
     table: {
       columns: ["Advisor", "Units", "Gross", "Avg discount", "Close rate", "Avg cycle"],
       rows: advisorRows,
+    },
+  };
+};
+
+/* Management — advisor lead intake and verified sales activity */
+const salesAdvisorActivity: Builder = async (ctx) => {
+  const { from, to, dealerId, scope, divisionId } = ctx;
+  const [allLeads, quotes, testDrives, deals, users] = await Promise.all([
+    db.select().from(leadsTable).where(eq(leadsTable.dealerId, dealerId)),
+    db.select().from(quotesTable).where(eq(quotesTable.dealerId, dealerId)),
+    db.select().from(testDrivesTable).where(eq(testDrivesTable.dealerId, dealerId)),
+    db.select().from(dealsTable).where(eq(dealsTable.dealerId, dealerId)),
+    db.select().from(usersTable),
+  ]);
+
+  const leads = scopeLeadRows(scope, allLeads, divisionId).filter((l) => !l.deletedAt);
+  const leadById = new Map(leads.map((l) => [l.id, l]));
+  const userName = new Map(users.map((u) => [u.id, u.name || u.email]));
+  const advisorName = (lead: (typeof leads)[number]) =>
+    (lead.ownerUserId ? userName.get(lead.ownerUserId) : null) ||
+    lead.assignedTo?.trim() ||
+    "Unassigned";
+
+  type AdvisorRow = {
+    leads: number;
+    contacted: number;
+    quotes: Set<string>;
+    testDrives: number;
+    converted: number;
+  };
+  const byAdvisor = new Map<string, AdvisorRow>();
+  const rowFor = (name: string) => {
+    const row = byAdvisor.get(name) ?? {
+      leads: 0,
+      contacted: 0,
+      quotes: new Set<string>(),
+      testDrives: 0,
+      converted: 0,
+    };
+    byAdvisor.set(name, row);
+    return row;
+  };
+
+  for (const lead of leads) {
+    const row = rowFor(advisorName(lead));
+    if (inRange(lead.createdAt, from, to)) row.leads += 1;
+    if (inRange(lead.contactedDate, from, to)) row.contacted += 1;
+  }
+  for (const quote of quotes) {
+    const lead = leadById.get(quote.leadId);
+    if (lead && inRange(quote.sentAt, from, to)) {
+      rowFor(advisorName(lead)).quotes.add(quote.quoteNumber);
+    }
+  }
+  for (const drive of testDrives) {
+    const lead = leadById.get(drive.leadId);
+    if (
+      lead &&
+      drive.status !== "cancelled" &&
+      inRange(drive.scheduledAt, from, to)
+    ) {
+      rowFor(advisorName(lead)).testDrives += 1;
+    }
+  }
+  for (const deal of deals) {
+    const lead = deal.leadId ? leadById.get(deal.leadId) : null;
+    if (
+      lead &&
+      ["committed", "delivered"].includes(deal.stage) &&
+      inRange(deal.createdAt, from, to)
+    ) {
+      rowFor(advisorName(lead)).converted += 1;
+    }
+  }
+
+  const rows = [...byAdvisor.entries()]
+    .filter(([, r]) => r.leads || r.contacted || r.quotes.size || r.testDrives || r.converted)
+    .sort((a, b) => b[1].leads - a[1].leads || b[1].converted - a[1].converted);
+  const totals = rows.reduce(
+    (sum, [, row]) => ({
+      leads: sum.leads + row.leads,
+      contacted: sum.contacted + row.contacted,
+      quotes: sum.quotes + row.quotes.size,
+      testDrives: sum.testDrives + row.testDrives,
+      converted: sum.converted + row.converted,
+    }),
+    { leads: 0, contacted: 0, quotes: 0, testDrives: 0, converted: 0 },
+  );
+
+  return {
+    label: "Sales Advisor Activity",
+    kpis: [
+      { label: "Leads received", value: String(totals.leads), sub: "Created in selected period" },
+      {
+        label: "Leads contacted",
+        value: String(totals.contacted),
+        sub: `${totals.leads ? Math.round((totals.contacted / totals.leads) * 100) : 0}% of received leads`,
+      },
+      { label: "Quotes sent", value: String(totals.quotes) },
+      { label: "Test drives", value: String(totals.testDrives) },
+      { label: "Converted", value: String(totals.converted), sub: "Deals committed or delivered" },
+    ],
+    chart: {
+      kind: "pie",
+      valueLabel: "Leads by advisor",
+      points: rows.map(([name, row]) => ({ label: name, value: row.leads })),
+    },
+    table: {
+      columns: [
+        "Advisor",
+        "Leads received",
+        "Contacted",
+        "Quotes sent",
+        "Test drives",
+        "Converted",
+        "Lead conversion",
+      ],
+      rows: rows.map(([name, row]) => [
+        name,
+        String(row.leads),
+        String(row.contacted),
+        String(row.quotes.size),
+        String(row.testDrives),
+        String(row.converted),
+        pct(row.leads ? (row.converted / row.leads) * 100 : 0),
+      ]),
     },
   };
 };
@@ -1352,6 +1481,7 @@ const builders: Record<string, Builder> = {
   delivery_operations: deliveryOperations,
   agent_activity: agentActivity,
   collision_claims: collisionClaims,
+  sales_advisor_activity: salesAdvisorActivity,
 };
 
 /* ------------------------------------------------------------------ */

@@ -5251,6 +5251,7 @@ paths:
             enum:
               - sales_pipeline
               - sales_performance
+              - sales_advisor_activity
               - inventory_aging
               - finance_applications
               - service_workshop
