@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Response } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   externalJobCardPartsTable,
@@ -7,10 +7,14 @@ import {
   jobCardsTable,
   partRequisitionFulfillmentsTable,
   partRequisitionLinesTable,
+  partRequisitionPoAllocationsTable,
   partRequisitionsTable,
   partsTable,
+  purchaseOrderLinesTable,
+  purchaseOrdersTable,
   serviceInvoicesTable,
   serviceOrdersTable,
+  suppliersTable,
 } from "@workspace/db";
 import {
   CreateJobCardPartRequisitionBody,
@@ -31,9 +35,18 @@ import {
   MarkPartRequisitionOrderedBody,
   MarkPartRequisitionOrderedParams,
   MarkPartRequisitionOrderedResponse,
+  ConvertPartRequisitionToPurchaseOrdersBody,
+  ConvertPartRequisitionToPurchaseOrdersParams,
+  ConvertPartRequisitionToPurchaseOrdersResponse,
+  CancelPartRequisitionBody,
+  CancelPartRequisitionParams,
+  CancelPartRequisitionResponse,
 } from "@workspace/api-zod";
 import { activeDealerId, hasPermission, type AuthedUser } from "../middlewares/rbac";
-import { enqueueStockEntrySync } from "../lib/erpnext/parts-sync";
+import {
+  enqueuePurchaseOrderSync,
+  enqueueStockEntrySync,
+} from "../lib/erpnext/parts-sync";
 
 const router: IRouter = Router();
 
@@ -104,7 +117,42 @@ async function loadDetail(dealerId: number, id: number) {
       ),
     )
     .orderBy(partRequisitionLinesTable.id);
-  return { ...header, lines };
+  const allocations = await db
+    .select()
+    .from(partRequisitionPoAllocationsTable)
+    .where(
+      and(
+        eq(partRequisitionPoAllocationsTable.dealerId, dealerId),
+        eq(partRequisitionPoAllocationsTable.requisitionId, id),
+      ),
+    );
+  const byLine = new Map<number, typeof allocations>();
+  for (const allocation of allocations) {
+    const list = byLine.get(allocation.requisitionLineId) ?? [];
+    list.push(allocation);
+    byLine.set(allocation.requisitionLineId, list);
+  }
+  return {
+    ...header,
+    lines: lines.map((line) => {
+      const links = byLine.get(line.id) ?? [];
+      const orderedQuantity = links.reduce((sum, link) => sum + link.quantityOrdered, 0);
+      const receivedQuantity = links.reduce((sum, link) => sum + link.quantityReceived, 0);
+      return {
+        ...line,
+        orderedQuantity,
+        receivedQuantity,
+        outstandingQuantity: Math.max(0, line.quantity - orderedQuantity),
+        purchaseOrderLinks: links.map((link) => ({
+          purchaseOrderId: link.purchaseOrderId,
+          purchaseOrderLineId: link.purchaseOrderLineId,
+          supplierId: link.supplierId,
+          quantityOrdered: link.quantityOrdered,
+          quantityReceived: link.quantityReceived,
+        })),
+      };
+    }),
+  };
 }
 
 async function canViewRequisition(user: AuthedUser | undefined, dealerId: number, jobCardId: number) {
@@ -365,6 +413,311 @@ router.post("/part-requisitions/:id/ordered", async (req, res): Promise<void> =>
   res.json(MarkPartRequisitionOrderedResponse.parse(await loadDetail(dealerId, updated.id)));
 });
 
+router.post(
+  "/part-requisitions/:id/convert-to-purchase-orders",
+  async (req, res): Promise<void> => {
+    const params = ConvertPartRequisitionToPurchaseOrdersParams.safeParse(req.params);
+    const parsed = ConvertPartRequisitionToPurchaseOrdersBody.safeParse(req.body);
+    if (!params.success || !parsed.success) {
+      res.status(400).json({ error: (params.success ? parsed : params).error?.message ?? "Invalid" });
+      return;
+    }
+    if (rejectProcessor(res)) return;
+    if (new Set(parsed.data.lines.map((line) => line.lineId)).size !== parsed.data.lines.length) {
+      res.status(422).json({ error: "Each requisition line may appear only once per conversion" });
+      return;
+    }
+    const dealerId = activeDealerId(res);
+    const createdPoIds: number[] = [];
+    let replay = false;
+    try {
+      await db.transaction(async (tx) => {
+        const [header] = await tx
+          .select()
+          .from(partRequisitionsTable)
+          .where(
+            and(
+              eq(partRequisitionsTable.id, params.data.id),
+              eq(partRequisitionsTable.dealerId, dealerId),
+            ),
+          )
+          .for("update");
+        if (!header) throw Object.assign(new Error("Requisition not found"), { status: 404 });
+
+        const prior = await tx
+          .select()
+          .from(partRequisitionPoAllocationsTable)
+          .where(
+            and(
+              eq(partRequisitionPoAllocationsTable.dealerId, dealerId),
+              eq(partRequisitionPoAllocationsTable.requisitionId, header.id),
+              eq(partRequisitionPoAllocationsTable.idempotencyKey, parsed.data.idempotencyKey),
+            ),
+          );
+        if (prior.length > 0) {
+          const requested = [...parsed.data.lines]
+            .map((line) => `${line.lineId}:${line.supplierId}:${line.quantity}`)
+            .sort()
+            .join("|");
+          const existing = prior
+            .map((line) => `${line.requisitionLineId}:${line.supplierId}:${line.quantityOrdered}`)
+            .sort()
+            .join("|");
+          if (requested !== existing) {
+            throw Object.assign(new Error("Idempotency key was already used with a different conversion"), { status: 409 });
+          }
+          createdPoIds.push(...new Set(prior.map((line) => line.purchaseOrderId)));
+          replay = true;
+          return;
+        }
+        if (!["approved", "partially_ordered", "partially_fulfilled"].includes(header.status)) {
+          throw Object.assign(new Error(`Cannot convert a ${header.status} requisition`), { status: 422 });
+        }
+
+        const supplierIds = [...new Set(parsed.data.lines.map((line) => line.supplierId))];
+        const suppliers = await tx
+          .select({ id: suppliersTable.id, status: suppliersTable.status })
+          .from(suppliersTable)
+          .where(and(eq(suppliersTable.dealerId, dealerId), inArray(suppliersTable.id, supplierIds)))
+          .for("update");
+        if (
+          suppliers.length !== supplierIds.length ||
+          suppliers.some((supplier) => supplier.status !== "active")
+        ) {
+          throw Object.assign(new Error("Every selected supplier must be active in this dealership"), { status: 422 });
+        }
+
+        const requestLines = new Map(parsed.data.lines.map((line) => [line.lineId, line]));
+        const lines = await tx
+          .select()
+          .from(partRequisitionLinesTable)
+          .where(
+            and(
+              eq(partRequisitionLinesTable.dealerId, dealerId),
+              eq(partRequisitionLinesTable.requisitionId, header.id),
+              inArray(partRequisitionLinesTable.id, [...requestLines.keys()]),
+            ),
+          )
+          .orderBy(partRequisitionLinesTable.id)
+          .for("update");
+        if (lines.length !== requestLines.size) {
+          throw Object.assign(new Error("One or more requisition lines were not found"), { status: 404 });
+        }
+        const existingAllocations = await tx
+          .select({
+            requisitionLineId: partRequisitionPoAllocationsTable.requisitionLineId,
+            quantityOrdered: partRequisitionPoAllocationsTable.quantityOrdered,
+          })
+          .from(partRequisitionPoAllocationsTable)
+          .where(
+            and(
+              eq(partRequisitionPoAllocationsTable.dealerId, dealerId),
+              eq(partRequisitionPoAllocationsTable.requisitionId, header.id),
+            ),
+          );
+        const allocated = new Map<number, number>();
+        for (const row of existingAllocations) {
+          allocated.set(row.requisitionLineId, (allocated.get(row.requisitionLineId) ?? 0) + row.quantityOrdered);
+        }
+        for (const line of lines) {
+          const requested = requestLines.get(line.id)!;
+          const outstanding = line.quantity - (allocated.get(line.id) ?? 0);
+          if (requested.quantity > outstanding) {
+            throw Object.assign(
+              new Error(`Line #${line.id} has only ${outstanding} unit(s) available to allocate`),
+              { status: 422 },
+            );
+          }
+        }
+
+        const bySupplier = new Map<number, typeof lines>();
+        for (const line of lines) {
+          const supplierId = requestLines.get(line.id)!.supplierId;
+          const group = bySupplier.get(supplierId) ?? [];
+          group.push(line);
+          bySupplier.set(supplierId, group);
+        }
+        for (const [supplierId, group] of bySupplier) {
+          const [po] = await tx
+            .insert(purchaseOrdersTable)
+            .values({
+              dealerId,
+              supplierId,
+              status: "ordered",
+              expectedDate:
+                parsed.data.expectedDate instanceof Date
+                  ? parsed.data.expectedDate.toISOString().slice(0, 10)
+                  : parsed.data.expectedDate,
+              reference: `REQ-${header.id}-${parsed.data.idempotencyKey}`,
+              notes: parsed.data.notes ?? `Created from requisition #${header.id}`,
+            })
+            .returning();
+          createdPoIds.push(po.id);
+          for (const line of group) {
+            const requested = requestLines.get(line.id)!;
+            const [poLine] = await tx
+              .insert(purchaseOrderLinesTable)
+              .values({
+                dealerId,
+                purchaseOrderId: po.id,
+                partId: line.partId,
+                source: line.source,
+                partName: line.descriptionSnapshot,
+                quantity: requested.quantity,
+                unitCost: requested.unitCost ?? line.unitCost,
+                jobCardId: header.jobCardId,
+              })
+              .returning();
+            await tx.insert(partRequisitionPoAllocationsTable).values({
+              dealerId,
+              requisitionId: header.id,
+              requisitionLineId: line.id,
+              supplierId,
+              purchaseOrderId: po.id,
+              purchaseOrderLineId: poLine.id,
+              idempotencyKey: parsed.data.idempotencyKey,
+              quantityOrdered: requested.quantity,
+            });
+            allocated.set(line.id, (allocated.get(line.id) ?? 0) + requested.quantity);
+          }
+        }
+        const allLines = await tx
+          .select({ id: partRequisitionLinesTable.id, quantity: partRequisitionLinesTable.quantity })
+          .from(partRequisitionLinesTable)
+          .where(
+            and(
+              eq(partRequisitionLinesTable.dealerId, dealerId),
+              eq(partRequisitionLinesTable.requisitionId, header.id),
+            ),
+          );
+        const complete = allLines.every((line) => (allocated.get(line.id) ?? 0) >= line.quantity);
+        const nextStatus =
+          header.status === "partially_fulfilled"
+            ? "partially_fulfilled"
+            : complete
+              ? "ordered"
+              : "partially_ordered";
+        await tx
+          .update(partRequisitionsTable)
+          .set({
+            status: nextStatus,
+            orderedByUserId: res.locals.user?.id ?? null,
+            orderedByName: actorName(res.locals.user),
+            ...(complete ? { orderedAt: new Date() } : {}),
+            updatedAt: new Date(),
+          })
+          .where(and(eq(partRequisitionsTable.id, header.id), eq(partRequisitionsTable.dealerId, dealerId)));
+      });
+    } catch (error) {
+      const failure = error as Error & { status?: number };
+      if (failure.status) {
+        res.status(failure.status).json({ error: failure.message });
+        return;
+      }
+      throw error;
+    }
+    if (!replay) {
+      for (const poId of createdPoIds) enqueuePurchaseOrderSync(dealerId, poId, "insert");
+    }
+    const purchaseOrders = [];
+    for (const poId of createdPoIds) {
+      const [po] = await db
+        .select()
+        .from(purchaseOrdersTable)
+        .where(and(eq(purchaseOrdersTable.id, poId), eq(purchaseOrdersTable.dealerId, dealerId)));
+      const lines = await db
+        .select()
+        .from(purchaseOrderLinesTable)
+        .where(and(eq(purchaseOrderLinesTable.purchaseOrderId, poId), eq(purchaseOrderLinesTable.dealerId, dealerId)));
+      purchaseOrders.push({ ...po, lines });
+    }
+    const result = {
+      requisition: await loadDetail(dealerId, params.data.id),
+      purchaseOrders,
+    };
+    res.status(replay ? 200 : 201).json(ConvertPartRequisitionToPurchaseOrdersResponse.parse(result));
+  },
+);
+
+router.post("/part-requisitions/:id/cancel", async (req, res): Promise<void> => {
+  const params = CancelPartRequisitionParams.safeParse(req.params);
+  const parsed = CancelPartRequisitionBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: (params.success ? parsed : params).error?.message ?? "Invalid" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  try {
+    await db.transaction(async (tx) => {
+      const [header] = await tx
+        .select()
+        .from(partRequisitionsTable)
+        .where(and(eq(partRequisitionsTable.id, params.data.id), eq(partRequisitionsTable.dealerId, dealerId)))
+        .for("update");
+      if (!header) throw Object.assign(new Error("Requisition not found"), { status: 404 });
+      const requesterBeforeApproval =
+        header.status === "submitted" && header.requesterUserId === res.locals.user?.id;
+      if (!requesterBeforeApproval && !canProcess(res.locals.user)) {
+        throw Object.assign(
+          new Error("Only the requester before approval, or a service approver/Parts processor after approval, may cancel"),
+          { status: 403 },
+        );
+      }
+      const links = await tx
+        .select({
+          purchaseOrderId: partRequisitionPoAllocationsTable.purchaseOrderId,
+          quantityReceived: partRequisitionPoAllocationsTable.quantityReceived,
+          poStatus: purchaseOrdersTable.status,
+        })
+        .from(partRequisitionPoAllocationsTable)
+        .innerJoin(
+          purchaseOrdersTable,
+          and(
+            eq(purchaseOrdersTable.id, partRequisitionPoAllocationsTable.purchaseOrderId),
+            eq(purchaseOrdersTable.dealerId, partRequisitionPoAllocationsTable.dealerId),
+          ),
+        )
+        .where(
+          and(
+            eq(partRequisitionPoAllocationsTable.dealerId, dealerId),
+            eq(partRequisitionPoAllocationsTable.requisitionId, header.id),
+          ),
+        );
+      if (links.some((link) => link.quantityReceived > 0)) {
+        throw Object.assign(new Error("Cannot cancel: linked purchase-order goods have been received"), { status: 409 });
+      }
+      if (["rejected", "fulfilled", "cancelled"].includes(header.status)) {
+        throw Object.assign(new Error(`Cannot cancel a ${header.status} requisition`), { status: 422 });
+      }
+      if (links.some((link) => link.poStatus !== "cancelled")) {
+        throw Object.assign(
+          new Error(`Cancel linked purchase order(s) ${[...new Set(links.map((l) => l.purchaseOrderId))].join(", ")} first`),
+          { status: 409 },
+        );
+      }
+      await tx
+        .update(partRequisitionsTable)
+        .set({
+          status: "cancelled",
+          cancellationReason: parsed.data.reason.trim(),
+          cancelledByUserId: res.locals.user?.id ?? null,
+          cancelledByName: actorName(res.locals.user),
+          cancelledAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(partRequisitionsTable.id, header.id), eq(partRequisitionsTable.dealerId, dealerId)));
+    });
+  } catch (error) {
+    const failure = error as Error & { status?: number };
+    if (failure.status) {
+      res.status(failure.status).json({ error: failure.message });
+      return;
+    }
+    throw error;
+  }
+  res.json(CancelPartRequisitionResponse.parse(await loadDetail(dealerId, params.data.id)));
+});
+
 router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> => {
   const params = FulfillPartRequisitionParams.safeParse(req.params);
   const parsed = FulfillPartRequisitionBody.safeParse(req.body);
@@ -407,7 +760,7 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
         const priorIds = new Set(prior.map((row) => row.lineId));
         if (parsed.data.lines.every((line) => priorIds.has(line.lineId))) return;
       }
-      if (!["approved", "ordered", "partially_fulfilled"].includes(header.status)) {
+       if (!["approved", "partially_ordered", "ordered", "partially_fulfilled"].includes(header.status)) {
         throw Object.assign(new Error(`Cannot fulfill a ${header.status} requisition`), { status: 422 });
       }
       const [invoice] = await tx
@@ -441,6 +794,24 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
           )
           .for("update");
         if (!line) throw Object.assign(new Error(`Line #${requestLine.lineId} not found`), { status: 404 });
+        if (line.source === "EXTERNAL") {
+          throw Object.assign(new Error(`External line #${line.id} is attached automatically when its PO is received`), { status: 422 });
+        }
+        const [received] = await tx
+          .select({
+            quantity: sql<number>`coalesce(sum(${partRequisitionPoAllocationsTable.quantityReceived}), 0)`,
+          })
+          .from(partRequisitionPoAllocationsTable)
+          .where(
+            and(
+              eq(partRequisitionPoAllocationsTable.dealerId, dealerId),
+              eq(partRequisitionPoAllocationsTable.requisitionId, header.id),
+              eq(partRequisitionPoAllocationsTable.requisitionLineId, line.id),
+            ),
+          );
+        if (requestLine.quantity > Number(received?.quantity ?? 0) - line.fulfilledQuantity) {
+          throw Object.assign(new Error(`Line #${line.id} has insufficient received quantity to issue`), { status: 409 });
+        }
         if (requestLine.quantity > line.quantity - line.fulfilledQuantity) {
           throw Object.assign(new Error(`Line #${line.id} has only ${line.quantity - line.fulfilledQuantity} unit(s) outstanding`), { status: 422 });
         }

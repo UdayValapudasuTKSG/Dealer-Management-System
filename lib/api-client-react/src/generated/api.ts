@@ -279,6 +279,9 @@ import type {
   PartPurchaseInput,
   PartPurchaseReceiveBody,
   PartRequisition,
+  PartRequisitionCancellationInput,
+  PartRequisitionConversionInput,
+  PartRequisitionConversionResult,
   PartRequisitionDecision,
   PartRequisitionDetail,
   PartRequisitionFulfillmentInput,
@@ -11654,6 +11657,150 @@ export const useMarkPartRequisitionOrdered = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getMarkPartRequisitionOrderedMutationOptions(options));
+    }
+
+export const getConvertPartRequisitionToPurchaseOrdersUrl = (id: number,) => {
+
+
+
+
+  return `/api/part-requisitions/${id}/convert-to-purchase-orders`
+}
+
+/**
+ * @summary Allocate approved requisition quantities to supplier purchase orders
+ */
+export const convertPartRequisitionToPurchaseOrders = async (id: number,
+    partRequisitionConversionInput: PartRequisitionConversionInput, options?: RequestInit): Promise<PartRequisitionConversionResult> => {
+
+  return customFetch<PartRequisitionConversionResult>(getConvertPartRequisitionToPurchaseOrdersUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partRequisitionConversionInput)
+  }
+);}
+
+
+
+
+
+export const getConvertPartRequisitionToPurchaseOrdersMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof convertPartRequisitionToPurchaseOrders>>, TError,{id: number;data: BodyType<PartRequisitionConversionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof convertPartRequisitionToPurchaseOrders>>, TError,{id: number;data: BodyType<PartRequisitionConversionInput>}, TContext> => {
+
+const mutationKey = ['convertPartRequisitionToPurchaseOrders'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof convertPartRequisitionToPurchaseOrders>>, {id: number;data: BodyType<PartRequisitionConversionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  convertPartRequisitionToPurchaseOrders(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConvertPartRequisitionToPurchaseOrdersMutationResult = NonNullable<Awaited<ReturnType<typeof convertPartRequisitionToPurchaseOrders>>>
+    export type ConvertPartRequisitionToPurchaseOrdersMutationBody = BodyType<PartRequisitionConversionInput>
+    export type ConvertPartRequisitionToPurchaseOrdersMutationError = ErrorType<Error>
+
+    /**
+ * @summary Allocate approved requisition quantities to supplier purchase orders
+ */
+export const useConvertPartRequisitionToPurchaseOrders = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof convertPartRequisitionToPurchaseOrders>>, TError,{id: number;data: BodyType<PartRequisitionConversionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof convertPartRequisitionToPurchaseOrders>>,
+        TError,
+        {id: number;data: BodyType<PartRequisitionConversionInput>},
+        TContext
+      > => {
+      return useMutation(getConvertPartRequisitionToPurchaseOrdersMutationOptions(options));
+    }
+
+export const getCancelPartRequisitionUrl = (id: number,) => {
+
+
+
+
+  return `/api/part-requisitions/${id}/cancel`
+}
+
+/**
+ * @summary Cancel a requisition when no linked goods have been received
+ */
+export const cancelPartRequisition = async (id: number,
+    partRequisitionCancellationInput: PartRequisitionCancellationInput, options?: RequestInit): Promise<PartRequisitionDetail> => {
+
+  return customFetch<PartRequisitionDetail>(getCancelPartRequisitionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partRequisitionCancellationInput)
+  }
+);}
+
+
+
+
+
+export const getCancelPartRequisitionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionCancellationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionCancellationInput>}, TContext> => {
+
+const mutationKey = ['cancelPartRequisition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelPartRequisition>>, {id: number;data: BodyType<PartRequisitionCancellationInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  cancelPartRequisition(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelPartRequisitionMutationResult = NonNullable<Awaited<ReturnType<typeof cancelPartRequisition>>>
+    export type CancelPartRequisitionMutationBody = BodyType<PartRequisitionCancellationInput>
+    export type CancelPartRequisitionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Cancel a requisition when no linked goods have been received
+ */
+export const useCancelPartRequisition = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionCancellationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelPartRequisition>>,
+        TError,
+        {id: number;data: BodyType<PartRequisitionCancellationInput>},
+        TContext
+      > => {
+      return useMutation(getCancelPartRequisitionMutationOptions(options));
     }
 
 export const getFulfillPartRequisitionUrl = (id: number,) => {

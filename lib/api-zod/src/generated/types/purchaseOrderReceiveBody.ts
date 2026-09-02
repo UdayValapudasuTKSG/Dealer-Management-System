@@ -8,6 +8,11 @@
 import type { PurchaseOrderReceiveBodyLinesItem } from './purchaseOrderReceiveBodyLinesItem';
 
 export interface PurchaseOrderReceiveBody {
+  /**
+     * @minLength 8
+     * @maxLength 100
+     */
+  idempotencyKey: string;
   /** Per-line receipt quantities; omit to receive everything outstanding */
   lines?: PurchaseOrderReceiveBodyLinesItem[];
 }

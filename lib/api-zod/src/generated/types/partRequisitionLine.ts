@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PartRequisitionLineSource } from './partRequisitionLineSource';
+import type { PartRequisitionPurchaseOrderLink } from './partRequisitionPurchaseOrderLink';
 
 export interface PartRequisitionLine {
   id: number;
@@ -28,5 +29,9 @@ export interface PartRequisitionLine {
   taxCost: number;
   /** Procurement freight cost in GYD */
   freightCost: number;
+  orderedQuantity?: number;
+  receivedQuantity?: number;
+  outstandingQuantity?: number;
+  purchaseOrderLinks?: PartRequisitionPurchaseOrderLink[];
   createdAt: Date;
 }

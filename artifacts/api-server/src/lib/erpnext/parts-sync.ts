@@ -397,7 +397,10 @@ async function purchaseOrderHandler(job: ErpnextSyncJob): Promise<{ docName: str
     .where(
       and(
         eq(partsTable.dealerId, job.dealerId),
-        inArray(partsTable.id, [...new Set(lines.map((l) => l.partId))]),
+        inArray(
+          partsTable.id,
+          [...new Set(lines.map((l) => l.partId).filter((id): id is number => id != null))],
+        ),
       ),
     );
   const partById = new Map(parts.map((p) => [p.id, p]));
@@ -429,6 +432,7 @@ async function purchaseOrderHandler(job: ErpnextSyncJob): Promise<{ docName: str
     zonedDayKey(new Date(), await dealerTimezone(job.dealerId));
   const items: Record<string, unknown>[] = [];
   for (const line of lines) {
+    if (line.partId == null) continue;
     const part = partById.get(line.partId);
     if (!part) continue;
     items.push({

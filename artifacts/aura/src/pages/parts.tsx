@@ -20,6 +20,7 @@ import {
   useUpdatePurchaseOrder,
   useReceivePurchaseOrder,
   getListPurchaseOrdersQueryKey,
+  getListPartRequisitionsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1023,11 +1024,13 @@ function PurchaseOrdersTab() {
       await fn();
       queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
       queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListPartRequisitionsQueryKey() });
       toast({ title: done });
-    } catch (err) {
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || (err as Error).message;
       toast({
         title: "Action failed",
-        description: err instanceof Error ? err.message : undefined,
+        description: msg,
         variant: "destructive",
       });
     } finally {
@@ -1127,7 +1130,7 @@ function PurchaseOrdersTab() {
                       onClick={() =>
                         act(
                           po.id,
-                          () => receive.mutateAsync({ id: po.id, data: {} }),
+                          () => receive.mutateAsync({ id: po.id, data: { idempotencyKey: `po-recv-${Date.now()}` } }),
                           `Received ${outstanding} unit(s) into stock`,
                         )
                       }

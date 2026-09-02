@@ -3908,7 +3908,7 @@ paths:
       parameters:
         - name: status
           in: query
-          schema: { type: string, enum: [submitted, approved, rejected, ordered, partially_fulfilled, fulfilled, cancelled] }
+          schema: { type: string, enum: [submitted, approved, partially_ordered, rejected, ordered, partially_fulfilled, fulfilled, cancelled] }
         - name: urgency
           in: query
           schema: { type: string, enum: [routine, urgent, vehicle_down] }
@@ -4008,6 +4008,70 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
           description: Invalid transition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /part-requisitions/{id}/convert-to-purchase-orders:
+    post:
+      operationId: convertPartRequisitionToPurchaseOrders
+      tags: [service, parts]
+      summary: Allocate approved requisition quantities to supplier purchase orders
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartRequisitionConversionInput" }
+      responses:
+        "200":
+          description: Existing idempotent conversion result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartRequisitionConversionResult" }
+        "201":
+          description: Purchase orders created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartRequisitionConversionResult" }
+        "409":
+          description: Conflicting allocation or idempotency key reuse
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid state, supplier, or quantity
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /part-requisitions/{id}/cancel:
+    post:
+      operationId: cancelPartRequisition
+      tags: [service, parts]
+      summary: Cancel a requisition when no linked goods have been received
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PartRequisitionCancellationInput" }
+      responses:
+        "200":
+          description: Requisition cancelled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartRequisitionDetail" }
+        "409":
+          description: Linked purchase orders or receipts prevent cancellation
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -12577,7 +12641,7 @@ components:
         jobCardId: { type: integer }
         requesterUserId: { type: ["integer", "null"] }
         requesterName: { type: string }
-        status: { type: string, enum: [submitted, approved, rejected, ordered, partially_fulfilled, fulfilled, cancelled] }
+        status: { type: string, enum: [submitted, approved, partially_ordered, rejected, ordered, partially_fulfilled, fulfilled, cancelled] }
         urgency: { type: string, enum: [routine, urgent, vehicle_down] }
         needBy: { type: ["string", "null"], format: date }
         notes: { type: ["string", "null"] }
@@ -12589,6 +12653,10 @@ components:
         orderedByName: { type: ["string", "null"] }
         orderedAt: { type: ["string", "null"], format: date-time }
         orderReference: { type: ["string", "null"] }
+        cancellationReason: { type: ["string", "null"] }
+        cancelledByUserId: { type: ["integer", "null"] }
+        cancelledByName: { type: ["string", "null"] }
+        cancelledAt: { type: ["string", "null"], format: date-time }
         fulfilledByUserId: { type: ["integer", "null"] }
         fulfilledByName: { type: ["string", "null"] }
         fulfilledAt: { type: ["string", "null"], format: date-time }
@@ -12611,6 +12679,12 @@ components:
         unitPrice: { type: number, description: "Customer invoice unit price in GYD" }
         taxCost: { type: number, description: "Procurement tax cost in GYD" }
         freightCost: { type: number, description: "Procurement freight cost in GYD" }
+        orderedQuantity: { type: integer }
+        receivedQuantity: { type: integer }
+        outstandingQuantity: { type: integer }
+        purchaseOrderLinks:
+          type: array
+          items: { $ref: "#/components/schemas/PartRequisitionPurchaseOrderLink" }
         createdAt: { type: string, format: date-time }
     PartRequisitionDetail:
       allOf:
@@ -12657,6 +12731,48 @@ components:
       type: object
       properties:
         reference: { type: string, maxLength: 250 }
+    PartRequisitionPurchaseOrderLink:
+      type: object
+      required: [purchaseOrderId, purchaseOrderLineId, supplierId, quantityOrdered, quantityReceived]
+      properties:
+        purchaseOrderId: { type: integer }
+        purchaseOrderLineId: { type: integer }
+        supplierId: { type: integer }
+        quantityOrdered: { type: integer }
+        quantityReceived: { type: integer }
+    PartRequisitionConversionLineInput:
+      type: object
+      required: [lineId, supplierId, quantity]
+      properties:
+        lineId: { type: integer }
+        supplierId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
+        unitCost: { type: number, minimum: 0 }
+    PartRequisitionConversionInput:
+      type: object
+      required: [idempotencyKey, lines]
+      properties:
+        idempotencyKey: { type: string, minLength: 8, maxLength: 100 }
+        expectedDate: { type: string, format: date }
+        notes: { type: string, maxLength: 4000 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/PartRequisitionConversionLineInput" }
+    PartRequisitionConversionResult:
+      type: object
+      required: [requisition, purchaseOrders]
+      properties:
+        requisition: { $ref: "#/components/schemas/PartRequisitionDetail" }
+        purchaseOrders:
+          type: array
+          items: { $ref: "#/components/schemas/PurchaseOrder" }
+    PartRequisitionCancellationInput:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 2000 }
     PartRequisitionFulfillmentLineInput:
       type: object
       required: [lineId, quantity]
@@ -13124,16 +13240,21 @@ components:
         markupPercent: { type: number, minimum: 0, maximum: 500 }
     PurchaseOrderLine:
       type: object
-      required: [id, purchaseOrderId, partId, partName, quantity, qtyReceived, unitCost, createdAt]
+      required: [id, purchaseOrderId, partName, source, quantity, qtyReceived, unitCost, createdAt]
       properties:
         id: { type: integer }
         purchaseOrderId: { type: integer }
-        partId: { type: integer }
+        partId: { type: ["integer", "null"] }
+        source: { type: string, enum: [INTERNAL, EXTERNAL] }
         partName: { type: string }
         quantity: { type: integer }
         qtyReceived: { type: integer }
         unitCost: { type: number }
         jobCardId: { type: ["integer", "null"], description: "Originating job card (backorder link)" }
+        requisitionContext:
+          oneOf:
+            - $ref: "#/components/schemas/PartRequisitionPurchaseOrderLinkContext"
+            - type: "null"
         createdAt: { type: string, format: date-time }
     PurchaseOrder:
       type: object
@@ -13180,7 +13301,9 @@ components:
         notes: { type: string }
     PurchaseOrderReceiveBody:
       type: object
+      required: [idempotencyKey]
       properties:
+        idempotencyKey: { type: string, minLength: 8, maxLength: 100 }
         lines:
           type: array
           description: "Per-line receipt quantities; omit to receive everything outstanding"
@@ -13190,6 +13313,17 @@ components:
             properties:
               lineId: { type: integer }
               qty: { type: integer, minimum: 1 }
+    PartRequisitionPurchaseOrderLinkContext:
+      type: object
+      required: [requisitionId, requisitionLineId, source, jobCardId, serviceOrderId, quantityOrdered, quantityReceived]
+      properties:
+        requisitionId: { type: integer }
+        requisitionLineId: { type: integer }
+        source: { type: string, enum: [INTERNAL, EXTERNAL] }
+        jobCardId: { type: integer }
+        serviceOrderId: { type: integer }
+        quantityOrdered: { type: integer }
+        quantityReceived: { type: integer }
     PartCreditNote:
       type: object
       required: [id, jobCardId, jobCardPartId, partId, partName, quantity, unitPrice, amount, reason, createdAt]

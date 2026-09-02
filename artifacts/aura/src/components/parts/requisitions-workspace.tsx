@@ -1,16 +1,21 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListPartRequisitions,
   useGetPartRequisition,
   useDecidePartRequisition,
-  useMarkPartRequisitionOrdered,
   useFulfillPartRequisition,
+  useConvertPartRequisitionToPurchaseOrders,
+  useCancelPartRequisition,
   useListParts,
+  useListSuppliers,
   getListPartRequisitionsQueryKey,
   getGetPartRequisitionQueryKey,
+  getListPurchaseOrdersQueryKey,
   type PartRequisition,
   type PartRequisitionDetail,
+  type PartRequisitionStatus,
+  type PartRequisitionUrgency,
 } from "@workspace/api-client-react";
 import { formatGuyanaDate, useMoney } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
@@ -19,9 +24,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Search, Loader2, FileText, CheckCircle, XCircle, ShoppingCart, Truck, AlertTriangle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Search, Loader2, FileText, CheckCircle, XCircle, ShoppingCart, Truck, Ban, Link as LinkIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Link } from "wouter";
 
 const URGENCY_LABELS: Record<string, string> = {
   routine: "Routine",
@@ -32,6 +38,7 @@ const URGENCY_LABELS: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
   submitted: "Pending Approval",
   approved: "Approved",
+  partially_ordered: "Partially Ordered",
   rejected: "Rejected",
   ordered: "Ordered",
   partially_fulfilled: "Partially Fulfilled",
@@ -39,14 +46,28 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+const getBadgeClass = (status: string) => {
+  switch (status) {
+    case "submitted": return "bg-amber-500/20 text-amber-300";
+    case "approved": return "bg-emerald-500/20 text-emerald-300";
+    case "partially_ordered": return "bg-blue-500/20 text-blue-300";
+    case "ordered": return "bg-indigo-500/20 text-indigo-300";
+    case "partially_fulfilled": return "bg-teal-500/20 text-teal-300";
+    case "fulfilled": return "bg-green-500/20 text-green-300";
+    case "rejected":
+    case "cancelled": return "bg-red-500/20 text-red-400";
+    default: return "bg-white/[0.05] text-foreground";
+  }
+};
+
 export function RequisitionsWorkspace() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [urgencyFilter, setUrgencyFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
-  
+
   const { data, isLoading } = useListPartRequisitions({
-    status: statusFilter !== "all" ? (statusFilter as any) : undefined,
-    urgency: urgencyFilter !== "all" ? (urgencyFilter as any) : undefined,
+    status: statusFilter !== "all" ? (statusFilter as PartRequisitionStatus) : undefined,
+    urgency: urgencyFilter !== "all" ? (urgencyFilter as PartRequisitionUrgency) : undefined,
   });
 
   const filtered = (data || []).filter((req) => {
@@ -65,8 +86,8 @@ export function RequisitionsWorkspace() {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search req ID, requester, or job..." 
+          <Input
+            placeholder="Search req ID, requester, or job..."
             className="pl-9 rounded-full bg-white/[0.03] border-white/10"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -80,9 +101,11 @@ export function RequisitionsWorkspace() {
             <SelectItem value="all">All statuses</SelectItem>
             <SelectItem value="submitted">Pending Approval</SelectItem>
             <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="partially_ordered">Partially Ordered</SelectItem>
             <SelectItem value="ordered">Ordered</SelectItem>
             <SelectItem value="partially_fulfilled">Partially Fulfilled</SelectItem>
             <SelectItem value="fulfilled">Fulfilled</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
         <Select value={urgencyFilter} onValueChange={setUrgencyFilter}>
@@ -123,7 +146,6 @@ export function RequisitionsWorkspace() {
 
 function RequisitionCard({ req }: { req: PartRequisition }) {
   const [open, setOpen] = useState(false);
-  const isPending = req.status === "submitted";
   const isVOR = req.urgency === "vehicle_down";
 
   return (
@@ -137,14 +159,12 @@ function RequisitionCard({ req }: { req: PartRequisition }) {
             </div>
             <Badge variant="secondary" className={cn(
               "px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest border-none",
-              isPending ? "bg-amber-500/20 text-amber-300" :
-              req.status === "fulfilled" ? "bg-emerald-500/20 text-emerald-300" :
-              "bg-white/[0.05] text-foreground"
+              getBadgeClass(req.status)
             )}>
               {STATUS_LABELS[req.status] || req.status}
             </Badge>
           </div>
-          
+
           <div className="flex justify-between items-end">
             <div className="text-xs text-muted-foreground">
               <span className="block">By: {req.requesterName}</span>
@@ -158,7 +178,7 @@ function RequisitionCard({ req }: { req: PartRequisition }) {
           </div>
         </CardContent>
       </Card>
-      
+
       <RequisitionDialog open={open} onOpenChange={setOpen} reqId={req.id} />
     </>
   );
@@ -166,22 +186,25 @@ function RequisitionCard({ req }: { req: PartRequisition }) {
 
 function RequisitionDialog({ open, onOpenChange, reqId }: { open: boolean, onOpenChange: (open: boolean) => void, reqId: number }) {
   const { data, isLoading } = useGetPartRequisition(reqId, { query: { enabled: open, queryKey: getGetPartRequisitionQueryKey(reqId) } });
-  
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl glass-panel border-none p-0 overflow-hidden bg-background">
+      <DialogContent className="max-w-4xl glass-panel border-none p-0 overflow-hidden bg-background">
         <DialogHeader className="p-6 pb-4 border-b border-white/10 bg-white/[0.02]">
           <DialogTitle className="flex items-center gap-3">
             REQ-{reqId}
             {data && (
-              <Badge variant="secondary" className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest border-none bg-white/[0.05]">
+              <Badge variant="secondary" className={cn(
+                "px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest border-none",
+                getBadgeClass(data.status)
+              )}>
                 {STATUS_LABELS[data.status]}
               </Badge>
             )}
           </DialogTitle>
         </DialogHeader>
-        
-        <div className="p-6 max-h-[70vh] overflow-y-auto space-y-6">
+
+        <div className="p-6 max-h-[75vh] overflow-y-auto space-y-6">
           {isLoading || !data ? (
              <div className="space-y-6">
                <div className="h-20 bg-white/[0.03] border border-white/5 rounded-xl animate-pulse" />
@@ -204,14 +227,17 @@ function RequisitionDetailContent({ req, onActionComplete }: { req: PartRequisit
   const queryClient = useQueryClient();
   const money = useMoney();
   const { data: parts } = useListParts();
-  
+
   const decide = useDecidePartRequisition();
-  const order = useMarkPartRequisitionOrdered();
   const fulfill = useFulfillPartRequisition();
+
+  const [sourcePOModalOpen, setSourcePOModalOpen] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListPartRequisitionsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetPartRequisitionQueryKey(req.id) });
+    queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
   };
 
   const handleDecision = async (action: 'approve' | 'reject') => {
@@ -220,18 +246,9 @@ function RequisitionDetailContent({ req, onActionComplete }: { req: PartRequisit
       toast({ title: `Requisition ${action}d` });
       invalidate();
       onActionComplete();
-    } catch (e: any) {
-      toast({ title: "Decision failed", description: e.message, variant: "destructive" });
-    }
-  };
-
-  const handleOrder = async () => {
-    try {
-      await order.mutateAsync({ id: req.id, data: {} });
-      toast({ title: "Marked as ordered" });
-      invalidate();
-    } catch (e: any) {
-      toast({ title: "Action failed", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || (e as Error).message;
+      toast({ title: "Decision failed", description: msg, variant: "destructive" });
     }
   };
 
@@ -240,25 +257,28 @@ function RequisitionDetailContent({ req, onActionComplete }: { req: PartRequisit
     const linesToFulfill = Object.entries(fulfillmentLines)
       .filter(([_, qty]) => qty > 0)
       .map(([id, qty]) => ({ lineId: parseInt(id), quantity: qty }));
-      
+
     if (!linesToFulfill.length) {
       toast({ title: "No quantities selected", variant: "destructive" });
       return;
     }
-    
+
     try {
-      await fulfill.mutateAsync({ 
-        id: req.id, 
-        data: { idempotencyKey: `ful-${Date.now()}`, lines: linesToFulfill } 
+      await fulfill.mutateAsync({
+        id: req.id,
+        data: { idempotencyKey: `ful-${Date.now()}`, lines: linesToFulfill }
       });
       toast({ title: "Fulfillment recorded" });
       setFulfillmentLines({});
       invalidate();
-    } catch (e: any) {
-      const msg = e.response?.data?.error || e.message;
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || (e as Error).message;
       toast({ title: "Fulfillment failed", description: msg, variant: "destructive" });
     }
   };
+
+  const canCancel = ["submitted", "approved", "partially_ordered", "ordered"].includes(req.status);
+  const canSourcePO = ["approved", "partially_ordered"].includes(req.status) && req.lines.some(l => (l.outstandingQuantity ?? 0) > 0);
 
   return (
     <div className="space-y-6">
@@ -280,7 +300,7 @@ function RequisitionDetailContent({ req, onActionComplete }: { req: PartRequisit
           <div className="text-sm font-medium">{req.needBy ? formatGuyanaDate(req.needBy) : 'N/A'}</div>
         </div>
       </div>
-      
+
       {req.notes && (
         <div>
           <h4 className="text-sm font-semibold mb-2">Notes</h4>
@@ -294,13 +314,13 @@ function RequisitionDetailContent({ req, onActionComplete }: { req: PartRequisit
           {req.lines.map(line => {
             const isInternal = line.source === "INTERNAL";
             const unfulfilled = line.quantity - line.fulfilledQuantity;
-            const canFulfill = ["approved", "ordered", "partially_fulfilled"].includes(req.status) && unfulfilled > 0;
+            const canFulfill = ["approved", "partially_ordered", "ordered", "partially_fulfilled"].includes(req.status) && unfulfilled > 0;
             const part = isInternal && line.partId ? parts?.find(p => p.id === line.partId) : null;
-            
+
             return (
-              <div key={line.id} className="bg-white/[0.02] border border-white/5 rounded-xl p-4 space-y-3">
+              <div key={line.id} className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
                 <div className="flex justify-between items-start gap-4">
-                  <div>
+                  <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Badge variant="outline" className={cn(
                         "text-[10px] uppercase font-bold tracking-widest px-1.5 py-0 border-none",
@@ -314,39 +334,58 @@ function RequisitionDetailContent({ req, onActionComplete }: { req: PartRequisit
                     {part && (
                       <div className="text-xs text-blue-400 font-medium mt-0.5">Current Stock: {part.stock}</div>
                     )}
-                    {line.supplierSnapshot && <div className="text-xs text-muted-foreground">Supplier: {line.supplierSnapshot}</div>}
+                    {line.supplierSnapshot && <div className="text-xs text-muted-foreground">Supplier (Snapshot): {line.supplierSnapshot}</div>}
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex-shrink-0">
                     <div className="text-sm font-medium">{line.quantity} requested</div>
-                    <div className="text-xs text-muted-foreground">{line.fulfilledQuantity} fulfilled</div>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <span className="text-muted-foreground">Procurement:</span> {money.gyd(line.unitCost)} 
-                    {line.taxCost > 0 && <span className="text-muted-foreground ml-1">(+{money.gyd(line.taxCost)} tax)</span>}
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs mt-4 pt-4 border-t border-white/5">
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground uppercase text-[10px] tracking-widest font-bold">Ordered</div>
+                    <div className="text-sm font-medium">{line.orderedQuantity ?? 0}</div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-muted-foreground">Customer Charge:</span> {money.gyd(line.unitPrice)}
-                    {!isInternal && line.unitPrice > 0 && (
-                      <span className="text-emerald-400 ml-2">
-                        Margin: {Math.round(((line.unitPrice - line.unitCost - line.taxCost - line.freightCost) / line.unitPrice) * 100)}%
-                      </span>
-                    )}
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground uppercase text-[10px] tracking-widest font-bold">Received</div>
+                    <div className="text-sm font-medium">{line.receivedQuantity ?? 0}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground uppercase text-[10px] tracking-widest font-bold">Outstanding</div>
+                    <div className="text-sm font-medium text-amber-400">{line.outstandingQuantity ?? 0}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground uppercase text-[10px] tracking-widest font-bold">Consumed</div>
+                    <div className="text-sm font-medium text-emerald-400">{line.fulfilledQuantity} / {line.quantity}</div>
                   </div>
                 </div>
-                
+
+                {line.purchaseOrderLinks && line.purchaseOrderLinks.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-white/5 space-y-2">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Purchase Orders</div>
+                    {line.purchaseOrderLinks.map(link => (
+                      <div key={`${link.purchaseOrderId}-${link.purchaseOrderLineId}`} className="flex justify-between items-center text-xs bg-white/[0.03] p-2.5 rounded-lg border border-white/5">
+                        <Link href="/parts?tab=orders" className="flex items-center gap-1.5 text-primary hover:text-primary/80 transition-colors font-medium">
+                          <LinkIcon className="w-3.5 h-3.5" /> PO-{link.purchaseOrderId}
+                        </Link>
+                        <span className="text-muted-foreground">
+                          Ord: <span className="text-foreground">{link.quantityOrdered}</span> · Rcvd: <span className="text-foreground">{link.quantityReceived}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {canFulfill && (
-                  <div className="flex items-center gap-3 pt-3 mt-3 border-t border-white/5">
-                    <span className="text-xs text-muted-foreground">Fulfill qty:</span>
-                    <Input 
-                      type="number" 
-                      min={0} 
+                  <div className="flex items-center justify-between gap-3 pt-3 mt-4 border-t border-white/5">
+                    <span className="text-xs font-medium text-muted-foreground">Issue to Job Card (Fulfill):</span>
+                    <Input
+                      type="number"
+                      min={0}
                       max={unfulfilled}
                       value={fulfillmentLines[line.id] ?? 0}
                       onChange={e => setFulfillmentLines(prev => ({...prev, [line.id]: parseInt(e.target.value) || 0}))}
-                      className="w-20 h-8 text-sm"
+                      className="w-24 h-8 text-sm bg-white/[0.03] border-white/10"
                     />
                   </div>
                 )}
@@ -355,32 +394,269 @@ function RequisitionDetailContent({ req, onActionComplete }: { req: PartRequisit
           })}
         </div>
       </div>
-      
+
       {/* Actions */}
-      <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
-        {req.status === "submitted" && (
-          <>
-            <Button variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => handleDecision('reject')} disabled={decide.isPending}>
-              <XCircle className="w-4 h-4 mr-2" /> Reject
+      <div className="flex justify-between items-center gap-3 pt-4 border-t border-white/10">
+        <div>
+          {canCancel && (
+            <Button variant="ghost" className="text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => setCancelModalOpen(true)}>
+              <Ban className="w-4 h-4 mr-2" /> Cancel Requisition
             </Button>
-            <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => handleDecision('approve')} disabled={decide.isPending}>
-              <CheckCircle className="w-4 h-4 mr-2" /> Approve
+          )}
+        </div>
+        <div className="flex gap-2">
+          {req.status === "submitted" && (
+            <>
+              <Button variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => handleDecision('reject')} disabled={decide.isPending}>
+                <XCircle className="w-4 h-4 mr-2" /> Reject
+              </Button>
+              <Button className="bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => handleDecision('approve')} disabled={decide.isPending}>
+                <CheckCircle className="w-4 h-4 mr-2" /> Approve
+              </Button>
+            </>
+          )}
+
+          {canSourcePO && (
+            <Button onClick={() => setSourcePOModalOpen(true)} className="bg-primary hover:bg-primary/90">
+              <ShoppingCart className="w-4 h-4 mr-2" /> Source & Create PO
             </Button>
-          </>
-        )}
-        
-        {req.status === "approved" && (
-          <Button onClick={handleOrder} disabled={order.isPending} className="bg-primary hover:bg-primary/90">
-            <ShoppingCart className="w-4 h-4 mr-2" /> Mark Ordered
-          </Button>
-        )}
-        
-        {["approved", "ordered", "partially_fulfilled"].includes(req.status) && Object.values(fulfillmentLines).some(q => q > 0) && (
-          <Button onClick={handleFulfill} disabled={fulfill.isPending} className="bg-amber-500 hover:bg-amber-600 text-white">
-            <Truck className="w-4 h-4 mr-2" /> Record Fulfillment
-          </Button>
-        )}
+          )}
+
+          {["approved", "partially_ordered", "ordered", "partially_fulfilled"].includes(req.status) && Object.values(fulfillmentLines).some(q => q > 0) && (
+            <Button onClick={handleFulfill} disabled={fulfill.isPending} className="bg-amber-500 hover:bg-amber-600 text-white">
+              <Truck className="w-4 h-4 mr-2" /> Record Consumption
+            </Button>
+          )}
+        </div>
       </div>
+
+      <SourceAndCreatePODialog
+        req={req}
+        open={sourcePOModalOpen}
+        onOpenChange={setSourcePOModalOpen}
+        onSuccess={invalidate}
+      />
+      <CancelRequisitionDialog
+        req={req}
+        open={cancelModalOpen}
+        onOpenChange={setCancelModalOpen}
+        onSuccess={() => { invalidate(); onActionComplete(); }}
+      />
     </div>
+  );
+}
+
+function SourceAndCreatePODialog({
+  req,
+  open,
+  onOpenChange,
+  onSuccess
+}: {
+  req: PartRequisitionDetail,
+  open: boolean,
+  onOpenChange: (open: boolean) => void,
+  onSuccess: () => void
+}) {
+  const { toast } = useToast();
+  const convert = useConvertPartRequisitionToPurchaseOrders();
+  const { data: suppliers } = useListSuppliers();
+
+  // Stable idempotency key per mount
+  const idempotencyKey = useMemo(() => crypto.randomUUID(), [open]);
+
+  // State: mapping of lineId -> { supplierId: string, quantity: number, unitCost: string }
+  const [selections, setSelections] = useState<Record<number, { supplierId: string, quantity: number, unitCost: string }>>({});
+
+  // Initialize selections
+  React.useEffect(() => {
+    if (open && req) {
+      const init: Record<number, { supplierId: string, quantity: number, unitCost: string }> = {};
+      req.lines.forEach(line => {
+        if ((line.outstandingQuantity ?? 0) > 0) {
+          init[line.id] = { supplierId: "", quantity: line.outstandingQuantity ?? 0, unitCost: line.unitCost > 0 ? String(line.unitCost) : "" };
+        }
+      });
+      setSelections(init);
+    }
+  }, [open, req]);
+
+  const handleSubmit = async () => {
+    const lines = Object.entries(selections)
+      .filter(([_, s]) => s.supplierId && s.quantity > 0)
+      .map(([id, s]) => ({
+        lineId: Number(id),
+        supplierId: Number(s.supplierId),
+        quantity: s.quantity,
+        unitCost: s.unitCost ? Number(s.unitCost) : undefined
+      }));
+
+    if (lines.length === 0) {
+      toast({ title: "No lines selected", description: "Select a supplier and quantity for at least one line.", variant: "destructive" });
+      return;
+    }
+
+    try {
+      await convert.mutateAsync({
+        id: req.id,
+        data: {
+          idempotencyKey,
+          lines
+        }
+      });
+      toast({ title: "Purchase Orders Created", description: "Draft POs have been prepared." });
+      onSuccess();
+      onOpenChange(false);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || (e as Error).message;
+      toast({ title: "Sourcing failed", description: msg, variant: "destructive" });
+    }
+  };
+
+  const outstandingLines = req.lines.filter(l => (l.outstandingQuantity ?? 0) > 0);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl glass-panel border-none">
+        <DialogHeader>
+          <DialogTitle>Source & Create PO</DialogTitle>
+          <DialogDescription>
+            Select suppliers to fulfill the outstanding quantities. This will create or append to Draft purchase orders.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 py-2">
+          {outstandingLines.map(line => {
+            const sel = selections[line.id] || { supplierId: "", quantity: 0, unitCost: "" };
+            const isInternal = line.source === "INTERNAL";
+            return (
+              <div key={line.id} className="grid grid-cols-12 gap-4 items-center bg-white/[0.02] border border-white/5 p-4 rounded-xl">
+                <div className="col-span-5 flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={cn(
+                      "text-[10px] uppercase font-bold tracking-widest px-1.5 py-0 border-none",
+                      isInternal ? "bg-blue-500/10 text-blue-400" : "bg-purple-500/10 text-purple-400"
+                    )}>
+                      {line.source}
+                    </Badge>
+                    <span className="text-sm font-semibold truncate" title={line.descriptionSnapshot}>{line.descriptionSnapshot}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Outstanding: <span className="text-foreground font-medium">{line.outstandingQuantity}</span>
+                  </div>
+                </div>
+
+                <div className="col-span-3">
+                  <Select value={sel.supplierId} onValueChange={v => setSelections(prev => ({ ...prev, [line.id]: { ...prev[line.id], supplierId: v } }))}>
+                    <SelectTrigger className="h-9 text-xs border-white/10 bg-white/[0.03]">
+                      <SelectValue placeholder="Select supplier..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {suppliers?.map(s => (
+                        <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="col-span-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={line.outstandingQuantity}
+                    className="h-9 text-xs border-white/10 bg-white/[0.03]"
+                    placeholder="Qty"
+                    value={sel.quantity || ""}
+                    onChange={e => setSelections(prev => ({ ...prev, [line.id]: { ...prev[line.id], quantity: Number(e.target.value) } }))}
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-9 text-xs border-white/10 bg-white/[0.03]"
+                    placeholder="Cost (Opt)"
+                    value={sel.unitCost}
+                    onChange={e => setSelections(prev => ({ ...prev, [line.id]: { ...prev[line.id], unitCost: e.target.value } }))}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <DialogFooter className="pt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="border-white/10">Cancel</Button>
+          <Button onClick={handleSubmit} disabled={convert.isPending} className="bg-primary hover:bg-primary/90">
+            {convert.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Create POs
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CancelRequisitionDialog({
+  req,
+  open,
+  onOpenChange,
+  onSuccess
+}: {
+  req: PartRequisitionDetail,
+  open: boolean,
+  onOpenChange: (open: boolean) => void,
+  onSuccess: () => void
+}) {
+  const { toast } = useToast();
+  const cancel = useCancelPartRequisition();
+  const [reason, setReason] = useState("");
+
+  const handleSubmit = async () => {
+    if (!reason.trim()) {
+      toast({ title: "Reason required", description: "You must provide a cancellation reason.", variant: "destructive" });
+      return;
+    }
+    try {
+      await cancel.mutateAsync({
+        id: req.id,
+        data: { reason: reason.trim() }
+      });
+      toast({ title: "Requisition Cancelled" });
+      setReason("");
+      onSuccess();
+      onOpenChange(false);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || (e as Error).message;
+      toast({ title: "Cancellation failed", description: msg, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md glass-panel border-none">
+        <DialogHeader>
+          <DialogTitle className="text-red-400 flex items-center gap-2"><Ban className="w-5 h-5"/> Cancel Requisition</DialogTitle>
+          <DialogDescription>
+            This action will cancel the requisition. Any unfulfilled lines will be released. You must provide a reason.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          <Input
+            placeholder="Cancellation reason..."
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            className="bg-white/[0.03] border-white/10 h-10"
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="hover:bg-white/[0.05]">Keep Requisition</Button>
+          <Button variant="destructive" onClick={handleSubmit} disabled={cancel.isPending || !reason.trim()} className="bg-red-500/20 text-red-400 hover:bg-red-500/30">
+            {cancel.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Confirm Cancellation
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

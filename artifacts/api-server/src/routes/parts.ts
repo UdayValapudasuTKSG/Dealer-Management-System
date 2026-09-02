@@ -10,6 +10,12 @@ import {
   partPurchasesTable,
   purchaseOrdersTable,
   purchaseOrderLinesTable,
+  purchaseOrderReceiptsTable,
+  partRequisitionPoAllocationsTable,
+  partRequisitionLinesTable,
+  partRequisitionFulfillmentsTable,
+  partRequisitionsTable,
+  externalJobCardPartsTable,
   dealersTable,
   type Part,
 } from "@workspace/db";
@@ -1176,7 +1182,46 @@ async function loadPurchaseOrder(dealerId: number, id: number) {
       ),
     )
     .orderBy(purchaseOrderLinesTable.id);
-  return { ...order, lines };
+  const contexts = await db
+    .select({
+      purchaseOrderLineId: partRequisitionPoAllocationsTable.purchaseOrderLineId,
+      requisitionId: partRequisitionPoAllocationsTable.requisitionId,
+      requisitionLineId: partRequisitionPoAllocationsTable.requisitionLineId,
+      source: partRequisitionLinesTable.source,
+      jobCardId: partRequisitionsTable.jobCardId,
+      serviceOrderId: partRequisitionsTable.serviceOrderId,
+      quantityOrdered: partRequisitionPoAllocationsTable.quantityOrdered,
+      quantityReceived: partRequisitionPoAllocationsTable.quantityReceived,
+    })
+    .from(partRequisitionPoAllocationsTable)
+    .innerJoin(
+      partRequisitionLinesTable,
+      and(
+        eq(partRequisitionLinesTable.id, partRequisitionPoAllocationsTable.requisitionLineId),
+        eq(partRequisitionLinesTable.dealerId, partRequisitionPoAllocationsTable.dealerId),
+      ),
+    )
+    .innerJoin(
+      partRequisitionsTable,
+      and(
+        eq(partRequisitionsTable.id, partRequisitionPoAllocationsTable.requisitionId),
+        eq(partRequisitionsTable.dealerId, partRequisitionPoAllocationsTable.dealerId),
+      ),
+    )
+    .where(
+      and(
+        eq(partRequisitionPoAllocationsTable.dealerId, dealerId),
+        eq(partRequisitionPoAllocationsTable.purchaseOrderId, id),
+      ),
+    );
+  const contextByLine = new Map(contexts.map((context) => [context.purchaseOrderLineId, context]));
+  return {
+    ...order,
+    lines: lines.map((line) => ({
+      ...line,
+      requisitionContext: contextByLine.get(line.id) ?? null,
+    })),
+  };
 }
 
 router.get("/purchase-orders", async (_req, res): Promise<void> => {
@@ -1205,9 +1250,51 @@ router.get("/purchase-orders", async (_req, res): Promise<void> => {
     list.push(l);
     byOrder.set(l.purchaseOrderId, list);
   }
+  const contexts = ids.length
+    ? await db
+        .select({
+          purchaseOrderId: partRequisitionPoAllocationsTable.purchaseOrderId,
+          purchaseOrderLineId: partRequisitionPoAllocationsTable.purchaseOrderLineId,
+          requisitionId: partRequisitionPoAllocationsTable.requisitionId,
+          requisitionLineId: partRequisitionPoAllocationsTable.requisitionLineId,
+          source: partRequisitionLinesTable.source,
+          jobCardId: partRequisitionsTable.jobCardId,
+          serviceOrderId: partRequisitionsTable.serviceOrderId,
+          quantityOrdered: partRequisitionPoAllocationsTable.quantityOrdered,
+          quantityReceived: partRequisitionPoAllocationsTable.quantityReceived,
+        })
+        .from(partRequisitionPoAllocationsTable)
+        .innerJoin(
+          partRequisitionLinesTable,
+          and(
+            eq(partRequisitionLinesTable.id, partRequisitionPoAllocationsTable.requisitionLineId),
+            eq(partRequisitionLinesTable.dealerId, partRequisitionPoAllocationsTable.dealerId),
+          ),
+        )
+        .innerJoin(
+          partRequisitionsTable,
+          and(
+            eq(partRequisitionsTable.id, partRequisitionPoAllocationsTable.requisitionId),
+            eq(partRequisitionsTable.dealerId, partRequisitionPoAllocationsTable.dealerId),
+          ),
+        )
+        .where(
+          and(
+            eq(partRequisitionPoAllocationsTable.dealerId, dealerId),
+            inArray(partRequisitionPoAllocationsTable.purchaseOrderId, ids),
+          ),
+        )
+    : [];
+  const contextByLine = new Map(contexts.map((context) => [context.purchaseOrderLineId, context]));
   res.json(
     ListPurchaseOrdersResponse.parse(
-      orders.map((o) => ({ ...o, lines: byOrder.get(o.id) ?? [] })),
+      orders.map((o) => ({
+        ...o,
+        lines: (byOrder.get(o.id) ?? []).map((line) => ({
+          ...line,
+          requisitionContext: contextByLine.get(line.id) ?? null,
+        })),
+      })),
     ),
   );
 });
@@ -1409,30 +1496,209 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
     cumulative: number;
     lineId: number;
   }[] = [];
-  await db.transaction(async (tx) => {
+  const receiptFingerprint = JSON.stringify(
+    [...requested.entries()].sort(([a], [b]) => a - b),
+  );
+  let receiptReplay = false;
+  try {
+    await db.transaction(async (tx) => {
+    const [receiptClaim] = await tx
+      .insert(purchaseOrderReceiptsTable)
+      .values({
+        dealerId,
+        purchaseOrderId: order.id,
+        idempotencyKey: parsed.data.idempotencyKey,
+        requestFingerprint: receiptFingerprint,
+      })
+      .onConflictDoNothing({
+        target: [
+          purchaseOrderReceiptsTable.dealerId,
+          purchaseOrderReceiptsTable.purchaseOrderId,
+          purchaseOrderReceiptsTable.idempotencyKey,
+        ],
+      })
+      .returning({ id: purchaseOrderReceiptsTable.id });
+    if (!receiptClaim) {
+      const [prior] = await tx
+        .select({ fingerprint: purchaseOrderReceiptsTable.requestFingerprint })
+        .from(purchaseOrderReceiptsTable)
+        .where(
+          and(
+            eq(purchaseOrderReceiptsTable.dealerId, dealerId),
+            eq(purchaseOrderReceiptsTable.purchaseOrderId, order.id),
+            eq(purchaseOrderReceiptsTable.idempotencyKey, parsed.data.idempotencyKey),
+          ),
+        );
+      if (prior?.fingerprint !== receiptFingerprint) {
+        throw Object.assign(
+          new Error("Idempotency key was already used with different receipt quantities"),
+          { status: 409 },
+        );
+      }
+      receiptReplay = true;
+      return;
+    }
     for (const line of order.lines) {
       const qty = requested.get(line.id);
       if (!qty) continue;
+      const [lockedLine] = await tx
+        .select()
+        .from(purchaseOrderLinesTable)
+        .where(
+          and(
+            eq(purchaseOrderLinesTable.id, line.id),
+            eq(purchaseOrderLinesTable.purchaseOrderId, order.id),
+            eq(purchaseOrderLinesTable.dealerId, dealerId),
+          ),
+        )
+        .for("update");
+      if (!lockedLine) {
+        throw Object.assign(new Error(`PO line #${line.id} not found`), { status: 404 });
+      }
+      if (qty > lockedLine.quantity - lockedLine.qtyReceived) {
+        throw Object.assign(
+          new Error(`Over-receipt on ${lockedLine.partName}: only ${lockedLine.quantity - lockedLine.qtyReceived} unit(s) outstanding`),
+          { status: 422 },
+        );
+      }
+      const [allocation] = await tx
+        .select()
+        .from(partRequisitionPoAllocationsTable)
+        .where(
+          and(
+            eq(partRequisitionPoAllocationsTable.dealerId, dealerId),
+            eq(partRequisitionPoAllocationsTable.purchaseOrderLineId, lockedLine.id),
+          ),
+        )
+        .for("update");
+      if (lockedLine.source === "EXTERNAL") {
+        if (!allocation) {
+          throw Object.assign(new Error(`External PO line #${lockedLine.id} has no requisition allocation`), { status: 409 });
+        }
+        const [reqLine] = await tx
+          .select()
+          .from(partRequisitionLinesTable)
+          .where(
+            and(
+              eq(partRequisitionLinesTable.id, allocation.requisitionLineId),
+              eq(partRequisitionLinesTable.dealerId, dealerId),
+            ),
+          )
+          .for("update");
+        const [requisition] = await tx
+          .select()
+          .from(partRequisitionsTable)
+          .where(
+            and(
+              eq(partRequisitionsTable.id, allocation.requisitionId),
+              eq(partRequisitionsTable.dealerId, dealerId),
+            ),
+          )
+          .for("update");
+        if (!reqLine || !requisition) {
+          throw Object.assign(new Error("Linked requisition was not found"), { status: 409 });
+        }
+        const [fulfillment] = await tx
+          .insert(partRequisitionFulfillmentsTable)
+          .values({
+            dealerId,
+            requisitionId: requisition.id,
+            lineId: reqLine.id,
+            idempotencyKey: `po-receipt:${order.id}:${parsed.data.idempotencyKey}`,
+            quantity: qty,
+            fulfilledByUserId: res.locals.user?.id ?? null,
+            fulfilledByName: res.locals.user?.name ?? res.locals.user?.email ?? "Parts",
+          })
+          .returning();
+        let externalId = allocation.externalJobCardPartId;
+        if (externalId == null) {
+          const [external] = await tx
+            .insert(externalJobCardPartsTable)
+            .values({
+              dealerId,
+              jobCardId: requisition.jobCardId,
+              requisitionLineId: reqLine.id,
+              fulfillmentId: fulfillment.id,
+              description: `External part — ${reqLine.descriptionSnapshot}`,
+              supplierSnapshot: reqLine.supplierSnapshot,
+              quantity: qty,
+              unitCost: lockedLine.unitCost,
+              unitPrice: reqLine.unitPrice,
+              taxCost: reqLine.taxCost,
+              freightCost: reqLine.freightCost,
+            })
+            .returning({ id: externalJobCardPartsTable.id });
+          externalId = external.id;
+        } else {
+          await tx
+            .update(externalJobCardPartsTable)
+            .set({ quantity: sql`${externalJobCardPartsTable.quantity} + ${qty}` })
+            .where(
+              and(
+                eq(externalJobCardPartsTable.id, externalId),
+                eq(externalJobCardPartsTable.dealerId, dealerId),
+              ),
+            );
+        }
+        await tx
+          .update(partRequisitionFulfillmentsTable)
+          .set({ externalJobCardPartId: externalId })
+          .where(eq(partRequisitionFulfillmentsTable.id, fulfillment.id));
+        await tx
+          .update(partRequisitionLinesTable)
+          .set({ fulfilledQuantity: reqLine.fulfilledQuantity + qty })
+          .where(
+            and(
+              eq(partRequisitionLinesTable.id, reqLine.id),
+              eq(partRequisitionLinesTable.dealerId, dealerId),
+            ),
+          );
+        await tx
+          .update(purchaseOrderLinesTable)
+          .set({ qtyReceived: lockedLine.qtyReceived + qty })
+          .where(eq(purchaseOrderLinesTable.id, lockedLine.id));
+        await tx
+          .update(partRequisitionPoAllocationsTable)
+          .set({
+            quantityReceived: allocation.quantityReceived + qty,
+            externalJobCardPartId: externalId,
+            updatedAt: new Date(),
+          })
+          .where(eq(partRequisitionPoAllocationsTable.id, allocation.id));
+        continue;
+      }
+      if (lockedLine.partId == null) {
+        throw Object.assign(new Error(`Internal PO line #${lockedLine.id} has no inventory part`), { status: 409 });
+      }
       const [part] = await tx
         .select()
         .from(partsTable)
         .where(
-          and(eq(partsTable.id, line.partId), eq(partsTable.dealerId, dealerId)),
+          and(eq(partsTable.id, lockedLine.partId), eq(partsTable.dealerId, dealerId)),
         );
       if (!part) continue;
       // Weighted-average cost: blend on-hand value with the receipt value.
       const onHand = Math.max(part.stock, 0);
       const newCost =
-        line.unitCost > 0 && onHand + qty > 0
+        lockedLine.unitCost > 0 && onHand + qty > 0
           ? Math.round(
-              ((onHand * part.unitCost + qty * line.unitCost) / (onHand + qty)) *
+              ((onHand * part.unitCost + qty * lockedLine.unitCost) / (onHand + qty)) *
                 100,
             ) / 100
           : part.unitCost;
       await tx
         .update(purchaseOrderLinesTable)
-        .set({ qtyReceived: line.qtyReceived + qty })
-        .where(eq(purchaseOrderLinesTable.id, line.id));
+        .set({ qtyReceived: lockedLine.qtyReceived + qty })
+        .where(eq(purchaseOrderLinesTable.id, lockedLine.id));
+      if (allocation) {
+        await tx
+          .update(partRequisitionPoAllocationsTable)
+          .set({
+            quantityReceived: allocation.quantityReceived + qty,
+            updatedAt: new Date(),
+          })
+          .where(eq(partRequisitionPoAllocationsTable.id, allocation.id));
+      }
       await tx
         .update(partsTable)
         .set({ stock: sql`${partsTable.stock} + ${qty}`, unitCost: newCost })
@@ -1452,9 +1718,9 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
       receivedForErpnext.push({
         partId: part.id,
         qty,
-        rate: line.unitCost,
-        cumulative: line.qtyReceived + qty,
-        lineId: line.id,
+        rate: lockedLine.unitCost,
+        cumulative: lockedLine.qtyReceived + qty,
+        lineId: lockedLine.id,
       });
     }
     const fresh = await tx
@@ -1476,7 +1742,59 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
           eq(purchaseOrdersTable.dealerId, dealerId),
         ),
       );
-  });
+    const touchedRequisitions = [
+      ...new Set(
+        order.lines
+          .map((line) => line.requisitionContext?.requisitionId)
+          .filter((id): id is number => id != null),
+      ),
+    ];
+    for (const requisitionId of touchedRequisitions) {
+      const reqLines = await tx
+        .select({
+          quantity: partRequisitionLinesTable.quantity,
+          fulfilledQuantity: partRequisitionLinesTable.fulfilledQuantity,
+        })
+        .from(partRequisitionLinesTable)
+        .where(
+          and(
+            eq(partRequisitionLinesTable.dealerId, dealerId),
+            eq(partRequisitionLinesTable.requisitionId, requisitionId),
+          ),
+        );
+      const any = reqLines.some((line) => line.fulfilledQuantity > 0);
+      const completeFulfillment =
+        reqLines.length > 0 &&
+        reqLines.every((line) => line.fulfilledQuantity >= line.quantity);
+      if (any) {
+        await tx
+          .update(partRequisitionsTable)
+          .set({
+            status: completeFulfillment ? "fulfilled" : "partially_fulfilled",
+            fulfilledAt: completeFulfillment ? new Date() : null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(partRequisitionsTable.id, requisitionId),
+              eq(partRequisitionsTable.dealerId, dealerId),
+            ),
+          );
+      }
+    }
+    });
+  } catch (error) {
+    const failure = error as Error & { status?: number };
+    if (failure.status) {
+      res.status(failure.status).json({ error: failure.message });
+      return;
+    }
+    throw error;
+  }
+  if (receiptReplay) {
+    res.json(ReceivePurchaseOrderResponse.parse(await loadPurchaseOrder(dealerId, params.data.id)));
+    return;
+  }
   for (const c of lowStockChecks)
     checkLowStockCrossing(c.part, c.prevStock, c.leftover);
 

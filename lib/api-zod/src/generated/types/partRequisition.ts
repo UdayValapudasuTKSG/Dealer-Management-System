@@ -38,6 +38,14 @@ export interface PartRequisition {
   /** @nullable */
   orderReference?: string | null;
   /** @nullable */
+  cancellationReason?: string | null;
+  /** @nullable */
+  cancelledByUserId?: number | null;
+  /** @nullable */
+  cancelledByName?: string | null;
+  /** @nullable */
+  cancelledAt?: Date | null;
+  /** @nullable */
   fulfilledByUserId?: number | null;
   /** @nullable */
   fulfilledByName?: string | null;

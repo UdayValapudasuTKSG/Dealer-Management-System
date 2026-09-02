@@ -8,6 +8,7 @@ import {
   timestamp,
   jsonb,
   boolean,
+  index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -25,6 +26,7 @@ export const suppliersTable = pgTable("suppliers", {
   contactName: text("contact_name"),
   email: text("email"),
   phone: text("phone"),
+  status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -515,9 +517,8 @@ export const purchaseOrderLinesTable = pgTable("purchase_order_lines", {
   purchaseOrderId: integer("purchase_order_id")
     .notNull()
     .references(() => purchaseOrdersTable.id, { onDelete: "cascade" }),
-  partId: integer("part_id")
-    .notNull()
-    .references(() => partsTable.id),
+  partId: integer("part_id").references(() => partsTable.id),
+  source: text("source").notNull().default("INTERNAL"),
   partName: text("part_name").notNull(),
   quantity: integer("quantity").notNull(),
   qtyReceived: integer("qty_received").notNull().default(0),
@@ -527,6 +528,34 @@ export const purchaseOrderLinesTable = pgTable("purchase_order_lines", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-});
+}, (t) => [
+  index("purchase_order_lines_dealer_po_idx").on(t.dealerId, t.purchaseOrderId),
+]);
+
+/** Idempotency ledger for goods receipts. The response can be reconstructed
+ * from the PO; this row atomically prevents a retried request moving stock or
+ * attaching a direct-to-job charge twice. */
+export const purchaseOrderReceiptsTable = pgTable(
+  "purchase_order_receipts",
+  {
+    id: serial("id").primaryKey(),
+    dealerId: integer("dealer_id").notNull(),
+    purchaseOrderId: integer("purchase_order_id")
+      .notNull()
+      .references(() => purchaseOrdersTable.id, { onDelete: "cascade" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestFingerprint: text("request_fingerprint").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("purchase_order_receipts_idempotency_unique").on(
+      t.dealerId,
+      t.purchaseOrderId,
+      t.idempotencyKey,
+    ),
+    index("purchase_order_receipts_po_idx").on(t.dealerId, t.purchaseOrderId),
+  ],
+);
 
 export type PurchaseOrderLine = typeof purchaseOrderLinesTable.$inferSelect;
+export type PurchaseOrderReceipt = typeof purchaseOrderReceiptsTable.$inferSelect;

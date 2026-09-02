@@ -5,11 +5,15 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { PartRequisitionPurchaseOrderLinkContext } from './partRequisitionPurchaseOrderLinkContext';
+import type { PurchaseOrderLineSource } from './purchaseOrderLineSource';
 
 export interface PurchaseOrderLine {
   id: number;
   purchaseOrderId: number;
-  partId: number;
+  /** @nullable */
+  partId?: number | null;
+  source: PurchaseOrderLineSource;
   partName: string;
   quantity: number;
   qtyReceived: number;
@@ -19,5 +23,6 @@ export interface PurchaseOrderLine {
      * @nullable
      */
   jobCardId?: number | null;
+  requisitionContext?: PartRequisitionPurchaseOrderLinkContext | null;
   createdAt: Date;
 }

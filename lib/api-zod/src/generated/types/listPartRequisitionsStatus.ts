@@ -12,6 +12,7 @@ export type ListPartRequisitionsStatus = typeof ListPartRequisitionsStatus[keyof
 export const ListPartRequisitionsStatus = {
   submitted: 'submitted',
   approved: 'approved',
+  partially_ordered: 'partially_ordered',
   rejected: 'rejected',
   ordered: 'ordered',
   partially_fulfilled: 'partially_fulfilled',

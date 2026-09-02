@@ -5541,6 +5541,7 @@ export type PartRequisitionStatus = typeof PartRequisitionStatus[keyof typeof Pa
 export const PartRequisitionStatus = {
   submitted: 'submitted',
   approved: 'approved',
+  partially_ordered: 'partially_ordered',
   rejected: 'rejected',
   ordered: 'ordered',
   partially_fulfilled: 'partially_fulfilled',
@@ -5587,6 +5588,14 @@ export interface PartRequisition {
   /** @nullable */
   orderReference?: string | null;
   /** @nullable */
+  cancellationReason?: string | null;
+  /** @nullable */
+  cancelledByUserId?: number | null;
+  /** @nullable */
+  cancelledByName?: string | null;
+  /** @nullable */
+  cancelledAt?: string | null;
+  /** @nullable */
   fulfilledByUserId?: number | null;
   /** @nullable */
   fulfilledByName?: string | null;
@@ -5603,6 +5612,14 @@ export const PartRequisitionLineSource = {
   INTERNAL: 'INTERNAL',
   EXTERNAL: 'EXTERNAL',
 } as const;
+
+export interface PartRequisitionPurchaseOrderLink {
+  purchaseOrderId: number;
+  purchaseOrderLineId: number;
+  supplierId: number;
+  quantityOrdered: number;
+  quantityReceived: number;
+}
 
 export interface PartRequisitionLine {
   id: number;
@@ -5625,6 +5642,10 @@ export interface PartRequisitionLine {
   taxCost: number;
   /** Procurement freight cost in GYD */
   freightCost: number;
+  orderedQuantity?: number;
+  receivedQuantity?: number;
+  outstandingQuantity?: number;
+  purchaseOrderLinks?: PartRequisitionPurchaseOrderLink[];
   createdAt: string;
 }
 
@@ -5713,6 +5734,115 @@ export interface PartRequisitionDecision {
 export interface PartRequisitionOrderUpdate {
   /** @maxLength 250 */
   reference?: string;
+}
+
+export interface PartRequisitionConversionLineInput {
+  lineId: number;
+  supplierId: number;
+  /** @minimum 1 */
+  quantity: number;
+  /** @minimum 0 */
+  unitCost?: number;
+}
+
+export interface PartRequisitionConversionInput {
+  /**
+     * @minLength 8
+     * @maxLength 100
+     */
+  idempotencyKey: string;
+  expectedDate?: string;
+  /** @maxLength 4000 */
+  notes?: string;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  lines: PartRequisitionConversionLineInput[];
+}
+
+export type PurchaseOrderStatus = typeof PurchaseOrderStatus[keyof typeof PurchaseOrderStatus];
+
+
+export const PurchaseOrderStatus = {
+  draft: 'draft',
+  ordered: 'ordered',
+  partially_received: 'partially_received',
+  received: 'received',
+  cancelled: 'cancelled',
+} as const;
+
+export type PurchaseOrderLineSource = typeof PurchaseOrderLineSource[keyof typeof PurchaseOrderLineSource];
+
+
+export const PurchaseOrderLineSource = {
+  INTERNAL: 'INTERNAL',
+  EXTERNAL: 'EXTERNAL',
+} as const;
+
+export type PartRequisitionPurchaseOrderLinkContextSource = typeof PartRequisitionPurchaseOrderLinkContextSource[keyof typeof PartRequisitionPurchaseOrderLinkContextSource];
+
+
+export const PartRequisitionPurchaseOrderLinkContextSource = {
+  INTERNAL: 'INTERNAL',
+  EXTERNAL: 'EXTERNAL',
+} as const;
+
+export interface PartRequisitionPurchaseOrderLinkContext {
+  requisitionId: number;
+  requisitionLineId: number;
+  source: PartRequisitionPurchaseOrderLinkContextSource;
+  jobCardId: number;
+  serviceOrderId: number;
+  quantityOrdered: number;
+  quantityReceived: number;
+}
+
+export interface PurchaseOrderLine {
+  id: number;
+  purchaseOrderId: number;
+  /** @nullable */
+  partId?: number | null;
+  source: PurchaseOrderLineSource;
+  partName: string;
+  quantity: number;
+  qtyReceived: number;
+  unitCost: number;
+  /**
+     * Originating job card (backorder link)
+     * @nullable
+     */
+  jobCardId?: number | null;
+  requisitionContext?: PartRequisitionPurchaseOrderLinkContext | null;
+  createdAt: string;
+}
+
+export interface PurchaseOrder {
+  id: number;
+  /** @nullable */
+  supplierId?: number | null;
+  status: PurchaseOrderStatus;
+  /** @nullable */
+  expectedDate?: string | null;
+  /** @nullable */
+  reference?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  lines: PurchaseOrderLine[];
+}
+
+export interface PartRequisitionConversionResult {
+  requisition: PartRequisitionDetail;
+  purchaseOrders: PurchaseOrder[];
+}
+
+export interface PartRequisitionCancellationInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  reason: string;
 }
 
 export interface PartRequisitionFulfillmentLineInput {
@@ -6515,48 +6645,6 @@ export interface PartsSettingsUpdate {
   markupPercent: number;
 }
 
-export interface PurchaseOrderLine {
-  id: number;
-  purchaseOrderId: number;
-  partId: number;
-  partName: string;
-  quantity: number;
-  qtyReceived: number;
-  unitCost: number;
-  /**
-     * Originating job card (backorder link)
-     * @nullable
-     */
-  jobCardId?: number | null;
-  createdAt: string;
-}
-
-export type PurchaseOrderStatus = typeof PurchaseOrderStatus[keyof typeof PurchaseOrderStatus];
-
-
-export const PurchaseOrderStatus = {
-  draft: 'draft',
-  ordered: 'ordered',
-  partially_received: 'partially_received',
-  received: 'received',
-  cancelled: 'cancelled',
-} as const;
-
-export interface PurchaseOrder {
-  id: number;
-  /** @nullable */
-  supplierId?: number | null;
-  status: PurchaseOrderStatus;
-  /** @nullable */
-  expectedDate?: string | null;
-  /** @nullable */
-  reference?: string | null;
-  /** @nullable */
-  notes?: string | null;
-  createdAt: string;
-  lines: PurchaseOrderLine[];
-}
-
 export interface PurchaseOrderLineInput {
   partId: number;
   /** @minimum 1 */
@@ -6605,6 +6693,11 @@ export type PurchaseOrderReceiveBodyLinesItem = {
 };
 
 export interface PurchaseOrderReceiveBody {
+  /**
+     * @minLength 8
+     * @maxLength 100
+     */
+  idempotencyKey: string;
   /** Per-line receipt quantities; omit to receive everything outstanding */
   lines?: PurchaseOrderReceiveBodyLinesItem[];
 }
@@ -8934,6 +9027,7 @@ export type ListPartRequisitionsStatus = typeof ListPartRequisitionsStatus[keyof
 export const ListPartRequisitionsStatus = {
   submitted: 'submitted',
   approved: 'approved',
+  partially_ordered: 'partially_ordered',
   rejected: 'rejected',
   ordered: 'ordered',
   partially_fulfilled: 'partially_fulfilled',

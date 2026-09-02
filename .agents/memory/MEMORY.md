@@ -69,3 +69,4 @@
 - [Vehicle model GL codes](vehicle-model-gl-codes.md) — one shared normalizeModelKey everywhere; ERPNext posting snapshots the resolved account on the job payload; no cross-code fallback.
 - [Sales advisor activity metrics](sales-advisor-activity-metrics.md) — monthly management figures use real event dates; advisor identity is ownerUserId-first with legacy name fallback.
 - [Time-sensitive sweep priority](time-sensitive-sweep-priority.md) — scheduled reports must run before backlog sweeps, or overdue work can indefinitely delay their enqueue.
+- [Text status check constraints](text-status-check-constraints.md) — adding an app-level status constant must also update the live database CHECK constraint in the same migration.
