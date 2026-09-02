@@ -16,7 +16,9 @@
     "verify:erpnext-entities": "tsx src/scripts/verify-erpnext-entity-sync.ts",
     "verify:timezone": "tsx src/scripts/verify-timezone.ts",
     "verify:lead-source-report": "tsx src/scripts/verify-lead-source-report.ts",
-    "verify:service-customer-actions": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/verify-service-customer-actions.ts"
+    "verify:service-customer-actions": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/verify-service-customer-actions.ts",
+    "verify:vehicle-onboarding": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/verify-vehicle-onboarding.ts",
+    "verify:service-claim-onboarding": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/verify-service-claim-onboarding.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.95",

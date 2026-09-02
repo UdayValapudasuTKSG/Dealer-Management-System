@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
+import { createHash, randomBytes } from "node:crypto";
 import { queueCustomerSync } from "../lib/erpnext/entities";
 import { eq, desc, and, or, ilike, sql, isNotNull, isNull } from "drizzle-orm";
 import multer from "multer";
+import { z } from "zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import {
   db,
@@ -28,6 +30,7 @@ import {
   type CustomerPersona,
   type Customer,
   type Vehicle,
+  vehicleOnboardingRequestsTable,
 } from "@workspace/db";
 import {
   CreateCustomerBody,
@@ -89,6 +92,8 @@ import {
 } from "../lib/privacy";
 import { notifyManagerNote } from "../lib/notify-triggers";
 import { ensurePrimaryContact } from "../lib/accounts";
+import { enqueueEmail } from "../lib/email";
+import { vehicleOnboardingUrl } from "../lib/email-triggers";
 import {
   guardUntrusted,
   isAgentEnabled,
@@ -1726,6 +1731,45 @@ router.post(
       .json(EraseCustomerDataResponse.parse(serializeDsar(request)));
   },
 );
+
+router.post("/customers/:id/vehicle-onboarding-invites", async (req, res): Promise<void> => {
+  const id = z.coerce.number().int().positive().safeParse(req.params.id);
+  if (!id.success) { res.status(400).json({ error: "Invalid customer" }); return; }
+  const dealerId = activeDealerId(res);
+  const [customer] = await db.select({
+    id: customersTable.id, email: customersTable.email, name: customersTable.name,
+  }).from(customersTable).where(and(
+    eq(customersTable.id, id.data), eq(customersTable.dealerId, dealerId),
+    isNull(customersTable.deletedAt), isNull(customersTable.erasedAt),
+  ));
+  if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
+  const email = customer.email?.trim();
+  if (!email || !z.string().email().safeParse(email).success) {
+    res.status(422).json({ error: "Customer must have a valid email address" }); return;
+  }
+  const token = randomBytes(32).toString("base64url");
+  const link = vehicleOnboardingUrl(token);
+  if (!link) { res.status(503).json({ error: "Public application URL is not configured" }); return; }
+  const [invite] = await db.insert(vehicleOnboardingRequestsTable).values({
+    dealerId, customerId: customer.id,
+    tokenHash: createHash("sha256").update(token).digest("hex"),
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    invitedByUserId: res.locals.user?.id ?? null,
+  }).returning({ id: vehicleOnboardingRequestsTable.id, expiresAt: vehicleOnboardingRequestsTable.expiresAt });
+  await enqueueEmail({
+    dealerId, customerId: customer.id, to: email,
+    template: "customer.vehicle.onboarding",
+    dedupeKey: `customer:${customer.id}:vehicle-onboarding:${invite!.id}`,
+    data: { name: customer.name, link },
+  });
+  await db.insert(timelineEventsTable).values({
+    dealerId, customerId: customer.id, domain: "customers", kind: "vehicle_onboarding_invited",
+    title: "Vehicle onboarding invitation emailed", detail: `Sent to ${email}`,
+    actor: res.locals.user?.name ?? res.locals.user?.email ?? "Staff", isAgent: false,
+    refType: "vehicle_onboarding_request", refId: invite!.id,
+  });
+  res.status(202).json({ status: "queued", inviteId: invite!.id, expiresAt: invite!.expiresAt.toISOString() });
+});
 
 function serializeDsar(r: DsarRequestRow): Record<string, unknown> {
   return {

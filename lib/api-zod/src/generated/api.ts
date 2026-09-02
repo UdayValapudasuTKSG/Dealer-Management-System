@@ -3832,6 +3832,20 @@ export const DeleteCustomerParams = zod.object({
 export const DeleteCustomerResponse = zod.void()
 
 
+/**
+ * @summary Email a secure vehicle onboarding invitation
+ */
+export const CreateVehicleOnboardingInviteParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CreateVehicleOnboardingInviteResponse = zod.object({
+  "status": zod.enum(['queued']),
+  "inviteId": zod.number(),
+  "expiresAt": zod.coerce.date()
+})
+
+
 export const ListDealsQueryParams = zod.object({
   "stage": zod.coerce.string().optional()
 })
@@ -5380,6 +5394,114 @@ export const SendServiceReminderParams = zod.object({
 export const SendServiceReminderResponse = zod.object({
   "status": zod.string(),
   "recipient": zod.string()
+})
+
+
+/**
+ * @summary Atomically claim an unassigned service order and open job card
+ */
+export const ClaimServiceOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ClaimServiceOrderBody = zod.object({
+  "technicianUserId": zod.number().optional()
+})
+
+
+
+
+export const ClaimServiceOrderResponse = zod.object({
+  "serviceOrder": zod.object({
+  "id": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerPhoneSnapshot": zod.string().nullish(),
+  "vehicleInfo": zod.string(),
+  "vehicleId": zod.number().nullish(),
+  "assetId": zod.number().nullish(),
+  "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection', 'comeback', 'unscheduled']),
+  "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']).optional(),
+  "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']),
+  "scheduledDate": zod.coerce.date(),
+  "complaint": zod.string().nullish(),
+  "odometer": zod.number().nullish(),
+  "technician": zod.string().nullish(),
+  "technicianUserId": zod.number().nullish(),
+  "estimatedCost": zod.number(),
+  "estimatedHours": zod.number().optional(),
+  "stageHistory": zod.array(zod.object({
+  "from": zod.string(),
+  "to": zod.string(),
+  "justification": zod.string(),
+  "byUserId": zod.number().nullish(),
+  "byName": zod.string(),
+  "at": zod.string()
+})).optional(),
+  "jobs": zod.array(zod.string()),
+  "createdAt": zod.coerce.date()
+}),
+  "jobCard": zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "assetId": zod.number().nullish(),
+  "title": zod.string(),
+  "status": zod.enum(['open', 'in_progress', 'on_hold', 'completed', 'closed', 'cancelled']),
+  "technicianUserId": zod.number().nullish(),
+  "technicianName": zod.string().nullish(),
+  "bay": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date().nullish(),
+  "durationMins": zod.number().nullish(),
+  "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']),
+  "quoteTotal": zod.number(),
+  "quoteApprovedAt": zod.coerce.date().nullish(),
+  "customerPhoneSnapshot": zod.string().nullish(),
+  "intake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "outtake": zod.union([zod.object({
+  "odometer": zod.number().optional(),
+  "fuelLevel": zod.string().optional(),
+  "loanerIssued": zod.boolean().optional(),
+  "notes": zod.string().optional(),
+  "signature": zod.string().optional(),
+  "recordedAt": zod.string().optional()
+}),zod.null()]).optional(),
+  "checklist": zod.array(zod.object({
+  "label": zod.string(),
+  "done": zod.boolean()
+})),
+  "laborHours": zod.number(),
+  "laborRate": zod.number(),
+  "notes": zod.string().nullish(),
+  "serviceAnalysis": zod.string().nullish(),
+  "workPerformed": zod.string().nullish(),
+  "rolloverStatus": zod.enum(['none', 'pending', 'approved']).optional(),
+  "rolloverToDate": zod.coerce.date().nullish(),
+  "rolloverReason": zod.string().nullish(),
+  "rolloverRequestedBy": zod.string().nullish(),
+  "rolloverRequestedAt": zod.coerce.date().nullish(),
+  "rolloverManagerApprovedBy": zod.string().nullish(),
+  "rolloverManagerApprovedAt": zod.coerce.date().nullish(),
+  "rolloverTechApprovedBy": zod.string().nullish(),
+  "rolloverTechApprovedAt": zod.coerce.date().nullish(),
+  "surchargeStatus": zod.enum(['none', 'suggested', 'applied', 'waived']).optional(),
+  "surchargeAmount": zod.number().optional(),
+  "surchargeOverKm": zod.number().nullish(),
+  "surchargeDecidedBy": zod.string().nullish(),
+  "surchargeDecidedAt": zod.coerce.date().nullish(),
+  "startedAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
+  "timerSeconds": zod.number().optional().describe('Accumulated worked seconds (excludes the running segment)'),
+  "timerStartedAt": zod.coerce.date().nullish().describe('Start of the running timer segment; null when paused'),
+  "createdAt": zod.coerce.date()
+}),
+  "assignedJobCardCount": zod.number().min(1)
 })
 
 
@@ -13015,6 +13137,111 @@ export const SubmitPublicFeedbackFormResponse = zod.object({
   "maxStars": zod.number().min(submitPublicFeedbackFormResponseQuestionsItemMaxStarsMin).max(submitPublicFeedbackFormResponseQuestionsItemMaxStarsMax).optional()
 })),
   "submittedAt": zod.coerce.date().nullish()
+})
+
+
+export const GetVehicleOnboardingParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const GetVehicleOnboardingResponse = zod.object({
+  "state": zod.enum(['open', 'expired', 'submitted']),
+  "customerName": zod.string(),
+  "expiresAt": zod.coerce.date(),
+  "media": zod.array(zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['image', 'video']),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "originalName": zod.string().nullish()
+}))
+})
+
+
+export const CreateVehicleOnboardingUploadParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const CreateVehicleOnboardingUploadBody = zod.object({
+  "kind": zod.enum(['image', 'video']),
+  "mimeType": zod.string(),
+  "originalName": zod.string().optional()
+})
+
+export const CreateVehicleOnboardingUploadResponse = zod.object({
+  "mediaId": zod.number(),
+  "uploadUrl": zod.string(),
+  "maxBytes": zod.number()
+})
+
+
+export const FinalizeVehicleOnboardingMediaParams = zod.object({
+  "token": zod.coerce.string(),
+  "mediaId": zod.coerce.number()
+})
+
+export const FinalizeVehicleOnboardingMediaResponse = zod.unknown()
+
+
+export const ReadVehicleOnboardingMediaParams = zod.object({
+  "token": zod.coerce.string(),
+  "mediaId": zod.coerce.number()
+})
+
+export const ReadVehicleOnboardingMediaResponse = zod.unknown()
+
+
+export const SubmitVehicleOnboardingParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const submitVehicleOnboardingBodyRegistrationMax = 40;
+
+export const submitVehicleOnboardingBodyVinChassisMax = 80;
+
+export const submitVehicleOnboardingBodyMakeMax = 80;
+
+export const submitVehicleOnboardingBodyModelMax = 80;
+
+export const submitVehicleOnboardingBodyYearMin = 1900;
+
+export const submitVehicleOnboardingBodyColourMax = 50;
+
+export const submitVehicleOnboardingBodyMileageMin = 0;
+export const submitVehicleOnboardingBodyMileageMax = 10000000;
+
+export const submitVehicleOnboardingBodyNotesMax = 4000;
+
+
+
+export const SubmitVehicleOnboardingBody = zod.object({
+  "registration": zod.string().min(1).max(submitVehicleOnboardingBodyRegistrationMax),
+  "vinChassis": zod.string().max(submitVehicleOnboardingBodyVinChassisMax).optional(),
+  "make": zod.string().min(1).max(submitVehicleOnboardingBodyMakeMax),
+  "model": zod.string().min(1).max(submitVehicleOnboardingBodyModelMax),
+  "year": zod.number().min(submitVehicleOnboardingBodyYearMin).optional(),
+  "colour": zod.string().max(submitVehicleOnboardingBodyColourMax).optional(),
+  "mileage": zod.number().min(submitVehicleOnboardingBodyMileageMin).max(submitVehicleOnboardingBodyMileageMax).optional(),
+  "notes": zod.string().max(submitVehicleOnboardingBodyNotesMax).optional()
+})
+
+export const SubmitVehicleOnboardingResponse = zod.object({
+  "state": zod.enum(['submitted']),
+  "vehicle": zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "customerId": zod.number(),
+  "registration": zod.string(),
+  "vinChassis": zod.string().nullish(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number().nullish(),
+  "colour": zod.string().nullish(),
+  "mileage": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
 })
 
 

@@ -107,6 +107,15 @@ export class ObjectStorageService {
   }
 
   async getObjectEntityUploadURL(ownerPrefix?: string): Promise<string> {
+    return (await this.createPrivateUpload(ownerPrefix)).uploadUrl;
+  }
+
+  /** Creates a server-owned private key. Callers persist objectPath and expose
+   * only an opaque media id on subsequent API calls. */
+  async createPrivateUpload(ownerPrefix?: string): Promise<{
+    uploadUrl: string;
+    objectPath: string;
+  }> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
       throw new Error(
@@ -124,12 +133,17 @@ export class ObjectStorageService {
 
     const { bucketName, objectName } = parseObjectPath(fullPath);
 
-    return signObjectURL({
+    const uploadUrl = await signObjectURL({
       bucketName,
       objectName,
       method: "PUT",
       ttlSec: 900,
     });
+    const entityDir = this.getPrivateObjectDir().replace(/\/$/, "");
+    return {
+      uploadUrl,
+      objectPath: `/objects/${fullPath.slice(entityDir.length + 1)}`,
+    };
   }
 
   async getObjectEntityFile(objectPath: string): Promise<File> {

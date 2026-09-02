@@ -2293,6 +2293,26 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /customers/{id}/vehicle-onboarding-invites:
+    post:
+      operationId: createVehicleOnboardingInvite
+      tags: [customers]
+      summary: Email a secure vehicle onboarding invitation
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "202":
+          description: Dealer-SMTP email queued; token is never returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, inviteId, expiresAt]
+                properties:
+                  status: { type: string, enum: [queued] }
+                  inviteId: { type: integer }
+                  expiresAt: { type: string, format: date-time }
+
   /deals:
     get:
       operationId: listDeals
@@ -3373,6 +3393,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  /service-orders/{id}/claim:
+    post:
+      operationId: claimServiceOrder
+      tags: [service]
+      summary: Atomically claim an unassigned service order and open job card
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ServiceOrderClaimRequest" }
+      responses:
+        "200":
+          description: Assignment synchronized
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [serviceOrder, jobCard, assignedJobCardCount]
+                properties:
+                  serviceOrder: { $ref: "#/components/schemas/ServiceOrder" }
+                  # Stable lowest-id representative; the claim applies to the
+                  # full unassigned open-card work package.
+                  jobCard: { $ref: "#/components/schemas/JobCard" }
+                  assignedJobCardCount: { type: integer, minimum: 1 }
+        "409":
+          description: Already assigned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /service-technicians:
     get:
@@ -9023,8 +9074,145 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /vehicle-onboarding/{token}:
+    get:
+      operationId: getVehicleOnboarding
+      tags: [vehicle-onboarding]
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Token-bound form state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VehicleOnboardingState" }
+  /vehicle-onboarding/{token}/media/upload-url:
+    post:
+      operationId: createVehicleOnboardingUpload
+      tags: [vehicle-onboarding]
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VehicleOnboardingUploadRequest" }
+      responses:
+        "201":
+          description: Private upload URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mediaId, uploadUrl, maxBytes]
+                properties:
+                  mediaId: { type: integer }
+                  uploadUrl: { type: string }
+                  maxBytes: { type: integer }
+  /vehicle-onboarding/{token}/media/{mediaId}/finalize:
+    post:
+      operationId: finalizeVehicleOnboardingMedia
+      tags: [vehicle-onboarding]
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: mediaId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Media verified }
+  /vehicle-onboarding/{token}/media/{mediaId}:
+    get:
+      operationId: readVehicleOnboardingMedia
+      tags: [vehicle-onboarding]
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+        - { name: mediaId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Private token-bound media
+          content:
+            application/octet-stream: { schema: { type: string, format: binary } }
+  /vehicle-onboarding/{token}/submit:
+    post:
+      operationId: submitVehicleOnboarding
+      tags: [vehicle-onboarding]
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VehicleOnboardingSubmission" }
+      responses:
+        "201":
+          description: Vehicle added to customer garage
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [state, vehicle]
+                properties:
+                  state: { type: string, enum: [submitted] }
+                  vehicle: { $ref: "#/components/schemas/GarageVehicle" }
+
 components:
   schemas:
+    ServiceOrderClaimRequest:
+      type: object
+      properties:
+        technicianUserId: { type: integer }
+    VehicleOnboardingUploadRequest:
+      type: object
+      required: [kind, mimeType]
+      properties:
+        kind: { type: string, enum: [image, video] }
+        mimeType: { type: string }
+        originalName: { type: string }
+    GarageVehicle:
+      type: object
+      required: [id, dealerId, customerId, registration, make, model, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        customerId: { type: integer }
+        registration: { type: string }
+        vinChassis: { type: ["string", "null"] }
+        make: { type: string }
+        model: { type: string }
+        year: { type: ["integer", "null"] }
+        colour: { type: ["string", "null"] }
+        mileage: { type: ["integer", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    VehicleOnboardingSubmission:
+      type: object
+      required: [registration, make, model]
+      properties:
+        registration: { type: string, minLength: 1, maxLength: 40 }
+        vinChassis: { type: string, maxLength: 80 }
+        make: { type: string, minLength: 1, maxLength: 80 }
+        model: { type: string, minLength: 1, maxLength: 80 }
+        year: { type: integer, minimum: 1900 }
+        colour: { type: string, maxLength: 50 }
+        mileage: { type: integer, minimum: 0, maximum: 10000000 }
+        notes: { type: string, maxLength: 4000 }
+    VehicleOnboardingState:
+      type: object
+      required: [state, customerName, expiresAt, media]
+      properties:
+        state: { type: string, enum: [open, expired, submitted] }
+        customerName: { type: string }
+        expiresAt: { type: string, format: date-time }
+        media:
+          type: array
+          items:
+            type: object
+            required: [id, kind, mimeType, sizeBytes]
+            properties:
+              id: { type: integer }
+              kind: { type: string, enum: [image, video] }
+              mimeType: { type: string }
+              sizeBytes: { type: integer }
+              originalName: { type: ["string", "null"] }
     WhatsappSettings:
       type: object
       required: [configured, enabled, hasAccessToken, hasAppSecret, serviceTemplateLanguage]

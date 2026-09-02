@@ -5,6 +5,109 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+export interface ServiceOrderClaimRequest {
+  technicianUserId?: number;
+}
+
+export type VehicleOnboardingUploadRequestKind = typeof VehicleOnboardingUploadRequestKind[keyof typeof VehicleOnboardingUploadRequestKind];
+
+
+export const VehicleOnboardingUploadRequestKind = {
+  image: 'image',
+  video: 'video',
+} as const;
+
+export interface VehicleOnboardingUploadRequest {
+  kind: VehicleOnboardingUploadRequestKind;
+  mimeType: string;
+  originalName?: string;
+}
+
+export interface GarageVehicle {
+  id: number;
+  dealerId: number;
+  customerId: number;
+  registration: string;
+  /** @nullable */
+  vinChassis?: string | null;
+  make: string;
+  model: string;
+  /** @nullable */
+  year?: number | null;
+  /** @nullable */
+  colour?: string | null;
+  /** @nullable */
+  mileage?: number | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VehicleOnboardingSubmission {
+  /**
+     * @minLength 1
+     * @maxLength 40
+     */
+  registration: string;
+  /** @maxLength 80 */
+  vinChassis?: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  make: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  model: string;
+  /** @minimum 1900 */
+  year?: number;
+  /** @maxLength 50 */
+  colour?: string;
+  /**
+     * @minimum 0
+     * @maximum 10000000
+     */
+  mileage?: number;
+  /** @maxLength 4000 */
+  notes?: string;
+}
+
+export type VehicleOnboardingStateState = typeof VehicleOnboardingStateState[keyof typeof VehicleOnboardingStateState];
+
+
+export const VehicleOnboardingStateState = {
+  open: 'open',
+  expired: 'expired',
+  submitted: 'submitted',
+} as const;
+
+export type VehicleOnboardingStateMediaItemKind = typeof VehicleOnboardingStateMediaItemKind[keyof typeof VehicleOnboardingStateMediaItemKind];
+
+
+export const VehicleOnboardingStateMediaItemKind = {
+  image: 'image',
+  video: 'video',
+} as const;
+
+export type VehicleOnboardingStateMediaItem = {
+  id: number;
+  kind: VehicleOnboardingStateMediaItemKind;
+  mimeType: string;
+  sizeBytes: number;
+  /** @nullable */
+  originalName?: string | null;
+};
+
+export interface VehicleOnboardingState {
+  state: VehicleOnboardingStateState;
+  customerName: string;
+  expiresAt: string;
+  media: VehicleOnboardingStateMediaItem[];
+}
+
 export interface WhatsappSettings {
   configured: boolean;
   enabled: boolean;
@@ -8523,6 +8626,19 @@ export const ListCustomersAccountType = {
   business: 'business',
 } as const;
 
+export type CreateVehicleOnboardingInvite202Status = typeof CreateVehicleOnboardingInvite202Status[keyof typeof CreateVehicleOnboardingInvite202Status];
+
+
+export const CreateVehicleOnboardingInvite202Status = {
+  queued: 'queued',
+} as const;
+
+export type CreateVehicleOnboardingInvite202 = {
+  status: CreateVehicleOnboardingInvite202Status;
+  inviteId: number;
+  expiresAt: string;
+};
+
 export type ListDealsParams = {
 stage?: string;
 };
@@ -8552,6 +8668,13 @@ export type CreatePayment422 = {
 
 export type ListServiceOrdersParams = {
 status?: string;
+};
+
+export type ClaimServiceOrder200 = {
+  serviceOrder: ServiceOrder;
+  jobCard: JobCard;
+  /** @minimum 1 */
+  assignedJobCardCount: number;
 };
 
 export type ListJobCardsParams = {
@@ -8798,5 +8921,23 @@ export type RotateErpnextWebhookSecret200 = {
 
 export type ListAmberEventsParams = {
 deviceId?: string;
+};
+
+export type CreateVehicleOnboardingUpload201 = {
+  mediaId: number;
+  uploadUrl: string;
+  maxBytes: number;
+};
+
+export type SubmitVehicleOnboarding201State = typeof SubmitVehicleOnboarding201State[keyof typeof SubmitVehicleOnboarding201State];
+
+
+export const SubmitVehicleOnboarding201State = {
+  submitted: 'submitted',
+} as const;
+
+export type SubmitVehicleOnboarding201 = {
+  state: SubmitVehicleOnboarding201State;
+  vehicle: GarageVehicle;
 };
 

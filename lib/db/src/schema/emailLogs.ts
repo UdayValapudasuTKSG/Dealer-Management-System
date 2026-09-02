@@ -69,6 +69,7 @@ export const EMAIL_TEMPLATES = [
   "collision.claim.action",
   // Task 269: daily lead-source report for General Managers
   "leads.source.report.daily",
+  "customer.vehicle.onboarding",
 ] as const;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 

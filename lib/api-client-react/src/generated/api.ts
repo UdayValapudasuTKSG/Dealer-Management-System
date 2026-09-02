@@ -75,6 +75,7 @@ import type {
   Case,
   CaseCreate,
   CaseUpdate,
+  ClaimServiceOrder200,
   CollisionClaim,
   CollisionClaimAdvanceBody,
   CollisionClaimAdvanceUnmet,
@@ -95,6 +96,8 @@ import type {
   CoveragePlanInput,
   CoveragePlanUpdate,
   CreatePayment422,
+  CreateVehicleOnboardingInvite202,
+  CreateVehicleOnboardingUpload201,
   CreatedDealerWithSaga,
   CurrentUser,
   Customer,
@@ -325,6 +328,7 @@ import type {
   ServiceOrder,
   ServiceOrderAdvanceBody,
   ServiceOrderAdvanceUnmet,
+  ServiceOrderClaimRequest,
   ServiceOrderInput,
   ServiceOrderUpdate,
   ServiceSettings,
@@ -332,6 +336,7 @@ import type {
   SmtpConnectionTestResult,
   StageChecklistConfig,
   StageChecklistInput,
+  SubmitVehicleOnboarding201,
   Supplier,
   SupplierInput,
   SuspendDealerRequest,
@@ -369,6 +374,9 @@ import type {
   VehicleModelGlCodeInput,
   VehicleModelGlCodeList,
   VehicleModelGlCodeValidationResult,
+  VehicleOnboardingState,
+  VehicleOnboardingSubmission,
+  VehicleOnboardingUploadRequest,
   VehicleUpdate,
   VerifyMetaWebhookParams,
   WhatsappMessage,
@@ -6750,6 +6758,77 @@ export const useDeleteCustomer = <TError = ErrorType<Error>,
       return useMutation(getDeleteCustomerMutationOptions(options));
     }
 
+export const getCreateVehicleOnboardingInviteUrl = (id: number,) => {
+
+
+
+
+  return `/api/customers/${id}/vehicle-onboarding-invites`
+}
+
+/**
+ * @summary Email a secure vehicle onboarding invitation
+ */
+export const createVehicleOnboardingInvite = async (id: number, options?: RequestInit): Promise<CreateVehicleOnboardingInvite202> => {
+
+  return customFetch<CreateVehicleOnboardingInvite202>(getCreateVehicleOnboardingInviteUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getCreateVehicleOnboardingInviteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['createVehicleOnboardingInvite'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  createVehicleOnboardingInvite(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVehicleOnboardingInviteMutationResult = NonNullable<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>>
+
+    export type CreateVehicleOnboardingInviteMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Email a secure vehicle onboarding invitation
+ */
+export const useCreateVehicleOnboardingInvite = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVehicleOnboardingInvite>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getCreateVehicleOnboardingInviteMutationOptions(options));
+    }
+
 export const getListDealsUrl = (params?: ListDealsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -9953,6 +10032,78 @@ export const useSendServiceReminder = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getSendServiceReminderMutationOptions(options));
+    }
+
+export const getClaimServiceOrderUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-orders/${id}/claim`
+}
+
+/**
+ * @summary Atomically claim an unassigned service order and open job card
+ */
+export const claimServiceOrder = async (id: number,
+    serviceOrderClaimRequest?: ServiceOrderClaimRequest, options?: RequestInit): Promise<ClaimServiceOrder200> => {
+
+  return customFetch<ClaimServiceOrder200>(getClaimServiceOrderUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(serviceOrderClaimRequest)
+  }
+);}
+
+
+
+
+
+export const getClaimServiceOrderMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof claimServiceOrder>>, TError,{id: number;data?: BodyType<ServiceOrderClaimRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof claimServiceOrder>>, TError,{id: number;data?: BodyType<ServiceOrderClaimRequest>}, TContext> => {
+
+const mutationKey = ['claimServiceOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof claimServiceOrder>>, {id: number;data?: BodyType<ServiceOrderClaimRequest>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  claimServiceOrder(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClaimServiceOrderMutationResult = NonNullable<Awaited<ReturnType<typeof claimServiceOrder>>>
+    export type ClaimServiceOrderMutationBody = BodyType<ServiceOrderClaimRequest> | undefined
+    export type ClaimServiceOrderMutationError = ErrorType<Error>
+
+    /**
+ * @summary Atomically claim an unassigned service order and open job card
+ */
+export const useClaimServiceOrder = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof claimServiceOrder>>, TError,{id: number;data?: BodyType<ServiceOrderClaimRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof claimServiceOrder>>,
+        TError,
+        {id: number;data?: BodyType<ServiceOrderClaimRequest>},
+        TContext
+      > => {
+      return useMutation(getClaimServiceOrderMutationOptions(options));
     }
 
 export const getListServiceTechniciansUrl = () => {
@@ -27337,5 +27488,351 @@ export const useSubmitPublicFeedbackForm = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getSubmitPublicFeedbackFormMutationOptions(options));
+    }
+
+export const getGetVehicleOnboardingUrl = (token: string,) => {
+
+
+
+
+  return `/api/vehicle-onboarding/${token}`
+}
+
+export const getVehicleOnboarding = async (token: string, options?: RequestInit): Promise<VehicleOnboardingState> => {
+
+  return customFetch<VehicleOnboardingState>(getGetVehicleOnboardingUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVehicleOnboardingQueryKey = (token: string,) => {
+    return [
+    `/api/vehicle-onboarding/${token}`
+    ] as const;
+    }
+
+
+export const getGetVehicleOnboardingQueryOptions = <TData = Awaited<ReturnType<typeof getVehicleOnboarding>>, TError = ErrorType<unknown>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVehicleOnboarding>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVehicleOnboardingQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVehicleOnboarding>>> = ({ signal }) => getVehicleOnboarding(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVehicleOnboarding>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVehicleOnboardingQueryResult = NonNullable<Awaited<ReturnType<typeof getVehicleOnboarding>>>
+export type GetVehicleOnboardingQueryError = ErrorType<unknown>
+
+
+
+export function useGetVehicleOnboarding<TData = Awaited<ReturnType<typeof getVehicleOnboarding>>, TError = ErrorType<unknown>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVehicleOnboarding>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVehicleOnboardingQueryOptions(token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVehicleOnboardingUploadUrl = (token: string,) => {
+
+
+
+
+  return `/api/vehicle-onboarding/${token}/media/upload-url`
+}
+
+export const createVehicleOnboardingUpload = async (token: string,
+    vehicleOnboardingUploadRequest: VehicleOnboardingUploadRequest, options?: RequestInit): Promise<CreateVehicleOnboardingUpload201> => {
+
+  return customFetch<CreateVehicleOnboardingUpload201>(getCreateVehicleOnboardingUploadUrl(token),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vehicleOnboardingUploadRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateVehicleOnboardingUploadMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingUpload>>, TError,{token: string;data: BodyType<VehicleOnboardingUploadRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingUpload>>, TError,{token: string;data: BodyType<VehicleOnboardingUploadRequest>}, TContext> => {
+
+const mutationKey = ['createVehicleOnboardingUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVehicleOnboardingUpload>>, {token: string;data: BodyType<VehicleOnboardingUploadRequest>}> = (props) => {
+          const {token,data} = props ?? {};
+
+          return  createVehicleOnboardingUpload(token,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVehicleOnboardingUploadMutationResult = NonNullable<Awaited<ReturnType<typeof createVehicleOnboardingUpload>>>
+    export type CreateVehicleOnboardingUploadMutationBody = BodyType<VehicleOnboardingUploadRequest>
+    export type CreateVehicleOnboardingUploadMutationError = ErrorType<unknown>
+
+    export const useCreateVehicleOnboardingUpload = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingUpload>>, TError,{token: string;data: BodyType<VehicleOnboardingUploadRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVehicleOnboardingUpload>>,
+        TError,
+        {token: string;data: BodyType<VehicleOnboardingUploadRequest>},
+        TContext
+      > => {
+      return useMutation(getCreateVehicleOnboardingUploadMutationOptions(options));
+    }
+
+export const getFinalizeVehicleOnboardingMediaUrl = (token: string,
+    mediaId: number,) => {
+
+
+
+
+  return `/api/vehicle-onboarding/${token}/media/${mediaId}/finalize`
+}
+
+export const finalizeVehicleOnboardingMedia = async (token: string,
+    mediaId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getFinalizeVehicleOnboardingMediaUrl(token,mediaId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getFinalizeVehicleOnboardingMediaMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeVehicleOnboardingMedia>>, TError,{token: string;mediaId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof finalizeVehicleOnboardingMedia>>, TError,{token: string;mediaId: number}, TContext> => {
+
+const mutationKey = ['finalizeVehicleOnboardingMedia'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof finalizeVehicleOnboardingMedia>>, {token: string;mediaId: number}> = (props) => {
+          const {token,mediaId} = props ?? {};
+
+          return  finalizeVehicleOnboardingMedia(token,mediaId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FinalizeVehicleOnboardingMediaMutationResult = NonNullable<Awaited<ReturnType<typeof finalizeVehicleOnboardingMedia>>>
+
+    export type FinalizeVehicleOnboardingMediaMutationError = ErrorType<unknown>
+
+    export const useFinalizeVehicleOnboardingMedia = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeVehicleOnboardingMedia>>, TError,{token: string;mediaId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof finalizeVehicleOnboardingMedia>>,
+        TError,
+        {token: string;mediaId: number},
+        TContext
+      > => {
+      return useMutation(getFinalizeVehicleOnboardingMediaMutationOptions(options));
+    }
+
+export const getReadVehicleOnboardingMediaUrl = (token: string,
+    mediaId: number,) => {
+
+
+
+
+  return `/api/vehicle-onboarding/${token}/media/${mediaId}`
+}
+
+export const readVehicleOnboardingMedia = async (token: string,
+    mediaId: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getReadVehicleOnboardingMediaUrl(token,mediaId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getReadVehicleOnboardingMediaQueryKey = (token: string,
+    mediaId: number,) => {
+    return [
+    `/api/vehicle-onboarding/${token}/media/${mediaId}`
+    ] as const;
+    }
+
+
+export const getReadVehicleOnboardingMediaQueryOptions = <TData = Awaited<ReturnType<typeof readVehicleOnboardingMedia>>, TError = ErrorType<unknown>>(token: string,
+    mediaId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof readVehicleOnboardingMedia>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getReadVehicleOnboardingMediaQueryKey(token,mediaId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof readVehicleOnboardingMedia>>> = ({ signal }) => readVehicleOnboardingMedia(token,mediaId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined && mediaId !== null && mediaId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof readVehicleOnboardingMedia>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ReadVehicleOnboardingMediaQueryResult = NonNullable<Awaited<ReturnType<typeof readVehicleOnboardingMedia>>>
+export type ReadVehicleOnboardingMediaQueryError = ErrorType<unknown>
+
+
+
+export function useReadVehicleOnboardingMedia<TData = Awaited<ReturnType<typeof readVehicleOnboardingMedia>>, TError = ErrorType<unknown>>(
+ token: string,
+    mediaId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof readVehicleOnboardingMedia>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getReadVehicleOnboardingMediaQueryOptions(token,mediaId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitVehicleOnboardingUrl = (token: string,) => {
+
+
+
+
+  return `/api/vehicle-onboarding/${token}/submit`
+}
+
+export const submitVehicleOnboarding = async (token: string,
+    vehicleOnboardingSubmission: VehicleOnboardingSubmission, options?: RequestInit): Promise<SubmitVehicleOnboarding201> => {
+
+  return customFetch<SubmitVehicleOnboarding201>(getSubmitVehicleOnboardingUrl(token),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vehicleOnboardingSubmission)
+  }
+);}
+
+
+
+
+
+export const getSubmitVehicleOnboardingMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitVehicleOnboarding>>, TError,{token: string;data: BodyType<VehicleOnboardingSubmission>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitVehicleOnboarding>>, TError,{token: string;data: BodyType<VehicleOnboardingSubmission>}, TContext> => {
+
+const mutationKey = ['submitVehicleOnboarding'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitVehicleOnboarding>>, {token: string;data: BodyType<VehicleOnboardingSubmission>}> = (props) => {
+          const {token,data} = props ?? {};
+
+          return  submitVehicleOnboarding(token,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitVehicleOnboardingMutationResult = NonNullable<Awaited<ReturnType<typeof submitVehicleOnboarding>>>
+    export type SubmitVehicleOnboardingMutationBody = BodyType<VehicleOnboardingSubmission>
+    export type SubmitVehicleOnboardingMutationError = ErrorType<unknown>
+
+    export const useSubmitVehicleOnboarding = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitVehicleOnboarding>>, TError,{token: string;data: BodyType<VehicleOnboardingSubmission>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitVehicleOnboarding>>,
+        TError,
+        {token: string;data: BodyType<VehicleOnboardingSubmission>},
+        TContext
+      > => {
+      return useMutation(getSubmitVehicleOnboardingMutationOptions(options));
     }
 

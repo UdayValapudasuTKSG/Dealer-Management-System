@@ -590,6 +590,16 @@ export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
       `We received your request for <strong>${d(x, "service", "service")}</strong> for your <strong>${d(x, "vehicle", "vehicle")}</strong>, with a preferred date of <strong>${d(x, "date", "the date requested")}</strong>${x.dealer ? ` at <strong>${x.dealer}</strong>` : ""}. This is a request receipt, not yet an appointment confirmation. Your service team will confirm the time shortly.`,
     sample: { name: "Alex", vehicle: "2025 BMW X7", service: "maintenance", date: "August 14, 2026", dealer: "Main Service Centre" },
   },
+  "customer.vehicle.onboarding": {
+    label: "Customer Vehicle Onboarding",
+    description: "Secure email-only invitation to add a vehicle to the customer's garage.",
+    subject: () => "Add your vehicle details securely",
+    heading: (x) => `Add your vehicle, ${d(x, "name", "valued customer")}`,
+    body: () =>
+      "Use the secure form to add your vehicle details and your own photos or videos. This private link expires and may be used only once.",
+    cta: (x) => ({ label: "Add my vehicle", href: d(x, "link", "#") }),
+    sample: { name: "Alex", link: "https://example.com/vehicle-onboarding/secure-token" },
+  },
   "service.appointment.confirmed": {
     label: "Service Appointment Confirmed",
     description: "Confirms the appointment and attaches an RFC 5545 calendar invitation.",

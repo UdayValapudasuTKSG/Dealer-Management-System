@@ -8,6 +8,8 @@ import {
   useDeleteServiceOrder,
   getListServiceOrdersQueryKey,
   useSendServiceReminder,
+  useClaimServiceOrder,
+  useCreateVehicleOnboardingInvite,
   useListJobCards,
   useCreateJobCard,
   useUpdateJobCard,
@@ -1076,6 +1078,7 @@ function BookingsTab() {
                     >
                       <Mail className="w-3.5 h-3.5" /> Remind
                     </Button>
+                    <SelfOnboardButton order={order} />
                     <AdvanceAndFeedback order={order} review={reviewFor(order.id)} />
                     <OpenCaseButton
                       customerId={order.customerId ?? null}
@@ -1763,6 +1766,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
         )}
 
         <div className="flex items-center gap-2 flex-wrap">
+          <ClaimJobCardAction card={card} />
           {next && (
             <Button
               size="sm"
@@ -2800,5 +2804,141 @@ function EmptyState({ icon: Icon, text }: { icon: typeof Calendar; text: string 
       <Icon className="w-8 h-8 text-muted-foreground" />
       <p className="text-muted-foreground">{text}</p>
     </div>
+  );
+}
+function SelfOnboardButton({ order }: { order: ServiceOrder }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const invite = useCreateVehicleOnboardingInvite();
+  if (!order.customerId) return null; // Needs a linked customer
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={invite.isPending}
+      className="rounded-full border-white/15 gap-1.5 text-xs h-8"
+      onClick={async () => {
+        try {
+          await invite.mutateAsync({ id: order.id });
+          toast({ title: "Invite sent", description: `Vehicle self-onboarding email sent to ${order.customerName || "customer"}.` });
+        } catch (e: unknown) {
+          const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Could not send invite.";
+          toast({ title: "Invite failed", description: msg, variant: "destructive" });
+        }
+      }}
+    >
+      <CarFront className="w-3.5 h-3.5" /> Self-Onboard
+    </Button>
+  );
+}
+
+function ClaimJobCardAction({ card }: { card: JobCard }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const claim = useClaimServiceOrder();
+  const { data: technicians } = useListServiceTechnicians();
+  const { me } = useAuthz();
+
+  const isApprover = useIsServiceApprover();
+  const isTechnician = (me?.roleName ?? "").toLowerCase().includes("tech");
+
+  if (card.technicianUserId) return null; // Already assigned
+  if (!isApprover && !isTechnician) return null; // Can't claim
+
+  if (isApprover) {
+    return (
+      <AssignJobCardDialog card={card} technicians={technicians ?? []} claim={claim} />
+    );
+  }
+
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="rounded-full border-primary/30 text-primary hover:bg-primary/10 gap-1.5 text-xs h-8"
+      disabled={claim.isPending}
+      onClick={async () => {
+        try {
+          await claim.mutateAsync({ id: card.serviceOrderId, data: {} });
+          queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
+          toast({
+            title: "Claimed",
+            description: "You have claimed this job.",
+          });
+        } catch (e: unknown) {
+          const msg = (e as any)?.response?.data?.error ?? "Could not claim job.";
+          toast({ title: "Claim failed", description: msg, variant: "destructive" });
+        }
+      }}
+    >
+      <User className="w-3.5 h-3.5" /> Claim Job
+    </Button>
+  );
+}
+
+function AssignJobCardDialog({ card, technicians, claim }: { card: JobCard, technicians: any[], claim: any }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [selectedTech, setSelectedTech] = useState<string>("me");
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          size="sm"
+          variant="outline"
+          className="rounded-full border-primary/30 text-primary hover:bg-primary/10 gap-1.5 text-xs h-8"
+        >
+          <User className="w-3.5 h-3.5" /> Assign Tech
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Assign Technician</DialogTitle>
+          <DialogDescription>
+            Choose a technician for this job.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4 space-y-2">
+          <Label>Technician</Label>
+          <Select value={selectedTech} onValueChange={setSelectedTech}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="me">Myself</SelectItem>
+              {technicians?.map((t: any) => (
+                <SelectItem key={t.id} value={String(t.id)}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button
+            className="w-full rounded-full"
+            disabled={claim.isPending}
+            onClick={async () => {
+              try {
+                const data = selectedTech === "me" ? {} : { technicianUserId: Number(selectedTech) };
+                await claim.mutateAsync({ id: card.serviceOrderId, data });
+                queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
+                queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
+                toast({ title: "Assigned", description: `Job assigned successfully.` });
+                setOpen(false);
+              } catch (e: unknown) {
+                const msg = (e as any)?.response?.data?.error ?? "Could not assign job.";
+                toast({ title: "Assignment failed", description: msg, variant: "destructive" });
+              }
+            }}
+          >
+            Confirm Assignment
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

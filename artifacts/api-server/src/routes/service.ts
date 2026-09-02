@@ -128,6 +128,7 @@ import {
   onJobCardIntakeRecorded,
   onServiceEstimateReady,
   onServiceAppointmentChanged,
+  onJobCardStatusChanged,
 } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { activeDealerId } from "../middlewares/rbac";
@@ -276,7 +277,8 @@ router.get("/service-orders", async (req, res): Promise<void> => {
     return;
   }
 
-  // RBAC: technicians only see bookings assigned to them (server-enforced).
+  // Technicians see their own work plus unclaimed work they may self-claim,
+  // never bookings assigned to another technician.
   const viewer = res.locals.user;
   const rows = await db
     .select()
@@ -288,7 +290,10 @@ router.get("/service-orders", async (req, res): Promise<void> => {
           ? eq(serviceOrdersTable.status, query.data.status)
           : undefined,
         isTechnicianRole(viewer)
-          ? eq(serviceOrdersTable.technicianUserId, viewer!.id)
+          ? or(
+              eq(serviceOrdersTable.technicianUserId, viewer!.id),
+              isNull(serviceOrdersTable.technicianUserId),
+            )
           : undefined,
       ),
     )
@@ -609,6 +614,84 @@ function technicianOwnsOrder(
   if (!isTechnicianRole(viewer)) return true;
   return order.technicianUserId === viewer!.id;
 }
+
+const ClaimServiceOrderParams = z.object({ id: z.coerce.number().int().positive() });
+const ClaimServiceOrderBody = z.object({ technicianUserId: z.number().int().positive().optional() });
+
+router.post("/service-orders/:id/claim", async (req, res): Promise<void> => {
+  const params = ClaimServiceOrderParams.safeParse(req.params);
+  const body = ClaimServiceOrderBody.safeParse(req.body ?? {});
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Invalid assignment request" }); return;
+  }
+  const dealerId = activeDealerId(res);
+  const actor = res.locals.user;
+  if (!actor?.id) { res.status(401).json({ error: "Authentication required" }); return; }
+  const [order] = await db.select().from(serviceOrdersTable).where(and(
+    eq(serviceOrdersTable.id, params.data.id), eq(serviceOrdersTable.dealerId, dealerId),
+  ));
+  if (!order) { res.status(404).json({ error: "Service order not found" }); return; }
+  if (order.technicianUserId != null) {
+    res.status(409).json({ error: "Service order is already assigned" }); return;
+  }
+  const targetId = body.data.technicianUserId ?? actor.id;
+  if (isTechnicianRole(actor) && targetId !== actor.id) {
+    res.status(403).json({ error: "Technicians may claim work only for themselves" }); return;
+  }
+  if (!isTechnicianRole(actor) && !isServiceApprover(actor)) {
+    res.status(403).json({ error: "Only technicians or service approvers may claim work" }); return;
+  }
+  const [target] = await db.select({
+    id: usersTable.id, name: usersTable.name, email: usersTable.email,
+    roleName: rolesTable.name, isGeneralManager: dealerUsersTable.isGeneralManager,
+  }).from(dealerUsersTable)
+    .innerJoin(usersTable, eq(usersTable.id, dealerUsersTable.userId))
+    .innerJoin(rolesTable, eq(rolesTable.id, dealerUsersTable.roleId))
+    .where(and(eq(dealerUsersTable.dealerId, dealerId), eq(dealerUsersTable.userId, targetId), eq(usersTable.status, "active")));
+  if (!target || (targetId !== actor.id && !/technician/i.test(target.roleName))) {
+    res.status(422).json({ error: "Selected technician is not eligible at this dealership" }); return;
+  }
+  const displayName = target.name ?? target.email ?? `User #${target.id}`;
+  try {
+    const assigned = await db.transaction(async (tx) => {
+      // A service order is a work package: claim every still-open, unassigned
+      // card on it in the same transaction. The response exposes the lowest-id
+      // card as a stable representative and the count for callers that render
+      // a package rather than an individual card.
+      const cards = await tx.update(jobCardsTable).set({
+        technicianUserId: target.id, technicianName: displayName,
+      }).where(and(
+        eq(jobCardsTable.serviceOrderId, order.id), eq(jobCardsTable.dealerId, dealerId),
+        eq(jobCardsTable.status, "open"), isNull(jobCardsTable.technicianUserId),
+      )).returning();
+      if (cards.length === 0) throw new Error("assignment_conflict");
+      const [claimedOrder] = await tx.update(serviceOrdersTable).set({
+        technicianUserId: target.id, technician: displayName,
+      }).where(and(
+        eq(serviceOrdersTable.id, order.id), eq(serviceOrdersTable.dealerId, dealerId),
+        isNull(serviceOrdersTable.technicianUserId),
+      )).returning();
+      if (!claimedOrder) throw new Error("assignment_conflict");
+      await tx.insert(timelineEventsTable).values({
+        dealerId, customerId: order.customerId, domain: "service", kind: "service_assignment_claimed",
+        title: `Service order #${order.id} assigned to ${displayName}`,
+        actor: actor.name ?? actor.email ?? "Staff", isAgent: false,
+        refType: "service_order", refId: order.id,
+      });
+      const jobCard = cards.sort((a, b) => a.id - b.id)[0]!;
+      return { serviceOrder: claimedOrder, jobCard, assignedJobCardCount: cards.length };
+    });
+    void notifyUser({ userId: target.id, dealerId, type: "assignment",
+      title: `Job card #${assigned.jobCard.id} assigned to you`,
+      body: `${assigned.jobCard.title} — ${assigned.serviceOrder.vehicleInfo}`, link: "/workshop" });
+    res.json(assigned);
+  } catch (error) {
+    if (error instanceof Error && error.message === "assignment_conflict") {
+      res.status(409).json({ error: "Service order or open job card is already assigned" }); return;
+    }
+    throw error;
+  }
+});
 
 router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
   const params = SendServiceReminderParams.safeParse(req.params);
@@ -1163,7 +1246,15 @@ router.get("/job-cards", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(jobCardsTable)
-    .where(and(...filters))
+    .where(and(
+      ...filters,
+      isTechnicianRole(me)
+        ? or(
+            eq(jobCardsTable.technicianUserId, me!.id),
+            isNull(jobCardsTable.technicianUserId),
+          )
+        : undefined,
+    ))
     .orderBy(desc(jobCardsTable.createdAt));
   res.json(ListJobCardsResponse.parse(rows));
 });
@@ -1346,6 +1437,20 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Job card not found" });
     return;
   }
+  if (!canActOnJobCard(res.locals.user, existing)) {
+    res.status(403).json({
+      error: "Claim this job card before changing it",
+    });
+    return;
+  }
+  if (
+    isTechnicianRole(res.locals.user) &&
+    (parsed.data.technicianUserId !== undefined ||
+      parsed.data.technicianName !== undefined)
+  ) {
+    res.status(403).json({ error: "Technicians cannot reassign job cards" });
+    return;
+  }
 
   const {
     approveQuote,
@@ -1403,21 +1508,73 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
     patch.completedAt = new Date();
   }
 
-  const [card] = await db
-    .update(jobCardsTable)
-    .set(patch)
-    .where(
-      and(
-        eq(jobCardsTable.id, params.data.id),
-        eq(jobCardsTable.dealerId, existing.dealerId),
-        (parsed.data.quoteTotal !== undefined ||
-          parsed.data.laborHours !== undefined ||
-          parsed.data.laborRate !== undefined)
-          ? isNull(jobCardsTable.quoteApprovedAt)
-          : undefined,
-      ),
-    )
-    .returning();
+  let becameReady = false;
+  const card = await db.transaction(async (tx) => {
+    const [updatedCard] = await tx
+      .update(jobCardsTable)
+      .set(patch)
+      .where(
+        and(
+          eq(jobCardsTable.id, params.data.id),
+          eq(jobCardsTable.dealerId, existing.dealerId),
+          (parsed.data.quoteTotal !== undefined ||
+            parsed.data.laborHours !== undefined ||
+            parsed.data.laborRate !== undefined)
+            ? isNull(jobCardsTable.quoteApprovedAt)
+            : undefined,
+        ),
+      )
+      .returning();
+    if (
+      updatedCard &&
+      (parsed.data.technicianUserId !== undefined ||
+        parsed.data.technicianName !== undefined)
+    ) {
+      await tx.update(serviceOrdersTable).set({
+        technicianUserId: updatedCard.technicianUserId,
+        technician: updatedCard.technicianName,
+      }).where(and(
+        eq(serviceOrdersTable.id, updatedCard.serviceOrderId),
+        eq(serviceOrdersTable.dealerId, updatedCard.dealerId),
+      ));
+    }
+    if (
+      updatedCard &&
+      parsed.data.status === "completed" &&
+      existing.status !== "completed"
+    ) {
+      const unfinished = await tx.select({ id: jobCardsTable.id }).from(jobCardsTable).where(and(
+        eq(jobCardsTable.serviceOrderId, updatedCard.serviceOrderId),
+        eq(jobCardsTable.dealerId, updatedCard.dealerId),
+        sql`${jobCardsTable.status} not in ('completed', 'closed', 'cancelled')`,
+      ));
+      if (unfinished.length === 0) {
+        const [currentOrder] = await tx.select({ status: serviceOrdersTable.status })
+          .from(serviceOrdersTable).where(and(
+            eq(serviceOrdersTable.id, updatedCard.serviceOrderId),
+            eq(serviceOrdersTable.dealerId, updatedCard.dealerId),
+          ));
+        const completionEvent = {
+          from: currentOrder?.status ?? "in_progress",
+          to: "resolved",
+          justification: `All job cards complete; job card #${updatedCard.id} triggered readiness`,
+          byUserId: res.locals.user?.id ?? null,
+          byName: res.locals.user?.name ?? res.locals.user?.email ?? "Unknown",
+          at: new Date().toISOString(),
+        };
+        const [resolved] = await tx.update(serviceOrdersTable).set({
+          status: "resolved",
+          stageHistory: sql`coalesce(${serviceOrdersTable.stageHistory}, '[]'::jsonb) || ${JSON.stringify([completionEvent])}::jsonb`,
+        }).where(and(
+          eq(serviceOrdersTable.id, updatedCard.serviceOrderId),
+          eq(serviceOrdersTable.dealerId, updatedCard.dealerId),
+          sql`${serviceOrdersTable.status} in ('acknowledged', 'in_progress', 'on_hold')`,
+        )).returning({ id: serviceOrdersTable.id });
+        becameReady = Boolean(resolved);
+      }
+    }
+    return updatedCard;
+  });
 
   // An edited quote invalidates every open public decision before the fresh
   // secure invitation is queued. Public approval also compares its snapshot
@@ -1456,6 +1613,9 @@ router.patch("/job-cards/:id", async (req, res): Promise<void> => {
       );
     if (order && !existing.intake && card.intake) {
       onJobCardIntakeRecorded(order, card);
+    }
+    if (order && parsed.data.status && parsed.data.status !== existing.status) {
+      onJobCardStatusChanged(existing, card, order, becameReady);
     }
     if (
       order &&

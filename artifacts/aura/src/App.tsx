@@ -18,6 +18,7 @@ import Landing from "@/pages/landing";
 import BookTestDrive from "@/pages/book-test-drive";
 import FeedbackRespond from "@/pages/feedback-respond";
 import ServiceEstimate from "@/pages/service-estimate";
+import VehicleOnboarding from "@/pages/vehicle-onboarding";
 import FeedbackForms from "@/pages/feedback-forms";
 import Dashboard from "@/pages/dashboard";
 import Reports from "@/pages/reports";
@@ -505,6 +506,7 @@ function ClerkProviderWithRoutes() {
             <Route path="/book-test-drive/:token" component={BookTestDrive} />
             <Route path="/feedback/:token" component={FeedbackRespond} />
             <Route path="/service-estimate/:token" component={ServiceEstimate} />
+            <Route path="/vehicle-onboarding/:token" component={VehicleOnboarding} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route>

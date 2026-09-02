@@ -68,3 +68,4 @@ export * from "./whatsappChannels";
 export * from "./metaConnections";
 export * from "./smtpConnections";
 export * from "./feedbackForms";
+export * from "./vehicleOnboarding";

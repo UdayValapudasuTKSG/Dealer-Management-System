@@ -183,6 +183,11 @@ export function feedbackFormUrl(token: string): string | null {
   return origin ? `${origin}/feedback/${token}` : null;
 }
 
+export function vehicleOnboardingUrl(token: string): string | null {
+  const origin = publicAppOrigin();
+  return origin ? `${origin}/vehicle-onboarding/${token}` : null;
+}
+
 /**
  * New lead created → personalised PDF quote when a vehicle of interest is on
  * file (details pulled from inventory), otherwise the "lead_received" welcome.
@@ -790,11 +795,8 @@ export function onServiceInvoiceIssued(invoice: ServiceInvoice): void {
   });
 }
 
-/**
- * Service order status transitions → customer milestone emails:
- * in_progress = work started, on_hold = paused/awaiting parts,
- * resolved = ready for pickup, closed = feedback request.
- */
+/** Service-order transitions own appointment acknowledgement and the
+ * closed→36h feedback schedule only. Workshop milestones are job-card driven. */
 export function onServiceOrderStatusChanged(
   before: ServiceOrder,
   after: ServiceOrder,
@@ -811,53 +813,6 @@ export function onServiceOrderStatusChanged(
     switch (after.status) {
       case "acknowledged":
         await confirmServiceAppointment(after);
-        break;
-      case "in_progress":
-        await cancelServiceReminders(after.id, after.dealerId);
-        // Re-entering in_progress after on_hold dedupes to the first send.
-        await enqueueEmail({
-          dealerId: after.dealerId,
-          template: "service.started",
-          to: c.email,
-          customerId: after.customerId,
-          dedupeKey: `svc:${after.id}:started`,
-          data: base,
-        });
-        break;
-      case "on_hold":
-        await cancelServiceReminders(after.id, after.dealerId);
-        await enqueueEmail({
-          dealerId: after.dealerId,
-          template: "service.delayed",
-          to: c.email,
-          customerId: after.customerId,
-          dedupeKey: `svc:${after.id}:delayed`,
-          data: { ...base, reason: "we're waiting on a part or workshop slot" },
-        });
-        break;
-      case "resolved":
-        await cancelServiceReminders(after.id, after.dealerId);
-        const [readyInvoice] = await db
-          .select({ total: serviceInvoicesTable.total })
-          .from(serviceInvoicesTable)
-          .where(
-            and(
-              eq(serviceInvoicesTable.serviceOrderId, after.id),
-              eq(serviceInvoicesTable.dealerId, after.dealerId),
-            ),
-          )
-          .limit(1);
-        await enqueueEmail({
-          dealerId: after.dealerId,
-          template: "vehicle_ready",
-          to: c.email,
-          customerId: after.customerId,
-          dedupeKey: `svc:${after.id}:ready`,
-          data: {
-            ...base,
-            ...(readyInvoice ? { balance: money(readyInvoice.total) } : {}),
-          },
-        });
         break;
       case "closed":
         await cancelServiceReminders(after.id, after.dealerId);
@@ -922,6 +877,50 @@ export function onServiceOrderStatusChanged(
       case "cancelled":
         await cancelServiceReminders(after.id, after.dealerId);
         break;
+    }
+  });
+}
+
+/** Workshop milestones are emitted only from a persisted job-card transition. */
+export function onJobCardStatusChanged(
+  before: JobCard,
+  after: JobCard,
+  order: ServiceOrder,
+  becameReady: boolean,
+): void {
+  if (before.status === after.status && !becameReady) return;
+  fire("job_card_status_changed", async () => {
+    const c = await customerEmail(order.dealerId, order.customerId);
+    if (!c.email) return;
+    const base: TemplateData = {
+      ...(c.name ? { name: c.name } : {}),
+      vehicle: order.vehicleInfo,
+      service: order.type,
+    };
+    if (before.status === "open" && after.status === "in_progress") {
+      await cancelServiceReminders(order.id, order.dealerId);
+      await enqueueEmail({ dealerId: order.dealerId, template: "service.started",
+        to: c.email, customerId: order.customerId,
+        dedupeKey: `svc:${order.id}:started`, data: base });
+    }
+    if (after.status === "on_hold" && before.status !== "on_hold") {
+      await cancelServiceReminders(order.id, order.dealerId);
+      await enqueueEmail({ dealerId: order.dealerId, template: "service.delayed",
+        to: c.email, customerId: order.customerId,
+        dedupeKey: `svc:${order.id}:delayed`,
+        data: { ...base, reason: "we're waiting on a part or workshop slot" } });
+    }
+    if (becameReady) {
+      await cancelServiceReminders(order.id, order.dealerId);
+      const [invoice] = await db.select({ total: serviceInvoicesTable.total })
+        .from(serviceInvoicesTable).where(and(
+          eq(serviceInvoicesTable.serviceOrderId, order.id),
+          eq(serviceInvoicesTable.dealerId, order.dealerId),
+        )).limit(1);
+      await enqueueEmail({ dealerId: order.dealerId, template: "vehicle_ready",
+        to: c.email, customerId: order.customerId,
+        dedupeKey: `svc:${order.id}:ready`,
+        data: { ...base, ...(invoice ? { balance: money(invoice.total) } : {}) } });
     }
   });
 }
