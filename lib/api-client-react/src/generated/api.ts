@@ -97,6 +97,7 @@ import type {
   CoveragePlanUpdate,
   CreatePayment422,
   CreateVehicleOnboardingInvite202,
+  CreateVehicleOnboardingInviteRequest,
   CreateVehicleOnboardingUpload201,
   CreatedDealerWithSaga,
   CurrentUser,
@@ -6776,14 +6777,15 @@ export const getCreateVehicleOnboardingInviteUrl = (id: number,) => {
 /**
  * @summary Email a secure vehicle onboarding invitation
  */
-export const createVehicleOnboardingInvite = async (id: number, options?: RequestInit): Promise<CreateVehicleOnboardingInvite202> => {
+export const createVehicleOnboardingInvite = async (id: number,
+    createVehicleOnboardingInviteRequest: CreateVehicleOnboardingInviteRequest, options?: RequestInit): Promise<CreateVehicleOnboardingInvite202> => {
 
   return customFetch<CreateVehicleOnboardingInvite202>(getCreateVehicleOnboardingInviteUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createVehicleOnboardingInviteRequest)
   }
 );}
 
@@ -6792,8 +6794,8 @@ export const createVehicleOnboardingInvite = async (id: number, options?: Reques
 
 
 export const getCreateVehicleOnboardingInviteMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, TError,{id: number;data: BodyType<CreateVehicleOnboardingInviteRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, TError,{id: number;data: BodyType<CreateVehicleOnboardingInviteRequest>}, TContext> => {
 
 const mutationKey = ['createVehicleOnboardingInvite'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -6805,10 +6807,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, {id: number;data: BodyType<CreateVehicleOnboardingInviteRequest>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  createVehicleOnboardingInvite(id,requestOptions)
+          return  createVehicleOnboardingInvite(id,data,requestOptions)
         }
 
 
@@ -6819,18 +6821,18 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type CreateVehicleOnboardingInviteMutationResult = NonNullable<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>>
-
+    export type CreateVehicleOnboardingInviteMutationBody = BodyType<CreateVehicleOnboardingInviteRequest>
     export type CreateVehicleOnboardingInviteMutationError = ErrorType<unknown>
 
     /**
  * @summary Email a secure vehicle onboarding invitation
  */
 export const useCreateVehicleOnboardingInvite = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVehicleOnboardingInvite>>, TError,{id: number;data: BodyType<CreateVehicleOnboardingInviteRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createVehicleOnboardingInvite>>,
         TError,
-        {id: number},
+        {id: number;data: BodyType<CreateVehicleOnboardingInviteRequest>},
         TContext
       > => {
       return useMutation(getCreateVehicleOnboardingInviteMutationOptions(options));

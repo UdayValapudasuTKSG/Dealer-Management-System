@@ -2300,6 +2300,12 @@ paths:
       summary: Email a secure vehicle onboarding invitation
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVehicleOnboardingInviteRequest"
       responses:
         "202":
           description: Dealer-SMTP email queued; token is never returned
@@ -9358,6 +9364,11 @@ paths:
 
 components:
   schemas:
+    CreateVehicleOnboardingInviteRequest:
+      type: object
+      required: [serviceOrderId]
+      properties:
+        serviceOrderId: { type: integer, minimum: 1 }
     ServiceOrderClaimRequest:
       type: object
       properties:

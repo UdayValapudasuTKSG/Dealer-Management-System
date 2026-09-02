@@ -18,6 +18,7 @@ const storage = new ObjectStorageService();
 const marker = `verify-sco-${Date.now()}-${randomBytes(4).toString("hex")}`;
 const objectPaths: string[] = [];
 let customerId = 0;
+let crossCustomerId = 0;
 let orderIds: number[] = [];
 let requestIds: number[] = [];
 
@@ -59,6 +60,11 @@ try {
     [`${marker} Customer`, `${marker}@example.invalid`],
   );
   customerId = customer.rows[0]!.id;
+  const crossCustomer = await pool.query<{ id: number }>(
+    `insert into customers (dealer_id,name,email) values (1,$1,$2) returning id`,
+    [`${marker} Other Customer`, `${marker}-other@example.invalid`],
+  );
+  crossCustomerId = crossCustomer.rows[0]!.id;
   async function fixtureOrder(label: string) {
     const order = await pool.query<{ id: number }>(
       `insert into service_orders (dealer_id,customer_id,customer_name,vehicle_info,scheduled_date,status)
@@ -100,6 +106,27 @@ try {
   assert(techReassign.response.status === 409 || techReassign.response.status === 403,
     "technician could assign another user");
 
+  const crossOrder = await pool.query<{ id: number }>(
+    `insert into service_orders (dealer_id,customer_id,customer_name,vehicle_info,scheduled_date,status)
+     values (1,$1,$2,$3,current_date,'acknowledged') returning id`,
+    [crossCustomerId, `${marker} Other Customer`, `${marker} cross-customer vehicle`],
+  );
+  orderIds.push(crossOrder.rows[0]!.id);
+  const otherDealer = await pool.query<{ id: number }>(`select id from dealers where id <> 1 order by id limit 1`);
+  assert(otherDealer.rows[0], "a second dealer is required for cross-tenant verification");
+  const crossDealerOrder = await pool.query<{ id: number }>(
+    `insert into service_orders (dealer_id,customer_id,customer_name,vehicle_info,scheduled_date,status)
+     values ($1,$2,$3,$4,current_date,'acknowledged') returning id`,
+    [otherDealer.rows[0]!.id, customerId, `${marker} Customer`, `${marker} cross-dealer vehicle`],
+  );
+  orderIds.push(crossDealerOrder.rows[0]!.id);
+  for (const foreignOrderId of [crossOrder.rows[0]!.id, crossDealerOrder.rows[0]!.id]) {
+    const rejected = await api(`/customers/${customerId}/vehicle-onboarding-invites`, gm, {
+      method: "POST", body: JSON.stringify({ serviceOrderId: foreignOrderId }),
+    });
+    assert(rejected.response.status === 404, "cross-customer/dealer onboarding invite was not rejected");
+  }
+
   const lifecycle = await fixtureOrder(`${marker} lifecycle`);
   const lifecycleClaim = await api(`/service-orders/${lifecycle.orderId}/claim`, tech, { method: "POST", body: "{}" });
   assert(lifecycleClaim.response.status === 200, "lifecycle card claim failed");
@@ -129,11 +156,17 @@ try {
     "completion did not resolve/order-ready exactly once");
 
   const validToken = token(), expiredToken = token(), submittedToken = token();
+  const linkedToken = token(), expiredLinkedToken = token();
   const inserts = await pool.query<{ id: number }>(
-    `insert into vehicle_onboarding_requests (dealer_id,customer_id,token_hash,expires_at,submitted_at)
-     values (1,$1,$2,now()+interval '1 hour',null),(1,$1,$3,now()-interval '1 hour',null),(1,$1,$4,now()+interval '1 hour',now())
+    `insert into vehicle_onboarding_requests (dealer_id,customer_id,service_order_id,token_hash,expires_at,submitted_at)
+     values (1,$1,null,$2,now()+interval '1 hour',null),
+            (1,$1,null,$3,now()-interval '1 hour',null),
+            (1,$1,null,$4,now()+interval '1 hour',now()),
+            (1,$1,$5,$6,now()+interval '1 hour',null),
+            (1,$1,$7,$8,now()-interval '1 hour',null)
      returning id`,
-    [customerId, hash(validToken), hash(expiredToken), hash(submittedToken)],
+    [customerId, hash(validToken), hash(expiredToken), hash(submittedToken),
+      second.orderId, hash(linkedToken), lifecycle.orderId, hash(expiredLinkedToken)],
   );
   requestIds = inserts.rows.map((row) => row.id);
   assert((await api(`/vehicle-onboarding/${validToken}`, null)).body.state === "open", "valid onboarding state failed");
@@ -164,6 +197,12 @@ try {
     method: "POST", body: JSON.stringify({ registration: marker, make: "Verify", model: "Garage", mileage: 1 }),
   });
   assert(submit.response.status === 201, "onboarding submit failed");
+  const afterLegacy = await pool.query<{ id: number; vehicle_info: string; odometer: number | null }>(
+    `select id,vehicle_info,odometer from service_orders where id=any($1::int[]) order by id`,
+    [[first.orderId, second.orderId]],
+  );
+  assert(afterLegacy.rows.every((row) => row.vehicle_info.endsWith(" vehicle") && row.odometer === null),
+    "legacy NULL invite guessed or updated a service booking");
   assert((await api(`/vehicle-onboarding/${validToken}/submit`, null, {
     method: "POST", body: JSON.stringify({ registration: marker, make: "Verify", model: "Garage" }),
   })).response.status === 409, "onboarding single-submit CAS failed");
@@ -173,6 +212,41 @@ try {
     [requestIds[0], customerId],
   );
   assert(Number(bound.rows[0]!.count) === 2, "finalized onboarding media is not bound to garage vehicle/request");
+
+  const linkedBody = JSON.stringify({
+    registration: `${marker}-LINKED`, year: 2024, make: "Verify", model: "Bound", mileage: 43210,
+  });
+  const concurrent = await Promise.all([
+    api(`/vehicle-onboarding/${linkedToken}/submit`, null, { method: "POST", body: linkedBody }),
+    api(`/vehicle-onboarding/${linkedToken}/submit`, null, { method: "POST", body: linkedBody }),
+  ]);
+  assert(concurrent.filter((result) => result.response.status === 201).length === 1 &&
+    concurrent.filter((result) => result.response.status === 409).length === 1,
+  "concurrent linked onboarding was not single-use");
+  const linkedOrders = await pool.query<{ id: number; vehicle_info: string; odometer: number | null }>(
+    `select id,vehicle_info,odometer from service_orders where id=any($1::int[])`,
+    [[first.orderId, second.orderId]],
+  );
+  const linked = linkedOrders.rows.find((row) => row.id === second.orderId);
+  const unchanged = linkedOrders.rows.find((row) => row.id === first.orderId);
+  assert(linked?.vehicle_info === `2024 Verify Bound · Registration ${marker}-LINKED` && linked.odometer === 43210,
+    "linked booking did not receive authoritative vehicleInfo and odometer");
+  assert(unchanged?.vehicle_info === `${marker} first vehicle` && unchanged.odometer === null,
+    "same-customer second booking was changed");
+  assert(requestIds[3] && (await pool.query(
+    `select 1 from vehicle_onboarding_requests where id=$1 and service_order_id=$2`,
+    [requestIds[3], second.orderId],
+  )).rowCount === 1, "invite was not bound to its originating service booking");
+
+  const expiredLinked = await api(`/vehicle-onboarding/${expiredLinkedToken}/submit`, null, {
+    method: "POST", body: linkedBody,
+  });
+  assert(expiredLinked.response.status === 410, "expired linked onboarding token was accepted");
+  const expiredOrder = await pool.query<{ vehicle_info: string }>(
+    `select vehicle_info from service_orders where id=$1`, [lifecycle.orderId],
+  );
+  assert(expiredOrder.rows[0]?.vehicle_info === `${marker} lifecycle vehicle`,
+    "expired onboarding token updated its linked booking");
   await pool.query(`update vehicle_onboarding_requests set expires_at=now()-interval '1 second' where id=$1`, [requestIds[0]]);
   assert((await fetch(`${base}/vehicle-onboarding/${validToken}/media/${videoId}`)).status === 410,
     "expired token streamed private media");
@@ -193,6 +267,7 @@ try {
       await pool.query(`delete from garage_vehicles where customer_id=$1`, [customerId]);
       await pool.query(`delete from job_cards where service_order_id = any($1::int[])`, [orderIds]);
       await pool.query(`delete from service_orders where id = any($1::int[])`, [orderIds]);
+      if (crossCustomerId) await pool.query(`delete from customers where id=$1`, [crossCustomerId]);
       await pool.query(`delete from customers where id=$1`, [customerId]);
     }
   } finally { await pool.end(); }

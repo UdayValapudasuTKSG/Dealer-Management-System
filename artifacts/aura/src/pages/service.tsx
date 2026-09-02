@@ -3214,7 +3214,8 @@ function EmptyState({ icon: Icon, text }: { icon: typeof Calendar; text: string 
 function SelfOnboardButton({ order }: { order: ServiceOrder }) {
   const { toast } = useToast();
   const invite = useCreateVehicleOnboardingInvite();
-  if (!order.customerId) return null; // Needs a linked customer
+  const customerId = order.customerId;
+  if (!customerId) return null; // Needs a linked customer
   return (
     <Button
       size="sm"
@@ -3223,7 +3224,10 @@ function SelfOnboardButton({ order }: { order: ServiceOrder }) {
       className="rounded-full border-white/15 gap-1.5 text-xs h-8"
       onClick={async () => {
         try {
-          await invite.mutateAsync({ id: order.customerId! });
+          await invite.mutateAsync({
+            id: customerId,
+            data: { serviceOrderId: order.id },
+          });
           toast({ title: "Invite sent", description: `Vehicle self-onboarding email sent to ${order.customerName || "customer"}.` });
         } catch (e: unknown) {
           const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Could not send invite.";

@@ -5,11 +5,13 @@ import {
   integer,
   timestamp,
   uniqueIndex,
+  index,
   check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { customersTable } from "./customers";
 import { dealersTable } from "./dealers";
+import { serviceOrdersTable } from "./serviceOrders";
 
 /** A customer-entered vehicle in their garage. It is deliberately unrelated
  * to inventory/VIN stock units. */
@@ -36,6 +38,7 @@ export const vehicleOnboardingRequestsTable = pgTable("vehicle_onboarding_reques
   id: serial("id").primaryKey(),
   dealerId: integer("dealer_id").notNull().references(() => dealersTable.id),
   customerId: integer("customer_id").notNull().references(() => customersTable.id),
+  serviceOrderId: integer("service_order_id").references(() => serviceOrdersTable.id),
   tokenHash: text("token_hash").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   submittedAt: timestamp("submitted_at", { withTimezone: true }),
@@ -44,6 +47,7 @@ export const vehicleOnboardingRequestsTable = pgTable("vehicle_onboarding_reques
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   uniqueIndex("vehicle_onboarding_requests_token_hash_uq").on(t.tokenHash),
+  index("vehicle_onboarding_requests_service_order_idx").on(t.serviceOrderId),
 ]);
 
 export const vehicleOnboardingMediaTable = pgTable("vehicle_onboarding_media", {

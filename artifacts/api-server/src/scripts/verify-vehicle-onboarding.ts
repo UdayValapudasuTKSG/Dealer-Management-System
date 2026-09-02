@@ -10,7 +10,7 @@ if (process.env.NODE_ENV === "production") {
 
 const required = new Map([
   ["garage_vehicles", ["dealer_id", "customer_id", "registration"]],
-  ["vehicle_onboarding_requests", ["dealer_id", "customer_id", "token_hash", "expires_at", "submitted_at"]],
+  ["vehicle_onboarding_requests", ["dealer_id", "customer_id", "service_order_id", "token_hash", "expires_at", "submitted_at"]],
   ["vehicle_onboarding_media", ["request_id", "dealer_id", "customer_id", "object_path", "mime_type", "size_bytes"]],
 ]);
 

@@ -3839,6 +3839,13 @@ export const CreateVehicleOnboardingInviteParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+
+
+export const CreateVehicleOnboardingInviteBody = zod.object({
+  "serviceOrderId": zod.number().min(1)
+})
+
 export const CreateVehicleOnboardingInviteResponse = zod.object({
   "status": zod.enum(['queued']),
   "inviteId": zod.number(),

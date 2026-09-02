@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { createHash, randomBytes } from "node:crypto";
 import { queueCustomerSync } from "../lib/erpnext/entities";
-import { eq, desc, and, or, ilike, sql, isNotNull, isNull } from "drizzle-orm";
+import { eq, desc, and, or, ilike, sql, isNotNull, isNull, notInArray } from "drizzle-orm";
 import multer from "multer";
 import { z } from "zod";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
@@ -81,6 +81,7 @@ import {
   GetAccountRelationsResponse,
   GetCustomerExportResponse,
   EraseCustomerDataResponse,
+  CreateVehicleOnboardingInviteBody,
 } from "@workspace/api-zod";
 import { storage } from "../lib/storage";
 import { activeDealerId, hasPermission } from "../middlewares/rbac";
@@ -1734,7 +1735,9 @@ router.post(
 
 router.post("/customers/:id/vehicle-onboarding-invites", async (req, res): Promise<void> => {
   const id = z.coerce.number().int().positive().safeParse(req.params.id);
+  const body = CreateVehicleOnboardingInviteBody.safeParse(req.body);
   if (!id.success) { res.status(400).json({ error: "Invalid customer" }); return; }
+  if (!body.success) { res.status(422).json({ error: "A valid service booking is required" }); return; }
   const dealerId = activeDealerId(res);
   const [customer] = await db.select({
     id: customersTable.id, email: customersTable.email, name: customersTable.name,
@@ -1743,6 +1746,13 @@ router.post("/customers/:id/vehicle-onboarding-invites", async (req, res): Promi
     isNull(customersTable.deletedAt), isNull(customersTable.erasedAt),
   ));
   if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
+  const [serviceOrder] = await db.select({ id: serviceOrdersTable.id }).from(serviceOrdersTable).where(and(
+    eq(serviceOrdersTable.id, body.data.serviceOrderId),
+    eq(serviceOrdersTable.dealerId, dealerId),
+    eq(serviceOrdersTable.customerId, customer.id),
+    notInArray(serviceOrdersTable.status, ["closed", "cancelled"]),
+  ));
+  if (!serviceOrder) { res.status(404).json({ error: "Service booking not found" }); return; }
   const email = customer.email?.trim();
   if (!email || !z.string().email().safeParse(email).success) {
     res.status(422).json({ error: "Customer must have a valid email address" }); return;
@@ -1751,7 +1761,7 @@ router.post("/customers/:id/vehicle-onboarding-invites", async (req, res): Promi
   const link = vehicleOnboardingUrl(token);
   if (!link) { res.status(503).json({ error: "Public application URL is not configured" }); return; }
   const [invite] = await db.insert(vehicleOnboardingRequestsTable).values({
-    dealerId, customerId: customer.id,
+    dealerId, customerId: customer.id, serviceOrderId: serviceOrder.id,
     tokenHash: createHash("sha256").update(token).digest("hex"),
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     invitedByUserId: res.locals.user?.id ?? null,

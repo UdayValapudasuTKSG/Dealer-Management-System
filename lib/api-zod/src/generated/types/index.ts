@@ -170,6 +170,7 @@ export * from './createdDealerWithSaga';
 export * from './createPayment422';
 export * from './createVehicleOnboardingInvite202';
 export * from './createVehicleOnboardingInvite202Status';
+export * from './createVehicleOnboardingInviteRequest';
 export * from './createVehicleOnboardingUpload201';
 export * from './currentUser';
 export * from './customer';

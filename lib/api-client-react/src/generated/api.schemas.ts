@@ -5,6 +5,11 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+export interface CreateVehicleOnboardingInviteRequest {
+  /** @minimum 1 */
+  serviceOrderId: number;
+}
+
 export interface ServiceOrderClaimRequest {
   technicianUserId?: number;
 }

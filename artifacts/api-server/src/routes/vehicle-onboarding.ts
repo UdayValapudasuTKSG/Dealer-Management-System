@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { z } from "zod";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 import {
   db,
   customersTable,
   garageVehiclesTable,
+  serviceOrdersTable,
   timelineEventsTable,
   vehicleOnboardingMediaTable,
   vehicleOnboardingRequestsTable,
@@ -21,6 +22,8 @@ const videoMimes = new Set(["video/mp4", "video/quicktime", "video/webm"]);
 const limits = { image: { count: 12, bytes: 15 * 1024 * 1024 }, video: { count: 3, bytes: 150 * 1024 * 1024 } };
 const tokenParams = z.object({ token: z.string().min(32).max(128) });
 const mediaParams = tokenParams.extend({ mediaId: z.coerce.number().int().positive() });
+
+class LinkedServiceOrderUnavailableError extends Error {}
 
 function digest(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -191,36 +194,59 @@ router.post("/vehicle-onboarding/:token/submit", async (req, res): Promise<void>
   if (!request) { res.status(404).json(INVALID); return; }
   if (!body.success) { res.status(422).json({ error: "Invalid vehicle details" }); return; }
   if (!active(request, res)) return;
-  const vehicle = await db.transaction(async (tx) => {
-    const [claimed] = await tx.update(vehicleOnboardingRequestsTable).set({ submittedAt: new Date() }).where(and(
+  let vehicle;
+  try {
+    vehicle = await db.transaction(async (tx) => {
+      const [claimed] = await tx.update(vehicleOnboardingRequestsTable).set({ submittedAt: new Date() }).where(and(
       eq(vehicleOnboardingRequestsTable.id, request.id),
       eq(vehicleOnboardingRequestsTable.dealerId, request.dealerId),
       eq(vehicleOnboardingRequestsTable.customerId, request.customerId),
       isNull(vehicleOnboardingRequestsTable.submittedAt),
       sql`${vehicleOnboardingRequestsTable.expiresAt} > now()`,
     )).returning({ id: vehicleOnboardingRequestsTable.id });
-    if (!claimed) return null;
-    const values = { ...body.data, vinChassis: body.data.vinChassis || null, colour: body.data.colour || null,
+      if (!claimed) return null;
+      const values = { ...body.data, vinChassis: body.data.vinChassis || null, colour: body.data.colour || null,
       notes: body.data.notes || null, dealerId: request.dealerId, customerId: request.customerId, updatedAt: new Date() };
-    const [saved] = await tx.insert(garageVehiclesTable).values(values).onConflictDoUpdate({
+      const [saved] = await tx.insert(garageVehiclesTable).values(values).onConflictDoUpdate({
       target: [garageVehiclesTable.dealerId, garageVehiclesTable.customerId, garageVehiclesTable.registration],
       set: values,
-    }).returning();
-    await tx.update(vehicleOnboardingRequestsTable).set({ garageVehicleId: saved!.id }).where(and(
+      }).returning();
+
+      if (request.serviceOrderId !== null) {
+        const vehicleInfo = `${body.data.year ? `${body.data.year} ` : ""}${body.data.make} ${body.data.model} · Registration ${body.data.registration}`;
+        const orderValues: { vehicleInfo: string; odometer?: number } = { vehicleInfo };
+        if (body.data.mileage !== undefined) orderValues.odometer = body.data.mileage;
+        const [updatedOrder] = await tx.update(serviceOrdersTable).set(orderValues).where(and(
+          eq(serviceOrdersTable.id, request.serviceOrderId),
+          eq(serviceOrdersTable.dealerId, request.dealerId),
+          eq(serviceOrdersTable.customerId, request.customerId),
+          notInArray(serviceOrdersTable.status, ["closed", "cancelled"]),
+        )).returning({ id: serviceOrdersTable.id });
+        if (!updatedOrder) throw new LinkedServiceOrderUnavailableError();
+      }
+
+      await tx.update(vehicleOnboardingRequestsTable).set({ garageVehicleId: saved!.id }).where(and(
       eq(vehicleOnboardingRequestsTable.id, request.id), eq(vehicleOnboardingRequestsTable.dealerId, request.dealerId),
-    ));
-    await tx.update(vehicleOnboardingMediaTable).set({ garageVehicleId: saved!.id }).where(and(
+      ));
+      await tx.update(vehicleOnboardingMediaTable).set({ garageVehicleId: saved!.id }).where(and(
       eq(vehicleOnboardingMediaTable.requestId, request.id), eq(vehicleOnboardingMediaTable.dealerId, request.dealerId),
       eq(vehicleOnboardingMediaTable.customerId, request.customerId), sql`${vehicleOnboardingMediaTable.finalizedAt} is not null`,
-    ));
-    await tx.insert(timelineEventsTable).values({
+      ));
+      await tx.insert(timelineEventsTable).values({
       dealerId: request.dealerId, customerId: request.customerId, domain: "customers",
       kind: "vehicle_self_onboarded", title: `${saved!.make} ${saved!.model} added to customer garage`,
       detail: `Registration ${saved!.registration}`, actor: "Customer", isAgent: false,
       refType: "garage_vehicle", refId: saved!.id,
+      });
+      return saved;
     });
-    return saved;
-  });
+  } catch (error) {
+    if (error instanceof LinkedServiceOrderUnavailableError) {
+      res.status(409).json({ error: "The linked service booking is no longer available for onboarding" });
+      return;
+    }
+    throw error;
+  }
   if (!vehicle) { res.status(409).json({ error: "This vehicle onboarding form was already submitted" }); return; }
   res.status(201).json({ state: "submitted", vehicle });
 });
