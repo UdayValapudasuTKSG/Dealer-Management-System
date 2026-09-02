@@ -1,5 +1,8 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
+  getGetCollisionClaimQueryKey,
+  getListDocumentsQueryKey,
+  useCreateDocument,
   useRequestCollisionChecklistItem,
   useVerifyCollisionChecklistItem,
   useWaiveCollisionChecklistItem,
@@ -7,6 +10,7 @@ import {
   type CollisionChecklistItem,
   type CollisionChecklistSummary,
 } from "@workspace/api-client-react";
+import { useUpload } from "@workspace/object-storage-web";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -14,8 +18,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { CheckCircle2, CircleDashed, Link as LinkIcon, AlertTriangle, MessageSquare, Plus, FileText, Loader2, Upload } from "lucide-react";
+import { CheckCircle2, CircleDashed, AlertTriangle, MessageSquare, FileText, Loader2, Upload } from "lucide-react";
 import { formatGuyanaDateTime } from "@/lib/format";
+
+const DOCUMENT_ACCEPT = ".pdf,.jpg,.jpeg,.png,.docx,application/pdf,image/jpeg,image/png,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 
 export function CollisionChecklistPanel({ claimId, checklist, summary }: { claimId: number, checklist: CollisionChecklistItem[], summary: CollisionChecklistSummary }) {
   // Group by audience
@@ -73,7 +80,7 @@ function ChecklistGroup({ claimId, title, items }: { claimId: number, title: str
 function ChecklistItemRow({ claimId, item }: { claimId: number, item: CollisionChecklistItem }) {
   const [waiveOpen, setWaiveOpen] = useState(false);
   const [requestOpen, setRequestOpen] = useState(false);
-  const [linkOpen, setLinkOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -83,7 +90,7 @@ function ChecklistItemRow({ claimId, item }: { claimId: number, item: CollisionC
     try {
       await verify.mutateAsync({ id: claimId, itemId: item.id });
       toast({ title: "Item verified" });
-      qc.invalidateQueries({ queryKey: ["getCollisionClaim", claimId] } as any); // using generic invalidation if keys missing
+      qc.invalidateQueries({ queryKey: getGetCollisionClaimQueryKey(claimId) });
     } catch (e: any) {
       toast({ title: "Verification failed", description: e.message, variant: "destructive" });
     }
@@ -136,8 +143,9 @@ function ChecklistItemRow({ claimId, item }: { claimId: number, item: CollisionC
               Request
             </Button>
           )}
-          <Button size="sm" variant="outline" onClick={() => setLinkOpen(true)} className="h-7 text-xs flex-1 border-dashed">
-            Link Doc
+          <Button size="sm" variant="outline" onClick={() => setUploadOpen(true)} className="h-7 text-xs flex-1 border-dashed">
+            <Upload className="w-3 h-3 mr-1" />
+            Upload
           </Button>
           <Button size="sm" variant="outline" onClick={() => setWaiveOpen(true)} className="h-7 text-xs border-dashed text-red-500 hover:text-red-600 hover:bg-red-500/10">
             Waive
@@ -153,7 +161,7 @@ function ChecklistItemRow({ claimId, item }: { claimId: number, item: CollisionC
 
       <WaiveDialog claimId={claimId} itemId={item.id} open={waiveOpen} onOpenChange={setWaiveOpen} label={item.label} />
       <RequestDialog claimId={claimId} itemId={item.id} open={requestOpen} onOpenChange={setRequestOpen} label={item.label} />
-      <LinkDialog claimId={claimId} itemId={item.id} open={linkOpen} onOpenChange={setLinkOpen} label={item.label} />
+      <UploadDialog claimId={claimId} itemId={item.id} open={uploadOpen} onOpenChange={setUploadOpen} label={item.label} />
     </div>
   );
 }
@@ -169,7 +177,7 @@ function WaiveDialog({ claimId, itemId, open, onOpenChange, label }: any) {
       await waive.mutateAsync({ id: claimId, itemId, data: { reason } });
       toast({ title: "Checklist item waived" });
       onOpenChange(false);
-      qc.invalidateQueries({ queryKey: ["getCollisionClaim", claimId] } as any);
+      qc.invalidateQueries({ queryKey: getGetCollisionClaimQueryKey(claimId) });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
@@ -211,7 +219,7 @@ function RequestDialog({ claimId, itemId, open, onOpenChange, label }: any) {
       await req.mutateAsync({ id: claimId, itemId, data: { note: note || undefined } });
       toast({ title: "Item requested" });
       onOpenChange(false);
-      qc.invalidateQueries({ queryKey: ["getCollisionClaim", claimId] } as any);
+      qc.invalidateQueries({ queryKey: getGetCollisionClaimQueryKey(claimId) });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
@@ -239,39 +247,109 @@ function RequestDialog({ claimId, itemId, open, onOpenChange, label }: any) {
   );
 }
 
-function LinkDialog({ claimId, itemId, open, onOpenChange, label }: any) {
-  const [docId, setDocId] = useState("");
+function UploadDialog({ claimId, itemId, open, onOpenChange, label }: {
+  claimId: number;
+  itemId: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  label: string;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const { uploadFile } = useUpload();
+  const createDocument = useCreateDocument();
   const link = useLinkCollisionChecklistDocument();
   const qc = useQueryClient();
   const { toast } = useToast();
 
+  const reset = () => {
+    setFile(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
   const handle = async () => {
+    if (!file) return;
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      toast({
+        title: "File too large",
+        description: "Claim documents can be up to 20MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setBusy(true);
     try {
-      await link.mutateAsync({ id: claimId, itemId, data: { documentId: Number(docId) } });
-      toast({ title: "Document linked and item verified" });
+      const uploaded = await uploadFile(file);
+      if (!uploaded) throw new Error("The file could not be uploaded");
+      const document = await createDocument.mutateAsync({
+        data: {
+          entityType: "collision_claim",
+          entityId: claimId,
+          type: "other",
+          fileName: file.name,
+          storageKey: uploaded.objectPath,
+          mimeType: file.type || "application/octet-stream",
+          sizeBytes: file.size,
+          comments: `Checklist evidence: ${label}`,
+        },
+      });
+      await link.mutateAsync({ id: claimId, itemId, data: { documentId: document.id } });
+      toast({
+        title: "Evidence uploaded",
+        description: `${file.name} is attached and ready for verification.`,
+      });
       onOpenChange(false);
-      qc.invalidateQueries({ queryKey: ["getCollisionClaim", claimId] } as any);
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      reset();
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: getGetCollisionClaimQueryKey(claimId) }),
+        qc.invalidateQueries({ queryKey: getListDocumentsQueryKey({ entityType: "collision_claim", entityId: claimId }) }),
+      ]);
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={(next) => {
+      if (busy) return;
+      onOpenChange(next);
+      if (!next) reset();
+    }}>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Link Existing Document</DialogTitle>
+          <DialogTitle>Upload Claim Evidence</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
-          <p className="text-sm text-muted-foreground">If the document was uploaded separately, link it to "{label}" to verify this checklist item.</p>
+          <p className="text-sm text-muted-foreground">
+            Add the file for “{label}” here. It will be stored privately on this claim and queued for staff verification.
+          </p>
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Document ID</label>
-            <Input type="number" value={docId} onChange={e => setDocId(e.target.value)} placeholder="e.g. 1024" />
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Choose File</label>
+            <Input
+              ref={fileRef}
+              type="file"
+              accept={DOCUMENT_ACCEPT}
+              disabled={busy}
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              className="bg-background/60 border-white/15 file:text-foreground"
+            />
+            <p className="text-xs text-muted-foreground">PDF, JPG, PNG or DOCX · maximum 20MB</p>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button disabled={!docId || link.isPending} onClick={handle}>Link Document</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
+          <Button disabled={!file || busy} onClick={() => void handle()}>
+            {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
+            {busy ? "Uploading…" : "Upload Evidence"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
