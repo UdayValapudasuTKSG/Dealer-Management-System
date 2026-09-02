@@ -78,6 +78,11 @@ import {
   Lock,
 } from "lucide-react";
 
+import { CollisionChecklistPanel } from "./collision-claims-checklist";
+import { CollisionPortalLinksCard } from "./collision-claims-portal-links";
+import { CollisionCommunicationsCard } from "./collision-claims-communications";
+import { CollisionPartRequisitionForm } from "./collision-claims-part-requisition";
+
 /* ------------------------------------------------------------------ */
 /* Status metadata (mirrors COLLISION_ADVANCE_MAP server-side)          */
 /* ------------------------------------------------------------------ */
@@ -823,6 +828,7 @@ function ClaimDetail({ claimId }: { claimId: number }) {
   const { claim, supplements, settlements, approvedTotal, insurerPaid, deductiblePaid, cycleSeconds } = data;
   const targets = ADVANCE_MAP[claim.status] ?? [];
   const invoiceCard = (jobCards ?? []).find((card) => card.status === "completed");
+  const activeCard = (jobCards ?? []).find((card) => !["completed", "cancelled"].includes(card.status));
   const cycleDays = (cycleSeconds / 86400).toFixed(1);
 
   const doAdvance = async (target: CollisionClaimStatus) => {
@@ -918,6 +924,13 @@ function ClaimDetail({ claimId }: { claimId: number }) {
                 Repair order #{claim.serviceOrderId}
               </Link>
             </Button>
+            {activeCard ? (
+              <CollisionPartRequisitionForm claimId={claimId} serviceOrderId={claim.serviceOrderId} onSuccess={refresh} />
+            ) : (
+              <Button size="sm" variant="outline" disabled className="h-9 shadow-sm" title="Requires an active Job Card">
+                Request Parts (No Active Job Card)
+              </Button>
+            )}
             {claim.customerName && (
               <div className="h-9 px-3 flex items-center rounded-md border border-border/60 bg-background text-sm text-muted-foreground shadow-sm">
                  <span className="truncate max-w-[200px]">{claim.customerName}</span>
@@ -929,6 +942,13 @@ function ClaimDetail({ claimId }: { claimId: number }) {
                  Invoice #{claim.serviceInvoiceId}
               </div>
             )}
+          </div>
+
+          <CollisionChecklistPanel claimId={claimId} checklist={data.checklist} summary={data.checklistSummary} />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <CollisionCommunicationsCard claimId={claimId} />
+            <CollisionPortalLinksCard claimId={claimId} />
           </div>
 
           {/* Estimate Card */}

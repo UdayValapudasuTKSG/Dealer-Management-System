@@ -24,6 +24,7 @@ export * from "./workshop";
 export * from "./partRequisitions";
 export * from "./serviceCustomerActions";
 export * from "./collisionClaims";
+export * from "./collisionWorkflow";
 export * from "./capacityBlocks";
 export * from "./agents";
 export * from "./agentRuns";

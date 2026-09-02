@@ -7,3 +7,5 @@ Rule: a verify suite that seeds DB fixtures and exercises notification/email pat
 **Why:** completion code review rejects suites that could run against production, enqueue mail for real dealers, or trigger sends of unrelated queued emails on the shared dev DB — each of these was a separate rejection.
 
 **How to apply:** when writing a new verify-* script, mirror the guard + seams in the lead-source-report suite rather than inventing weaker checks.
+
+An isolated verifier can still leak side effects through the shared development database: disabling the worker only in the verifier process does not stop the normal API worker from consuming rows that the verifier enqueues. **Why:** asynchronous coordinators can also enqueue after fixture cleanup has already run. **How to apply:** suppress asynchronous coordinators in explicit verifier mode, disable worker timers entirely (including reminder timers), and delete fixture outbox/notification rows before deleting their parent records.

@@ -94,6 +94,14 @@ const d = (data: TemplateData, key: string, fallback: string) =>
   data[key] && data[key].trim() ? data[key] : fallback;
 
 export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
+  "collision.claim.communication": {
+    label: "Collision claim communication",
+    description: "Staff-reviewed collision claim email.",
+    subject: (x) => d(x, "subject", "Collision claim update"),
+    heading: (x) => d(x, "subject", "Collision claim update"),
+    body: (x) => d(x, "body", ""),
+    sample: { subject: "Collision claim update", body: "Your claim has been updated." },
+  },
   lead_received: {
     label: "Lead Received",
     description: "Warm welcome the moment an enquiry lands.",
@@ -2583,6 +2591,10 @@ export async function processTaskReminders(): Promise<void> {
 let workerTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startEmailWorker(): void {
+  if (process.env.OUTBOX_WORKER_DISABLED === "1") {
+    logger.info("email queue worker disabled");
+    return;
+  }
   if (workerTimer) return;
   workerTimer = setInterval(() => {
     void processQueue();

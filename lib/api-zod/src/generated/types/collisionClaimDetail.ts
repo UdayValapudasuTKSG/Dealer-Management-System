@@ -5,6 +5,8 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { CollisionChecklistItem } from './collisionChecklistItem';
+import type { CollisionChecklistSummary } from './collisionChecklistSummary';
 import type { CollisionClaim } from './collisionClaim';
 import type { CollisionSettlement } from './collisionSettlement';
 import type { CollisionSupplement } from './collisionSupplement';
@@ -22,4 +24,6 @@ export interface CollisionClaimDetail {
   deductiblePaid: number;
   /** Elapsed claim cycle time excluding backorder pauses */
   cycleSeconds: number;
+  checklist: CollisionChecklistItem[];
+  checklistSummary: CollisionChecklistSummary;
 }

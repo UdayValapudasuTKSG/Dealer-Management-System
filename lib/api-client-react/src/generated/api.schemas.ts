@@ -6018,6 +6018,10 @@ export const CollisionClaimEventKind = {
   payment: 'payment',
   pause: 'pause',
   resume: 'resume',
+  checklist: 'checklist',
+  communication: 'communication',
+  portal: 'portal',
+  requisition: 'requisition',
   note: 'note',
 } as const;
 
@@ -6303,6 +6307,72 @@ export interface CollisionSettlementInput {
   reference?: string;
 }
 
+export type CollisionChecklistItemAudience = typeof CollisionChecklistItemAudience[keyof typeof CollisionChecklistItemAudience];
+
+
+export const CollisionChecklistItemAudience = {
+  customer: 'customer',
+  insurer: 'insurer',
+  workshop: 'workshop',
+} as const;
+
+export type CollisionChecklistItemStatus = typeof CollisionChecklistItemStatus[keyof typeof CollisionChecklistItemStatus];
+
+
+export const CollisionChecklistItemStatus = {
+  missing: 'missing',
+  requested: 'requested',
+  uploaded: 'uploaded',
+  verified: 'verified',
+  waived: 'waived',
+} as const;
+
+export interface CollisionChecklistItem {
+  id: number;
+  claimId: number;
+  category: string;
+  key: string;
+  label: string;
+  description: string;
+  audience: CollisionChecklistItemAudience;
+  /** @nullable */
+  requiredForStatus?: string | null;
+  status: CollisionChecklistItemStatus;
+  /** @nullable */
+  documentId?: number | null;
+  /** @nullable */
+  requestedByUserId?: number | null;
+  /** @nullable */
+  requestedByName?: string | null;
+  /** @nullable */
+  requestedAt?: string | null;
+  /** @nullable */
+  verifiedByUserId?: number | null;
+  /** @nullable */
+  verifiedByName?: string | null;
+  /** @nullable */
+  verifiedAt?: string | null;
+  /** @nullable */
+  waivedByUserId?: number | null;
+  /** @nullable */
+  waivedByName?: string | null;
+  /** @nullable */
+  waivedAt?: string | null;
+  /** @nullable */
+  waiverReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CollisionChecklistSummary {
+  total: number;
+  missing: number;
+  requested: number;
+  uploaded: number;
+  verified: number;
+  waived: number;
+}
+
 export interface CollisionClaimDetail {
   claim: CollisionClaim;
   supplements: CollisionSupplement[];
@@ -6316,7 +6386,271 @@ export interface CollisionClaimDetail {
   deductiblePaid: number;
   /** Elapsed claim cycle time excluding backorder pauses */
   cycleSeconds: number;
+  checklist: CollisionChecklistItem[];
+  checklistSummary: CollisionChecklistSummary;
 }
+
+export interface CollisionChecklistRequest {
+  /** @maxLength 500 */
+  note?: string;
+}
+
+export interface CollisionChecklistLink {
+  /** @minimum 1 */
+  documentId: number;
+}
+
+export interface CollisionChecklistWaiver {
+  /**
+     * @minLength 3
+     * @maxLength 1000
+     */
+  reason: string;
+}
+
+export type CollisionCommunicationAudience = typeof CollisionCommunicationAudience[keyof typeof CollisionCommunicationAudience];
+
+
+export const CollisionCommunicationAudience = {
+  customer: 'customer',
+  insurer: 'insurer',
+} as const;
+
+export type CollisionCommunicationStatus = typeof CollisionCommunicationStatus[keyof typeof CollisionCommunicationStatus];
+
+
+export const CollisionCommunicationStatus = {
+  draft: 'draft',
+  queued: 'queued',
+  sent: 'sent',
+  failed: 'failed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface CollisionCommunication {
+  id: number;
+  claimId: number;
+  audience: CollisionCommunicationAudience;
+  kind: string;
+  /** @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$ */
+  recipient: string;
+  subject: string;
+  body: string;
+  status: CollisionCommunicationStatus;
+  generatedByAgent: boolean;
+  /** @nullable */
+  model?: string | null;
+  /** @nullable */
+  promptVersion?: string | null;
+  /** @nullable */
+  outboxId?: number | null;
+  createdAt: string;
+}
+
+export type CollisionCommunicationGenerateAudience = typeof CollisionCommunicationGenerateAudience[keyof typeof CollisionCommunicationGenerateAudience];
+
+
+export const CollisionCommunicationGenerateAudience = {
+  customer: 'customer',
+  insurer: 'insurer',
+} as const;
+
+export type CollisionCommunicationGeneratePurpose = typeof CollisionCommunicationGeneratePurpose[keyof typeof CollisionCommunicationGeneratePurpose];
+
+
+export const CollisionCommunicationGeneratePurpose = {
+  missing_documents: 'missing_documents',
+  claim_received: 'claim_received',
+  estimate_submitted: 'estimate_submitted',
+  approval_received: 'approval_received',
+  repair_started: 'repair_started',
+  delay_update: 'delay_update',
+  ready_for_collection: 'ready_for_collection',
+  payment_request: 'payment_request',
+  custom: 'custom',
+} as const;
+
+export interface CollisionCommunicationGenerate {
+  audience: CollisionCommunicationGenerateAudience;
+  purpose: CollisionCommunicationGeneratePurpose;
+  /** @maxLength 800 */
+  instruction?: string;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+}
+
+export interface CollisionCommunicationEdit {
+  /** @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$ */
+  recipient?: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  subject?: string;
+  /**
+     * @minLength 1
+     * @maxLength 6000
+     */
+  body?: string;
+}
+
+export interface CollisionCommunicationSend {
+  confirm: true;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+}
+
+export interface CollisionPortalInvitation {
+  id: number;
+  dealerId: number;
+  claimId: number;
+  /** @nullable */
+  customerId: number | null;
+  /** @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$ */
+  email: string;
+  expiresAt: string;
+  idempotencyKey: string;
+  /** @nullable */
+  createdByUserId: number | null;
+  /** @nullable */
+  createdByName: string | null;
+  /** @nullable */
+  revokedAt: string | null;
+  /** @nullable */
+  revokedByUserId: number | null;
+  /** @nullable */
+  revokedByName: string | null;
+  /** @nullable */
+  lastAccessedAt: string | null;
+  createdAt: string;
+}
+
+export type CollisionPortalInvitationCreated = CollisionPortalInvitation & {
+  token: string;
+};
+
+export interface CollisionPortalInvitationCreate {
+  /**
+     * @maxLength 320
+     * @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$
+     */
+  email: string;
+  /**
+     * @minimum 1
+     * @maximum 30
+     */
+  expiresInDays?: number;
+  /**
+     * @minLength 8
+     * @maxLength 200
+     */
+  idempotencyKey: string;
+  createDraft?: boolean;
+}
+
+export type CollisionPortalChecklistItemStatus = typeof CollisionPortalChecklistItemStatus[keyof typeof CollisionPortalChecklistItemStatus];
+
+
+export const CollisionPortalChecklistItemStatus = {
+  missing: 'missing',
+  requested: 'requested',
+  uploaded: 'uploaded',
+  verified: 'verified',
+  waived: 'waived',
+} as const;
+
+export interface CollisionPortalChecklistItem {
+  id: number;
+  key: string;
+  label: string;
+  description: string;
+  status: CollisionPortalChecklistItemStatus;
+}
+
+export type CollisionPortalClaimFinancial = {
+  currency: string;
+  customerDeductible: number;
+  /** @nullable */
+  insurerDue: number | null;
+  /** @nullable */
+  customerDue: number | null;
+};
+
+export type CollisionPortalClaimMilestonesItem = {
+  /** @nullable */
+  stage: string | null;
+  label: string;
+  at: string;
+};
+
+export type CollisionPortalClaim = {
+  vehicle: string;
+  /** @nullable */
+  customerFirstName: string | null;
+  stage: string;
+  stageLabel: string;
+  cycleSeconds: number;
+  financial: CollisionPortalClaimFinancial;
+  nextAction: string;
+  milestones: CollisionPortalClaimMilestonesItem[];
+};
+
+export interface CollisionPortal {
+  claim: CollisionPortalClaim;
+  checklist: CollisionPortalChecklistItem[];
+}
+
+export type CollisionPortalUploadRequestMimeType = typeof CollisionPortalUploadRequestMimeType[keyof typeof CollisionPortalUploadRequestMimeType];
+
+
+export const CollisionPortalUploadRequestMimeType = {
+  'application/pdf': 'application/pdf',
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'application/vndopenxmlformats-officedocumentwordprocessingmldocument': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+} as const;
+
+export interface CollisionPortalUploadRequest {
+  /** @minimum 1 */
+  checklistItemId: number;
+  mimeType: CollisionPortalUploadRequestMimeType;
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  fileName: string;
+}
+
+export interface CollisionPortalUploadRequestResult {
+  uploadId: number;
+  uploadUrl: string;
+  maxBytes: 20971520;
+}
+
+export interface CollisionPortalUploadFinalized {
+  documentId: number;
+  checklistItemId: number;
+  status: 'uploaded';
+}
+
+export interface CollisionPortalNote {
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  note: string;
+}
+
+export const CollisionPortalNoteResultValue = {
+  status: 'recorded',
+} as const;
+export type CollisionPortalNoteResult = typeof CollisionPortalNoteResultValue;
 
 export type ServiceSettingsSummaryCadence = typeof ServiceSettingsSummaryCadence[keyof typeof ServiceSettingsSummaryCadence];
 

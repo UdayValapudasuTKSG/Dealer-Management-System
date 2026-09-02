@@ -17,12 +17,19 @@
  *   FOR UPDATE transaction so concurrent posts cannot overshoot.
  */
 import { Router, type IRouter } from "express";
-import { and, desc, eq, gte, ilike, lte, sql } from "drizzle-orm";
+import { createHash, randomBytes } from "node:crypto";
+import { and, desc, eq, gte, ilike, lte, ne, sql } from "drizzle-orm";
+import { z } from "zod/v4";
 import {
   db,
   collisionClaimsTable,
   collisionSupplementsTable,
   collisionSettlementsTable,
+  collisionChecklistItemsTable,
+  documentsTable,
+  collisionPortalInvitationsTable,
+  collisionClaimCommunicationsTable,
+  customersTable,
   serviceOrdersTable,
   serviceInvoicesTable,
   COLLISION_ADVANCE_MAP,
@@ -58,10 +65,129 @@ import {
 import { activeDealerId } from "../middlewares/rbac";
 import { isTechnicianRole } from "./service";
 import { coordinateCollisionClaim } from "../lib/collision-coordinator";
+import { enqueueEmail } from "../lib/email";
+import { isAgentEnabled, recordAgentRun } from "../lib/agent-governance";
+import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router: IRouter = Router();
 
 const TERMINAL = new Set(["closed", "denied", "total_loss"]);
+
+const checklistParams = z.object({
+  id: z.coerce.number().int().positive(),
+  itemId: z.coerce.number().int().positive(),
+});
+const checklistRequestBody = z.object({ note: z.string().trim().max(500).optional() });
+const checklistLinkBody = z.object({ documentId: z.number().int().positive() });
+const checklistWaiveBody = z.object({
+  reason: z.string().trim().min(3).max(1000),
+});
+const portalInviteBody = z.object({
+  email: z.string().trim().email().max(320),
+  expiresInDays: z.number().int().min(1).max(30).default(7),
+  idempotencyKey: z.string().trim().min(8).max(200),
+  createDraft: z.boolean().optional().default(false),
+});
+const PURPOSES = ["missing_documents", "claim_received", "estimate_submitted", "approval_received", "repair_started", "delay_update", "ready_for_collection", "payment_request", "custom"] as const;
+const draftBody = z.object({ audience: z.enum(["customer", "insurer"]), purpose: z.enum(PURPOSES), instruction: z.string().trim().max(800).optional(), idempotencyKey: z.string().trim().min(8).max(200) });
+const editDraftBody = z.object({ recipient: z.string().trim().email().max(320).optional(), subject: z.string().trim().min(1).max(200).optional(), body: z.string().trim().min(1).max(6000).optional() }).refine(v => v.recipient || v.subject || v.body);
+
+type CollisionDraft = { subject: string; body: string; model: string };
+type CollisionDraftGenerator = (context: Record<string, unknown>) => Promise<CollisionDraft>;
+let verificationDraftGenerator: CollisionDraftGenerator | null = null;
+
+/** Test-only seam. Production always uses the configured OpenAI client. */
+export function setCollisionDraftGeneratorForVerification(
+  generator: CollisionDraftGenerator | null,
+): void {
+  verificationDraftGenerator = generator;
+}
+
+// The focused development verifier runs the server with this opt-in flag. It
+// deliberately cannot alter a production process, while retaining the same
+// injectable function seam for in-process tests.
+if (
+  process.env.NODE_ENV === "development" &&
+  process.env.COLLISION_DRAFT_VERIFIER === "1"
+) {
+  setCollisionDraftGeneratorForVerification(async () => ({
+    subject: "Collision claim update",
+    body: "This is a deterministic draft for staff review.",
+    model: "deterministic-verifier",
+  }));
+}
+
+async function generateCollisionDraft(context: Record<string, unknown>): Promise<CollisionDraft> {
+  if (verificationDraftGenerator) return verificationDraftGenerator(context);
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    response_format: { type: "json_object" },
+    max_tokens: 700,
+    messages: [{ role: "system", content: "Write a professional plain-language collision-claim email draft. Return JSON with subject and body only. Do not invent dates, promises, coverage decisions, or financial decisions. When requesting documents say they may be uploaded through the secure portal." }, { role: "user", content: JSON.stringify(context) }],
+  });
+  const parsed = z.object({ subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(6000) }).safeParse(JSON.parse(completion.choices[0]?.message.content ?? "{}"));
+  if (!parsed.success) throw new Error("invalid model draft");
+  return { ...parsed.data, model: "gpt-4o-mini" };
+}
+
+type ChecklistDefault = {
+  category: string;
+  key: string;
+  label: string;
+  description: string;
+  audience: "customer" | "insurer" | "workshop";
+  requiredForStatus: string | null;
+  severeOnly?: boolean;
+  partsOnly?: boolean;
+};
+
+const CHECKLIST_DEFAULTS: ChecklistDefault[] = [
+  { category: "identity", key: "customer_id", label: "Customer identification", description: "Government-issued customer identification.", audience: "customer", requiredForStatus: "submitted" },
+  { category: "identity", key: "driver_license", label: "Driver licence", description: "Valid licence for the driver at the time of loss.", audience: "customer", requiredForStatus: "submitted" },
+  { category: "vehicle", key: "vehicle_registration", label: "Vehicle registration", description: "Current registration for the claimed vehicle.", audience: "customer", requiredForStatus: "submitted" },
+  { category: "insurance", key: "insurance_schedule", label: "Insurance certificate or policy schedule", description: "Certificate or schedule identifying the insured vehicle.", audience: "customer", requiredForStatus: "submitted" },
+  { category: "loss", key: "accident_statement", label: "Accident statement", description: "Customer statement describing what happened.", audience: "customer", requiredForStatus: "submitted" },
+  { category: "loss", key: "police_report", label: "Police report", description: "Police report for a severe collision where applicable.", audience: "customer", requiredForStatus: "submitted", severeOnly: true },
+  { category: "evidence", key: "damage_photos", label: "Damage photos", description: "Clear photographs of the damaged areas.", audience: "customer", requiredForStatus: "estimate_drafted" },
+  { category: "estimate", key: "repair_estimate", label: "Repair estimate", description: "Workshop estimate submitted for review.", audience: "workshop", requiredForStatus: "submitted" },
+  { category: "approval", key: "insurer_approval", label: "Insurer approval", description: "Written insurer approval of repair scope and value.", audience: "insurer", requiredForStatus: "approved" },
+  { category: "parts", key: "parts_quotations", label: "Parts quotations", description: "Supplier quotations supporting applicable parts costs.", audience: "workshop", requiredForStatus: "parts_ordered", partsOnly: true },
+  { category: "repair", key: "completion_photos", label: "Repair completion photos", description: "Photographs showing completed repairs.", audience: "workshop", requiredForStatus: "quality_check" },
+  { category: "repair", key: "quality_inspection", label: "Quality inspection", description: "Completed post-repair quality inspection.", audience: "workshop", requiredForStatus: "insurer_signoff" },
+  { category: "billing", key: "final_invoice", label: "Final invoice", description: "Final repair invoice issued by the workshop.", audience: "workshop", requiredForStatus: "closed" },
+  { category: "approval", key: "insurer_signoff", label: "Insurer sign-off", description: "Final insurer acceptance or settlement sign-off.", audience: "insurer", requiredForStatus: "invoiced" },
+];
+
+async function instantiateChecklist(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  claim: { id: number; dealerId: number; severity: string },
+): Promise<void> {
+  const rows = CHECKLIST_DEFAULTS.filter(
+    (item) =>
+      (!item.severeOnly || claim.severity === "severe") &&
+      (!item.partsOnly || claim.severity !== "minor"),
+  ).map(({ severeOnly: _severe, partsOnly: _parts, ...item }) => ({
+    ...item,
+    dealerId: claim.dealerId,
+    claimId: claim.id,
+  }));
+  if (rows.length) {
+    await tx
+      .insert(collisionChecklistItemsTable)
+      .values(rows)
+      .onConflictDoNothing({
+        target: [collisionChecklistItemsTable.claimId, collisionChecklistItemsTable.key],
+      });
+  }
+}
+
+function checklistEvent(
+  res: Parameters<typeof actor>[0],
+  action: string,
+  label: string,
+): CollisionClaimEvent {
+  return event(res, "checklist", { note: `${action}: ${label}` });
+}
 
 /**
  * Generated Zod coerces `format: date` fields to Date objects, but the
@@ -297,6 +423,7 @@ router.post("/collision-claims", async (req, res): Promise<void> => {
         history: [event(res, "created", { to: "intake" })],
         })
         .returning();
+       await instantiateChecklist(tx, claim);
       return { kind: "ok" as const, claim };
     });
     if (outcome.kind === "missing") {
@@ -381,6 +508,16 @@ router.get("/collision-claims/:id", async (req, res): Promise<void> => {
       ),
     )
     .orderBy(desc(collisionSettlementsTable.createdAt));
+  const checklist = await db
+    .select()
+    .from(collisionChecklistItemsTable)
+    .where(
+      and(
+        eq(collisionChecklistItemsTable.claimId, claim.id),
+        eq(collisionChecklistItemsTable.dealerId, dealerId),
+      ),
+    )
+    .orderBy(collisionChecklistItemsTable.id);
 
   const approvedSupplements = supplements
     .filter((s) => s.status === "approved")
@@ -401,6 +538,15 @@ router.get("/collision-claims/:id", async (req, res): Promise<void> => {
         .filter((s) => s.payer === "customer")
         .reduce((sum, s) => sum + s.amount, 0),
       cycleSeconds: claimCycleSeconds(claim),
+      checklist,
+      checklistSummary: {
+        total: checklist.length,
+        missing: checklist.filter((item) => item.status === "missing").length,
+        requested: checklist.filter((item) => item.status === "requested").length,
+        uploaded: checklist.filter((item) => item.status === "uploaded").length,
+        verified: checklist.filter((item) => item.status === "verified").length,
+        waived: checklist.filter((item) => item.status === "waived").length,
+      },
     }),
   );
 });
@@ -603,6 +749,19 @@ router.post("/collision-claims/:id/advance", async (req, res): Promise<void> => 
       };
     }
     const unmet: string[] = [];
+    const blockedChecklist = await tx
+      .select({ label: collisionChecklistItemsTable.label })
+      .from(collisionChecklistItemsTable)
+      .where(
+        and(
+          eq(collisionChecklistItemsTable.dealerId, locked.dealerId),
+          eq(collisionChecklistItemsTable.claimId, locked.id),
+          eq(collisionChecklistItemsTable.requiredForStatus, target),
+          ne(collisionChecklistItemsTable.status, "verified"),
+          ne(collisionChecklistItemsTable.status, "waived"),
+        ),
+      );
+    unmet.push(...blockedChecklist.map((item) => item.label));
     const totalLossValue =
       parsed.data.totalLossValue ?? locked.totalLossValue ?? null;
     if (target === "approved" && locked.approvedEstimate == null) {
@@ -777,6 +936,440 @@ router.post("/collision-claims/:id/resume", async (req, res): Promise<void> => {
     eventKey: `resume:${updated.pausedSeconds}`,
   });
   res.json(ResumeCollisionClaimResponse.parse(updated));
+});
+
+// ---------------------------------------------------------------------------
+// Stage-aware evidence checklist
+// ---------------------------------------------------------------------------
+
+router.post(
+  "/collision-claims/:id/checklist/:itemId/request",
+  async (req, res): Promise<void> => {
+    const params = checklistParams.safeParse(req.params);
+    const body = checklistRequestBody.safeParse(req.body ?? {});
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: (params.success ? body : params).error?.message });
+      return;
+    }
+    const claim = await findClaim(res, params.data.id);
+    if (!claim) {
+      res.status(404).json({ error: "Claim not found" });
+      return;
+    }
+    const outcome = await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select()
+        .from(collisionClaimsTable)
+        .where(and(eq(collisionClaimsTable.id, claim.id), eq(collisionClaimsTable.dealerId, claim.dealerId)))
+        .for("update");
+      if (!locked) return null;
+      const [item] = await tx
+        .update(collisionChecklistItemsTable)
+        .set({
+          status: "requested",
+          requestedByUserId: actor(res).byUserId,
+          requestedByName: actor(res).byName,
+          requestedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(collisionChecklistItemsTable.id, params.data.itemId),
+            eq(collisionChecklistItemsTable.claimId, locked.id),
+            eq(collisionChecklistItemsTable.dealerId, locked.dealerId),
+            sql`${collisionChecklistItemsTable.status} in ('missing','requested')`,
+          ),
+        )
+        .returning();
+      if (!item) return null;
+      await tx
+        .update(collisionClaimsTable)
+        .set({
+          history: [
+            ...locked.history,
+            checklistEvent(res, "requested", item.label),
+          ],
+        })
+        .where(eq(collisionClaimsTable.id, locked.id));
+      return item;
+    });
+    if (!outcome) {
+      res.status(409).json({ error: "Checklist item is unavailable or already completed" });
+      return;
+    }
+    res.json(outcome);
+  },
+);
+
+router.post(
+  "/collision-claims/:id/checklist/:itemId/link",
+  async (req, res): Promise<void> => {
+    const params = checklistParams.safeParse(req.params);
+    const body = checklistLinkBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: (params.success ? body : params).error?.message });
+      return;
+    }
+    const claim = await findClaim(res, params.data.id);
+    if (!claim) {
+      res.status(404).json({ error: "Claim not found" });
+      return;
+    }
+    const [document] = await db
+      .select({ id: documentsTable.id })
+      .from(documentsTable)
+      .where(
+        and(
+          eq(documentsTable.id, body.data.documentId),
+          eq(documentsTable.dealerId, claim.dealerId),
+          eq(documentsTable.entityType, "collision_claim"),
+          eq(documentsTable.entityId, claim.id),
+        ),
+      );
+    if (!document) {
+      res.status(404).json({ error: "Collision claim document not found" });
+      return;
+    }
+    const [item] = await db
+      .update(collisionChecklistItemsTable)
+      .set({ documentId: document.id, status: "uploaded", updatedAt: new Date() })
+      .where(
+        and(
+          eq(collisionChecklistItemsTable.id, params.data.itemId),
+          eq(collisionChecklistItemsTable.claimId, claim.id),
+          eq(collisionChecklistItemsTable.dealerId, claim.dealerId),
+          ne(collisionChecklistItemsTable.status, "verified"),
+          ne(collisionChecklistItemsTable.status, "waived"),
+        ),
+      )
+      .returning();
+    if (!item) {
+      res.status(409).json({ error: "Checklist item is unavailable or already completed" });
+      return;
+    }
+    res.json(item);
+  },
+);
+
+router.post(
+  "/collision-claims/:id/checklist/:itemId/verify",
+  async (req, res): Promise<void> => {
+    const params = checklistParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const claim = await findClaim(res, params.data.id);
+    if (!claim) {
+      res.status(404).json({ error: "Claim not found" });
+      return;
+    }
+    const outcome = await db.transaction(async (tx) => {
+      const [locked] = await tx.select().from(collisionClaimsTable).where(
+        and(eq(collisionClaimsTable.id, claim.id), eq(collisionClaimsTable.dealerId, claim.dealerId)),
+      ).for("update");
+      if (!locked) return null;
+      const [item] = await tx
+        .update(collisionChecklistItemsTable)
+        .set({
+          status: "verified",
+          verifiedByUserId: actor(res).byUserId,
+          verifiedByName: actor(res).byName,
+          verifiedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(collisionChecklistItemsTable.id, params.data.itemId),
+            eq(collisionChecklistItemsTable.claimId, locked.id),
+            eq(collisionChecklistItemsTable.dealerId, locked.dealerId),
+            eq(collisionChecklistItemsTable.status, "uploaded"),
+            sql`${collisionChecklistItemsTable.documentId} is not null`,
+          ),
+        )
+        .returning();
+      if (!item) return null;
+      await tx.update(collisionClaimsTable).set({
+        history: [...locked.history, checklistEvent(res, "verified", item.label)],
+      }).where(eq(collisionClaimsTable.id, locked.id));
+      return item;
+    });
+    if (!outcome) {
+      res.status(422).json({ error: "Link an uploaded collision claim document before verification" });
+      return;
+    }
+    res.json(outcome);
+  },
+);
+
+router.post(
+  "/collision-claims/:id/checklist/:itemId/waive",
+  async (req, res): Promise<void> => {
+    const params = checklistParams.safeParse(req.params);
+    const body = checklistWaiveBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ error: (params.success ? body : params).error?.message });
+      return;
+    }
+    if (!isServiceApprover(res.locals.user)) {
+      res.status(403).json({ error: "Only a Service Manager / Management user can waive required evidence" });
+      return;
+    }
+    const claim = await findClaim(res, params.data.id);
+    if (!claim) {
+      res.status(404).json({ error: "Claim not found" });
+      return;
+    }
+    const outcome = await db.transaction(async (tx) => {
+      const [locked] = await tx.select().from(collisionClaimsTable).where(
+        and(eq(collisionClaimsTable.id, claim.id), eq(collisionClaimsTable.dealerId, claim.dealerId)),
+      ).for("update");
+      if (!locked) return null;
+      const [item] = await tx.update(collisionChecklistItemsTable).set({
+        status: "waived",
+        waivedByUserId: actor(res).byUserId,
+        waivedByName: actor(res).byName,
+        waivedAt: new Date(),
+        waiverReason: body.data.reason,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(collisionChecklistItemsTable.id, params.data.itemId),
+        eq(collisionChecklistItemsTable.claimId, locked.id),
+        eq(collisionChecklistItemsTable.dealerId, locked.dealerId),
+        ne(collisionChecklistItemsTable.status, "verified"),
+      )).returning();
+      if (!item) return null;
+      await tx.update(collisionClaimsTable).set({
+        history: [...locked.history, checklistEvent(res, "waived", `${item.label} — ${body.data.reason}`)],
+      }).where(eq(collisionClaimsTable.id, locked.id));
+      return item;
+    });
+    if (!outcome) {
+      res.status(409).json({ error: "Checklist item is unavailable or already verified" });
+      return;
+    }
+    res.json(outcome);
+  },
+);
+
+router.post(
+  "/collision-claims/:id/portal-invitations",
+  async (req, res): Promise<void> => {
+    const id = z.coerce.number().int().positive().safeParse(req.params.id);
+    const body = portalInviteBody.safeParse(req.body);
+    if (!id.success || !body.success) {
+      res.status(400).json({ error: (id.success ? body : id).error?.message });
+      return;
+    }
+    if (body.data.createDraft) {
+      res.status(422).json({
+        error: "Portal invitation email drafts require the configured claim communication agent",
+      });
+      return;
+    }
+    const claim = await findClaim(res, id.data);
+    if (!claim) {
+      res.status(404).json({ error: "Claim not found" });
+      return;
+    }
+    const rawToken = randomBytes(32).toString("base64url");
+    const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+    const expiresAt = new Date(Date.now() + body.data.expiresInDays * 86_400_000);
+    const outcome = await db.transaction(async (tx) => {
+      const [locked] = await tx.select().from(collisionClaimsTable).where(
+        and(eq(collisionClaimsTable.id, claim.id), eq(collisionClaimsTable.dealerId, claim.dealerId)),
+      ).for("update");
+      if (!locked) return { kind: "missing" as const };
+      const [existing] = await tx.select({ id: collisionPortalInvitationsTable.id })
+        .from(collisionPortalInvitationsTable)
+        .where(and(
+          eq(collisionPortalInvitationsTable.dealerId, locked.dealerId),
+          eq(collisionPortalInvitationsTable.claimId, locked.id),
+          eq(collisionPortalInvitationsTable.idempotencyKey, body.data.idempotencyKey),
+        ));
+      if (existing) return { kind: "duplicate" as const };
+      const [invitation] = await tx.insert(collisionPortalInvitationsTable).values({
+        dealerId: locked.dealerId,
+        claimId: locked.id,
+        customerId: locked.customerId,
+        email: body.data.email,
+        tokenHash,
+        expiresAt,
+        idempotencyKey: body.data.idempotencyKey,
+        createdByUserId: actor(res).byUserId,
+        createdByName: actor(res).byName,
+      }).returning();
+      await tx.update(collisionClaimsTable).set({
+        history: [...locked.history, event(res, "portal", { note: "Customer portal invitation created" })],
+      }).where(eq(collisionClaimsTable.id, locked.id));
+      return { kind: "ok" as const, invitation };
+    });
+    if (outcome.kind === "duplicate") {
+      res.status(409).json({ error: "An invitation already exists for this idempotency key" });
+      return;
+    }
+    if (outcome.kind === "missing") {
+      res.status(404).json({ error: "Claim not found" });
+      return;
+    }
+    const { tokenHash: _hash, ...safeInvitation } = outcome.invitation;
+    res.status(201).json({ ...safeInvitation, token: rawToken });
+  },
+);
+
+router.get("/collision-claims/:id/portal-invitations", async (req, res): Promise<void> => {
+  const id = z.coerce.number().int().positive().safeParse(req.params.id);
+  const claim = id.success ? await findClaim(res, id.data) : null;
+  if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
+  const invitations = await db.select().from(collisionPortalInvitationsTable).where(and(
+    eq(collisionPortalInvitationsTable.claimId, claim.id),
+    eq(collisionPortalInvitationsTable.dealerId, claim.dealerId),
+  )).orderBy(desc(collisionPortalInvitationsTable.createdAt));
+  res.json(invitations.map(({ tokenHash: _tokenHash, ...invitation }) => invitation));
+});
+
+router.post(
+  "/collision-claims/:id/portal-invitations/:invitationId/revoke",
+  async (req, res): Promise<void> => {
+    const params = z.object({
+      id: z.coerce.number().int().positive(),
+      invitationId: z.coerce.number().int().positive(),
+    }).safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const claim = await findClaim(res, params.data.id);
+    if (!claim) {
+      res.status(404).json({ error: "Claim not found" });
+      return;
+    }
+    const outcome = await db.transaction(async (tx) => {
+      const [locked] = await tx.select().from(collisionClaimsTable).where(
+        and(eq(collisionClaimsTable.id, claim.id), eq(collisionClaimsTable.dealerId, claim.dealerId)),
+      ).for("update");
+      if (!locked) return null;
+      const [invitation] = await tx.update(collisionPortalInvitationsTable).set({
+        revokedAt: new Date(),
+        revokedByUserId: actor(res).byUserId,
+        revokedByName: actor(res).byName,
+      }).where(and(
+        eq(collisionPortalInvitationsTable.id, params.data.invitationId),
+        eq(collisionPortalInvitationsTable.claimId, locked.id),
+        eq(collisionPortalInvitationsTable.dealerId, locked.dealerId),
+        sql`${collisionPortalInvitationsTable.revokedAt} is null`,
+      )).returning();
+      if (!invitation) return null;
+      await tx.update(collisionClaimsTable).set({
+        history: [...locked.history, event(res, "portal", { note: "Customer portal invitation revoked" })],
+      }).where(eq(collisionClaimsTable.id, locked.id));
+      return invitation;
+    });
+    if (!outcome) {
+      res.status(404).json({ error: "Invitation not found" });
+      return;
+    }
+    const { tokenHash: _hash, ...safeInvitation } = outcome;
+    res.json(safeInvitation);
+  },
+);
+
+router.get("/collision-claims/:id/communications", async (req, res): Promise<void> => {
+  const id = z.coerce.number().int().positive().safeParse(req.params.id);
+  const claim = id.success ? await findClaim(res, id.data) : null;
+  if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
+  const rows = await db.select().from(collisionClaimCommunicationsTable).where(and(
+    eq(collisionClaimCommunicationsTable.dealerId, claim.dealerId), eq(collisionClaimCommunicationsTable.claimId, claim.id),
+  )).orderBy(desc(collisionClaimCommunicationsTable.createdAt));
+  res.json(rows);
+});
+
+router.get("/collision-claims/:id/communications/:communicationId", async (req, res): Promise<void> => {
+  const params = z.object({ id: z.coerce.number().int().positive(), communicationId: z.coerce.number().int().positive() }).safeParse(req.params);
+  if (!params.success) { res.status(404).json({ error: "Claim not found" }); return; }
+  const claim = await findClaim(res, params.data.id);
+  if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
+  const [row] = await db.select().from(collisionClaimCommunicationsTable).where(and(
+    eq(collisionClaimCommunicationsTable.id, params.data.communicationId), eq(collisionClaimCommunicationsTable.claimId, claim.id),
+    eq(collisionClaimCommunicationsTable.dealerId, claim.dealerId),
+  ));
+  if (!row) { res.status(404).json({ error: "Communication not found" }); return; }
+  res.json(row);
+});
+
+router.post("/collision-claims/:id/communications/generate-draft", async (req, res): Promise<void> => {
+  const id = z.coerce.number().int().positive().safeParse(req.params.id);
+  const body = draftBody.safeParse(req.body);
+  const claim = id.success ? await findClaim(res, id.data) : null;
+  if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
+  if (!body.success) { res.status(422).json({ error: body.error.message }); return; }
+  const [existing] = await db.select().from(collisionClaimCommunicationsTable).where(and(
+    eq(collisionClaimCommunicationsTable.dealerId, claim.dealerId), eq(collisionClaimCommunicationsTable.claimId, claim.id),
+    eq(collisionClaimCommunicationsTable.generationIdempotencyKey, body.data.idempotencyKey),
+  ));
+  if (existing) { res.json(existing); return; }
+  if (!(await isAgentEnabled(claim.dealerId, "collision_coordinator"))) {
+    await recordAgentRun({ dealerId: claim.dealerId, agentKey: "collision_coordinator", runType: "email_draft", inputSource: "collision_claim", inputSummary: "draft generation blocked", status: "blocked", refType: "collision_claim", refId: claim.id, autonomy: "advisory" });
+    res.status(409).json({ error: "Collision coordinator is disabled for this dealer" }); return;
+  }
+  const [customer] = claim.customerId == null ? [] : await db.select({ name: customersTable.name, email: customersTable.email }).from(customersTable).where(and(eq(customersTable.id, claim.customerId), eq(customersTable.dealerId, claim.dealerId)));
+  const recipient = body.data.audience === "customer" ? customer?.email : claim.adjusterContact;
+  if (!recipient || !z.string().email().safeParse(recipient.trim()).success) {
+    res.status(422).json({ error: `A valid ${body.data.audience} email recipient is required before generating a draft` }); return;
+  }
+  const labels = await db.select({ label: collisionChecklistItemsTable.label, status: collisionChecklistItemsTable.status }).from(collisionChecklistItemsTable).where(and(eq(collisionChecklistItemsTable.claimId, claim.id), eq(collisionChecklistItemsTable.dealerId, claim.dealerId)));
+  const context = { customerFirstName: customer?.name?.split(/\s+/)[0] ?? null, vehicle: claim.vehicleInfo, status: claim.status, purpose: body.data.purpose, checklist: labels.filter(x => x.status !== "verified" && x.status !== "waived").map(x => x.label), instruction: body.data.instruction ?? null };
+  try {
+    const generated = await generateCollisionDraft(context);
+    const [draft] = await db.insert(collisionClaimCommunicationsTable).values({
+      dealerId: claim.dealerId, claimId: claim.id, audience: body.data.audience, kind: body.data.purpose, recipient: recipient.trim(),
+      subject: generated.subject, body: generated.body, status: "draft", generatedByAgent: true, model: generated.model, promptVersion: "collision-email-v1",
+      createdByUserId: actor(res).byUserId, createdByName: actor(res).byName, generationIdempotencyKey: body.data.idempotencyKey,
+    }).returning();
+    await recordAgentRun({ dealerId: claim.dealerId, agentKey: "collision_coordinator", runType: "email_draft", inputSource: "collision_claim", inputSummary: "minimized collision email context", outputSummary: "draft saved for staff review", status: "completed", refType: "collision_claim", refId: claim.id, autonomy: "advisory", mutation: true });
+    res.status(201).json(draft);
+  } catch {
+    await recordAgentRun({ dealerId: claim.dealerId, agentKey: "collision_coordinator", runType: "email_draft", inputSource: "collision_claim", inputSummary: "minimized collision email context", status: "error", errorMessage: "Email draft provider failed", refType: "collision_claim", refId: claim.id, autonomy: "advisory" });
+    res.status(502).json({ error: "Email draft provider is unavailable; no draft was created" });
+  }
+});
+
+router.patch("/collision-claims/:id/communications/:communicationId", async (req, res): Promise<void> => {
+  const params = z.object({ id: z.coerce.number().int().positive(), communicationId: z.coerce.number().int().positive() }).safeParse(req.params);
+  const body = editDraftBody.safeParse(req.body);
+  if (!params.success) { res.status(404).json({ error: "Claim not found" }); return; }
+  const claim = await findClaim(res, params.data.id);
+  if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
+  if (!body.success) { res.status(422).json({ error: body.error.message }); return; }
+  const [row] = await db.update(collisionClaimCommunicationsTable).set({ ...body.data, editedByUserId: actor(res).byUserId, editedByName: actor(res).byName, editedAt: new Date(), updatedAt: new Date() }).where(and(
+    eq(collisionClaimCommunicationsTable.id, params.data.communicationId), eq(collisionClaimCommunicationsTable.claimId, claim.id),
+    eq(collisionClaimCommunicationsTable.dealerId, claim.dealerId), eq(collisionClaimCommunicationsTable.status, "draft"),
+  )).returning();
+  if (!row) { res.status(409).json({ error: "Only an unlocked draft can be edited" }); return; }
+  res.json(row);
+});
+
+router.post("/collision-claims/:id/communications/:communicationId/send", async (req, res): Promise<void> => {
+  const params = z.object({ id: z.coerce.number().int().positive(), communicationId: z.coerce.number().int().positive() }).safeParse(req.params);
+  const body = z.object({ confirm: z.literal(true), idempotencyKey: z.string().trim().min(8).max(200) }).safeParse(req.body);
+  if (!params.success) { res.status(404).json({ error: "Claim not found" }); return; }
+  const claim = await findClaim(res, params.data.id);
+  if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
+  if (!body.success) { res.status(422).json({ error: "confirm must be true and an idempotency key is required" }); return; }
+  const outcome = await db.transaction(async tx => {
+    const [draft] = await tx.select().from(collisionClaimCommunicationsTable).where(and(eq(collisionClaimCommunicationsTable.id, params.data.communicationId), eq(collisionClaimCommunicationsTable.claimId, claim.id), eq(collisionClaimCommunicationsTable.dealerId, claim.dealerId))).for("update");
+    if (!draft) return null;
+    if (draft.status !== "draft") return draft.sendIdempotencyKey === body.data.idempotencyKey ? draft : null;
+    const queued = await enqueueEmail({ dealerId: claim.dealerId, customerId: claim.customerId, to: draft.recipient, template: "collision.claim.communication", data: { subject: draft.subject, body: draft.body }, dedupeKey: `collision-communication:${draft.id}:${body.data.idempotencyKey}` });
+    const [saved] = await tx.update(collisionClaimCommunicationsTable).set({ status: "queued", outboxId: queued.id, sendIdempotencyKey: body.data.idempotencyKey, sentByUserId: actor(res).byUserId, sentByName: actor(res).byName, sentAt: new Date(), updatedAt: new Date() }).where(and(eq(collisionClaimCommunicationsTable.id, draft.id), eq(collisionClaimCommunicationsTable.status, "draft"))).returning();
+    return saved ?? null;
+  });
+  if (!outcome) { res.status(409).json({ error: "Communication is not an editable draft or was sent with another request" }); return; }
+  await db.update(collisionClaimsTable).set({
+    history: [...claim.history, event(res, "communication", { note: `Email queued to ${outcome.audience}` })],
+  }).where(and(eq(collisionClaimsTable.id, claim.id), eq(collisionClaimsTable.dealerId, claim.dealerId)));
+  coordinateCollisionClaim({ id: claim.id, dealerId: claim.dealerId, vehicleInfo: claim.vehicleInfo, status: claim.status, event: "communication", eventKey: `communication:${outcome.id}:${outcome.sendIdempotencyKey}` });
+  res.json(outcome);
 });
 
 // ---------------------------------------------------------------------------

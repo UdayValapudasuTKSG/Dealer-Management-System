@@ -67,6 +67,7 @@ export const EMAIL_TEMPLATES = [
   "service.invoice.issued",
   "service.summary.management",
   "collision.claim.action",
+  "collision.claim.communication",
   // Task 269: daily lead-source report for General Managers
   "leads.source.report.daily",
   "customer.vehicle.onboarding",

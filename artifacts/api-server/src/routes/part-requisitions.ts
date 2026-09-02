@@ -1,4 +1,4 @@
-import { Router, type IRouter, type Response } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
@@ -14,6 +14,7 @@ import {
   purchaseOrdersTable,
   serviceInvoicesTable,
   serviceOrdersTable,
+  collisionClaimsTable,
   suppliersTable,
 } from "@workspace/db";
 import {
@@ -161,7 +162,11 @@ async function canViewRequisition(user: AuthedUser | undefined, dealerId: number
   return !!linked && isAssigned(user, linked.card, linked.order);
 }
 
-router.post("/job-cards/:id/part-requisitions", async (req, res): Promise<void> => {
+async function createJobCardRequisition(
+  req: Request,
+  res: Response,
+  collisionClaimId?: number,
+): Promise<void> {
   const params = CreateJobCardPartRequisitionParams.safeParse(req.params);
   const parsed = CreateJobCardPartRequisitionBody.safeParse(req.body);
   if (!params.success || !parsed.success) {
@@ -219,6 +224,7 @@ router.post("/job-cards/:id/part-requisitions", async (req, res): Promise<void> 
       .insert(partRequisitionsTable)
       .values({
         dealerId,
+        collisionClaimId: collisionClaimId ?? null,
         serviceOrderId: linked.order.id,
         jobCardId: linked.card.id,
         requesterUserId: user?.id ?? null,
@@ -255,6 +261,40 @@ router.post("/job-cards/:id/part-requisitions", async (req, res): Promise<void> 
     return header;
   });
   res.status(201).json(CreateJobCardPartRequisitionResponse.parse(await loadDetail(dealerId, requisition.id)));
+}
+router.post("/job-cards/:id/part-requisitions", (req, res) =>
+  createJobCardRequisition(req, res),
+);
+
+/** Collision requests deliberately delegate to the job-card implementation so
+ * inventory validation, snapshots and lifecycle semantics cannot diverge. */
+router.post("/collision-claims/:id/part-requisitions", async (req, res): Promise<void> => {
+  const claimId = Number(req.params.id);
+  if (!Number.isInteger(claimId) || claimId <= 0) { res.status(404).json({ error: "Claim not found" }); return; }
+  const dealerId = activeDealerId(res);
+  const [claim] = await db.select().from(collisionClaimsTable).where(and(
+    eq(collisionClaimsTable.id, claimId), eq(collisionClaimsTable.dealerId, dealerId),
+  ));
+  if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
+  if (["closed", "denied", "total_loss"].includes(claim.status)) { res.status(422).json({ error: "Cannot requisition parts for a terminal collision claim" }); return; }
+  const [card] = await db.select({ id: jobCardsTable.id, status: jobCardsTable.status }).from(jobCardsTable).where(and(
+    eq(jobCardsTable.dealerId, dealerId), eq(jobCardsTable.serviceOrderId, claim.serviceOrderId),
+    sql`${jobCardsTable.status} not in ('completed', 'cancelled')`,
+  )).orderBy(desc(jobCardsTable.id));
+  if (!card) { res.status(422).json({ error: "An active job card is required for this collision claim" }); return; }
+  if (Number(req.body?.serviceOrderId) !== claim.serviceOrderId) { res.status(422).json({ error: "Requisition service order must match the collision claim" }); return; }
+  (req.params as Record<string, string>).id = String(card.id);
+  await createJobCardRequisition(req, res, claim.id);
+});
+
+router.get("/collision-claims/:id/part-requisitions", async (req, res): Promise<void> => {
+  const claimId = Number(req.params.id);
+  const dealerId = activeDealerId(res);
+  const [claim] = await db.select().from(collisionClaimsTable).where(and(eq(collisionClaimsTable.id, claimId), eq(collisionClaimsTable.dealerId, dealerId)));
+  if (!claim) { res.status(404).json({ error: "Claim not found" }); return; }
+  if (!canPartsView(res.locals.user)) { res.status(403).json({ error: "Parts access required" }); return; }
+  const rows = await db.select().from(partRequisitionsTable).where(and(eq(partRequisitionsTable.dealerId, dealerId), eq(partRequisitionsTable.collisionClaimId, claim.id))).orderBy(desc(partRequisitionsTable.createdAt));
+  res.json(rows);
 });
 
 router.get("/job-cards/:id/part-requisitions", async (req, res): Promise<void> => {

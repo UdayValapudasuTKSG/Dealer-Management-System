@@ -4630,6 +4630,219 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /collision-claims/{id}/checklist/{itemId}/request:
+    post:
+      operationId: requestCollisionChecklistItem
+      tags: [service]
+      summary: Request a missing collision checklist item
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: itemId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CollisionChecklistRequest" }
+      responses:
+        "200":
+          description: Requested item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollisionChecklistItem" }
+  /collision-claims/{id}/checklist/{itemId}/link:
+    post:
+      operationId: linkCollisionChecklistDocument
+      tags: [service]
+      summary: Link a same-dealer collision claim document
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: itemId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CollisionChecklistLink" }
+      responses:
+        "200":
+          description: Uploaded item awaiting verification
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollisionChecklistItem" }
+  /collision-claims/{id}/checklist/{itemId}/verify:
+    post:
+      operationId: verifyCollisionChecklistItem
+      tags: [service]
+      summary: Verify a linked checklist document
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: itemId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Verified item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollisionChecklistItem" }
+  /collision-claims/{id}/checklist/{itemId}/waive:
+    post:
+      operationId: waiveCollisionChecklistItem
+      tags: [service]
+      summary: Explicitly waive a checklist item (approver only)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: itemId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CollisionChecklistWaiver" }
+      responses:
+        "200":
+          description: Waived item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollisionChecklistItem" }
+  /collision-claims/{id}/communications:
+    get:
+      operationId: listCollisionCommunications
+      tags: [service]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Claim communications
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/CollisionCommunication" } } } }
+  /collision-claims/{id}/communications/generate-draft:
+    post:
+      operationId: generateCollisionCommunicationDraft
+      tags: [service]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CollisionCommunicationGenerate" } } }
+      responses:
+        "201":
+          description: Staff-reviewable draft
+          content: { application/json: { schema: { $ref: "#/components/schemas/CollisionCommunication" } } }
+  /collision-claims/{id}/communications/{communicationId}:
+    get:
+      operationId: getCollisionCommunication
+      tags: [service]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: communicationId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Communication, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionCommunication" } } } }
+    patch:
+      operationId: editCollisionCommunicationDraft
+      tags: [service]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: communicationId, in: path, required: true, schema: { type: integer } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionCommunicationEdit" } } } }
+      responses:
+        "200": { description: Edited draft, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionCommunication" } } } }
+  /collision-claims/{id}/communications/{communicationId}/send:
+    post:
+      operationId: sendCollisionCommunicationDraft
+      tags: [service]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: communicationId, in: path, required: true, schema: { type: integer } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionCommunicationSend" } } } }
+      responses:
+        "200": { description: Queued through dealer SMTP, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionCommunication" } } } }
+  /collision-claims/{id}/portal-invitations:
+    get:
+      operationId: listCollisionPortalInvitations
+      tags: [service]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Sanitized portal invitations (token hashes are never returned)
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/CollisionPortalInvitation" } } } }
+    post:
+      operationId: createCollisionPortalInvitation
+      tags: [service]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CollisionPortalInvitationCreate" } } }
+      responses:
+        "201":
+          description: Invitation. The raw token is returned once only.
+          content: { application/json: { schema: { $ref: "#/components/schemas/CollisionPortalInvitationCreated" } } }
+  /collision-claims/{id}/portal-invitations/{invitationId}/revoke:
+    post:
+      operationId: revokeCollisionPortalInvitation
+      tags: [service]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: invitationId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200": { description: Revoked sanitized invitation, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionPortalInvitation" } } } }
+  /collision-portal/{token}:
+    get:
+      operationId: getCollisionPortal
+      tags: [service]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string, minLength: 32, maxLength: 200 } }
+      responses:
+        "200": { description: Sanitized customer portal claim and customer-visible checklist, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionPortal" } } } }
+  /collision-portal/{token}/uploads/upload-url:
+    post:
+      operationId: createCollisionPortalUploadRequest
+      tags: [service]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string, minLength: 32, maxLength: 200 } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionPortalUploadRequest" } } } }
+      responses:
+        "201": { description: Private object upload request, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionPortalUploadRequestResult" } } } }
+  /collision-portal/{token}/uploads/{uploadId}/finalize:
+    post:
+      operationId: finalizeCollisionPortalUpload
+      tags: [service]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string, minLength: 32, maxLength: 200 } }
+        - { name: uploadId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200": { description: Uploaded checklist item awaiting staff verification, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionPortalUploadFinalized" } } } }
+  /collision-portal/{token}/note:
+    post:
+      operationId: createCollisionPortalNote
+      tags: [service]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string, minLength: 32, maxLength: 200 } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionPortalNote" } } } }
+      responses:
+        "201": { description: Note recorded, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionPortalNoteResult" } } } }
+  /collision-claims/{id}/part-requisitions:
+    get:
+      operationId: listCollisionClaimPartRequisitions
+      tags: [service, parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Collision-linked requisitions
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/PartRequisition" } } } }
+    post:
+      operationId: createCollisionClaimPartRequisition
+      tags: [service, parts]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PartRequisitionInput" } } }
+      responses:
+        "201":
+          description: Created requisition
+          content: { application/json: { schema: { $ref: "#/components/schemas/PartRequisitionDetail" } } }
   /collision-claims/{id}/supplements:
     post:
       operationId: createCollisionSupplement
@@ -12866,7 +13079,7 @@ components:
       type: object
       required: [kind, byName, at]
       properties:
-        kind: { type: string, enum: [created, status, estimate, supplement, payment, pause, resume, note] }
+        kind: { type: string, enum: [created, status, estimate, supplement, payment, pause, resume, checklist, communication, portal, requisition, note] }
         from: { type: ["string", "null"] }
         to: { type: ["string", "null"] }
         note: { type: ["string", "null"] }
@@ -13020,7 +13233,7 @@ components:
         reference: { type: string }
     CollisionClaimDetail:
       type: object
-      required: [claim, supplements, settlements, approvedTotal, insurerPaid, deductiblePaid, cycleSeconds]
+      required: [claim, supplements, settlements, approvedTotal, insurerPaid, deductiblePaid, cycleSeconds, checklist, checklistSummary]
       properties:
         claim:
           $ref: "#/components/schemas/CollisionClaim"
@@ -13036,6 +13249,200 @@ components:
         insurerPaid: { type: number }
         deductiblePaid: { type: number }
         cycleSeconds: { type: integer, description: "Elapsed claim cycle time excluding backorder pauses" }
+        checklist:
+          type: array
+          items: { $ref: "#/components/schemas/CollisionChecklistItem" }
+        checklistSummary:
+          $ref: "#/components/schemas/CollisionChecklistSummary"
+    CollisionChecklistItem:
+      type: object
+      required: [id, claimId, category, key, label, description, audience, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        claimId: { type: integer }
+        category: { type: string }
+        key: { type: string }
+        label: { type: string }
+        description: { type: string }
+        audience: { type: string, enum: [customer, insurer, workshop] }
+        requiredForStatus: { type: ["string", "null"] }
+        status: { type: string, enum: [missing, requested, uploaded, verified, waived] }
+        documentId: { type: ["integer", "null"] }
+        requestedByUserId: { type: ["integer", "null"] }
+        requestedByName: { type: ["string", "null"] }
+        requestedAt: { type: ["string", "null"], format: date-time }
+        verifiedByUserId: { type: ["integer", "null"] }
+        verifiedByName: { type: ["string", "null"] }
+        verifiedAt: { type: ["string", "null"], format: date-time }
+        waivedByUserId: { type: ["integer", "null"] }
+        waivedByName: { type: ["string", "null"] }
+        waivedAt: { type: ["string", "null"], format: date-time }
+        waiverReason: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CollisionChecklistSummary:
+      type: object
+      required: [total, missing, requested, uploaded, verified, waived]
+      properties:
+        total: { type: integer }
+        missing: { type: integer }
+        requested: { type: integer }
+        uploaded: { type: integer }
+        verified: { type: integer }
+        waived: { type: integer }
+    CollisionChecklistRequest:
+      type: object
+      properties:
+        note: { type: string, maxLength: 500 }
+    CollisionChecklistLink:
+      type: object
+      required: [documentId]
+      properties:
+        documentId: { type: integer, minimum: 1 }
+    CollisionChecklistWaiver:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 1000 }
+    CollisionCommunication:
+      type: object
+      required: [id, claimId, audience, kind, recipient, subject, body, status, generatedByAgent, createdAt]
+      properties:
+        id: { type: integer }
+        claimId: { type: integer }
+        audience: { type: string, enum: [customer, insurer] }
+        kind: { type: string }
+        recipient: { type: string, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$' }
+        subject: { type: string }
+        body: { type: string }
+        status: { type: string, enum: [draft, queued, sent, failed, cancelled] }
+        generatedByAgent: { type: boolean }
+        model: { type: ["string", "null"] }
+        promptVersion: { type: ["string", "null"] }
+        outboxId: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+    CollisionCommunicationGenerate:
+      type: object
+      required: [audience, purpose, idempotencyKey]
+      properties:
+        audience: { type: string, enum: [customer, insurer] }
+        purpose: { type: string, enum: [missing_documents, claim_received, estimate_submitted, approval_received, repair_started, delay_update, ready_for_collection, payment_request, custom] }
+        instruction: { type: string, maxLength: 800 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+    CollisionCommunicationEdit:
+      type: object
+      properties:
+        recipient: { type: string, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$' }
+        subject: { type: string, minLength: 1, maxLength: 200 }
+        body: { type: string, minLength: 1, maxLength: 6000 }
+    CollisionCommunicationSend:
+      type: object
+      required: [confirm, idempotencyKey]
+      properties:
+        confirm: { type: boolean, enum: [true] }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+    CollisionPortalInvitation:
+      type: object
+      required: [id, dealerId, claimId, email, customerId, expiresAt, idempotencyKey, createdByUserId, createdByName, revokedAt, revokedByUserId, revokedByName, lastAccessedAt, createdAt]
+      properties:
+        id: { type: integer }
+        dealerId: { type: integer }
+        claimId: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        email: { type: string, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$' }
+        expiresAt: { type: string, format: date-time }
+        idempotencyKey: { type: string }
+        createdByUserId: { type: ["integer", "null"] }
+        createdByName: { type: ["string", "null"] }
+        revokedAt: { type: ["string", "null"], format: date-time }
+        revokedByUserId: { type: ["integer", "null"] }
+        revokedByName: { type: ["string", "null"] }
+        lastAccessedAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+    CollisionPortalInvitationCreated:
+      allOf:
+        - $ref: "#/components/schemas/CollisionPortalInvitation"
+        - type: object
+          required: [token]
+          properties: { token: { type: string } }
+    CollisionPortalInvitationCreate:
+      type: object
+      required: [email, idempotencyKey]
+      properties:
+        email: { type: string, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$', maxLength: 320 }
+        expiresInDays: { type: integer, minimum: 1, maximum: 30, default: 7 }
+        idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
+        createDraft: { type: boolean, default: false }
+    CollisionPortalChecklistItem:
+      type: object
+      required: [id, key, label, description, status]
+      properties:
+        id: { type: integer }
+        key: { type: string }
+        label: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [missing, requested, uploaded, verified, waived] }
+    CollisionPortal:
+      type: object
+      required: [claim, checklist]
+      properties:
+        claim:
+          type: object
+          required: [vehicle, customerFirstName, stage, stageLabel, cycleSeconds, financial, nextAction, milestones]
+          properties:
+            vehicle: { type: string }
+            customerFirstName: { type: ["string", "null"] }
+            stage: { type: string }
+            stageLabel: { type: string }
+            cycleSeconds: { type: integer }
+            financial:
+              type: object
+              required: [currency, customerDeductible, insurerDue, customerDue]
+              properties:
+                currency: { type: string }
+                customerDeductible: { type: number }
+                insurerDue: { type: ["number", "null"] }
+                customerDue: { type: ["number", "null"] }
+            nextAction: { type: string }
+            milestones:
+              type: array
+              items:
+                type: object
+                required: [stage, label, at]
+                properties:
+                  stage: { type: ["string", "null"] }
+                  label: { type: string }
+                  at: { type: string, format: date-time }
+        checklist: { type: array, items: { $ref: "#/components/schemas/CollisionPortalChecklistItem" } }
+    CollisionPortalUploadRequest:
+      type: object
+      required: [checklistItemId, mimeType, fileName]
+      properties:
+        checklistItemId: { type: integer, minimum: 1 }
+        mimeType: { type: string, enum: [application/pdf, image/jpeg, image/png, application/vnd.openxmlformats-officedocument.wordprocessingml.document] }
+        fileName: { type: string, minLength: 1, maxLength: 255 }
+    CollisionPortalUploadRequestResult:
+      type: object
+      required: [uploadId, uploadUrl, maxBytes]
+      properties:
+        uploadId: { type: integer }
+        uploadUrl: { type: string }
+        maxBytes: { type: integer, const: 20971520 }
+    CollisionPortalUploadFinalized:
+      type: object
+      required: [documentId, checklistItemId, status]
+      properties:
+        documentId: { type: integer }
+        checklistItemId: { type: integer }
+        status: { type: string, const: uploaded }
+    CollisionPortalNote:
+      type: object
+      required: [note]
+      properties: { note: { type: string, minLength: 1, maxLength: 1000 } }
+    CollisionPortalNoteResult:
+      type: object
+      required: [status]
+      properties: { status: { type: string, const: recorded } }
 
     ServiceSettings:
       type: object

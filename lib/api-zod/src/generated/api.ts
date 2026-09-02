@@ -7381,7 +7381,7 @@ export const ListCollisionClaimsResponseItem = zod.object({
   "insurerDue": zod.number().nullish(),
   "deductibleDue": zod.number().nullish(),
   "history": zod.array(zod.object({
-  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'checklist', 'communication', 'portal', 'requisition', 'note']),
   "from": zod.string().nullish(),
   "to": zod.string().nullish(),
   "note": zod.string().nullish(),
@@ -7459,7 +7459,7 @@ export const CreateCollisionClaimResponse = zod.object({
   "insurerDue": zod.number().nullish(),
   "deductibleDue": zod.number().nullish(),
   "history": zod.array(zod.object({
-  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'checklist', 'communication', 'portal', 'requisition', 'note']),
   "from": zod.string().nullish(),
   "to": zod.string().nullish(),
   "note": zod.string().nullish(),
@@ -7515,7 +7515,7 @@ export const GetCollisionClaimResponse = zod.object({
   "insurerDue": zod.number().nullish(),
   "deductibleDue": zod.number().nullish(),
   "history": zod.array(zod.object({
-  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'checklist', 'communication', 'portal', 'requisition', 'note']),
   "from": zod.string().nullish(),
   "to": zod.string().nullish(),
   "note": zod.string().nullish(),
@@ -7553,7 +7553,39 @@ export const GetCollisionClaimResponse = zod.object({
   "approvedTotal": zod.number().nullable().describe('Approved estimate plus approved supplements (null until an approved estimate is recorded)'),
   "insurerPaid": zod.number(),
   "deductiblePaid": zod.number(),
-  "cycleSeconds": zod.number().describe('Elapsed claim cycle time excluding backorder pauses')
+  "cycleSeconds": zod.number().describe('Elapsed claim cycle time excluding backorder pauses'),
+  "checklist": zod.array(zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "category": zod.string(),
+  "key": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "audience": zod.enum(['customer', 'insurer', 'workshop']),
+  "requiredForStatus": zod.string().nullish(),
+  "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived']),
+  "documentId": zod.number().nullish(),
+  "requestedByUserId": zod.number().nullish(),
+  "requestedByName": zod.string().nullish(),
+  "requestedAt": zod.coerce.date().nullish(),
+  "verifiedByUserId": zod.number().nullish(),
+  "verifiedByName": zod.string().nullish(),
+  "verifiedAt": zod.coerce.date().nullish(),
+  "waivedByUserId": zod.number().nullish(),
+  "waivedByName": zod.string().nullish(),
+  "waivedAt": zod.coerce.date().nullish(),
+  "waiverReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "checklistSummary": zod.object({
+  "total": zod.number(),
+  "missing": zod.number(),
+  "requested": zod.number(),
+  "uploaded": zod.number(),
+  "verified": zod.number(),
+  "waived": zod.number()
+})
 })
 
 
@@ -7631,7 +7663,7 @@ export const UpdateCollisionClaimResponse = zod.object({
   "insurerDue": zod.number().nullish(),
   "deductibleDue": zod.number().nullish(),
   "history": zod.array(zod.object({
-  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'checklist', 'communication', 'portal', 'requisition', 'note']),
   "from": zod.string().nullish(),
   "to": zod.string().nullish(),
   "note": zod.string().nullish(),
@@ -7696,7 +7728,7 @@ export const AdvanceCollisionClaimResponse = zod.object({
   "insurerDue": zod.number().nullish(),
   "deductibleDue": zod.number().nullish(),
   "history": zod.array(zod.object({
-  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'checklist', 'communication', 'portal', 'requisition', 'note']),
   "from": zod.string().nullish(),
   "to": zod.string().nullish(),
   "note": zod.string().nullish(),
@@ -7751,7 +7783,7 @@ export const ResumeCollisionClaimResponse = zod.object({
   "insurerDue": zod.number().nullish(),
   "deductibleDue": zod.number().nullish(),
   "history": zod.array(zod.object({
-  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'note']),
+  "kind": zod.enum(['created', 'status', 'estimate', 'supplement', 'payment', 'pause', 'resume', 'checklist', 'communication', 'portal', 'requisition', 'note']),
   "from": zod.string().nullish(),
   "to": zod.string().nullish(),
   "note": zod.string().nullish(),
@@ -7764,6 +7796,674 @@ export const ResumeCollisionClaimResponse = zod.object({
   "createdBy": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })
+
+
+/**
+ * @summary Request a missing collision checklist item
+ */
+export const RequestCollisionChecklistItemParams = zod.object({
+  "id": zod.coerce.number(),
+  "itemId": zod.coerce.number()
+})
+
+export const requestCollisionChecklistItemBodyNoteMax = 500;
+
+
+
+export const RequestCollisionChecklistItemBody = zod.object({
+  "note": zod.string().max(requestCollisionChecklistItemBodyNoteMax).optional()
+})
+
+export const RequestCollisionChecklistItemResponse = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "category": zod.string(),
+  "key": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "audience": zod.enum(['customer', 'insurer', 'workshop']),
+  "requiredForStatus": zod.string().nullish(),
+  "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived']),
+  "documentId": zod.number().nullish(),
+  "requestedByUserId": zod.number().nullish(),
+  "requestedByName": zod.string().nullish(),
+  "requestedAt": zod.coerce.date().nullish(),
+  "verifiedByUserId": zod.number().nullish(),
+  "verifiedByName": zod.string().nullish(),
+  "verifiedAt": zod.coerce.date().nullish(),
+  "waivedByUserId": zod.number().nullish(),
+  "waivedByName": zod.string().nullish(),
+  "waivedAt": zod.coerce.date().nullish(),
+  "waiverReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Link a same-dealer collision claim document
+ */
+export const LinkCollisionChecklistDocumentParams = zod.object({
+  "id": zod.coerce.number(),
+  "itemId": zod.coerce.number()
+})
+
+
+
+
+export const LinkCollisionChecklistDocumentBody = zod.object({
+  "documentId": zod.number().min(1)
+})
+
+export const LinkCollisionChecklistDocumentResponse = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "category": zod.string(),
+  "key": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "audience": zod.enum(['customer', 'insurer', 'workshop']),
+  "requiredForStatus": zod.string().nullish(),
+  "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived']),
+  "documentId": zod.number().nullish(),
+  "requestedByUserId": zod.number().nullish(),
+  "requestedByName": zod.string().nullish(),
+  "requestedAt": zod.coerce.date().nullish(),
+  "verifiedByUserId": zod.number().nullish(),
+  "verifiedByName": zod.string().nullish(),
+  "verifiedAt": zod.coerce.date().nullish(),
+  "waivedByUserId": zod.number().nullish(),
+  "waivedByName": zod.string().nullish(),
+  "waivedAt": zod.coerce.date().nullish(),
+  "waiverReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Verify a linked checklist document
+ */
+export const VerifyCollisionChecklistItemParams = zod.object({
+  "id": zod.coerce.number(),
+  "itemId": zod.coerce.number()
+})
+
+export const VerifyCollisionChecklistItemResponse = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "category": zod.string(),
+  "key": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "audience": zod.enum(['customer', 'insurer', 'workshop']),
+  "requiredForStatus": zod.string().nullish(),
+  "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived']),
+  "documentId": zod.number().nullish(),
+  "requestedByUserId": zod.number().nullish(),
+  "requestedByName": zod.string().nullish(),
+  "requestedAt": zod.coerce.date().nullish(),
+  "verifiedByUserId": zod.number().nullish(),
+  "verifiedByName": zod.string().nullish(),
+  "verifiedAt": zod.coerce.date().nullish(),
+  "waivedByUserId": zod.number().nullish(),
+  "waivedByName": zod.string().nullish(),
+  "waivedAt": zod.coerce.date().nullish(),
+  "waiverReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Explicitly waive a checklist item (approver only)
+ */
+export const WaiveCollisionChecklistItemParams = zod.object({
+  "id": zod.coerce.number(),
+  "itemId": zod.coerce.number()
+})
+
+export const waiveCollisionChecklistItemBodyReasonMin = 3;
+export const waiveCollisionChecklistItemBodyReasonMax = 1000;
+
+
+
+export const WaiveCollisionChecklistItemBody = zod.object({
+  "reason": zod.string().min(waiveCollisionChecklistItemBodyReasonMin).max(waiveCollisionChecklistItemBodyReasonMax)
+})
+
+export const WaiveCollisionChecklistItemResponse = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "category": zod.string(),
+  "key": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "audience": zod.enum(['customer', 'insurer', 'workshop']),
+  "requiredForStatus": zod.string().nullish(),
+  "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived']),
+  "documentId": zod.number().nullish(),
+  "requestedByUserId": zod.number().nullish(),
+  "requestedByName": zod.string().nullish(),
+  "requestedAt": zod.coerce.date().nullish(),
+  "verifiedByUserId": zod.number().nullish(),
+  "verifiedByName": zod.string().nullish(),
+  "verifiedAt": zod.coerce.date().nullish(),
+  "waivedByUserId": zod.number().nullish(),
+  "waivedByName": zod.string().nullish(),
+  "waivedAt": zod.coerce.date().nullish(),
+  "waiverReason": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const ListCollisionCommunicationsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const listCollisionCommunicationsResponseRecipientRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+
+
+export const ListCollisionCommunicationsResponseItem = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "audience": zod.enum(['customer', 'insurer']),
+  "kind": zod.string(),
+  "recipient": zod.string().regex(listCollisionCommunicationsResponseRecipientRegExp),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "status": zod.enum(['draft', 'queued', 'sent', 'failed', 'cancelled']),
+  "generatedByAgent": zod.boolean(),
+  "model": zod.string().nullish(),
+  "promptVersion": zod.string().nullish(),
+  "outboxId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCollisionCommunicationsResponse = zod.array(ListCollisionCommunicationsResponseItem)
+
+
+export const GenerateCollisionCommunicationDraftParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const generateCollisionCommunicationDraftBodyInstructionMax = 800;
+
+export const generateCollisionCommunicationDraftBodyIdempotencyKeyMin = 8;
+export const generateCollisionCommunicationDraftBodyIdempotencyKeyMax = 200;
+
+
+
+export const GenerateCollisionCommunicationDraftBody = zod.object({
+  "audience": zod.enum(['customer', 'insurer']),
+  "purpose": zod.enum(['missing_documents', 'claim_received', 'estimate_submitted', 'approval_received', 'repair_started', 'delay_update', 'ready_for_collection', 'payment_request', 'custom']),
+  "instruction": zod.string().max(generateCollisionCommunicationDraftBodyInstructionMax).optional(),
+  "idempotencyKey": zod.string().min(generateCollisionCommunicationDraftBodyIdempotencyKeyMin).max(generateCollisionCommunicationDraftBodyIdempotencyKeyMax)
+})
+
+export const generateCollisionCommunicationDraftResponseRecipientRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+
+
+export const GenerateCollisionCommunicationDraftResponse = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "audience": zod.enum(['customer', 'insurer']),
+  "kind": zod.string(),
+  "recipient": zod.string().regex(generateCollisionCommunicationDraftResponseRecipientRegExp),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "status": zod.enum(['draft', 'queued', 'sent', 'failed', 'cancelled']),
+  "generatedByAgent": zod.boolean(),
+  "model": zod.string().nullish(),
+  "promptVersion": zod.string().nullish(),
+  "outboxId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const GetCollisionCommunicationParams = zod.object({
+  "id": zod.coerce.number(),
+  "communicationId": zod.coerce.number()
+})
+
+export const getCollisionCommunicationResponseRecipientRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+
+
+export const GetCollisionCommunicationResponse = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "audience": zod.enum(['customer', 'insurer']),
+  "kind": zod.string(),
+  "recipient": zod.string().regex(getCollisionCommunicationResponseRecipientRegExp),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "status": zod.enum(['draft', 'queued', 'sent', 'failed', 'cancelled']),
+  "generatedByAgent": zod.boolean(),
+  "model": zod.string().nullish(),
+  "promptVersion": zod.string().nullish(),
+  "outboxId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const EditCollisionCommunicationDraftParams = zod.object({
+  "id": zod.coerce.number(),
+  "communicationId": zod.coerce.number()
+})
+
+export const editCollisionCommunicationDraftBodyRecipientRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+export const editCollisionCommunicationDraftBodySubjectMax = 200;
+
+export const editCollisionCommunicationDraftBodyBodyMax = 6000;
+
+
+
+export const EditCollisionCommunicationDraftBody = zod.object({
+  "recipient": zod.string().regex(editCollisionCommunicationDraftBodyRecipientRegExp).optional(),
+  "subject": zod.string().min(1).max(editCollisionCommunicationDraftBodySubjectMax).optional(),
+  "body": zod.string().min(1).max(editCollisionCommunicationDraftBodyBodyMax).optional()
+})
+
+export const editCollisionCommunicationDraftResponseRecipientRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+
+
+export const EditCollisionCommunicationDraftResponse = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "audience": zod.enum(['customer', 'insurer']),
+  "kind": zod.string(),
+  "recipient": zod.string().regex(editCollisionCommunicationDraftResponseRecipientRegExp),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "status": zod.enum(['draft', 'queued', 'sent', 'failed', 'cancelled']),
+  "generatedByAgent": zod.boolean(),
+  "model": zod.string().nullish(),
+  "promptVersion": zod.string().nullish(),
+  "outboxId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const SendCollisionCommunicationDraftParams = zod.object({
+  "id": zod.coerce.number(),
+  "communicationId": zod.coerce.number()
+})
+
+export const sendCollisionCommunicationDraftBodyIdempotencyKeyMin = 8;
+export const sendCollisionCommunicationDraftBodyIdempotencyKeyMax = 200;
+
+
+
+export const SendCollisionCommunicationDraftBody = zod.object({
+  "confirm": zod.literal(true),
+  "idempotencyKey": zod.string().min(sendCollisionCommunicationDraftBodyIdempotencyKeyMin).max(sendCollisionCommunicationDraftBodyIdempotencyKeyMax)
+})
+
+export const sendCollisionCommunicationDraftResponseRecipientRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+
+
+export const SendCollisionCommunicationDraftResponse = zod.object({
+  "id": zod.number(),
+  "claimId": zod.number(),
+  "audience": zod.enum(['customer', 'insurer']),
+  "kind": zod.string(),
+  "recipient": zod.string().regex(sendCollisionCommunicationDraftResponseRecipientRegExp),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "status": zod.enum(['draft', 'queued', 'sent', 'failed', 'cancelled']),
+  "generatedByAgent": zod.boolean(),
+  "model": zod.string().nullish(),
+  "promptVersion": zod.string().nullish(),
+  "outboxId": zod.number().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+
+
+
+export const ListCollisionPortalInvitationsParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const listCollisionPortalInvitationsResponseEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+
+
+export const ListCollisionPortalInvitationsResponseItem = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "claimId": zod.number(),
+  "customerId": zod.number().nullable(),
+  "email": zod.string().regex(listCollisionPortalInvitationsResponseEmailRegExp),
+  "expiresAt": zod.coerce.date(),
+  "idempotencyKey": zod.string(),
+  "createdByUserId": zod.number().nullable(),
+  "createdByName": zod.string().nullable(),
+  "revokedAt": zod.coerce.date().nullable(),
+  "revokedByUserId": zod.number().nullable(),
+  "revokedByName": zod.string().nullable(),
+  "lastAccessedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+export const ListCollisionPortalInvitationsResponse = zod.array(ListCollisionPortalInvitationsResponseItem)
+
+
+
+
+
+export const CreateCollisionPortalInvitationParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const createCollisionPortalInvitationBodyEmailMax = 320;
+
+
+export const createCollisionPortalInvitationBodyEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+export const createCollisionPortalInvitationBodyExpiresInDaysDefault = 7;
+export const createCollisionPortalInvitationBodyExpiresInDaysMax = 30;
+
+export const createCollisionPortalInvitationBodyIdempotencyKeyMin = 8;
+export const createCollisionPortalInvitationBodyIdempotencyKeyMax = 200;
+
+export const createCollisionPortalInvitationBodyCreateDraftDefault = false;
+
+export const CreateCollisionPortalInvitationBody = zod.object({
+  "email": zod.string().max(createCollisionPortalInvitationBodyEmailMax).regex(createCollisionPortalInvitationBodyEmailRegExp),
+  "expiresInDays": zod.number().min(1).max(createCollisionPortalInvitationBodyExpiresInDaysMax).default(createCollisionPortalInvitationBodyExpiresInDaysDefault),
+  "idempotencyKey": zod.string().min(createCollisionPortalInvitationBodyIdempotencyKeyMin).max(createCollisionPortalInvitationBodyIdempotencyKeyMax),
+  "createDraft": zod.boolean().default(createCollisionPortalInvitationBodyCreateDraftDefault)
+})
+
+export const createCollisionPortalInvitationResponseOneEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+
+
+export const CreateCollisionPortalInvitationResponse = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "claimId": zod.number(),
+  "customerId": zod.number().nullable(),
+  "email": zod.string().regex(createCollisionPortalInvitationResponseOneEmailRegExp),
+  "expiresAt": zod.coerce.date(),
+  "idempotencyKey": zod.string(),
+  "createdByUserId": zod.number().nullable(),
+  "createdByName": zod.string().nullable(),
+  "revokedAt": zod.coerce.date().nullable(),
+  "revokedByUserId": zod.number().nullable(),
+  "revokedByName": zod.string().nullable(),
+  "lastAccessedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+}).and(zod.object({
+  "token": zod.string()
+}))
+
+
+
+
+
+
+export const RevokeCollisionPortalInvitationParams = zod.object({
+  "id": zod.coerce.number().min(1),
+  "invitationId": zod.coerce.number().min(1)
+})
+
+export const revokeCollisionPortalInvitationResponseEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+
+
+export const RevokeCollisionPortalInvitationResponse = zod.object({
+  "id": zod.number(),
+  "dealerId": zod.number(),
+  "claimId": zod.number(),
+  "customerId": zod.number().nullable(),
+  "email": zod.string().regex(revokeCollisionPortalInvitationResponseEmailRegExp),
+  "expiresAt": zod.coerce.date(),
+  "idempotencyKey": zod.string(),
+  "createdByUserId": zod.number().nullable(),
+  "createdByName": zod.string().nullable(),
+  "revokedAt": zod.coerce.date().nullable(),
+  "revokedByUserId": zod.number().nullable(),
+  "revokedByName": zod.string().nullable(),
+  "lastAccessedAt": zod.coerce.date().nullable(),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const getCollisionPortalPathTokenMin = 32;
+export const getCollisionPortalPathTokenMax = 200;
+
+
+
+export const GetCollisionPortalParams = zod.object({
+  "token": zod.coerce.string().min(getCollisionPortalPathTokenMin).max(getCollisionPortalPathTokenMax)
+})
+
+export const GetCollisionPortalResponse = zod.object({
+  "claim": zod.object({
+  "vehicle": zod.string(),
+  "customerFirstName": zod.string().nullable(),
+  "stage": zod.string(),
+  "stageLabel": zod.string(),
+  "cycleSeconds": zod.number(),
+  "financial": zod.object({
+  "currency": zod.string(),
+  "customerDeductible": zod.number(),
+  "insurerDue": zod.number().nullable(),
+  "customerDue": zod.number().nullable()
+}),
+  "nextAction": zod.string(),
+  "milestones": zod.array(zod.object({
+  "stage": zod.string().nullable(),
+  "label": zod.string(),
+  "at": zod.coerce.date()
+}))
+}),
+  "checklist": zod.array(zod.object({
+  "id": zod.number(),
+  "key": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived'])
+}))
+})
+
+
+export const createCollisionPortalUploadRequestPathTokenMin = 32;
+export const createCollisionPortalUploadRequestPathTokenMax = 200;
+
+
+
+export const CreateCollisionPortalUploadRequestParams = zod.object({
+  "token": zod.coerce.string().min(createCollisionPortalUploadRequestPathTokenMin).max(createCollisionPortalUploadRequestPathTokenMax)
+})
+
+
+export const createCollisionPortalUploadRequestBodyFileNameMax = 255;
+
+
+
+export const CreateCollisionPortalUploadRequestBody = zod.object({
+  "checklistItemId": zod.number().min(1),
+  "mimeType": zod.enum(['application/pdf', 'image/jpeg', 'image/png', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
+  "fileName": zod.string().min(1).max(createCollisionPortalUploadRequestBodyFileNameMax)
+})
+
+export const CreateCollisionPortalUploadRequestResponse = zod.object({
+  "uploadId": zod.number(),
+  "uploadUrl": zod.string(),
+  "maxBytes": zod.number()
+})
+
+
+export const finalizeCollisionPortalUploadPathTokenMin = 32;
+export const finalizeCollisionPortalUploadPathTokenMax = 200;
+
+
+
+
+export const FinalizeCollisionPortalUploadParams = zod.object({
+  "token": zod.coerce.string().min(finalizeCollisionPortalUploadPathTokenMin).max(finalizeCollisionPortalUploadPathTokenMax),
+  "uploadId": zod.coerce.number().min(1)
+})
+
+export const FinalizeCollisionPortalUploadResponse = zod.object({
+  "documentId": zod.number(),
+  "checklistItemId": zod.number(),
+  "status": zod.literal("uploaded")
+})
+
+
+export const createCollisionPortalNotePathTokenMin = 32;
+export const createCollisionPortalNotePathTokenMax = 200;
+
+
+
+export const CreateCollisionPortalNoteParams = zod.object({
+  "token": zod.coerce.string().min(createCollisionPortalNotePathTokenMin).max(createCollisionPortalNotePathTokenMax)
+})
+
+export const createCollisionPortalNoteBodyNoteMax = 1000;
+
+
+
+export const CreateCollisionPortalNoteBody = zod.object({
+  "note": zod.string().min(1).max(createCollisionPortalNoteBodyNoteMax)
+})
+
+export const CreateCollisionPortalNoteResponse = zod.object({
+  "status": zod.literal("recorded")
+})
+
+
+export const ListCollisionClaimPartRequisitionsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListCollisionClaimPartRequisitionsResponseItem = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "jobCardId": zod.number(),
+  "requesterUserId": zod.number().nullish(),
+  "requesterName": zod.string(),
+  "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
+  "urgency": zod.enum(['routine', 'urgent', 'vehicle_down']),
+  "needBy": zod.coerce.date().nullish(),
+  "notes": zod.string().nullish(),
+  "decisionReason": zod.string().nullish(),
+  "decidedByUserId": zod.number().nullish(),
+  "decidedByName": zod.string().nullish(),
+  "decidedAt": zod.coerce.date().nullish(),
+  "orderedByUserId": zod.number().nullish(),
+  "orderedByName": zod.string().nullish(),
+  "orderedAt": zod.coerce.date().nullish(),
+  "orderReference": zod.string().nullish(),
+  "cancellationReason": zod.string().nullish(),
+  "cancelledByUserId": zod.number().nullish(),
+  "cancelledByName": zod.string().nullish(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "fulfilledByUserId": zod.number().nullish(),
+  "fulfilledByName": zod.string().nullish(),
+  "fulfilledAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListCollisionClaimPartRequisitionsResponse = zod.array(ListCollisionClaimPartRequisitionsResponseItem)
+
+
+export const CreateCollisionClaimPartRequisitionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createCollisionClaimPartRequisitionBodyNotesMax = 4000;
+
+export const createCollisionClaimPartRequisitionBodyLinesItemDescriptionMax = 500;
+
+export const createCollisionClaimPartRequisitionBodyLinesItemSupplierMax = 250;
+
+
+export const createCollisionClaimPartRequisitionBodyLinesItemUnitCostMin = 0;
+
+export const createCollisionClaimPartRequisitionBodyLinesItemUnitPriceMin = 0;
+
+export const createCollisionClaimPartRequisitionBodyLinesItemTaxCostMin = 0;
+
+export const createCollisionClaimPartRequisitionBodyLinesItemFreightCostMin = 0;
+
+export const createCollisionClaimPartRequisitionBodyLinesMax = 100;
+
+
+
+export const CreateCollisionClaimPartRequisitionBody = zod.object({
+  "serviceOrderId": zod.number(),
+  "urgency": zod.enum(['routine', 'urgent', 'vehicle_down']),
+  "needBy": zod.coerce.date().optional(),
+  "notes": zod.string().max(createCollisionClaimPartRequisitionBodyNotesMax).optional(),
+  "lines": zod.array(zod.object({
+  "source": zod.enum(['INTERNAL', 'EXTERNAL']),
+  "partId": zod.number().optional(),
+  "description": zod.string().min(1).max(createCollisionClaimPartRequisitionBodyLinesItemDescriptionMax).optional(),
+  "supplier": zod.string().max(createCollisionClaimPartRequisitionBodyLinesItemSupplierMax).optional(),
+  "quantity": zod.number().min(1),
+  "unitCost": zod.number().min(createCollisionClaimPartRequisitionBodyLinesItemUnitCostMin).optional().describe('GYD only'),
+  "unitPrice": zod.number().min(createCollisionClaimPartRequisitionBodyLinesItemUnitPriceMin).optional().describe('GYD customer charge'),
+  "taxCost": zod.number().min(createCollisionClaimPartRequisitionBodyLinesItemTaxCostMin).optional().describe('GYD only'),
+  "freightCost": zod.number().min(createCollisionClaimPartRequisitionBodyLinesItemFreightCostMin).optional().describe('GYD only')
+})).min(1).max(createCollisionClaimPartRequisitionBodyLinesMax)
+})
+
+export const CreateCollisionClaimPartRequisitionResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number(),
+  "jobCardId": zod.number(),
+  "requesterUserId": zod.number().nullish(),
+  "requesterName": zod.string(),
+  "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
+  "urgency": zod.enum(['routine', 'urgent', 'vehicle_down']),
+  "needBy": zod.coerce.date().nullish(),
+  "notes": zod.string().nullish(),
+  "decisionReason": zod.string().nullish(),
+  "decidedByUserId": zod.number().nullish(),
+  "decidedByName": zod.string().nullish(),
+  "decidedAt": zod.coerce.date().nullish(),
+  "orderedByUserId": zod.number().nullish(),
+  "orderedByName": zod.string().nullish(),
+  "orderedAt": zod.coerce.date().nullish(),
+  "orderReference": zod.string().nullish(),
+  "cancellationReason": zod.string().nullish(),
+  "cancelledByUserId": zod.number().nullish(),
+  "cancelledByName": zod.string().nullish(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "fulfilledByUserId": zod.number().nullish(),
+  "fulfilledByName": zod.string().nullish(),
+  "fulfilledAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "requisitionId": zod.number(),
+  "source": zod.enum(['INTERNAL', 'EXTERNAL']),
+  "partId": zod.number().nullish(),
+  "skuSnapshot": zod.string().nullish(),
+  "descriptionSnapshot": zod.string(),
+  "supplierSnapshot": zod.string().nullish(),
+  "quantity": zod.number(),
+  "fulfilledQuantity": zod.number(),
+  "unitCost": zod.number().describe('Procurement cost in GYD'),
+  "unitPrice": zod.number().describe('Customer invoice unit price in GYD'),
+  "taxCost": zod.number().describe('Procurement tax cost in GYD'),
+  "freightCost": zod.number().describe('Procurement freight cost in GYD'),
+  "orderedQuantity": zod.number().optional(),
+  "receivedQuantity": zod.number().optional(),
+  "outstandingQuantity": zod.number().optional(),
+  "purchaseOrderLinks": zod.array(zod.object({
+  "purchaseOrderId": zod.number(),
+  "purchaseOrderLineId": zod.number(),
+  "supplierId": zod.number(),
+  "quantityOrdered": zod.number(),
+  "quantityReceived": zod.number()
+})).optional(),
+  "createdAt": zod.coerce.date()
+}))
+}))
 
 
 /**

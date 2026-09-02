@@ -16,6 +16,7 @@ export const DOCUMENT_ENTITY_TYPES = [
   "delivery",
   "job_card",
   "quote",
+  "collision_claim",
 ] as const;
 export type DocumentEntityType = (typeof DOCUMENT_ENTITY_TYPES)[number];
 

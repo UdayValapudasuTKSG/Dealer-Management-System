@@ -18,6 +18,7 @@ import {
   purchaseOrdersTable,
   suppliersTable,
 } from "./workshop";
+import { collisionClaimsTable } from "./collisionClaims";
 
 export const PART_REQUISITION_STATUSES = [
   "submitted",
@@ -37,6 +38,12 @@ export const partRequisitionsTable = pgTable(
   {
     id: serial("id").primaryKey(),
     dealerId: integer("dealer_id").notNull(),
+    /** Present when launched from the collision workflow. Existing workshop
+     * requisitions intentionally remain nullable. */
+    collisionClaimId: integer("collision_claim_id").references(
+      () => collisionClaimsTable.id,
+      { onDelete: "set null" },
+    ),
     serviceOrderId: integer("service_order_id").notNull(),
     jobCardId: integer("job_card_id")
       .notNull()
@@ -72,6 +79,7 @@ export const partRequisitionsTable = pgTable(
     index("part_requisitions_dealer_status_idx").on(t.dealerId, t.status),
     index("part_requisitions_dealer_job_card_idx").on(t.dealerId, t.jobCardId),
     index("part_requisitions_dealer_service_order_idx").on(t.dealerId, t.serviceOrderId),
+    index("part_requisitions_dealer_collision_claim_idx").on(t.dealerId, t.collisionClaimId),
   ],
 );
 

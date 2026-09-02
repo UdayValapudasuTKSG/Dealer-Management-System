@@ -21,7 +21,11 @@ app.use(
         return {
           id: req.id,
           method: req.method,
-          url: req.url?.split("?")[0],
+          // Customer portal bearer tokens live in the path. Never copy the
+          // raw token into request logs.
+          url: req.url
+            ?.split("?")[0]
+            ?.replace(/(\/collision-portal\/)[^/]+/i, "$1[redacted]"),
         };
       },
       res(res) {

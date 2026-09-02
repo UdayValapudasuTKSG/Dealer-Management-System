@@ -14,7 +14,8 @@ type CollisionAutomationEvent =
   | "supplement_submitted"
   | "supplement_decided"
   | "resumed"
-  | "settlement";
+  | "settlement"
+  | "communication";
 
 type CollisionAutomationInput = {
   id: number;
@@ -53,6 +54,13 @@ function nextAction(input: CollisionAutomationInput): {
       title: "Collision payment recorded",
       body: input.detail || "Review the remaining insurer and customer balances.",
       audience: "finance",
+    };
+  }
+  if (input.event === "communication") {
+    return {
+      title: "Collision claim email queued",
+      body: input.detail || "A staff-approved claim communication is queued through dealer SMTP.",
+      audience: "service",
     };
   }
   if (input.event === "resumed") {
@@ -146,6 +154,16 @@ function nextAction(input: CollisionAutomationInput): {
  * action through the existing in-app + email outbox channels.
  */
 export function coordinateCollisionClaim(input: CollisionAutomationInput): void {
+  // Focused collision acceptance runs validate the workflow and reviewed-email
+  // queueing directly. Suppress asynchronous staff routing in that explicit
+  // test process so it cannot race fixture cleanup or leak test notifications
+  // into the shared development outbox.
+  if (
+    process.env.COLLISION_DRAFT_VERIFIER === "1" &&
+    process.env.OUTBOX_WORKER_DISABLED === "1"
+  ) {
+    return;
+  }
   void (async () => {
     if (!(await isAgentEnabled(input.dealerId, AGENT_KEY))) {
       await recordAgentRun({

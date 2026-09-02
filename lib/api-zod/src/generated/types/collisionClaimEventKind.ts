@@ -17,5 +17,9 @@ export const CollisionClaimEventKind = {
   payment: 'payment',
   pause: 'pause',
   resume: 'resume',
+  checklist: 'checklist',
+  communication: 'communication',
+  portal: 'portal',
+  requisition: 'requisition',
   note: 'note',
 } as const;

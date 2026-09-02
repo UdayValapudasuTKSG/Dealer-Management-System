@@ -44,6 +44,7 @@ import webhooksRouter from "./webhooks";
 import testDriveRouter from "./test-drive";
 import feedbackRouter from "./feedback";
 import vehicleOnboardingRouter from "./vehicle-onboarding";
+import collisionPortalRouter from "./collision-portal";
 import serviceEstimateRouter from "./service-estimate";
 import feedbackFormsRouter from "./feedback-forms";
 import testDrivesRouter from "./test-drives";
@@ -73,6 +74,7 @@ router.use("/test-drive", publicRateLimit);
 router.use("/feedback", publicRateLimit);
 router.use("/service-estimates", publicRateLimit);
 router.use("/vehicle-onboarding", publicRateLimit);
+router.use("/collision-portal", publicRateLimit);
 router.use(enquiriesRouter);
 router.use(webhooksRouter);
 // Public: customer self-service test-drive booking (token-authenticated link).
@@ -81,6 +83,7 @@ router.use(testDriveRouter);
 router.use(feedbackRouter);
 router.use(serviceEstimateRouter);
 router.use(vehicleOnboardingRouter);
+router.use(collisionPortalRouter);
 
 // Everything below requires a signed-in user, then a role permission
 // matching the route (see middlewares/rbac.ts), and mutations are audited.

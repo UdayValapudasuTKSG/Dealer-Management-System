@@ -19,6 +19,7 @@ import BookTestDrive from "@/pages/book-test-drive";
 import FeedbackRespond from "@/pages/feedback-respond";
 import ServiceEstimate from "@/pages/service-estimate";
 import VehicleOnboarding from "@/pages/vehicle-onboarding";
+import CollisionPortal from "@/pages/collision-portal";
 import FeedbackForms from "@/pages/feedback-forms";
 import Dashboard from "@/pages/dashboard";
 import Reports from "@/pages/reports";
@@ -507,6 +508,7 @@ function ClerkProviderWithRoutes() {
             <Route path="/feedback/:token" component={FeedbackRespond} />
             <Route path="/service-estimate/:token" component={ServiceEstimate} />
             <Route path="/vehicle-onboarding/:token" component={VehicleOnboarding} />
+            <Route path="/collision-portal/:token" component={CollisionPortal} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
             <Route>

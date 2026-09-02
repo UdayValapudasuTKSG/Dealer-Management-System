@@ -76,12 +76,29 @@ import type {
   CaseCreate,
   CaseUpdate,
   ClaimServiceOrder200,
+  CollisionChecklistItem,
+  CollisionChecklistLink,
+  CollisionChecklistRequest,
+  CollisionChecklistWaiver,
   CollisionClaim,
   CollisionClaimAdvanceBody,
   CollisionClaimAdvanceUnmet,
   CollisionClaimDetail,
   CollisionClaimInput,
   CollisionClaimUpdate,
+  CollisionCommunication,
+  CollisionCommunicationEdit,
+  CollisionCommunicationGenerate,
+  CollisionCommunicationSend,
+  CollisionPortal,
+  CollisionPortalInvitation,
+  CollisionPortalInvitationCreate,
+  CollisionPortalInvitationCreated,
+  CollisionPortalNote,
+  CollisionPortalNoteResult,
+  CollisionPortalUploadFinalized,
+  CollisionPortalUploadRequest,
+  CollisionPortalUploadRequestResult,
   CollisionSettlement,
   CollisionSettlementInput,
   CollisionSupplement,
@@ -13191,6 +13208,1261 @@ export const useResumeCollisionClaim = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getResumeCollisionClaimMutationOptions(options));
+    }
+
+export const getRequestCollisionChecklistItemUrl = (id: number,
+    itemId: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/checklist/${itemId}/request`
+}
+
+/**
+ * @summary Request a missing collision checklist item
+ */
+export const requestCollisionChecklistItem = async (id: number,
+    itemId: number,
+    collisionChecklistRequest?: CollisionChecklistRequest, options?: RequestInit): Promise<CollisionChecklistItem> => {
+
+  return customFetch<CollisionChecklistItem>(getRequestCollisionChecklistItemUrl(id,itemId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionChecklistRequest)
+  }
+);}
+
+
+
+
+
+export const getRequestCollisionChecklistItemMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestCollisionChecklistItem>>, TError,{id: number;itemId: number;data?: BodyType<CollisionChecklistRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestCollisionChecklistItem>>, TError,{id: number;itemId: number;data?: BodyType<CollisionChecklistRequest>}, TContext> => {
+
+const mutationKey = ['requestCollisionChecklistItem'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestCollisionChecklistItem>>, {id: number;itemId: number;data?: BodyType<CollisionChecklistRequest>}> = (props) => {
+          const {id,itemId,data} = props ?? {};
+
+          return  requestCollisionChecklistItem(id,itemId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestCollisionChecklistItemMutationResult = NonNullable<Awaited<ReturnType<typeof requestCollisionChecklistItem>>>
+    export type RequestCollisionChecklistItemMutationBody = BodyType<CollisionChecklistRequest> | undefined
+    export type RequestCollisionChecklistItemMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Request a missing collision checklist item
+ */
+export const useRequestCollisionChecklistItem = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestCollisionChecklistItem>>, TError,{id: number;itemId: number;data?: BodyType<CollisionChecklistRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestCollisionChecklistItem>>,
+        TError,
+        {id: number;itemId: number;data?: BodyType<CollisionChecklistRequest>},
+        TContext
+      > => {
+      return useMutation(getRequestCollisionChecklistItemMutationOptions(options));
+    }
+
+export const getLinkCollisionChecklistDocumentUrl = (id: number,
+    itemId: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/checklist/${itemId}/link`
+}
+
+/**
+ * @summary Link a same-dealer collision claim document
+ */
+export const linkCollisionChecklistDocument = async (id: number,
+    itemId: number,
+    collisionChecklistLink: CollisionChecklistLink, options?: RequestInit): Promise<CollisionChecklistItem> => {
+
+  return customFetch<CollisionChecklistItem>(getLinkCollisionChecklistDocumentUrl(id,itemId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionChecklistLink)
+  }
+);}
+
+
+
+
+
+export const getLinkCollisionChecklistDocumentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkCollisionChecklistDocument>>, TError,{id: number;itemId: number;data: BodyType<CollisionChecklistLink>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkCollisionChecklistDocument>>, TError,{id: number;itemId: number;data: BodyType<CollisionChecklistLink>}, TContext> => {
+
+const mutationKey = ['linkCollisionChecklistDocument'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkCollisionChecklistDocument>>, {id: number;itemId: number;data: BodyType<CollisionChecklistLink>}> = (props) => {
+          const {id,itemId,data} = props ?? {};
+
+          return  linkCollisionChecklistDocument(id,itemId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkCollisionChecklistDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof linkCollisionChecklistDocument>>>
+    export type LinkCollisionChecklistDocumentMutationBody = BodyType<CollisionChecklistLink>
+    export type LinkCollisionChecklistDocumentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Link a same-dealer collision claim document
+ */
+export const useLinkCollisionChecklistDocument = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkCollisionChecklistDocument>>, TError,{id: number;itemId: number;data: BodyType<CollisionChecklistLink>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkCollisionChecklistDocument>>,
+        TError,
+        {id: number;itemId: number;data: BodyType<CollisionChecklistLink>},
+        TContext
+      > => {
+      return useMutation(getLinkCollisionChecklistDocumentMutationOptions(options));
+    }
+
+export const getVerifyCollisionChecklistItemUrl = (id: number,
+    itemId: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/checklist/${itemId}/verify`
+}
+
+/**
+ * @summary Verify a linked checklist document
+ */
+export const verifyCollisionChecklistItem = async (id: number,
+    itemId: number, options?: RequestInit): Promise<CollisionChecklistItem> => {
+
+  return customFetch<CollisionChecklistItem>(getVerifyCollisionChecklistItemUrl(id,itemId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getVerifyCollisionChecklistItemMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyCollisionChecklistItem>>, TError,{id: number;itemId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyCollisionChecklistItem>>, TError,{id: number;itemId: number}, TContext> => {
+
+const mutationKey = ['verifyCollisionChecklistItem'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyCollisionChecklistItem>>, {id: number;itemId: number}> = (props) => {
+          const {id,itemId} = props ?? {};
+
+          return  verifyCollisionChecklistItem(id,itemId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyCollisionChecklistItemMutationResult = NonNullable<Awaited<ReturnType<typeof verifyCollisionChecklistItem>>>
+
+    export type VerifyCollisionChecklistItemMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Verify a linked checklist document
+ */
+export const useVerifyCollisionChecklistItem = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyCollisionChecklistItem>>, TError,{id: number;itemId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyCollisionChecklistItem>>,
+        TError,
+        {id: number;itemId: number},
+        TContext
+      > => {
+      return useMutation(getVerifyCollisionChecklistItemMutationOptions(options));
+    }
+
+export const getWaiveCollisionChecklistItemUrl = (id: number,
+    itemId: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/checklist/${itemId}/waive`
+}
+
+/**
+ * @summary Explicitly waive a checklist item (approver only)
+ */
+export const waiveCollisionChecklistItem = async (id: number,
+    itemId: number,
+    collisionChecklistWaiver: CollisionChecklistWaiver, options?: RequestInit): Promise<CollisionChecklistItem> => {
+
+  return customFetch<CollisionChecklistItem>(getWaiveCollisionChecklistItemUrl(id,itemId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionChecklistWaiver)
+  }
+);}
+
+
+
+
+
+export const getWaiveCollisionChecklistItemMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof waiveCollisionChecklistItem>>, TError,{id: number;itemId: number;data: BodyType<CollisionChecklistWaiver>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof waiveCollisionChecklistItem>>, TError,{id: number;itemId: number;data: BodyType<CollisionChecklistWaiver>}, TContext> => {
+
+const mutationKey = ['waiveCollisionChecklistItem'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof waiveCollisionChecklistItem>>, {id: number;itemId: number;data: BodyType<CollisionChecklistWaiver>}> = (props) => {
+          const {id,itemId,data} = props ?? {};
+
+          return  waiveCollisionChecklistItem(id,itemId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type WaiveCollisionChecklistItemMutationResult = NonNullable<Awaited<ReturnType<typeof waiveCollisionChecklistItem>>>
+    export type WaiveCollisionChecklistItemMutationBody = BodyType<CollisionChecklistWaiver>
+    export type WaiveCollisionChecklistItemMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Explicitly waive a checklist item (approver only)
+ */
+export const useWaiveCollisionChecklistItem = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof waiveCollisionChecklistItem>>, TError,{id: number;itemId: number;data: BodyType<CollisionChecklistWaiver>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof waiveCollisionChecklistItem>>,
+        TError,
+        {id: number;itemId: number;data: BodyType<CollisionChecklistWaiver>},
+        TContext
+      > => {
+      return useMutation(getWaiveCollisionChecklistItemMutationOptions(options));
+    }
+
+export const getListCollisionCommunicationsUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/communications`
+}
+
+export const listCollisionCommunications = async (id: number, options?: RequestInit): Promise<CollisionCommunication[]> => {
+
+  return customFetch<CollisionCommunication[]>(getListCollisionCommunicationsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCollisionCommunicationsQueryKey = (id: number,) => {
+    return [
+    `/api/collision-claims/${id}/communications`
+    ] as const;
+    }
+
+
+export const getListCollisionCommunicationsQueryOptions = <TData = Awaited<ReturnType<typeof listCollisionCommunications>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCollisionCommunications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCollisionCommunicationsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCollisionCommunications>>> = ({ signal }) => listCollisionCommunications(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCollisionCommunications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCollisionCommunicationsQueryResult = NonNullable<Awaited<ReturnType<typeof listCollisionCommunications>>>
+export type ListCollisionCommunicationsQueryError = ErrorType<unknown>
+
+
+
+export function useListCollisionCommunications<TData = Awaited<ReturnType<typeof listCollisionCommunications>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCollisionCommunications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCollisionCommunicationsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGenerateCollisionCommunicationDraftUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/communications/generate-draft`
+}
+
+export const generateCollisionCommunicationDraft = async (id: number,
+    collisionCommunicationGenerate: CollisionCommunicationGenerate, options?: RequestInit): Promise<CollisionCommunication> => {
+
+  return customFetch<CollisionCommunication>(getGenerateCollisionCommunicationDraftUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionCommunicationGenerate)
+  }
+);}
+
+
+
+
+
+export const getGenerateCollisionCommunicationDraftMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCollisionCommunicationDraft>>, TError,{id: number;data: BodyType<CollisionCommunicationGenerate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateCollisionCommunicationDraft>>, TError,{id: number;data: BodyType<CollisionCommunicationGenerate>}, TContext> => {
+
+const mutationKey = ['generateCollisionCommunicationDraft'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateCollisionCommunicationDraft>>, {id: number;data: BodyType<CollisionCommunicationGenerate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  generateCollisionCommunicationDraft(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateCollisionCommunicationDraftMutationResult = NonNullable<Awaited<ReturnType<typeof generateCollisionCommunicationDraft>>>
+    export type GenerateCollisionCommunicationDraftMutationBody = BodyType<CollisionCommunicationGenerate>
+    export type GenerateCollisionCommunicationDraftMutationError = ErrorType<unknown>
+
+    export const useGenerateCollisionCommunicationDraft = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCollisionCommunicationDraft>>, TError,{id: number;data: BodyType<CollisionCommunicationGenerate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateCollisionCommunicationDraft>>,
+        TError,
+        {id: number;data: BodyType<CollisionCommunicationGenerate>},
+        TContext
+      > => {
+      return useMutation(getGenerateCollisionCommunicationDraftMutationOptions(options));
+    }
+
+export const getGetCollisionCommunicationUrl = (id: number,
+    communicationId: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/communications/${communicationId}`
+}
+
+export const getCollisionCommunication = async (id: number,
+    communicationId: number, options?: RequestInit): Promise<CollisionCommunication> => {
+
+  return customFetch<CollisionCommunication>(getGetCollisionCommunicationUrl(id,communicationId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCollisionCommunicationQueryKey = (id: number,
+    communicationId: number,) => {
+    return [
+    `/api/collision-claims/${id}/communications/${communicationId}`
+    ] as const;
+    }
+
+
+export const getGetCollisionCommunicationQueryOptions = <TData = Awaited<ReturnType<typeof getCollisionCommunication>>, TError = ErrorType<unknown>>(id: number,
+    communicationId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCollisionCommunication>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCollisionCommunicationQueryKey(id,communicationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCollisionCommunication>>> = ({ signal }) => getCollisionCommunication(id,communicationId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && communicationId !== null && communicationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCollisionCommunication>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCollisionCommunicationQueryResult = NonNullable<Awaited<ReturnType<typeof getCollisionCommunication>>>
+export type GetCollisionCommunicationQueryError = ErrorType<unknown>
+
+
+
+export function useGetCollisionCommunication<TData = Awaited<ReturnType<typeof getCollisionCommunication>>, TError = ErrorType<unknown>>(
+ id: number,
+    communicationId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCollisionCommunication>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCollisionCommunicationQueryOptions(id,communicationId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getEditCollisionCommunicationDraftUrl = (id: number,
+    communicationId: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/communications/${communicationId}`
+}
+
+export const editCollisionCommunicationDraft = async (id: number,
+    communicationId: number,
+    collisionCommunicationEdit: CollisionCommunicationEdit, options?: RequestInit): Promise<CollisionCommunication> => {
+
+  return customFetch<CollisionCommunication>(getEditCollisionCommunicationDraftUrl(id,communicationId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionCommunicationEdit)
+  }
+);}
+
+
+
+
+
+export const getEditCollisionCommunicationDraftMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof editCollisionCommunicationDraft>>, TError,{id: number;communicationId: number;data: BodyType<CollisionCommunicationEdit>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof editCollisionCommunicationDraft>>, TError,{id: number;communicationId: number;data: BodyType<CollisionCommunicationEdit>}, TContext> => {
+
+const mutationKey = ['editCollisionCommunicationDraft'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof editCollisionCommunicationDraft>>, {id: number;communicationId: number;data: BodyType<CollisionCommunicationEdit>}> = (props) => {
+          const {id,communicationId,data} = props ?? {};
+
+          return  editCollisionCommunicationDraft(id,communicationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type EditCollisionCommunicationDraftMutationResult = NonNullable<Awaited<ReturnType<typeof editCollisionCommunicationDraft>>>
+    export type EditCollisionCommunicationDraftMutationBody = BodyType<CollisionCommunicationEdit>
+    export type EditCollisionCommunicationDraftMutationError = ErrorType<unknown>
+
+    export const useEditCollisionCommunicationDraft = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof editCollisionCommunicationDraft>>, TError,{id: number;communicationId: number;data: BodyType<CollisionCommunicationEdit>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof editCollisionCommunicationDraft>>,
+        TError,
+        {id: number;communicationId: number;data: BodyType<CollisionCommunicationEdit>},
+        TContext
+      > => {
+      return useMutation(getEditCollisionCommunicationDraftMutationOptions(options));
+    }
+
+export const getSendCollisionCommunicationDraftUrl = (id: number,
+    communicationId: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/communications/${communicationId}/send`
+}
+
+export const sendCollisionCommunicationDraft = async (id: number,
+    communicationId: number,
+    collisionCommunicationSend: CollisionCommunicationSend, options?: RequestInit): Promise<CollisionCommunication> => {
+
+  return customFetch<CollisionCommunication>(getSendCollisionCommunicationDraftUrl(id,communicationId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionCommunicationSend)
+  }
+);}
+
+
+
+
+
+export const getSendCollisionCommunicationDraftMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendCollisionCommunicationDraft>>, TError,{id: number;communicationId: number;data: BodyType<CollisionCommunicationSend>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendCollisionCommunicationDraft>>, TError,{id: number;communicationId: number;data: BodyType<CollisionCommunicationSend>}, TContext> => {
+
+const mutationKey = ['sendCollisionCommunicationDraft'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendCollisionCommunicationDraft>>, {id: number;communicationId: number;data: BodyType<CollisionCommunicationSend>}> = (props) => {
+          const {id,communicationId,data} = props ?? {};
+
+          return  sendCollisionCommunicationDraft(id,communicationId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendCollisionCommunicationDraftMutationResult = NonNullable<Awaited<ReturnType<typeof sendCollisionCommunicationDraft>>>
+    export type SendCollisionCommunicationDraftMutationBody = BodyType<CollisionCommunicationSend>
+    export type SendCollisionCommunicationDraftMutationError = ErrorType<unknown>
+
+    export const useSendCollisionCommunicationDraft = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendCollisionCommunicationDraft>>, TError,{id: number;communicationId: number;data: BodyType<CollisionCommunicationSend>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendCollisionCommunicationDraft>>,
+        TError,
+        {id: number;communicationId: number;data: BodyType<CollisionCommunicationSend>},
+        TContext
+      > => {
+      return useMutation(getSendCollisionCommunicationDraftMutationOptions(options));
+    }
+
+export const getListCollisionPortalInvitationsUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/portal-invitations`
+}
+
+export const listCollisionPortalInvitations = async (id: number, options?: RequestInit): Promise<CollisionPortalInvitation[]> => {
+
+  return customFetch<CollisionPortalInvitation[]>(getListCollisionPortalInvitationsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCollisionPortalInvitationsQueryKey = (id: number,) => {
+    return [
+    `/api/collision-claims/${id}/portal-invitations`
+    ] as const;
+    }
+
+
+export const getListCollisionPortalInvitationsQueryOptions = <TData = Awaited<ReturnType<typeof listCollisionPortalInvitations>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCollisionPortalInvitations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCollisionPortalInvitationsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCollisionPortalInvitations>>> = ({ signal }) => listCollisionPortalInvitations(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCollisionPortalInvitations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCollisionPortalInvitationsQueryResult = NonNullable<Awaited<ReturnType<typeof listCollisionPortalInvitations>>>
+export type ListCollisionPortalInvitationsQueryError = ErrorType<unknown>
+
+
+
+export function useListCollisionPortalInvitations<TData = Awaited<ReturnType<typeof listCollisionPortalInvitations>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCollisionPortalInvitations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCollisionPortalInvitationsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateCollisionPortalInvitationUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/portal-invitations`
+}
+
+export const createCollisionPortalInvitation = async (id: number,
+    collisionPortalInvitationCreate: CollisionPortalInvitationCreate, options?: RequestInit): Promise<CollisionPortalInvitationCreated> => {
+
+  return customFetch<CollisionPortalInvitationCreated>(getCreateCollisionPortalInvitationUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionPortalInvitationCreate)
+  }
+);}
+
+
+
+
+
+export const getCreateCollisionPortalInvitationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionPortalInvitation>>, TError,{id: number;data: BodyType<CollisionPortalInvitationCreate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCollisionPortalInvitation>>, TError,{id: number;data: BodyType<CollisionPortalInvitationCreate>}, TContext> => {
+
+const mutationKey = ['createCollisionPortalInvitation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCollisionPortalInvitation>>, {id: number;data: BodyType<CollisionPortalInvitationCreate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createCollisionPortalInvitation(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCollisionPortalInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof createCollisionPortalInvitation>>>
+    export type CreateCollisionPortalInvitationMutationBody = BodyType<CollisionPortalInvitationCreate>
+    export type CreateCollisionPortalInvitationMutationError = ErrorType<unknown>
+
+    export const useCreateCollisionPortalInvitation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionPortalInvitation>>, TError,{id: number;data: BodyType<CollisionPortalInvitationCreate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCollisionPortalInvitation>>,
+        TError,
+        {id: number;data: BodyType<CollisionPortalInvitationCreate>},
+        TContext
+      > => {
+      return useMutation(getCreateCollisionPortalInvitationMutationOptions(options));
+    }
+
+export const getRevokeCollisionPortalInvitationUrl = (id: number,
+    invitationId: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/portal-invitations/${invitationId}/revoke`
+}
+
+export const revokeCollisionPortalInvitation = async (id: number,
+    invitationId: number, options?: RequestInit): Promise<CollisionPortalInvitation> => {
+
+  return customFetch<CollisionPortalInvitation>(getRevokeCollisionPortalInvitationUrl(id,invitationId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeCollisionPortalInvitationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeCollisionPortalInvitation>>, TError,{id: number;invitationId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeCollisionPortalInvitation>>, TError,{id: number;invitationId: number}, TContext> => {
+
+const mutationKey = ['revokeCollisionPortalInvitation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeCollisionPortalInvitation>>, {id: number;invitationId: number}> = (props) => {
+          const {id,invitationId} = props ?? {};
+
+          return  revokeCollisionPortalInvitation(id,invitationId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeCollisionPortalInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof revokeCollisionPortalInvitation>>>
+
+    export type RevokeCollisionPortalInvitationMutationError = ErrorType<unknown>
+
+    export const useRevokeCollisionPortalInvitation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeCollisionPortalInvitation>>, TError,{id: number;invitationId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeCollisionPortalInvitation>>,
+        TError,
+        {id: number;invitationId: number},
+        TContext
+      > => {
+      return useMutation(getRevokeCollisionPortalInvitationMutationOptions(options));
+    }
+
+export const getGetCollisionPortalUrl = (token: string,) => {
+
+
+
+
+  return `/api/collision-portal/${token}`
+}
+
+export const getCollisionPortal = async (token: string, options?: RequestInit): Promise<CollisionPortal> => {
+
+  return customFetch<CollisionPortal>(getGetCollisionPortalUrl(token),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCollisionPortalQueryKey = (token: string,) => {
+    return [
+    `/api/collision-portal/${token}`
+    ] as const;
+    }
+
+
+export const getGetCollisionPortalQueryOptions = <TData = Awaited<ReturnType<typeof getCollisionPortal>>, TError = ErrorType<unknown>>(token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCollisionPortal>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCollisionPortalQueryKey(token);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCollisionPortal>>> = ({ signal }) => getCollisionPortal(token, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCollisionPortal>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCollisionPortalQueryResult = NonNullable<Awaited<ReturnType<typeof getCollisionPortal>>>
+export type GetCollisionPortalQueryError = ErrorType<unknown>
+
+
+
+export function useGetCollisionPortal<TData = Awaited<ReturnType<typeof getCollisionPortal>>, TError = ErrorType<unknown>>(
+ token: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCollisionPortal>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCollisionPortalQueryOptions(token,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateCollisionPortalUploadRequestUrl = (token: string,) => {
+
+
+
+
+  return `/api/collision-portal/${token}/uploads/upload-url`
+}
+
+export const createCollisionPortalUploadRequest = async (token: string,
+    collisionPortalUploadRequest: CollisionPortalUploadRequest, options?: RequestInit): Promise<CollisionPortalUploadRequestResult> => {
+
+  return customFetch<CollisionPortalUploadRequestResult>(getCreateCollisionPortalUploadRequestUrl(token),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionPortalUploadRequest)
+  }
+);}
+
+
+
+
+
+export const getCreateCollisionPortalUploadRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionPortalUploadRequest>>, TError,{token: string;data: BodyType<CollisionPortalUploadRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCollisionPortalUploadRequest>>, TError,{token: string;data: BodyType<CollisionPortalUploadRequest>}, TContext> => {
+
+const mutationKey = ['createCollisionPortalUploadRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCollisionPortalUploadRequest>>, {token: string;data: BodyType<CollisionPortalUploadRequest>}> = (props) => {
+          const {token,data} = props ?? {};
+
+          return  createCollisionPortalUploadRequest(token,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCollisionPortalUploadRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createCollisionPortalUploadRequest>>>
+    export type CreateCollisionPortalUploadRequestMutationBody = BodyType<CollisionPortalUploadRequest>
+    export type CreateCollisionPortalUploadRequestMutationError = ErrorType<unknown>
+
+    export const useCreateCollisionPortalUploadRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionPortalUploadRequest>>, TError,{token: string;data: BodyType<CollisionPortalUploadRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCollisionPortalUploadRequest>>,
+        TError,
+        {token: string;data: BodyType<CollisionPortalUploadRequest>},
+        TContext
+      > => {
+      return useMutation(getCreateCollisionPortalUploadRequestMutationOptions(options));
+    }
+
+export const getFinalizeCollisionPortalUploadUrl = (token: string,
+    uploadId: number,) => {
+
+
+
+
+  return `/api/collision-portal/${token}/uploads/${uploadId}/finalize`
+}
+
+export const finalizeCollisionPortalUpload = async (token: string,
+    uploadId: number, options?: RequestInit): Promise<CollisionPortalUploadFinalized> => {
+
+  return customFetch<CollisionPortalUploadFinalized>(getFinalizeCollisionPortalUploadUrl(token,uploadId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getFinalizeCollisionPortalUploadMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeCollisionPortalUpload>>, TError,{token: string;uploadId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof finalizeCollisionPortalUpload>>, TError,{token: string;uploadId: number}, TContext> => {
+
+const mutationKey = ['finalizeCollisionPortalUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof finalizeCollisionPortalUpload>>, {token: string;uploadId: number}> = (props) => {
+          const {token,uploadId} = props ?? {};
+
+          return  finalizeCollisionPortalUpload(token,uploadId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FinalizeCollisionPortalUploadMutationResult = NonNullable<Awaited<ReturnType<typeof finalizeCollisionPortalUpload>>>
+
+    export type FinalizeCollisionPortalUploadMutationError = ErrorType<unknown>
+
+    export const useFinalizeCollisionPortalUpload = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof finalizeCollisionPortalUpload>>, TError,{token: string;uploadId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof finalizeCollisionPortalUpload>>,
+        TError,
+        {token: string;uploadId: number},
+        TContext
+      > => {
+      return useMutation(getFinalizeCollisionPortalUploadMutationOptions(options));
+    }
+
+export const getCreateCollisionPortalNoteUrl = (token: string,) => {
+
+
+
+
+  return `/api/collision-portal/${token}/note`
+}
+
+export const createCollisionPortalNote = async (token: string,
+    collisionPortalNote: CollisionPortalNote, options?: RequestInit): Promise<CollisionPortalNoteResult> => {
+
+  return customFetch<CollisionPortalNoteResult>(getCreateCollisionPortalNoteUrl(token),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(collisionPortalNote)
+  }
+);}
+
+
+
+
+
+export const getCreateCollisionPortalNoteMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionPortalNote>>, TError,{token: string;data: BodyType<CollisionPortalNote>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCollisionPortalNote>>, TError,{token: string;data: BodyType<CollisionPortalNote>}, TContext> => {
+
+const mutationKey = ['createCollisionPortalNote'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCollisionPortalNote>>, {token: string;data: BodyType<CollisionPortalNote>}> = (props) => {
+          const {token,data} = props ?? {};
+
+          return  createCollisionPortalNote(token,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCollisionPortalNoteMutationResult = NonNullable<Awaited<ReturnType<typeof createCollisionPortalNote>>>
+    export type CreateCollisionPortalNoteMutationBody = BodyType<CollisionPortalNote>
+    export type CreateCollisionPortalNoteMutationError = ErrorType<unknown>
+
+    export const useCreateCollisionPortalNote = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionPortalNote>>, TError,{token: string;data: BodyType<CollisionPortalNote>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCollisionPortalNote>>,
+        TError,
+        {token: string;data: BodyType<CollisionPortalNote>},
+        TContext
+      > => {
+      return useMutation(getCreateCollisionPortalNoteMutationOptions(options));
+    }
+
+export const getListCollisionClaimPartRequisitionsUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/part-requisitions`
+}
+
+export const listCollisionClaimPartRequisitions = async (id: number, options?: RequestInit): Promise<PartRequisition[]> => {
+
+  return customFetch<PartRequisition[]>(getListCollisionClaimPartRequisitionsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCollisionClaimPartRequisitionsQueryKey = (id: number,) => {
+    return [
+    `/api/collision-claims/${id}/part-requisitions`
+    ] as const;
+    }
+
+
+export const getListCollisionClaimPartRequisitionsQueryOptions = <TData = Awaited<ReturnType<typeof listCollisionClaimPartRequisitions>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCollisionClaimPartRequisitions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCollisionClaimPartRequisitionsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCollisionClaimPartRequisitions>>> = ({ signal }) => listCollisionClaimPartRequisitions(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCollisionClaimPartRequisitions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCollisionClaimPartRequisitionsQueryResult = NonNullable<Awaited<ReturnType<typeof listCollisionClaimPartRequisitions>>>
+export type ListCollisionClaimPartRequisitionsQueryError = ErrorType<unknown>
+
+
+
+export function useListCollisionClaimPartRequisitions<TData = Awaited<ReturnType<typeof listCollisionClaimPartRequisitions>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCollisionClaimPartRequisitions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCollisionClaimPartRequisitionsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateCollisionClaimPartRequisitionUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/part-requisitions`
+}
+
+export const createCollisionClaimPartRequisition = async (id: number,
+    partRequisitionInput: PartRequisitionInput, options?: RequestInit): Promise<PartRequisitionDetail> => {
+
+  return customFetch<PartRequisitionDetail>(getCreateCollisionClaimPartRequisitionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(partRequisitionInput)
+  }
+);}
+
+
+
+
+
+export const getCreateCollisionClaimPartRequisitionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionClaimPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCollisionClaimPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionInput>}, TContext> => {
+
+const mutationKey = ['createCollisionClaimPartRequisition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCollisionClaimPartRequisition>>, {id: number;data: BodyType<PartRequisitionInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createCollisionClaimPartRequisition(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCollisionClaimPartRequisitionMutationResult = NonNullable<Awaited<ReturnType<typeof createCollisionClaimPartRequisition>>>
+    export type CreateCollisionClaimPartRequisitionMutationBody = BodyType<PartRequisitionInput>
+    export type CreateCollisionClaimPartRequisitionMutationError = ErrorType<unknown>
+
+    export const useCreateCollisionClaimPartRequisition = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCollisionClaimPartRequisition>>, TError,{id: number;data: BodyType<PartRequisitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCollisionClaimPartRequisition>>,
+        TError,
+        {id: number;data: BodyType<PartRequisitionInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCollisionClaimPartRequisitionMutationOptions(options));
     }
 
 export const getCreateCollisionSupplementUrl = (id: number,) => {

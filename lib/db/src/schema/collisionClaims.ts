@@ -102,6 +102,10 @@ export type CollisionClaimEvent = {
     | "payment"
     | "pause"
     | "resume"
+    | "checklist"
+    | "communication"
+    | "portal"
+    | "requisition"
     | "note";
   from?: string | null;
   to?: string | null;
