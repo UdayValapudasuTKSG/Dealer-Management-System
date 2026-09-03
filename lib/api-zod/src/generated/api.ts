@@ -7745,6 +7745,20 @@ export const GetCollisionClaimResponse = zod.object({
   "requiredForStatus": zod.string().nullish(),
   "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived']),
   "documentId": zod.number().nullish(),
+  "document": zod.union([zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional(),
+  "documents": zod.array(zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})).optional(),
   "requestedByUserId": zod.number().nullish(),
   "requestedByName": zod.string().nullish(),
   "requestedAt": zod.coerce.date().nullish(),
@@ -7777,6 +7791,12 @@ export const UpdateCollisionClaimParams = zod.object({
 })
 
 
+export const updateCollisionClaimBodyCustomerNameMax = 200;
+
+
+export const updateCollisionClaimBodyVehicleInfoMax = 300;
+
+
 export const updateCollisionClaimBodyInitialEstimateMin = 0;
 
 export const updateCollisionClaimBodyContestedEstimateMin = 0;
@@ -7790,6 +7810,10 @@ export const updateCollisionClaimBodyTotalLossValueMin = 0;
 
 
 export const UpdateCollisionClaimBody = zod.object({
+  "customerId": zod.number().min(1).nullish(),
+  "customerName": zod.string().max(updateCollisionClaimBodyCustomerNameMax).nullish(),
+  "vehicleId": zod.number().min(1).nullish(),
+  "vehicleInfo": zod.string().min(1).max(updateCollisionClaimBodyVehicleInfoMax).optional(),
   "lossDate": zod.coerce.date().optional(),
   "insurerName": zod.string().min(1).optional(),
   "policyNumber": zod.string().nullish(),
@@ -8031,6 +8055,20 @@ export const RequestCollisionChecklistItemResponse = zod.object({
   "requiredForStatus": zod.string().nullish(),
   "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived']),
   "documentId": zod.number().nullish(),
+  "document": zod.union([zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional(),
+  "documents": zod.array(zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})).optional(),
   "requestedByUserId": zod.number().nullish(),
   "requestedByName": zod.string().nullish(),
   "requestedAt": zod.coerce.date().nullish(),
@@ -8072,6 +8110,20 @@ export const LinkCollisionChecklistDocumentResponse = zod.object({
   "requiredForStatus": zod.string().nullish(),
   "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived']),
   "documentId": zod.number().nullish(),
+  "document": zod.union([zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional(),
+  "documents": zod.array(zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})).optional(),
   "requestedByUserId": zod.number().nullish(),
   "requestedByName": zod.string().nullish(),
   "requestedAt": zod.coerce.date().nullish(),
@@ -8106,6 +8158,20 @@ export const VerifyCollisionChecklistItemResponse = zod.object({
   "requiredForStatus": zod.string().nullish(),
   "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived']),
   "documentId": zod.number().nullish(),
+  "document": zod.union([zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional(),
+  "documents": zod.array(zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})).optional(),
   "requestedByUserId": zod.number().nullish(),
   "requestedByName": zod.string().nullish(),
   "requestedAt": zod.coerce.date().nullish(),
@@ -8149,6 +8215,20 @@ export const WaiveCollisionChecklistItemResponse = zod.object({
   "requiredForStatus": zod.string().nullish(),
   "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived']),
   "documentId": zod.number().nullish(),
+  "document": zod.union([zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+}),zod.null()]).optional(),
+  "documents": zod.array(zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})).optional(),
   "requestedByUserId": zod.number().nullish(),
   "requestedByName": zod.string().nullish(),
   "requestedAt": zod.coerce.date().nullish(),
@@ -8361,10 +8441,6 @@ export const CreateCollisionPortalInvitationParams = zod.object({
   "id": zod.coerce.number().min(1)
 })
 
-export const createCollisionPortalInvitationBodyEmailMax = 320;
-
-
-export const createCollisionPortalInvitationBodyEmailRegExp = new RegExp('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
 export const createCollisionPortalInvitationBodyExpiresInDaysDefault = 7;
 export const createCollisionPortalInvitationBodyExpiresInDaysMax = 30;
 
@@ -8374,7 +8450,6 @@ export const createCollisionPortalInvitationBodyIdempotencyKeyMax = 200;
 export const createCollisionPortalInvitationBodyCreateDraftDefault = false;
 
 export const CreateCollisionPortalInvitationBody = zod.object({
-  "email": zod.string().max(createCollisionPortalInvitationBodyEmailMax).regex(createCollisionPortalInvitationBodyEmailRegExp),
   "expiresInDays": zod.number().min(1).max(createCollisionPortalInvitationBodyExpiresInDaysMax).default(createCollisionPortalInvitationBodyExpiresInDaysDefault),
   "idempotencyKey": zod.string().min(createCollisionPortalInvitationBodyIdempotencyKeyMin).max(createCollisionPortalInvitationBodyIdempotencyKeyMax),
   "createDraft": zod.boolean().default(createCollisionPortalInvitationBodyCreateDraftDefault)
@@ -8467,7 +8542,23 @@ export const GetCollisionPortalResponse = zod.object({
   "key": zod.string(),
   "label": zod.string(),
   "description": zod.string(),
-  "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived'])
+  "status": zod.enum(['missing', 'requested', 'uploaded', 'verified', 'waived']),
+  "document": zod.union([zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "viewUrl": zod.string()
+}),zod.null()]).optional(),
+  "documents": zod.array(zod.object({
+  "id": zod.number(),
+  "fileName": zod.string(),
+  "mimeType": zod.string(),
+  "uploadedBy": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "viewUrl": zod.string()
+})).optional()
 }))
 })
 
@@ -8497,6 +8588,20 @@ export const CreateCollisionPortalUploadRequestResponse = zod.object({
   "uploadUrl": zod.string(),
   "maxBytes": zod.number()
 })
+
+
+export const viewCollisionPortalDocumentPathTokenMin = 32;
+export const viewCollisionPortalDocumentPathTokenMax = 200;
+
+
+
+
+export const ViewCollisionPortalDocumentParams = zod.object({
+  "token": zod.coerce.string().min(viewCollisionPortalDocumentPathTokenMin).max(viewCollisionPortalDocumentPathTokenMax),
+  "documentId": zod.coerce.number().min(1)
+})
+
+export const ViewCollisionPortalDocumentResponse = zod.unknown()
 
 
 export const finalizeCollisionPortalUploadPathTokenMin = 32;

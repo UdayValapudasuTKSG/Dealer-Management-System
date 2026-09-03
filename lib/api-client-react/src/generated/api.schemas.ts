@@ -6268,6 +6268,26 @@ export const CollisionClaimUpdateSeverity = {
 } as const;
 
 export interface CollisionClaimUpdate {
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  customerId?: number | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  customerName?: string | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  vehicleId?: number | null;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  vehicleInfo?: string;
   lossDate?: string;
   /** @minLength 1 */
   insurerName?: string;
@@ -6437,6 +6457,15 @@ export const CollisionChecklistItemStatus = {
   waived: 'waived',
 } as const;
 
+export interface CollisionChecklistDocument {
+  id: number;
+  fileName: string;
+  mimeType: string;
+  /** @nullable */
+  uploadedBy: string | null;
+  createdAt: string;
+}
+
 export interface CollisionChecklistItem {
   id: number;
   claimId: number;
@@ -6450,6 +6479,8 @@ export interface CollisionChecklistItem {
   status: CollisionChecklistItemStatus;
   /** @nullable */
   documentId?: number | null;
+  document?: CollisionChecklistDocument | null;
+  documents?: CollisionChecklistDocument[];
   /** @nullable */
   requestedByUserId?: number | null;
   /** @nullable */
@@ -6669,11 +6700,6 @@ export type CollisionPortalInvitationCreated = CollisionPortalInvitation & {
 
 export interface CollisionPortalInvitationCreate {
   /**
-     * @maxLength 320
-     * @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$
-     */
-  email: string;
-  /**
      * @minimum 1
      * @maximum 30
      */
@@ -6697,12 +6723,24 @@ export const CollisionPortalChecklistItemStatus = {
   waived: 'waived',
 } as const;
 
+export interface CollisionPortalDocument {
+  id: number;
+  fileName: string;
+  mimeType: string;
+  /** @nullable */
+  uploadedBy: string | null;
+  createdAt: string;
+  viewUrl: string;
+}
+
 export interface CollisionPortalChecklistItem {
   id: number;
   key: string;
   label: string;
   description: string;
   status: CollisionPortalChecklistItemStatus;
+  document?: CollisionPortalDocument | null;
+  documents?: CollisionPortalDocument[];
 }
 
 export type CollisionPortalClaimFinancial = {

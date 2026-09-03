@@ -20,7 +20,6 @@ export function CollisionPortalLinksCard({ claimId }: { claimId: number }) {
   const { toast } = useToast();
   
   const [createOpen, setCreateOpen] = useState(false);
-  const [email, setEmail] = useState("");
   const [expiresInDays, setExpiresInDays] = useState("7");
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const create = useCreateCollisionPortalInvitation();
@@ -30,10 +29,9 @@ export function CollisionPortalLinksCard({ claimId }: { claimId: number }) {
       const res = await create.mutateAsync({
         id: claimId,
         data: {
-          email,
           expiresInDays: Number(expiresInDays),
           idempotencyKey: crypto.randomUUID(),
-        } as any
+        }
       });
       setCreatedToken((res as any).token);
       toast({ title: "Invitation link created" });
@@ -64,7 +62,7 @@ export function CollisionPortalLinksCard({ claimId }: { claimId: number }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
          <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Customer Portal Links</div>
-         <Dialog open={createOpen} onOpenChange={(o) => { setCreateOpen(o); if (!o) { setCreatedToken(null); setEmail(""); } }}>
+         <Dialog open={createOpen} onOpenChange={(o) => { setCreateOpen(o); if (!o) setCreatedToken(null); }}>
            <DialogTrigger asChild>
              <Button size="sm" variant="outline" className="h-8 shadow-sm">
                <Plus className="w-3.5 h-3.5 mr-1" /> New Link
@@ -85,9 +83,8 @@ export function CollisionPortalLinksCard({ claimId }: { claimId: number }) {
              ) : (
                <>
                  <div className="space-y-4 py-4">
-                   <div className="space-y-2">
-                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Customer Email</label>
-                     <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="customer@example.com" />
+                    <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+                      A secure link will be emailed directly to the linked customer’s stored email address.
                    </div>
                    <div className="space-y-2">
                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Expires In (Days)</label>
@@ -96,9 +93,9 @@ export function CollisionPortalLinksCard({ claimId }: { claimId: number }) {
                  </div>
                  <DialogFooter>
                    <Button variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-                   <Button disabled={!email || create.isPending} onClick={handleCreate}>
+                    <Button disabled={create.isPending} onClick={handleCreate}>
                      {create.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                     Generate Link
+                      Email Secure Link
                    </Button>
                  </DialogFooter>
                </>

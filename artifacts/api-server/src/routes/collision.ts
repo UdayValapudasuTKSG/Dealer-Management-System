@@ -28,8 +28,10 @@ import {
   collisionChecklistItemsTable,
   documentsTable,
   collisionPortalInvitationsTable,
+  collisionPortalUploadsTable,
   collisionClaimCommunicationsTable,
   customersTable,
+  vehiclesTable,
   serviceOrdersTable,
   serviceInvoicesTable,
   COLLISION_ADVANCE_MAP,
@@ -85,7 +87,6 @@ const checklistWaiveBody = z.object({
   reason: z.string().trim().min(3).max(1000),
 });
 const portalInviteBody = z.object({
-  email: z.string().trim().email().max(320),
   expiresInDays: z.number().int().min(1).max(30).default(7),
   idempotencyKey: z.string().trim().min(8).max(200),
   createDraft: z.boolean().optional().default(false),
@@ -549,6 +550,68 @@ router.get("/collision-claims/:id", async (req, res): Promise<void> => {
       ),
     )
     .orderBy(collisionChecklistItemsTable.id);
+  const portalDocumentLinks = await db
+    .select({
+      checklistItemId: collisionPortalUploadsTable.checklistItemId,
+      documentId: collisionPortalUploadsTable.documentId,
+    })
+    .from(collisionPortalUploadsTable)
+    .where(and(
+      eq(collisionPortalUploadsTable.dealerId, dealerId),
+      eq(collisionPortalUploadsTable.claimId, claim.id),
+      sql`${collisionPortalUploadsTable.finalizedAt} is not null`,
+      sql`${collisionPortalUploadsTable.documentId} is not null`,
+    ));
+  const checklistDocumentIds = [...new Set([
+    ...checklist
+    .map((item) => item.documentId)
+    .filter((id): id is number => id != null),
+    ...portalDocumentLinks
+      .map((link) => link.documentId)
+      .filter((id): id is number => id != null),
+  ])];
+  const checklistDocuments = checklistDocumentIds.length
+    ? await db
+        .select({
+          id: documentsTable.id,
+          fileName: documentsTable.fileName,
+          mimeType: documentsTable.mimeType,
+          uploadedBy: documentsTable.uploadedBy,
+          createdAt: documentsTable.createdAt,
+        })
+        .from(documentsTable)
+        .where(and(
+          eq(documentsTable.dealerId, dealerId),
+          eq(documentsTable.entityType, "collision_claim"),
+          eq(documentsTable.entityId, claim.id),
+          sql`${documentsTable.id} in (${sql.join(checklistDocumentIds.map((id) => sql`${id}`), sql`, `)})`,
+        ))
+    : [];
+  const checklistDocumentsById = new Map(
+    checklistDocuments.map((document) => [document.id, document]),
+  );
+  const checklistWithDocuments = checklist.map((item) => ({
+    ...item,
+    document: item.documentId == null
+      ? null
+      : checklistDocumentsById.get(item.documentId) ?? null,
+    documents: [
+      ...(item.documentId == null
+        ? []
+        : [checklistDocumentsById.get(item.documentId)].filter(
+            (document): document is NonNullable<typeof document> =>
+              document != null,
+          )),
+      ...portalDocumentLinks
+        .filter((link) => link.checklistItemId === item.id && link.documentId != null)
+        .map((link) => checklistDocumentsById.get(link.documentId!))
+        .filter((document): document is NonNullable<typeof document> =>
+          document != null,
+        ),
+    ].filter((document, index, all) =>
+      all.findIndex((candidate) => candidate.id === document.id) === index,
+    ),
+  }));
 
   const approvedSupplements = supplements
     .filter((s) => s.status === "approved")
@@ -569,7 +632,7 @@ router.get("/collision-claims/:id", async (req, res): Promise<void> => {
         .filter((s) => s.payer === "customer")
         .reduce((sum, s) => sum + s.amount, 0),
       cycleSeconds: claimCycleSeconds(claim),
-      checklist,
+      checklist: checklistWithDocuments,
       checklistSummary: {
         total: checklist.length,
         missing: checklist.filter((item) => item.status === "missing").length,
@@ -796,6 +859,56 @@ router.patch("/collision-claims/:id", async (req, res): Promise<void> => {
         return { kind: "financial_locked" as const };
       }
       const events: CollisionClaimEvent[] = [];
+      const changedDetails: string[] = [];
+      let customerName = input.customerName;
+      let vehicleInfo = input.vehicleInfo;
+      if (input.customerId !== undefined && input.customerId !== null) {
+        const [customer] = await tx
+          .select({ name: customersTable.name })
+          .from(customersTable)
+          .where(and(
+            eq(customersTable.id, input.customerId),
+            eq(customersTable.dealerId, locked.dealerId),
+          ));
+        if (!customer) return { kind: "customer_missing" as const };
+        customerName = customer.name;
+      }
+      if (input.vehicleId !== undefined && input.vehicleId !== null) {
+        const [vehicle] = await tx
+          .select({
+            make: vehiclesTable.make,
+            model: vehiclesTable.model,
+            year: vehiclesTable.year,
+            registration: vehiclesTable.registration,
+          })
+          .from(vehiclesTable)
+          .where(and(
+            eq(vehiclesTable.id, input.vehicleId),
+            eq(vehiclesTable.dealerId, locked.dealerId),
+          ));
+        if (!vehicle) return { kind: "vehicle_missing" as const };
+        vehicleInfo = [
+          vehicle.year,
+          vehicle.make,
+          vehicle.model,
+          vehicle.registration ? `(${vehicle.registration})` : null,
+        ].filter(Boolean).join(" ");
+      }
+      const detailKeys = [
+        "customerId", "customerName", "vehicleId", "vehicleInfo",
+        "insurerName", "policyNumber", "claimNumber", "adjusterName",
+        "adjusterContact", "lossDate", "severity", "damageNotes",
+      ] as const;
+      for (const key of detailKeys) {
+        const next = key === "customerName"
+          ? customerName
+          : key === "vehicleInfo"
+            ? vehicleInfo
+            : input[key];
+        if (next !== undefined && next !== locked[key]) {
+          changedDetails.push(key.replace(/([A-Z])/g, " $1").toLowerCase());
+        }
+      }
       for (const key of financialKeys) {
         if (input[key] !== undefined && input[key] !== locked[key]) {
           events.push(
@@ -809,6 +922,10 @@ router.patch("/collision-claims/:id", async (req, res): Promise<void> => {
       const [updated] = await tx
         .update(collisionClaimsTable)
         .set({
+        ...(input.customerId !== undefined && { customerId: input.customerId }),
+        ...(customerName !== undefined && { customerName }),
+        ...(input.vehicleId !== undefined && { vehicleId: input.vehicleId }),
+        ...(vehicleInfo !== undefined && { vehicleInfo: vehicleInfo.trim() }),
         ...(input.lossDate !== undefined && {
           lossDate: toDateOnly(input.lossDate),
         }),
@@ -847,8 +964,16 @@ router.patch("/collision-claims/:id", async (req, res): Promise<void> => {
         ...(input.totalLossValue !== undefined && {
           totalLossValue: input.totalLossValue,
         }),
-        ...(events.length > 0 && {
-          history: [...locked.history, ...events],
+        ...((events.length > 0 || changedDetails.length > 0) && {
+          history: [
+            ...locked.history,
+            ...(changedDetails.length > 0
+              ? [event(res, "note", {
+                  note: `Claim details updated: ${changedDetails.join(", ")}`,
+                })]
+              : []),
+            ...events,
+          ],
         }),
         })
         .where(
@@ -875,6 +1000,14 @@ router.patch("/collision-claims/:id", async (req, res): Promise<void> => {
         error:
           "Claim financials are locked after invoicing so the insurer/deductible split cannot diverge",
       });
+      return;
+    }
+    if (outcome.kind === "customer_missing") {
+      res.status(404).json({ error: "Customer not found for this dealership" });
+      return;
+    }
+    if (outcome.kind === "vehicle_missing") {
+      res.status(404).json({ error: "Vehicle not found for this dealership" });
       return;
     }
     res.json(UpdateCollisionClaimResponse.parse(outcome.updated));
@@ -1373,6 +1506,26 @@ router.post(
       res.status(404).json({ error: "Claim not found" });
       return;
     }
+    if (claim.customerId == null) {
+      res.status(422).json({
+        error: "Link a customer with a stored email address before creating a portal invitation",
+      });
+      return;
+    }
+    const [customer] = await db
+      .select({ email: customersTable.email })
+      .from(customersTable)
+      .where(and(
+        eq(customersTable.id, claim.customerId),
+        eq(customersTable.dealerId, claim.dealerId),
+      ));
+    const customerEmail = customer?.email?.trim();
+    if (!customerEmail) {
+      res.status(422).json({
+        error: "The linked customer has no email address. Add one to the customer record first",
+      });
+      return;
+    }
     const rawToken = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(rawToken).digest("hex");
     const expiresAt = new Date(Date.now() + body.data.expiresInDays * 86_400_000);
@@ -1393,7 +1546,7 @@ router.post(
         dealerId: locked.dealerId,
         claimId: locked.id,
         customerId: locked.customerId,
-        email: body.data.email,
+        email: customerEmail,
         tokenHash,
         expiresAt,
         idempotencyKey: body.data.idempotencyKey,
@@ -1411,6 +1564,33 @@ router.post(
     }
     if (outcome.kind === "missing") {
       res.status(404).json({ error: "Claim not found" });
+      return;
+    }
+    const portalOrigin =
+      process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ||
+      process.env.REPLIT_DEV_DOMAIN?.trim();
+    if (!portalOrigin) {
+      res.status(503).json({
+        error: "Portal email could not be sent because the public application URL is unavailable",
+      });
+      return;
+    }
+    const portalUrl = `https://${portalOrigin}/collision-portal/${rawToken}`;
+    const queued = await enqueueEmail({
+      dealerId: claim.dealerId,
+      customerId: claim.customerId,
+      to: customerEmail,
+      template: "collision.claim.communication",
+      data: {
+        subject: `Your collision claim portal — ${claim.vehicleInfo}`,
+        body: `Your secure AURA claim portal is ready. Use this private link before it expires: ${portalUrl}`,
+      },
+      dedupeKey: `collision-portal-invitation:${outcome.invitation.id}`,
+    });
+    if (!queued) {
+      res.status(503).json({
+        error: "The invitation was created, but its email could not be queued. Revoke it and try again",
+      });
       return;
     }
     const { tokenHash: _hash, ...safeInvitation } = outcome.invitation;

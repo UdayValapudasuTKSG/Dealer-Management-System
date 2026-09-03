@@ -185,6 +185,7 @@ export function DocumentsCard({
   title = "Documents",
   imageOnly = false,
   previewable = false,
+  multiple = false,
 }: {
   entityType: DocumentInputEntityType;
   entityId: number;
@@ -192,6 +193,7 @@ export function DocumentsCard({
   title?: string;
   imageOnly?: boolean;
   previewable?: boolean;
+  multiple?: boolean;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -202,7 +204,7 @@ export function DocumentsCard({
     imageOnly ? "quote" : "other",
   );
   const [comments, setComments] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -225,56 +227,60 @@ export function DocumentsCard({
   const reset = () => {
     setDocType(imageOnly ? "quote" : "other");
     setComments("");
-    setFile(null);
+    setFiles([]);
     if (fileRef.current) fileRef.current.value = "";
   };
 
   const submit = async () => {
-    if (!file) return;
-    if (file.size > MAX_BYTES) {
-      toast({
-        title: "File too large",
-        description: "Documents can be up to 20MB.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (
-      imageOnly &&
-      !["image/jpeg", "image/png"].includes(file.type.toLowerCase())
-    ) {
-      toast({
-        title: "Choose an image",
-        description: "Quote attachments must be JPG or PNG images.",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (files.length === 0) return;
     setBusy(true);
+    const failures: string[] = [];
+    let uploadedCount = 0;
     try {
-      const uploaded = await uploadFile(file);
-      if (!uploaded) throw new Error("Upload failed");
-      await createDocument.mutateAsync({
-        data: {
-          entityType,
-          entityId,
-          type: imageOnly ? "quote" : docType,
-          fileName: file.name,
-          storageKey: uploaded.objectPath,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-          ...(comments.trim() ? { comments: comments.trim() } : {}),
-        },
-      });
+      for (const file of files) {
+        try {
+          if (file.size > MAX_BYTES) throw new Error("file is larger than 20MB");
+          if (
+            imageOnly &&
+            !["image/jpeg", "image/png"].includes(file.type.toLowerCase())
+          ) {
+            throw new Error("file must be JPG or PNG");
+          }
+          const uploaded = await uploadFile(file);
+          if (!uploaded) throw new Error("storage upload failed");
+          await createDocument.mutateAsync({
+            data: {
+              entityType,
+              entityId,
+              type: imageOnly ? "quote" : docType,
+              fileName: file.name,
+              storageKey: uploaded.objectPath,
+              mimeType: file.type || "application/octet-stream",
+              sizeBytes: file.size,
+              ...(comments.trim() ? { comments: comments.trim() } : {}),
+            },
+          });
+          uploadedCount++;
+        } catch (error) {
+          failures.push(
+            `${file.name}: ${error instanceof Error ? error.message : "upload failed"}`,
+          );
+        }
+      }
       await queryClient.invalidateQueries({
         queryKey: getListDocumentsQueryKey(params),
       });
       toast({
-        title: "Document uploaded",
-        description: `${file.name} saved as ${DOCUMENT_TYPE_LABEL[docType]}.`,
+        title: failures.length === 0 ? "Documents uploaded" : "Some documents could not be uploaded",
+        description: failures.length === 0
+          ? `${uploadedCount} document${uploadedCount === 1 ? "" : "s"} saved as ${DOCUMENT_TYPE_LABEL[docType]}.`
+          : `${uploadedCount} uploaded; ${failures.length} failed. ${failures.join(" · ")}`,
+        variant: failures.length > 0 ? "destructive" : "default",
       });
-      setOpen(false);
-      reset();
+      if (uploadedCount > 0) {
+        setOpen(false);
+        reset();
+      }
     } catch (err) {
       toast({
         title: "Upload failed",
@@ -316,6 +322,23 @@ export function DocumentsCard({
               ? " Upload an optional JPG or PNG."
               : " Upload PDF, JPG, PNG or DOCX up to 20MB."
             : ""}
+        </div>
+      ) : multiple ? (
+        <div className="space-y-2.5">
+          {(docs ?? []).map((doc) => (
+            <div
+              key={doc.id}
+              className="rounded-xl border border-white/10 bg-foreground/[0.03] overflow-hidden"
+            >
+              <div className="px-3 pt-2.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                {DOCUMENT_TYPE_LABEL[doc.type] ?? doc.type}
+              </div>
+              <DocumentRow
+                doc={doc}
+                onPreview={previewable ? setPreviewDoc : undefined}
+              />
+            </div>
+          ))}
         </div>
       ) : (
         <div className="space-y-2.5">
@@ -367,8 +390,9 @@ export function DocumentsCard({
               <Input
                 ref={fileRef}
                 type="file"
+                multiple={multiple}
                 accept={imageOnly ? ".jpg,.jpeg,.png,image/jpeg,image/png" : ACCEPT}
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
                 className="h-9 bg-background/60 border-white/15 file:text-foreground"
               />
             </div>
@@ -391,13 +415,13 @@ export function DocumentsCard({
               >
                 Cancel
               </Button>
-              <Button onClick={() => void submit()} disabled={!file || busy}>
+              <Button onClick={() => void submit()} disabled={files.length === 0 || busy}>
                 {busy ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Upload className="w-4 h-4" />
                 )}
-                Upload
+                Upload{multiple ? " Files" : ""}
               </Button>
             </div>
           </div>

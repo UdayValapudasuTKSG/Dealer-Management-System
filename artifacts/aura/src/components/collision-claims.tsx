@@ -26,6 +26,8 @@ import {
   useListJobCards,
   useCreateJobCardInvoice,
   useCreateServiceOrder,
+  useListCustomers,
+  useListVehicles,
   getListServiceOrdersQueryKey,
   getListServiceInvoicesQueryKey,
   type CollisionClaim,
@@ -84,6 +86,7 @@ import {
   CheckCircle2,
   XCircle,
   Lock,
+  Pencil,
 } from "lucide-react";
 
 import { CollisionChecklistPanel } from "./collision-claims-checklist";
@@ -946,6 +949,8 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
   const { data: jobCards } = useListJobCards(
     { serviceOrderId: data?.claim.serviceOrderId ?? -1 },
   );
+  const { data: claimCustomers } = useListCustomers();
+  const { data: claimVehicles } = useListVehicles();
 
   const [note, setNote] = useState("");
   const [totalLossValue, setTotalLossValue] = useState("");
@@ -957,6 +962,17 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
   const [estimateDraft, setEstimateDraft] = useState<{
     contested: string;
     approved: string;
+  } | null>(null);
+  const [detailsDraft, setDetailsDraft] = useState<{
+    customerId: number | null;
+    customerName: string;
+    vehicleId: number | null;
+    vehicleInfo: string;
+    insurerName: string;
+    policyNumber: string;
+    claimNumber: string;
+    adjusterName: string;
+    adjusterContact: string;
   } | null>(null);
 
   const refresh = () => {
@@ -1070,9 +1086,32 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
               <span>· {cycleDays} cycle days (excl. pauses)</span>
             </div>
           </div>
-          <Badge variant="outline" className={cn("px-3 py-1.5 text-sm font-semibold border-2 shrink-0 whitespace-nowrap", statusBadgeClass(claim.status))}>
-            {STATUS_LABEL[claim.status] ?? claim.status}
-          </Badge>
+          <div className="flex shrink-0 items-center gap-2">
+            {canEdit && !TERMINAL.has(claim.status) && (
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="button-edit-claim-details"
+                onClick={() => setDetailsDraft({
+                  customerId: claim.customerId ?? null,
+                  customerName: claim.customerName ?? "",
+                  vehicleId: claim.vehicleId ?? null,
+                  vehicleInfo: claim.vehicleInfo,
+                  insurerName: claim.insurerName,
+                  policyNumber: claim.policyNumber ?? "",
+                  claimNumber: claim.claimNumber ?? "",
+                  adjusterName: claim.adjusterName ?? "",
+                  adjusterContact: claim.adjusterContact ?? "",
+                })}
+              >
+                <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                Edit details
+              </Button>
+            )}
+            <Badge variant="outline" className={cn("px-3 py-1.5 text-sm font-semibold border-2 whitespace-nowrap", statusBadgeClass(claim.status))}>
+              {STATUS_LABEL[claim.status] ?? claim.status}
+            </Badge>
+          </div>
         </div>
 
         <div className="w-full overflow-x-auto no-scrollbar pb-1">
@@ -1111,6 +1150,138 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
           </div>
         </div>
       </div>
+      <Dialog open={detailsDraft != null} onOpenChange={(open) => !open && setDetailsDraft(null)}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Edit claim details</DialogTitle>
+            <DialogDescription>
+              Update this claim’s customer, vehicle and insurer snapshots. The linked repair order and claim financials are not changed.
+            </DialogDescription>
+          </DialogHeader>
+          {detailsDraft && (
+            <div className="grid gap-4 py-2 sm:grid-cols-2">
+              <div>
+                <Label className="text-xs">Linked customer</Label>
+                <Select
+                  value={detailsDraft.customerId?.toString() ?? "unlinked"}
+                  onValueChange={(value) => {
+                    const customer = claimCustomers?.find((entry) => entry.id === Number(value));
+                    setDetailsDraft({
+                      ...detailsDraft,
+                      customerId: customer?.id ?? null,
+                      customerName: customer?.name ?? detailsDraft.customerName,
+                    });
+                  }}
+                >
+                  <SelectTrigger className="mt-1.5" data-testid="select-claim-customer">
+                    <SelectValue placeholder="Choose customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unlinked">No linked customer</SelectItem>
+                    {claimCustomers?.map((customer) => (
+                      <SelectItem key={customer.id} value={customer.id.toString()}>
+                        {customer.name}{customer.email ? ` · ${customer.email}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Linked vehicle</Label>
+                <Select
+                  value={detailsDraft.vehicleId?.toString() ?? "unlinked"}
+                  onValueChange={(value) => {
+                    const vehicle = claimVehicles?.find((entry) => entry.id === Number(value));
+                    setDetailsDraft({
+                      ...detailsDraft,
+                      vehicleId: vehicle?.id ?? null,
+                      vehicleInfo: vehicle
+                        ? `${vehicle.year} ${vehicle.make} ${vehicle.model}${vehicle.registration ? ` (${vehicle.registration})` : ""}`
+                        : detailsDraft.vehicleInfo,
+                    });
+                  }}
+                >
+                  <SelectTrigger className="mt-1.5" data-testid="select-claim-vehicle">
+                    <SelectValue placeholder="Choose vehicle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unlinked">No linked inventory vehicle</SelectItem>
+                    {claimVehicles?.map((vehicle) => (
+                      <SelectItem key={vehicle.id} value={vehicle.id.toString()}>
+                        {vehicle.year} {vehicle.make} {vehicle.model}
+                        {vehicle.registration ? ` · ${vehicle.registration}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {([
+                ["customerName", "Customer name"],
+                ["vehicleInfo", "Vehicle"],
+                ["insurerName", "Insurer"],
+                ["policyNumber", "Policy number"],
+                ["claimNumber", "Insurer claim number"],
+                ["adjusterName", "Adjuster name"],
+                ["adjusterContact", "Adjuster contact"],
+              ] as const).map(([key, label]) => (
+                <div key={key} className={key === "adjusterContact" ? "sm:col-span-2" : ""}>
+                  <Label htmlFor={`claim-${key}`} className="text-xs">{label}</Label>
+                  <Input
+                    id={`claim-${key}`}
+                    data-testid={`input-claim-${key}`}
+                    value={detailsDraft[key]}
+                    onChange={(event) => setDetailsDraft({
+                      ...detailsDraft,
+                      [key]: event.target.value,
+                    })}
+                    className="mt-1.5"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDetailsDraft(null)} disabled={update.isPending}>
+              Cancel
+            </Button>
+            <Button
+              data-testid="button-save-claim-details"
+              disabled={
+                update.isPending ||
+                !detailsDraft?.vehicleInfo.trim() ||
+                !detailsDraft?.insurerName.trim()
+              }
+              onClick={async () => {
+                if (!detailsDraft) return;
+                try {
+                  await update.mutateAsync({
+                    id: claimId,
+                    data: {
+                      customerId: detailsDraft.customerId,
+                      customerName: detailsDraft.customerName.trim() || null,
+                      vehicleId: detailsDraft.vehicleId,
+                      vehicleInfo: detailsDraft.vehicleInfo.trim(),
+                      insurerName: detailsDraft.insurerName.trim(),
+                      policyNumber: detailsDraft.policyNumber.trim() || null,
+                      claimNumber: detailsDraft.claimNumber.trim() || null,
+                      adjusterName: detailsDraft.adjusterName.trim() || null,
+                      adjusterContact: detailsDraft.adjusterContact.trim() || null,
+                    },
+                  });
+                  setDetailsDraft(null);
+                  refresh();
+                  toast({ title: "Claim details updated" });
+                } catch (error) {
+                  onError(error, "Could not update claim details");
+                }
+              }}
+            >
+              {update.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save details
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Body */}
       <div className="p-4 sm:p-6 bg-background">
@@ -1301,6 +1472,7 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
             canEdit={canEdit && !TERMINAL.has(claim.status)}
             title="Photos & Documents"
             previewable
+            multiple
           />
 
           {/* Supplements */}

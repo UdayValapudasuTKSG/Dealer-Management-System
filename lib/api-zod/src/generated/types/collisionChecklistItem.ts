@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { CollisionChecklistDocument } from './collisionChecklistDocument';
 import type { CollisionChecklistItemAudience } from './collisionChecklistItemAudience';
 import type { CollisionChecklistItemStatus } from './collisionChecklistItemStatus';
 
@@ -21,6 +22,8 @@ export interface CollisionChecklistItem {
   status: CollisionChecklistItemStatus;
   /** @nullable */
   documentId?: number | null;
+  document?: CollisionChecklistDocument | null;
+  documents?: CollisionChecklistDocument[];
   /** @nullable */
   requestedByUserId?: number | null;
   /** @nullable */

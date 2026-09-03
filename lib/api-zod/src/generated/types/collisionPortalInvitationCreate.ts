@@ -8,11 +8,6 @@
 
 export interface CollisionPortalInvitationCreate {
   /**
-     * @maxLength 320
-     * @pattern ^[^@\s]+@[^@\s]+\.[^@\s]+$
-     */
-  email: string;
-  /**
      * @minimum 1
      * @maximum 30
      */

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CollisionPortalChecklistItemStatus } from './collisionPortalChecklistItemStatus';
+import type { CollisionPortalDocument } from './collisionPortalDocument';
 
 export interface CollisionPortalChecklistItem {
   id: number;
@@ -13,4 +14,6 @@ export interface CollisionPortalChecklistItem {
   label: string;
   description: string;
   status: CollisionPortalChecklistItemStatus;
+  document?: CollisionPortalDocument | null;
+  documents?: CollisionPortalDocument[];
 }

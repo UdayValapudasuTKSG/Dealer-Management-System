@@ -14651,6 +14651,82 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getCreateCollisionPortalUploadRequestMutationOptions(options));
     }
 
+export const getViewCollisionPortalDocumentUrl = (token: string,
+    documentId: number,) => {
+
+
+
+
+  return `/api/collision-portal/${token}/documents/${documentId}`
+}
+
+export const viewCollisionPortalDocument = async (token: string,
+    documentId: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getViewCollisionPortalDocumentUrl(token,documentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getViewCollisionPortalDocumentQueryKey = (token: string,
+    documentId: number,) => {
+    return [
+    `/api/collision-portal/${token}/documents/${documentId}`
+    ] as const;
+    }
+
+
+export const getViewCollisionPortalDocumentQueryOptions = <TData = Awaited<ReturnType<typeof viewCollisionPortalDocument>>, TError = ErrorType<unknown>>(token: string,
+    documentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof viewCollisionPortalDocument>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getViewCollisionPortalDocumentQueryKey(token,documentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof viewCollisionPortalDocument>>> = ({ signal }) => viewCollisionPortalDocument(token,documentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: token !== null && token !== undefined && documentId !== null && documentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof viewCollisionPortalDocument>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ViewCollisionPortalDocumentQueryResult = NonNullable<Awaited<ReturnType<typeof viewCollisionPortalDocument>>>
+export type ViewCollisionPortalDocumentQueryError = ErrorType<unknown>
+
+
+
+export function useViewCollisionPortalDocument<TData = Awaited<ReturnType<typeof viewCollisionPortalDocument>>, TError = ErrorType<unknown>>(
+ token: string,
+    documentId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof viewCollisionPortalDocument>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getViewCollisionPortalDocumentQueryOptions(token,documentId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getFinalizeCollisionPortalUploadUrl = (token: string,
     uploadId: number,) => {
 

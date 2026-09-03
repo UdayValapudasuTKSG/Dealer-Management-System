@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { Readable } from "node:stream";
 import { Router, type IRouter } from "express";
 import { z } from "zod/v4";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -78,6 +79,7 @@ router.get("/collision-portal/:token", async (req, res): Promise<void> => {
       label: collisionChecklistItemsTable.label,
       description: collisionChecklistItemsTable.description,
       status: collisionChecklistItemsTable.status,
+      documentId: collisionChecklistItemsTable.documentId,
     })
     .from(collisionChecklistItemsTable)
     .where(
@@ -96,6 +98,45 @@ router.get("/collision-portal/:token", async (req, res): Promise<void> => {
   const needed = checklist.filter((item) =>
     item.status === "missing" || item.status === "requested",
   );
+  const portalDocumentLinks = await db
+    .select({
+      checklistItemId: collisionPortalUploadsTable.checklistItemId,
+      documentId: collisionPortalUploadsTable.documentId,
+    })
+    .from(collisionPortalUploadsTable)
+    .where(and(
+      eq(collisionPortalUploadsTable.invitationId, invitation.id),
+      eq(collisionPortalUploadsTable.dealerId, invitation.dealerId),
+      eq(collisionPortalUploadsTable.claimId, invitation.claimId),
+      sql`${collisionPortalUploadsTable.finalizedAt} is not null`,
+      sql`${collisionPortalUploadsTable.documentId} is not null`,
+    ));
+  const documentIds = [...new Set([
+    ...checklist
+    .map((item) => item.documentId)
+    .filter((id): id is number => id != null),
+    ...portalDocumentLinks
+      .map((link) => link.documentId)
+      .filter((id): id is number => id != null),
+  ])];
+  const documents = documentIds.length
+    ? await db
+        .select({
+          id: documentsTable.id,
+          fileName: documentsTable.fileName,
+          mimeType: documentsTable.mimeType,
+          uploadedBy: documentsTable.uploadedBy,
+          createdAt: documentsTable.createdAt,
+        })
+        .from(documentsTable)
+        .where(and(
+          eq(documentsTable.dealerId, invitation.dealerId),
+          eq(documentsTable.entityType, "collision_claim"),
+          eq(documentsTable.entityId, invitation.claimId),
+          sql`${documentsTable.id} in (${sql.join(documentIds.map((id) => sql`${id}`), sql`, `)})`,
+        ))
+    : [];
+  const documentsById = new Map(documents.map((document) => [document.id, document]));
   res.json({
     claim: {
       vehicle: claim.vehicleInfo,
@@ -121,8 +162,107 @@ router.get("/collision-portal/:token", async (req, res): Promise<void> => {
           at: entry.at,
         })),
     },
-    checklist,
+    checklist: checklist.map((item) => {
+      const document = item.documentId == null
+        ? null
+        : documentsById.get(item.documentId) ?? null;
+      const itemDocuments = portalDocumentLinks
+        .filter((link) => link.checklistItemId === item.id && link.documentId != null)
+        .map((link) => documentsById.get(link.documentId!))
+        .filter((entry): entry is NonNullable<typeof entry> => entry != null)
+        .map((entry) => ({
+          ...entry,
+          viewUrl: `/api/collision-portal/${encodeURIComponent(token)}/documents/${entry.id}`,
+        }));
+      return {
+        id: item.id,
+        key: item.key,
+        label: item.label,
+        description: item.description,
+        status: item.status,
+        document: document
+          ? {
+              ...document,
+              viewUrl: `/api/collision-portal/${encodeURIComponent(token)}/documents/${document.id}`,
+            }
+          : null,
+        documents: itemDocuments,
+      };
+    }),
   });
+});
+
+router.get("/collision-portal/:token/documents/:documentId", async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "private, no-store, max-age=0");
+  const params = z.object({
+    token: z.string().min(32).max(200),
+    documentId: z.coerce.number().int().positive(),
+  }).safeParse(req.params);
+  if (!params.success) {
+    res.status(404).json({ error: "Document not found" });
+    return;
+  }
+  const invitation = await invitationFor(params.data.token);
+  if (!invitation || expired(invitation, res)) return;
+  const [document] = await db
+    .select()
+    .from(documentsTable)
+    .where(and(
+      eq(documentsTable.id, params.data.documentId),
+      eq(documentsTable.dealerId, invitation.dealerId),
+      eq(documentsTable.entityType, "collision_claim"),
+      eq(documentsTable.entityId, invitation.claimId),
+    ));
+  const [[linkedChecklist], [linkedUpload]] = await Promise.all([
+    db.select({ id: collisionChecklistItemsTable.id })
+      .from(collisionChecklistItemsTable)
+      .where(and(
+        eq(collisionChecklistItemsTable.documentId, params.data.documentId),
+        eq(collisionChecklistItemsTable.claimId, invitation.claimId),
+        eq(collisionChecklistItemsTable.dealerId, invitation.dealerId),
+        eq(collisionChecklistItemsTable.audience, "customer"),
+      ))
+      .limit(1),
+    db.select({ id: collisionPortalUploadsTable.id })
+      .from(collisionPortalUploadsTable)
+      .where(and(
+        eq(collisionPortalUploadsTable.documentId, params.data.documentId),
+        eq(collisionPortalUploadsTable.invitationId, invitation.id),
+        eq(collisionPortalUploadsTable.claimId, invitation.claimId),
+        eq(collisionPortalUploadsTable.dealerId, invitation.dealerId),
+        sql`${collisionPortalUploadsTable.finalizedAt} is not null`,
+      ))
+      .limit(1),
+  ]);
+  const fileDocument = linkedChecklist || linkedUpload ? document : null;
+  if (!fileDocument?.storageKey) {
+    res.status(404).json({ error: "Document not found" });
+    return;
+  }
+  try {
+    const file = await storage.getObjectEntityFile(fileDocument.storageKey);
+    const response = await storage.downloadObject(file);
+    res.status(response.status);
+    response.headers.forEach((value, key) => res.setHeader(key, value));
+    res.setHeader("Content-Type", fileDocument.mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${fileDocument.fileName.replace(/[^\w.\- ]/g, "_")}"`,
+    );
+    if (response.body) {
+      Readable.fromWeb(
+        response.body as unknown as import("stream/web").ReadableStream,
+      ).pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "File not found in storage" });
+      return;
+    }
+    throw error;
+  }
 });
 
 const uploadBody = z.object({

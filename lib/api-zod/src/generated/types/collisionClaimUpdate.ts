@@ -9,6 +9,26 @@ import type { CollisionClaimUpdateSeverity } from './collisionClaimUpdateSeverit
 import type { CollisionDamagePoint } from './collisionDamagePoint';
 
 export interface CollisionClaimUpdate {
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  customerId?: number | null;
+  /**
+     * @maxLength 200
+     * @nullable
+     */
+  customerName?: string | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  vehicleId?: number | null;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  vehicleInfo?: string;
   lossDate?: Date;
   /** @minLength 1 */
   insurerName?: string;

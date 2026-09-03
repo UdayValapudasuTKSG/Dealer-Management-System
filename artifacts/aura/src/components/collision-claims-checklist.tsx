@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { CheckCircle2, CircleDashed, AlertTriangle, MessageSquare, FileText, Loader2, Upload } from "lucide-react";
+import { CheckCircle2, CircleDashed, AlertTriangle, MessageSquare, FileText, Loader2, Upload, Eye } from "lucide-react";
 import { formatGuyanaDateTime } from "@/lib/format";
 
 const DOCUMENT_ACCEPT = ".pdf,.jpg,.jpeg,.png,.docx,application/pdf,image/jpeg,image/png,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -125,14 +125,59 @@ function ChecklistItemRow({ claimId, item }: { claimId: number, item: CollisionC
       </div>
 
       {item.status === "uploaded" && (
-        <div className="mt-1 flex items-center justify-between p-2 rounded-md border border-emerald-500/30 bg-emerald-500/5">
-          <div className="text-xs text-emerald-600 flex items-center gap-1 font-medium">
-            <FileText className="w-3.5 h-3.5" /> Awaiting Verification
+        <div className="mt-1 space-y-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-2">
+          <div className="space-y-2">
+            {(item.documents?.length ? item.documents : item.document ? [item.document] : []).map((document) => (
+              <div key={document.id} className="flex items-start justify-between gap-2 text-xs text-emerald-700 dark:text-emerald-400">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1 font-semibold">
+                    <FileText className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{document.fileName}</span>
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    Uploaded by {document.uploadedBy ?? "staff"} · {formatGuyanaDateTime(document.createdAt)}
+                  </div>
+                </div>
+                <Button size="sm" variant="outline" asChild className="h-7 shrink-0 text-xs">
+                  <a href={`/api/documents/${document.id}/download`} target="_blank" rel="noreferrer">
+                    <Eye className="mr-1 h-3 w-3" />
+                    View
+                  </a>
+                </Button>
+              </div>
+            ))}
+            <div className="font-medium text-xs text-emerald-700 dark:text-emerald-400">
+              Status: Awaiting verification. Verify confirms this checklist item and its submitted evidence.
+            </div>
           </div>
-          <Button size="sm" onClick={handleVerify} disabled={verify.isPending} className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
-            {verify.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
-            Verify
-          </Button>
+          <div className="flex items-center justify-end gap-2">
+            <Button size="sm" onClick={handleVerify} disabled={verify.isPending} className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white">
+              {verify.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
+              Verify
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {item.status === "verified" && (
+        <div className="mt-1 space-y-2 rounded-md border border-border/50 bg-muted/20 p-2 text-xs">
+          <div className="font-medium">Status: Verified</div>
+          <div className="text-muted-foreground">
+            Uploaded by {item.document?.uploadedBy ?? "staff"}
+            {item.document?.createdAt ? ` · ${formatGuyanaDateTime(item.document.createdAt)}` : ""}
+          </div>
+          <div className="text-muted-foreground">
+            Verified by {item.verifiedByName ?? "dealership staff"}
+            {item.verifiedAt ? ` · ${formatGuyanaDateTime(item.verifiedAt)}` : ""}
+          </div>
+          {item.document && (
+            <Button size="sm" variant="outline" asChild className="h-7 text-xs">
+              <a href={`/api/documents/${item.document.id}/download`} target="_blank" rel="noreferrer">
+                <Eye className="mr-1 h-3 w-3" />
+                View
+              </a>
+            </Button>
+          )}
         </div>
       )}
 

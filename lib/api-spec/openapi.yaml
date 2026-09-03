@@ -4966,6 +4966,21 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionPortalUploadRequest" } } } }
       responses:
         "201": { description: Private object upload request, content: { application/json: { schema: { $ref: "#/components/schemas/CollisionPortalUploadRequestResult" } } } }
+  /collision-portal/{token}/documents/{documentId}:
+    get:
+      operationId: viewCollisionPortalDocument
+      tags: [service]
+      security: []
+      parameters:
+        - { name: token, in: path, required: true, schema: { type: string, minLength: 32, maxLength: 200 } }
+        - { name: documentId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Token-scoped private customer checklist document
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
   /collision-portal/{token}/uploads/{uploadId}/finalize:
     post:
       operationId: finalizeCollisionPortalUpload
@@ -13401,6 +13416,10 @@ components:
     CollisionClaimUpdate:
       type: object
       properties:
+        customerId: { type: ["integer", "null"], minimum: 1 }
+        customerName: { type: ["string", "null"], maxLength: 200 }
+        vehicleId: { type: ["integer", "null"], minimum: 1 }
+        vehicleInfo: { type: string, minLength: 1, maxLength: 300 }
         lossDate: { type: string, format: date }
         insurerName: { type: string, minLength: 1 }
         policyNumber: { type: ["string", "null"] }
@@ -13537,6 +13556,13 @@ components:
         requiredForStatus: { type: ["string", "null"] }
         status: { type: string, enum: [missing, requested, uploaded, verified, waived] }
         documentId: { type: ["integer", "null"] }
+        document:
+          oneOf:
+            - $ref: "#/components/schemas/CollisionChecklistDocument"
+            - type: "null"
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/CollisionChecklistDocument" }
         requestedByUserId: { type: ["integer", "null"] }
         requestedByName: { type: ["string", "null"] }
         requestedAt: { type: ["string", "null"], format: date-time }
@@ -13559,6 +13585,15 @@ components:
         uploaded: { type: integer }
         verified: { type: integer }
         waived: { type: integer }
+    CollisionChecklistDocument:
+      type: object
+      required: [id, fileName, mimeType, uploadedBy, createdAt]
+      properties:
+        id: { type: integer }
+        fileName: { type: string }
+        mimeType: { type: string }
+        uploadedBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
     CollisionChecklistRequest:
       type: object
       properties:
@@ -13636,9 +13671,8 @@ components:
           properties: { token: { type: string } }
     CollisionPortalInvitationCreate:
       type: object
-      required: [email, idempotencyKey]
+      required: [idempotencyKey]
       properties:
-        email: { type: string, pattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$', maxLength: 320 }
         expiresInDays: { type: integer, minimum: 1, maximum: 30, default: 7 }
         idempotencyKey: { type: string, minLength: 8, maxLength: 200 }
         createDraft: { type: boolean, default: false }
@@ -13651,6 +13685,23 @@ components:
         label: { type: string }
         description: { type: string }
         status: { type: string, enum: [missing, requested, uploaded, verified, waived] }
+        document:
+          oneOf:
+            - $ref: "#/components/schemas/CollisionPortalDocument"
+            - type: "null"
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/CollisionPortalDocument" }
+    CollisionPortalDocument:
+      type: object
+      required: [id, fileName, mimeType, uploadedBy, createdAt, viewUrl]
+      properties:
+        id: { type: integer }
+        fileName: { type: string }
+        mimeType: { type: string }
+        uploadedBy: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        viewUrl: { type: string }
     CollisionPortal:
       type: object
       required: [claim, checklist]

@@ -141,7 +141,7 @@ export default function CollisionPortal() {
                   <div className="mt-0.5 text-emerald-500">
                     <CheckCircle2 className="w-5 h-5" />
                   </div>
-                  <div>
+                   <div className="min-w-0 flex-1">
                     <div className="font-medium text-sm">{item.label}</div>
                     <div className="text-xs text-muted-foreground mt-1">
                       {item.status === "verified"
@@ -150,6 +150,20 @@ export default function CollisionPortal() {
                         ? "Uploaded, awaiting dealership verification."
                         : "Waived by dealership."}
                     </div>
+                     <div className="mt-2 flex flex-col items-start gap-1">
+                       {(item.documents?.length ? item.documents : item.document ? [item.document] : []).map((document) => (
+                         <a
+                           key={document.id}
+                           href={document.viewUrl}
+                           target="_blank"
+                           rel="noreferrer"
+                           className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                         >
+                           <FileText className="h-3.5 w-3.5" />
+                           View {document.fileName}
+                         </a>
+                       ))}
+                     </div>
                   </div>
                 </div>
               ))}
@@ -234,57 +248,55 @@ function ChecklistUploader({
   const finalizeReq = useFinalizeCollisionPortalUpload();
   const { toast } = useToast();
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (files: File[]) => {
     setBusy(true);
+    const failures: string[] = [];
+    let uploadedCount = 0;
     try {
-      const mime = file.type;
       const validMimes = [
         "application/pdf",
         "image/jpeg",
         "image/png",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       ];
-      if (!validMimes.includes(mime)) {
-        throw new Error("Invalid file type. Please upload a PDF, JPG, PNG, or DOCX.");
+      for (const file of files) {
+        try {
+          const mime = file.type;
+          if (!validMimes.includes(mime)) {
+            throw new Error("unsupported file type");
+          }
+          const reqRes = await createReq.mutateAsync({
+            token,
+            data: {
+              fileName: file.name,
+              mimeType: mime as any,
+              checklistItemId: item.id,
+            },
+          });
+          const putRes = await fetch(reqRes.uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": mime },
+            body: file,
+          });
+          if (!putRes.ok) throw new Error("storage upload failed");
+          await finalizeReq.mutateAsync({
+            token,
+            uploadId: reqRes.uploadId,
+          } as any);
+          uploadedCount++;
+        } catch (error) {
+          failures.push(
+            `${file.name}: ${error instanceof Error ? error.message : "upload failed"}`,
+          );
+        }
       }
-
-      // 1. Get upload URL
-      const reqRes = await createReq.mutateAsync({
-        token,
-        data: {
-          fileName: file.name,
-          mimeType: mime as any,
-          checklistItemId: item.id,
-        },
-      });
-
-      // 2. PUT file to pre-signed URL
-      const putRes = await fetch(reqRes.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": mime },
-        body: file,
-      });
-
-      if (!putRes.ok) {
-        throw new Error("Upload failed. Please try again.");
-      }
-
-      // 3. Finalize
-      await finalizeReq.mutateAsync({
-        token,
-        uploadId: reqRes.uploadId,
-      } as any);
-
+      if (uploadedCount > 0) onSuccess();
       toast({
-        title: "Upload complete",
-        description: `${item.label} has been securely uploaded.`,
-      });
-      onSuccess();
-    } catch (err: any) {
-      toast({
-        title: "Could not upload",
-        description: err.message || "Unknown error occurred.",
-        variant: "destructive",
+        title: failures.length === 0 ? "Uploads complete" : "Some files could not be uploaded",
+        description: failures.length === 0
+          ? `${uploadedCount} file${uploadedCount === 1 ? "" : "s"} securely uploaded.`
+          : `${uploadedCount} uploaded; ${failures.length} failed. ${failures.join(" · ")}`,
+        variant: failures.length > 0 ? "destructive" : "default",
       });
     } finally {
       setBusy(false);
@@ -303,11 +315,12 @@ function ChecklistUploader({
       <div className="shrink-0">
         <input
           type="file"
+          multiple
           className="hidden"
           ref={fileInputRef}
           onChange={(e) => {
-            if (e.target.files && e.target.files[0]) {
-              handleUpload(e.target.files[0]);
+            if (e.target.files?.length) {
+              void handleUpload(Array.from(e.target.files));
             }
           }}
           accept=".pdf,.jpg,.jpeg,.png,.docx"
@@ -322,7 +335,7 @@ function ChecklistUploader({
           ) : (
             <Upload className="w-4 h-4 mr-2" />
           )}
-          Upload File
+          Upload Files
         </Button>
       </div>
     </div>
