@@ -5598,8 +5598,10 @@ export const PartRequisitionUrgency = {
 
 export interface PartRequisition {
   id: number;
-  serviceOrderId: number;
-  jobCardId: number;
+  /** @nullable */
+  serviceOrderId?: number | null;
+  /** @nullable */
+  jobCardId?: number | null;
   /** @nullable */
   requesterUserId?: number | null;
   requesterName: string;
@@ -5753,6 +5755,33 @@ export interface PartRequisitionInput {
      * @maxItems 100
      */
   lines: PartRequisitionLineInput[];
+}
+
+export type InventoryPartRequisitionInputUrgency = typeof InventoryPartRequisitionInputUrgency[keyof typeof InventoryPartRequisitionInputUrgency];
+
+
+export const InventoryPartRequisitionInputUrgency = {
+  routine: 'routine',
+  urgent: 'urgent',
+  vehicle_down: 'vehicle_down',
+} as const;
+
+export interface InventoryPartRequisitionLineInput {
+  partId: number;
+  /** @minimum 1 */
+  quantity: number;
+}
+
+export interface InventoryPartRequisitionInput {
+  urgency: InventoryPartRequisitionInputUrgency;
+  needBy?: string;
+  /** @maxLength 4000 */
+  notes?: string;
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  lines: InventoryPartRequisitionLineInput[];
 }
 
 export type PartRequisitionDecisionAction = typeof PartRequisitionDecisionAction[keyof typeof PartRequisitionDecisionAction];

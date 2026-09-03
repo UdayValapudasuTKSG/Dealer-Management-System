@@ -9,6 +9,7 @@ import {
   useCancelPartRequisition,
   useListParts,
   useListSuppliers,
+  useCreateInventoryPartRequisition,
   getListPartRequisitionsQueryKey,
   getGetPartRequisitionQueryKey,
   getListPurchaseOrdersQueryKey,
@@ -23,9 +24,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Search, Loader2, FileText, CheckCircle, XCircle, ShoppingCart, Truck, Ban, Link as LinkIcon } from "lucide-react";
+import { Search, Loader2, FileText, CheckCircle, XCircle, ShoppingCart, Truck, Ban, Link as LinkIcon, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 
@@ -76,8 +78,9 @@ export function RequisitionsWorkspace() {
     return (
       req.id.toString().includes(lower) ||
       (req.requesterName || "").toLowerCase().includes(lower) ||
-      req.serviceOrderId.toString().includes(lower) ||
-      req.jobCardId.toString().includes(lower)
+      req.serviceOrderId?.toString().includes(lower) ||
+      req.jobCardId?.toString().includes(lower) ||
+      (req.jobCardId == null && "inventory restock".includes(lower))
     );
   });
 
@@ -144,6 +147,159 @@ export function RequisitionsWorkspace() {
   );
 }
 
+export function CreateInventoryRequisitionButton() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        onClick={() => setOpen(true)}
+        className="bg-primary hover:bg-primary/90 text-white rounded-full px-6 h-12 shadow-lg shadow-primary/20 gap-2"
+      >
+        <Plus className="w-5 h-5" />
+        New Restock Requisition
+      </Button>
+      <CreateInventoryRequisitionDialog open={open} onOpenChange={setOpen} />
+    </>
+  );
+}
+
+function CreateInventoryRequisitionDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const create = useCreateInventoryPartRequisition();
+  const { data: parts } = useListParts();
+  const [urgency, setUrgency] = useState<PartRequisitionUrgency>("routine");
+  const [needBy, setNeedBy] = useState("");
+  const [notes, setNotes] = useState("");
+  const [lines, setLines] = useState<Array<{ partId: string; quantity: number }>>([
+    { partId: "", quantity: 1 },
+  ]);
+
+  const reset = () => {
+    setUrgency("routine");
+    setNeedBy("");
+    setNotes("");
+    setLines([{ partId: "", quantity: 1 }]);
+  };
+
+  const submit = async () => {
+    const validLines = lines
+      .filter((line) => line.partId && line.quantity > 0)
+      .map((line) => ({ partId: Number(line.partId), quantity: line.quantity }));
+    if (validLines.length === 0 || validLines.length !== lines.length) {
+      toast({
+        title: "Complete every requested part",
+        description: "Select a part and enter a quantity of at least one for each line.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (new Set(validLines.map((line) => line.partId)).size !== validLines.length) {
+      toast({
+        title: "Duplicate part selected",
+        description: "Combine duplicate parts into one requested quantity.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      await create.mutateAsync({
+        data: {
+          urgency,
+          lines: validLines,
+          ...(needBy ? { needBy } : {}),
+          ...(notes.trim() ? { notes: notes.trim() } : {}),
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: getListPartRequisitionsQueryKey() });
+      toast({
+        title: "Restock requisition submitted",
+        description: "It is now ready for approval and supplier sourcing.",
+      });
+      reset();
+      onOpenChange(false);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || (e as Error).message;
+      toast({ title: "Could not submit requisition", description: msg, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => { if (!next && !create.isPending) reset(); onOpenChange(next); }}>
+      <DialogContent className="max-w-2xl glass-panel border-none">
+        <DialogHeader>
+          <DialogTitle>New Inventory Restock Requisition</DialogTitle>
+          <DialogDescription>
+            Request inventory replenishment without linking it to a customer or job card.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-5 py-2">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Priority</label>
+              <Select value={urgency} onValueChange={(value) => setUrgency(value as PartRequisitionUrgency)}>
+                <SelectTrigger className="border-white/10 bg-white/[0.03]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="routine">Routine</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                  <SelectItem value="vehicle_down">Vehicle Down (VOR)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Need by</label>
+              <Input type="date" value={needBy} onChange={(event) => setNeedBy(event.target.value)} className="border-white/10 bg-white/[0.03]" />
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Parts to replenish</label>
+              <Button variant="outline" size="sm" onClick={() => setLines((current) => [...current, { partId: "", quantity: 1 }])}>
+                <Plus className="w-4 h-4 mr-1" /> Add part
+              </Button>
+            </div>
+            {lines.map((line, index) => (
+              <div key={index} className="grid grid-cols-[1fr_110px_40px] gap-3 items-center">
+                <Select value={line.partId} onValueChange={(value) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, partId: value } : item))}>
+                  <SelectTrigger className="border-white/10 bg-white/[0.03]"><SelectValue placeholder="Select inventory part" /></SelectTrigger>
+                  <SelectContent>
+                    {parts?.filter((part) => part.status === "active").map((part) => (
+                      <SelectItem key={part.id} value={String(part.id)}>
+                        {part.sku} — {part.name} ({part.stock} on hand)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input type="number" min={1} value={line.quantity} onChange={(event) => setLines((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Number(event.target.value) } : item))} className="border-white/10 bg-white/[0.03]" />
+                <Button variant="ghost" size="icon" disabled={lines.length === 1} onClick={() => setLines((current) => current.filter((_, itemIndex) => itemIndex !== index))} aria-label="Remove part">
+                  <Trash2 className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</label>
+            <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Supplier preference, pack size, or replenishment context…" className="border-white/10 bg-white/[0.03] min-h-24" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={create.isPending}>Cancel</Button>
+          <Button onClick={submit} disabled={create.isPending}>
+            {create.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Submit Requisition
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RequisitionCard({ req }: { req: PartRequisition }) {
   const [open, setOpen] = useState(false);
   const isVOR = req.urgency === "vehicle_down";
@@ -155,7 +311,9 @@ function RequisitionCard({ req }: { req: PartRequisition }) {
           <div className="flex justify-between items-start">
             <div>
               <h4 className="font-bold text-sm">REQ-{req.id}</h4>
-              <p className="text-xs text-muted-foreground">Job Card #{req.jobCardId} · SO #{req.serviceOrderId}</p>
+              <p className="text-xs text-muted-foreground">
+                {req.jobCardId == null ? "Inventory restock" : `Job Card #${req.jobCardId} · SO #${req.serviceOrderId}`}
+              </p>
             </div>
             <Badge variant="secondary" className={cn(
               "px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest border-none",
@@ -293,7 +451,7 @@ function RequisitionDetailContent({ req, onActionComplete }: { req: PartRequisit
         </div>
         <div>
           <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mb-1">Context</div>
-          <div className="text-sm font-medium">JC #{req.jobCardId}</div>
+           <div className="text-sm font-medium">{req.jobCardId == null ? "Inventory restock" : `JC #${req.jobCardId}`}</div>
         </div>
         <div>
           <div className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mb-1">Need By</div>
@@ -314,7 +472,7 @@ function RequisitionDetailContent({ req, onActionComplete }: { req: PartRequisit
           {req.lines.map(line => {
             const isInternal = line.source === "INTERNAL";
             const unfulfilled = line.quantity - line.fulfilledQuantity;
-            const canFulfill = ["approved", "partially_ordered", "ordered", "partially_fulfilled"].includes(req.status) && unfulfilled > 0;
+            const canFulfill = req.jobCardId != null && ["approved", "partially_ordered", "ordered", "partially_fulfilled"].includes(req.status) && unfulfilled > 0;
             const part = isInternal && line.partId ? parts?.find(p => p.id === line.partId) : null;
 
             return (
@@ -355,7 +513,7 @@ function RequisitionDetailContent({ req, onActionComplete }: { req: PartRequisit
                     <div className="text-sm font-medium text-amber-400">{line.outstandingQuantity ?? 0}</div>
                   </div>
                   <div className="space-y-1">
-                    <div className="text-muted-foreground uppercase text-[10px] tracking-widest font-bold">Consumed</div>
+                    <div className="text-muted-foreground uppercase text-[10px] tracking-widest font-bold">{req.jobCardId == null ? "Received" : "Consumed"}</div>
                     <div className="text-sm font-medium text-emerald-400">{line.fulfilledQuantity} / {line.quantity}</div>
                   </div>
                 </div>
@@ -422,7 +580,7 @@ function RequisitionDetailContent({ req, onActionComplete }: { req: PartRequisit
             </Button>
           )}
 
-          {["approved", "partially_ordered", "ordered", "partially_fulfilled"].includes(req.status) && Object.values(fulfillmentLines).some(q => q > 0) && (
+          {req.jobCardId != null && ["approved", "partially_ordered", "ordered", "partially_fulfilled"].includes(req.status) && Object.values(fulfillmentLines).some(q => q > 0) && (
             <Button onClick={handleFulfill} disabled={fulfill.isPending} className="bg-amber-500 hover:bg-amber-600 text-white">
               <Truck className="w-4 h-4 mr-2" /> Record Consumption
             </Button>

@@ -21,6 +21,8 @@ import {
   CreateJobCardPartRequisitionBody,
   CreateJobCardPartRequisitionParams,
   CreateJobCardPartRequisitionResponse,
+  CreateInventoryPartRequisitionBody,
+  CreateInventoryPartRequisitionResponse,
   DecidePartRequisitionBody,
   DecidePartRequisitionParams,
   DecidePartRequisitionResponse,
@@ -158,8 +160,9 @@ async function loadDetail(dealerId: number, id: number) {
   };
 }
 
-async function canViewRequisition(user: AuthedUser | undefined, dealerId: number, jobCardId: number) {
+async function canViewRequisition(user: AuthedUser | undefined, dealerId: number, jobCardId: number | null) {
   if (canPartsView(user)) return true;
+  if (jobCardId == null) return false;
   const linked = await loadCardAndOrder(dealerId, jobCardId);
   return !!linked && isAssigned(user, linked.card, linked.order);
 }
@@ -275,6 +278,84 @@ async function createJobCardRequisition(
 router.post("/job-cards/:id/part-requisitions", (req, res) =>
   createJobCardRequisition(req, res),
 );
+
+router.post("/part-requisitions", async (req, res): Promise<void> => {
+  const parsed = CreateInventoryPartRequisitionBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (!canPartsView(res.locals.user)) {
+    res.status(403).json({ error: "Parts access required" });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const partIds = [...new Set(parsed.data.lines.map((line) => line.partId))];
+  const parts = await db
+    .select()
+    .from(partsTable)
+    .where(
+      and(
+        eq(partsTable.dealerId, dealerId),
+        inArray(partsTable.id, partIds),
+        eq(partsTable.status, "active"),
+      ),
+    );
+  const partById = new Map(parts.map((part) => [part.id, part]));
+  if (partIds.some((id) => !partById.has(id))) {
+    res.status(422).json({ error: "One or more active inventory parts were not found in this dealership" });
+    return;
+  }
+  const user = res.locals.user;
+  const requisition = await db.transaction(async (tx) => {
+    const [header] = await tx
+      .insert(partRequisitionsTable)
+      .values({
+        dealerId,
+        serviceOrderId: null,
+        jobCardId: null,
+        requesterUserId: user?.id ?? null,
+        requesterName: actorName(user),
+        status: "submitted",
+        urgency: parsed.data.urgency,
+        needBy: parsed.data.needBy
+          ? parsed.data.needBy instanceof Date
+            ? parsed.data.needBy.toISOString().slice(0, 10)
+            : String(parsed.data.needBy).slice(0, 10)
+          : null,
+        notes: parsed.data.notes?.trim() || null,
+      })
+      .returning();
+    await tx.insert(partRequisitionLinesTable).values(
+      parsed.data.lines.map((line) => {
+        const part = partById.get(line.partId)!;
+        return {
+          dealerId,
+          requisitionId: header.id,
+          source: "INTERNAL",
+          partId: part.id,
+          skuSnapshot: part.sku,
+          descriptionSnapshot: part.name,
+          quantity: line.quantity,
+          unitCost: part.unitCost,
+          unitPrice: part.unitPrice,
+        };
+      }),
+    );
+    return header;
+  });
+  notifyPartsRequisitionSubmitted({
+    id: requisition.id,
+    dealerId,
+    jobCardId: null,
+    requesterName: requisition.requesterName,
+    urgency: requisition.urgency,
+    lineCount: parsed.data.lines.length,
+  });
+  res.status(201).json(
+    CreateInventoryPartRequisitionResponse.parse(await loadDetail(dealerId, requisition.id)),
+  );
+});
 
 /** Collision requests deliberately delegate to the job-card implementation so
  * inventory validation, snapshots and lifecycle semantics cannot diverge. */
@@ -798,6 +879,13 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
         .where(and(eq(partRequisitionsTable.id, params.data.id), eq(partRequisitionsTable.dealerId, dealerId)))
         .for("update");
       if (!header) throw Object.assign(new Error("Requisition not found"), { status: 404 });
+      if (header.jobCardId == null) {
+        throw Object.assign(
+          new Error("Inventory restock requisitions are fulfilled by receiving their purchase order"),
+          { status: 422 },
+        );
+      }
+      const jobCardId = header.jobCardId;
       if (header.status === "fulfilled") {
         const prior = await tx
           .select({ lineId: partRequisitionFulfillmentsTable.lineId })
@@ -818,7 +906,7 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
       const [invoice] = await tx
         .select({ id: serviceInvoicesTable.id })
         .from(serviceInvoicesTable)
-        .where(and(eq(serviceInvoicesTable.dealerId, dealerId), eq(serviceInvoicesTable.jobCardId, header.jobCardId)));
+        .where(and(eq(serviceInvoicesTable.dealerId, dealerId), eq(serviceInvoicesTable.jobCardId, jobCardId)));
       if (invoice) throw Object.assign(new Error(`Invoice #${invoice.id} is already issued`), { status: 422 });
 
       for (const requestLine of parsed.data.lines) {
@@ -891,7 +979,7 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
             .insert(jobCardPartsTable)
             .values({
               dealerId,
-              jobCardId: header.jobCardId,
+              jobCardId,
               partId: part.id,
               partName: line.descriptionSnapshot,
               kind: "issue",
@@ -908,7 +996,7 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
           issuedInternal.push({
             partId: part.id,
             quantity: requestLine.quantity,
-            jobCardId: header.jobCardId,
+            jobCardId,
             jobCardPartId: jobLine.id,
             part,
             previousStock: beforePart.stock,
@@ -918,7 +1006,7 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
             .insert(externalJobCardPartsTable)
             .values({
               dealerId,
-              jobCardId: header.jobCardId,
+              jobCardId,
               requisitionLineId: line.id,
               fulfillmentId: fulfillment.id,
               description: `External part — ${line.descriptionSnapshot}`,

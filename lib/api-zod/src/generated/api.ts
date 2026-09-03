@@ -6414,8 +6414,8 @@ export const ListJobCardPartRequisitionsParams = zod.object({
 
 export const ListJobCardPartRequisitionsResponseItem = zod.object({
   "id": zod.number(),
-  "serviceOrderId": zod.number(),
-  "jobCardId": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
   "requesterUserId": zod.number().nullish(),
   "requesterName": zod.string(),
   "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
@@ -6489,8 +6489,8 @@ export const CreateJobCardPartRequisitionBody = zod.object({
 
 export const CreateJobCardPartRequisitionResponse = zod.object({
   "id": zod.number(),
-  "serviceOrderId": zod.number(),
-  "jobCardId": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
   "requesterUserId": zod.number().nullish(),
   "requesterName": zod.string(),
   "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
@@ -6556,8 +6556,8 @@ export const ListPartRequisitionsQueryParams = zod.object({
 
 export const ListPartRequisitionsResponseItem = zod.object({
   "id": zod.number(),
-  "serviceOrderId": zod.number(),
-  "jobCardId": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
   "requesterUserId": zod.number().nullish(),
   "requesterName": zod.string(),
   "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
@@ -6585,14 +6585,91 @@ export const ListPartRequisitionsResponseItem = zod.object({
 export const ListPartRequisitionsResponse = zod.array(ListPartRequisitionsResponseItem)
 
 
+/**
+ * @summary Submit a standalone inventory restocking requisition
+ */
+export const createInventoryPartRequisitionBodyNotesMax = 4000;
+
+
+export const createInventoryPartRequisitionBodyLinesMax = 100;
+
+
+
+export const CreateInventoryPartRequisitionBody = zod.object({
+  "urgency": zod.enum(['routine', 'urgent', 'vehicle_down']),
+  "needBy": zod.coerce.date().optional(),
+  "notes": zod.string().max(createInventoryPartRequisitionBodyNotesMax).optional(),
+  "lines": zod.array(zod.object({
+  "partId": zod.number(),
+  "quantity": zod.number().min(1)
+})).min(1).max(createInventoryPartRequisitionBodyLinesMax)
+})
+
+export const CreateInventoryPartRequisitionResponse = zod.object({
+  "id": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
+  "requesterUserId": zod.number().nullish(),
+  "requesterName": zod.string(),
+  "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
+  "urgency": zod.enum(['routine', 'urgent', 'vehicle_down']),
+  "needBy": zod.coerce.date().nullish(),
+  "notes": zod.string().nullish(),
+  "decisionReason": zod.string().nullish(),
+  "decidedByUserId": zod.number().nullish(),
+  "decidedByName": zod.string().nullish(),
+  "decidedAt": zod.coerce.date().nullish(),
+  "orderedByUserId": zod.number().nullish(),
+  "orderedByName": zod.string().nullish(),
+  "orderedAt": zod.coerce.date().nullish(),
+  "orderReference": zod.string().nullish(),
+  "cancellationReason": zod.string().nullish(),
+  "cancelledByUserId": zod.number().nullish(),
+  "cancelledByName": zod.string().nullish(),
+  "cancelledAt": zod.coerce.date().nullish(),
+  "fulfilledByUserId": zod.number().nullish(),
+  "fulfilledByName": zod.string().nullish(),
+  "fulfilledAt": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "lines": zod.array(zod.object({
+  "id": zod.number(),
+  "requisitionId": zod.number(),
+  "source": zod.enum(['INTERNAL', 'EXTERNAL']),
+  "partId": zod.number().nullish(),
+  "skuSnapshot": zod.string().nullish(),
+  "descriptionSnapshot": zod.string(),
+  "supplierSnapshot": zod.string().nullish(),
+  "quantity": zod.number(),
+  "fulfilledQuantity": zod.number(),
+  "unitCost": zod.number().describe('Procurement cost in GYD'),
+  "unitPrice": zod.number().describe('Customer invoice unit price in GYD'),
+  "taxCost": zod.number().describe('Procurement tax cost in GYD'),
+  "freightCost": zod.number().describe('Procurement freight cost in GYD'),
+  "orderedQuantity": zod.number().optional(),
+  "receivedQuantity": zod.number().optional(),
+  "outstandingQuantity": zod.number().optional(),
+  "purchaseOrderLinks": zod.array(zod.object({
+  "purchaseOrderId": zod.number(),
+  "purchaseOrderLineId": zod.number(),
+  "supplierId": zod.number(),
+  "quantityOrdered": zod.number(),
+  "quantityReceived": zod.number()
+})).optional(),
+  "createdAt": zod.coerce.date()
+}))
+}))
+
+
 export const GetPartRequisitionParams = zod.object({
   "id": zod.coerce.number()
 })
 
 export const GetPartRequisitionResponse = zod.object({
   "id": zod.number(),
-  "serviceOrderId": zod.number(),
-  "jobCardId": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
   "requesterUserId": zod.number().nullish(),
   "requesterName": zod.string(),
   "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
@@ -6664,8 +6741,8 @@ export const DecidePartRequisitionBody = zod.object({
 
 export const DecidePartRequisitionResponse = zod.object({
   "id": zod.number(),
-  "serviceOrderId": zod.number(),
-  "jobCardId": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
   "requesterUserId": zod.number().nullish(),
   "requesterName": zod.string(),
   "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
@@ -6736,8 +6813,8 @@ export const MarkPartRequisitionOrderedBody = zod.object({
 
 export const MarkPartRequisitionOrderedResponse = zod.object({
   "id": zod.number(),
-  "serviceOrderId": zod.number(),
-  "jobCardId": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
   "requesterUserId": zod.number().nullish(),
   "requesterName": zod.string(),
   "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
@@ -6825,8 +6902,8 @@ export const ConvertPartRequisitionToPurchaseOrdersBody = zod.object({
 export const ConvertPartRequisitionToPurchaseOrdersResponse = zod.object({
   "requisition": zod.object({
   "id": zod.number(),
-  "serviceOrderId": zod.number(),
-  "jobCardId": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
   "requesterUserId": zod.number().nullish(),
   "requesterName": zod.string(),
   "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
@@ -6928,8 +7005,8 @@ export const CancelPartRequisitionBody = zod.object({
 
 export const CancelPartRequisitionResponse = zod.object({
   "id": zod.number(),
-  "serviceOrderId": zod.number(),
-  "jobCardId": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
   "requesterUserId": zod.number().nullish(),
   "requesterName": zod.string(),
   "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
@@ -7008,8 +7085,8 @@ export const FulfillPartRequisitionBody = zod.object({
 
 export const FulfillPartRequisitionResponse = zod.object({
   "id": zod.number(),
-  "serviceOrderId": zod.number(),
-  "jobCardId": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
   "requesterUserId": zod.number().nullish(),
   "requesterName": zod.string(),
   "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
@@ -8468,8 +8545,8 @@ export const ListCollisionClaimPartRequisitionsParams = zod.object({
 
 export const ListCollisionClaimPartRequisitionsResponseItem = zod.object({
   "id": zod.number(),
-  "serviceOrderId": zod.number(),
-  "jobCardId": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
   "requesterUserId": zod.number().nullish(),
   "requesterName": zod.string(),
   "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),
@@ -8540,8 +8617,8 @@ export const CreateCollisionClaimPartRequisitionBody = zod.object({
 
 export const CreateCollisionClaimPartRequisitionResponse = zod.object({
   "id": zod.number(),
-  "serviceOrderId": zod.number(),
-  "jobCardId": zod.number(),
+  "serviceOrderId": zod.number().nullish(),
+  "jobCardId": zod.number().nullish(),
   "requesterUserId": zod.number().nullish(),
   "requesterName": zod.string(),
   "status": zod.enum(['submitted', 'approved', 'partially_ordered', 'rejected', 'ordered', 'partially_fulfilled', 'fulfilled', 'cancelled']),

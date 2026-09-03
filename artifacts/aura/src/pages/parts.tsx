@@ -66,7 +66,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { formatGuyanaDate, useMoney } from "@/lib/format";
 
-import { RequisitionsWorkspace } from "@/components/parts/requisitions-workspace";
+import { CreateInventoryRequisitionButton, RequisitionsWorkspace } from "@/components/parts/requisitions-workspace";
 
 const TABS = [
   { key: "parts", label: "Parts", icon: Package },
@@ -189,6 +189,8 @@ export default function Parts() {
       action={
         tab === "parts" ? (
           <CreatePartDialog />
+        ) : tab === "requisitions" ? (
+          <CreateInventoryRequisitionButton />
         ) : tab === "suppliers" ? (
           <CreateSupplierDialog />
         ) : tab === "orders" ? (

@@ -206,6 +206,7 @@ import type {
   ImportPartsParams,
   ImportVehiclesParams,
   InventoryBreakdown,
+  InventoryPartRequisitionInput,
   Invoice,
   InvoiceInput,
   InvoiceUpdate,
@@ -11772,6 +11773,77 @@ export function useListPartRequisitions<TData = Awaited<ReturnType<typeof listPa
 
 
 
+
+export const getCreateInventoryPartRequisitionUrl = () => {
+
+
+
+
+  return `/api/part-requisitions`
+}
+
+/**
+ * @summary Submit a standalone inventory restocking requisition
+ */
+export const createInventoryPartRequisition = async (inventoryPartRequisitionInput: InventoryPartRequisitionInput, options?: RequestInit): Promise<PartRequisitionDetail> => {
+
+  return customFetch<PartRequisitionDetail>(getCreateInventoryPartRequisitionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inventoryPartRequisitionInput)
+  }
+);}
+
+
+
+
+
+export const getCreateInventoryPartRequisitionMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInventoryPartRequisition>>, TError,{data: BodyType<InventoryPartRequisitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createInventoryPartRequisition>>, TError,{data: BodyType<InventoryPartRequisitionInput>}, TContext> => {
+
+const mutationKey = ['createInventoryPartRequisition'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createInventoryPartRequisition>>, {data: BodyType<InventoryPartRequisitionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createInventoryPartRequisition(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateInventoryPartRequisitionMutationResult = NonNullable<Awaited<ReturnType<typeof createInventoryPartRequisition>>>
+    export type CreateInventoryPartRequisitionMutationBody = BodyType<InventoryPartRequisitionInput>
+    export type CreateInventoryPartRequisitionMutationError = ErrorType<Error>
+
+    /**
+ * @summary Submit a standalone inventory restocking requisition
+ */
+export const useCreateInventoryPartRequisition = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createInventoryPartRequisition>>, TError,{data: BodyType<InventoryPartRequisitionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createInventoryPartRequisition>>,
+        TError,
+        {data: BodyType<InventoryPartRequisitionInput>},
+        TContext
+      > => {
+      return useMutation(getCreateInventoryPartRequisitionMutationOptions(options));
+    }
 
 export const getGetPartRequisitionUrl = (id: number,) => {
 

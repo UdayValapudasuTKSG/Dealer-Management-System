@@ -127,7 +127,7 @@ export function notifyPartLowStock(part: {
 export function notifyPartsRequisitionSubmitted(requisition: {
   id: number;
   dealerId: number;
-  jobCardId: number;
+  jobCardId: number | null;
   requesterName: string;
   urgency: string;
   lineCount: number;
@@ -135,7 +135,10 @@ export function notifyPartsRequisitionSubmitted(requisition: {
   fire("parts.requisition.submitted", async () => {
     const users = await usersWithPermission(requisition.dealerId, "parts");
     if (users.length === 0) return;
-    const body = `${requisition.requesterName} submitted ${requisition.lineCount} requested item${requisition.lineCount === 1 ? "" : "s"} for Job Card #${requisition.jobCardId}. Urgency: ${requisition.urgency}.`;
+    const context = requisition.jobCardId == null
+      ? "for inventory restocking"
+      : `for Job Card #${requisition.jobCardId}`;
+    const body = `${requisition.requesterName} submitted ${requisition.lineCount} requested item${requisition.lineCount === 1 ? "" : "s"} ${context}. Urgency: ${requisition.urgency}.`;
     const emails = await userEmails(users);
     for (const userId of users) {
       const to = emails.get(userId);

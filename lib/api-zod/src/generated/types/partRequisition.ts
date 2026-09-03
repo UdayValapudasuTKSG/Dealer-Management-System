@@ -10,8 +10,10 @@ import type { PartRequisitionUrgency } from './partRequisitionUrgency';
 
 export interface PartRequisition {
   id: number;
-  serviceOrderId: number;
-  jobCardId: number;
+  /** @nullable */
+  serviceOrderId?: number | null;
+  /** @nullable */
+  jobCardId?: number | null;
   /** @nullable */
   requesterUserId?: number | null;
   requesterName: string;

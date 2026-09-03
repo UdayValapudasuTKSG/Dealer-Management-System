@@ -1632,6 +1632,12 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
         if (!reqLine || !requisition) {
           throw Object.assign(new Error("Linked requisition was not found"), { status: 409 });
         }
+        if (requisition.jobCardId == null) {
+          throw Object.assign(
+            new Error("Standalone inventory requisitions cannot contain external parts"),
+            { status: 409 },
+          );
+        }
         const [fulfillment] = await tx
           .insert(partRequisitionFulfillmentsTable)
           .values({
@@ -1732,6 +1738,33 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
             updatedAt: new Date(),
           })
           .where(eq(partRequisitionPoAllocationsTable.id, allocation.id));
+        const [restockRequisition] = await tx
+          .select({ jobCardId: partRequisitionsTable.jobCardId })
+          .from(partRequisitionsTable)
+          .where(
+            and(
+              eq(partRequisitionsTable.id, allocation.requisitionId),
+              eq(partRequisitionsTable.dealerId, dealerId),
+            ),
+          );
+        if (restockRequisition?.jobCardId == null) {
+          const [restockLine] = await tx
+            .select({ fulfilledQuantity: partRequisitionLinesTable.fulfilledQuantity })
+            .from(partRequisitionLinesTable)
+            .where(
+              and(
+                eq(partRequisitionLinesTable.id, allocation.requisitionLineId),
+                eq(partRequisitionLinesTable.dealerId, dealerId),
+              ),
+            )
+            .for("update");
+          if (restockLine) {
+            await tx
+              .update(partRequisitionLinesTable)
+              .set({ fulfilledQuantity: restockLine.fulfilledQuantity + qty })
+              .where(eq(partRequisitionLinesTable.id, allocation.requisitionLineId));
+          }
+        }
       }
       await tx
         .update(partsTable)

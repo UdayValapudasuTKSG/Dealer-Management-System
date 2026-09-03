@@ -4031,6 +4031,31 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/PartRequisition" }
+    post:
+      operationId: createInventoryPartRequisition
+      tags: [parts]
+      summary: Submit a standalone inventory restocking requisition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InventoryPartRequisitionInput" }
+      responses:
+        "201":
+          description: Submitted inventory requisition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PartRequisitionDetail" }
+        "403":
+          description: Parts access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid inventory line
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /part-requisitions/{id}:
     get:
@@ -13022,11 +13047,11 @@ components:
 
     PartRequisition:
       type: object
-      required: [id, serviceOrderId, jobCardId, requesterName, status, urgency, createdAt, updatedAt]
+      required: [id, requesterName, status, urgency, createdAt, updatedAt]
       properties:
         id: { type: integer }
-        serviceOrderId: { type: integer }
-        jobCardId: { type: integer }
+        serviceOrderId: { type: ["integer", "null"] }
+        jobCardId: { type: ["integer", "null"] }
         requesterUserId: { type: ["integer", "null"] }
         requesterName: { type: string }
         status: { type: string, enum: [submitted, approved, partially_ordered, rejected, ordered, partially_fulfilled, fulfilled, cancelled] }
@@ -13109,6 +13134,25 @@ components:
           minItems: 1
           maxItems: 100
           items: { $ref: "#/components/schemas/PartRequisitionLineInput" }
+    InventoryPartRequisitionInput:
+      type: object
+      required: [urgency, lines]
+      properties:
+        urgency: { type: string, enum: [routine, urgent, vehicle_down] }
+        needBy: { type: string, format: date }
+        notes: { type: string, maxLength: 4000 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/InventoryPartRequisitionLineInput"
+    InventoryPartRequisitionLineInput:
+      type: object
+      required: [partId, quantity]
+      properties:
+        partId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
     PartRequisitionDecision:
       type: object
       required: [action]

@@ -44,9 +44,8 @@ export const partRequisitionsTable = pgTable(
       () => collisionClaimsTable.id,
       { onDelete: "set null" },
     ),
-    serviceOrderId: integer("service_order_id").notNull(),
+    serviceOrderId: integer("service_order_id"),
     jobCardId: integer("job_card_id")
-      .notNull()
       .references(() => jobCardsTable.id, { onDelete: "cascade" }),
     requesterUserId: integer("requester_user_id"),
     requesterName: text("requester_name").notNull(),
