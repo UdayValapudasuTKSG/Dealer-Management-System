@@ -5190,6 +5190,29 @@ export interface RemindAck {
   recipient: string;
 }
 
+export interface ServiceAppointmentConfirmationInput {
+  date: string;
+  /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */
+  time: string;
+}
+
+export type ServiceOnboardingMediaKind = typeof ServiceOnboardingMediaKind[keyof typeof ServiceOnboardingMediaKind];
+
+
+export const ServiceOnboardingMediaKind = {
+  image: 'image',
+  video: 'video',
+} as const;
+
+export interface ServiceOnboardingMedia {
+  id: number;
+  kind: ServiceOnboardingMediaKind;
+  mimeType: string;
+  sizeBytes: number;
+  fileName: string;
+  createdAt: string;
+}
+
 export interface TechnicianRef {
   id: number;
   name: string;

@@ -3410,6 +3410,12 @@ paths:
           in: path
           required: true
           schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceAppointmentConfirmationInput"
       responses:
         "200":
           description: Appointment confirmed and confirmation email queued
@@ -3431,6 +3437,50 @@ paths:
                 $ref: "#/components/schemas/Error"
         "422":
           description: Customer email or appointment schedule is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /service-orders/{id}/onboarding-media:
+    get:
+      operationId: listServiceOrderOnboardingMedia
+      tags: [service]
+      summary: List finalized customer uploads linked to a service booking
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Customer onboarding photos and videos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceOnboardingMedia"
+        "404":
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /service-orders/{id}/onboarding-media/{mediaId}:
+    get:
+      operationId: readServiceOrderOnboardingMedia
+      tags: [service]
+      summary: Securely read one customer onboarding upload linked to a booking
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: mediaId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Media bytes
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "404":
+          description: Booking or media not found
           content:
             application/json:
               schema:
@@ -12714,6 +12764,26 @@ components:
       properties:
         status: { type: string }
         recipient: { type: string }
+
+    ServiceAppointmentConfirmationInput:
+      type: object
+      required: [date, time]
+      properties:
+        date: { type: string, format: date }
+        time:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+
+    ServiceOnboardingMedia:
+      type: object
+      required: [id, kind, mimeType, sizeBytes, fileName, createdAt]
+      properties:
+        id: { type: integer }
+        kind: { type: string, enum: [image, video] }
+        mimeType: { type: string }
+        sizeBytes: { type: integer }
+        fileName: { type: string }
+        createdAt: { type: string, format: date-time }
 
     TechnicianRef:
       type: object

@@ -39,6 +39,8 @@ import {
   collisionSettlementsTable,
   collisionSupplementsTable,
   serviceEstimateDecisionsTable,
+  vehicleOnboardingRequestsTable,
+  vehicleOnboardingMediaTable,
   type JobCard,
   type ServiceInvoice,
 } from "@workspace/db";
@@ -53,7 +55,11 @@ import {
   SendServiceReminderParams,
   SendServiceReminderResponse,
   ConfirmServiceAppointmentParams,
+  ConfirmServiceAppointmentBody,
   ConfirmServiceAppointmentResponse,
+  ListServiceOrderOnboardingMediaParams,
+  ListServiceOrderOnboardingMediaResponse,
+  ReadServiceOrderOnboardingMediaParams,
   ListServiceTechniciansResponse,
   ListJobCardsQueryParams,
   ListJobCardsResponse,
@@ -137,11 +143,13 @@ import {
 import { enqueueEmail, notifyUser } from "../lib/email";
 import { activeDealerId } from "../middlewares/rbac";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
+import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
 import { computeServiceTax, ensureDealerTaxes } from "../lib/taxes";
 import { logger } from "../lib/logger";
 import { coordinateCollisionClaim } from "../lib/collision-coordinator";
 
 const router: IRouter = Router();
+const objectStorage = new ObjectStorageService();
 
 /**
  * Service Manager / Management sign-off check for rollover approvals and
@@ -783,8 +791,13 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
 
 router.post("/service-orders/:id/confirm", async (req, res): Promise<void> => {
   const params = ConfirmServiceAppointmentParams.safeParse(req.params);
+  const body = ConfirmServiceAppointmentBody.safeParse(req.body);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
     return;
   }
   const dealerId = activeDealerId(res);
@@ -810,8 +823,25 @@ router.post("/service-orders/:id/confirm", async (req, res): Promise<void> => {
     res.status(422).json({ error: "Customer has no email on file" });
     return;
   }
+  const timezone = await dealerTimezone(dealerId);
+  const scheduledDate = toDateString(body.data.date);
+  const dateParts = scheduledDate?.split("-").map(Number);
+  const timeParts = body.data.time.split(":").map(Number);
+  if (!scheduledDate || dateParts?.length !== 3 || timeParts.length !== 2) {
+    res.status(422).json({ error: "Choose a valid appointment date and time" });
+    return;
+  }
+  const scheduledAt = zonedTimeToUtc(
+    timezone,
+    dateParts[0]!,
+    dateParts[1]!,
+    dateParts[2]!,
+    timeParts[0]!,
+    timeParts[1]!,
+  );
+
   const [appointment] = await db
-    .select({ scheduledAt: jobCardsTable.scheduledAt })
+    .select({ id: jobCardsTable.id })
     .from(jobCardsTable)
     .where(
       and(
@@ -820,13 +850,35 @@ router.post("/service-orders/:id/confirm", async (req, res): Promise<void> => {
       ),
     )
     .limit(1);
-  if (!appointment?.scheduledAt) {
-    res.status(422).json({ error: "Set the appointment date and time before confirming" });
+  if (!appointment) {
+    res.status(422).json({ error: "This booking has no job card to schedule" });
     return;
   }
 
-  let confirmed = order;
-  if (order.status === "open") {
+  const confirmed = await db.transaction(async (tx) => {
+    await tx
+      .update(jobCardsTable)
+      .set({ scheduledAt })
+      .where(
+        and(
+          eq(jobCardsTable.serviceOrderId, order.id),
+          eq(jobCardsTable.dealerId, dealerId),
+        ),
+      );
+    if (order.status === "acknowledged") {
+      const [updated] = await tx
+        .update(serviceOrdersTable)
+        .set({ scheduledDate })
+        .where(
+          and(
+            eq(serviceOrdersTable.id, order.id),
+            eq(serviceOrdersTable.dealerId, dealerId),
+            eq(serviceOrdersTable.status, "acknowledged"),
+          ),
+        )
+        .returning();
+      return updated ?? null;
+    }
     const stageEvent = {
       from: "open",
       to: "acknowledged",
@@ -835,10 +887,11 @@ router.post("/service-orders/:id/confirm", async (req, res): Promise<void> => {
       byName: res.locals.user?.name ?? res.locals.user?.email ?? "Unknown",
       at: new Date().toISOString(),
     };
-    const [updated] = await db
+    const [updated] = await tx
       .update(serviceOrdersTable)
       .set({
         status: "acknowledged",
+        scheduledDate,
         stageHistory: sql`coalesce(${serviceOrdersTable.stageHistory}, '[]'::jsonb) || ${JSON.stringify([stageEvent])}::jsonb`,
       })
       .where(
@@ -849,11 +902,11 @@ router.post("/service-orders/:id/confirm", async (req, res): Promise<void> => {
         ),
       )
       .returning();
-    if (!updated) {
-      res.status(409).json({ error: "Booking status changed; refresh and try again" });
-      return;
-    }
-    confirmed = updated;
+    return updated ?? null;
+  });
+  if (!confirmed) {
+    res.status(409).json({ error: "Booking status changed; refresh and try again" });
+    return;
   }
 
   const queuedTo = await queueServiceAppointmentConfirmation(confirmed);
@@ -867,6 +920,116 @@ router.post("/service-orders/:id/confirm", async (req, res): Promise<void> => {
       recipient: queuedTo,
     }),
   );
+});
+
+router.get("/service-orders/:id/onboarding-media", async (req, res): Promise<void> => {
+  const params = ListServiceOrderOnboardingMediaParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [order] = await db
+    .select({ id: serviceOrdersTable.id, technicianUserId: serviceOrdersTable.technicianUserId })
+    .from(serviceOrdersTable)
+    .where(and(eq(serviceOrdersTable.id, params.data.id), eq(serviceOrdersTable.dealerId, dealerId)));
+  if (!order || !technicianOwnsOrder(res, order)) {
+    res.status(404).json({ error: "Service order not found" });
+    return;
+  }
+  const rows = await db
+    .select({
+      id: vehicleOnboardingMediaTable.id,
+      kind: vehicleOnboardingMediaTable.kind,
+      mimeType: vehicleOnboardingMediaTable.mimeType,
+      sizeBytes: vehicleOnboardingMediaTable.sizeBytes,
+      originalName: vehicleOnboardingMediaTable.originalName,
+      createdAt: vehicleOnboardingMediaTable.createdAt,
+    })
+    .from(vehicleOnboardingMediaTable)
+    .innerJoin(
+      vehicleOnboardingRequestsTable,
+      and(
+        eq(vehicleOnboardingRequestsTable.id, vehicleOnboardingMediaTable.requestId),
+        eq(vehicleOnboardingRequestsTable.dealerId, dealerId),
+        eq(vehicleOnboardingRequestsTable.serviceOrderId, order.id),
+      ),
+    )
+    .where(
+      and(
+        eq(vehicleOnboardingMediaTable.dealerId, dealerId),
+        sql`${vehicleOnboardingMediaTable.finalizedAt} is not null`,
+      ),
+    )
+    .orderBy(vehicleOnboardingMediaTable.createdAt);
+  res.json(
+    ListServiceOrderOnboardingMediaResponse.parse(
+      rows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        mimeType: row.mimeType,
+        sizeBytes: row.sizeBytes,
+        fileName: row.originalName || `${row.kind}-${row.id}`,
+        createdAt: row.createdAt,
+      })),
+    ),
+  );
+});
+
+router.get("/service-orders/:id/onboarding-media/:mediaId", async (req, res): Promise<void> => {
+  const params = ReadServiceOrderOnboardingMediaParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [media] = await db
+    .select({
+      objectPath: vehicleOnboardingMediaTable.objectPath,
+      mimeType: vehicleOnboardingMediaTable.mimeType,
+      sizeBytes: vehicleOnboardingMediaTable.sizeBytes,
+      technicianUserId: serviceOrdersTable.technicianUserId,
+    })
+    .from(vehicleOnboardingMediaTable)
+    .innerJoin(
+      vehicleOnboardingRequestsTable,
+      and(
+        eq(vehicleOnboardingRequestsTable.id, vehicleOnboardingMediaTable.requestId),
+        eq(vehicleOnboardingRequestsTable.dealerId, dealerId),
+        eq(vehicleOnboardingRequestsTable.serviceOrderId, params.data.id),
+      ),
+    )
+    .innerJoin(
+      serviceOrdersTable,
+      and(
+        eq(serviceOrdersTable.id, params.data.id),
+        eq(serviceOrdersTable.dealerId, dealerId),
+      ),
+    )
+    .where(
+      and(
+        eq(vehicleOnboardingMediaTable.id, params.data.mediaId),
+        eq(vehicleOnboardingMediaTable.dealerId, dealerId),
+        sql`${vehicleOnboardingMediaTable.finalizedAt} is not null`,
+      ),
+    );
+  if (!media || !technicianOwnsOrder(res, media)) {
+    res.status(404).json({ error: "Onboarding media not found" });
+    return;
+  }
+  try {
+    const file = await objectStorage.getObjectEntityFile(media.objectPath);
+    res.setHeader("Content-Type", media.mimeType);
+    res.setHeader("Content-Length", String(media.sizeBytes));
+    res.setHeader("Cache-Control", "private, no-store");
+    file.createReadStream().on("error", () => res.destroy()).pipe(res);
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "Onboarding media not found" });
+      return;
+    }
+    throw error;
+  }
 });
 
 // ---------------------------------------------------------------------------

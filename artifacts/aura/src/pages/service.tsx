@@ -10,6 +10,7 @@ import {
   getListServiceOrdersQueryKey,
   useSendServiceReminder,
   useConfirmServiceAppointment,
+  useListServiceOrderOnboardingMedia,
   useClaimServiceOrder,
   useCreateVehicleOnboardingInvite,
   useListJobCards,
@@ -1434,6 +1435,8 @@ function BookingDetailsDialog({
               </div>
             </div>
           )}
+
+          <BookingOnboardingMedia orderId={order.id} />
         </div>
       </DialogContent>
     </Dialog>
@@ -1717,10 +1720,16 @@ function ConfirmAppointmentButton({ order }: { order: ServiceOrder }) {
   const confirm = useConfirmServiceAppointment();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const initialDate =
+    typeof order.scheduledDate === "string"
+      ? order.scheduledDate.slice(0, 10)
+      : new Date(order.scheduledDate).toISOString().slice(0, 10);
+  const [date, setDate] = useState(initialDate);
+  const [time, setTime] = useState("09:00");
 
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
+    <Dialog>
+      <DialogTrigger asChild>
         <Button
           size="sm"
           className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs gap-1.5 h-8"
@@ -1733,22 +1742,44 @@ function ConfirmAppointmentButton({ order }: { order: ServiceOrder }) {
           )}
           Confirm appointment
         </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Confirm this service appointment?</AlertDialogTitle>
-          <AlertDialogDescription>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Set appointment date & time</DialogTitle>
+          <DialogDescription>
             This marks RO #{order.id.toString().padStart(5, "0")} as confirmed and emails the
             customer the appointment details with a calendar invitation.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Not yet</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={confirm.isPending}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor={`confirm-date-${order.id}`}>Appointment date</Label>
+            <Input
+              id={`confirm-date-${order.id}`}
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`confirm-time-${order.id}`}>Arrival time</Label>
+            <Input
+              id={`confirm-time-${order.id}`}
+              type="time"
+              value={time}
+              onChange={(event) => setTime(event.target.value)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            disabled={confirm.isPending || !date || !time}
             onClick={async () => {
               try {
-                const result = await confirm.mutateAsync({ id: order.id });
+                const result = await confirm.mutateAsync({
+                  id: order.id,
+                  data: { date, time },
+                });
                 await queryClient.invalidateQueries({
                   queryKey: getListServiceOrdersQueryKey(),
                 });
@@ -1768,11 +1799,68 @@ function ConfirmAppointmentButton({ order }: { order: ServiceOrder }) {
               }
             }}
           >
+            {confirm.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Confirm & send email
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BookingOnboardingMedia({ orderId }: { orderId: number }) {
+  const { data: media, isLoading } = useListServiceOrderOnboardingMedia(orderId);
+
+  return (
+    <div className="border-t border-white/10 pt-4">
+      <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mb-3">
+        Customer self-onboarding uploads
+      </div>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading uploads…
+        </div>
+      ) : !media?.length ? (
+        <div className="text-sm text-muted-foreground rounded-xl border border-dashed border-white/10 p-4 text-center">
+          No customer photos or videos uploaded for this booking.
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {media.map((item) => {
+            const src = `/api/service-orders/${orderId}/onboarding-media/${item.id}`;
+            return (
+              <a
+                key={item.id}
+                href={src}
+                target="_blank"
+                rel="noreferrer"
+                className="group overflow-hidden rounded-xl border border-white/10 bg-black/20"
+                title={item.fileName}
+              >
+                {item.kind === "image" ? (
+                  <img
+                    src={src}
+                    alt={item.fileName}
+                    className="aspect-video w-full object-cover transition-transform group-hover:scale-[1.02]"
+                  />
+                ) : (
+                  <video
+                    src={src}
+                    controls
+                    preload="metadata"
+                    className="aspect-video w-full object-cover"
+                    onClick={(event) => event.stopPropagation()}
+                  />
+                )}
+                <div className="truncate px-2.5 py-2 text-xs text-muted-foreground">
+                  {item.fileName}
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

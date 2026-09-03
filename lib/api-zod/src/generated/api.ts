@@ -5426,10 +5426,47 @@ export const ConfirmServiceAppointmentParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const confirmServiceAppointmentBodyTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+
+
+export const ConfirmServiceAppointmentBody = zod.object({
+  "date": zod.coerce.date(),
+  "time": zod.string().regex(confirmServiceAppointmentBodyTimeRegExp)
+})
+
 export const ConfirmServiceAppointmentResponse = zod.object({
   "status": zod.string(),
   "recipient": zod.string()
 })
+
+
+/**
+ * @summary List finalized customer uploads linked to a service booking
+ */
+export const ListServiceOrderOnboardingMediaParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListServiceOrderOnboardingMediaResponseItem = zod.object({
+  "id": zod.number(),
+  "kind": zod.enum(['image', 'video']),
+  "mimeType": zod.string(),
+  "sizeBytes": zod.number(),
+  "fileName": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListServiceOrderOnboardingMediaResponse = zod.array(ListServiceOrderOnboardingMediaResponseItem)
+
+
+/**
+ * @summary Securely read one customer onboarding upload linked to a booking
+ */
+export const ReadServiceOrderOnboardingMediaParams = zod.object({
+  "id": zod.coerce.number(),
+  "mediaId": zod.coerce.number()
+})
+
+export const ReadServiceOrderOnboardingMediaResponse = zod.unknown()
 
 
 /**

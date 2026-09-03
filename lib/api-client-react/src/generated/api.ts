@@ -348,12 +348,14 @@ import type {
   SendQuoteInput,
   SendQuoteResult,
   SentimentAnalysis,
+  ServiceAppointmentConfirmationInput,
   ServiceDiscountDecision,
   ServiceDiscountRequest,
   ServiceEstimateDecisionInput,
   ServiceInvoice,
   ServiceInvoiceAdjustmentInput,
   ServiceInvoiceUpdate,
+  ServiceOnboardingMedia,
   ServiceOrder,
   ServiceOrderAdvanceBody,
   ServiceOrderAdvanceUnmet,
@@ -10075,14 +10077,15 @@ export const getConfirmServiceAppointmentUrl = (id: number,) => {
 /**
  * @summary Confirm a requested service appointment and queue the customer email
  */
-export const confirmServiceAppointment = async (id: number, options?: RequestInit): Promise<RemindAck> => {
+export const confirmServiceAppointment = async (id: number,
+    serviceAppointmentConfirmationInput: ServiceAppointmentConfirmationInput, options?: RequestInit): Promise<RemindAck> => {
 
   return customFetch<RemindAck>(getConfirmServiceAppointmentUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(serviceAppointmentConfirmationInput)
   }
 );}
 
@@ -10091,8 +10094,8 @@ export const confirmServiceAppointment = async (id: number, options?: RequestIni
 
 
 export const getConfirmServiceAppointmentMutationOptions = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmServiceAppointment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof confirmServiceAppointment>>, TError,{id: number}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmServiceAppointment>>, TError,{id: number;data: BodyType<ServiceAppointmentConfirmationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmServiceAppointment>>, TError,{id: number;data: BodyType<ServiceAppointmentConfirmationInput>}, TContext> => {
 
 const mutationKey = ['confirmServiceAppointment'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -10104,10 +10107,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmServiceAppointment>>, {id: number}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmServiceAppointment>>, {id: number;data: BodyType<ServiceAppointmentConfirmationInput>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  confirmServiceAppointment(id,requestOptions)
+          return  confirmServiceAppointment(id,data,requestOptions)
         }
 
 
@@ -10118,22 +10121,181 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ConfirmServiceAppointmentMutationResult = NonNullable<Awaited<ReturnType<typeof confirmServiceAppointment>>>
-
+    export type ConfirmServiceAppointmentMutationBody = BodyType<ServiceAppointmentConfirmationInput>
     export type ConfirmServiceAppointmentMutationError = ErrorType<Error>
 
     /**
  * @summary Confirm a requested service appointment and queue the customer email
  */
 export const useConfirmServiceAppointment = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmServiceAppointment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmServiceAppointment>>, TError,{id: number;data: BodyType<ServiceAppointmentConfirmationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof confirmServiceAppointment>>,
         TError,
-        {id: number},
+        {id: number;data: BodyType<ServiceAppointmentConfirmationInput>},
         TContext
       > => {
       return useMutation(getConfirmServiceAppointmentMutationOptions(options));
     }
+
+export const getListServiceOrderOnboardingMediaUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-orders/${id}/onboarding-media`
+}
+
+/**
+ * @summary List finalized customer uploads linked to a service booking
+ */
+export const listServiceOrderOnboardingMedia = async (id: number, options?: RequestInit): Promise<ServiceOnboardingMedia[]> => {
+
+  return customFetch<ServiceOnboardingMedia[]>(getListServiceOrderOnboardingMediaUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListServiceOrderOnboardingMediaQueryKey = (id: number,) => {
+    return [
+    `/api/service-orders/${id}/onboarding-media`
+    ] as const;
+    }
+
+
+export const getListServiceOrderOnboardingMediaQueryOptions = <TData = Awaited<ReturnType<typeof listServiceOrderOnboardingMedia>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listServiceOrderOnboardingMedia>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListServiceOrderOnboardingMediaQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listServiceOrderOnboardingMedia>>> = ({ signal }) => listServiceOrderOnboardingMedia(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listServiceOrderOnboardingMedia>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListServiceOrderOnboardingMediaQueryResult = NonNullable<Awaited<ReturnType<typeof listServiceOrderOnboardingMedia>>>
+export type ListServiceOrderOnboardingMediaQueryError = ErrorType<Error>
+
+
+/**
+ * @summary List finalized customer uploads linked to a service booking
+ */
+
+export function useListServiceOrderOnboardingMedia<TData = Awaited<ReturnType<typeof listServiceOrderOnboardingMedia>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listServiceOrderOnboardingMedia>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListServiceOrderOnboardingMediaQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReadServiceOrderOnboardingMediaUrl = (id: number,
+    mediaId: number,) => {
+
+
+
+
+  return `/api/service-orders/${id}/onboarding-media/${mediaId}`
+}
+
+/**
+ * @summary Securely read one customer onboarding upload linked to a booking
+ */
+export const readServiceOrderOnboardingMedia = async (id: number,
+    mediaId: number, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getReadServiceOrderOnboardingMediaUrl(id,mediaId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getReadServiceOrderOnboardingMediaQueryKey = (id: number,
+    mediaId: number,) => {
+    return [
+    `/api/service-orders/${id}/onboarding-media/${mediaId}`
+    ] as const;
+    }
+
+
+export const getReadServiceOrderOnboardingMediaQueryOptions = <TData = Awaited<ReturnType<typeof readServiceOrderOnboardingMedia>>, TError = ErrorType<Error>>(id: number,
+    mediaId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof readServiceOrderOnboardingMedia>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getReadServiceOrderOnboardingMediaQueryKey(id,mediaId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof readServiceOrderOnboardingMedia>>> = ({ signal }) => readServiceOrderOnboardingMedia(id,mediaId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && mediaId !== null && mediaId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof readServiceOrderOnboardingMedia>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ReadServiceOrderOnboardingMediaQueryResult = NonNullable<Awaited<ReturnType<typeof readServiceOrderOnboardingMedia>>>
+export type ReadServiceOrderOnboardingMediaQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Securely read one customer onboarding upload linked to a booking
+ */
+
+export function useReadServiceOrderOnboardingMedia<TData = Awaited<ReturnType<typeof readServiceOrderOnboardingMedia>>, TError = ErrorType<Error>>(
+ id: number,
+    mediaId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof readServiceOrderOnboardingMedia>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getReadServiceOrderOnboardingMediaQueryOptions(id,mediaId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getClaimServiceOrderUrl = (id: number,) => {
 
