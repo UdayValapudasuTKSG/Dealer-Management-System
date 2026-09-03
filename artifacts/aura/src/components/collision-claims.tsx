@@ -1256,53 +1256,71 @@ function ClaimDetail({ claimId }: { claimId: number }) {
                 </div>
               ) : (
                 <>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[0.04] p-4">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-primary">Final Collision Invoice</div>
-                      <div className="flex items-baseline gap-2 mt-1">
-                        <span className="font-mono text-2xl font-semibold">{money((claim.insurerDue ?? 0) + (claim.deductibleDue ?? 0))}</span>
-                        <span className="text-sm text-muted-foreground">Invoice #{claim.serviceInvoiceId}</span>
+                  <div className="rounded-xl border border-primary/25 bg-primary/[0.04] p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-primary">Final Collision Invoice</div>
+                        <div className="flex items-baseline gap-2 mt-1">
+                          <span className="font-mono text-2xl font-semibold">{money((claim.insurerDue ?? 0) + (claim.deductibleDue ?? 0))}</span>
+                          <span className="text-sm text-muted-foreground">Invoice #{claim.serviceInvoiceId}</span>
+                        </div>
                       </div>
+                      <Button asChild variant="outline" className="shrink-0">
+                        <a href={`/api/service-invoices/${claim.serviceInvoiceId}/pdf`} target="_blank" rel="noreferrer">
+                          <Download className="w-4 h-4 mr-2" />
+                          View Invoice PDF
+                        </a>
+                      </Button>
                     </div>
-                    <Button asChild variant="outline" className="shrink-0">
-                      <a href={`/api/service-invoices/${claim.serviceInvoiceId}/pdf`} target="_blank" rel="noreferrer">
-                        <Download className="w-4 h-4 mr-2" />
-                        View Invoice PDF
-                      </a>
-                    </Button>
+                    <div className="mt-3 pt-3 border-t border-primary/15 flex items-center justify-between gap-4">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Total outstanding
+                      </span>
+                      <span className="font-mono text-lg font-semibold text-foreground">
+                        {money(
+                          Math.max(
+                            0,
+                            (claim.insurerDue ?? 0) +
+                              (claim.deductibleDue ?? 0) -
+                              insurerPaid -
+                              deductiblePaid,
+                          ),
+                        )}
+                      </span>
+                    </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="p-4 rounded-lg border border-border/60 bg-muted/10 space-y-1.5">
-                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Insurer Responsibility</div>
-                      <div className="font-mono text-xl font-medium text-primary">{money(claim.insurerDue ?? 0)}</div>
-                      <div className="grid grid-cols-2 gap-3 pt-3 mt-2 border-t border-border/50">
+                    <div className="p-4 rounded-xl border border-primary/25 bg-primary/[0.035]">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Insurer owes</div>
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-primary mt-4">Outstanding due</div>
+                      <div className="font-mono text-3xl font-semibold text-primary mt-1">
+                        {money(Math.max(0, (claim.insurerDue ?? 0) - insurerPaid))}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 pt-4 mt-4 border-t border-border/50">
                         <div>
-                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Paid</div>
-                          <div className="font-mono text-sm mt-0.5">{money(insurerPaid)}</div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Responsibility</div>
+                          <div className="font-mono text-sm mt-1">{money(claim.insurerDue ?? 0)}</div>
                         </div>
                         <div>
-                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Still Due</div>
-                          <div className="font-mono text-sm mt-0.5">
-                            {money(Math.max(0, (claim.insurerDue ?? 0) - insurerPaid))}
-                          </div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Paid to date</div>
+                          <div className="font-mono text-sm mt-1">{money(insurerPaid)}</div>
                         </div>
                       </div>
                     </div>
-                    <div className="p-4 rounded-lg border border-border/60 bg-muted/10 space-y-1.5">
-                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customer Responsibility</div>
-                      <div className="font-mono text-xl font-medium text-primary">
-                        {money(claim.deductibleDue ?? 0)}
+                    <div className="p-4 rounded-xl border border-sky-500/25 bg-sky-500/[0.035]">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customer owes · Deductible</div>
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-sky-600 dark:text-sky-400 mt-4">Outstanding due</div>
+                      <div className="font-mono text-3xl font-semibold text-sky-600 dark:text-sky-400 mt-1">
+                        {money(Math.max(0, (claim.deductibleDue ?? 0) - deductiblePaid))}
                       </div>
-                      <div className="grid grid-cols-2 gap-3 pt-3 mt-2 border-t border-border/50">
+                      <div className="grid grid-cols-2 gap-3 pt-4 mt-4 border-t border-border/50">
                         <div>
-                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Paid</div>
-                          <div className="font-mono text-sm mt-0.5">{money(deductiblePaid)}</div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Responsibility</div>
+                          <div className="font-mono text-sm mt-1">{money(claim.deductibleDue ?? 0)}</div>
                         </div>
                         <div>
-                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Still Due</div>
-                          <div className="font-mono text-sm mt-0.5 text-sky-600 dark:text-sky-400">
-                            {money(Math.max(0, (claim.deductibleDue ?? 0) - deductiblePaid))}
-                          </div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Paid to date</div>
+                          <div className="font-mono text-sm mt-1">{money(deductiblePaid)}</div>
                         </div>
                       </div>
                     </div>

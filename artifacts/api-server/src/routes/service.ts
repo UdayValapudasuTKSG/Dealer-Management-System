@@ -2767,6 +2767,14 @@ async function issueServiceInvoice(
     Math.round((partsTotal + laborTotal + surchargeTotal) * 100) / 100,
     taxRules,
   );
+  if (claim && total <= 0) {
+    return {
+      ok: false,
+      status: 422,
+      error:
+        "Cannot issue a zero-value collision invoice — add the final parts, labour, or approved invoice adjustment before invoicing",
+    };
+  }
 
   // Issue + collision binding in ONE transaction with the claim row locked
   // FOR UPDATE: the invoice can never exist while the split stamping loses a
