@@ -5,7 +5,8 @@
  * existing (or quick-created) repair order, then the claim walks the insurer
  * workflow while the workshop keeps its normal job-card / parts / invoice
  * lifecycle. This file holds the tab (list + filters), the intake dialog and
- * the claim detail dialog (timeline, damage zones, supplements, settlement).
+ * the routed claim detail workspace (timeline, damage zones, supplements,
+ * settlement).
  */
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
@@ -616,7 +617,6 @@ export function CollisionTab() {
   const [insurer, setInsurer] = useState("");
   const [lossFrom, setLossFrom] = useState("");
   const [lossTo, setLossTo] = useState("");
-  const [openClaimId, setOpenClaimId] = useState<number | null>(null);
 
   const { data: claims, isLoading } = useListCollisionClaims({
     ...(status !== "all" && { status }),
@@ -678,78 +678,64 @@ export function CollisionTab() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {(claims ?? []).map((c) => (
-            <ClaimCard key={c.id} claim={c} onOpen={() => setOpenClaimId(c.id)} />
+            <ClaimCard key={c.id} claim={c} />
           ))}
         </div>
-      )}
-
-      {openClaimId != null && (
-        <Dialog open onOpenChange={(o) => !o && setOpenClaimId(null)}>
-          <DialogContent className="max-w-5xl !p-0 !gap-0 grid grid-rows-[auto_1fr_auto] h-[95vh] sm:h-[90vh] overflow-hidden">
-            <ClaimDetail claimId={openClaimId} />
-          </DialogContent>
-        </Dialog>
       )}
     </div>
   );
 }
 
-function ClaimCard({ claim, onOpen }: { claim: CollisionClaim; onOpen: () => void }) {
+function ClaimCard({ claim }: { claim: CollisionClaim }) {
   const { gyd: money } = useMoney();
   return (
-    <Card
-      className="border-border/50 bg-background hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-      onClick={onOpen}
-      role="button"
-      tabIndex={0}
+    <Link
+      href={`/service/collision/${claim.id}`}
+      className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
       aria-label={`Open collision claim ${claim.id} for ${claim.vehicleInfo}`}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen();
-        }
-      }}
       data-testid={`card-claim-${claim.id}`}
     >
-      <CardContent className="p-5 space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 space-y-1 flex-1">
-            <div className="font-semibold text-base truncate group-hover:text-primary transition-colors">
-              <span className="text-muted-foreground font-normal">#{claim.id} · </span>{claim.vehicleInfo}
+      <Card className="h-full border-border/50 bg-background hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group">
+        <CardContent className="p-5 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 space-y-1 flex-1">
+              <div className="font-semibold text-base truncate group-hover:text-primary transition-colors">
+                <span className="text-muted-foreground font-normal">#{claim.id} · </span>{claim.vehicleInfo}
+              </div>
+              <div className="text-sm text-muted-foreground truncate flex items-center gap-2">
+                <span className="font-medium text-foreground/80">{claim.insurerName}</span>
+                {claim.claimNumber && <span>· {claim.claimNumber}</span>}
+                <span>· {formatGuyanaDate(claim.lossDate)}</span>
+              </div>
             </div>
-            <div className="text-sm text-muted-foreground truncate flex items-center gap-2">
-              <span className="font-medium text-foreground/80">{claim.insurerName}</span>
-              {claim.claimNumber && <span>· {claim.claimNumber}</span>}
-              <span>· {formatGuyanaDate(claim.lossDate)}</span>
-            </div>
+            <Badge variant="outline" className={cn("shrink-0 px-2.5 py-1 text-xs border-2 font-semibold", statusBadgeClass(claim.status))}>
+              {STATUS_LABEL[claim.status] ?? claim.status}
+            </Badge>
           </div>
-          <Badge variant="outline" className={cn("shrink-0 px-2.5 py-1 text-xs border-2 font-semibold", statusBadgeClass(claim.status))}>
-            {STATUS_LABEL[claim.status] ?? claim.status}
-          </Badge>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground pt-1 border-t border-border/40">
-          {claim.customerName && (
-            <span className="font-medium text-foreground/80">{claim.customerName}</span>
-          )}
-          <span className="capitalize px-2 py-0.5 rounded-md bg-muted text-xs font-medium">
-            {claim.severity} damage
-          </span>
-          <div className="flex items-center gap-1.5 font-mono text-foreground/90 bg-muted/30 px-2 py-0.5 rounded-md text-xs">
-            <CircleDollarSign className="w-3.5 h-3.5 text-muted-foreground" />
-            {claim.approvedEstimate != null ? (
-              <span>{money(claim.approvedEstimate)} (Approved)</span>
-            ) : (
-              <span>{money(claim.initialEstimate)} (Est.)</span>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground pt-1 border-t border-border/40">
+            {claim.customerName && (
+              <span className="font-medium text-foreground/80">{claim.customerName}</span>
+            )}
+            <span className="capitalize px-2 py-0.5 rounded-md bg-muted text-xs font-medium">
+              {claim.severity} damage
+            </span>
+            <div className="flex items-center gap-1.5 font-mono text-foreground/90 bg-muted/30 px-2 py-0.5 rounded-md text-xs">
+              <CircleDollarSign className="w-3.5 h-3.5 text-muted-foreground" />
+              {claim.approvedEstimate != null ? (
+                <span>{money(claim.approvedEstimate)} (Approved)</span>
+              ) : (
+                <span>{money(claim.initialEstimate)} (Est.)</span>
+              )}
+            </div>
+            {claim.pausedAt && (
+              <span className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium text-xs bg-amber-500/10 px-2 py-0.5 rounded-md">
+                <Pause className="w-3.5 h-3.5" /> Paused
+              </span>
             )}
           </div>
-          {claim.pausedAt && (
-            <span className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-medium text-xs bg-amber-500/10 px-2 py-0.5 rounded-md">
-              <Pause className="w-3.5 h-3.5" /> Paused
-            </span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 
@@ -757,7 +743,7 @@ function ClaimCard({ claim, onOpen }: { claim: CollisionClaim; onOpen: () => voi
 /* Claim detail                                                         */
 /* ------------------------------------------------------------------ */
 
-function ClaimDetail({ claimId }: { claimId: number }) {
+export function ClaimDetail({ claimId }: { claimId: number }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { can, me } = useAuthz();
@@ -890,10 +876,10 @@ function ClaimDetail({ claimId }: { claimId: number }) {
       <div className="p-6 pb-4 border-b border-border/60 bg-background flex flex-col gap-4 shrink-0">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 pr-8">
-            <DialogTitle className="text-2xl font-bold flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold flex flex-wrap items-center gap-2">
               <span>Claim #{claim.id}</span>
               <span className="text-muted-foreground font-normal text-lg truncate">· {claim.vehicleInfo}</span>
-            </DialogTitle>
+            </h1>
             <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-muted-foreground">
               <span className="font-medium text-foreground/80">{claim.insurerName}</span>
               {claim.claimNumber && <span>· Claim {claim.claimNumber}</span>}
@@ -945,8 +931,8 @@ function ClaimDetail({ claimId }: { claimId: number }) {
       </div>
 
       {/* Body */}
-      <div className="p-6 overflow-y-auto bg-muted/10">
-        <div className="max-w-4xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 bg-muted/10">
+        <div className="max-w-5xl mx-auto space-y-6">
 
           {/* Quick Links Row */}
           <div className="flex flex-wrap items-center gap-3">
@@ -1431,7 +1417,7 @@ function ClaimDetail({ claimId }: { claimId: number }) {
       </div>
 
       {/* Footer actions */}
-      <div className="p-4 border-t border-border/60 bg-background flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+      <div className="sticky bottom-0 z-20 p-4 border-t border-border/60 bg-background/95 backdrop-blur flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>
           {claim.pausedAt ? (
             <Button
