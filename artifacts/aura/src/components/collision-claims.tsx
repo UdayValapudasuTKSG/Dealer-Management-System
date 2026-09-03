@@ -217,8 +217,8 @@ function DamageZoneSelector({
     }
   };
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
         {ZONES.map(({ zone, label }) => {
           const p = byZone.get(zone);
           return (
@@ -228,29 +228,30 @@ function DamageZoneSelector({
               onClick={() => cycle(zone)}
               disabled={readOnly}
               className={cn(
-                "relative flex flex-col rounded-lg border px-3 py-2 text-left transition-all",
+                "relative flex flex-col items-start justify-center rounded-xl border p-3 text-left transition-all duration-200 ease-out",
                 p
                   ? severityClass[p.severity]
-                  : "border-border/60 bg-muted/20 text-muted-foreground",
-                !readOnly && "hover:border-primary/40 hover:bg-muted/40 cursor-pointer",
-                readOnly && !p && "opacity-60",
-                !readOnly && p && "hover:brightness-105 shadow-sm",
+                  : "border-border/40 bg-muted/20 text-muted-foreground",
+                !readOnly && "hover:border-primary/40 hover:bg-muted/30 cursor-pointer",
+                readOnly && !p && "opacity-50",
+                !readOnly && p && "hover:brightness-105 hover:shadow-md",
+                p && "scale-[1.02] border-opacity-100 shadow-sm"
               )}
             >
-              <span className="text-xs font-medium truncate">{label}</span>
+              <span className="text-[13px] font-medium leading-tight">{label}</span>
               {p ? (
-                <span className="text-[10px] font-bold uppercase tracking-wider mt-1 opacity-90">{p.severity}</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider mt-1.5 opacity-90">{p.severity}</span>
               ) : (
-                <span className="text-[10px] font-medium uppercase tracking-wider mt-1 opacity-0">-</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider mt-1.5 opacity-0">-</span>
               )}
             </button>
           );
         })}
       </div>
       {!readOnly && (
-        <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-2">
-          <AlertTriangle className="w-3.5 h-3.5" />
-          Tap a zone to cycle severity: minor → moderate → severe → clear.
+        <p className="text-[12px] text-muted-foreground flex items-center gap-1.5 pt-1">
+          <AlertTriangle className="w-3.5 h-3.5 opacity-70" />
+          Tap a zone repeatedly to cycle severity: minor → moderate → severe → clear.
         </p>
       )}
     </div>
@@ -398,217 +399,266 @@ export function CreateClaimDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="rounded-full bg-primary hover:bg-primary/90 text-white shadow-sm">
+        <Button className="rounded-full bg-primary hover:bg-primary/90 text-white shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg">
           <Plus className="w-4 h-4 mr-1.5" /> New Claim
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl !p-0 !gap-0 grid grid-rows-[auto_1fr_auto] h-[90vh] max-h-[90vh] overflow-hidden">
-        <div className="p-6 border-b border-border bg-background shrink-0">
-          <DialogHeader>
-            <DialogTitle className="text-xl pr-6">New collision claim</DialogTitle>
-            <DialogDescription className="mt-1.5">
-              Attach an insurance claim to a repair order. The repair itself runs
-              through the normal workshop lane.
-            </DialogDescription>
-          </DialogHeader>
-        </div>
+      <DialogContent className="sm:max-w-3xl !p-0 overflow-hidden bg-background border-border/40 shadow-2xl sm:rounded-[24px]">
+        <div className="max-h-[85vh] overflow-y-auto no-scrollbar flex flex-col relative">
 
-        <div className="p-6 overflow-y-auto bg-muted/10 space-y-6">
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { key: "existing", label: "Existing repair order" },
-                { key: "new", label: "New repair order" },
-              ] as const
-            ).map((m) => (
-              <button
-                key={m.key}
-                type="button"
-                onClick={() => setMode(m.key)}
-                className={cn(
-                  "rounded-full border px-4 py-2 text-sm font-medium transition-colors shadow-sm",
-                  mode === m.key
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border/60 bg-background text-muted-foreground hover:bg-muted/40",
-                )}
-              >
-                {m.label}
-              </button>
-            ))}
+          {/* Header */}
+          <div className="px-8 pt-8 pb-6 shrink-0 bg-background/80 backdrop-blur-xl sticky top-0 z-20 border-b border-border/40">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-semibold tracking-tight text-foreground">Intake collision claim</DialogTitle>
+              <DialogDescription className="text-sm mt-1.5 text-muted-foreground">
+                Record an insurance claim and attach it to a repair order. The repair itself will run through the normal workshop lane.
+              </DialogDescription>
+            </DialogHeader>
           </div>
 
-          <Card className="border-border/60 shadow-sm bg-background">
-            <CardHeader className="py-3 px-4 border-b border-border/40 bg-muted/20">
-              <h3 className="font-semibold text-sm">Vehicle & Repair</h3>
-            </CardHeader>
-            <CardContent className="p-4 space-y-4">
-              {mode === "existing" ? (
-                <div className="space-y-1.5">
-                  <Label>Repair order</Label>
-                  <Select value={serviceOrderId} onValueChange={setServiceOrderId}>
-                    <SelectTrigger data-testid="select-claim-order">
-                      <SelectValue placeholder="Pick a repair order without a claim" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {eligibleOrders.length === 0 && (
-                        <div className="px-3 py-2 text-xs text-muted-foreground">
-                          No eligible repair orders — create one instead.
-                        </div>
+          {/* Form Content */}
+          <div className="p-8 space-y-10">
+
+            {/* 01. Vehicle & Repair */}
+            <section>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">1</div>
+                <h3 className="text-lg font-medium text-foreground tracking-tight">Vehicle & repair</h3>
+              </div>
+
+              <div className="pl-11 space-y-6">
+                <div className="inline-flex bg-muted/40 p-1 rounded-xl w-full sm:w-auto border border-border/50">
+                  {(
+                    [
+                      { key: "existing", label: "Existing repair order" },
+                      { key: "new", label: "New repair order" },
+                    ] as const
+                  ).map((m) => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => setMode(m.key)}
+                      className={cn(
+                        "flex-1 sm:flex-none px-5 py-2 text-sm font-medium rounded-lg transition-all duration-200",
+                        mode === m.key
+                          ? "bg-background text-foreground shadow-sm ring-1 ring-border/50"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50",
                       )}
-                      {eligibleOrders.map((o) => (
-                        <SelectItem key={o.id} value={String(o.id)}>
-                          #{o.id} · {o.vehicleInfo}
-                          {o.customerName ? ` — ${o.customerName}` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    >
+                      {m.label}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <Label>Vehicle</Label>
+
+                <div className="bg-muted/10 border border-border/40 rounded-2xl p-5 space-y-4">
+                  {mode === "existing" ? (
+                    <div className="space-y-2 max-w-md">
+                      <Label className="text-[13px] font-medium text-foreground/80">Repair order</Label>
+                      <Select value={serviceOrderId} onValueChange={setServiceOrderId}>
+                        <SelectTrigger data-testid="select-claim-order" className="h-10 rounded-lg">
+                          <SelectValue placeholder="Pick a repair order without a claim" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {eligibleOrders.length === 0 && (
+                            <div className="px-3 py-2 text-xs text-muted-foreground">
+                              No eligible repair orders — create one instead.
+                            </div>
+                          )}
+                          {eligibleOrders.map((o) => (
+                            <SelectItem key={o.id} value={String(o.id)}>
+                              #{o.id} · {o.vehicleInfo}
+                              {o.customerName ? ` — ${o.customerName}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label className="text-[13px] font-medium text-foreground/80">Vehicle description</Label>
+                        <Input
+                          data-testid="input-claim-vehicle"
+                          value={vehicleInfo}
+                          onChange={(e) => setVehicleInfo(e.target.value)}
+                          placeholder="e.g. 2024 Toyota Hilux — PAD 1234"
+                          className="h-10 rounded-lg"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[13px] font-medium text-foreground/80">Customer name</Label>
+                        <Input
+                          value={customerName}
+                          onChange={(e) => setCustomerName(e.target.value)}
+                          placeholder="Full name"
+                          className="h-10 rounded-lg"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[13px] font-medium text-foreground/80">Scheduled date</Label>
+                        <Input
+                          type="date"
+                          value={scheduledDate}
+                          onChange={(e) => setScheduledDate(e.target.value)}
+                          className="h-10 rounded-lg"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <div className="h-px bg-border/40 ml-11" />
+
+            {/* 02. Insurance Details */}
+            <section>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">2</div>
+                <h3 className="text-lg font-medium text-foreground tracking-tight">Insurance details</h3>
+              </div>
+
+              <div className="pl-11">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-medium text-foreground/80">Date of loss <span className="text-destructive">*</span></Label>
                     <Input
-                      data-testid="input-claim-vehicle"
-                      value={vehicleInfo}
-                      onChange={(e) => setVehicleInfo(e.target.value)}
-                      placeholder="2024 Toyota Hilux — PAD 1234"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Customer</Label>
-                    <Input
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="Customer name"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Scheduled date</Label>
-                    <Input
+                      data-testid="input-claim-loss-date"
                       type="date"
-                      value={scheduledDate}
-                      onChange={(e) => setScheduledDate(e.target.value)}
+                      value={lossDate}
+                      onChange={(e) => setLossDate(e.target.value)}
+                      className="h-10 rounded-lg"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-medium text-foreground/80">Insurer <span className="text-destructive">*</span></Label>
+                    <Input
+                      data-testid="input-claim-insurer"
+                      value={insurerName}
+                      onChange={(e) => setInsurerName(e.target.value)}
+                      placeholder="e.g. Assuria, GTM, Hand-in-Hand"
+                      className="h-10 rounded-lg"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-medium text-foreground/80">Policy number</Label>
+                    <Input
+                      value={policyNumber}
+                      onChange={(e) => setPolicyNumber(e.target.value)}
+                      className="h-10 rounded-lg"
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-medium text-foreground/80">Insurer claim number</Label>
+                    <Input
+                      value={claimNumber}
+                      onChange={(e) => setClaimNumber(e.target.value)}
+                      className="h-10 rounded-lg"
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-medium text-foreground/80">Adjuster name</Label>
+                    <Input
+                      value={adjusterName}
+                      onChange={(e) => setAdjusterName(e.target.value)}
+                      className="h-10 rounded-lg"
+                      placeholder="Optional"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-medium text-foreground/80">Adjuster contact</Label>
+                    <Input
+                      value={adjusterContact}
+                      onChange={(e) => setAdjusterContact(e.target.value)}
+                      placeholder="Phone or email"
+                      className="h-10 rounded-lg"
                     />
                   </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            </section>
 
-          <Card className="border-border/60 shadow-sm bg-background">
-            <CardHeader className="py-3 px-4 border-b border-border/40 bg-muted/20">
-              <h3 className="font-semibold text-sm">Insurance Details</h3>
-            </CardHeader>
-            <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Date of loss</Label>
-                <Input
-                  data-testid="input-claim-loss-date"
-                  type="date"
-                  value={lossDate}
-                  onChange={(e) => setLossDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Insurer</Label>
-                <Input
-                  data-testid="input-claim-insurer"
-                  value={insurerName}
-                  onChange={(e) => setInsurerName(e.target.value)}
-                  placeholder="e.g. Assuria, GTM, Hand-in-Hand"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Policy number</Label>
-                <Input value={policyNumber} onChange={(e) => setPolicyNumber(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Insurer claim number</Label>
-                <Input value={claimNumber} onChange={(e) => setClaimNumber(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Adjuster</Label>
-                <Input value={adjusterName} onChange={(e) => setAdjusterName(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Adjuster contact</Label>
-                <Input
-                  value={adjusterContact}
-                  onChange={(e) => setAdjusterContact(e.target.value)}
-                  placeholder="Phone or email"
-                />
-              </div>
-            </CardContent>
-          </Card>
+            <div className="h-px bg-border/40 ml-11" />
 
-          <Card className="border-border/60 shadow-sm bg-background">
-            <CardHeader className="py-3 px-4 border-b border-border/40 bg-muted/20">
-              <h3 className="font-semibold text-sm">Damage Assessment</h3>
-            </CardHeader>
-            <CardContent className="p-4 space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Overall severity</Label>
-                  <Select value={severity} onValueChange={(v) => setSeverity(v as typeof severity)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="minor">Minor</SelectItem>
-                      <SelectItem value="moderate">Moderate</SelectItem>
-                      <SelectItem value="severe">Severe</SelectItem>
-                    </SelectContent>
-                  </Select>
+            {/* 03. Damage Assessment */}
+            <section>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm">3</div>
+                <h3 className="text-lg font-medium text-foreground tracking-tight">Damage assessment</h3>
+              </div>
+
+              <div className="pl-11 space-y-8">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-medium text-foreground/80">Overall severity</Label>
+                    <Select value={severity} onValueChange={(v) => setSeverity(v as typeof severity)}>
+                      <SelectTrigger className="h-10 rounded-lg">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="minor">Minor</SelectItem>
+                        <SelectItem value="moderate">Moderate</SelectItem>
+                        <SelectItem value="severe">Severe</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-medium text-foreground/80">Initial estimate <span className="text-muted-foreground font-normal">(GYD)</span></Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={initialEstimate}
+                      onChange={(e) => setInitialEstimate(e.target.value)}
+                      className="h-10 rounded-lg"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-medium text-foreground/80">Deductible <span className="text-muted-foreground font-normal">(GYD)</span></Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={deductible}
+                      onChange={(e) => setDeductible(e.target.value)}
+                      className="h-10 rounded-lg"
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Initial estimate (GYD)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={initialEstimate}
-                    onChange={(e) => setInitialEstimate(e.target.value)}
-                  />
+
+                <div className="space-y-3">
+                  <Label className="text-[13px] font-medium text-foreground/80 block">Points of impact</Label>
+                  <DamageZoneSelector points={damagePoints} onChange={setDamagePoints} />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Deductible (GYD)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={deductible}
-                    onChange={(e) => setDeductible(e.target.value)}
+
+                <div className="space-y-2">
+                  <Label className="text-[13px] font-medium text-foreground/80 block">Damage notes</Label>
+                  <Textarea
+                    value={damageNotes}
+                    onChange={(e) => setDamageNotes(e.target.value)}
+                    placeholder="Describe the accident damage, specific areas affected, and any initial observations..."
+                    className="min-h-[100px] rounded-xl resize-y"
                   />
                 </div>
               </div>
+            </section>
 
-              <div className="pt-2 border-t border-border/40">
-                <Label className="mb-3 block">Point of impact</Label>
-                <DamageZoneSelector points={damagePoints} onChange={setDamagePoints} />
-              </div>
+            <div className="pl-11 pt-4 pb-2">
+              <Button
+                data-testid="button-create-claim"
+                onClick={submit}
+                disabled={busy}
+                className="w-full sm:w-auto sm:min-w-[200px] rounded-full bg-primary hover:bg-primary/90 text-white font-semibold shadow-md transition-all hover:shadow-lg hover:-translate-y-0.5"
+                size="lg"
+              >
+                {busy ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <CheckCircle2 className="w-5 h-5 mr-2" />}
+                Open Claim
+              </Button>
+            </div>
 
-              <div className="pt-2">
-                <Label className="mb-2 block">Damage notes</Label>
-                <Textarea
-                  value={damageNotes}
-                  onChange={(e) => setDamageNotes(e.target.value)}
-                  placeholder="Describe the accident damage…"
-                  className="h-24"
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="p-4 border-t border-border bg-background flex justify-end shrink-0">
-          <Button
-            data-testid="button-create-claim"
-            onClick={submit}
-            disabled={busy}
-            className="bg-primary hover:bg-primary/90 text-white min-w-32"
-          >
-            {busy ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Plus className="w-4 h-4 mr-1.5" />}
-            Open claim
-          </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
