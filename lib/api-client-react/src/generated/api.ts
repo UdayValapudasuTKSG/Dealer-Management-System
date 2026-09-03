@@ -210,6 +210,7 @@ import type {
   InvoiceInput,
   InvoiceUpdate,
   JobCard,
+  JobCardExternalPart,
   JobCardHistoryItem,
   JobCardInput,
   JobCardPart,
@@ -11390,6 +11391,83 @@ export const useAddJobCardPart = <TError = ErrorType<Error>,
       > => {
       return useMutation(getAddJobCardPartMutationOptions(options));
     }
+
+export const getListJobCardExternalPartsUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}/external-parts`
+}
+
+/**
+ * @summary List fulfilled external parts attached to a job card
+ */
+export const listJobCardExternalParts = async (id: number, options?: RequestInit): Promise<JobCardExternalPart[]> => {
+
+  return customFetch<JobCardExternalPart[]>(getListJobCardExternalPartsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListJobCardExternalPartsQueryKey = (id: number,) => {
+    return [
+    `/api/job-cards/${id}/external-parts`
+    ] as const;
+    }
+
+
+export const getListJobCardExternalPartsQueryOptions = <TData = Awaited<ReturnType<typeof listJobCardExternalParts>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobCardExternalParts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListJobCardExternalPartsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJobCardExternalParts>>> = ({ signal }) => listJobCardExternalParts(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJobCardExternalParts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListJobCardExternalPartsQueryResult = NonNullable<Awaited<ReturnType<typeof listJobCardExternalParts>>>
+export type ListJobCardExternalPartsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List fulfilled external parts attached to a job card
+ */
+
+export function useListJobCardExternalParts<TData = Awaited<ReturnType<typeof listJobCardExternalParts>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJobCardExternalParts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListJobCardExternalPartsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getCreateJobCardInvoiceUrl = (id: number,) => {
 

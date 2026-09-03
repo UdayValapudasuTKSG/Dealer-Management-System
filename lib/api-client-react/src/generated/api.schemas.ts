@@ -5558,6 +5558,21 @@ export interface JobCardPartInput {
   kind?: JobCardPartInputKind;
 }
 
+export interface JobCardExternalPart {
+  id: number;
+  jobCardId: number;
+  requisitionLineId: number;
+  description: string;
+  /** @nullable */
+  supplierSnapshot?: string | null;
+  quantity: number;
+  unitCost: number;
+  unitPrice: number;
+  taxCost: number;
+  freightCost: number;
+  createdAt: string;
+}
+
 export type PartRequisitionStatus = typeof PartRequisitionStatus[keyof typeof PartRequisitionStatus];
 
 

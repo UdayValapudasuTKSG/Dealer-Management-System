@@ -18,8 +18,10 @@ import {
   useUpdateJobCard,
   getListJobCardsQueryKey,
   useListJobCardParts,
+  useListJobCardExternalParts,
   useAddJobCardPart,
   getListJobCardPartsQueryKey,
+  getListJobCardExternalPartsQueryKey,
   useListJobCardPartRequisitions,
   getListJobCardPartRequisitionsQueryKey,
   useCreateJobCardInvoice,
@@ -2018,6 +2020,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
   const createCreditNote = useCreateJobCardCreditNote();
   const money = useMoney();
   const { data: lines } = useListJobCardParts(card.id);
+  const { data: externalLines } = useListJobCardExternalParts(card.id);
   const { data: requisitions } = useListJobCardPartRequisitions(card.id);
   const { data: parts } = useListParts();
   const { data: creditNotes } = useListJobCardCreditNotes(card.id);
@@ -2056,6 +2059,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getListJobCardPartsQueryKey(card.id) });
+    queryClient.invalidateQueries({ queryKey: getListJobCardExternalPartsQueryKey(card.id) });
     queryClient.invalidateQueries({ queryKey: getListJobCardPartRequisitionsQueryKey(card.id) });
     queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
     queryClient.invalidateQueries({ queryKey: getListJobCardCreditNotesQueryKey(card.id) });
@@ -2117,11 +2121,14 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
     }
   };
 
-  const partsTotal =
+  const internalPartsTotal =
     lines?.reduce(
       (s, l) => s + l.unitPrice * l.quantity * (l.kind === "return" ? -1 : 1),
       0,
     ) ?? 0;
+  const externalPartsTotal =
+    externalLines?.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0) ?? 0;
+  const partsTotal = internalPartsTotal + externalPartsTotal;
   const laborTotal = card.laborHours * card.laborRate;
 
   const NEXT: Record<string, JobCard["status"] | undefined> = {
@@ -2267,8 +2274,28 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">No parts issued.</p>
+            !externalLines?.length && <p className="text-xs text-muted-foreground">No parts issued.</p>
           )}
+          {externalLines?.length ? (
+            <div className="space-y-0.5">
+              {externalLines.map((line) => (
+                <div key={line.id} className="flex items-center justify-between gap-3 text-xs">
+                  <span>
+                    {line.description} × {line.quantity}
+                    <span className="ml-2 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
+                      External
+                    </span>
+                    {line.supplierSnapshot && (
+                      <span className="ml-2 text-muted-foreground">via {line.supplierSnapshot}</span>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {money.gyd(line.unitPrice * line.quantity)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
           <div className="flex gap-2 pt-0.5">
             <CreateRecordDialog
               title="Issue / Return Part"

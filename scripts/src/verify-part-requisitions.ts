@@ -180,6 +180,10 @@ async function main() {
     check("external receipt does not mutate stock and attaches once",
       externalReceived.status === 200 && Number(beforeExternal.rows[0].stock) === Number(afterExternal.rows[0].stock) &&
       afterExternal.rows[0].external_count === 1 && Number(afterExternal.rows[0].external_qty) === 2);
+    const visibleExternal = await api("GET", `/job-cards/${cardId}/external-parts`, MANAGER, dealerId);
+    check("fulfilled external part is visible on its job card",
+      visibleExternal.status === 200 && visibleExternal.json?.length === 1 &&
+      Number(visibleExternal.json[0]?.quantity) === 2);
     const invoice = await api("POST", `/job-cards/${cardId}/invoice`, MANAGER, dealerId);
     check("external charge is invoiced exactly once", invoice.status === 201 &&
       Number(invoice.json?.externalPartsTotal) === 1300 && Number(invoice.json?.partsTotal) === 1825);

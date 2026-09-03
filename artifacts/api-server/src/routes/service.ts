@@ -78,6 +78,8 @@ import {
   UpdateJobCardResponse,
   ListJobCardPartsParams,
   ListJobCardPartsResponse,
+  ListJobCardExternalPartsParams,
+  ListJobCardExternalPartsResponse,
   AddJobCardPartParams,
   AddJobCardPartBody,
   AddJobCardPartResponse,
@@ -2523,6 +2525,25 @@ router.get("/job-cards/:id/parts", async (req, res): Promise<void> => {
     )
     .orderBy(desc(jobCardPartsTable.createdAt));
   res.json(ListJobCardPartsResponse.parse(rows));
+});
+
+router.get("/job-cards/:id/external-parts", async (req, res): Promise<void> => {
+  const params = ListJobCardExternalPartsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(externalJobCardPartsTable)
+    .where(
+      and(
+        eq(externalJobCardPartsTable.jobCardId, params.data.id),
+        eq(externalJobCardPartsTable.dealerId, activeDealerId(res)),
+      ),
+    )
+    .orderBy(desc(externalJobCardPartsTable.createdAt));
+  res.json(ListJobCardExternalPartsResponse.parse(rows));
 });
 
 router.post("/job-cards/:id/parts", async (req, res): Promise<void> => {

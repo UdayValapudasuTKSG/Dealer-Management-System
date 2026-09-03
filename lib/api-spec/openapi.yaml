@@ -3902,6 +3902,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /job-cards/{id}/external-parts:
+    get:
+      operationId: listJobCardExternalParts
+      tags: [service]
+      summary: List fulfilled external parts attached to a job card
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: External part lines on the job card
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JobCardExternalPart"
   /job-cards/{id}/invoice:
     post:
       operationId: createJobCardInvoice
@@ -12985,6 +13004,21 @@ components:
         partId: { type: integer }
         quantity: { type: integer, minimum: 1 }
         kind: { type: string, enum: [issue, return] }
+    JobCardExternalPart:
+      type: object
+      required: [id, jobCardId, requisitionLineId, description, quantity, unitCost, unitPrice, taxCost, freightCost, createdAt]
+      properties:
+        id: { type: integer }
+        jobCardId: { type: integer }
+        requisitionLineId: { type: integer }
+        description: { type: string }
+        supplierSnapshot: { type: ["string", "null"] }
+        quantity: { type: integer }
+        unitCost: { type: number }
+        unitPrice: { type: number }
+        taxCost: { type: number }
+        freightCost: { type: number }
+        createdAt: { type: string, format: date-time }
 
     PartRequisition:
       type: object

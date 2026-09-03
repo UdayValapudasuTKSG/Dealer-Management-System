@@ -6337,6 +6337,29 @@ export const AddJobCardPartResponse = zod.object({
 
 
 /**
+ * @summary List fulfilled external parts attached to a job card
+ */
+export const ListJobCardExternalPartsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListJobCardExternalPartsResponseItem = zod.object({
+  "id": zod.number(),
+  "jobCardId": zod.number(),
+  "requisitionLineId": zod.number(),
+  "description": zod.string(),
+  "supplierSnapshot": zod.string().nullish(),
+  "quantity": zod.number(),
+  "unitCost": zod.number(),
+  "unitPrice": zod.number(),
+  "taxCost": zod.number(),
+  "freightCost": zod.number(),
+  "createdAt": zod.coerce.date()
+})
+export const ListJobCardExternalPartsResponse = zod.array(ListJobCardExternalPartsResponseItem)
+
+
+/**
  * @summary Roll a job card's parts and labour into a service invoice
  */
 export const CreateJobCardInvoiceParams = zod.object({
