@@ -19,7 +19,7 @@ export default function CollisionClaimDetailPage() {
   }
 
   return (
-    <Page className="max-w-[1500px] mx-auto">
+    <Page>
       <Button asChild variant="ghost" className="mb-4 -ml-3 text-muted-foreground hover:text-foreground">
         <Link href="/service?tab=collision">
           <ArrowLeft className="w-4 h-4 mr-2" />

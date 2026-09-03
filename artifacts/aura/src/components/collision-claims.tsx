@@ -60,6 +60,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { DocumentsCard } from "@/components/documents-card";
 import { cn } from "@/lib/utils";
 import {
@@ -932,8 +938,19 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
 
       {/* Body */}
       <div className="p-4 sm:p-6 bg-muted/10">
-        <div className="max-w-5xl mx-auto space-y-6">
+        <Tabs defaultValue="overview" className="w-full">
+          <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 pb-4 bg-muted/95 backdrop-blur">
+            <TabsList className="w-full h-auto justify-start gap-1 overflow-x-auto rounded-xl border border-border/60 bg-background p-1.5">
+              <TabsTrigger value="overview" className="shrink-0 px-4">Overview</TabsTrigger>
+              <TabsTrigger value="coordination" className="shrink-0 px-4">Coordination</TabsTrigger>
+              <TabsTrigger value="assessment" className="shrink-0 px-4">Assessment</TabsTrigger>
+              <TabsTrigger value="evidence" className="shrink-0 px-4">Evidence</TabsTrigger>
+              <TabsTrigger value="financials" className="shrink-0 px-4">Financials</TabsTrigger>
+              <TabsTrigger value="activity" className="shrink-0 px-4">Activity</TabsTrigger>
+            </TabsList>
+          </div>
 
+          <TabsContent value="overview" className="mt-0 space-y-6">
           {/* Quick Links Row */}
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="outline" size="sm" asChild className="h-9 bg-background shadow-sm hover:border-primary/40 transition-colors">
@@ -963,12 +980,16 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
           </div>
 
           <CollisionChecklistPanel claimId={claimId} checklist={data.checklist} summary={data.checklistSummary} />
+          </TabsContent>
 
+          <TabsContent value="coordination" className="mt-0">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <CollisionCommunicationsCard claimId={claimId} />
             <CollisionPortalLinksCard claimId={claimId} />
           </div>
+          </TabsContent>
 
+          <TabsContent value="assessment" className="mt-0 space-y-6">
           {/* Estimate Card */}
           <Card className="border-border/60 shadow-sm bg-background overflow-hidden">
             <CardHeader className="py-3 px-4 border-b border-border/40 bg-muted/20 flex flex-row items-center justify-between">
@@ -1091,7 +1112,9 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
                 )}
              </CardContent>
           </Card>
+          </TabsContent>
 
+          <TabsContent value="evidence" className="mt-0 space-y-6">
           {/* Documents */}
           <DocumentsCard
             entityType="collision_claim"
@@ -1181,7 +1204,9 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
               )}
             </CardContent>
           </Card>
+          </TabsContent>
 
+          <TabsContent value="financials" className="mt-0">
           {/* Settlement */}
           <Card className="border-border/60 shadow-sm bg-background overflow-hidden">
             <CardHeader className="py-3 px-4 border-b border-border/40 bg-muted/20">
@@ -1370,7 +1395,9 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
               )}
             </CardContent>
           </Card>
+          </TabsContent>
 
+          <TabsContent value="activity" className="mt-0">
           {/* Timeline */}
           <Card className="border-border/60 shadow-sm bg-background overflow-hidden">
             <CardHeader className="py-3 px-4 border-b border-border/40 bg-muted/20">
@@ -1412,8 +1439,8 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
                </div>
             </CardContent>
           </Card>
-
-        </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Footer actions */}
