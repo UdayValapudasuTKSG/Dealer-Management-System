@@ -3400,6 +3400,42 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /service-orders/{id}/confirm:
+    post:
+      operationId: confirmServiceAppointment
+      tags: [service]
+      summary: Confirm a requested service appointment and queue the customer email
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Appointment confirmed and confirmation email queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemindAck"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Booking is no longer awaiting confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Customer email or appointment schedule is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /service-orders/{id}/claim:
     post:
       operationId: claimServiceOrder

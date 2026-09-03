@@ -10064,6 +10064,77 @@ export const useSendServiceReminder = <TError = ErrorType<Error>,
       return useMutation(getSendServiceReminderMutationOptions(options));
     }
 
+export const getConfirmServiceAppointmentUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-orders/${id}/confirm`
+}
+
+/**
+ * @summary Confirm a requested service appointment and queue the customer email
+ */
+export const confirmServiceAppointment = async (id: number, options?: RequestInit): Promise<RemindAck> => {
+
+  return customFetch<RemindAck>(getConfirmServiceAppointmentUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getConfirmServiceAppointmentMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmServiceAppointment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof confirmServiceAppointment>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['confirmServiceAppointment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof confirmServiceAppointment>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  confirmServiceAppointment(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfirmServiceAppointmentMutationResult = NonNullable<Awaited<ReturnType<typeof confirmServiceAppointment>>>
+
+    export type ConfirmServiceAppointmentMutationError = ErrorType<Error>
+
+    /**
+ * @summary Confirm a requested service appointment and queue the customer email
+ */
+export const useConfirmServiceAppointment = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmServiceAppointment>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof confirmServiceAppointment>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getConfirmServiceAppointmentMutationOptions(options));
+    }
+
 export const getClaimServiceOrderUrl = (id: number,) => {
 
 

@@ -52,6 +52,8 @@ import {
   UpdateServiceOrderResponse,
   SendServiceReminderParams,
   SendServiceReminderResponse,
+  ConfirmServiceAppointmentParams,
+  ConfirmServiceAppointmentResponse,
   ListServiceTechniciansResponse,
   ListJobCardsQueryParams,
   ListJobCardsResponse,
@@ -129,6 +131,7 @@ import {
   onJobCardIntakeRecorded,
   onServiceEstimateReady,
   onServiceAppointmentChanged,
+  queueServiceAppointmentConfirmation,
   onJobCardStatusChanged,
 } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
@@ -775,6 +778,94 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
   });
   res.json(
     SendServiceReminderResponse.parse({ status: "queued", recipient: email }),
+  );
+});
+
+router.post("/service-orders/:id/confirm", async (req, res): Promise<void> => {
+  const params = ConfirmServiceAppointmentParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [order] = await db
+    .select()
+    .from(serviceOrdersTable)
+    .where(
+      and(
+        eq(serviceOrdersTable.id, params.data.id),
+        eq(serviceOrdersTable.dealerId, dealerId),
+      ),
+    );
+  if (!order || !technicianOwnsOrder(res, order)) {
+    res.status(404).json({ error: "Service order not found" });
+    return;
+  }
+  if (!["open", "acknowledged"].includes(order.status)) {
+    res.status(409).json({ error: "This booking is no longer awaiting confirmation" });
+    return;
+  }
+  const recipient = await customerEmail(order.customerId, dealerId);
+  if (!recipient.email) {
+    res.status(422).json({ error: "Customer has no email on file" });
+    return;
+  }
+  const [appointment] = await db
+    .select({ scheduledAt: jobCardsTable.scheduledAt })
+    .from(jobCardsTable)
+    .where(
+      and(
+        eq(jobCardsTable.serviceOrderId, order.id),
+        eq(jobCardsTable.dealerId, dealerId),
+      ),
+    )
+    .limit(1);
+  if (!appointment?.scheduledAt) {
+    res.status(422).json({ error: "Set the appointment date and time before confirming" });
+    return;
+  }
+
+  let confirmed = order;
+  if (order.status === "open") {
+    const stageEvent = {
+      from: "open",
+      to: "acknowledged",
+      justification: "Service appointment confirmed with customer",
+      byUserId: res.locals.user?.id ?? null,
+      byName: res.locals.user?.name ?? res.locals.user?.email ?? "Unknown",
+      at: new Date().toISOString(),
+    };
+    const [updated] = await db
+      .update(serviceOrdersTable)
+      .set({
+        status: "acknowledged",
+        stageHistory: sql`coalesce(${serviceOrdersTable.stageHistory}, '[]'::jsonb) || ${JSON.stringify([stageEvent])}::jsonb`,
+      })
+      .where(
+        and(
+          eq(serviceOrdersTable.id, order.id),
+          eq(serviceOrdersTable.dealerId, dealerId),
+          eq(serviceOrdersTable.status, "open"),
+        ),
+      )
+      .returning();
+    if (!updated) {
+      res.status(409).json({ error: "Booking status changed; refresh and try again" });
+      return;
+    }
+    confirmed = updated;
+  }
+
+  const queuedTo = await queueServiceAppointmentConfirmation(confirmed);
+  if (!queuedTo) {
+    res.status(422).json({ error: "Customer email or appointment schedule is missing" });
+    return;
+  }
+  res.json(
+    ConfirmServiceAppointmentResponse.parse({
+      status: "queued",
+      recipient: queuedTo,
+    }),
   );
 });
 

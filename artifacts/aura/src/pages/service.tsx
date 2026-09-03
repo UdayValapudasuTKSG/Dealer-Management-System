@@ -9,6 +9,7 @@ import {
   useDeleteServiceOrder,
   getListServiceOrdersQueryKey,
   useSendServiceReminder,
+  useConfirmServiceAppointment,
   useClaimServiceOrder,
   useCreateVehicleOnboardingInvite,
   useListJobCards,
@@ -1467,6 +1468,7 @@ function BookingsTab() {
                 <th className="px-4 py-3 font-semibold hidden md:table-cell">Type</th>
                 <th className="px-4 py-3 font-semibold">Scheduled</th>
                 <th className="px-4 py-3 font-semibold">Status</th>
+                <th className="px-4 py-3 font-semibold text-right">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -1515,6 +1517,9 @@ function BookingsTab() {
                     >
                       {order.status.replace(/_/g, " ")}
                     </span>
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    {order.status === "open" && <ConfirmAppointmentButton order={order} />}
                   </td>
                 </tr>
               ))}
@@ -1660,6 +1665,7 @@ function BookingsTab() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 flex-wrap lg:justify-end lg:flex-1">
+                    {order.status === "open" && <ConfirmAppointmentButton order={order} />}
                     <Button
                       size="sm"
                       variant="outline"
@@ -1704,6 +1710,69 @@ function BookingsTab() {
       onOpenChange={(open) => !open && setSelectedOrder(null)}
     />
     </>
+  );
+}
+
+function ConfirmAppointmentButton({ order }: { order: ServiceOrder }) {
+  const confirm = useConfirmServiceAppointment();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button
+          size="sm"
+          className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs gap-1.5 h-8"
+          disabled={confirm.isPending}
+        >
+          {confirm.isPending ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <CheckCircle2 className="w-3.5 h-3.5" />
+          )}
+          Confirm appointment
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirm this service appointment?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This marks RO #{order.id.toString().padStart(5, "0")} as confirmed and emails the
+            customer the appointment details with a calendar invitation.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Not yet</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={confirm.isPending}
+            onClick={async () => {
+              try {
+                const result = await confirm.mutateAsync({ id: order.id });
+                await queryClient.invalidateQueries({
+                  queryKey: getListServiceOrdersQueryKey(),
+                });
+                toast({
+                  title: "Appointment confirmed",
+                  description: `Confirmation email queued to ${result.recipient}.`,
+                });
+              } catch (error: unknown) {
+                const message =
+                  (error as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+                  "Could not confirm the appointment.";
+                toast({
+                  title: "Confirmation blocked",
+                  description: message,
+                  variant: "destructive",
+                });
+              }
+            }}
+          >
+            Confirm & send email
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

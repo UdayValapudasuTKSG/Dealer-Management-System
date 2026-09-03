@@ -571,10 +571,12 @@ async function cancelServiceReminders(orderId: number, dealerId: number) {
 }
 
 /** Cancel stale reminders, confirm an acknowledged appointment, and schedule 48h/3h. */
-async function confirmServiceAppointment(order: ServiceOrder): Promise<void> {
+export async function queueServiceAppointmentConfirmation(
+  order: ServiceOrder,
+): Promise<string | null> {
   await cancelServiceReminders(order.id, order.dealerId);
   const c = await customerEmail(order.dealerId, order.customerId);
-  if (!c.email) return;
+  if (!c.email) return null;
   const [card] = await db
     .select()
     .from(jobCardsTable)
@@ -585,7 +587,7 @@ async function confirmServiceAppointment(order: ServiceOrder): Promise<void> {
       ),
     )
     .limit(1);
-  if (!card?.scheduledAt) return;
+  if (!card?.scheduledAt) return null;
   const [dealer] = await db
     .select({ name: dealersTable.name, address: dealersTable.address })
     .from(dealersTable)
@@ -638,10 +640,13 @@ async function confirmServiceAppointment(order: ServiceOrder): Promise<void> {
       data: { ...base, window },
     });
   }
+  return c.email;
 }
 
 export function onServiceAppointmentChanged(order: ServiceOrder): void {
-  fire("service_appointment_changed", () => confirmServiceAppointment(order));
+  fire("service_appointment_changed", async () => {
+    await queueServiceAppointmentConfirmation(order);
+  });
 }
 
 /** First persisted job-card intake → digital check-in receipt. */
@@ -812,7 +817,7 @@ export function onServiceOrderStatusChanged(
     };
     switch (after.status) {
       case "acknowledged":
-        await confirmServiceAppointment(after);
+        await queueServiceAppointmentConfirmation(after);
         break;
       case "closed":
         await cancelServiceReminders(after.id, after.dealerId);

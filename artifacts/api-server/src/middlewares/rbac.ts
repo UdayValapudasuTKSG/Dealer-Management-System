@@ -775,9 +775,9 @@ const PATH_MODULES: Record<string, RouteRule> = {
   "service-orders": {
     module: "service",
     category: (req) => {
-      // Stage advance must be reachable by Technicians (service:edit, no
-      // service:create); the route enforces assigned-technician ownership.
-      if (/^\/service-orders\/\d+\/advance\/?$/.test(req.path)) {
+      // Workflow actions on an existing booking are edits, not creation.
+      // The routes still enforce dealership scope and technician ownership.
+      if (/^\/service-orders\/\d+\/(advance|confirm)\/?$/.test(req.path)) {
         return "edit";
       }
       return METHOD_CATEGORY[req.method] ?? "view";

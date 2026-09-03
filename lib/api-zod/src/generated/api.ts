@@ -5420,6 +5420,19 @@ export const SendServiceReminderResponse = zod.object({
 
 
 /**
+ * @summary Confirm a requested service appointment and queue the customer email
+ */
+export const ConfirmServiceAppointmentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ConfirmServiceAppointmentResponse = zod.object({
+  "status": zod.string(),
+  "recipient": zod.string()
+})
+
+
+/**
  * @summary Atomically claim an unassigned service order and open job card
  */
 export const ClaimServiceOrderParams = zod.object({
