@@ -5859,8 +5859,10 @@ export interface PartRequisitionPurchaseOrderLinkContext {
   requisitionId: number;
   requisitionLineId: number;
   source: PartRequisitionPurchaseOrderLinkContextSource;
-  jobCardId: number;
-  serviceOrderId: number;
+  /** @nullable */
+  jobCardId?: number | null;
+  /** @nullable */
+  serviceOrderId?: number | null;
   quantityOrdered: number;
   quantityReceived: number;
 }
@@ -7150,11 +7152,37 @@ export interface PurchaseOrderUpdate {
   notes?: string;
 }
 
+export type PurchaseOrderReceiveBodyCondition = typeof PurchaseOrderReceiveBodyCondition[keyof typeof PurchaseOrderReceiveBodyCondition];
+
+
+export const PurchaseOrderReceiveBodyCondition = {
+  accepted: 'accepted',
+  accepted_with_discrepancy: 'accepted_with_discrepancy',
+} as const;
+
 export type PurchaseOrderReceiveBodyLinesItem = {
   lineId: number;
   /** @minimum 1 */
   qty: number;
 };
+
+export interface PurchaseOrderReceiptDocumentInput {
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  objectPath: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  fileName: string;
+  /**
+     * @minLength 1
+     * @maxLength 250
+     */
+  mimeType: string;
+}
 
 export interface PurchaseOrderReceiveBody {
   /**
@@ -7162,6 +7190,27 @@ export interface PurchaseOrderReceiveBody {
      * @maxLength 100
      */
   idempotencyKey: string;
+  receivedAt: string;
+  /**
+     * @minLength 1
+     * @maxLength 250
+     */
+  deliveryNoteNumber: string;
+  /** @maxLength 250 */
+  supplierInvoiceNumber?: string;
+  /**
+     * @minLength 1
+     * @maxLength 250
+     */
+  warehouseLocation: string;
+  condition: PurchaseOrderReceiveBodyCondition;
+  /** @maxLength 4000 */
+  notes?: string;
+  /**
+     * @minItems 1
+     * @maxItems 10
+     */
+  documents: PurchaseOrderReceiptDocumentInput[];
   /** Per-line receipt quantities; omit to receive everything outstanding */
   lines?: PurchaseOrderReceiveBodyLinesItem[];
 }

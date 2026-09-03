@@ -13953,9 +13953,21 @@ components:
         notes: { type: string }
     PurchaseOrderReceiveBody:
       type: object
-      required: [idempotencyKey]
+      required: [idempotencyKey, receivedAt, deliveryNoteNumber, warehouseLocation, condition, documents]
       properties:
         idempotencyKey: { type: string, minLength: 8, maxLength: 100 }
+        receivedAt: { type: string, format: date-time }
+        deliveryNoteNumber: { type: string, minLength: 1, maxLength: 250 }
+        supplierInvoiceNumber: { type: string, maxLength: 250 }
+        warehouseLocation: { type: string, minLength: 1, maxLength: 250 }
+        condition: { type: string, enum: [accepted, accepted_with_discrepancy] }
+        notes: { type: string, maxLength: 4000 }
+        documents:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/PurchaseOrderReceiptDocumentInput"
         lines:
           type: array
           description: "Per-line receipt quantities; omit to receive everything outstanding"
@@ -13965,15 +13977,22 @@ components:
             properties:
               lineId: { type: integer }
               qty: { type: integer, minimum: 1 }
+    PurchaseOrderReceiptDocumentInput:
+      type: object
+      required: [objectPath, fileName, mimeType]
+      properties:
+        objectPath: { type: string, minLength: 1, maxLength: 1000 }
+        fileName: { type: string, minLength: 1, maxLength: 500 }
+        mimeType: { type: string, minLength: 1, maxLength: 250 }
     PartRequisitionPurchaseOrderLinkContext:
       type: object
-      required: [requisitionId, requisitionLineId, source, jobCardId, serviceOrderId, quantityOrdered, quantityReceived]
+      required: [requisitionId, requisitionLineId, source, quantityOrdered, quantityReceived]
       properties:
         requisitionId: { type: integer }
         requisitionLineId: { type: integer }
         source: { type: string, enum: [INTERNAL, EXTERNAL] }
-        jobCardId: { type: integer }
-        serviceOrderId: { type: integer }
+        jobCardId: { type: ["integer", "null"] }
+        serviceOrderId: { type: ["integer", "null"] }
         quantityOrdered: { type: integer }
         quantityReceived: { type: integer }
     PartCreditNote:

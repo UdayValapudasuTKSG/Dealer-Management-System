@@ -5,6 +5,8 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { PurchaseOrderReceiptDocumentInput } from './purchaseOrderReceiptDocumentInput';
+import type { PurchaseOrderReceiveBodyCondition } from './purchaseOrderReceiveBodyCondition';
 import type { PurchaseOrderReceiveBodyLinesItem } from './purchaseOrderReceiveBodyLinesItem';
 
 export interface PurchaseOrderReceiveBody {
@@ -13,6 +15,27 @@ export interface PurchaseOrderReceiveBody {
      * @maxLength 100
      */
   idempotencyKey: string;
+  receivedAt: Date;
+  /**
+     * @minLength 1
+     * @maxLength 250
+     */
+  deliveryNoteNumber: string;
+  /** @maxLength 250 */
+  supplierInvoiceNumber?: string;
+  /**
+     * @minLength 1
+     * @maxLength 250
+     */
+  warehouseLocation: string;
+  condition: PurchaseOrderReceiveBodyCondition;
+  /** @maxLength 4000 */
+  notes?: string;
+  /**
+     * @minItems 1
+     * @maxItems 10
+     */
+  documents: PurchaseOrderReceiptDocumentInput[];
   /** Per-line receipt quantities; omit to receive everything outstanding */
   lines?: PurchaseOrderReceiveBodyLinesItem[];
 }

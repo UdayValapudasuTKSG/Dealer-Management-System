@@ -551,6 +551,18 @@ export const purchaseOrderReceiptsTable = pgTable(
       .references(() => purchaseOrdersTable.id, { onDelete: "cascade" }),
     idempotencyKey: text("idempotency_key").notNull(),
     requestFingerprint: text("request_fingerprint").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+    receivedByUserId: integer("received_by_user_id"),
+    receivedByName: text("received_by_name").notNull(),
+    deliveryNoteNumber: text("delivery_note_number").notNull(),
+    supplierInvoiceNumber: text("supplier_invoice_number"),
+    warehouseLocation: text("warehouse_location").notNull(),
+    condition: text("condition").notNull(),
+    notes: text("notes"),
+    documents: jsonb("documents")
+      .$type<Array<{ objectPath: string; fileName: string; mimeType: string }>>()
+      .notNull()
+      .default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

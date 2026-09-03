@@ -19,6 +19,7 @@ import {
   useCreatePurchaseOrder,
   useUpdatePurchaseOrder,
   useReceivePurchaseOrder,
+  type PurchaseOrder,
   getListPurchaseOrdersQueryKey,
   getListPartRequisitionsQueryKey,
 } from "@workspace/api-client-react";
@@ -27,6 +28,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useUpload } from "@workspace/object-storage-web";
 import { StyledSelect } from "@/components/ui/styled-select";
 import {
   Dialog,
@@ -1014,8 +1017,8 @@ function PurchaseOrdersTab() {
   const { data: orders, isLoading } = useListPurchaseOrders();
   const { data: suppliers } = useListSuppliers();
   const update = useUpdatePurchaseOrder();
-  const receive = useReceivePurchaseOrder();
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [receivingPo, setReceivingPo] = useState<PurchaseOrder | null>(null);
 
   const supplierName = (id: number | null | undefined) =>
     id == null ? "No supplier" : (suppliers?.find((s) => s.id === id)?.name ?? `Supplier #${id}`);
@@ -1129,16 +1132,10 @@ function PurchaseOrdersTab() {
                     <Button
                       size="sm"
                       disabled={busy || outstanding === 0}
-                      onClick={() =>
-                        act(
-                          po.id,
-                          () => receive.mutateAsync({ id: po.id, data: { idempotencyKey: `po-recv-${Date.now()}` } }),
-                          `Received ${outstanding} unit(s) into stock`,
-                        )
-                      }
+                      onClick={() => setReceivingPo(po)}
                       className="bg-primary hover:bg-primary/90 text-white rounded-full px-5"
                     >
-                      Receive all ({outstanding})
+                      Receive shipment ({outstanding})
                     </Button>
                   )}
                   {(po.status === "draft" || po.status === "ordered") && (
@@ -1164,7 +1161,173 @@ function PurchaseOrdersTab() {
           </Card>
         );
       })}
+      <ReceivePurchaseOrderDialog
+        order={receivingPo}
+        onOpenChange={(open) => { if (!open) setReceivingPo(null); }}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getListPartRequisitionsQueryKey() });
+        }}
+      />
     </div>
+  );
+}
+
+function ReceivePurchaseOrderDialog({
+  order,
+  onOpenChange,
+  onSuccess,
+}: {
+  order: PurchaseOrder | null;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const receive = useReceivePurchaseOrder();
+  const { uploadFile } = useUpload();
+  const [receivedAt, setReceivedAt] = useState(() => new Date().toISOString().slice(0, 16));
+  const [deliveryNoteNumber, setDeliveryNoteNumber] = useState("");
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
+  const [warehouseLocation, setWarehouseLocation] = useState("Parts stores");
+  const [condition, setCondition] = useState<"accepted" | "accepted_with_discrepancy">("accepted");
+  const [notes, setNotes] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [quantities, setQuantities] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    if (!order) return;
+    setReceivedAt(new Date().toISOString().slice(0, 16));
+    setDeliveryNoteNumber("");
+    setSupplierInvoiceNumber("");
+    setWarehouseLocation("Parts stores");
+    setCondition("accepted");
+    setNotes("");
+    setFiles([]);
+    setQuantities(Object.fromEntries(order.lines.map((line) => [
+      line.id,
+      Math.max(0, line.quantity - line.qtyReceived),
+    ])));
+  }, [order]);
+
+  const submit = async () => {
+    if (!order) return;
+    if (!deliveryNoteNumber.trim() || !warehouseLocation.trim()) {
+      toast({ title: "Receipt details required", description: "Enter the delivery note and receiving location.", variant: "destructive" });
+      return;
+    }
+    if (files.length === 0) {
+      toast({ title: "Supporting document required", description: "Attach the supplier delivery note, invoice, packing list, or receiving photo.", variant: "destructive" });
+      return;
+    }
+    const lines = order.lines
+      .map((line) => ({ lineId: line.id, qty: quantities[line.id] ?? 0 }))
+      .filter((line) => line.qty > 0);
+    if (lines.length === 0) {
+      toast({ title: "Nothing selected to receive", variant: "destructive" });
+      return;
+    }
+    try {
+      const documents = [];
+      for (const file of files) {
+        const uploaded = await uploadFile(file);
+        if (!uploaded) throw new Error(`Could not upload ${file.name}`);
+        documents.push({
+          objectPath: uploaded.objectPath,
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+        });
+      }
+      await receive.mutateAsync({
+        id: order.id,
+        data: {
+          idempotencyKey: crypto.randomUUID(),
+          receivedAt: new Date(receivedAt).toISOString(),
+          deliveryNoteNumber: deliveryNoteNumber.trim(),
+          ...(supplierInvoiceNumber.trim() ? { supplierInvoiceNumber: supplierInvoiceNumber.trim() } : {}),
+          warehouseLocation: warehouseLocation.trim(),
+          condition,
+          ...(notes.trim() ? { notes: notes.trim() } : {}),
+          documents,
+          lines,
+        },
+      });
+      onSuccess();
+      toast({ title: "Shipment received", description: `PO #${order.id} stock and receipt records are updated.` });
+      onOpenChange(false);
+    } catch (error) {
+      const message = (error as { response?: { data?: { error?: string } } })?.response?.data?.error || (error as Error).message;
+      toast({ title: "Could not receive shipment", description: message, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={order != null} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl glass-panel border-none">
+        <DialogHeader>
+          <DialogTitle>Receive Purchase Order #{order?.id}</DialogTitle>
+          <DialogDescription>Record exactly what arrived and attach the supplier paperwork before stock is updated.</DialogDescription>
+        </DialogHeader>
+        {order && (
+          <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-2">
+            <div className="space-y-2">
+              {order.lines.map((line) => {
+                const outstanding = Math.max(0, line.quantity - line.qtyReceived);
+                return (
+                  <div key={line.id} className="grid grid-cols-[1fr_120px] gap-4 items-center rounded-xl border border-white/5 bg-white/[0.03] p-3">
+                    <div>
+                      <div className="text-sm font-medium">{line.partName}</div>
+                      <div className="text-xs text-muted-foreground">{outstanding} outstanding</div>
+                    </div>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={outstanding}
+                      value={quantities[line.id] ?? 0}
+                      onChange={(event) => setQuantities((current) => ({ ...current, [line.id]: Number(event.target.value) }))}
+                      className="border-white/10 bg-white/[0.03]"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-2"><label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Received at</label><Input type="datetime-local" value={receivedAt} onChange={(event) => setReceivedAt(event.target.value)} /></div>
+              <div className="space-y-2"><label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery note number</label><Input value={deliveryNoteNumber} onChange={(event) => setDeliveryNoteNumber(event.target.value)} placeholder="Required" /></div>
+              <div className="space-y-2"><label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Supplier invoice number</label><Input value={supplierInvoiceNumber} onChange={(event) => setSupplierInvoiceNumber(event.target.value)} placeholder="Optional" /></div>
+              <div className="space-y-2"><label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Receiving location</label><Input value={warehouseLocation} onChange={(event) => setWarehouseLocation(event.target.value)} /></div>
+              <div className="space-y-2 sm:col-span-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Shipment condition</label>
+                <StyledSelect
+                  value={condition}
+                  onValueChange={(value) => setCondition(value as typeof condition)}
+                  options={[
+                    { value: "accepted", label: "Accepted — quantities and condition match" },
+                    { value: "accepted_with_discrepancy", label: "Accepted with discrepancy" },
+                  ]}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Supporting documents</label>
+              <Input type="file" multiple accept="image/*,.pdf,.docx" onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
+              <p className="text-xs text-muted-foreground">Attach at least one delivery note, supplier invoice, packing list, or receiving photo.</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Receiving notes</label>
+              <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Damage, shortages, substitutions, serial or batch details…" />
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={receive.isPending}>Cancel</Button>
+          <Button onClick={submit} disabled={receive.isPending}>
+            {receive.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Confirm Receipt
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -11,8 +11,10 @@ export interface PartRequisitionPurchaseOrderLinkContext {
   requisitionId: number;
   requisitionLineId: number;
   source: PartRequisitionPurchaseOrderLinkContextSource;
-  jobCardId: number;
-  serviceOrderId: number;
+  /** @nullable */
+  jobCardId?: number | null;
+  /** @nullable */
+  serviceOrderId?: number | null;
   quantityOrdered: number;
   quantityReceived: number;
 }

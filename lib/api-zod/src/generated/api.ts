@@ -6977,8 +6977,8 @@ export const ConvertPartRequisitionToPurchaseOrdersResponse = zod.object({
   "requisitionId": zod.number(),
   "requisitionLineId": zod.number(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
-  "jobCardId": zod.number(),
-  "serviceOrderId": zod.number(),
+  "jobCardId": zod.number().nullish(),
+  "serviceOrderId": zod.number().nullish(),
   "quantityOrdered": zod.number(),
   "quantityReceived": zod.number()
 }),zod.null()]).optional(),
@@ -8942,8 +8942,8 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "requisitionId": zod.number(),
   "requisitionLineId": zod.number(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
-  "jobCardId": zod.number(),
-  "serviceOrderId": zod.number(),
+  "jobCardId": zod.number().nullish(),
+  "serviceOrderId": zod.number().nullish(),
   "quantityOrdered": zod.number(),
   "quantityReceived": zod.number()
 }),zod.null()]).optional(),
@@ -8998,8 +8998,8 @@ export const CreatePurchaseOrderResponse = zod.object({
   "requisitionId": zod.number(),
   "requisitionLineId": zod.number(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
-  "jobCardId": zod.number(),
-  "serviceOrderId": zod.number(),
+  "jobCardId": zod.number().nullish(),
+  "serviceOrderId": zod.number().nullish(),
   "quantityOrdered": zod.number(),
   "quantityReceived": zod.number()
 }),zod.null()]).optional(),
@@ -9043,8 +9043,8 @@ export const UpdatePurchaseOrderResponse = zod.object({
   "requisitionId": zod.number(),
   "requisitionLineId": zod.number(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
-  "jobCardId": zod.number(),
-  "serviceOrderId": zod.number(),
+  "jobCardId": zod.number().nullish(),
+  "serviceOrderId": zod.number().nullish(),
   "quantityOrdered": zod.number(),
   "quantityReceived": zod.number()
 }),zod.null()]).optional(),
@@ -9063,11 +9063,38 @@ export const ReceivePurchaseOrderParams = zod.object({
 export const receivePurchaseOrderBodyIdempotencyKeyMin = 8;
 export const receivePurchaseOrderBodyIdempotencyKeyMax = 100;
 
+export const receivePurchaseOrderBodyDeliveryNoteNumberMax = 250;
+
+export const receivePurchaseOrderBodySupplierInvoiceNumberMax = 250;
+
+export const receivePurchaseOrderBodyWarehouseLocationMax = 250;
+
+export const receivePurchaseOrderBodyNotesMax = 4000;
+
+export const receivePurchaseOrderBodyDocumentsItemObjectPathMax = 1000;
+
+export const receivePurchaseOrderBodyDocumentsItemFileNameMax = 500;
+
+export const receivePurchaseOrderBodyDocumentsItemMimeTypeMax = 250;
+
+export const receivePurchaseOrderBodyDocumentsMax = 10;
+
 
 
 
 export const ReceivePurchaseOrderBody = zod.object({
   "idempotencyKey": zod.string().min(receivePurchaseOrderBodyIdempotencyKeyMin).max(receivePurchaseOrderBodyIdempotencyKeyMax),
+  "receivedAt": zod.coerce.date(),
+  "deliveryNoteNumber": zod.string().min(1).max(receivePurchaseOrderBodyDeliveryNoteNumberMax),
+  "supplierInvoiceNumber": zod.string().max(receivePurchaseOrderBodySupplierInvoiceNumberMax).optional(),
+  "warehouseLocation": zod.string().min(1).max(receivePurchaseOrderBodyWarehouseLocationMax),
+  "condition": zod.enum(['accepted', 'accepted_with_discrepancy']),
+  "notes": zod.string().max(receivePurchaseOrderBodyNotesMax).optional(),
+  "documents": zod.array(zod.object({
+  "objectPath": zod.string().min(1).max(receivePurchaseOrderBodyDocumentsItemObjectPathMax),
+  "fileName": zod.string().min(1).max(receivePurchaseOrderBodyDocumentsItemFileNameMax),
+  "mimeType": zod.string().min(1).max(receivePurchaseOrderBodyDocumentsItemMimeTypeMax)
+})).min(1).max(receivePurchaseOrderBodyDocumentsMax),
   "lines": zod.array(zod.object({
   "lineId": zod.number(),
   "qty": zod.number().min(1)
@@ -9096,8 +9123,8 @@ export const ReceivePurchaseOrderResponse = zod.object({
   "requisitionId": zod.number(),
   "requisitionLineId": zod.number(),
   "source": zod.enum(['INTERNAL', 'EXTERNAL']),
-  "jobCardId": zod.number(),
-  "serviceOrderId": zod.number(),
+  "jobCardId": zod.number().nullish(),
+  "serviceOrderId": zod.number().nullish(),
   "quantityOrdered": zod.number(),
   "quantityReceived": zod.number()
 }),zod.null()]).optional(),

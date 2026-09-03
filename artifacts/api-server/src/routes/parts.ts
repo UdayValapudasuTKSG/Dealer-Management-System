@@ -1479,6 +1479,15 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
     return;
   }
   const dealerId = activeDealerId(res);
+  const expectedObjectPrefix = `/objects/dealer-${dealerId}/`;
+  if (
+    parsed.data.documents.some(
+      (document) => !document.objectPath.startsWith(expectedObjectPrefix),
+    )
+  ) {
+    res.status(422).json({ error: "Every receipt document must belong to the active dealership" });
+    return;
+  }
   const order = await loadPurchaseOrder(dealerId, params.data.id);
   if (!order) {
     res.status(404).json({ error: "Purchase order not found" });
@@ -1530,9 +1539,16 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
     cumulative: number;
     lineId: number;
   }[] = [];
-  const receiptFingerprint = JSON.stringify(
-    [...requested.entries()].sort(([a], [b]) => a - b),
-  );
+  const receiptFingerprint = JSON.stringify({
+    lines: [...requested.entries()].sort(([a], [b]) => a - b),
+    receivedAt: parsed.data.receivedAt,
+    deliveryNoteNumber: parsed.data.deliveryNoteNumber.trim(),
+    supplierInvoiceNumber: parsed.data.supplierInvoiceNumber?.trim() || null,
+    warehouseLocation: parsed.data.warehouseLocation.trim(),
+    condition: parsed.data.condition,
+    notes: parsed.data.notes?.trim() || null,
+    documents: parsed.data.documents,
+  });
   let receiptReplay = false;
   try {
     await db.transaction(async (tx) => {
@@ -1543,6 +1559,15 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
         purchaseOrderId: order.id,
         idempotencyKey: parsed.data.idempotencyKey,
         requestFingerprint: receiptFingerprint,
+        receivedAt: parsed.data.receivedAt,
+        receivedByUserId: res.locals.user?.id ?? null,
+        receivedByName: res.locals.user?.name ?? res.locals.user?.email ?? "Parts",
+        deliveryNoteNumber: parsed.data.deliveryNoteNumber.trim(),
+        supplierInvoiceNumber: parsed.data.supplierInvoiceNumber?.trim() || null,
+        warehouseLocation: parsed.data.warehouseLocation.trim(),
+        condition: parsed.data.condition,
+        notes: parsed.data.notes?.trim() || null,
+        documents: parsed.data.documents,
       })
       .onConflictDoNothing({
         target: [
