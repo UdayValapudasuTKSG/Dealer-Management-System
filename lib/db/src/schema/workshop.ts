@@ -58,6 +58,8 @@ export const partsTable = pgTable("parts", {
   unitPrice: doublePrecision("unit_price").notNull().default(0),
   stock: integer("stock").notNull().default(0),
   reorderLevel: integer("reorder_level").notNull().default(5),
+  lowStockAlertActive: boolean("low_stock_alert_active").notNull().default(false),
+  lowStockAlertCycle: integer("low_stock_alert_cycle").notNull().default(0),
   status: text("status").notNull().default("active"),
   supersededByPartId: integer("superseded_by_part_id"),
   location: text("location"),

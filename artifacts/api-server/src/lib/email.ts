@@ -94,6 +94,36 @@ const d = (data: TemplateData, key: string, fallback: string) =>
   data[key] && data[key].trim() ? data[key] : fallback;
 
 export const TEMPLATE_DEFS: Record<EmailTemplate, TemplateDef> = {
+  "parts.requisition.submitted": {
+    label: "New parts requisition",
+    description: "Alerts Parts Advisors when a new workshop requisition arrives.",
+    subject: (x) => `New parts requisition — ${d(x, "reference", "Workshop request")}`,
+    heading: () => "A new parts request needs attention",
+    body: (x) => d(x, "body", "A new parts requisition has been submitted."),
+    cta: (x) => x.link
+      ? { label: "Review requisition", href: x.link }
+      : { label: "Review requisition" },
+    sample: {
+      reference: "Requisition #1042",
+      body: "A technician submitted 3 requested items for Job Card #231.",
+      link: "/parts",
+    },
+  },
+  "parts.inventory.reorder": {
+    label: "Parts inventory reorder alert",
+    description: "Alerts Parts Advisors when inventory reaches its reorder threshold.",
+    subject: (x) => `Reorder required — ${d(x, "partName", "Inventory part")}`,
+    heading: () => "Inventory has reached its reorder threshold",
+    body: (x) => d(x, "body", "A part now needs replenishment."),
+    cta: (x) => x.link
+      ? { label: "Open parts inventory", href: x.link }
+      : { label: "Open parts inventory" },
+    sample: {
+      partName: "Oil filter",
+      body: "OF-100: 5 on hand, at the reorder level of 5.",
+      link: "/parts",
+    },
+  },
   "collision.claim.communication": {
     label: "Collision claim communication",
     description: "Staff-reviewed collision claim email.",

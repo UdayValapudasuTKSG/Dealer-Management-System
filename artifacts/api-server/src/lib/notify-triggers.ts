@@ -98,20 +98,60 @@ export function notifyPartLowStock(part: {
   name: string;
   stock: number;
   reorderLevel: number;
+  alertCycle: number;
 }): void {
   fire("part.low_stock", async () => {
     let users = await usersWithPermission(part.dealerId, "parts");
     if (users.length === 0) users = await serviceUsers(part.dealerId);
     if (users.length === 0) return;
-    await notifyUsers(users, {
+    await notifyInternal({
       dealerId: part.dealerId,
+      userIds: users,
       type: "part.low_stock",
+      template: "parts.inventory.reorder",
       title: `Low stock — ${part.name}`,
       body: `${part.sku}: ${part.stock} on hand, at or below the reorder level of ${part.reorderLevel}. Raise a purchase order.`,
       link: "/parts",
       entityType: "part",
       entityId: part.id,
+      dedupeKey: `parts:reorder:${part.dealerId}:${part.id}:cycle:${part.alertCycle}`,
+      data: {
+        partName: part.name,
+        body: `${part.sku}: ${part.stock} on hand, at or below the reorder level of ${part.reorderLevel}. Raise a purchase order.`,
+        link: "/parts",
+      },
     });
+  });
+}
+
+export function notifyPartsRequisitionSubmitted(requisition: {
+  id: number;
+  dealerId: number;
+  jobCardId: number;
+  requesterName: string;
+  urgency: string;
+  lineCount: number;
+}): void {
+  fire("parts.requisition.submitted", async () => {
+    const users = await usersWithPermission(requisition.dealerId, "parts");
+    if (users.length === 0) return;
+    const body = `${requisition.requesterName} submitted ${requisition.lineCount} requested item${requisition.lineCount === 1 ? "" : "s"} for Job Card #${requisition.jobCardId}. Urgency: ${requisition.urgency}.`;
+    const emails = await userEmails(users);
+    for (const userId of users) {
+      const to = emails.get(userId);
+      if (!to) continue;
+      await enqueueEmail({
+        template: "parts.requisition.submitted",
+        to,
+        dealerId: requisition.dealerId,
+        data: {
+          reference: `Requisition #${requisition.id}`,
+          body,
+          link: "/parts",
+        },
+        dedupeKey: `parts:requisition:${requisition.id}:submitted:u${userId}`,
+      });
+    }
   });
 }
 

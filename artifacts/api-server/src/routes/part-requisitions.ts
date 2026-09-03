@@ -48,6 +48,8 @@ import {
   enqueuePurchaseOrderSync,
   enqueueStockEntrySync,
 } from "../lib/erpnext/parts-sync";
+import { notifyPartsRequisitionSubmitted } from "../lib/notify-triggers";
+import { checkLowStockCrossing } from "./parts";
 
 const router: IRouter = Router();
 
@@ -259,6 +261,14 @@ async function createJobCardRequisition(
       }),
     );
     return header;
+  });
+  notifyPartsRequisitionSubmitted({
+    id: requisition.id,
+    dealerId,
+    jobCardId: linked.card.id,
+    requesterName: requisition.requesterName,
+    urgency: requisition.urgency,
+    lineCount: parsed.data.lines.length,
   });
   res.status(201).json(CreateJobCardPartRequisitionResponse.parse(await loadDetail(dealerId, requisition.id)));
 }
@@ -777,6 +787,8 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
     quantity: number;
     jobCardId: number;
     jobCardPartId: number;
+    part: typeof partsTable.$inferSelect;
+    previousStock: number;
   }> = [];
   try {
     await db.transaction(async (tx) => {
@@ -853,6 +865,14 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
           })
           .returning();
         if (line.source === "INTERNAL") {
+          const [beforePart] = await tx
+            .select()
+            .from(partsTable)
+            .where(and(eq(partsTable.id, line.partId!), eq(partsTable.dealerId, dealerId)))
+            .for("update");
+          if (!beforePart) {
+            throw Object.assign(new Error(`Part not found for ${line.descriptionSnapshot}`), { status: 404 });
+          }
           const [part] = await tx
             .update(partsTable)
             .set({ stock: sql`${partsTable.stock} - ${requestLine.quantity}` })
@@ -890,6 +910,8 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
             quantity: requestLine.quantity,
             jobCardId: header.jobCardId,
             jobCardPartId: jobLine.id,
+            part,
+            previousStock: beforePart.stock,
           });
         } else {
           const [externalLine] = await tx
@@ -943,6 +965,7 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
     throw error;
   }
   for (const issue of issuedInternal) {
+    checkLowStockCrossing(issue.part, issue.previousStock, issue.part.stock);
     enqueueStockEntrySync({
       dealerId,
       partId: issue.partId,

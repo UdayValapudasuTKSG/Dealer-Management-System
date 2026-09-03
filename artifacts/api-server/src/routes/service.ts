@@ -2922,6 +2922,13 @@ router.post("/job-cards/:id/credit-notes", async (req, res): Promise<void> => {
     return inserted;
     // (ERPNext Material Receipt for this return is enqueued after commit.)
   });
+  const [restockedPart] = await db
+    .select()
+    .from(partsTable)
+    .where(and(eq(partsTable.id, line.partId), eq(partsTable.dealerId, dealerId)));
+  if (restockedPart) {
+    checkLowStockCrossing(restockedPart, restockedPart.stock, restockedPart.stock);
+  }
 
   // ERPNext: the credited return restores stock → Material Receipt.
   enqueueStockEntrySync({

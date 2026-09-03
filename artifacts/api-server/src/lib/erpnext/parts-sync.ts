@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   db,
   erpnextRefsTable,
@@ -588,16 +588,44 @@ async function applyInboundStockChange(opts: {
     .where(
       and(eq(partsTable.id, part.id), eq(partsTable.dealerId, opts.dealerId)),
     );
-  // Low-stock crossing logic mirrors checkLowStockCrossing in routes/parts.
-  if (part.stock > part.reorderLevel && newStock <= part.reorderLevel) {
-    notifyPartLowStock({
-      id: part.id,
-      dealerId: part.dealerId,
-      sku: part.sku,
-      name: part.name,
-      stock: newStock,
-      reorderLevel: part.reorderLevel,
-    });
+  if (newStock > part.reorderLevel) {
+    await db
+      .update(partsTable)
+      .set({ lowStockAlertActive: false })
+      .where(
+        and(
+          eq(partsTable.id, part.id),
+          eq(partsTable.dealerId, part.dealerId),
+          eq(partsTable.lowStockAlertActive, true),
+        ),
+      );
+  } else if (part.stock > part.reorderLevel) {
+    const [claimed] = await db
+      .update(partsTable)
+      .set({
+        lowStockAlertActive: true,
+        lowStockAlertCycle: sql`${partsTable.lowStockAlertCycle} + 1`,
+      })
+      .where(
+        and(
+          eq(partsTable.id, part.id),
+          eq(partsTable.dealerId, part.dealerId),
+          eq(partsTable.lowStockAlertActive, false),
+          sql`${partsTable.stock} <= ${partsTable.reorderLevel}`,
+        ),
+      )
+      .returning({ alertCycle: partsTable.lowStockAlertCycle });
+    if (claimed) {
+      notifyPartLowStock({
+        id: part.id,
+        dealerId: part.dealerId,
+        sku: part.sku,
+        name: part.name,
+        stock: newStock,
+        reorderLevel: part.reorderLevel,
+        alertCycle: claimed.alertCycle,
+      });
+    }
   }
   return {
     partId: part.id,

@@ -268,7 +268,37 @@ export function checkLowStockCrossing(
   prevStock: number,
   newStock: number,
 ): void {
-  if (prevStock > part.reorderLevel && newStock <= part.reorderLevel) {
+  void (async () => {
+    if (newStock > part.reorderLevel) {
+      await db
+        .update(partsTable)
+        .set({ lowStockAlertActive: false })
+        .where(
+          and(
+            eq(partsTable.id, part.id),
+            eq(partsTable.dealerId, part.dealerId),
+            eq(partsTable.lowStockAlertActive, true),
+          ),
+        );
+      return;
+    }
+    if (prevStock <= part.reorderLevel) return;
+    const [claimed] = await db
+      .update(partsTable)
+      .set({
+        lowStockAlertActive: true,
+        lowStockAlertCycle: sql`${partsTable.lowStockAlertCycle} + 1`,
+      })
+      .where(
+        and(
+          eq(partsTable.id, part.id),
+          eq(partsTable.dealerId, part.dealerId),
+          eq(partsTable.lowStockAlertActive, false),
+          sql`${partsTable.stock} <= ${partsTable.reorderLevel}`,
+        ),
+      )
+      .returning({ alertCycle: partsTable.lowStockAlertCycle });
+    if (!claimed) return;
     notifyPartLowStock({
       id: part.id,
       dealerId: part.dealerId,
@@ -276,8 +306,11 @@ export function checkLowStockCrossing(
       name: part.name,
       stock: newStock,
       reorderLevel: part.reorderLevel,
+      alertCycle: claimed.alertCycle,
     });
-  }
+  })().catch((err) => {
+    console.error("Failed to evaluate low-stock email crossing", err);
+  });
 }
 
 router.get("/parts", async (req, res): Promise<void> => {
@@ -462,6 +495,7 @@ router.post("/part-purchases", async (req, res): Promise<void> => {
   });
   // Immediate-receipt purchases move stock now → ERPNext Material Receipt.
   if (!isOrdered) {
+    checkLowStockCrossing(part, part.stock, part.stock + parsed.data.quantity);
     enqueueStockEntrySync({
       dealerId: part.dealerId,
       partId: part.id,
