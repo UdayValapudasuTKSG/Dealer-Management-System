@@ -4601,6 +4601,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CollisionClaimAdvanceUnmet"
+  /collision-claims/{id}/analysis:
+    post:
+      operationId: generateCollisionClaimAnalysis
+      tags: [service]
+      summary: Generate a grounded AI operational analysis of the current claim
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Current claim analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CollisionClaimAnalysis"
+        "403":
+          description: Collision AI is disabled for this dealership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Claim not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Analysis generation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /collision-claims/{id}/resume:
     post:
       operationId: resumeCollisionClaim
@@ -13254,6 +13289,26 @@ components:
           items: { $ref: "#/components/schemas/CollisionChecklistItem" }
         checklistSummary:
           $ref: "#/components/schemas/CollisionChecklistSummary"
+    CollisionClaimAnalysis:
+      type: object
+      required: [summary, riskLevel, nextActions, evidenceGaps, financialObservations, generatedAt, model]
+      properties:
+        summary: { type: string }
+        riskLevel: { type: string, enum: [low, moderate, high] }
+        nextActions:
+          type: array
+          maxItems: 5
+          items: { type: string }
+        evidenceGaps:
+          type: array
+          maxItems: 5
+          items: { type: string }
+        financialObservations:
+          type: array
+          maxItems: 4
+          items: { type: string }
+        generatedAt: { type: string, format: date-time }
+        model: { type: string }
     CollisionChecklistItem:
       type: object
       required: [id, claimId, category, key, label, description, audience, status, createdAt, updatedAt]

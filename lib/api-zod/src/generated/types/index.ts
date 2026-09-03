@@ -138,6 +138,8 @@ export * from './collisionClaim';
 export * from './collisionClaimAdvanceBody';
 export * from './collisionClaimAdvanceBodyTargetStatus';
 export * from './collisionClaimAdvanceUnmet';
+export * from './collisionClaimAnalysis';
+export * from './collisionClaimAnalysisRiskLevel';
 export * from './collisionClaimDetail';
 export * from './collisionClaimEvent';
 export * from './collisionClaimEventKind';

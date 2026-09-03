@@ -6390,6 +6390,28 @@ export interface CollisionClaimDetail {
   checklistSummary: CollisionChecklistSummary;
 }
 
+export type CollisionClaimAnalysisRiskLevel = typeof CollisionClaimAnalysisRiskLevel[keyof typeof CollisionClaimAnalysisRiskLevel];
+
+
+export const CollisionClaimAnalysisRiskLevel = {
+  low: 'low',
+  moderate: 'moderate',
+  high: 'high',
+} as const;
+
+export interface CollisionClaimAnalysis {
+  summary: string;
+  riskLevel: CollisionClaimAnalysisRiskLevel;
+  /** @maxItems 5 */
+  nextActions: string[];
+  /** @maxItems 5 */
+  evidenceGaps: string[];
+  /** @maxItems 4 */
+  financialObservations: string[];
+  generatedAt: string;
+  model: string;
+}
+
 export interface CollisionChecklistRequest {
   /** @maxLength 500 */
   note?: string;

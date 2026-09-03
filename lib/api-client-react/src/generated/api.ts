@@ -83,6 +83,7 @@ import type {
   CollisionClaim,
   CollisionClaimAdvanceBody,
   CollisionClaimAdvanceUnmet,
+  CollisionClaimAnalysis,
   CollisionClaimDetail,
   CollisionClaimInput,
   CollisionClaimUpdate,
@@ -13137,6 +13138,77 @@ export const useAdvanceCollisionClaim = <TError = ErrorType<Error | CollisionCla
         TContext
       > => {
       return useMutation(getAdvanceCollisionClaimMutationOptions(options));
+    }
+
+export const getGenerateCollisionClaimAnalysisUrl = (id: number,) => {
+
+
+
+
+  return `/api/collision-claims/${id}/analysis`
+}
+
+/**
+ * @summary Generate a grounded AI operational analysis of the current claim
+ */
+export const generateCollisionClaimAnalysis = async (id: number, options?: RequestInit): Promise<CollisionClaimAnalysis> => {
+
+  return customFetch<CollisionClaimAnalysis>(getGenerateCollisionClaimAnalysisUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getGenerateCollisionClaimAnalysisMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCollisionClaimAnalysis>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateCollisionClaimAnalysis>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['generateCollisionClaimAnalysis'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateCollisionClaimAnalysis>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  generateCollisionClaimAnalysis(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateCollisionClaimAnalysisMutationResult = NonNullable<Awaited<ReturnType<typeof generateCollisionClaimAnalysis>>>
+
+    export type GenerateCollisionClaimAnalysisMutationError = ErrorType<Error>
+
+    /**
+ * @summary Generate a grounded AI operational analysis of the current claim
+ */
+export const useGenerateCollisionClaimAnalysis = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCollisionClaimAnalysis>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateCollisionClaimAnalysis>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getGenerateCollisionClaimAnalysisMutationOptions(options));
     }
 
 export const getResumeCollisionClaimUrl = (id: number,) => {

@@ -44,6 +44,8 @@ import {
   CreateCollisionClaimResponse,
   GetCollisionClaimParams,
   GetCollisionClaimResponse,
+  GenerateCollisionClaimAnalysisParams,
+  GenerateCollisionClaimAnalysisResponse,
   UpdateCollisionClaimParams,
   UpdateCollisionClaimBody,
   UpdateCollisionClaimResponse,
@@ -128,6 +130,35 @@ async function generateCollisionDraft(context: Record<string, unknown>): Promise
   const parsed = z.object({ subject: z.string().trim().min(1).max(200), body: z.string().trim().min(1).max(6000) }).safeParse(JSON.parse(completion.choices[0]?.message.content ?? "{}"));
   if (!parsed.success) throw new Error("invalid model draft");
   return { ...parsed.data, model: "gpt-4o-mini" };
+}
+
+const collisionAnalysisSchema = z.object({
+  summary: z.string().trim().min(1).max(1200),
+  riskLevel: z.enum(["low", "moderate", "high"]),
+  nextActions: z.array(z.string().trim().min(1).max(300)).max(5),
+  evidenceGaps: z.array(z.string().trim().min(1).max(300)).max(5),
+  financialObservations: z.array(z.string().trim().min(1).max(300)).max(4),
+});
+
+async function generateCollisionAnalysis(
+  context: Record<string, unknown>,
+): Promise<z.infer<typeof collisionAnalysisSchema>> {
+  const completion = await openai.chat.completions.create({
+    model: "gpt-5.4-mini",
+    response_format: { type: "json_object" },
+    max_completion_tokens: 1200,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are A5, an operational collision-claim analyst for dealership staff. Analyze only the supplied record. Never invent facts, fault, coverage, liability, repair safety, dates, costs, or insurer decisions. Identify practical workflow risks, missing evidence, financial inconsistencies, and the most useful next actions. Return JSON only with summary, riskLevel (low|moderate|high), nextActions (max 5), evidenceGaps (max 5), and financialObservations (max 4). Use concise plain language. Empty arrays are valid when the record does not support an observation.",
+      },
+      { role: "user", content: JSON.stringify(context) },
+    ],
+  });
+  return collisionAnalysisSchema.parse(
+    JSON.parse(completion.choices[0]?.message.content ?? "{}"),
+  );
 }
 
 type ChecklistDefault = {
@@ -550,6 +581,176 @@ router.get("/collision-claims/:id", async (req, res): Promise<void> => {
     }),
   );
 });
+
+router.post(
+  "/collision-claims/:id/analysis",
+  async (req, res): Promise<void> => {
+    const params = GenerateCollisionClaimAnalysisParams.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+    const claim = await findClaim(res, params.data.id);
+    if (!claim) {
+      res.status(404).json({ error: "Claim not found" });
+      return;
+    }
+    if (!(await isAgentEnabled(claim.dealerId, "collision_coordinator"))) {
+      res.status(403).json({
+        error: "Collision AI is paused for this dealership",
+      });
+      return;
+    }
+
+    const [supplements, settlements, checklist, documents, serviceOrder] =
+      await Promise.all([
+        db
+          .select()
+          .from(collisionSupplementsTable)
+          .where(
+            and(
+              eq(collisionSupplementsTable.claimId, claim.id),
+              eq(collisionSupplementsTable.dealerId, claim.dealerId),
+            ),
+          ),
+        db
+          .select()
+          .from(collisionSettlementsTable)
+          .where(
+            and(
+              eq(collisionSettlementsTable.claimId, claim.id),
+              eq(collisionSettlementsTable.dealerId, claim.dealerId),
+            ),
+          ),
+        db
+          .select()
+          .from(collisionChecklistItemsTable)
+          .where(
+            and(
+              eq(collisionChecklistItemsTable.claimId, claim.id),
+              eq(collisionChecklistItemsTable.dealerId, claim.dealerId),
+            ),
+          ),
+        db
+          .select({
+            type: documentsTable.type,
+            mimeType: documentsTable.mimeType,
+            extractionStatus: documentsTable.extractionStatus,
+          })
+          .from(documentsTable)
+          .where(
+            and(
+              eq(documentsTable.entityType, "collision_claim"),
+              eq(documentsTable.entityId, claim.id),
+              eq(documentsTable.dealerId, claim.dealerId),
+            ),
+          ),
+        db
+          .select({
+            status: serviceOrdersTable.status,
+            complaint: serviceOrdersTable.complaint,
+            odometer: serviceOrdersTable.odometer,
+            technician: serviceOrdersTable.technician,
+          })
+          .from(serviceOrdersTable)
+          .where(
+            and(
+              eq(serviceOrdersTable.id, claim.serviceOrderId),
+              eq(serviceOrdersTable.dealerId, claim.dealerId),
+            ),
+          )
+          .then((rows) => rows[0] ?? null),
+      ]);
+
+    const approvedSupplements = supplements
+      .filter((item) => item.status === "approved")
+      .reduce((sum, item) => sum + item.amount, 0);
+    const insurerPaid = settlements
+      .filter((item) => item.payer === "insurer")
+      .reduce((sum, item) => sum + item.amount, 0);
+    const customerPaid = settlements
+      .filter((item) => item.payer === "customer")
+      .reduce((sum, item) => sum + item.amount, 0);
+    const generatedAt = new Date().toISOString();
+
+    try {
+      const analysis = await generateCollisionAnalysis({
+        claim: {
+          status: claim.status,
+          severity: claim.severity,
+          lossDate: claim.lossDate,
+          vehicle: claim.vehicleInfo,
+          insurer: claim.insurerName,
+          hasPolicyNumber: Boolean(claim.policyNumber),
+          hasClaimNumber: Boolean(claim.claimNumber),
+          hasAdjuster: Boolean(claim.adjusterName),
+          damageNotes: claim.damageNotes,
+          damagePoints: claim.damagePoints,
+          initialEstimate: claim.initialEstimate,
+          contestedEstimate: claim.contestedEstimate,
+          approvedEstimate: claim.approvedEstimate,
+          deductible: claim.deductible,
+          insurerDue: claim.insurerDue,
+          customerDue: claim.deductibleDue,
+          paused: Boolean(claim.pausedAt),
+          cycleSeconds: claimCycleSeconds(claim),
+        },
+        serviceOrder,
+        checklist: checklist.map((item) => ({
+          label: item.label,
+          audience: item.audience,
+          status: item.status,
+          requiredForStatus: item.requiredForStatus,
+        })),
+        documents,
+        supplements: supplements.map((item) => ({
+          description: item.description,
+          amount: item.amount,
+          status: item.status,
+        })),
+        approvedTotal:
+          claim.approvedEstimate == null
+            ? null
+            : claim.approvedEstimate + approvedSupplements,
+        payments: { insurerPaid, customerPaid },
+      });
+      await recordAgentRun({
+        dealerId: claim.dealerId,
+        agentKey: "collision_coordinator",
+        runType: "analysis",
+        inputSource: "collision_claim",
+        inputSummary: `Analyzed collision claim ${claim.id}`,
+        outputSummary: `${analysis.riskLevel} risk; ${analysis.nextActions.length} next actions`,
+        status: "completed",
+        refType: "collision_claim",
+        refId: claim.id,
+        autonomy: "advisory",
+      });
+      res.json(
+        GenerateCollisionClaimAnalysisResponse.parse({
+          ...analysis,
+          generatedAt,
+          model: "gpt-5.4-mini",
+        }),
+      );
+    } catch (err) {
+      await recordAgentRun({
+        dealerId: claim.dealerId,
+        agentKey: "collision_coordinator",
+        runType: "analysis",
+        inputSource: "collision_claim",
+        inputSummary: `Analyzed collision claim ${claim.id}`,
+        outputSummary: "Analysis generation failed",
+        status: "error",
+        refType: "collision_claim",
+        refId: claim.id,
+        autonomy: "advisory",
+        errorMessage: err instanceof Error ? err.message : "unknown",
+      });
+      res.status(502).json({ error: "Could not generate claim analysis" });
+    }
+  },
+);
 
 router.patch("/collision-claims/:id", async (req, res): Promise<void> => {
   const params = UpdateCollisionClaimParams.safeParse(req.params);

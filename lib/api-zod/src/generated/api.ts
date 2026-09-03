@@ -7744,6 +7744,32 @@ export const AdvanceCollisionClaimResponse = zod.object({
 
 
 /**
+ * @summary Generate a grounded AI operational analysis of the current claim
+ */
+export const GenerateCollisionClaimAnalysisParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const generateCollisionClaimAnalysisResponseNextActionsMax = 5;
+
+export const generateCollisionClaimAnalysisResponseEvidenceGapsMax = 5;
+
+export const generateCollisionClaimAnalysisResponseFinancialObservationsMax = 4;
+
+
+
+export const GenerateCollisionClaimAnalysisResponse = zod.object({
+  "summary": zod.string(),
+  "riskLevel": zod.enum(['low', 'moderate', 'high']),
+  "nextActions": zod.array(zod.string()).max(generateCollisionClaimAnalysisResponseNextActionsMax),
+  "evidenceGaps": zod.array(zod.string()).max(generateCollisionClaimAnalysisResponseEvidenceGapsMax),
+  "financialObservations": zod.array(zod.string()).max(generateCollisionClaimAnalysisResponseFinancialObservationsMax),
+  "generatedAt": zod.coerce.date(),
+  "model": zod.string()
+})
+
+
+/**
  * @summary Resume cycle-time measurement after a backorder pause
  */
 export const ResumeCollisionClaimParams = zod.object({

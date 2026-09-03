@@ -90,6 +90,7 @@ import { CollisionChecklistPanel } from "./collision-claims-checklist";
 import { CollisionPortalLinksCard } from "./collision-claims-portal-links";
 import { CollisionCommunicationsCard } from "./collision-claims-communications";
 import { CollisionPartRequisitionForm } from "./collision-claims-part-requisition";
+import { CollisionClaimIntelligence } from "./collision-claim-intelligence";
 
 /* ------------------------------------------------------------------ */
 /* Status metadata (mirrors COLLISION_ADVANCE_MAP server-side)          */
@@ -938,6 +939,9 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
 
       {/* Body */}
       <div className="p-4 sm:p-6 bg-muted/10">
+        <div className="mb-6">
+          <CollisionClaimIntelligence claim={claim} />
+        </div>
         <Tabs defaultValue="overview" className="w-full">
           <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 pb-4 bg-muted/95 backdrop-blur">
             <TabsList className="w-full h-auto justify-start gap-1 overflow-x-auto rounded-xl border border-border/60 bg-background p-1.5">
@@ -1121,6 +1125,7 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
             entityId={claimId}
             canEdit={canEdit && !TERMINAL.has(claim.status)}
             title="Photos & Documents"
+            previewable
           />
 
           {/* Supplements */}

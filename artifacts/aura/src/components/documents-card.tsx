@@ -30,6 +30,7 @@ import {
   Check,
   ChevronDown,
   Download,
+  Eye,
   FileText,
   History,
   Loader2,
@@ -71,9 +72,11 @@ function downloadUrl(doc: Document): string {
 function DocumentRow({
   doc,
   isHistory,
+  onPreview,
 }: {
   doc: Document;
   isHistory?: boolean;
+  onPreview?: (doc: Document) => void;
 }) {
   return (
     <div
@@ -109,6 +112,16 @@ function DocumentRow({
           {doc.comments ? ` · ${doc.comments}` : ""}
         </div>
       </div>
+      {onPreview && (
+        <button
+          type="button"
+          onClick={() => onPreview(doc)}
+          aria-label={`Preview ${doc.fileName}`}
+          className="w-8 h-8 rounded-lg border border-white/10 text-muted-foreground hover:text-primary hover:bg-primary/10 flex items-center justify-center shrink-0 transition-colors"
+        >
+          <Eye className="w-3.5 h-3.5" />
+        </button>
+      )}
       <a
         href={downloadUrl(doc)}
         target="_blank"
@@ -122,7 +135,13 @@ function DocumentRow({
   );
 }
 
-function TypeGroup({ docs }: { docs: Document[] }) {
+function TypeGroup({
+  docs,
+  onPreview,
+}: {
+  docs: Document[];
+  onPreview?: (doc: Document) => void;
+}) {
   const [showHistory, setShowHistory] = useState(false);
   const [latest, ...history] = docs;
   if (!latest) return null;
@@ -148,11 +167,11 @@ function TypeGroup({ docs }: { docs: Document[] }) {
           </button>
         )}
       </div>
-      <DocumentRow doc={latest} />
+      <DocumentRow doc={latest} onPreview={onPreview} />
       {showHistory &&
         history.map((d) => (
           <div key={d.id} className="border-t border-white/5">
-            <DocumentRow doc={d} isHistory />
+            <DocumentRow doc={d} isHistory onPreview={onPreview} />
           </div>
         ))}
     </div>
@@ -165,12 +184,14 @@ export function DocumentsCard({
   canEdit,
   title = "Documents",
   imageOnly = false,
+  previewable = false,
 }: {
   entityType: DocumentInputEntityType;
   entityId: number;
   canEdit: boolean;
   title?: string;
   imageOnly?: boolean;
+  previewable?: boolean;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -183,6 +204,7 @@ export function DocumentsCard({
   const [comments, setComments] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { uploadFile } = useUpload();
 
@@ -298,7 +320,11 @@ export function DocumentsCard({
       ) : (
         <div className="space-y-2.5">
           {grouped.map(([type, list]) => (
-            <TypeGroup key={type} docs={list} />
+            <TypeGroup
+              key={type}
+              docs={list}
+              onPreview={previewable ? setPreviewDoc : undefined}
+            />
           ))}
         </div>
       )}
@@ -375,6 +401,64 @@ export function DocumentsCard({
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!previewDoc} onOpenChange={(next) => !next && setPreviewDoc(null)}>
+        <DialogContent className="flex h-[88vh] max-w-[min(1100px,calc(100vw-2rem))] flex-col overflow-hidden p-0">
+          <DialogHeader className="border-b border-border/60 px-5 py-4">
+            <DialogTitle className="pr-8">{previewDoc?.fileName}</DialogTitle>
+            <DialogDescription>
+              {previewDoc
+                ? `${DOCUMENT_TYPE_LABEL[previewDoc.type] ?? previewDoc.type} · ${formatSize(previewDoc.sizeBytes)}`
+                : "Claim document"}
+            </DialogDescription>
+          </DialogHeader>
+          {previewDoc && (
+            <div className="min-h-0 flex-1 bg-muted/30">
+              {previewDoc.mimeType.startsWith("image/") ? (
+                <div className="flex h-full items-center justify-center overflow-auto p-4">
+                  <img
+                    src={downloadUrl(previewDoc)}
+                    alt={previewDoc.fileName}
+                    className="max-h-full max-w-full rounded-lg object-contain shadow-lg"
+                  />
+                </div>
+              ) : previewDoc.mimeType === "application/pdf" ? (
+                <iframe
+                  src={downloadUrl(previewDoc)}
+                  title={previewDoc.fileName}
+                  className="h-full w-full border-0 bg-background"
+                />
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
+                  <FileText className="h-12 w-12 text-primary/60" />
+                  <div>
+                    <p className="font-semibold">Preview is not available for this file type</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Open the original document in a new browser tab.
+                    </p>
+                  </div>
+                  <Button asChild>
+                    <a href={downloadUrl(previewDoc)} target="_blank" rel="noreferrer">
+                      <Download className="mr-2 h-4 w-4" />
+                      Open document
+                    </a>
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          {previewDoc && (
+            <div className="flex justify-end border-t border-border/60 px-5 py-3">
+              <Button asChild variant="outline">
+                <a href={downloadUrl(previewDoc)} target="_blank" rel="noreferrer">
+                  <Download className="mr-2 h-4 w-4" />
+                  Open original
+                </a>
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
