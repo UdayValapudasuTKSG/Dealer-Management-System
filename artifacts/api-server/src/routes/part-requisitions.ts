@@ -837,21 +837,6 @@ router.post("/part-requisitions/:id/fulfill", async (req, res): Promise<void> =>
         if (line.source === "EXTERNAL") {
           throw Object.assign(new Error(`External line #${line.id} is attached automatically when its PO is received`), { status: 422 });
         }
-        const [received] = await tx
-          .select({
-            quantity: sql<number>`coalesce(sum(${partRequisitionPoAllocationsTable.quantityReceived}), 0)`,
-          })
-          .from(partRequisitionPoAllocationsTable)
-          .where(
-            and(
-              eq(partRequisitionPoAllocationsTable.dealerId, dealerId),
-              eq(partRequisitionPoAllocationsTable.requisitionId, header.id),
-              eq(partRequisitionPoAllocationsTable.requisitionLineId, line.id),
-            ),
-          );
-        if (requestLine.quantity > Number(received?.quantity ?? 0) - line.fulfilledQuantity) {
-          throw Object.assign(new Error(`Line #${line.id} has insufficient received quantity to issue`), { status: 409 });
-        }
         if (requestLine.quantity > line.quantity - line.fulfilledQuantity) {
           throw Object.assign(new Error(`Line #${line.id} has only ${line.quantity - line.fulfilledQuantity} unit(s) outstanding`), { status: 422 });
         }
