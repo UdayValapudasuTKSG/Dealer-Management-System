@@ -69,6 +69,7 @@ import {
   Pause,
   Play,
   Receipt,
+  Download,
   ClipboardList,
   CircleDollarSign,
   History,
@@ -827,9 +828,40 @@ function ClaimDetail({ claimId }: { claimId: number }) {
 
   const { claim, supplements, settlements, approvedTotal, insurerPaid, deductiblePaid, cycleSeconds } = data;
   const targets = ADVANCE_MAP[claim.status] ?? [];
-  const invoiceCard = (jobCards ?? []).find((card) => card.status === "completed");
-  const activeCard = (jobCards ?? []).find((card) => !["completed", "cancelled"].includes(card.status));
+  const advanceTargets = targets.filter((target) => target !== "invoiced");
+  const invoiceCard = (jobCards ?? []).find((card) => ["completed", "closed"].includes(card.status));
+  const activeCard = (jobCards ?? []).find((card) => !["completed", "closed", "cancelled"].includes(card.status));
   const cycleDays = (cycleSeconds / 86400).toFixed(1);
+  const approvedRepairValue = approvedTotal ?? 0;
+  const expectedCustomerShare = Math.min(claim.deductible, approvedRepairValue);
+  const expectedInsurerShare = Math.max(0, approvedRepairValue - expectedCustomerShare);
+
+  const generateCollisionInvoice = () => {
+    if (!invoiceCard) {
+      toast({
+        title: "Complete the job card first",
+        description:
+          "The final invoice uses the completed job card’s parts, labour and tax.",
+        variant: "destructive",
+      });
+      return;
+    }
+    invoice.mutate(
+      { id: invoiceCard.id },
+      {
+        onSuccess: () => {
+          refresh();
+          toast({
+            title: "Collision invoice generated",
+            description:
+              "The final insurer and customer responsibilities are now ready.",
+          });
+        },
+        onError: (error) =>
+          onError(error, "Could not generate collision invoice"),
+      },
+    );
+  };
 
   const doAdvance = async (target: CollisionClaimStatus) => {
     try {
@@ -1171,28 +1203,107 @@ function ClaimDetail({ claimId }: { claimId: number }) {
             </CardHeader>
             <CardContent className="p-4 space-y-4">
               {claim.serviceInvoiceId == null ? (
-                <div className="text-sm text-muted-foreground py-4 text-center border border-dashed border-border/60 rounded-lg">
-                  The insurer / deductible split is set when the service invoice is issued (after insurer sign-off).
+                <div className="rounded-xl border border-primary/20 bg-primary/[0.03] overflow-hidden">
+                  <div className="p-4 border-b border-border/50">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div>
+                        <div className="text-xs font-bold uppercase tracking-widest text-primary">
+                          Ready for financial handoff
+                        </div>
+                        <h4 className="font-semibold mt-1">Generate the collision invoice here</h4>
+                        <p className="text-sm text-muted-foreground mt-1 max-w-xl">
+                          The final invoice pulls parts, labour and tax from the completed job card, then separates what the insurer owes from the customer’s deductible.
+                        </p>
+                      </div>
+                      {claim.status === "insurer_signoff" && (
+                        <Button
+                          onClick={generateCollisionInvoice}
+                          disabled={invoice.isPending || !invoiceCard}
+                          className="shrink-0"
+                        >
+                          {invoice.isPending ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <Receipt className="w-4 h-4 mr-2" />
+                          )}
+                          {invoiceCard ? "Generate Final Invoice" : "Job Card Not Complete"}
+                        </Button>
+                      )}
+                    </div>
+                    {claim.status === "insurer_signoff" && !invoiceCard && (
+                      <div className="mt-3 text-xs text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2">
+                        Complete or close the repair job card to lock the final parts and labour totals.
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-border/50">
+                    <div className="p-4">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Approved Repair Value</div>
+                      <div className="font-mono text-lg mt-1">{money(approvedRepairValue)}</div>
+                    </div>
+                    <div className="p-4">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Expected Insurer Share</div>
+                      <div className="font-mono text-lg text-primary mt-1">{money(expectedInsurerShare)}</div>
+                    </div>
+                    <div className="p-4">
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Expected Customer Share</div>
+                      <div className="font-mono text-lg text-sky-600 dark:text-sky-400 mt-1">{money(expectedCustomerShare)}</div>
+                    </div>
+                  </div>
+                  <div className="px-4 py-2.5 text-xs text-muted-foreground border-t border-border/50 bg-muted/10">
+                    Preview only. The issued invoice uses the final job-card total and caps the customer share at the deductible.
+                  </div>
                 </div>
               ) : (
                 <>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/[0.04] p-4">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-primary">Final Collision Invoice</div>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="font-mono text-2xl font-semibold">{money((claim.insurerDue ?? 0) + (claim.deductibleDue ?? 0))}</span>
+                        <span className="text-sm text-muted-foreground">Invoice #{claim.serviceInvoiceId}</span>
+                      </div>
+                    </div>
+                    <Button asChild variant="outline" className="shrink-0">
+                      <a href={`/api/service-invoices/${claim.serviceInvoiceId}/pdf`} target="_blank" rel="noreferrer">
+                        <Download className="w-4 h-4 mr-2" />
+                        View Invoice PDF
+                      </a>
+                    </Button>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="p-4 rounded-lg border border-border/60 bg-muted/10 space-y-1.5">
-                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Insurer Balance</div>
-                      <div className="font-mono text-xl font-medium text-primary">
-                        {money(Math.max(0, (claim.insurerDue ?? 0) - insurerPaid))}
-                      </div>
-                      <div className="text-xs text-muted-foreground pt-1">
-                        of {money(claim.insurerDue ?? 0)} total · paid {money(insurerPaid)}
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Insurer Responsibility</div>
+                      <div className="font-mono text-xl font-medium text-primary">{money(claim.insurerDue ?? 0)}</div>
+                      <div className="grid grid-cols-2 gap-3 pt-3 mt-2 border-t border-border/50">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Paid</div>
+                          <div className="font-mono text-sm mt-0.5">{money(insurerPaid)}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Still Due</div>
+                          <div className="font-mono text-sm mt-0.5">
+                            {money(Math.max(0, (claim.insurerDue ?? 0) - insurerPaid))}
+                          </div>
+                        </div>
                       </div>
                     </div>
                     <div className="p-4 rounded-lg border border-border/60 bg-muted/10 space-y-1.5">
-                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customer Deductible</div>
-                      <div className="font-mono text-xl font-medium text-sky-600 dark:text-sky-400">
-                        {money(Math.max(0, (claim.deductibleDue ?? 0) - deductiblePaid))}
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customer Responsibility</div>
+                      <div className="font-mono text-xl font-medium text-primary">
+                        {money(claim.deductibleDue ?? 0)}
                       </div>
-                      <div className="text-xs text-muted-foreground pt-1">
-                        of {money(claim.deductibleDue ?? 0)} total · paid {money(deductiblePaid)}
+                      <div className="grid grid-cols-2 gap-3 pt-3 mt-2 border-t border-border/50">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Paid</div>
+                          <div className="font-mono text-sm mt-0.5">{money(deductiblePaid)}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Still Due</div>
+                          <div className="font-mono text-sm mt-0.5 text-sky-600 dark:text-sky-400">
+                            {money(Math.max(0, (claim.deductibleDue ?? 0) - deductiblePaid))}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1321,7 +1432,7 @@ function ClaimDetail({ claimId }: { claimId: number }) {
           ) : <div />}
         </div>
 
-        {canEdit && targets.length > 0 ? (
+        {canEdit && advanceTargets.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 justify-end w-full sm:w-auto">
             <Input
               value={note}
@@ -1329,7 +1440,7 @@ function ClaimDetail({ claimId }: { claimId: number }) {
               placeholder="Advance note (optional)"
               className="w-full sm:w-48 bg-muted/20"
             />
-            {targets.includes("total_loss" as never) && (
+            {advanceTargets.includes("total_loss" as never) && (
               <Input
                 type="number"
                 value={totalLossValue}
@@ -1338,56 +1449,9 @@ function ClaimDetail({ claimId }: { claimId: number }) {
                 className="w-full sm:w-36 bg-muted/20"
               />
             )}
-            {targets.map((t) => {
+            {advanceTargets.map((t) => {
               const needsApprover = APPROVER_TARGETS.has(t);
               const destructive = t === "denied" || t === "total_loss";
-              if (t === "invoiced") {
-                return (
-                  <Button
-                    key={t}
-                    onClick={() => {
-                      if (!invoiceCard) {
-                        toast({
-                          title: "Complete the job card first",
-                          description:
-                            "The collision invoice is generated from the completed job card's parts and labour.",
-                          variant: "destructive",
-                        });
-                        return;
-                      }
-                      invoice.mutate(
-                        { id: invoiceCard.id },
-                        {
-                          onSuccess: () => {
-                            refresh();
-                            toast({
-                              title: "Collision invoice generated",
-                              description:
-                                "The claim moved to Invoiced and the insurer/deductible split is ready.",
-                            });
-                          },
-                          onError: (error) =>
-                            onError(error, "Could not generate collision invoice"),
-                        },
-                      );
-                    }}
-                    disabled={invoice.isPending}
-                    className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-white shadow-sm"
-                    title={
-                      invoiceCard
-                        ? "Generate the invoice and split insurer/customer balances"
-                        : "Complete the repair job card before invoicing"
-                    }
-                  >
-                    {invoice.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                    ) : (
-                      <Receipt className="w-4 h-4 mr-1.5" />
-                    )}
-                    Generate Collision Invoice
-                  </Button>
-                );
-              }
               return (
                 <Button
                   key={t}
