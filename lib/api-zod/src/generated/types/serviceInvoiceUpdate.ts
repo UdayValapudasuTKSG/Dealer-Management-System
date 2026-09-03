@@ -5,9 +5,16 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ServiceInvoiceUpdatePaymentMethod } from './serviceInvoiceUpdatePaymentMethod';
 import type { ServiceInvoiceUpdateStatus } from './serviceInvoiceUpdateStatus';
 
 export interface ServiceInvoiceUpdate {
   status?: ServiceInvoiceUpdateStatus;
   signedCopyFiled?: boolean;
+  paymentMethod?: ServiceInvoiceUpdatePaymentMethod;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  paymentReference?: string;
 }

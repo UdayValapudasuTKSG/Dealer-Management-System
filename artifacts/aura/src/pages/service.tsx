@@ -2993,14 +2993,30 @@ function InvoiceCard({ inv }: { inv: ServiceInvoice }) {
   const { toast } = useToast();
   const money = useMoney();
   const isApprover = useIsServiceApprover();
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: getListServiceInvoicesQueryKey() });
 
-  const setStatus = async (status: "issued" | "paid" | "void") => {
-    await update.mutateAsync({ id: inv.id, data: { status } });
-    invalidate();
-    toast({ title: "Invoice updated", description: `Marked ${status}.` });
+  const setStatus = async (
+    status: "issued" | "paid" | "void",
+    payment?: { paymentMethod: "cash" | "card" | "bank_transfer" | "cheque" | "mobile_money" | "other"; paymentReference?: string },
+  ) => {
+    try {
+      await update.mutateAsync({ id: inv.id, data: { status, ...payment } });
+      invalidate();
+      toast({ title: "Invoice updated", description: `Marked ${status}.` });
+      return true;
+    } catch (error) {
+      toast({
+        title: "Invoice update failed",
+        description: (error as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Try again.",
+        variant: "destructive",
+      });
+      return false;
+    }
   };
 
   return (
@@ -3058,7 +3074,7 @@ function InvoiceCard({ inv }: { inv: ServiceInvoice }) {
                 <Button
                   size="sm"
                   disabled={update.isPending}
-                  onClick={() => setStatus("paid")}
+                  onClick={() => setPaymentOpen(true)}
                   className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs"
                 >
                   Mark Paid
@@ -3076,6 +3092,59 @@ function InvoiceCard({ inv }: { inv: ServiceInvoice }) {
             )}
           </div>
         </div>
+
+        {inv.status === "paid" && inv.paymentMethod && (
+          <div className="text-xs text-muted-foreground">
+            Payment received by {inv.paidBy ?? "Staff"} via{" "}
+            <span className="font-medium text-foreground">{inv.paymentMethod.replace(/_/g, " ")}</span>
+            {inv.paymentReference && <> · Ref: {inv.paymentReference}</>}
+            {inv.paidAt && <> · {formatDealerDayTime(inv.paidAt)}</>}
+          </div>
+        )}
+
+        <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Acknowledge payment received</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Record how {money.gyd(inv.total)} was received before closing this invoice.
+              </p>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger><SelectValue placeholder="Payment method" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="bank_transfer">Bank transfer</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="mobile_money">Mobile money</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                value={paymentReference}
+                onChange={(event) => setPaymentReference(event.target.value)}
+                placeholder="Reference / receipt number (optional)"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button>
+              <Button
+                disabled={!paymentMethod || update.isPending}
+                onClick={async () => {
+                  const saved = await setStatus("paid", {
+                    paymentMethod: paymentMethod as "cash" | "card" | "bank_transfer" | "cheque" | "mobile_money" | "other",
+                    ...(paymentReference.trim() ? { paymentReference: paymentReference.trim() } : {}),
+                  });
+                  if (saved) setPaymentOpen(false);
+                }}
+              >
+                Confirm payment
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <DiscountRow inv={inv} onChanged={invalidate} />
 

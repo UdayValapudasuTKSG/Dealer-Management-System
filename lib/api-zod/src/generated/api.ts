@@ -6388,6 +6388,10 @@ export const CreateJobCardInvoiceResponse = zod.object({
   "tax": zod.number(),
   "total": zod.number(),
   "status": zod.enum(['issued', 'paid', 'void']),
+  "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paidBy": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),
@@ -7085,6 +7089,10 @@ export const ListServiceInvoicesResponseItem = zod.object({
   "tax": zod.number(),
   "total": zod.number(),
   "status": zod.enum(['issued', 'paid', 'void']),
+  "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paidBy": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),
@@ -7103,9 +7111,15 @@ export const UpdateServiceInvoiceParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateServiceInvoiceBodyPaymentReferenceMax = 200;
+
+
+
 export const UpdateServiceInvoiceBody = zod.object({
   "status": zod.enum(['issued', 'paid', 'void']).optional(),
-  "signedCopyFiled": zod.boolean().optional()
+  "signedCopyFiled": zod.boolean().optional(),
+  "paymentMethod": zod.enum(['cash', 'card', 'bank_transfer', 'cheque', 'mobile_money', 'other']).optional(),
+  "paymentReference": zod.string().min(1).max(updateServiceInvoiceBodyPaymentReferenceMax).optional()
 })
 
 export const UpdateServiceInvoiceResponse = zod.object({
@@ -7130,6 +7144,10 @@ export const UpdateServiceInvoiceResponse = zod.object({
   "tax": zod.number(),
   "total": zod.number(),
   "status": zod.enum(['issued', 'paid', 'void']),
+  "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paidBy": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),
@@ -7181,6 +7199,10 @@ export const RequestServiceInvoiceDiscountResponse = zod.object({
   "tax": zod.number(),
   "total": zod.number(),
   "status": zod.enum(['issued', 'paid', 'void']),
+  "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paidBy": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),
@@ -7227,6 +7249,10 @@ export const DecideServiceInvoiceDiscountResponse = zod.object({
   "tax": zod.number(),
   "total": zod.number(),
   "status": zod.enum(['issued', 'paid', 'void']),
+  "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paidBy": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),
@@ -7278,6 +7304,10 @@ export const AdjustServiceInvoiceResponse = zod.object({
   "tax": zod.number(),
   "total": zod.number(),
   "status": zod.enum(['issued', 'paid', 'void']),
+  "paymentMethod": zod.union([zod.literal('cash'),zod.literal('card'),zod.literal('bank_transfer'),zod.literal('cheque'),zod.literal('mobile_money'),zod.literal('other'),zod.literal(null)]).nullish(),
+  "paymentReference": zod.string().nullish(),
+  "paidBy": zod.string().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),

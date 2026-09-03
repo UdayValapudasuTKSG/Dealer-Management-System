@@ -359,7 +359,11 @@ function taskToTriage(t: Task): TriageItem {
         : t.dueDate
           ? `Due ${t.dueDate.slice(0, 10)}`
           : "Open task",
-    href: t.leadId ? `/lead/${t.leadId}` : "/command-center",
+    href: t.leadId
+      ? `/lead/${t.leadId}`
+      : t.title.startsWith("Approve rollover ·") || t.title.startsWith("Approve discount ·")
+        ? "/service"
+        : "/command-center",
     rank: overdue ? 1 : 4,
   };
 }

@@ -35,6 +35,7 @@ import {
   partCreditNotesTable,
   jobCardTechnicianNotesTable,
   externalJobCardPartsTable,
+  tasksTable,
   collisionClaimsTable,
   collisionSettlementsTable,
   collisionSupplementsTable,
@@ -143,6 +144,7 @@ import {
   onJobCardStatusChanged,
 } from "../lib/email-triggers";
 import { enqueueEmail, notifyUser } from "../lib/email";
+import { generalManagers } from "../lib/notify-matrix";
 import { activeDealerId } from "../middlewares/rbac";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
 import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage";
@@ -2281,6 +2283,21 @@ router.post("/job-cards/:id/rollover", async (req, res): Promise<void> => {
     res.status(409).json({ error: "Job card changed — reload and retry" });
     return;
   }
+  const managerIds = await generalManagers(dealerId);
+  if (managerIds.length) {
+    await db.insert(tasksTable).values(
+      managerIds.map((managerId) => ({
+        dealerId,
+        title: `Approve rollover · JC #${updated.id}`,
+        description: `${updated.title} · move to ${toDate}${updated.rolloverReason ? ` · ${updated.rolloverReason}` : ""}`,
+        assigneeUserId: managerId,
+        createdByUserId: res.locals.user?.id ?? null,
+        dueDate: today,
+        kind: "service_rollover_approval",
+        priority: "high",
+      })),
+    );
+  }
   res.json(RolloverJobCardResponse.parse(updated));
 });
 
@@ -2436,6 +2453,19 @@ router.post(
             : "Technician sign-off already recorded (or rollover no longer pending)",
       });
       return;
+    }
+    if (parsed.data.as === "manager") {
+      await db
+        .update(tasksTable)
+        .set({ status: "done", completedAt: new Date(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(tasksTable.dealerId, dealerId),
+            eq(tasksTable.kind, "service_rollover_approval"),
+            eq(tasksTable.title, `Approve rollover · JC #${card.id}`),
+            eq(tasksTable.status, "open"),
+          ),
+        );
     }
     res.json(ApproveJobCardRolloverResponse.parse(updated));
   },
@@ -3321,7 +3351,15 @@ router.patch("/service-invoices/:id", async (req, res): Promise<void> => {
   // Locked totals (FR-SR-09): PATCH only ever touches lifecycle status and
   // the signed-copy acknowledgement — monetary fields are not accepted here.
   const dealerId = activeDealerId(res);
-  const { signedCopyFiled, status } = parsed.data;
+  const { signedCopyFiled, status, paymentMethod, paymentReference } = parsed.data;
+  if (status === "paid" && !paymentMethod) {
+    res.status(422).json({ error: "Choose how payment was received before marking this invoice paid" });
+    return;
+  }
+  if (status !== "paid" && (paymentMethod || paymentReference)) {
+    res.status(422).json({ error: "Payment details are only accepted when marking an invoice paid" });
+    return;
+  }
   // One transaction with the invoice row locked FOR UPDATE: the collision
   // advance route locks the same row before binding it to a claim, so a
   // manual void can never slip in between "claim reads issued invoice" and
@@ -3410,6 +3448,12 @@ router.patch("/service-invoices/:id", async (req, res): Promise<void> => {
     }
     const patch: Partial<typeof serviceInvoicesTable.$inferInsert> = {};
     if (status !== undefined) patch.status = status;
+    if (status === "paid") {
+      patch.paymentMethod = paymentMethod!;
+      patch.paymentReference = paymentReference?.trim() || null;
+      patch.paidBy = res.locals.user?.name ?? res.locals.user?.email ?? "Staff";
+      patch.paidAt = new Date();
+    }
     if (signedCopyFiled) {
       patch.signedCopyFiledBy =
         res.locals.user?.name ?? res.locals.user?.email ?? "Staff";
@@ -3527,6 +3571,22 @@ router.post(
         ),
       )
       .returning();
+    const managerIds = await generalManagers(dealerId);
+    if (managerIds.length) {
+      const dueDate = zonedDayKey(new Date(), await dealerTimezone(dealerId));
+      await db.insert(tasksTable).values(
+        managerIds.map((managerId) => ({
+          dealerId,
+          title: `Approve discount · Invoice #${updated.id}`,
+          description: `GYD ${parsed.data.amount.toLocaleString()}${parsed.data.reason ? ` · ${parsed.data.reason}` : ""}`,
+          assigneeUserId: managerId,
+          createdByUserId: res.locals.user?.id ?? null,
+          dueDate,
+          kind: "service_discount_approval",
+          priority: "high",
+        })),
+      );
+    }
     res.json(RequestServiceInvoiceDiscountResponse.parse(updated));
   },
 );
@@ -3621,6 +3681,17 @@ router.post(
         ),
       )
       .returning();
+    await db
+      .update(tasksTable)
+      .set({ status: "done", completedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(tasksTable.dealerId, dealerId),
+          eq(tasksTable.kind, "service_discount_approval"),
+          eq(tasksTable.title, `Approve discount · Invoice #${invoice.id}`),
+          eq(tasksTable.status, "open"),
+        ),
+      );
     res.json(DecideServiceInvoiceDiscountResponse.parse(updated));
   },
 );

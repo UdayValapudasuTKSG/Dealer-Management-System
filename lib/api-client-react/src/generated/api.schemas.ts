@@ -5921,6 +5921,21 @@ export const ServiceInvoiceStatus = {
   void: 'void',
 } as const;
 
+/**
+ * @nullable
+ */
+export type ServiceInvoicePaymentMethod = typeof ServiceInvoicePaymentMethod[keyof typeof ServiceInvoicePaymentMethod] | null;
+
+
+export const ServiceInvoicePaymentMethod = {
+  cash: 'cash',
+  card: 'card',
+  bank_transfer: 'bank_transfer',
+  cheque: 'cheque',
+  mobile_money: 'mobile_money',
+  other: 'other',
+} as const;
+
 export interface InvoiceAdjustmentEntry {
   amount: number;
   reason: string;
@@ -5960,6 +5975,14 @@ export interface ServiceInvoice {
   total: number;
   status: ServiceInvoiceStatus;
   /** @nullable */
+  paymentMethod?: ServiceInvoicePaymentMethod;
+  /** @nullable */
+  paymentReference?: string | null;
+  /** @nullable */
+  paidBy?: string | null;
+  /** @nullable */
+  paidAt?: string | null;
+  /** @nullable */
   lockedAt?: string | null;
   adjustments: InvoiceAdjustmentEntry[];
   /** @nullable */
@@ -5978,9 +6001,27 @@ export const ServiceInvoiceUpdateStatus = {
   void: 'void',
 } as const;
 
+export type ServiceInvoiceUpdatePaymentMethod = typeof ServiceInvoiceUpdatePaymentMethod[keyof typeof ServiceInvoiceUpdatePaymentMethod];
+
+
+export const ServiceInvoiceUpdatePaymentMethod = {
+  cash: 'cash',
+  card: 'card',
+  bank_transfer: 'bank_transfer',
+  cheque: 'cheque',
+  mobile_money: 'mobile_money',
+  other: 'other',
+} as const;
+
 export interface ServiceInvoiceUpdate {
   status?: ServiceInvoiceUpdateStatus;
   signedCopyFiled?: boolean;
+  paymentMethod?: ServiceInvoiceUpdatePaymentMethod;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  paymentReference?: string;
 }
 
 export interface ServiceDiscountRequest {

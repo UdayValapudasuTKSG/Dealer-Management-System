@@ -7,6 +7,7 @@
  */
 import type { InvoiceAdjustmentEntry } from './invoiceAdjustmentEntry';
 import type { ServiceInvoiceDiscountStatus } from './serviceInvoiceDiscountStatus';
+import type { ServiceInvoicePaymentMethod } from './serviceInvoicePaymentMethod';
 import type { ServiceInvoiceStatus } from './serviceInvoiceStatus';
 
 export interface ServiceInvoice {
@@ -40,6 +41,14 @@ export interface ServiceInvoice {
   tax: number;
   total: number;
   status: ServiceInvoiceStatus;
+  /** @nullable */
+  paymentMethod?: ServiceInvoicePaymentMethod;
+  /** @nullable */
+  paymentReference?: string | null;
+  /** @nullable */
+  paidBy?: string | null;
+  /** @nullable */
+  paidAt?: Date | null;
   /** @nullable */
   lockedAt?: Date | null;
   adjustments: InvoiceAdjustmentEntry[];

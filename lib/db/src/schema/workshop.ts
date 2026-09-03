@@ -411,6 +411,10 @@ export const serviceInvoicesTable = pgTable(
   discountDecidedAt: timestamp("discount_decided_at", { withTimezone: true }),
   total: doublePrecision("total").notNull().default(0),
   status: text("status").notNull().default("issued"),
+  paymentMethod: text("payment_method"),
+  paymentReference: text("payment_reference"),
+  paidBy: text("paid_by"),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
   // Totals lock at issue (FR-SR-09); later changes append adjustments.
   lockedAt: timestamp("locked_at", { withTimezone: true }),
   adjustments: jsonb("adjustments")

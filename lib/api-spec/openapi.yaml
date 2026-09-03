@@ -13203,6 +13203,10 @@ components:
         tax: { type: number }
         total: { type: number }
         status: { type: string, enum: [issued, paid, void] }
+        paymentMethod: { type: ["string", "null"], enum: [cash, card, bank_transfer, cheque, mobile_money, other, null] }
+        paymentReference: { type: ["string", "null"] }
+        paidBy: { type: ["string", "null"] }
+        paidAt: { type: ["string", "null"], format: date-time }
         lockedAt: { type: ["string", "null"], format: date-time }
         adjustments:
           type: array
@@ -13223,6 +13227,8 @@ components:
       properties:
         status: { type: string, enum: [issued, paid, void] }
         signedCopyFiled: { type: boolean }
+        paymentMethod: { type: string, enum: [cash, card, bank_transfer, cheque, mobile_money, other] }
+        paymentReference: { type: string, minLength: 1, maxLength: 200 }
     ServiceDiscountRequest:
       type: object
       required: [amount]
