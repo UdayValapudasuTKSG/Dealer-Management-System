@@ -938,7 +938,7 @@ export function ClaimDetail({ claimId }: { claimId: number }) {
       </div>
 
       {/* Body */}
-      <div className="p-4 sm:p-6 bg-muted/10">
+      <div className="p-4 sm:p-6 bg-background">
         <div className="mb-6">
           <CollisionClaimIntelligence claim={claim} />
         </div>

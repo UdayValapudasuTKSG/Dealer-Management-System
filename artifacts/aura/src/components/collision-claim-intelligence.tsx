@@ -69,8 +69,8 @@ function ProfileCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="overflow-hidden border-primary/15 bg-background shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-primary/10 bg-primary/[0.025] px-4 py-3">
+    <Card className="overflow-hidden border-border/60 bg-background shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-border/50 bg-muted/20 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
             {icon}
@@ -275,7 +275,7 @@ export function CollisionClaimIntelligence({ claim }: { claim: CollisionClaim })
         </ProfileCard>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.08] via-background to-cyan-500/[0.05] shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-background shadow-sm">
         <div className="flex flex-col gap-4 border-b border-primary/15 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/15 text-primary">
