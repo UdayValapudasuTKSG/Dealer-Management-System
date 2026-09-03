@@ -7,6 +7,8 @@ import {
   getListPartsQueryKey,
   useListSuppliers,
   useCreateSupplier,
+  useGetSupplierDeliveryHistory,
+  getGetSupplierDeliveryHistoryQueryKey,
   getListSuppliersQueryKey,
   useListPartPurchases,
   useCreatePartPurchase,
@@ -673,7 +675,19 @@ function CreateSupplierDialog() {
 }
 
 function SuppliersTab() {
+  const money = useMoney();
   const { data: suppliers, isLoading } = useListSuppliers();
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
+  const selectedSupplier = suppliers?.find((supplier) => supplier.id === selectedSupplierId);
+  const { data: history, isLoading: historyLoading } = useGetSupplierDeliveryHistory(
+    selectedSupplierId ?? 0,
+    {
+      query: {
+        queryKey: getGetSupplierDeliveryHistoryQueryKey(selectedSupplierId ?? 0),
+        enabled: selectedSupplierId != null,
+      },
+    },
+  );
   if (isLoading) return <div className="h-64 bg-white/[0.05] rounded-3xl animate-pulse" />;
   if (!suppliers?.length)
     return (
@@ -683,9 +697,14 @@ function SuppliersTab() {
       </div>
     );
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      {suppliers.map((s) => (
-        <Card key={s.id} className="glass-panel border-none rounded-3xl">
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {suppliers.map((s) => (
+        <Card
+          key={s.id}
+          className="glass-panel border-none rounded-3xl cursor-pointer transition-transform hover:-translate-y-0.5"
+          onClick={() => setSelectedSupplierId(s.id)}
+        >
           <CardContent className="p-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center">
@@ -698,10 +717,88 @@ function SuppliersTab() {
               {s.email && <div>{s.email}</div>}
               {s.phone && <div>{s.phone}</div>}
             </div>
+            <div className="mt-4 pt-3 border-t border-white/5 text-xs font-semibold uppercase tracking-wider text-primary">
+              View delivery history
+            </div>
           </CardContent>
         </Card>
-      ))}
-    </div>
+        ))}
+      </div>
+      <Dialog
+        open={selectedSupplierId != null}
+        onOpenChange={(open) => { if (!open) setSelectedSupplierId(null); }}
+      >
+        <DialogContent className="max-w-4xl glass-panel border-none">
+          <DialogHeader>
+            <DialogTitle>{selectedSupplier?.name ?? "Supplier"} · Delivery History</DialogTitle>
+            <DialogDescription>
+              Every documented shipment received from this supplier, newest first.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[72vh] overflow-y-auto pr-2 space-y-4">
+            {historyLoading ? (
+              <div className="h-40 rounded-2xl bg-white/[0.04] animate-pulse" />
+            ) : !history?.deliveries.length ? (
+              <div className="rounded-2xl border border-dashed border-white/10 py-14 text-center text-muted-foreground">
+                No documented deliveries have been received from this supplier yet.
+              </div>
+            ) : (
+              history.deliveries.map((delivery) => {
+                const units = delivery.lines.reduce((sum, line) => sum + line.quantity, 0);
+                const value = delivery.lines.reduce((sum, line) => sum + line.quantity * line.unitCost, 0);
+                return (
+                  <Card key={delivery.id} className="border border-white/5 bg-white/[0.025] rounded-2xl">
+                    <CardContent className="p-5 space-y-4">
+                      <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div>
+                          <div className="font-semibold">PO #{delivery.purchaseOrderId}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {formatGuyanaDate(delivery.receivedAt)} · Delivery note {delivery.deliveryNoteNumber}
+                          </div>
+                        </div>
+                        <Badge className={cn(
+                          "border-none rounded-full text-[10px] font-bold uppercase tracking-widest",
+                          delivery.condition === "accepted"
+                            ? "bg-primary/15 text-primary"
+                            : "bg-red-500/15 text-red-300",
+                        )}>
+                          {delivery.condition === "accepted" ? "Accepted" : "Accepted with discrepancy"}
+                        </Badge>
+                      </div>
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                        <div><div className="text-xs text-muted-foreground">Received by</div><div>{delivery.receivedByName}</div></div>
+                        <div><div className="text-xs text-muted-foreground">Location</div><div>{delivery.warehouseLocation}</div></div>
+                        <div><div className="text-xs text-muted-foreground">Supplier invoice</div><div>{delivery.supplierInvoiceNumber || "Not recorded"}</div></div>
+                        <div><div className="text-xs text-muted-foreground">Shipment total</div><div>{units} units · {money.gyd(value)}</div></div>
+                      </div>
+                      <div className="rounded-xl border border-white/5 divide-y divide-white/5">
+                        {delivery.lines.map((line) => (
+                          <div key={line.purchaseOrderLineId} className="px-3 py-2 flex justify-between gap-4 text-sm">
+                            <span>{line.partName}</span>
+                            <span className="text-muted-foreground tabular-nums">{line.quantity} × {money.gyd(line.unitCost)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {delivery.notes && <div className="text-sm text-muted-foreground">{delivery.notes}</div>}
+                      <div className="flex flex-wrap gap-2">
+                        {delivery.documents.map((document) => (
+                          <Button key={document.objectPath} asChild size="sm" variant="outline" className="rounded-full">
+                            <a href={`/api/storage${document.objectPath}`} target="_blank" rel="noreferrer">
+                              <Download className="w-3.5 h-3.5 mr-2" />
+                              {document.fileName}
+                            </a>
+                          </Button>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

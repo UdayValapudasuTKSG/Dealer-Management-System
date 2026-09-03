@@ -5473,6 +5473,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/Supplier"
 
+  /suppliers/{id}/delivery-history:
+    get:
+      operationId: getSupplierDeliveryHistory
+      tags: [parts]
+      summary: Complete goods-receipt history for one supplier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Supplier and delivery history, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierDeliveryHistory"
+        "404":
+          description: Supplier not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /part-purchases:
     get:
       operationId: listPartPurchases
@@ -13814,6 +13838,47 @@ components:
         contactName: { type: string }
         email: { type: string }
         phone: { type: string }
+    SupplierDeliveryHistory:
+      type: object
+      required: [supplier, deliveries]
+      properties:
+        supplier:
+          $ref: "#/components/schemas/Supplier"
+        deliveries:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupplierDelivery"
+    SupplierDelivery:
+      type: object
+      required: [id, purchaseOrderId, receivedAt, receivedByName, deliveryNoteNumber, warehouseLocation, condition, documents, lines]
+      properties:
+        id: { type: integer }
+        purchaseOrderId: { type: integer }
+        purchaseOrderReference: { type: ["string", "null"] }
+        receivedAt: { type: string, format: date-time }
+        receivedByName: { type: string }
+        deliveryNoteNumber: { type: string }
+        supplierInvoiceNumber: { type: ["string", "null"] }
+        warehouseLocation: { type: string }
+        condition: { type: string, enum: [accepted, accepted_with_discrepancy] }
+        notes: { type: ["string", "null"] }
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/PurchaseOrderReceiptDocumentInput"
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupplierDeliveryLine"
+    SupplierDeliveryLine:
+      type: object
+      required: [purchaseOrderLineId, partName, quantity, unitCost]
+      properties:
+        purchaseOrderLineId: { type: integer }
+        partId: { type: ["integer", "null"] }
+        partName: { type: string }
+        quantity: { type: integer }
+        unitCost: { type: number }
 
     PartPurchase:
       type: object

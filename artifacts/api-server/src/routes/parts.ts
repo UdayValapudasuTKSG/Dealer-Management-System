@@ -11,6 +11,7 @@ import {
   purchaseOrdersTable,
   purchaseOrderLinesTable,
   purchaseOrderReceiptsTable,
+  purchaseOrderReceiptLinesTable,
   partRequisitionPoAllocationsTable,
   partRequisitionLinesTable,
   partRequisitionFulfillmentsTable,
@@ -30,6 +31,8 @@ import {
   ListSuppliersResponse,
   CreateSupplierBody,
   CreateSupplierResponse,
+  GetSupplierDeliveryHistoryParams,
+  GetSupplierDeliveryHistoryResponse,
   ListPartPurchasesResponse,
   CreatePartPurchaseBody,
   CreatePartPurchaseResponse,
@@ -432,6 +435,97 @@ router.post("/suppliers", async (req, res): Promise<void> => {
     .returning();
   enqueueSupplierSync(supplier.dealerId, supplier.id, "insert");
   res.status(201).json(CreateSupplierResponse.parse(supplier));
+});
+
+router.get("/suppliers/:id/delivery-history", async (req, res): Promise<void> => {
+  const params = GetSupplierDeliveryHistoryParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const [supplier] = await db
+    .select()
+    .from(suppliersTable)
+    .where(and(eq(suppliersTable.id, params.data.id), eq(suppliersTable.dealerId, dealerId)));
+  if (!supplier) {
+    res.status(404).json({ error: "Supplier not found" });
+    return;
+  }
+
+  const receipts = await db
+    .select({
+      id: purchaseOrderReceiptsTable.id,
+      purchaseOrderId: purchaseOrderReceiptsTable.purchaseOrderId,
+      purchaseOrderReference: purchaseOrdersTable.reference,
+      receivedAt: purchaseOrderReceiptsTable.receivedAt,
+      receivedByName: purchaseOrderReceiptsTable.receivedByName,
+      deliveryNoteNumber: purchaseOrderReceiptsTable.deliveryNoteNumber,
+      supplierInvoiceNumber: purchaseOrderReceiptsTable.supplierInvoiceNumber,
+      warehouseLocation: purchaseOrderReceiptsTable.warehouseLocation,
+      condition: purchaseOrderReceiptsTable.condition,
+      notes: purchaseOrderReceiptsTable.notes,
+      documents: purchaseOrderReceiptsTable.documents,
+    })
+    .from(purchaseOrderReceiptsTable)
+    .innerJoin(
+      purchaseOrdersTable,
+      and(
+        eq(purchaseOrdersTable.id, purchaseOrderReceiptsTable.purchaseOrderId),
+        eq(purchaseOrdersTable.dealerId, dealerId),
+      ),
+    )
+    .where(
+      and(
+        eq(purchaseOrderReceiptsTable.dealerId, dealerId),
+        eq(purchaseOrdersTable.supplierId, supplier.id),
+      ),
+    )
+    .orderBy(desc(purchaseOrderReceiptsTable.receivedAt));
+
+  const receiptIds = receipts.map((receipt) => receipt.id);
+  const receiptLines = receiptIds.length > 0
+    ? await db
+        .select({
+          receiptId: purchaseOrderReceiptLinesTable.receiptId,
+          purchaseOrderLineId: purchaseOrderReceiptLinesTable.purchaseOrderLineId,
+          partId: purchaseOrderLinesTable.partId,
+          partName: purchaseOrderLinesTable.partName,
+          quantity: purchaseOrderReceiptLinesTable.quantity,
+          unitCost: purchaseOrderLinesTable.unitCost,
+        })
+        .from(purchaseOrderReceiptLinesTable)
+        .innerJoin(
+          purchaseOrderLinesTable,
+          and(
+            eq(purchaseOrderLinesTable.id, purchaseOrderReceiptLinesTable.purchaseOrderLineId),
+            eq(purchaseOrderLinesTable.dealerId, dealerId),
+          ),
+        )
+        .where(
+          and(
+            eq(purchaseOrderReceiptLinesTable.dealerId, dealerId),
+            inArray(purchaseOrderReceiptLinesTable.receiptId, receiptIds),
+          ),
+        )
+    : [];
+  const linesByReceipt = new Map<number, typeof receiptLines>();
+  for (const line of receiptLines) {
+    const current = linesByReceipt.get(line.receiptId) ?? [];
+    current.push(line);
+    linesByReceipt.set(line.receiptId, current);
+  }
+
+  res.json(
+    GetSupplierDeliveryHistoryResponse.parse({
+      supplier,
+      deliveries: receipts.map((receipt) => ({
+        ...receipt,
+        documents: receipt.documents ?? [],
+        lines: linesByReceipt.get(receipt.id) ?? [],
+      })),
+    }),
+  );
 });
 
 router.get("/part-purchases", async (_req, res): Promise<void> => {
@@ -1479,7 +1573,7 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
     return;
   }
   const dealerId = activeDealerId(res);
-  const expectedObjectPrefix = `/objects/dealer-${dealerId}/`;
+  const expectedObjectPrefix = `/objects/uploads/dealer-${dealerId}/`;
   if (
     parsed.data.documents.some(
       (document) => !document.objectPath.startsWith(expectedObjectPrefix),
@@ -1597,6 +1691,14 @@ router.post("/purchase-orders/:id/receive", async (req, res): Promise<void> => {
       receiptReplay = true;
       return;
     }
+    await tx.insert(purchaseOrderReceiptLinesTable).values(
+      [...requested.entries()].map(([purchaseOrderLineId, quantity]) => ({
+        dealerId,
+        receiptId: receiptClaim.id,
+        purchaseOrderLineId,
+        quantity,
+      })),
+    );
     for (const line of order.lines) {
       const qty = requested.get(line.id);
       if (!qty) continue;

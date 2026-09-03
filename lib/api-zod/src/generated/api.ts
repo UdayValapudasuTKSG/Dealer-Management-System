@@ -9220,6 +9220,57 @@ export const CreateSupplierResponse = zod.object({
 })
 
 
+/**
+ * @summary Complete goods-receipt history for one supplier
+ */
+export const GetSupplierDeliveryHistoryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const getSupplierDeliveryHistoryResponseDeliveriesItemDocumentsItemObjectPathMax = 1000;
+
+export const getSupplierDeliveryHistoryResponseDeliveriesItemDocumentsItemFileNameMax = 500;
+
+export const getSupplierDeliveryHistoryResponseDeliveriesItemDocumentsItemMimeTypeMax = 250;
+
+
+
+export const GetSupplierDeliveryHistoryResponse = zod.object({
+  "supplier": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "contactName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+}),
+  "deliveries": zod.array(zod.object({
+  "id": zod.number(),
+  "purchaseOrderId": zod.number(),
+  "purchaseOrderReference": zod.string().nullish(),
+  "receivedAt": zod.coerce.date(),
+  "receivedByName": zod.string(),
+  "deliveryNoteNumber": zod.string(),
+  "supplierInvoiceNumber": zod.string().nullish(),
+  "warehouseLocation": zod.string(),
+  "condition": zod.enum(['accepted', 'accepted_with_discrepancy']),
+  "notes": zod.string().nullish(),
+  "documents": zod.array(zod.object({
+  "objectPath": zod.string().min(1).max(getSupplierDeliveryHistoryResponseDeliveriesItemDocumentsItemObjectPathMax),
+  "fileName": zod.string().min(1).max(getSupplierDeliveryHistoryResponseDeliveriesItemDocumentsItemFileNameMax),
+  "mimeType": zod.string().min(1).max(getSupplierDeliveryHistoryResponseDeliveriesItemDocumentsItemMimeTypeMax)
+})),
+  "lines": zod.array(zod.object({
+  "purchaseOrderLineId": zod.number(),
+  "partId": zod.number().nullish(),
+  "partName": zod.string(),
+  "quantity": zod.number(),
+  "unitCost": zod.number()
+}))
+}))
+})
+
+
 export const ListPartPurchasesResponseItem = zod.object({
   "id": zod.number(),
   "partId": zod.number(),

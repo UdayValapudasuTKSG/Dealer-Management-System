@@ -371,6 +371,7 @@ import type {
   StageChecklistInput,
   SubmitVehicleOnboarding201,
   Supplier,
+  SupplierDeliveryHistory,
   SupplierInput,
   SuspendDealerRequest,
   Task,
@@ -16297,6 +16298,83 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getCreateSupplierMutationOptions(options));
     }
+
+export const getGetSupplierDeliveryHistoryUrl = (id: number,) => {
+
+
+
+
+  return `/api/suppliers/${id}/delivery-history`
+}
+
+/**
+ * @summary Complete goods-receipt history for one supplier
+ */
+export const getSupplierDeliveryHistory = async (id: number, options?: RequestInit): Promise<SupplierDeliveryHistory> => {
+
+  return customFetch<SupplierDeliveryHistory>(getGetSupplierDeliveryHistoryUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSupplierDeliveryHistoryQueryKey = (id: number,) => {
+    return [
+    `/api/suppliers/${id}/delivery-history`
+    ] as const;
+    }
+
+
+export const getGetSupplierDeliveryHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getSupplierDeliveryHistory>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupplierDeliveryHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSupplierDeliveryHistoryQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSupplierDeliveryHistory>>> = ({ signal }) => getSupplierDeliveryHistory(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSupplierDeliveryHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSupplierDeliveryHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getSupplierDeliveryHistory>>>
+export type GetSupplierDeliveryHistoryQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Complete goods-receipt history for one supplier
+ */
+
+export function useGetSupplierDeliveryHistory<TData = Awaited<ReturnType<typeof getSupplierDeliveryHistory>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupplierDeliveryHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSupplierDeliveryHistoryQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListPartPurchasesUrl = () => {
 

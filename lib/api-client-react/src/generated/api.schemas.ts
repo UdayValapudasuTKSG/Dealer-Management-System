@@ -6995,6 +6995,64 @@ export interface SupplierInput {
   phone?: string;
 }
 
+export type SupplierDeliveryCondition = typeof SupplierDeliveryCondition[keyof typeof SupplierDeliveryCondition];
+
+
+export const SupplierDeliveryCondition = {
+  accepted: 'accepted',
+  accepted_with_discrepancy: 'accepted_with_discrepancy',
+} as const;
+
+export interface PurchaseOrderReceiptDocumentInput {
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  objectPath: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  fileName: string;
+  /**
+     * @minLength 1
+     * @maxLength 250
+     */
+  mimeType: string;
+}
+
+export interface SupplierDeliveryLine {
+  purchaseOrderLineId: number;
+  /** @nullable */
+  partId?: number | null;
+  partName: string;
+  quantity: number;
+  unitCost: number;
+}
+
+export interface SupplierDelivery {
+  id: number;
+  purchaseOrderId: number;
+  /** @nullable */
+  purchaseOrderReference?: string | null;
+  receivedAt: string;
+  receivedByName: string;
+  deliveryNoteNumber: string;
+  /** @nullable */
+  supplierInvoiceNumber?: string | null;
+  warehouseLocation: string;
+  condition: SupplierDeliveryCondition;
+  /** @nullable */
+  notes?: string | null;
+  documents: PurchaseOrderReceiptDocumentInput[];
+  lines: SupplierDeliveryLine[];
+}
+
+export interface SupplierDeliveryHistory {
+  supplier: Supplier;
+  deliveries: SupplierDelivery[];
+}
+
 export type PartPurchaseStatus = typeof PartPurchaseStatus[keyof typeof PartPurchaseStatus];
 
 
@@ -7165,24 +7223,6 @@ export type PurchaseOrderReceiveBodyLinesItem = {
   /** @minimum 1 */
   qty: number;
 };
-
-export interface PurchaseOrderReceiptDocumentInput {
-  /**
-     * @minLength 1
-     * @maxLength 1000
-     */
-  objectPath: string;
-  /**
-     * @minLength 1
-     * @maxLength 500
-     */
-  fileName: string;
-  /**
-     * @minLength 1
-     * @maxLength 250
-     */
-  mimeType: string;
-}
 
 export interface PurchaseOrderReceiveBody {
   /**

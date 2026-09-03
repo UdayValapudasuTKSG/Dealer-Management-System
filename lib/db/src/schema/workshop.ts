@@ -575,5 +575,28 @@ export const purchaseOrderReceiptsTable = pgTable(
   ],
 );
 
+export const purchaseOrderReceiptLinesTable = pgTable(
+  "purchase_order_receipt_lines",
+  {
+    id: serial("id").primaryKey(),
+    dealerId: integer("dealer_id").notNull(),
+    receiptId: integer("receipt_id")
+      .notNull()
+      .references(() => purchaseOrderReceiptsTable.id, { onDelete: "cascade" }),
+    purchaseOrderLineId: integer("purchase_order_line_id")
+      .notNull()
+      .references(() => purchaseOrderLinesTable.id),
+    quantity: integer("quantity").notNull(),
+  },
+  (t) => [
+    uniqueIndex("purchase_order_receipt_lines_receipt_line_unique").on(
+      t.receiptId,
+      t.purchaseOrderLineId,
+    ),
+    index("purchase_order_receipt_lines_dealer_receipt_idx").on(t.dealerId, t.receiptId),
+  ],
+);
+
 export type PurchaseOrderLine = typeof purchaseOrderLinesTable.$inferSelect;
 export type PurchaseOrderReceipt = typeof purchaseOrderReceiptsTable.$inferSelect;
+export type PurchaseOrderReceiptLine = typeof purchaseOrderReceiptLinesTable.$inferSelect;
