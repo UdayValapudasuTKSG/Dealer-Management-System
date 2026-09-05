@@ -337,6 +337,7 @@ type ToolCtx = {
   profileName: string;
   memory: AgentMemory;
   lead: Lead | null;
+  availableInventory: Awaited<ReturnType<typeof availableVehicles>>;
   mutated: boolean;
   escalated: boolean;
   /** Lowercased concatenation of everything the CUSTOMER actually wrote
@@ -354,6 +355,116 @@ function statedByCustomer(corpus: string, value: string): boolean {
   return tokens.length > 0 && tokens.every((t) => corpus.includes(t));
 }
 
+function normalizedInventoryText(value: string): string {
+  return value
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function inventoryVehicleMatches(
+  vehicle: Awaited<ReturnType<typeof availableVehicles>>[number],
+  query: string,
+): boolean {
+  const needle = normalizedInventoryText(query);
+  if (!needle) return true;
+  const haystack = normalizedInventoryText(
+    `${vehicleLabel(vehicle)} ${vehicle.exteriorColor ?? ""} ${vehicle.bodyType ?? ""}`,
+  );
+  const compactNeedle = needle.replace(/\s+/g, "");
+  const compactHaystack = haystack.replace(/\s+/g, "");
+  return (
+    needle.split(/\s+/).every((word) => haystack.includes(word)) ||
+    compactHaystack.includes(compactNeedle)
+  );
+}
+
+export function summarizeAvailableInventory(
+  inventory: Awaited<ReturnType<typeof availableVehicles>>,
+  query: string | null,
+  maxPrice: number | null,
+) {
+  const filtered = inventory.filter((vehicle) => {
+    if (maxPrice && vehicle.price > maxPrice) return false;
+    return !query || inventoryVehicleMatches(vehicle, query);
+  });
+  const groups = new Map<
+    string,
+    {
+      representative_vehicle_id: number;
+      year: number | null;
+      make: string | null;
+      model: string | null;
+      trim: string | null;
+      quantity: number;
+      price_gyd: number;
+      colors: Record<string, number>;
+    }
+  >();
+  for (const vehicle of filtered) {
+    const key = [
+      vehicle.year ?? "",
+      vehicle.make ?? "",
+      vehicle.model ?? "",
+      vehicle.trim || vehicle.variant || "",
+      vehicle.price,
+    ].join("\u0000");
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        representative_vehicle_id: vehicle.id,
+        year: vehicle.year,
+        make: vehicle.make,
+        model: vehicle.model,
+        trim: vehicle.trim || vehicle.variant || null,
+        quantity: 0,
+        price_gyd: vehicle.price,
+        colors: {},
+      };
+      groups.set(key, group);
+    }
+    group.quantity += 1;
+    const color = vehicle.exteriorColor?.trim() || "Unspecified";
+    group.colors[color] = (group.colors[color] ?? 0) + 1;
+  }
+  return {
+    available_count: filtered.length,
+    model_count: groups.size,
+    models: [...groups.values()],
+    note:
+      filtered.length === 0
+        ? "No available vehicles match. Do NOT invent stock — offer to note the customer's interest instead."
+        : "Counts are exact AVAILABLE units for this dealership. Prices are in GYD. Each representative_vehicle_id is a valid inventory vehicle for that model.",
+  };
+}
+
+export function requiresFreshInventoryLookup(
+  message: string,
+  inventory: Awaited<ReturnType<typeof availableVehicles>>,
+): boolean {
+  const normalized = normalizedInventoryText(message);
+  if (
+    /\b(inventory|stock|in stock|available|availability|models?|vehicles?|cars?|price|pricing|cost|colou?rs?)\b/.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+  const messageTokens = new Set(normalized.split(/\s+/).filter(Boolean));
+  return inventory.some((vehicle) => {
+    const model = normalizedInventoryText(vehicle.model ?? "");
+    const compactModel = model.replace(/\s+/g, "");
+    const compactMessage = normalized.replace(/\s+/g, "");
+    if (model && (normalized.includes(model) || compactMessage.includes(compactModel))) {
+      return true;
+    }
+    return model
+      .split(/\s+/)
+      .some((token) => token.length >= 4 && messageTokens.has(token));
+  });
+}
+
 async function runTool(
   ctx: ToolCtx,
   name: string,
@@ -361,34 +472,14 @@ async function runTool(
 ): Promise<string> {
   switch (name) {
     case "search_inventory": {
-      const all = await availableVehicles(ctx.dealerId);
       const q = cleanStr(input["query"], 120)?.toLowerCase();
       const maxPrice =
         typeof input["max_price"] === "number" && input["max_price"] > 0
           ? input["max_price"]
           : null;
-      const matches = all
-        .filter((v) => {
-          if (maxPrice && v.price > maxPrice) return false;
-          if (!q) return true;
-          const hay = `${vehicleLabel(v)} ${v.exteriorColor ?? ""} ${v.bodyType ?? ""}`.toLowerCase();
-          return q.split(/\s+/).every((w) => hay.includes(w));
-        })
-        .slice(0, 12)
-        .map((v) => ({
-          id: v.id,
-          vehicle: vehicleLabel(v),
-          color: v.exteriorColor ?? null,
-          price_gyd: v.price,
-        }));
-      return JSON.stringify({
-        available_count: matches.length,
-        vehicles: matches,
-        note:
-          matches.length === 0
-            ? "No available vehicles match. Do NOT invent stock — offer to note the customer's interest instead."
-            : "Prices are in GYD.",
-      });
+      return JSON.stringify(
+        summarizeAvailableInventory(ctx.availableInventory, q ?? null, maxPrice),
+      );
     }
 
     case "get_lead_status": {
@@ -711,6 +802,8 @@ WHAT YOU DO
 - Understand intent (enquiry, availability, pricing, financing, trade-in, test drive, status check, human request, complaint…). Intent can change mid-conversation — follow the customer, never argue ("you already selected X").
 - Collect what's needed for an enquiry progressively: name, vehicle interest, and optionally email/budget/financing/trade-in. The customer's WhatsApp number is already known — never ask them to type it unless they want a different contact number.
 - Use tools for ALL facts: inventory (search_inventory), their enquiry status (get_lead_status), test-drive links. NEVER invent stock, prices, statuses, valuations, monthly payments, or approvals. If data isn't available, say so and offer to pass it to the team.
+- For EVERY message asking about inventory, availability, models, colors, or price — including a follow-up that only names a model — call search_inventory again in that turn. Never rely on an earlier stock answer because inventory and the customer's requested model may have changed.
+- search_inventory returns exact available unit counts grouped by model and color. When query is omitted it represents the dealership's complete available inventory. Never claim that one model is the dealership's only stock unless that complete unfiltered result contains only that model.
 - Once you have at least a name and a vehicle interest, create/update the enquiry with upsert_lead (don't announce internal IDs). Update the same enquiry when details change — never create duplicates.
 - Resolve references like "that one" / "is it available?" from the conversation context.
 - Prices are in Guyanese dollars (GYD).
@@ -812,12 +905,18 @@ export async function handleConversationalWhatsapp(
       transcript.pop();
     }
 
+    const availableInventory = await availableVehicles(dealerId);
+    const mustSearchInventory = requiresFreshInventoryLookup(
+      combined,
+      availableInventory,
+    );
     const ctx: ToolCtx = {
       dealerId,
       phone,
       profileName: msg.profileName,
       memory,
       lead: existingLead,
+      availableInventory,
       mutated: false,
       escalated: false,
       inboundCorpus: [...transcript.filter((m) => m.role === "user").map((m) => m.text), combined]
@@ -856,6 +955,10 @@ export async function handleConversationalWhatsapp(
           max_tokens: 1024,
           system,
           tools: TOOLS,
+          tool_choice:
+            mustSearchInventory && i === 0
+              ? { type: "tool", name: "search_inventory" }
+              : { type: "auto" },
           messages: messages as never,
         },
         { timeout: 25_000, maxRetries: 1 },
