@@ -191,48 +191,56 @@ id = "OVThM-BLvdGYiJWriQ3Qm"
 uri = "file://docs/AURA_WALKTHROUGH.md"
 type = "text"
 title = "AURA End-to-End Walkthrough"
+logical_id = "69f0f19e-ba78-4421-8a6c-84cfb4946e83"
 
 [[outputs]]
 id = "rACn8XpIpG7CBeWGoyYHo"
 uri = "file://.local/demo/GRA-2026-01812-duty-pack.pdf"
 type = "pdf"
 title = "GRA Import Duty Pack — GRA-2026-01812 (2024 Toyota Hilux)"
+logical_id = "5260df34-e458-45f7-a967-a5dd1e304ba1"
 
 [[outputs]]
 id = "U7n2gu8PiD4fQNlgekDOE"
 uri = "file://exports/quote-EST-00011.pdf"
 type = "pdf"
 title = "Vehicle Quotation PDF (CAM Motors, USD + GYD)"
+logical_id = "a61e25c2-49b9-429e-b1af-15ea3d6e8f0d"
 
 [[outputs]]
 id = "J6l70p4p4mJRUYrdcVeGo"
 uri = "file://exports/customer-1-data-export.json"
 type = "unspecified"
 title = "Customer Data Export (DSAR bundle, C1–C5)"
+logical_id = "7926a297-19a6-4979-85ed-88a10b6d5f61"
 
 [[outputs]]
 id = "iP5dQ_vUlQ0H_Y9ea-UJb"
 uri = "file://exports/sample-gra-commercial-invoice.png"
 type = "image"
 title = "Sample GRA Commercial Invoice (upload this)"
+logical_id = "396733a8-9faf-4f4d-b734-32e3ccb7f817"
 
 [[outputs]]
 id = "Z8luVWQHw4ol6p5oocCrI"
 uri = "file://exports/sample-gra-commercial-invoice.pdf"
 type = "pdf"
 title = "Sample GRA Commercial Invoice (PDF copy)"
+logical_id = "83c15943-2462-4904-a5ad-c8671f5713a9"
 
 [[outputs]]
 id = "dHZIqRQ2rHItv_EBZhZmn"
 uri = "file://docs/AURA-GCP-Architecture.pdf"
 type = "pdf"
 title = "AURA — GCP Architecture (growth-ready PROD)"
+logical_id = "ede66ee2-d53f-4313-b8d6-be77d569c074"
 
 [[outputs]]
 id = "8EuhbEvLmA6oSv6bQFqo6"
 uri = "file://docs/aura-styling-components.zip"
 type = "unspecified"
 title = "AURA & Realm — styling + app components (zip)"
+logical_id = "0c8eb78c-1663-4c5b-9c4c-fa061a488864"
 
 [[outputs]]
 id = "0k4dxeYX2sRsup1BGyRKq"
@@ -240,6 +248,7 @@ uri = "file://backups/aura-dev-backup.sql.gz"
 type = "unspecified"
 title = "Fresh PostgreSQL backup (post re-import)"
 description = "Full pg_dump including the new GT Automotive data — 2,685 leads, 541 customers, 437 vehicles, 647 linked quote PDFs."
+logical_id = "35e8e3a0-de40-46d3-849f-79ce28dab87d"
 
 [[outputs]]
 id = "trho2dXQ_2BkXk8B8ZRNL"
@@ -247,6 +256,7 @@ uri = "file://attached_assets/cam-motors/cam-motors-inventory-import.xlsx"
 type = "table"
 title = "CAM Motors inventory — 51 units (3 of each vehicle)"
 description = "Each of the 17 models now has 3 stock units — 51 rows total, every unit with its own unique 17-character VIN and engine number. One unit per model keeps the Featured flag."
+logical_id = "679dd5c6-6bf7-41a5-801d-cde60cc7384a"
 
 [[outputs]]
 id = "K_31AyS2H0zwJNqfdhbvP"
@@ -254,3 +264,18 @@ uri = "file://attached_assets/manual/aura-user-manual.pdf"
 type = "pdf"
 title = "AURA Dealership OS — User Manual (PDF)"
 description = "Complete user manual covering all 23 areas: sign-in, navigation & roles, My Day, Pipeline & lead workbench, Deals, Quotes, Finance, Approvals, GRA duty filing, Inventory, Capacity, Deliveries, Service, Parts, Accounts, Reports, Notifications, all Settings pages, WhatsApp/Meta, ERPNext/Email, the Realm platform console, and an FAQ."
+logical_id = "d82a45bb-b044-4d1a-a4de-fdf71d4d8d02"
+
+[[outputs]]
+id = "aUo7uWBy_q8w6QZsmuTNB"
+uri = "file://outputs/byd-atto-8-100-vehicle-import.xlsx"
+type = "table"
+title = "BYD Atto 8 — 100 Vehicle Inventory Import"
+description = "AURA-ready Excel import with 100 new 2026 BYD Atto 8 vehicles, unique synthetic 17-character VINs and engine numbers, published GT Automotive specifications, four exterior colours, instructions, and validation results."
+logical_id = "fdfbae8d-6f94-4ac3-af68-80a7fe96024e"
+content_hash = "sha256:4c0bd408b659e418026a2c6955a86ca5ca926e8ce60a789c064e86b23c416b25"
+size = 19811
+mtime_ms = 1788581271198
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/fdfbae8d-6f94-4ac3-af68-80a7fe96024e/b829e5ad-1365-4fb2-bceb-05f612911a67"
+storage_version_token = "1788581280379757"
+content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
