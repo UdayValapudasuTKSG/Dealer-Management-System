@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WhatsApp Cloud API Integration Handbook</title>
+  <style>
+    @page { size: A4; margin: 16mm 15mm 18mm; }
+    :root {
+      --navy: #081b33;
+      --blue: #1261a6;
+      --cyan: #00a6c7;
+      --ink: #16283d;
+      --muted: #5a6b7e;
+      --line: #dce6ef;
+      --soft: #eef5fa;
+      --code: #071827;
+    }
+    * { box-sizing: border-box; }
+    html { font-family: Inter, "Segoe UI", Arial, sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.52; }
+    body { margin: 0; background: white; }
+    .cover {
+      min-height: 260mm;
+      padding: 24mm 18mm;
+      color: white;
+      background:
+        radial-gradient(circle at 90% 12%, rgba(0,166,199,.32), transparent 28%),
+        linear-gradient(145deg, #06172c 0%, #0a3157 58%, #1261a6 100%);
+      position: relative;
+      page-break-after: always;
+      overflow: hidden;
+    }
+    .cover:after {
+      content: "";
+      position: absolute;
+      width: 210mm; height: 210mm;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 50%;
+      right: -118mm; bottom: -90mm;
+      box-shadow: 0 0 0 22mm rgba(255,255,255,.025), 0 0 0 46mm rgba(255,255,255,.018);
+    }
+    .eyebrow { text-transform: uppercase; letter-spacing: .18em; font-weight: 700; font-size: 9pt; color: #73d8ed; }
+    .cover h1 { color: white; font-size: 37pt; line-height: 1.03; margin: 30mm 0 8mm; max-width: 150mm; letter-spacing: -.025em; }
+    .cover .subtitle { font-size: 15pt; line-height: 1.45; max-width: 145mm; color: #d9ebf6; }
+    .cover .meta { position: absolute; left: 18mm; bottom: 22mm; display: grid; grid-template-columns: auto auto; gap: 3mm 15mm; color: #b9d0df; font-size: 9.5pt; }
+    .cover .meta strong { color: white; }
+    main { max-width: 180mm; margin: 0 auto; }
+    h1, h2, h3, h4 { color: var(--navy); line-height: 1.2; break-after: avoid; }
+    h2 { font-size: 21pt; margin: 13mm 0 4mm; padding-bottom: 2.5mm; border-bottom: 2px solid var(--cyan); }
+    h3 { font-size: 14pt; margin: 8mm 0 2.5mm; }
+    h4 { font-size: 11pt; margin: 5mm 0 2mm; }
+    p { margin: 0 0 3.2mm; }
+    ul, ol { margin: 1.5mm 0 4mm 6mm; padding-left: 5mm; }
+    li { margin-bottom: 1.2mm; }
+    a { color: var(--blue); text-decoration: none; }
+    code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 8.7pt; }
+    pre {
+      background: var(--code); color: #e8f5fb; border-radius: 3mm;
+      padding: 4mm; white-space: pre-wrap; overflow-wrap: anywhere;
+      border-left: 3px solid var(--cyan); font-size: 8.2pt; line-height: 1.45;
+      break-inside: avoid;
+    }
+    pre .comment { color: #85a6bb; }
+    .callout {
+      background: var(--soft); border-left: 4px solid var(--blue);
+      border-radius: 0 2.5mm 2.5mm 0; padding: 4mm 5mm; margin: 4mm 0;
+      break-inside: avoid;
+    }
+    .callout.warning { background: #fff3ed; border-color: #d3542b; }
+    .callout.success { background: #eaf8fb; border-color: var(--cyan); }
+    .callout strong { color: var(--navy); }
+    table { width: 100%; border-collapse: collapse; margin: 3mm 0 6mm; font-size: 9pt; break-inside: avoid; }
+    th { text-align: left; background: var(--navy); color: white; padding: 2.6mm; }
+    td { padding: 2.4mm 2.6mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+    tr:nth-child(even) td { background: #f7fafc; }
+    .toc { columns: 2; column-gap: 12mm; padding: 2mm 0 5mm; }
+    .toc a { display: block; padding: 1.4mm 0; border-bottom: 1px dotted #bfcbd5; }
+    .architecture {
+      display: grid; grid-template-columns: 1fr auto 1fr auto 1fr;
+      align-items: center; gap: 2.5mm; margin: 6mm 0;
+      break-inside: avoid;
+    }
+    .architecture .box { background: var(--soft); border: 1px solid #bed2e2; border-radius: 3mm; padding: 4mm 2.5mm; text-align: center; font-weight: 700; }
+    .architecture .arrow { color: var(--cyan); font-size: 18pt; font-weight: 700; }
+    .checklist { list-style: none; margin-left: 0; padding-left: 0; }
+    .checklist li:before { content: "□"; color: var(--blue); font-weight: 700; margin-right: 2mm; }
+    .page-break { page-break-before: always; }
+    .small { color: var(--muted); font-size: 8.5pt; }
+    .footer-note { margin-top: 12mm; padding-top: 3mm; border-top: 1px solid var(--line); color: var(--muted); font-size: 8.5pt; }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div class="eyebrow">Production Implementation Guide</div>
+    <h1>WhatsApp Cloud API Integration Handbook</h1>
+    <p class="subtitle">A complete, reusable blueprint for connecting a web application to the official Meta WhatsApp Business Platform—with secure webhooks, outbound messaging, templates, media, delivery tracking, opt-out handling, multi-tenant isolation, and optional AI automation.</p>
+    <div class="meta">
+      <span>Edition</span><strong>September 2026</strong>
+      <span>Reference stack</span><strong>Node.js · TypeScript · Express · PostgreSQL</strong>
+      <span>Audience</span><strong>Engineering, security, product, and operations teams</strong>
+    </div>
+  </section>
+
+  <main>
+    <div class="callout success">
+      <strong>Purpose.</strong> This handbook is a vendor-neutral implementation reference derived from a production integration. It contains no credentials, customer data, or project-specific secrets. Adapt the data model and deployment steps to your own application.
+    </div>
+
+    <h2>Contents</h2>
+    <nav class="toc">
+      <a href="#scope">1. Scope and architecture</a>
+      <a href="#prerequisites">2. Meta prerequisites</a>
+      <a href="#configuration">3. Configuration and secrets</a>
+      <a href="#data">4. Recommended data model</a>
+      <a href="#webhook">5. Secure webhook implementation</a>
+      <a href="#subscription">6. WABA app subscription</a>
+      <a href="#inbound">7. Inbound message processing</a>
+      <a href="#outbound">8. Outbound messages</a>
+      <a href="#window">9. 24-hour window and templates</a>
+      <a href="#media">10. Media and documents</a>
+      <a href="#receipts">11. Delivery receipts</a>
+      <a href="#consent">12. Consent and opt-out</a>
+      <a href="#multitenant">13. Multi-tenant isolation</a>
+      <a href="#automation">14. Optional AI agent</a>
+      <a href="#reliability">15. Reliability and security</a>
+      <a href="#testing">16. Testing</a>
+      <a href="#deployment">17. Deployment</a>
+      <a href="#troubleshooting">18. Troubleshooting</a>
+      <a href="#checklists">19. Production checklists</a>
+      <a href="#references">20. Official references</a>
+    </nav>
+
+    <section id="scope">
+      <h2>1. Scope and architecture</h2>
+      <p>This guide uses Meta’s official <strong>WhatsApp Cloud API</strong>. It does not require Twilio or an unofficial browser automation library. The application receives inbound events through HTTPS webhooks and sends outbound messages through the Graph API.</p>
+      <div class="architecture">
+        <div class="box">WhatsApp customer</div><div class="arrow">↔</div>
+        <div class="box">Meta Cloud API</div><div class="arrow">↔</div>
+        <div class="box">Your HTTPS API</div>
+      </div>
+      <p>A production implementation normally includes five layers:</p>
+      <ol>
+        <li><strong>Channel configuration:</strong> WABA, phone-number ID, access token, app secret, templates, and health state.</li>
+        <li><strong>Webhook gateway:</strong> challenge verification, raw-body signature validation, parsing, and immediate acknowledgement.</li>
+        <li><strong>Message service:</strong> send text, interactive messages, templates, and media through one provider abstraction.</li>
+        <li><strong>Persistence and workers:</strong> transcript storage, idempotency ledger, durable outbox, retries, and delivery receipts.</li>
+        <li><strong>Business workflow:</strong> customer support, sales intake, notifications, CRM updates, and optional AI responses.</li>
+      </ol>
+    </section>
+
+    <section id="prerequisites">
+      <h2>2. Meta prerequisites</h2>
+      <ol>
+        <li>Create or use a verified Meta Business Portfolio.</li>
+        <li>Create a Meta Developer app and add the <strong>WhatsApp</strong> product/use case.</li>
+        <li>Create or connect a WhatsApp Business Account (WABA).</li>
+        <li>Add and verify the business phone number.</li>
+        <li>Record the <strong>App ID</strong>, <strong>WABA ID</strong>, and <strong>Phone Number ID</strong>.</li>
+        <li>Create a system user and generate a production access token with the minimum required WhatsApp permissions.</li>
+        <li>Expose a stable public HTTPS webhook endpoint.</li>
+        <li>Configure the webhook callback URL and a private verify token in the Meta App Dashboard.</li>
+        <li>Subscribe to the <code>messages</code> webhook field.</li>
+        <li>Explicitly subscribe the app to each WABA using <code>/{WABA_ID}/subscribed_apps</code>.</li>
+      </ol>
+      <div class="callout warning">
+        <strong>Common production gap:</strong> configuring the callback URL is not enough. If the app is not attached to the WABA through <code>subscribed_apps</code>, inbound messages may never reach your webhook.
+      </div>
+    </section>
+
+    <section id="configuration">
+      <h2>3. Configuration and secrets</h2>
+      <p>Store credentials in a managed secret store. Never commit them, return them from settings APIs, place them in client-side variables, or print them in logs.</p>
+      <table>
+        <thead><tr><th>Variable</th><th>Purpose</th><th>Sensitivity</th></tr></thead>
+        <tbody>
+          <tr><td><code>WHATSAPP_ACCESS_TOKEN</code></td><td>Bearer token used for Graph API calls</td><td>Secret</td></tr>
+          <tr><td><code>WHATSAPP_APP_SECRET</code></td><td>Validates <code>X-Hub-Signature-256</code></td><td>Secret</td></tr>
+          <tr><td><code>WHATSAPP_VERIFY_TOKEN</code></td><td>Private string used during webhook challenge</td><td>Secret</td></tr>
+          <tr><td><code>WHATSAPP_PHONE_NUMBER_ID</code></td><td>Sender phone-number resource ID</td><td>Configuration</td></tr>
+          <tr><td><code>WHATSAPP_WABA_ID</code></td><td>WhatsApp Business Account ID</td><td>Configuration</td></tr>
+          <tr><td><code>WHATSAPP_GRAPH_VERSION</code></td><td>Pinned supported Graph API version</td><td>Configuration</td></tr>
+          <tr><td><code>WHATSAPP_SERVICE_TEMPLATE_NAME</code></td><td>Approved template for messages outside the service window</td><td>Configuration</td></tr>
+          <tr><td><code>WHATSAPP_SERVICE_TEMPLATE_LANGUAGE</code></td><td>Template locale, for example <code>en_US</code></td><td>Configuration</td></tr>
+        </tbody>
+      </table>
+      <pre><code>const GRAPH_VERSION = process.env.WHATSAPP_GRAPH_VERSION ?? "vXX.X";
+const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
+
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing required configuration: ${name}`);
+  return value;
+}</code></pre>
+      <p>For multi-tenant applications, store one encrypted channel record per customer organization. Encrypt access tokens and app secrets at rest using an authenticated cipher such as AES-256-GCM. Keep the encryption root key in the secret store, not the database.</p>
+    </section>
+
+    <section id="data">
+      <h2>4. Recommended data model</h2>
+      <table>
+        <thead><tr><th>Table</th><th>Essential fields</th><th>Important constraints</th></tr></thead>
+        <tbody>
+          <tr><td><code>whatsapp_channels</code></td><td>tenant_id, waba_id, phone_number_id, encrypted token/secret, enabled, template config, health</td><td>Unique phone_number_id; tenant scoped</td></tr>
+          <tr><td><code>whatsapp_messages</code></td><td>tenant_id, customer phone, direction, body, provider_message_id, status timestamps</td><td>Unique provider_message_id and outbox_id</td></tr>
+          <tr><td><code>whatsapp_conversations</code></td><td>tenant_id, normalized phone, state, last inbound, opted_out_at, expires_at</td><td>Unique tenant_id + normalized phone</td></tr>
+          <tr><td><code>webhook_events</code></td><td>channel, external_id, received_at, processed_at</td><td>Unique channel + external_id</td></tr>
+          <tr><td><code>message_outbox</code></td><td>tenant_id, channel, payload, dedupe_key, attempts, state, next_attempt_at</td><td>Unique dedupe_key; atomic claim</td></tr>
+        </tbody>
+      </table>
+      <p>Normalize phone numbers to digits in international format before using them as lookup keys. Preserve the original provider payload only when required for diagnostics, and apply retention limits.</p>
+    </section>
+
+    <section id="webhook" class="page-break">
+      <h2>5. Secure webhook implementation</h2>
+      <h3>5.1 Route ordering: preserve raw bytes</h3>
+      <p>Meta’s signature covers the exact request bytes. Mount the WhatsApp webhook with <code>express.raw()</code> <strong>before</strong> the global JSON parser.</p>
+      <pre><code>import express from "express";
+
+const app = express();
+
+app.use(
+  "/api/webhooks/whatsapp",
+  express.raw({ type: "application/json", limit: "2mb" }),
+  whatsappWebhookRouter,
+);
+
+app.use(express.json()); // mount after the raw webhook route</code></pre>
+
+      <h3>5.2 GET challenge verification</h3>
+      <pre><code>router.get("/", (req, res) =&gt; {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (!process.env.WHATSAPP_VERIFY_TOKEN) {
+    return res.status(503).send("Webhook is not configured");
+  }
+  if (
+    mode === "subscribe" &amp;&amp;
+    token === process.env.WHATSAPP_VERIFY_TOKEN &amp;&amp;
+    typeof challenge === "string"
+  ) {
+    return res.type("text/plain").status(200).send(challenge);
+  }
+  return res.sendStatus(403);
+});</code></pre>
+
+      <h3>5.3 POST signature validation</h3>
+      <pre><code>import crypto from "node:crypto";
+
+function verifyMetaSignature(
+  rawBody: Buffer,
+  header: string | undefined,
+  appSecret: string,
+): boolean {
+  if (!header?.startsWith("sha256=")) return false;
+  const supplied = Buffer.from(header.slice(7), "hex");
+  const expected = crypto
+    .createHmac("sha256", appSecret)
+    .update(rawBody)
+    .digest();
+  return supplied.length === expected.length &amp;&amp;
+    crypto.timingSafeEqual(supplied, expected);
+}
+
+router.post("/", async (req, res) =&gt; {
+  const rawBody = Buffer.isBuffer(req.body)
+    ? req.body
+    : Buffer.from(req.body ?? "");
+  const signature = req.get("X-Hub-Signature-256");
+
+  if (!verifyMetaSignature(rawBody, signature, required("WHATSAPP_APP_SECRET"))) {
+    return res.sendStatus(403);
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody.toString("utf8"));
+  } catch {
+    return res.sendStatus(400);
+  }
+
+  res.sendStatus(200); // acknowledge before slow work
+  void processWebhookPayload(payload).catch(logger.error);
+});</code></pre>
+      <div class="callout">
+        <strong>Multi-tenant signature validation:</strong> the phone-number ID is inside the signed body, but the body must not be trusted before signature verification. Safely try the small set of active app secrets, or use one platform app secret shared across channel records. Never select a secret from unverified payload data and assume it is valid.
+      </div>
+    </section>
+
+    <section id="subscription">
+      <h2>6. Attach the app to the WABA</h2>
+      <p>Execute this once during onboarding and again during a connection health check. A successful webhook configuration without this subscription may still receive no customer messages.</p>
+      <pre><code>async function subscribeAppToWaba(wabaId: string, token: string) {
+  const response = await fetch(
+    `${GRAPH_BASE}/${encodeURIComponent(wabaId)}/subscribed_apps`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  const data = await response.json();
+  if (!response.ok || data.success !== true) {
+    throw new Error(`WABA subscription failed (${response.status})`);
+  }
+}</code></pre>
+      <p>A robust onboarding test should also confirm that:</p>
+      <ul>
+        <li>the token is valid and has the expected app/system-user identity;</li>
+        <li>the configured phone number belongs to the configured WABA;</li>
+        <li>the phone uses the Cloud API platform and is connected;</li>
+        <li>the application is subscribed to the WABA;</li>
+        <li>the channel is not already assigned to another tenant.</li>
+      </ul>
+    </section>
+
+    <section id="inbound">
+      <h2>7. Inbound message processing</h2>
+      <p>Meta webhook payloads may contain multiple entries, changes, messages, and status receipts. Iterate all arrays; do not assume index zero is the only event.</p>
+      <pre><code>type Inbound = {
+  id: string;
+  from: string;
+  phoneNumberId: string;
+  profileName?: string;
+  type: string;
+  text?: string;
+  replyId?: string;
+};
+
+function extractInbound(payload: any): Inbound[] {
+  const output: Inbound[] = [];
+  for (const entry of payload?.entry ?? []) {
+    for (const change of entry?.changes ?? []) {
+      if (change?.field !== "messages") continue;
+      const value = change.value ?? {};
+      const phoneNumberId = value.metadata?.phone_number_id;
+      const profileName = value.contacts?.[0]?.profile?.name;
+      for (const msg of value.messages ?? []) {
+        output.push({
+          id: msg.id,
+          from: msg.from,
+          phoneNumberId,
+          profileName,
+          type: msg.type,
+          text: msg.text?.body,
+          replyId:
+            msg.button?.payload ??
+            msg.interactive?.button_reply?.id ??
+            msg.interactive?.list_reply?.id,
+        });
+      }
+    }
+  }
+  return output;
+}</code></pre>
+      <h3>7.1 Idempotency</h3>
+      <p>Meta retries webhooks, potentially for days. Atomically claim each message ID before processing it.</p>
+      <pre><code>const claimed = await db.query(`
+  INSERT INTO webhook_events (channel, external_id, received_at)
+  VALUES ('meta_whatsapp', $1, now())
+  ON CONFLICT (channel, external_id) DO NOTHING
+  RETURNING external_id
+`, [message.id]);
+
+if (claimed.rowCount === 0) return; // duplicate delivery</code></pre>
+      <p>Resolve the tenant exclusively from the verified <code>phone_number_id</code>. Unknown or disabled channels should be ignored or quarantined—never routed to a default tenant.</p>
+    </section>
+
+    <section id="outbound">
+      <h2>8. Outbound messages</h2>
+      <h3>8.1 Shared sender</h3>
+      <pre><code>type Channel = { phoneNumberId: string; accessToken: string };
+
+async function sendMessage(channel: Channel, to: string, message: object) {
+  const response = await fetch(
+    `${GRAPH_BASE}/${channel.phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${channel.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to,
+        ...message,
+      }),
+    },
+  );
+  const data = await response.json();
+  if (!response.ok || !data.messages?.[0]?.id) {
+    throw classifyProviderError(response.status, data);
+  }
+  return data.messages[0].id as string;
+}</code></pre>
+
+      <h3>8.2 Text</h3>
+      <pre><code>await sendMessage(channel, customerPhone, {
+  type: "text",
+  text: { preview_url: false, body: "Thanks—how can we help?" },
+});</code></pre>
+
+      <h3>8.3 Reply buttons</h3>
+      <pre><code>await sendMessage(channel, customerPhone, {
+  type: "interactive",
+  interactive: {
+    type: "button",
+    body: { text: "Would you like to book a test drive?" },
+    action: {
+      buttons: [
+        { type: "reply", reply: { id: "book_yes", title: "Yes" } },
+        { type: "reply", reply: { id: "book_later", title: "Not now" } },
+      ],
+    },
+  },
+});</code></pre>
+      <p>Meta limits reply buttons and label lengths. Validate and truncate user-generated labels server-side.</p>
+
+      <h3>8.4 List message</h3>
+      <pre><code>await sendMessage(channel, customerPhone, {
+  type: "interactive",
+  interactive: {
+    type: "list",
+    body: { text: "Choose a model to continue." },
+    action: {
+      button: "View models",
+      sections: [{
+        title: "Available models",
+        rows: [
+          { id: "model_1", title: "Model One", description: "SUV" },
+          { id: "model_2", title: "Model Two", description: "Pickup" },
+        ],
+      }],
+    },
+  },
+});</code></pre>
+    </section>
+
+    <section id="window" class="page-break">
+      <h2>9. Customer-service window and templates</h2>
+      <p>A customer message or call opens a rolling <strong>24-hour customer-service window</strong>. During that window, the business may send free-form service messages. Outside it, initiate contact only with an approved template in an eligible category and with the required consent.</p>
+      <pre><code>const WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function hasOpenServiceWindow(lastInboundAt: Date | null): boolean {
+  return !!lastInboundAt &amp;&amp;
+    Date.now() - lastInboundAt.getTime() &lt; WINDOW_MS;
+}
+
+if (hasOpenServiceWindow(conversation.lastInboundAt)) {
+  await sendMessage(channel, to, {
+    type: "text",
+    text: { preview_url: false, body },
+  });
+} else {
+  await sendMessage(channel, to, {
+    type: "template",
+    template: {
+      name: channel.serviceTemplateName,
+      language: { code: channel.serviceTemplateLanguage },
+      components: [{
+        type: "body",
+        parameters: [{ type: "text", text: body }],
+      }],
+    },
+  });
+}</code></pre>
+      <div class="callout warning">
+        <strong>Do not bypass the window.</strong> A successful API call does not make an out-of-window free-form message compliant. Enforce this policy before enqueueing the send, and expose a clear “template required” state to staff.
+      </div>
+      <p>Template category, content, consent, and pricing rules evolve. Reconfirm the current Meta policy before launch and whenever Meta announces a pricing or policy change.</p>
+    </section>
+
+    <section id="media">
+      <h2>10. Media and documents</h2>
+      <p>For private business documents, upload the binary to Meta, receive a media ID, and then send that ID. Avoid public, long-lived document URLs.</p>
+      <pre><code>async function uploadDocument(
+  channel: Channel,
+  bytes: Buffer,
+  mimeType: string,
+  filename: string,
+): Promise&lt;string&gt; {
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", mimeType);
+  form.append("file", new Blob([bytes], { type: mimeType }), filename);
+
+  const response = await fetch(
+    `${GRAPH_BASE}/${channel.phoneNumberId}/media`,
+    { method: "POST", headers: {
+        Authorization: `Bearer ${channel.accessToken}`,
+      }, body: form },
+  );
+  const data = await response.json();
+  if (!response.ok || !data.id) throw new Error("Media upload failed");
+  return data.id;
+}
+
+const mediaId = await uploadDocument(channel, pdf, "application/pdf", "quote.pdf");
+await sendMessage(channel, to, {
+  type: "document",
+  document: { id: mediaId, filename: "quote.pdf", caption: "Your quotation" },
+});</code></pre>
+      <p>Apply authorization before creating the document, avoid logging private storage paths, and retain a snapshot of the exact content represented by the outbound message.</p>
+    </section>
+
+    <section id="receipts">
+      <h2>11. Delivery and read receipts</h2>
+      <p>The <code>messages</code> webhook also delivers status events such as sent, delivered, read, and failed. Persist the provider message ID returned by every send and correlate receipts to it.</p>
+      <ul>
+        <li>Deduplicate receipt events.</li>
+        <li>Apply status transitions monotonically; do not regress <em>read</em> back to <em>delivered</em>.</li>
+        <li>Treat provider-declared failures as terminal unless the error explicitly permits retry.</li>
+        <li>Record timestamps separately for sent, delivered, read, and failed.</li>
+        <li>Keep internal outbox correlation in <code>biz_opaque_callback_data</code> when supported.</li>
+      </ul>
+    </section>
+
+    <section id="consent">
+      <h2>12. Consent, STOP, and START</h2>
+      <p>A customer-initiated inbound message supports service replies within the window; it is not blanket marketing consent. Maintain purpose-specific consent records for marketing campaigns.</p>
+      <pre><code>const STOP = /^(stop|unsubscribe|opt[ -]?out)$/i;
+const START = /^(start|unstop|resume)$/i;
+
+if (STOP.test(text.trim())) {
+  await markOptedOut(tenantId, phone);
+  await sendComplianceAcknowledgement(phone,
+    "You have been opted out. Reply START to resume.");
+  return;
+}
+if (START.test(text.trim())) {
+  await clearOptOut(tenantId, phone);
+  await sendComplianceAcknowledgement(phone,
+    "You are opted back in.");
+  return;
+}</code></pre>
+      <p>Intercept compliance keywords before bots, menus, or AI. All outbound workers must check the opt-out state—not only the user interface.</p>
+    </section>
+
+    <section id="multitenant">
+      <h2>13. Multi-tenant isolation</h2>
+      <p>For software serving multiple businesses, tenant resolution is a security boundary.</p>
+      <ul>
+        <li>Map each verified phone-number ID to exactly one enabled tenant.</li>
+        <li>Resolve inbound tenant context from that mapping—not from customer text, query parameters, or a global fallback.</li>
+        <li>Resolve outbound credentials by tenant; never fall back to another tenant’s sender.</li>
+        <li>Stamp every conversation, message, event, lead, and outbox row with the tenant ID.</li>
+        <li>Filter every read and write by tenant ID, including helper functions and background workers.</li>
+        <li>Return no decrypted secrets through settings endpoints.</li>
+      </ul>
+      <div class="callout warning">
+        <strong>Fail closed.</strong> If no valid channel exists for a tenant or phone-number ID, stop. A “helpful” global fallback can send from the wrong business and expose customer data.
+      </div>
+    </section>
+
+    <section id="automation">
+      <h2>14. Optional conversational AI</h2>
+      <p>Place AI above a controlled tool layer, not directly above the database or Graph API. The model should decide conversational intent; server-side tools should enforce authorization, tenancy, validation, and factual grounding.</p>
+      <p>Recommended tools include:</p>
+      <ul>
+        <li>search available inventory or product catalogue;</li>
+        <li>retrieve the current customer’s own enquiry/order status;</li>
+        <li>create or update one deduplicated enquiry;</li>
+        <li>generate a controlled appointment link;</li>
+        <li>escalate to a human;</li>
+        <li>save bounded, structured conversation memory.</li>
+      </ul>
+      <h3>Grounding requirements</h3>
+      <ul>
+        <li>Force a fresh lookup for every availability, price, model, or status claim.</li>
+        <li>Aggregate the complete authorized dataset before imposing display limits.</li>
+        <li>Never allow the model to choose a tenant.</li>
+        <li>Treat customer messages and model-generated tool arguments as untrusted input.</li>
+        <li>Accept identity fields only when supported by customer-provided text.</li>
+        <li>Fall back to a deterministic flow or human handoff if the model or tool fails.</li>
+        <li>Keep the response concise and ask one question at a time.</li>
+      </ul>
+      <p>AI inference and WhatsApp delivery may be billed separately. Track both provider costs.</p>
+    </section>
+
+    <section id="reliability" class="page-break">
+      <h2>15. Reliability and security controls</h2>
+      <h3>Durable outbox</h3>
+      <p>Business transactions should enqueue messages in the same database transaction as the business event. A worker atomically claims rows, sends, records the provider ID, and retries eligible failures.</p>
+      <h3>Error classification</h3>
+      <table>
+        <thead><tr><th>Condition</th><th>Recommended disposition</th></tr></thead>
+        <tbody>
+          <tr><td>HTTP 429</td><td>Retry with exponential backoff and jitter</td></tr>
+          <tr><td>HTTP 400/401/403</td><td>Usually terminal; flag configuration/authentication</td></tr>
+          <tr><td>HTTP 5xx</td><td>Retry with limits</td></tr>
+          <tr><td>Network timeout after request write</td><td>Outcome uncertain; reconcile using idempotency/correlation before retrying</td></tr>
+          <tr><td>Media upload failure before message send</td><td>Safe to retry upload</td></tr>
+        </tbody>
+      </table>
+      <h3>Security baseline</h3>
+      <ul>
+        <li>Validate every POST signature using raw bytes and constant-time comparison.</li>
+        <li>Use HTTPS only and keep the deployment publicly reachable for Meta.</li>
+        <li>Use least-privilege tokens; rotate them and monitor expiry/revocation.</li>
+        <li>Encrypt tenant credentials at rest with authenticated encryption.</li>
+        <li>Rate-limit public routes without collapsing all reverse-proxy users into one IP bucket.</li>
+        <li>Sanitize provider errors before showing them to users.</li>
+        <li>Never log bearer tokens, app secrets, customer message bodies unnecessarily, or full provider payloads containing personal data.</li>
+        <li>Apply retention policies to transcripts and webhook payloads.</li>
+      </ul>
+    </section>
+
+    <section id="testing">
+      <h2>16. Testing strategy</h2>
+      <p>Point the Graph base URL to a local mock server. Use fake tokens and a dummy app secret—never production credentials.</p>
+      <h3>Webhook tests</h3>
+      <ul class="checklist">
+        <li>GET challenge succeeds with the correct token and fails otherwise.</li>
+        <li>Valid raw-body HMAC succeeds; modified body and bad signature fail.</li>
+        <li>Malformed JSON returns 400.</li>
+        <li>Unknown or disabled phone-number IDs fail closed.</li>
+        <li>Duplicate message IDs execute business logic once.</li>
+        <li>Text, button, list, media, and status payloads parse correctly.</li>
+      </ul>
+      <h3>Outbound tests</h3>
+      <ul class="checklist">
+        <li>Bearer authorization and endpoint path are correct.</li>
+        <li>Text, button, list, template, media upload, and document payloads match Meta contracts.</li>
+        <li>The 24-hour window allows free-form replies and requires templates after expiry.</li>
+        <li>STOP blocks later sends; START resumes them.</li>
+        <li>Retryable, terminal, and uncertain failures receive different dispositions.</li>
+        <li>Delivery states cannot move backwards.</li>
+      </ul>
+      <h3>Isolation and AI tests</h3>
+      <ul class="checklist">
+        <li>Inbound events cannot cross tenants.</li>
+        <li>Outbound messages never use another tenant’s credentials.</li>
+        <li>Inventory or catalogue totals use the complete authorized dataset.</li>
+        <li>Model-only follow-ups trigger a fresh lookup.</li>
+        <li>Prompt injection cannot reveal tools, credentials, or another customer’s data.</li>
+      </ul>
+    </section>
+
+    <section id="deployment">
+      <h2>17. Production deployment</h2>
+      <ol>
+        <li>Deploy the API to a stable public HTTPS URL.</li>
+        <li>Set production secrets through the platform’s secret manager.</li>
+        <li>Apply the channel, transcript, event-ledger, conversation, and outbox database migrations.</li>
+        <li>Configure <code>https://YOUR_HOST/api/webhooks/whatsapp</code> in the Meta App Dashboard.</li>
+        <li>Complete the GET challenge using the production verify token.</li>
+        <li>Subscribe the <code>messages</code> field.</li>
+        <li>Attach the application to each WABA through <code>subscribed_apps</code>.</li>
+        <li>Send a customer-originated test message and confirm inbound persistence.</li>
+        <li>Reply inside the service window and confirm sent → delivered → read receipts.</li>
+        <li>Test the approved template outside the window using a consenting test recipient.</li>
+        <li>Verify STOP/START and cross-tenant isolation.</li>
+        <li>Enable monitoring for webhook failures, token health, queue age, retries, and undelivered messages.</li>
+      </ol>
+      <div class="callout">
+        <strong>Webhook availability:</strong> private or password-gated deployments are not directly reachable by Meta unless the hosting platform provides a supported external-access mechanism. Verify external reachability before declaring the integration complete.
+      </div>
+    </section>
+
+    <section id="troubleshooting">
+      <h2>18. Troubleshooting</h2>
+      <table>
+        <thead><tr><th>Symptom</th><th>Likely cause</th><th>Resolution</th></tr></thead>
+        <tbody>
+          <tr><td>GET verification fails</td><td>Token mismatch, wrong path, non-public deployment</td><td>Compare exact verify token; curl the public HTTPS URL</td></tr>
+          <tr><td>POST always returns 403</td><td>JSON parser changed bytes or wrong app secret</td><td>Mount raw parser first; verify HMAC over exact bytes</td></tr>
+          <tr><td>Webhook configured but no inbound events</td><td>App not subscribed to WABA</td><td>Call <code>POST /{WABA_ID}/subscribed_apps</code></td></tr>
+          <tr><td>Messages accepted but customer receives nothing</td><td>Wrong phone ID, template issue, recipient restriction, or later failed receipt</td><td>Inspect provider response and status webhook</td></tr>
+          <tr><td>Free-form message rejected</td><td>24-hour window expired</td><td>Use an approved, eligible template</td></tr>
+          <tr><td>Customers receive duplicates</td><td>Webhook retries or non-idempotent outbox</td><td>Unique event IDs and dedupe keys; atomic claims</td></tr>
+          <tr><td>Wrong business replies</td><td>Global credential fallback</td><td>Resolve channel strictly by verified phone ID/tenant</td></tr>
+          <tr><td>AI gives stale product information</td><td>Skipped lookup or truncated data before aggregation</td><td>Force a fresh tool call and aggregate before limiting</td></tr>
+          <tr><td>Token suddenly stops working</td><td>Revoked/expired token or missing permissions</td><td>Run token debug/health check and rotate safely</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="checklists">
+      <h2>19. Production readiness checklists</h2>
+      <h3>Meta configuration</h3>
+      <ul class="checklist">
+        <li>Business, WABA, and phone number are approved and connected.</li>
+        <li>Production system-user token uses minimum permissions.</li>
+        <li>Webhook callback and verify token are configured.</li>
+        <li><code>messages</code> is subscribed and the app is attached to the WABA.</li>
+        <li>Required templates are approved in every needed language.</li>
+      </ul>
+      <h3>Application</h3>
+      <ul class="checklist">
+        <li>Raw-body signature validation is mandatory.</li>
+        <li>Inbound events and status receipts are idempotent.</li>
+        <li>Outbound sends use a durable outbox and classified retries.</li>
+        <li>Service-window and opt-out rules are enforced server-side.</li>
+        <li>Transcripts and delivery states are persisted.</li>
+        <li>Tenant/channel resolution fails closed.</li>
+        <li>Secrets are encrypted, redacted, and never returned to clients.</li>
+      </ul>
+      <h3>Operations</h3>
+      <ul class="checklist">
+        <li>Token and channel health are monitored.</li>
+        <li>Webhook latency/error rate and outbox queue age are monitored.</li>
+        <li>Support staff can identify failed messages without seeing secrets.</li>
+        <li>Consent, retention, privacy, and deletion policies are documented.</li>
+        <li>Meta pricing and policy changes have an assigned owner.</li>
+      </ul>
+    </section>
+
+    <section id="references">
+      <h2>20. Official Meta references</h2>
+      <ul>
+        <li><a href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started/">WhatsApp Cloud API — Get Started</a></li>
+        <li><a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/overview">Webhooks overview</a></li>
+        <li><a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages">Messages webhook reference</a></li>
+        <li><a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages">Service messages and customer-service windows</a></li>
+        <li><a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview">Template fundamentals</a></li>
+        <li><a href="https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-review">Template review</a></li>
+        <li><a href="https://business.whatsapp.com/products/platform-pricing">WhatsApp Business Platform pricing</a></li>
+      </ul>
+      <div class="footer-note">
+        <strong>Document status:</strong> Reference implementation guide, September 2026. Meta APIs, supported Graph versions, template rules, pricing, and permissions change over time. Pin a supported Graph version and validate current official documentation before each production launch. This guide is technical guidance, not legal advice.
+      </div>
+    </section>
+  </main>
+</body>
+</html>

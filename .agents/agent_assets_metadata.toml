@@ -279,3 +279,31 @@ mtime_ms = 1788581388005
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/fdfbae8d-6f94-4ac3-af68-80a7fe96024e/2fd3f887-94ff-400c-b40b-776b897bdbd5"
 storage_version_token = "1788581393635766"
 content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+[[outputs]]
+id = "6M9SglfqOFpz3fOzfyfWz"
+uri = "file://outputs/whatsapp-cloud-api-integration-handbook.pdf"
+type = "pdf"
+title = "WhatsApp Cloud API Integration Handbook — PDF"
+description = "Shareable 20-page production guide covering Meta setup, secure webhooks, WABA subscription, TypeScript/Express code, messages, templates, media, delivery receipts, consent, multi-tenant isolation, AI automation, testing, deployment, and troubleshooting."
+logical_id = "8ddb6526-e71f-442e-9768-3bf52785fa48"
+content_hash = "sha256:e21106c1d573564487e904a89ee30114da6164a16ece78a24de26d8018ed2967"
+size = 287692
+mtime_ms = 1788789511412
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/8ddb6526-e71f-442e-9768-3bf52785fa48/1dfe0710-5dd6-4e46-a6bc-e47e2008a578"
+storage_version_token = "1788789550550836"
+content_type = "application/pdf"
+
+[[outputs]]
+id = "FwQERFMU43t2Wyj0F8qLT"
+uri = "file://outputs/whatsapp-cloud-api-integration-handbook.html"
+type = "text"
+title = "WhatsApp Cloud API Integration Handbook — Editable HTML"
+description = "Self-contained editable source edition with print-ready styling and copy-ready implementation examples."
+logical_id = "2f7f71c6-edc5-42c1-a95b-a9b0dc4e094a"
+content_hash = "sha256:c192b81e014c9b0c05fe63082d693eb7fda199816fc7863415883eaf0126e471"
+size = 37680
+mtime_ms = 1788789497452
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/2f7f71c6-edc5-42c1-a95b-a9b0dc4e094a/cba14d42-7fad-4a38-b1c3-2a4fc465c780"
+storage_version_token = "1788789551809738"
+content_type = "text/html"
