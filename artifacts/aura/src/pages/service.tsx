@@ -473,8 +473,18 @@ function MyJobsTab() {
     return () => window.clearInterval(timer);
   }, [hasRunningTimer]);
 
-  const open = cards?.filter((c) => c.status !== "completed") ?? [];
-  const done = cards?.filter((c) => c.status === "completed") ?? [];
+  const active =
+    cards?.filter((card) =>
+      ["open", "in_progress", "on_hold"].includes(card.status),
+    ) ?? [];
+  const completed =
+    cards?.filter((card) =>
+      ["completed", "closed"].includes(card.status),
+    ) ?? [];
+  const other =
+    cards?.filter(
+      (card) => !active.includes(card) && !completed.includes(card),
+    ) ?? [];
   const bookedHours = cards?.reduce((sum, card) => sum + card.laborHours, 0) ?? 0;
   const now = Date.now();
   const workedSeconds =
@@ -483,8 +493,8 @@ function MyJobsTab() {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <MyJobsStatCard icon={ClipboardList} label="Active jobs" value={String(open.length)} />
-        <MyJobsStatCard icon={CheckCircle2} label="Completed" value={String(done.length)} />
+        <MyJobsStatCard icon={ClipboardList} label="Active jobs" value={String(active.length)} />
+        <MyJobsStatCard icon={CheckCircle2} label="Completed" value={String(completed.length)} />
         <MyJobsStatCard
           icon={Clock}
           label="Worked time"
@@ -512,7 +522,7 @@ function MyJobsTab() {
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          {[...open, ...done].map((card) => (
+          {[...active, ...completed, ...other].map((card) => (
             <JobCardPanel key={card.id} card={card} technicianView />
           ))}
         </div>
