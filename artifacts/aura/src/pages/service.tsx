@@ -336,6 +336,32 @@ function formatWorkedSeconds(totalSeconds: number): string {
   return `${m}m`;
 }
 
+function workedSecondsAt(card: JobCard, now: number): number {
+  const running =
+    card.status === "in_progress" && card.timerStartedAt
+      ? Math.max(
+          0,
+          Math.round((now - new Date(card.timerStartedAt).getTime()) / 1000),
+        )
+      : 0;
+  const timerSeconds = (card.timerSeconds ?? 0) + running;
+  if (timerSeconds > 0 || card.timerStartedAt) return timerSeconds;
+  // Cards completed before pause/resume timers were introduced still have
+  // trustworthy start and finish timestamps. Use that wall-clock duration as
+  // a compatibility fallback instead of reporting that no work occurred.
+  if (card.startedAt && card.completedAt) {
+    return Math.max(
+      0,
+      Math.round(
+        (new Date(card.completedAt).getTime() -
+          new Date(card.startedAt).getTime()) /
+          1000,
+      ),
+    );
+  }
+  return 0;
+}
+
 function HistoryTab() {
   const [q, setQ] = useState("");
   const [applied, setApplied] = useState("");
@@ -436,17 +462,39 @@ function HistoryTab() {
 
 function MyJobsTab() {
   const { data: cards, isLoading } = useListJobCards({ mine: "1" });
+  const hasRunningTimer =
+    cards?.some(
+      (card) => card.status === "in_progress" && !!card.timerStartedAt,
+    ) ?? false;
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!hasRunningTimer) return;
+    const timer = window.setInterval(() => tick((value) => value + 1), 30_000);
+    return () => window.clearInterval(timer);
+  }, [hasRunningTimer]);
 
   const open = cards?.filter((c) => c.status !== "completed") ?? [];
   const done = cards?.filter((c) => c.status === "completed") ?? [];
-  const hours = cards?.reduce((s, c) => s + c.laborHours, 0) ?? 0;
+  const bookedHours = cards?.reduce((sum, card) => sum + card.laborHours, 0) ?? 0;
+  const now = Date.now();
+  const workedSeconds =
+    cards?.reduce((sum, card) => sum + workedSecondsAt(card, now), 0) ?? 0;
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <MyJobsStatCard icon={ClipboardList} label="Active jobs" value={String(open.length)} />
         <MyJobsStatCard icon={CheckCircle2} label="Completed" value={String(done.length)} />
-        <MyJobsStatCard icon={Calendar} label="Booked hours" value={`${hours.toFixed(1)}h`} />
+        <MyJobsStatCard
+          icon={Clock}
+          label="Worked time"
+          value={formatWorkedSeconds(workedSeconds)}
+        />
+        <MyJobsStatCard
+          icon={Calendar}
+          label="Booked hours"
+          value={`${bookedHours.toFixed(1)}h`}
+        />
       </div>
 
       {isLoading ? (
@@ -2165,7 +2213,7 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
               <span>·</span>
               <PenTool className="w-3 h-3" />
               {card.technicianName ?? "Unassigned"}
-              <span>· {card.laborHours}h @ {money.gyd(card.laborRate)}/hr</span>
+              <span>· Booked {card.laborHours}h @ {money.gyd(card.laborRate)}/hr</span>
             </div>
             {customerPhoneSnapshot && (
               <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
