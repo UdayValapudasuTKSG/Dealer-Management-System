@@ -362,6 +362,13 @@ function workedSecondsAt(card: JobCard, now: number): number {
   return 0;
 }
 
+function bookedHoursForCard(card: JobCard): number {
+  if (card.laborHours > 0) return card.laborHours;
+  return card.durationMins && card.durationMins > 0
+    ? card.durationMins / 60
+    : 0;
+}
+
 function HistoryTab() {
   const [q, setQ] = useState("");
   const [applied, setApplied] = useState("");
@@ -485,7 +492,8 @@ function MyJobsTab() {
     cards?.filter(
       (card) => !active.includes(card) && !completed.includes(card),
     ) ?? [];
-  const bookedHours = cards?.reduce((sum, card) => sum + card.laborHours, 0) ?? 0;
+  const bookedHours =
+    cards?.reduce((sum, card) => sum + bookedHoursForCard(card), 0) ?? 0;
   const now = Date.now();
   const workedSeconds =
     cards?.reduce((sum, card) => sum + workedSecondsAt(card, now), 0) ?? 0;
@@ -2223,7 +2231,9 @@ export function JobCardPanel({ card, technicianView = false }: { card: JobCard; 
               <span>·</span>
               <PenTool className="w-3 h-3" />
               {card.technicianName ?? "Unassigned"}
-              <span>· Booked {card.laborHours}h @ {money.gyd(card.laborRate)}/hr</span>
+              <span>
+                · Booked {bookedHoursForCard(card)}h @ {money.gyd(card.laborRate)}/hr
+              </span>
             </div>
             {customerPhoneSnapshot && (
               <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">

@@ -1408,6 +1408,7 @@ async function autoCreateJobCard(
       technicianName: order.technician,
       scheduledAt: new Date(`${order.scheduledDate}T09:00:00`),
       durationMins: Math.round(order.estimatedHours * 60),
+      laborHours: order.estimatedHours,
       customerPhoneSnapshot,
       ...surcharge,
     });
