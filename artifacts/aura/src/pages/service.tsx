@@ -101,7 +101,8 @@ import {
   CarFront,
   Check,
   ChevronsUpDown,
-  X
+  X,
+  ArrowRight
 } from "lucide-react";
 import { DocumentsCard } from "@/components/documents-card";
 import { CollisionTab, CreateClaimDialog } from "@/components/collision-claims";
@@ -1794,28 +1795,123 @@ function BookingsTab() {
                     setSelectedOrder(order);
                   }
                 }}
-                className={`flex items-start justify-between p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors border border-white/10 rounded-2xl cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ${
+                className={`group relative overflow-hidden bg-white/[0.035] hover:bg-white/[0.065] hover:-translate-y-0.5 hover:shadow-lg transition-all border border-white/10 rounded-2xl cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                   isFocused(order.id) ? "bg-primary/10 ring-1 ring-inset ring-primary/50" : ""
                 }`}
               >
-                <div className="flex flex-col gap-1.5 min-w-0 pr-4">
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold tracking-tight text-primary">#{order.id.toString().padStart(5, "0")}</span>
-                    <Badge variant="secondary" className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border-none bg-foreground/[0.06] text-foreground shrink-0">
+                <div
+                  className={cn(
+                    "absolute inset-y-0 left-0 w-1",
+                    order.status === "in_progress"
+                      ? "bg-primary"
+                      : order.status === "resolved" || order.status === "closed"
+                        ? "bg-foreground/30"
+                        : "bg-primary/45",
+                  )}
+                />
+                <div className="p-5 pl-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
+                          Repair order
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums">
+                          #{order.id.toString().padStart(5, "0")}
+                        </span>
+                      </div>
+                      <h3 className="mt-1 truncate text-lg font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors">
+                        {order.vehicleInfo}
+                      </h3>
+                    </div>
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border-none shrink-0",
+                        order.status === "in_progress"
+                          ? "bg-primary/15 text-primary"
+                          : order.status === "resolved" || order.status === "closed"
+                            ? "bg-foreground/[0.07] text-muted-foreground"
+                            : "bg-primary/10 text-primary",
+                      )}
+                    >
                       {order.status.replace(/_/g, " ")}
                     </Badge>
                   </div>
-                  <h3 className="font-semibold tracking-tight text-foreground truncate">{order.vehicleInfo}</h3>
-                  <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="truncate">{order.customerName || "Unknown Customer"}</span>
-                    <span>·</span>
-                    <span className="capitalize">{order.type}</span>
-                    <span>·</span>
-                    <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />{formatCalendarDateShort(order.scheduledDate)}</span>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+                      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        <User className="h-3.5 w-3.5" /> Customer
+                      </div>
+                      <div className="mt-1 truncate text-sm font-medium">
+                        {order.customerName || "Unknown customer"}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+                      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5" /> Appointment
+                      </div>
+                      <div className="mt-1 text-sm font-medium">
+                        {formatCalendarDateShort(order.scheduledDate)}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+                      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        <CarFront className="h-3.5 w-3.5" /> Registration
+                      </div>
+                      <div className="mt-1 truncate text-sm font-medium">
+                        {order.registrationNumber || "Not recorded"}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        Service plan
+                      </div>
+                      <div className="mt-1 truncate text-sm font-medium capitalize">
+                        {order.type.replace(/_/g, " ")}
+                        {order.estimatedHours ? ` · ${order.estimatedHours}h` : ""}
+                      </div>
+                    </div>
                   </div>
-                  {order.complaint && <p className="text-sm mt-1 line-clamp-2 text-foreground/80">{order.complaint}</p>}
+
+                  <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        Service concern
+                      </div>
+                      <p className="mt-0.5 line-clamp-2 text-sm text-foreground/80">
+                        {order.complaint || order.jobs.join(", ") || "No concern recorded"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      {order.customerId && (
+                        <Button asChild size="sm" variant="ghost" className="rounded-full text-xs">
+                          <Link
+                            href={`/customers/${order.customerId}`}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <User className="mr-1.5 h-3.5 w-3.5" />
+                            Customer
+                          </Link>
+                        </Button>
+                      )}
+                      {order.status === "open" && <ConfirmAppointmentButton order={order} />}
+                      <Button
+                        size="sm"
+                        variant={order.status === "open" ? "outline" : "default"}
+                        className="rounded-full text-xs"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedOrder(order);
+                        }}
+                      >
+                        Open booking
+                        <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-                {order.status === "open" && <div className="shrink-0"><ConfirmAppointmentButton order={order} /></div>}
               </div>
             ))
           )}
