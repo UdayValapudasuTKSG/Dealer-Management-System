@@ -211,6 +211,7 @@ import type {
   InvoiceInput,
   InvoiceUpdate,
   JobCard,
+  JobCardDetail,
   JobCardExternalPart,
   JobCardHistoryItem,
   JobCardInput,
@@ -10591,6 +10592,77 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getCreateJobCardMutationOptions(options));
     }
+
+export const getGetJobCardUrl = (id: number,) => {
+
+
+
+
+  return `/api/job-cards/${id}`
+}
+
+export const getJobCard = async (id: number, options?: RequestInit): Promise<JobCardDetail> => {
+
+  return customFetch<JobCardDetail>(getGetJobCardUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetJobCardQueryKey = (id: number,) => {
+    return [
+    `/api/job-cards/${id}`
+    ] as const;
+    }
+
+
+export const getGetJobCardQueryOptions = <TData = Awaited<ReturnType<typeof getJobCard>>, TError = ErrorType<Error>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJobCard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetJobCardQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getJobCard>>> = ({ signal }) => getJobCard(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getJobCard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetJobCardQueryResult = NonNullable<Awaited<ReturnType<typeof getJobCard>>>
+export type GetJobCardQueryError = ErrorType<Error>
+
+
+
+export function useGetJobCard<TData = Awaited<ReturnType<typeof getJobCard>>, TError = ErrorType<Error>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getJobCard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetJobCardQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getUpdateJobCardUrl = (id: number,) => {
 

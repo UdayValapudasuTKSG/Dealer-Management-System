@@ -5018,6 +5018,10 @@ export interface ServiceOrder {
   customerPhoneSnapshot?: string | null;
   vehicleInfo: string;
   /** @nullable */
+  vin: string | null;
+  /** @nullable */
+  registrationNumber: string | null;
+  /** @nullable */
   vehicleId?: number | null;
   /** @nullable */
   assetId?: number | null;
@@ -5092,6 +5096,16 @@ export interface ServiceOrderInput {
      * @maxLength 200
      */
   vehicleInfo: string;
+  /**
+     * @minLength 1
+     * @maxLength 50
+     */
+  vin: string;
+  /**
+     * @minLength 1
+     * @maxLength 50
+     */
+  registrationNumber: string;
   vehicleId?: number;
   assetId?: number;
   type: ServiceOrderInputType;
@@ -5167,6 +5181,16 @@ export interface ServiceOrderUpdate {
      * @maxLength 200
      */
   vehicleInfo?: string;
+  /**
+     * @minLength 1
+     * @maxLength 50
+     */
+  vin?: string;
+  /**
+     * @minLength 1
+     * @maxLength 50
+     */
+  registrationNumber?: string;
   type?: ServiceOrderUpdateType;
   payType?: ServiceOrderUpdatePayType;
   status?: ServiceOrderUpdateStatus;
@@ -5344,6 +5368,11 @@ export interface JobCard {
      */
   timerStartedAt?: string | null;
   createdAt: string;
+}
+
+export interface JobCardDetail {
+  jobCard: JobCard;
+  serviceOrder: ServiceOrder;
 }
 
 export interface JobCardRolloverRequest {
@@ -9583,6 +9612,16 @@ export type CreatePayment422 = {
 
 export type ListServiceOrdersParams = {
 status?: string;
+/**
+ * First scheduled date to include
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+from?: string;
+/**
+ * Last scheduled date to include
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+to?: string;
 };
 
 export type ClaimServiceOrder200 = {

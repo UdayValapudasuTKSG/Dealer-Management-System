@@ -8,4 +8,14 @@
 
 export type ListServiceOrdersParams = {
 status?: string;
+/**
+ * First scheduled date to include
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+from?: string;
+/**
+ * Last scheduled date to include
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+to?: string;
 };

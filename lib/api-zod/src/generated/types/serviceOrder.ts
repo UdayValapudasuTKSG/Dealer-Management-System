@@ -20,6 +20,10 @@ export interface ServiceOrder {
   customerPhoneSnapshot?: string | null;
   vehicleInfo: string;
   /** @nullable */
+  vin: string | null;
+  /** @nullable */
+  registrationNumber: string | null;
+  /** @nullable */
   vehicleId?: number | null;
   /** @nullable */
   assetId?: number | null;

@@ -1,10 +1,15 @@
 ---
-name: Drizzle date-mode-string + Zod coercion mismatch
-description: Why date columns break inserts when bodies come from Orval-generated Zod schemas.
+name: OpenAPI dates with Orval Zod
+description: Date-body coercion and date-query parsing constraints in the generated API validators.
 ---
 
-# Drizzle date(mode:"string") + Zod coercion
+# OpenAPI dates with Orval Zod
 
-- A Drizzle column declared `date(..., { mode: "string" })` expects a `string` on insert/update, but Orval/Zod generated bodies coerce OpenAPI `format: date` (or date-time) fields into JS `Date` objects.
-- **Why:** Typecheck fails ("Date not assignable to string") and, if bypassed, the DB write can misbehave.
-- **How to apply:** Before insert/update, convert the value to `YYYY-MM-DD` (e.g. `value instanceof Date ? value.toISOString().slice(0,10) : String(value).slice(0,10)`). Handle the optional case on updates (only override when present).
+Use different OpenAPI date representations at body and query boundaries:
+
+- A Drizzle column declared `date(..., { mode: "string" })` expects a string, while Orval-generated body validators may coerce `format: date` or `date-time` values into JavaScript `Date` objects.
+- An HTTP query parameter declared as `format: date` can generate `zod.date()`, which rejects the raw `YYYY-MM-DD` string Express receives before route code can normalize it.
+
+**Why:** Body coercion causes type/write mismatches, while query coercion makes valid date filters fail with `Expected date, received string`.
+
+**How to apply:** Normalize generated body dates to `YYYY-MM-DD` before Drizzle writes. For date-only query parameters, use a string schema with a `YYYY-MM-DD` pattern, then validate and compare normalized strings in the route.

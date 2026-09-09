@@ -426,6 +426,7 @@ export * from './invoiceTaxLineKind';
 export * from './invoiceUpdate';
 export * from './invoiceUpdateStatus';
 export * from './jobCard';
+export * from './jobCardDetail';
 export * from './jobCardExternalPart';
 export * from './jobCardHistoryItem';
 export * from './jobCardHistoryItemStatus';

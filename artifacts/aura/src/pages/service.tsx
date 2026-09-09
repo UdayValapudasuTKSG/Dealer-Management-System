@@ -101,6 +101,7 @@ import {
   CarFront,
   Check,
   ChevronsUpDown,
+  X
 } from "lucide-react";
 import { DocumentsCard } from "@/components/documents-card";
 import { CollisionTab, CreateClaimDialog } from "@/components/collision-claims";
@@ -165,6 +166,7 @@ import {
   formatDealerDayTime,
   formatDealerMonthYear,
   formatGuyanaDate,
+  dealerDayKey,
   useMoney,
 } from "@/lib/format";
 
@@ -469,10 +471,23 @@ function HistoryTab() {
 
 function MyJobsTab() {
   const { data: cards, isLoading } = useListJobCards({ mine: "1" });
+  const [scope, setScope] = useState<"today" | "later">("today");
+  const todayKey = dealerDayKey();
+  const visibleCards =
+    cards?.filter((card) => {
+      const scheduledKey = card.scheduledAt
+        ? dealerDayKey(new Date(card.scheduledAt))
+        : null;
+      const active = ["open", "in_progress", "on_hold"].includes(card.status);
+      if (scope === "later") {
+        return active && scheduledKey != null && scheduledKey > todayKey;
+      }
+      return scheduledKey === todayKey || (active && (!scheduledKey || scheduledKey < todayKey));
+    }) ?? [];
   const hasRunningTimer =
-    cards?.some(
+    visibleCards.some(
       (card) => card.status === "in_progress" && !!card.timerStartedAt,
-    ) ?? false;
+    );
   const [, tick] = useState(0);
   useEffect(() => {
     if (!hasRunningTimer) return;
@@ -481,25 +496,47 @@ function MyJobsTab() {
   }, [hasRunningTimer]);
 
   const active =
-    cards?.filter((card) =>
+    visibleCards.filter((card) =>
       ["open", "in_progress", "on_hold"].includes(card.status),
-    ) ?? [];
+    );
   const completed =
-    cards?.filter((card) =>
+    visibleCards.filter((card) =>
       ["completed", "closed"].includes(card.status),
-    ) ?? [];
+    );
   const other =
-    cards?.filter(
+    visibleCards.filter(
       (card) => !active.includes(card) && !completed.includes(card),
-    ) ?? [];
+    );
   const bookedHours =
-    cards?.reduce((sum, card) => sum + bookedHoursForCard(card), 0) ?? 0;
+    visibleCards.reduce((sum, card) => sum + bookedHoursForCard(card), 0);
   const now = Date.now();
   const workedSeconds =
-    cards?.reduce((sum, card) => sum + workedSecondsAt(card, now), 0) ?? 0;
+    visibleCards.reduce((sum, card) => sum + workedSecondsAt(card, now), 0);
 
   return (
     <div className="space-y-5">
+      <div
+        className="inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1"
+        data-testid="tabs-my-jobs-schedule"
+      >
+        {(["today", "later"] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setScope(value)}
+            data-testid={`button-my-jobs-${value}`}
+            className={cn(
+              "rounded-full px-4 py-2 text-sm font-medium transition-colors",
+              scope === value
+                ? "bg-primary text-white shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {value === "today" ? "Today" : "Later"}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <MyJobsStatCard icon={ClipboardList} label="Active jobs" value={String(active.length)} />
         <MyJobsStatCard icon={CheckCircle2} label="Completed" value={String(completed.length)} />
@@ -528,10 +565,19 @@ function MyJobsTab() {
             No job cards assigned to you yet. When a service manager assigns you a job, it appears here.
           </p>
         </div>
+      ) : visibleCards.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] py-20 flex flex-col items-center gap-3 text-center">
+          <CalendarClock className="w-8 h-8 text-muted-foreground" />
+          <p className="text-muted-foreground">
+            {scope === "today"
+              ? "No jobs scheduled for today."
+              : "No jobs scheduled for later."}
+          </p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
           {[...active, ...completed, ...other].map((card) => (
-            <JobCardPanel key={card.id} card={card} technicianView />
+            <Link key={card.id} href={`/service/job-cards/${card.id}`}><JobCardSummary card={card} /></Link>
           ))}
         </div>
       )}
@@ -609,6 +655,8 @@ function CreateBookingDialog() {
         { name: "customerPhoneSnapshot", label: "Contact Phone (Job Card)", type: "phone", span: "half", required: true, placeholder: "+592..." },
         { name: "customerEmail", label: "Customer Email", type: "email", span: "half", placeholder: "customer@email.com" },
         { name: "vehicleInfo", label: "Vehicle", type: "text", required: true, span: "half", placeholder: "2022 BMW X5" },
+        { name: "vin", label: "VIN", type: "text", required: true, span: "half", placeholder: "WBA..." },
+        { name: "registrationNumber", label: "Registration", type: "text", required: true, span: "half", placeholder: "PAB 1234" },
         { name: "complaint", label: "Customer complaint", type: "textarea", span: "full", placeholder: "Grinding noise when braking..." },
         {
           name: "type",
@@ -700,6 +748,8 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
   const [customerName, setCustomerName] = useState<string>("");
   const [customerPhoneSnapshot, setCustomerPhoneSnapshot] = useState<string>("");
   const [vehicleInfo, setVehicleInfo] = useState<string>("");
+  const [vin, setVin] = useState<string>("");
+  const [registrationNumber, setRegistrationNumber] = useState<string>("");
   const [type, setType] = useState<string>("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [complaint, setComplaint] = useState("");
@@ -714,6 +764,8 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
       setCustomerName(order.customerName ?? "");
       setCustomerPhoneSnapshot(order.customerPhoneSnapshot ?? "");
       setVehicleInfo(order.vehicleInfo ?? "");
+      setVin(order.vin ?? "");
+      setRegistrationNumber(order.registrationNumber ?? "");
       setType(order.type);
       setScheduledDate(order.scheduledDate ? order.scheduledDate.split("T")[0] : "");
       setComplaint(order.complaint ?? "");
@@ -743,7 +795,11 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
     setCustomerSelectOpen(false);
   };
 
-  const canSubmit = type !== "" && scheduledDate !== "" && vehicleInfo.trim() !== "" && !update.isPending;
+  const canSubmit =
+    type !== "" &&
+    scheduledDate !== "" &&
+    vehicleInfo.trim() !== "" &&
+    !update.isPending;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -756,6 +812,11 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
         vehicleInfo: vehicleInfo.trim(),
         customerId: customerId !== "none" ? Number(customerId) : null,
       };
+
+      if (vin.trim()) payload.vin = vin.trim();
+      if (registrationNumber.trim()) {
+        payload.registrationNumber = registrationNumber.trim();
+      }
 
       if (customerName.trim()) {
         payload.customerName = customerName.trim();
@@ -907,6 +968,28 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
                 placeholder="2022 BMW X5"
                 value={vehicleInfo}
                 onChange={(e) => setVehicleInfo(e.target.value)}
+                className="h-9 bg-white/[0.04]"
+              />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>VIN</Label>
+              <Input
+                type="text"
+                placeholder="Vehicle identification number"
+                value={vin}
+                onChange={(event) => setVin(event.target.value)}
+                className="h-9 bg-white/[0.04]"
+              />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Registration Number</Label>
+              <Input
+                type="text"
+                placeholder="PAB 1234"
+                value={registrationNumber}
+                onChange={(event) => setRegistrationNumber(event.target.value)}
                 className="h-9 bg-white/[0.04]"
               />
             </div>
@@ -1328,6 +1411,16 @@ function BookingDetailsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const money = useMoney();
+  const { toast } = useToast();
+  const remind = useSendServiceReminder();
+  const { data: csatReviews } = useListReviews({ source: "service_csat" });
+  const review = order
+    ? csatReviews?.find(
+        (candidate) =>
+          candidate.refType === "service_order" &&
+          candidate.refId === order.id,
+      )
+    : undefined;
 
   if (!order) return null;
 
@@ -1506,6 +1599,50 @@ function BookingDetailsDialog({
 
           <BookingOnboardingMedia orderId={order.id} />
         </div>
+        <DialogFooter className="flex flex-wrap gap-2 border-t border-white/10 pt-4 sm:justify-start">
+          {order.status === "open" && (
+            <ConfirmAppointmentButton order={order} />
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={remind.isPending}
+            className="rounded-full border-white/15 gap-1.5 text-xs h-8"
+            onClick={async () => {
+              try {
+                const result = await remind.mutateAsync({ id: order.id });
+                toast({
+                  title: "Reminder sent",
+                  description: `Email queued to ${result.recipient}.`,
+                });
+              } catch (error: unknown) {
+                const message =
+                  (
+                    error as {
+                      response?: { data?: { error?: string } };
+                    }
+                  )?.response?.data?.error ?? "Could not send reminder.";
+                toast({
+                  title: "Reminder failed",
+                  description: message,
+                  variant: "destructive",
+                });
+              }
+            }}
+          >
+            <Mail className="w-3.5 h-3.5" /> Remind
+          </Button>
+          <SelfOnboardButton order={order} />
+          <AdvanceAndFeedback order={order} review={review} />
+          <OpenCaseButton
+            customerId={order.customerId ?? null}
+            customerName={order.customerName ?? null}
+            refId={order.id}
+            contextLabel={`RO #${order.id.toString().padStart(5, "0")} — ${order.vehicleInfo}`}
+          />
+          <EditBookingDialog order={order} />
+          <DeleteOrderButton order={order} />
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -1513,22 +1650,55 @@ function BookingDetailsDialog({
 
 function BookingsTab() {
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
-  const { data: orders, isLoading } = useListServiceOrders();
-  const { toast } = useToast();
-  const money = useMoney();
-  const remind = useSendServiceReminder();
-  const { data: csatReviews } = useListReviews({ source: "service_csat" });
-  const reviewFor = (orderId: number) =>
-    csatReviews?.find((r) => r.refType === "service_order" && r.refId === orderId);
+  const [fromStr, setFromStr] = useState("");
+  const [toStr, setToStr] = useState("");
+
+  const { data: orders, isLoading } = useListServiceOrders({
+    ...(fromStr ? { from: fromStr } : {}),
+    ...(toStr ? { to: toStr } : {}),
+  });
   const { density, setDensity, layout, setLayout } = useViewMode("service");
-  /* Triage deep link: /service?order=<id> scrolls to and highlights the RO. */
   const focusOrderId = useFocusParam("order");
   const isFocused = useFocusHighlight(focusOrderId, "service-order", !!orders?.length);
 
-  if (!isLoading && orders?.length !== 0 && layout === "list") {
-    return (
-      <>
-      <div className="space-y-4">
+  return (
+    <>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 bg-white/5 rounded-full px-3 py-1.5 border border-white/10 text-sm">
+          <Calendar className="w-4 h-4 text-muted-foreground" />
+          <Input
+            type="date"
+            value={fromStr}
+            onChange={(event) => setFromStr(event.target.value)}
+            className="w-auto h-7 border-none bg-transparent shadow-none p-0 focus-visible:ring-0 text-xs"
+            data-testid="input-filter-from"
+          />
+          <span className="text-muted-foreground">to</span>
+          <Input
+            type="date"
+            value={toStr}
+            onChange={(event) => setToStr(event.target.value)}
+            className="w-auto h-7 border-none bg-transparent shadow-none p-0 focus-visible:ring-0 text-xs"
+            data-testid="input-filter-to"
+          />
+          {(fromStr || toStr) && (
+            <button
+              type="button"
+              onClick={() => {
+                setFromStr("");
+                setToStr("");
+              }}
+              className="text-muted-foreground hover:text-foreground ml-1"
+              data-testid="button-clear-date-filter"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!isLoading && orders?.length !== 0 && layout === "list" ? (
         <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
           <table className="w-full text-sm">
             <thead>
@@ -1597,184 +1767,62 @@ function BookingsTab() {
             </tbody>
           </table>
         </div>
-      </div>
-      <BookingDetailsDialog
-        order={selectedOrder}
-        open={!!selectedOrder}
-        onOpenChange={(open) => !open && setSelectedOrder(null)}
-      />
-      </>
-    );
-  }
-
-  return (
-    <>
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3">
-      {isLoading ? (
-        [...Array(4)].map((_, i) => (
-          <div key={i} className="h-24 bg-white/[0.05] rounded-2xl animate-pulse" />
-        ))
-      ) : orders?.length === 0 ? (
-        <EmptyState icon={Calendar} text="No bookings yet. Book the first service." />
       ) : (
-        orders?.map((order, i) => (
-          <motion.div
-            key={order.id}
-            id={`service-order-${order.id}`}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04 }}
-          >
-            <Card
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                const target = e.target as HTMLElement;
-                if (target.closest('button, a, input, select, textarea, [role="button"]') !== null && target.closest('button, a, input, select, textarea, [role="button"]') !== e.currentTarget) return;
-                setSelectedOrder(order);
-              }}
-              onKeyDown={(e) => {
-                if (e.target !== e.currentTarget) return;
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setSelectedOrder(order);
-                }
-              }}
-              className={`glass-panel shadow-sm hover:shadow-xl transition-all duration-300 rounded-3xl overflow-hidden group relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 cursor-pointer ${
-                isFocused(order.id) ? "border border-primary ring-2 ring-primary/50" : "border-none"
-              }`}
-            >
+        <div className="grid grid-cols-1 gap-3">
+          {isLoading ? (
+            [...Array(4)].map((_, i) => (
+              <div key={i} className="h-24 bg-white/[0.05] rounded-2xl animate-pulse" />
+            ))
+          ) : !orders?.length ? (
+            <EmptyState icon={Calendar} text="No bookings yet. Book the first service." />
+          ) : (
+            orders.map((order) => (
               <div
-                className={`absolute top-0 bottom-0 left-0 w-1.5 ${order.status === "resolved" || order.status === "closed" ? "bg-primary" : "bg-white/10"}`}
-              />
-              <CardContent className="px-4 py-3.5 md:px-5 md:py-4 pl-5 md:pl-6">
-                <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-5">
-                  {/* Identity */}
-                  <div className="flex gap-3 items-center min-w-0 lg:w-[34%]">
-                    <div className="w-9 h-9 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center shrink-0 group-hover:border-primary/40 group-hover:bg-primary/10 transition-colors duration-300">
-                      <Wrench className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors duration-300" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-base leading-tight truncate">{order.vehicleInfo}</h3>
-                        <Badge
-                          variant="secondary"
-                          className={cn(
-                            "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border-none shrink-0",
-                            order.status === "in_progress"
-                              ? "bg-primary/15 text-primary"
-                              : order.status === "resolved" || order.status === "closed"
-                                ? "bg-emerald-500/15 text-emerald-400"
-                                : "bg-white/[0.06] text-foreground",
-                          )}
-                        >
-                          {order.status.replace("_", " ")}
-                        </Badge>
-                      </div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap mt-0.5">
-                        <span className="font-semibold tracking-wider text-primary uppercase">
-                          RO #{order.id.toString().padStart(5, "0")}
-                        </span>
-                        <span>· {order.type}</span>
-                        {order.payType && order.payType !== "customer" && (
-                          <span className="rounded-full bg-primary/15 text-primary px-1.5 py-px text-[10px] font-bold">
-                            {PAY_TYPE_LABEL[order.payType] ?? order.payType}
-                          </span>
-                        )}
-                        <span>·</span>
-                        {order.customerId ? (
-                          <Link
-                            href={`/customers/${order.customerId}`}
-                            className="text-primary hover:underline truncate"
-                          >
-                            {order.customerName || "Unknown"}
-                          </Link>
-                        ) : (
-                          <span className="truncate">{order.customerName || "Unknown"}</span>
-                        )}
-                        {order.odometer != null && (
-                          <span>· {order.odometer.toLocaleString()} km</span>
-                        )}
-                      </div>
-                      {order.complaint && (
-                        <p className="text-xs text-muted-foreground/80 italic line-clamp-1 mt-0.5">
-                          “{order.complaint}”
-                        </p>
-                      )}
-                    </div>
+                key={order.id}
+                id={`service-order-${order.id}`}
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  const target = e.target as HTMLElement;
+                  if (target.closest('button, a, input, select, textarea, [role="button"]') !== null && target.closest('button, a, input, select, textarea, [role="button"]') !== e.currentTarget) return;
+                  setSelectedOrder(order);
+                }}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSelectedOrder(order);
+                  }
+                }}
+                className={`flex items-start justify-between p-4 bg-white/[0.03] hover:bg-white/[0.05] transition-colors border border-white/10 rounded-2xl cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary ${
+                  isFocused(order.id) ? "bg-primary/10 ring-1 ring-inset ring-primary/50" : ""
+                }`}
+              >
+                <div className="flex flex-col gap-1.5 min-w-0 pr-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-semibold tracking-tight text-primary">#{order.id.toString().padStart(5, "0")}</span>
+                    <Badge variant="secondary" className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border-none bg-foreground/[0.06] text-foreground shrink-0">
+                      {order.status.replace(/_/g, " ")}
+                    </Badge>
                   </div>
-
-                  {/* Facts */}
-                  <div className="flex items-center gap-5 lg:gap-6 lg:w-[38%] flex-wrap">
-                    <div>
-                      <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1 mb-0.5">
-                        <Calendar className="w-3 h-3" /> Scheduled
-                      </div>
-                      <div className="font-medium text-sm leading-tight">
-                        {formatCalendarDateShort(order.scheduledDate)}
-                        <span className="text-muted-foreground"> · {order.estimatedHours}h</span>
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1 mb-0.5">
-                        <PenTool className="w-3 h-3" /> Technician
-                      </div>
-                      <div className={cn("font-medium text-sm truncate", !order.technician && "text-muted-foreground")}>
-                        {order.technician || "Unassigned"}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase flex items-center gap-1 mb-0.5">
-                        <DollarSign className="w-3 h-3" /> Est. Total
-                      </div>
-                      <div className="font-medium text-sm tracking-tight">
-                        {money.gyd(order.estimatedCost)}
-                      </div>
-                    </div>
+                  <h3 className="font-semibold tracking-tight text-foreground truncate">{order.vehicleInfo}</h3>
+                  <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="truncate">{order.customerName || "Unknown Customer"}</span>
+                    <span>·</span>
+                    <span className="capitalize">{order.type}</span>
+                    <span>·</span>
+                    <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />{formatCalendarDateShort(order.scheduledDate)}</span>
                   </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 flex-wrap lg:justify-end lg:flex-1">
-                    {order.status === "open" && <ConfirmAppointmentButton order={order} />}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={remind.isPending}
-                      className="rounded-full border-white/15 gap-1.5 text-xs h-8"
-                      onClick={async () => {
-                        try {
-                          const r = await remind.mutateAsync({ id: order.id });
-                          toast({ title: "Reminder sent", description: `Email queued to ${r.recipient}.` });
-                        } catch (e: unknown) {
-                          const msg =
-                            (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-                            "Could not send reminder.";
-                          toast({ title: "Reminder failed", description: msg, variant: "destructive" });
-                        }
-                      }}
-                    >
-                      <Mail className="w-3.5 h-3.5" /> Remind
-                    </Button>
-                    <SelfOnboardButton order={order} />
-                    <AdvanceAndFeedback order={order} review={reviewFor(order.id)} />
-                    <OpenCaseButton
-                      customerId={order.customerId ?? null}
-                      customerName={order.customerName ?? null}
-                      refId={order.id}
-                      contextLabel={`RO #${order.id.toString().padStart(5, "0")} — ${order.vehicleInfo}`}
-                    />
-                    <EditBookingDialog order={order} />
-                    <DeleteOrderButton order={order} />
-                  </div>
+                  {order.complaint && <p className="text-sm mt-1 line-clamp-2 text-foreground/80">{order.complaint}</p>}
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))
+                {order.status === "open" && <div className="shrink-0"><ConfirmAppointmentButton order={order} /></div>}
+              </div>
+            ))
+          )}
+        </div>
       )}
-      </div>
     </div>
+
     <BookingDetailsDialog
       order={selectedOrder}
       open={!!selectedOrder}
@@ -2036,7 +2084,7 @@ function JobCardsTab() {
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
       {cards.map((card) => (
-        <JobCardPanel key={card.id} card={card} />
+        <Link key={card.id} href={`/service/job-cards/${card.id}`}><JobCardSummary card={card} /></Link>
       ))}
     </div>
   );
@@ -2074,695 +2122,6 @@ function TimerReadout({ card }: { card: JobCard }) {
   );
 }
 
-export function JobCardPanel({ card, technicianView = false }: { card: JobCard; technicianView?: boolean }) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const update = useUpdateJobCard();
-  const timer = useToggleJobCardTimer();
-  const reopen = useReopenJobCard();
-  const { can, me } = useAuthz();
-  const invoice = useCreateJobCardInvoice();
-  const addPart = useAddJobCardPart();
-  const createCreditNote = useCreateJobCardCreditNote();
-  const money = useMoney();
-  const { data: lines } = useListJobCardParts(card.id);
-  const { data: externalLines } = useListJobCardExternalParts(card.id);
-  const { data: requisitions } = useListJobCardPartRequisitions(card.id);
-  const { data: parts } = useListParts();
-  const { data: creditNotes } = useListJobCardCreditNotes(card.id);
-  const [noteDraft, setNoteDraft] = useState("");
-  const technicianNotesQuery = useListJobCardTechnicianNotes(card.id);
-  const createTechnicianNote = useCreateJobCardTechnicianNote();
-  const technicianNotes = technicianNotesQuery.data ?? [];
-  const notesLoading = technicianNotesQuery.isLoading;
-  const noteSaving = createTechnicianNote.isPending;
-  const isApprover = useIsServiceApprover();
-  const customerPhoneSnapshot = (card as JobCard & {
-    customerPhoneSnapshot?: string | null;
-  }).customerPhoneSnapshot;
-  const canAddTechnicianNote =
-    card.status === "in_progress" &&
-    (isApprover || (card.technicianUserId != null && card.technicianUserId === me?.id));
-
-  const addTechnicianNote = async () => {
-    const body = noteDraft.trim();
-    if (!body) return;
-    try {
-      await createTechnicianNote.mutateAsync({ id: card.id, data: { body } });
-      await queryClient.invalidateQueries({
-        queryKey: getListJobCardTechnicianNotesQueryKey(card.id),
-      });
-      setNoteDraft("");
-    } catch (error) {
-      toast({
-        title: "Could not add technician note",
-        description: error instanceof Error ? error.message : "Try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getListJobCardPartsQueryKey(card.id) });
-    queryClient.invalidateQueries({ queryKey: getListJobCardExternalPartsQueryKey(card.id) });
-    queryClient.invalidateQueries({ queryKey: getListJobCardPartRequisitionsQueryKey(card.id) });
-    queryClient.invalidateQueries({ queryKey: getListPartsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getListJobCardCreditNotesQueryKey(card.id) });
-  };
-
-  // Issued (non-backordered) lines are what a credit note can be raised against.
-  const creditableLines =
-    lines?.filter((l) => l.kind === "issue" && !l.backordered) ?? [];
-
-  const toggleChecklist = async (idx: number) => {
-    const next = card.checklist.map((c, i) => (i === idx ? { ...c, done: !c.done } : c));
-    await update.mutateAsync({ id: card.id, data: { checklist: next } });
-    invalidate();
-  };
-
-  // Completion write-up (mandatory): analysis of the service + work performed
-  // must be recorded before the card can be moved to Completed.
-  const [completeOpen, setCompleteOpen] = useState(false);
-  const [analysisDraft, setAnalysisDraft] = useState("");
-  const [performedDraft, setPerformedDraft] = useState("");
-
-  const setStatus = async (status: JobCard["status"]) => {
-    if (
-      status === "completed" &&
-      (!card.serviceAnalysis?.trim() || !card.workPerformed?.trim())
-    ) {
-      setAnalysisDraft(card.serviceAnalysis ?? "");
-      setPerformedDraft(card.workPerformed ?? "");
-      setCompleteOpen(true);
-      return;
-    }
-    await update.mutateAsync({ id: card.id, data: { status } });
-    invalidate();
-    toast({ title: "Job card updated", description: `Status → ${JOB_STATUS_LABEL[status]}.` });
-  };
-
-  const submitCompletion = async () => {
-    try {
-      await update.mutateAsync({
-        id: card.id,
-        data: {
-          status: "completed",
-          serviceAnalysis: analysisDraft.trim(),
-          workPerformed: performedDraft.trim(),
-        },
-      });
-      setCompleteOpen(false);
-      invalidate();
-      toast({
-        title: "Job card completed",
-        description: "Completion write-up saved.",
-      });
-    } catch (err) {
-      toast({
-        title: "Could not complete job card",
-        description: err instanceof Error ? err.message : "Try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const internalPartsTotal =
-    lines?.reduce(
-      (s, l) => s + l.unitPrice * l.quantity * (l.kind === "return" ? -1 : 1),
-      0,
-    ) ?? 0;
-  const externalPartsTotal =
-    externalLines?.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0) ?? 0;
-  const partsTotal = internalPartsTotal + externalPartsTotal;
-  const laborTotal = card.laborHours * card.laborRate;
-
-  const NEXT: Record<string, JobCard["status"] | undefined> = {
-    open: "in_progress",
-    in_progress: "completed",
-    on_hold: "in_progress",
-    completed: "closed",
-  };
-  const next = NEXT[card.status];
-
-  return (
-    <Card className="glass-panel border-none rounded-2xl overflow-hidden">
-      <CardContent className="p-4 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-bold text-base leading-tight truncate">{card.title}</h3>
-              <Badge
-                variant="secondary"
-                className={cn(
-                  "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border-none shrink-0",
-                  card.status === "completed"
-                    ? "bg-primary/15 text-primary"
-                    : "bg-white/[0.05] text-foreground",
-                )}
-              >
-                {JOB_STATUS_LABEL[card.status]}
-              </Badge>
-            </div>
-            <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
-              <span className="font-semibold tracking-wider text-primary uppercase">
-                JC #{card.id} · RO #{card.serviceOrderId}
-              </span>
-              <span>·</span>
-              <PenTool className="w-3 h-3" />
-              {card.technicianName ?? "Unassigned"}
-              <span>
-                · Booked {bookedHoursForCard(card)}h @ {money.gyd(card.laborRate)}/hr
-              </span>
-            </div>
-            {customerPhoneSnapshot && (
-              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                <Phone className="w-3 h-3" />
-                <span>Job contact: {customerPhoneSnapshot}</span>
-              </div>
-            )}
-            {(card.startedAt || card.completedAt) && (
-              <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
-                <Clock className="w-3 h-3" />
-                {card.startedAt && (
-                  <span>Started {formatDealerDayTime(card.startedAt)}</span>
-                )}
-                {card.completedAt && (
-                  <span>· Finished {formatDealerDayTime(card.completedAt)}</span>
-                )}
-                {card.startedAt && card.completedAt && (
-                  <span className="text-foreground font-medium">
-                    · {formatWorkDuration(new Date(card.startedAt), new Date(card.completedAt))} on vehicle
-                  </span>
-                )}
-                <TimerReadout card={card} />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {card.checklist.length > 0 && (
-          <div className="space-y-1.5">
-            {card.checklist.map((item, idx) => (
-              <button
-                key={idx}
-                onClick={() => toggleChecklist(idx)}
-                className="flex items-center gap-2.5 text-sm w-full text-left group"
-              >
-                {item.done ? (
-                  <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
-                ) : (
-                  <Circle className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
-                )}
-                <span className={cn(item.done && "line-through text-muted-foreground")}>
-                  {item.label}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 space-y-1.5">
-          <div className="flex items-center justify-between text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
-            <span className="flex items-center gap-1.5">
-              <Package className="w-3 h-3" /> Parts
-            </span>
-            <span>
-              Parts {money.gyd(partsTotal)} · Labour {money.gyd(laborTotal)}
-            </span>
-          </div>
-          <div className="py-2 border-b border-white/5 mb-2">
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Requisitions</span>
-              <PartRequisitionForm cardId={card.id} serviceOrderId={card.serviceOrderId} onSuccess={invalidate} />
-            </div>
-            {(!requisitions || requisitions.length === 0) ? (
-              <p className="text-xs text-muted-foreground italic mb-2">No requisitions.</p>
-            ) : (
-              <div className="space-y-2 mb-2">
-                {requisitions.map(req => (
-                  <div key={req.id} className="bg-white/[0.02] border border-white/10 rounded-lg p-2.5 flex flex-col gap-2">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="text-xs font-bold flex items-center gap-1.5">
-                          REQ-{req.id}
-                          {req.urgency === "vehicle_down" && (
-                            <span className="bg-red-500/20 text-red-400 text-[8px] uppercase font-bold tracking-widest px-1 py-0 rounded-sm">VOR</span>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5">By {req.requesterName}</div>
-                      </div>
-                      <div className="bg-white/[0.05] rounded px-1.5 py-0.5 text-[9px] tracking-widest uppercase text-muted-foreground">
-                        {req.status}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mt-4 mb-2">Issued Parts</div>
-          </div>
-          {lines?.length ? (
-            <div className="space-y-0.5">
-              {lines.map((l) => (
-                <div key={l.id} className="flex items-center justify-between text-xs">
-                  <span className={cn(l.kind === "return" && "text-muted-foreground line-through")}>
-                    {l.partName} × {l.quantity}
-                    {l.kind === "return" && " (returned)"}
-                    {l.backordered && (
-                      <span className="ml-2 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
-                        Backordered
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {money.gyd(l.unitPrice * l.quantity)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            !externalLines?.length && <p className="text-xs text-muted-foreground">No parts issued.</p>
-          )}
-          {externalLines?.length ? (
-            <div className="space-y-0.5">
-              {externalLines.map((line) => (
-                <div key={line.id} className="flex items-center justify-between gap-3 text-xs">
-                  <span>
-                    {line.description} × {line.quantity}
-                    <span className="ml-2 rounded-full bg-primary/15 text-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest">
-                      External
-                    </span>
-                    {line.supplierSnapshot && (
-                      <span className="ml-2 text-muted-foreground">via {line.supplierSnapshot}</span>
-                    )}
-                  </span>
-                  <span className="text-muted-foreground">
-                    {money.gyd(line.unitPrice * line.quantity)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          <div className="flex gap-2 pt-0.5">
-            <CreateRecordDialog
-              title="Issue / Return Part"
-              description="Issuing decrements stock; returning restocks it."
-              pending={addPart.isPending}
-              submitLabel="Post part line"
-              trigger={
-                <Button size="sm" variant="outline" className="rounded-full border-white/15 gap-1.5 text-xs">
-                  <Plus className="w-3.5 h-3.5" /> Part
-                </Button>
-              }
-              fields={[
-                {
-                  name: "partId",
-                  label: "Part",
-                  type: "select",
-                  searchable: true,
-                  required: true,
-                  span: "full",
-                  placeholder: "Search parts by name or number...",
-                  options:
-                    parts?.map((p) => ({
-                      value: String(p.id),
-                      label: `${p.name} (${p.sku}) — ${p.stock} in stock`,
-                    })) ?? [],
-                },
-                { name: "quantity", label: "Quantity", type: "number", required: true, span: "half", defaultValue: "1" },
-                {
-                  name: "kind",
-                  label: "Action",
-                  type: "select",
-                  span: "half",
-                  defaultValue: "issue",
-                  options: [
-                    { value: "issue", label: "Issue to job" },
-                    { value: "return", label: "Return to stock" },
-                  ],
-                },
-              ]}
-              onSubmit={async (values) => {
-                const v = values as Record<string, unknown>;
-                try {
-                  await addPart.mutateAsync({
-                    id: card.id,
-                    data: {
-                      partId: Number(v.partId),
-                      quantity: Number(v.quantity),
-                      kind: (v.kind as "issue" | "return") ?? "issue",
-                    },
-                  });
-                  invalidate();
-                  toast({ title: "Part line posted", description: "Stock adjusted." });
-                } catch (e: unknown) {
-                  const msg =
-                    (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-                    "Could not post part line.";
-                  toast({ title: "Failed", description: msg, variant: "destructive" });
-                  throw e;
-                }
-              }}
-            />
-            {creditableLines.length > 0 && (
-              <CreateRecordDialog
-                title="Credit Note — return unused parts"
-                description="Restores stock and reduces this job's parts total. Internal adjustment only — no cash refund."
-                pending={createCreditNote.isPending}
-                submitLabel="Issue credit note"
-                trigger={
-                  <Button size="sm" variant="outline" className="rounded-full border-white/15 gap-1.5 text-xs">
-                    <Receipt className="w-3.5 h-3.5" /> Credit note
-                  </Button>
-                }
-                fields={[
-                  {
-                    name: "jobCardPartId",
-                    label: "Issued part line",
-                    type: "select",
-                    required: true,
-                    span: "full",
-                    options: creditableLines.map((l) => ({
-                      value: String(l.id),
-                      label: `${l.partName} × ${l.quantity} @ ${money.gyd(l.unitPrice)}`,
-                    })),
-                  },
-                  { name: "quantity", label: "Quantity to credit", type: "number", required: true, span: "half", defaultValue: "1" },
-                  { name: "reason", label: "Reason", type: "text", required: true, span: "full", placeholder: "e.g. Part unused — customer declined the repair" },
-                ]}
-                onSubmit={async (values) => {
-                  const v = values as Record<string, unknown>;
-                  try {
-                    await createCreditNote.mutateAsync({
-                      id: card.id,
-                      data: {
-                        jobCardPartId: Number(v.jobCardPartId),
-                        quantity: Number(v.quantity),
-                        reason: String(v.reason ?? ""),
-                      },
-                    });
-                    invalidate();
-                    toast({ title: "Credit note issued", description: "Stock restored and parts total reduced." });
-                  } catch (e: unknown) {
-                    const msg =
-                      (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-                      "Could not issue the credit note.";
-                    toast({ title: "Failed", description: msg, variant: "destructive" });
-                    throw e;
-                  }
-                }}
-              />
-            )}
-          </div>
-          {creditNotes && creditNotes.length > 0 && (
-            <div className="pt-2 border-t border-white/5 space-y-1">
-              <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
-                Credit notes
-              </div>
-              {creditNotes.map((cn) => (
-                <div key={cn.id} className="flex items-center justify-between text-sm gap-3">
-                  <span className="min-w-0 truncate text-muted-foreground">
-                    CN-{cn.id} · {cn.partName} × {cn.quantity} — {cn.reason}
-                  </span>
-                  <span className="text-primary shrink-0">−{money.gyd(cn.amount)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {(card.quoteTotal ?? 0) > 0 && (
-          <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase mb-0.5">
-                Customer quote
-              </div>
-              <div className="font-medium text-base tracking-tight">
-                {money.gyd(card.quoteTotal ?? 0)}
-              </div>
-            </div>
-            {card.quoteApprovedAt ? (
-              <Badge className="bg-primary/15 text-primary border-none rounded-full text-[10px] font-bold uppercase tracking-widest gap-1">
-                <CheckCircle2 className="w-3 h-3" />
-                Approved {formatDealerDateShort(card.quoteApprovedAt)}
-              </Badge>
-            ) : technicianView ? (
-              <Badge className="bg-white/[0.06] text-muted-foreground border-none rounded-full text-[10px] font-bold uppercase tracking-widest">
-                Awaiting approval
-              </Badge>
-            ) : (
-              <Button
-                size="sm"
-                disabled={update.isPending}
-                className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs gap-1.5"
-                onClick={async () => {
-                  await update.mutateAsync({ id: card.id, data: { approveQuote: true } });
-                  invalidate();
-                  toast({ title: "Quote approved", description: "Customer approval recorded." });
-                }}
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" /> Approve Quote
-              </Button>
-            )}
-          </div>
-        )}
-
-        {card.surchargeStatus !== "none" && (
-          <SurchargeSection card={card} onChanged={invalidate} />
-        )}
-
-        <RolloverSection card={card} onChanged={invalidate} technicianView={technicianView} />
-
-        <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 space-y-2">
-          <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
-            Technician work log
-          </div>
-          {notesLoading ? (
-            <p className="text-xs text-muted-foreground">Loading notes…</p>
-          ) : technicianNotes.length ? (
-            <div className="space-y-2">
-              {technicianNotes.map((note) => (
-                <div key={note.id} className="text-xs border-l-2 border-primary/40 pl-2">
-                  <p>{note.body}</p>
-                  <p className="mt-0.5 text-muted-foreground">
-                    {note.authorName} · {formatDealerDayTime(note.createdAt)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">No technician notes yet.</p>
-          )}
-          {canAddTechnicianNote && (
-            <div className="pt-1 space-y-2">
-              <Textarea
-                value={noteDraft}
-                onChange={(event) => setNoteDraft(event.target.value)}
-                placeholder="Add an attributed work-log note…"
-                rows={2}
-                maxLength={4000}
-                data-testid={`input-technician-note-${card.id}`}
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                className="rounded-full border-white/15 text-xs"
-                disabled={noteSaving || !noteDraft.trim()}
-                onClick={() => void addTechnicianNote()}
-                data-testid={`button-add-technician-note-${card.id}`}
-              >
-                {noteSaving && <Loader2 className="mr-1.5 w-3.5 h-3.5 animate-spin" />}
-                Add work-log note
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Diagnostic reports & other paperwork attach at any point in the
-            job's life — uploads go to private object storage. */}
-        <DocumentsCard
-          entityType="job_card"
-          entityId={card.id}
-          canEdit={can("service", "edit")}
-        />
-
-        <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Completion write-up</DialogTitle>
-              <DialogDescription>
-                Record the service analysis and the work performed — both are
-                required before the job card can be marked completed.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor={`jc-analysis-${card.id}`}>Analysis of the service</Label>
-                <Textarea
-                  id={`jc-analysis-${card.id}`}
-                  value={analysisDraft}
-                  onChange={(e) => setAnalysisDraft(e.target.value)}
-                  placeholder="What was found — diagnosis, root cause, condition notes…"
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor={`jc-performed-${card.id}`}>Work performed</Label>
-                <Textarea
-                  id={`jc-performed-${card.id}`}
-                  value={performedDraft}
-                  onChange={(e) => setPerformedDraft(e.target.value)}
-                  placeholder="What was done — repairs, replacements, adjustments…"
-                  rows={3}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                className="rounded-full"
-                onClick={() => setCompleteOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                className="rounded-full bg-primary hover:bg-primary/90 text-white"
-                disabled={
-                  update.isPending ||
-                  !analysisDraft.trim() ||
-                  !performedDraft.trim()
-                }
-                onClick={submitCompletion}
-              >
-                Complete job card
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {(card.serviceAnalysis || card.workPerformed) && (
-          <div className="rounded-xl bg-white/5 p-3 space-y-1.5 text-xs">
-            {card.serviceAnalysis && (
-              <p>
-                <span className="font-bold uppercase tracking-wider text-[10px] text-muted-foreground">Analysis: </span>
-                {card.serviceAnalysis}
-              </p>
-            )}
-            {card.workPerformed && (
-              <p>
-                <span className="font-bold uppercase tracking-wider text-[10px] text-muted-foreground">Work performed: </span>
-                {card.workPerformed}
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <ClaimJobCardAction card={card} />
-          {next && (
-            <Button
-              size="sm"
-              disabled={update.isPending}
-              onClick={() => setStatus(next)}
-              className="rounded-full bg-primary hover:bg-primary/90 text-white text-xs gap-1.5"
-            >
-              <Wrench className="w-3.5 h-3.5" />
-              Move to {JOB_STATUS_LABEL[next]}
-            </Button>
-          )}
-          {card.status === "in_progress" && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={timer.isPending}
-              className="rounded-full border-white/15 text-xs gap-1.5"
-              onClick={async () => {
-                try {
-                  await timer.mutateAsync({
-                    id: card.id,
-                    data: { action: card.timerStartedAt ? "pause" : "resume" },
-                  });
-                  invalidate();
-                  toast({
-                    title: card.timerStartedAt ? "Timer paused" : "Timer running",
-                  });
-                } catch (e: unknown) {
-                  const msg =
-                    (e as { response?: { data?: { error?: string } } })?.response
-                      ?.data?.error ?? "Could not update the timer.";
-                  toast({ title: "Timer", description: msg, variant: "destructive" });
-                }
-              }}
-            >
-              {card.timerStartedAt ? (
-                <>
-                  <Pause className="w-3.5 h-3.5" /> Pause timer
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5" /> Resume timer
-                </>
-              )}
-            </Button>
-          )}
-          {(card.status === "completed" || card.status === "closed") && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={reopen.isPending}
-              className="rounded-full border-white/15 text-xs gap-1.5"
-              onClick={async () => {
-                try {
-                  await reopen.mutateAsync({ id: card.id, data: {} });
-                  invalidate();
-                  toast({
-                    title: "Job card reopened",
-                    description: "The job is back in progress and the timer is running.",
-                  });
-                } catch (e: unknown) {
-                  const msg =
-                    (e as { response?: { data?: { error?: string } } })?.response
-                      ?.data?.error ?? "Could not reopen the job card.";
-                  toast({ title: "Reopen failed", description: msg, variant: "destructive" });
-                }
-              }}
-            >
-              <RotateCcw className="w-3.5 h-3.5" /> Reopen
-            </Button>
-          )}
-          {!technicianView && card.status === "completed" && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={invoice.isPending}
-              className="rounded-full border-white/15 text-xs gap-1.5"
-              onClick={async () => {
-                try {
-                  const inv = await invoice.mutateAsync({ id: card.id });
-                  queryClient.invalidateQueries({ queryKey: getListServiceInvoicesQueryKey() });
-                  toast({
-                    title: `Invoice #${inv.id} issued`,
-                    description: `Total ${money.gyd(inv.total)} (parts + labour + tax).`,
-                  });
-                } catch (e: unknown) {
-                  const msg =
-                    (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-                    "Could not create invoice.";
-                  toast({ title: "Invoice failed", description: msg, variant: "destructive" });
-                }
-              }}
-            >
-              <FileText className="w-3.5 h-3.5" /> Generate Invoice
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-/* Late-service surcharge (FR-SR-07): suggested at intake; apply or waive. */
 function SurchargeSection({ card, onChanged }: { card: JobCard; onChanged: () => void }) {
   const { toast } = useToast();
   const money = useMoney();
@@ -3905,5 +3264,46 @@ function AssignJobCardDialog({ card, technicians, claim }: { card: JobCard, tech
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function JobCardSummary({ card, onClick }: { card: JobCard; onClick?: () => void }) {
+  const workedSeconds = workedSecondsAt(card, Date.now());
+  const worked = workedSeconds > 0
+    ? formatWorkedSeconds(workedSeconds)
+    : "—";
+
+  return (
+    <Card className="glass-panel border-white/10 hover:bg-white/[0.04] transition-colors cursor-pointer group rounded-2xl" onClick={onClick}>
+      <CardContent className="p-4 flex flex-col gap-3 relative">
+        <div className="flex justify-between items-start">
+          <div className="flex flex-col gap-1 min-w-0 pr-4">
+            <h3 className="font-semibold text-lg tracking-tight group-hover:text-primary transition-colors truncate">
+              {card.title}
+            </h3>
+            <p className="text-xs text-muted-foreground truncate">
+              JC #{card.id} · RO #{card.serviceOrderId}
+              {card.technicianName && ` · Tech: ${card.technicianName}`}
+            </p>
+          </div>
+          <Badge variant="secondary" className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border-none bg-foreground/[0.06] text-foreground shrink-0">
+            {JOB_STATUS_LABEL[card.status] ?? card.status}
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 text-sm mt-1">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Booked</div>
+            <div className="font-medium">
+              {bookedHoursForCard(card) > 0 ? `${bookedHoursForCard(card)}h` : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Worked</div>
+            <div className="font-medium">{worked}</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

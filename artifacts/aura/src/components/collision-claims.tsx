@@ -296,6 +296,8 @@ export function CreateClaimDialog() {
   const [mode, setMode] = useState<"existing" | "new">("existing");
   const [serviceOrderId, setServiceOrderId] = useState<string>("");
   const [vehicleInfo, setVehicleInfo] = useState("");
+  const [vin, setVin] = useState("");
+  const [registrationNumber, setRegistrationNumber] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [scheduledDate, setScheduledDate] = useState(
     new Date().toISOString().slice(0, 10),
@@ -334,9 +336,12 @@ export function CreateClaimDialog() {
   const isReady = useMemo(() => {
     if (!lossDate || !insurerName.trim()) return false;
     if (mode === "existing" && !serviceOrderId) return false;
-    if (mode === "new" && !vehicleInfo.trim()) return false;
+    if (
+      mode === "new" &&
+      (!vehicleInfo.trim() || !vin.trim() || !registrationNumber.trim())
+    ) return false;
     return true;
-  }, [lossDate, insurerName, mode, serviceOrderId, vehicleInfo]);
+  }, [lossDate, insurerName, mode, serviceOrderId, vehicleInfo, vin, registrationNumber]);
 
   if (!can("service", "create")) return null;
 
@@ -344,6 +349,8 @@ export function CreateClaimDialog() {
     setMode("existing");
     setServiceOrderId("");
     setVehicleInfo("");
+    setVin("");
+    setRegistrationNumber("");
     setCustomerName("");
     setLossDate("");
     setInsurerName("");
@@ -371,10 +378,10 @@ export function CreateClaimDialog() {
     try {
       let orderId = Number(serviceOrderId);
       if (mode === "new") {
-        if (!vehicleInfo.trim()) {
+        if (!vehicleInfo.trim() || !vin.trim() || !registrationNumber.trim()) {
           toast({
-            title: "Vehicle required",
-            description: "Describe the vehicle for the new repair order.",
+            title: "Vehicle identity required",
+            description: "Vehicle, VIN and registration number are required.",
             variant: "destructive",
           });
           setBusy(false);
@@ -388,6 +395,8 @@ export function CreateClaimDialog() {
             payType: "customer",
             scheduledDate,
             complaint: damageNotes.trim() || "Collision repair",
+            vin: vin.trim(),
+            registrationNumber: registrationNumber.trim(),
             jobs: ["Collision repair"],
           },
         });
@@ -518,6 +527,30 @@ export function CreateClaimDialog() {
                           value={vehicleInfo}
                           onChange={(e) => setVehicleInfo(e.target.value)}
                           placeholder="e.g. 2024 Toyota Hilux — PAD 1234"
+                          className="h-11 rounded-xl bg-background/50 border-border/60 focus-visible:bg-background"
+                        />
+                      </div>
+                      <div className="space-y-2.5">
+                        <Label className="text-[13px] font-medium text-foreground/80">
+                          VIN <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          data-testid="input-claim-vin"
+                          value={vin}
+                          onChange={(event) => setVin(event.target.value)}
+                          placeholder="Vehicle identification number"
+                          className="h-11 rounded-xl bg-background/50 border-border/60 focus-visible:bg-background"
+                        />
+                      </div>
+                      <div className="space-y-2.5">
+                        <Label className="text-[13px] font-medium text-foreground/80">
+                          Registration number <span className="text-destructive">*</span>
+                        </Label>
+                        <Input
+                          data-testid="input-claim-registration"
+                          value={registrationNumber}
+                          onChange={(event) => setRegistrationNumber(event.target.value)}
+                          placeholder="PAB 1234"
                           className="h-11 rounded-xl bg-background/50 border-border/60 focus-visible:bg-background"
                         />
                       </div>

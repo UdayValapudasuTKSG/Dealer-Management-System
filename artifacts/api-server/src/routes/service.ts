@@ -15,7 +15,7 @@ import {
 import { getServiceSettings } from "../lib/service-settings";
 import { queueCustomerSync } from "../lib/erpnext/entities";
 import { dealerExchangeRate } from "../lib/invoicing";
-import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
 import {
   db,
   serviceOrdersTable,
@@ -64,6 +64,8 @@ import {
   ListServiceTechniciansResponse,
   ListJobCardsQueryParams,
   ListJobCardsResponse,
+  GetJobCardParams,
+  GetJobCardResponse,
   ListJobCardHistoryQueryParams,
   ListJobCardHistoryResponse,
   ToggleJobCardTimerParams,
@@ -292,6 +294,12 @@ router.get("/service-orders", async (req, res): Promise<void> => {
     res.status(400).json({ error: query.error.message });
     return;
   }
+  const fromDate = toDateString(query.data.from);
+  const toDate = toDateString(query.data.to);
+  if (fromDate && toDate && fromDate > toDate) {
+    res.status(400).json({ error: "The start date must be on or before the end date" });
+    return;
+  }
 
   // Technicians see their own work plus unclaimed work they may self-claim,
   // never bookings assigned to another technician.
@@ -304,6 +312,12 @@ router.get("/service-orders", async (req, res): Promise<void> => {
         eq(serviceOrdersTable.dealerId, activeDealerId(res)),
         query.data.status
           ? eq(serviceOrdersTable.status, query.data.status)
+          : undefined,
+        fromDate
+          ? gte(serviceOrdersTable.scheduledDate, fromDate)
+          : undefined,
+        toDate
+          ? lte(serviceOrdersTable.scheduledDate, toDate)
           : undefined,
         isTechnicianRole(viewer)
           ? or(
@@ -319,7 +333,22 @@ router.get("/service-orders", async (req, res): Promise<void> => {
 });
 
 router.post("/service-orders", async (req, res): Promise<void> => {
-  const parsed = CreateServiceOrderBody.safeParse(req.body);
+  const normalizedBody =
+    req.body && typeof req.body === "object"
+      ? {
+          ...req.body,
+          ...(typeof req.body.vehicleInfo === "string"
+            ? { vehicleInfo: req.body.vehicleInfo.trim() }
+            : {}),
+          ...(typeof req.body.vin === "string"
+            ? { vin: req.body.vin.trim() }
+            : {}),
+          ...(typeof req.body.registrationNumber === "string"
+            ? { registrationNumber: req.body.registrationNumber.trim() }
+            : {}),
+        }
+      : req.body;
+  const parsed = CreateServiceOrderBody.safeParse(normalizedBody);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
@@ -331,6 +360,9 @@ router.post("/service-orders", async (req, res): Promise<void> => {
   // confirmations and the completion invoice have a real recipient. Matches an
   // existing dealer customer first; otherwise creates one from name + email.
   const { customerEmail: bookingEmail, ...orderInput } = parsed.data;
+  orderInput.vehicleInfo = orderInput.vehicleInfo.trim();
+  orderInput.vin = orderInput.vin.trim();
+  orderInput.registrationNumber = orderInput.registrationNumber.trim();
   const submittedPhone = orderInput.customerPhoneSnapshot?.trim() ?? null;
   if (submittedPhone && !validPhone(submittedPhone)) {
     res.status(422).json({ error: "customerPhoneSnapshot must be a valid phone number" });
@@ -527,7 +559,7 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
   // names/vehicle labels reject whitespace-only values, while a blank phone
   // deliberately clears the optional snapshot.
   const normalizedBody = { ...(req.body ?? {}) };
-  for (const field of ["customerName", "vehicleInfo"] as const) {
+  for (const field of ["customerName", "vehicleInfo", "vin", "registrationNumber"] as const) {
     if (typeof normalizedBody[field] === "string") {
       normalizedBody[field] = normalizedBody[field].trim();
     }
@@ -1561,6 +1593,45 @@ router.get("/job-cards", async (req, res): Promise<void> => {
     ))
     .orderBy(desc(jobCardsTable.createdAt));
   res.json(ListJobCardsResponse.parse(rows));
+});
+
+router.get("/job-cards/:id", async (req, res): Promise<void> => {
+  const params = GetJobCardParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const viewer = res.locals.user;
+  const [row] = await db
+    .select({
+      jobCard: jobCardsTable,
+      serviceOrder: serviceOrdersTable,
+    })
+    .from(jobCardsTable)
+    .innerJoin(
+      serviceOrdersTable,
+      and(
+        eq(serviceOrdersTable.id, jobCardsTable.serviceOrderId),
+        eq(serviceOrdersTable.dealerId, jobCardsTable.dealerId),
+      ),
+    )
+    .where(
+      and(
+        eq(jobCardsTable.id, params.data.id),
+        eq(jobCardsTable.dealerId, activeDealerId(res)),
+        isTechnicianRole(viewer)
+          ? or(
+              eq(jobCardsTable.technicianUserId, viewer!.id),
+              isNull(jobCardsTable.technicianUserId),
+            )
+          : undefined,
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "Job card not found" });
+    return;
+  }
+  res.json(GetJobCardResponse.parse(row));
 });
 
 router.post("/job-cards", async (req, res): Promise<void> => {

@@ -55,6 +55,7 @@ import NoDealership from "@/pages/no-dealership";
 import DealerPicker, { DealerSuspended } from "@/pages/dealer-picker";
 import SettingsMeta from "@/pages/settings-meta";
 import CollisionClaimDetailPage from "@/pages/collision-claim-detail";
+import JobCardDetailPage from "@/pages/job-card-detail";
 
 /* Live data: every visible query silently re-polls the server every 10s
    (paused when the tab is hidden), plus refetches on tab focus and page
@@ -280,6 +281,11 @@ function AppRoutes() {
                 <Route path="/service/collision/:id">
                   <RequireModule module="service" label="Service">
                     <CollisionClaimDetailPage />
+                  </RequireModule>
+                </Route>
+                <Route path="/service/job-cards/:id">
+                  <RequireModule module="service" label="Service">
+                    <JobCardDetailPage />
                   </RequireModule>
                 </Route>
                 <Route path="/service">

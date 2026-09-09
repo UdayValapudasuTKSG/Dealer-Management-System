@@ -3256,6 +3256,16 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: from
+          in: query
+          required: false
+          description: First scheduled date to include
+          schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        - name: to
+          in: query
+          required: false
+          description: Last scheduled date to include
+          schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
       responses:
         "200":
           description: List of service orders
@@ -3575,6 +3585,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/JobCard"
   /job-cards/{id}:
+    get:
+      operationId: getJobCard
+      tags: [service]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Job card with its linked service booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobCardDetail"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     patch:
       operationId: updateJobCard
       tags: [service]
@@ -12758,13 +12789,15 @@ components:
 
     ServiceOrder:
       type: object
-      required: [id, vehicleInfo, type, status, scheduledDate, estimatedCost, jobs, createdAt]
+      required: [id, vehicleInfo, vin, registrationNumber, type, status, scheduledDate, estimatedCost, jobs, createdAt]
       properties:
         id: { type: integer }
         customerId: { type: ["integer", "null"] }
         customerName: { type: ["string", "null"] }
         customerPhoneSnapshot: { type: ["string", "null"] }
         vehicleInfo: { type: string }
+        vin: { type: ["string", "null"] }
+        registrationNumber: { type: ["string", "null"] }
         vehicleId: { type: ["integer", "null"] }
         assetId: { type: ["integer", "null"] }
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection, comeback, unscheduled] }
@@ -12797,13 +12830,15 @@ components:
         at: { type: string }
     ServiceOrderInput:
       type: object
-      required: [vehicleInfo, type, scheduledDate]
+      required: [vehicleInfo, vin, registrationNumber, type, scheduledDate]
       properties:
         customerId: { type: integer }
         customerName: { type: string, minLength: 1, maxLength: 200 }
         customerPhoneSnapshot: { type: string, maxLength: 40 }
         customerEmail: { type: string, minLength: 3 }
         vehicleInfo: { type: string, minLength: 1, maxLength: 200 }
+        vin: { type: string, minLength: 1, maxLength: 50 }
+        registrationNumber: { type: string, minLength: 1, maxLength: 50 }
         vehicleId: { type: integer }
         assetId: { type: integer }
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection, comeback, unscheduled] }
@@ -12827,6 +12862,8 @@ components:
         customerName: { type: string, minLength: 1, maxLength: 200 }
         customerPhoneSnapshot: { type: ["string", "null"], maxLength: 40 }
         vehicleInfo: { type: string, minLength: 1, maxLength: 200 }
+        vin: { type: string, minLength: 1, maxLength: 50 }
+        registrationNumber: { type: string, minLength: 1, maxLength: 50 }
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection, comeback, unscheduled] }
         payType: { type: string, enum: [customer, warranty, goodwill, rectify] }
         status: { type: string, enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled] }
@@ -12945,6 +12982,14 @@ components:
         timerSeconds: { type: integer, description: "Accumulated worked seconds (excludes the running segment)" }
         timerStartedAt: { type: ["string", "null"], format: date-time, description: "Start of the running timer segment; null when paused" }
         createdAt: { type: string, format: date-time }
+    JobCardDetail:
+      type: object
+      required: [jobCard, serviceOrder]
+      properties:
+        jobCard:
+          $ref: "#/components/schemas/JobCard"
+        serviceOrder:
+          $ref: "#/components/schemas/ServiceOrder"
     JobCardRolloverRequest:
       type: object
       required: [toDate]

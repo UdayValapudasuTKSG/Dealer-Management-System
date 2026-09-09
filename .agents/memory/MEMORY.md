@@ -7,7 +7,7 @@
 - [CopilotKit runtime](copilotkit-runtime.md) — non-obvious constraints for CopilotKit runtime behind the Replit reverse proxy (headers, body-parsing exclusion, req.url).
 - [Clerk proxy dev boundary](clerk-proxy-dev-boundary.md) — Vite may see production proxy env vars in dev; only pass Clerk proxyUrl when import.meta.env.PROD is true.
 - [Anthropic SSE chat](anthropic-sse-chat.md) — correctness rules for the streaming AI chat (server SSE + client fetch stream, persist-on-abort).
-- [Drizzle date + Zod coercion](drizzle-date-zod.md) — `date({mode:"string"})` columns break inserts when Orval Zod coerces to Date; convert to YYYY-MM-DD before insert/update.
+- [OpenAPI dates with Orval Zod](drizzle-date-zod.md) — normalize date-formatted bodies before Drizzle writes; model HTTP date query params as patterned strings, not `format: date`.
 - [AURA dashboard conventions](aura-dashboard.md) — non-obvious KPI semantics (percentages pre-scaled 0–100, monthlyRevenue, server-side aggregates).
 - [RBAC view is explicit](rbac-view-explicit.md) — "view" is a master visibility switch NOT implied by "admin"; visibility checks and notification recipient queries must test explicit view.
 - [RBAC roles seed can get wiped](rbac-seed-wipe.md) — blanket 403s for everyone usually means the roles table is empty (drizzle push wiped seed, FK nulled role_ids); re-seed + restore roles.

@@ -25,6 +25,16 @@ export interface ServiceOrderInput {
      * @maxLength 200
      */
   vehicleInfo: string;
+  /**
+     * @minLength 1
+     * @maxLength 50
+     */
+  vin: string;
+  /**
+     * @minLength 1
+     * @maxLength 50
+     */
+  registrationNumber: string;
   vehicleId?: number;
   assetId?: number;
   type: ServiceOrderInputType;
