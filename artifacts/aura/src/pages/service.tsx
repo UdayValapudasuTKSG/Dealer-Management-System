@@ -2068,8 +2068,36 @@ function CreateJobCardDialog() {
 
 function JobCardsTab() {
   const { data: cards, isLoading } = useListJobCards();
+  const { data: orders, isLoading: ordersLoading } = useListServiceOrders();
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [status, setStatus] = useState("all");
+  const [search, setSearch] = useState("");
 
-  if (isLoading)
+  const ordersById = new Map((orders ?? []).map((order) => [order.id, order]));
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredCards = (cards ?? []).filter((card) => {
+    const order = ordersById.get(card.serviceOrderId);
+    const scheduledKey = order?.scheduledDate
+      ? String(order.scheduledDate).slice(0, 10)
+      : null;
+    if (fromDate && (!scheduledKey || scheduledKey < fromDate)) return false;
+    if (toDate && (!scheduledKey || scheduledKey > toDate)) return false;
+    if (status !== "all" && card.status !== status) return false;
+    if (!normalizedSearch) return true;
+    return [
+      card.title,
+      String(card.id),
+      String(card.serviceOrderId),
+      card.technicianName,
+      order?.customerName,
+      order?.vehicleInfo,
+      order?.vin,
+      order?.registrationNumber,
+    ].some((value) => value?.toLowerCase().includes(normalizedSearch));
+  });
+
+  if (isLoading || ordersLoading)
     return (
       <div className="grid gap-4">
         {[...Array(3)].map((_, i) => (
@@ -2081,11 +2109,110 @@ function JobCardsTab() {
   if (!cards?.length)
     return <EmptyState icon={ClipboardList} text="No job cards yet. Open one from a booking." />;
 
+  const hasFilters = Boolean(fromDate || toDate || search.trim() || status !== "all");
+
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-      {cards.map((card) => (
-        <Link key={card.id} href={`/service/job-cards/${card.id}`}><JobCardSummary card={card} /></Link>
-      ))}
+    <div className="space-y-4">
+      <Card className="glass-panel border-white/10 rounded-2xl">
+        <CardContent className="p-4">
+          <div className="grid items-end gap-3 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_170px_170px_180px_auto]">
+            <div className="space-y-1">
+              <Label htmlFor="job-card-search" className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Search
+              </Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="job-card-search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Customer, model, VIN, registration or job…"
+                  className="pl-9"
+                  data-testid="input-job-card-search"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="job-cards-from" className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                From
+              </Label>
+              <Input
+                id="job-cards-from"
+                type="date"
+                value={fromDate}
+                max={toDate || undefined}
+                onChange={(event) => setFromDate(event.target.value)}
+                aria-label="Job cards from date"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="job-cards-to" className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                To
+              </Label>
+              <Input
+                id="job-cards-to"
+                type="date"
+                value={toDate}
+                min={fromDate || undefined}
+                onChange={(event) => setToDate(event.target.value)}
+                aria-label="Job cards to date"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                Status
+              </Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger aria-label="Filter job cards by status">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="in_progress">In Progress</SelectItem>
+                  <SelectItem value="on_hold">On Hold</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full"
+              disabled={!hasFilters}
+              onClick={() => {
+                setSearch("");
+                setFromDate("");
+                setToDate("");
+                setStatus("all");
+              }}
+            >
+              <X className="mr-1.5 h-4 w-4" />
+              Clear
+            </Button>
+          </div>
+          <div className="mt-3 text-xs text-muted-foreground">
+            Showing {filteredCards.length} of {cards.length} job cards
+          </div>
+        </CardContent>
+      </Card>
+
+      {filteredCards.length === 0 ? (
+        <EmptyState
+          icon={Search}
+          text="No job cards match this date range and filter combination."
+        />
+      ) : (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          {filteredCards.map((card) => (
+            <Link key={card.id} href={`/service/job-cards/${card.id}`}>
+              <JobCardSummary card={card} order={ordersById.get(card.serviceOrderId)} />
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -3267,7 +3394,15 @@ function AssignJobCardDialog({ card, technicians, claim }: { card: JobCard, tech
   );
 }
 
-function JobCardSummary({ card, onClick }: { card: JobCard; onClick?: () => void }) {
+function JobCardSummary({
+  card,
+  order,
+  onClick,
+}: {
+  card: JobCard;
+  order?: ServiceOrder;
+  onClick?: () => void;
+}) {
   const workedSeconds = workedSecondsAt(card, Date.now());
   const worked = workedSeconds > 0
     ? formatWorkedSeconds(workedSeconds)
@@ -3291,7 +3426,34 @@ function JobCardSummary({ card, onClick }: { card: JobCard; onClick?: () => void
           </Badge>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 text-sm mt-1">
+        {order && (
+          <div className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs sm:grid-cols-2">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Customer</div>
+              <div className="font-medium truncate">{order.customerName ?? "Unassigned customer"}</div>
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Model</div>
+              <div className="font-medium truncate">{order.vehicleInfo || "Not recorded"}</div>
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Registration</div>
+              <div className="font-medium truncate">{order.registrationNumber || "Not recorded"}</div>
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">VIN</div>
+              <div className="font-medium truncate" title={order.vin ?? undefined}>{order.vin || "Not recorded"}</div>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-4 text-sm mt-1">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Scheduled</div>
+            <div className="font-medium">
+              {order?.scheduledDate ? formatCalendarDateShort(order.scheduledDate) : "—"}
+            </div>
+          </div>
           <div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Booked</div>
             <div className="font-medium">

@@ -83,6 +83,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
@@ -154,7 +155,7 @@ export default function JobCardDetailPage() {
       <Button asChild variant="ghost" className="mb-4 -ml-3 text-muted-foreground hover:text-foreground">
         <Link href="/service?tab=myjobs">
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to My Jobs
+          Back to Job Cards
         </Link>
       </Button>
       <div className="mb-6 space-y-1">
@@ -360,27 +361,59 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
           </div>
         </div>
 
-        {card.checklist.length > 0 && (
-          <div className="space-y-1.5">
-            {card.checklist.map((item, idx) => (
-              <button
-                key={idx}
-                onClick={() => toggleChecklist(idx)}
-                className="flex items-center gap-2.5 text-sm w-full text-left group"
-              >
-                {item.done ? (
-                  <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
-                ) : (
-                  <Circle className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
-                )}
-                <span className={cn(item.done && "line-through text-muted-foreground")}>
-                  {item.label}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto rounded-xl bg-white/[0.04] p-1">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="parts">Parts</TabsTrigger>
+            <TabsTrigger value="commercial">Commercial</TabsTrigger>
+            <TabsTrigger value="work-log">Work Log</TabsTrigger>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
+          </TabsList>
 
+          <TabsContent value="overview" className="space-y-3">
+            {serviceOrder && (
+              <div className="grid gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:grid-cols-2 lg:grid-cols-4">
+                <DetailDatum label="Customer" value={serviceOrder.customerName ?? "Not recorded"} />
+                <DetailDatum label="Model" value={serviceOrder.vehicleInfo || "Not recorded"} />
+                <DetailDatum label="Registration" value={serviceOrder.registrationNumber || "Not recorded"} />
+                <DetailDatum label="VIN" value={serviceOrder.vin || "Not recorded"} />
+                <DetailDatum label="Scheduled" value={formatDealerDateShort(serviceOrder.scheduledDate)} />
+                <DetailDatum label="Service type" value={serviceOrder.type.replaceAll("_", " ")} />
+                <DetailDatum label="Technician" value={card.technicianName ?? "Unassigned"} />
+                <DetailDatum label="Payment" value={serviceOrder.payType?.replaceAll("_", " ") ?? "Not recorded"} />
+              </div>
+            )}
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Service checklist
+              </div>
+              {card.checklist.length > 0 ? (
+                <div className="space-y-2">
+                  {card.checklist.map((item, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => toggleChecklist(idx)}
+                      className="flex items-center gap-2.5 text-sm w-full text-left group"
+                    >
+                      {item.done ? (
+                        <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+                      ) : (
+                        <Circle className="w-4 h-4 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
+                      )}
+                      <span className={cn(item.done && "line-through text-muted-foreground")}>
+                        {item.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No checklist items have been added.</p>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="parts" className="space-y-3">
         <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 space-y-1.5">
           <div className="flex items-center justify-between text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
             <span className="flex items-center gap-1.5">
@@ -590,7 +623,9 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
             </div>
           )}
         </div>
+          </TabsContent>
 
+          <TabsContent value="commercial" className="space-y-3">
         {(card.quoteTotal ?? 0) > 0 && (
           <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 flex items-center justify-between gap-3">
             <div>
@@ -632,7 +667,9 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
         )}
 
         <RolloverSection card={card} onChanged={invalidate} technicianView={technicianView} />
+          </TabsContent>
 
+          <TabsContent value="work-log" className="space-y-3">
         <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3 space-y-2">
           <div className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
             Technician work log
@@ -677,7 +714,9 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
             </div>
           )}
         </div>
+          </TabsContent>
 
+          <TabsContent value="documents">
         {/* Diagnostic reports & other paperwork attach at any point in the
             job's life — uploads go to private object storage. */}
         <DocumentsCard
@@ -685,6 +724,8 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
           entityId={card.id}
           canEdit={can("service", "edit")}
         />
+          </TabsContent>
+        </Tabs>
 
         <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
           <DialogContent className="sm:max-w-md">
@@ -858,6 +899,15 @@ export function JobCardPanel({ card, serviceOrder, technicianView = false }: { c
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function DetailDatum({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="mt-1 truncate text-sm font-medium capitalize" title={value}>{value}</div>
+    </div>
   );
 }
 
