@@ -1769,7 +1769,7 @@ function BookingsTab() {
           </table>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {isLoading ? (
             [...Array(4)].map((_, i) => (
               <div key={i} className="h-24 bg-white/[0.05] rounded-2xl animate-pulse" />
@@ -1809,7 +1809,7 @@ function BookingsTab() {
                         : "bg-primary/45",
                   )}
                 />
-                <div className="p-5 pl-6">
+                <div className="p-4 pl-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -1820,7 +1820,7 @@ function BookingsTab() {
                           #{order.id.toString().padStart(5, "0")}
                         </span>
                       </div>
-                      <h3 className="mt-1 truncate text-lg font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors">
+                      <h3 className="mt-0.5 truncate text-base font-semibold tracking-tight text-foreground group-hover:text-primary transition-colors">
                         {order.vehicleInfo}
                       </h3>
                     </div>
@@ -1839,8 +1839,8 @@ function BookingsTab() {
                     </Badge>
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
                       <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                         <User className="h-3.5 w-3.5" /> Customer
                       </div>
@@ -1848,7 +1848,7 @@ function BookingsTab() {
                         {order.customerName || "Unknown customer"}
                       </div>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+                    <div className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
                       <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                         <Calendar className="h-3.5 w-3.5" /> Appointment
                       </div>
@@ -1856,7 +1856,7 @@ function BookingsTab() {
                         {formatCalendarDateShort(order.scheduledDate)}
                       </div>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+                    <div className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
                       <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                         <CarFront className="h-3.5 w-3.5" /> Registration
                       </div>
@@ -1864,7 +1864,7 @@ function BookingsTab() {
                         {order.registrationNumber || "Not recorded"}
                       </div>
                     </div>
-                    <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+                    <div className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
                       <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                         Service plan
                       </div>
@@ -1875,18 +1875,18 @@ function BookingsTab() {
                     </div>
                   </div>
 
-                  <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="mt-3 flex flex-col gap-2.5 border-t border-white/10 pt-3 xl:flex-row xl:items-end xl:justify-between">
                     <div className="min-w-0">
                       <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                         Service concern
                       </div>
-                      <p className="mt-0.5 line-clamp-2 text-sm text-foreground/80">
+                      <p className="mt-0.5 line-clamp-1 text-sm text-foreground/80">
                         {order.complaint || order.jobs.join(", ") || "No concern recorded"}
                       </p>
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                       {order.customerId && (
-                        <Button asChild size="sm" variant="ghost" className="rounded-full text-xs">
+                        <Button asChild size="sm" variant="ghost" className="h-8 rounded-full px-3 text-xs">
                           <Link
                             href={`/customers/${order.customerId}`}
                             onClick={(event) => event.stopPropagation()}
@@ -1900,7 +1900,7 @@ function BookingsTab() {
                       <Button
                         size="sm"
                         variant={order.status === "open" ? "outline" : "default"}
-                        className="rounded-full text-xs"
+                        className="h-8 rounded-full px-3 text-xs"
                         onClick={(event) => {
                           event.stopPropagation();
                           setSelectedOrder(order);
