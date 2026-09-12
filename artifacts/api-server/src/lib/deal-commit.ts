@@ -11,6 +11,7 @@ import {
   defaultDeliverySteps,
   DEFAULT_PDI_ITEMS,
   VIN_LENGTH,
+  isValidVinLength,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
 
@@ -232,7 +233,7 @@ export async function commitDealInTransaction(
           isNull(vehiclesTable.deletedAt),
         )).for("update");
         const heldIdentityValid =
-          heldVehicle?.vin?.length === VIN_LENGTH &&
+          isValidVinLength(heldVehicle?.vin) &&
           heldVehicle.engineNumber?.length === VIN_LENGTH &&
           (!heldVehicle.registration || REGISTRATION_PATTERN.test(heldVehicle.registration));
         // A conflicting claim by ANOTHER deal (active booking or another
@@ -327,7 +328,7 @@ export async function commitDealInTransaction(
         chosen = candidate ?? null;
       }
       const identityValid =
-        chosen?.vin?.length === VIN_LENGTH &&
+        isValidVinLength(chosen?.vin) &&
         chosen.engineNumber?.length === VIN_LENGTH &&
         (!chosen.registration || REGISTRATION_PATTERN.test(chosen.registration));
       if (!chosen || !identityValid || chosen.recallFlag || chosen.damageFlag) {

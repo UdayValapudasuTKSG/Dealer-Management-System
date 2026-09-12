@@ -154,11 +154,11 @@ const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   sold: [],
 };
 
-/** Client-side mirror of the server's VIN/Engine# 17-character rule. */
+/** Client-side mirror: VIN 17–18 characters, engine number exactly 17. */
 function vehicleIdentifierError(values: Record<string, unknown>): string | null {
   const vin = values.vin as string | undefined;
   const engine = values.engine as string | undefined;
-  if (vin && vin.length !== 17) return "VIN must be exactly 17 characters";
+  if (vin && (vin.length < 17 || vin.length > 18)) return "VIN must be 17 or 18 characters";
   if (engine && engine.length !== 17)
     return "Engine number must be exactly 17 characters";
   const engineNumber = values.engineNumber as string | undefined;
@@ -238,7 +238,7 @@ function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
     { name: "model", label: "Model", type: "text", required: true, span: "half", placeholder: "i7", defaultValue: existing?.model },
     { name: "trim", label: "Trim", type: "text", span: "half", placeholder: "xDrive60 M Sport", defaultValue: existing?.trim ?? undefined },
     { name: "year", label: "Year", type: "number", required: true, span: "half", placeholder: "2026", defaultValue: existing ? String(existing.year) : undefined },
-    { name: "vin", label: "VIN (17 characters)", type: "text", span: "half", placeholder: "WBY73AW0XPCK00000", defaultValue: existing?.vin ?? undefined, validate: (v) => (v.length === 17 ? null : "VIN must be exactly 17 characters") },
+    { name: "vin", label: "VIN (17–18 characters)", type: "text", span: "half", placeholder: "WBY73AW0XPCK00000", defaultValue: existing?.vin ?? undefined, validate: (v) => (v.length >= 17 && v.length <= 18 ? null : "VIN must be 17 or 18 characters") },
     ...(divisions && divisions.length > 0
       ? [
           {

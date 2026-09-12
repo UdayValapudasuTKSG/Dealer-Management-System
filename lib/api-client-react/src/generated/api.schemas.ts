@@ -1566,9 +1566,9 @@ export interface VehicleInput {
   trim?: string;
   year: number;
   /**
-     * VIN / chassis number — exactly 17 characters
+     * VIN / chassis number — 17 or 18 characters
      * @minLength 17
-     * @maxLength 17
+     * @maxLength 18
      */
   vin?: string;
   /**
@@ -1643,9 +1643,9 @@ export interface VehicleUpdate {
   trim?: string;
   year?: number;
   /**
-     * VIN / chassis number — exactly 17 characters
+     * VIN / chassis number — 17 or 18 characters
      * @minLength 17
-     * @maxLength 17
+     * @maxLength 18
      */
   vin?: string;
   /**

@@ -226,7 +226,7 @@ function OnboardingForm({
                 <FormItem>
                   <FormLabel className="text-[#505050]">VIN / Chassis Number <span className="font-normal text-black/40">(Optional)</span></FormLabel>
                   <FormControl>
-                    <Input placeholder="17-character VIN" className="bg-[#F8F9FA] border-black/10 rounded-xl h-12 uppercase" {...field} />
+                    <Input placeholder="17- or 18-character VIN" className="bg-[#F8F9FA] border-black/10 rounded-xl h-12 uppercase" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -216,7 +216,7 @@ export const ListVehiclesResponse = zod.array(ListVehiclesResponseItem)
 
 
 export const createVehicleBodyVinMin = 17;
-export const createVehicleBodyVinMax = 17;
+export const createVehicleBodyVinMax = 18;
 
 export const createVehicleBodyEngineNumberMin = 17;
 export const createVehicleBodyEngineNumberMax = 17;
@@ -238,7 +238,7 @@ export const CreateVehicleBody = zod.object({
   "model": zod.string().min(1),
   "trim": zod.string().optional(),
   "year": zod.number(),
-  "vin": zod.string().min(createVehicleBodyVinMin).max(createVehicleBodyVinMax).optional().describe('VIN \/ chassis number — exactly 17 characters'),
+  "vin": zod.string().min(createVehicleBodyVinMin).max(createVehicleBodyVinMax).optional().describe('VIN \/ chassis number — 17 or 18 characters'),
   "engineNumber": zod.string().min(createVehicleBodyEngineNumberMin).max(createVehicleBodyEngineNumberMax).optional().describe('Engine number must be exactly 17 characters'),
   "registration": zod.string().regex(createVehicleBodyRegistrationRegExp).optional().describe('3 uppercase letters followed by 1-4 digits'),
   "variant": zod.string().optional(),
@@ -380,7 +380,7 @@ export const UpdateVehicleParams = zod.object({
 
 
 export const updateVehicleBodyVinMin = 17;
-export const updateVehicleBodyVinMax = 17;
+export const updateVehicleBodyVinMax = 18;
 
 export const updateVehicleBodyEngineNumberMin = 17;
 export const updateVehicleBodyEngineNumberMax = 17;
@@ -401,7 +401,7 @@ export const UpdateVehicleBody = zod.object({
   "model": zod.string().min(1).optional(),
   "trim": zod.string().optional(),
   "year": zod.number().optional(),
-  "vin": zod.string().min(updateVehicleBodyVinMin).max(updateVehicleBodyVinMax).optional().describe('VIN \/ chassis number — exactly 17 characters'),
+  "vin": zod.string().min(updateVehicleBodyVinMin).max(updateVehicleBodyVinMax).optional().describe('VIN \/ chassis number — 17 or 18 characters'),
   "engineNumber": zod.string().min(updateVehicleBodyEngineNumberMin).max(updateVehicleBodyEngineNumberMax).optional(),
   "registration": zod.string().regex(updateVehicleBodyRegistrationRegExp).optional(),
   "variant": zod.string().optional(),

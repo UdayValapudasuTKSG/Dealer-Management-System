@@ -19,6 +19,7 @@ import {
   defaultDeliverySteps,
   DEFAULT_PDI_ITEMS,
   VIN_LENGTH,
+  isValidVinLength,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
 import { recordAgentRun } from "../lib/agent-governance";
@@ -308,7 +309,7 @@ async function allocateDealItemUnits(
       }
 
       const identityValid =
-        chosen?.vin?.length === VIN_LENGTH &&
+        isValidVinLength(chosen?.vin) &&
         chosen.engineNumber?.length === VIN_LENGTH &&
         (!chosen.registration ||
           REGISTRATION_PATTERN.test(chosen.registration));
@@ -409,8 +410,8 @@ async function allocateVehicleOnCommit(
   // registration (when present) must match the Guyana plate format.
   const identityUnmet = (v: typeof vehicle): string[] => {
     const problems: string[] = [];
-    if (!v.vin || v.vin.length !== VIN_LENGTH)
-      problems.push(`VIN must be exactly ${VIN_LENGTH} characters before allocation`);
+    if (!isValidVinLength(v.vin))
+      problems.push("VIN must be 17 or 18 characters before allocation");
     if (!v.engineNumber || v.engineNumber.length !== VIN_LENGTH)
       problems.push(`Engine number must be exactly ${VIN_LENGTH} characters before allocation`);
     if (v.registration && !REGISTRATION_PATTERN.test(v.registration))

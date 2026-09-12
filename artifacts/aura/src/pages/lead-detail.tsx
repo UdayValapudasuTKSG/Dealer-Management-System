@@ -1301,7 +1301,7 @@ export default function LeadDetail() {
     }
   })();
   const quoteSent = lead.quotationSent || !!quote?.sentAt;
-  const vinValid = !!vehicle?.vin && vehicle.vin.length === 17;
+  const vinValid = !!vehicle?.vin && (vehicle.vin.length === 17 || vehicle.vin.length === 18);
   // Spec (A11): a specific VIN is only hard-locked to the order at deal
   // commit. Before that, interest is model-level — never surface the VIN.
   const vinAllocated =
