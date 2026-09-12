@@ -7,7 +7,7 @@ import {
   reservationAllocationsTable,
   timelineEventsTable,
   vehiclesTable,
-  VIN_LENGTH,
+  isValidEngineNumberLength,
   isValidVinLength,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
@@ -139,7 +139,7 @@ export async function allocateReservationInventory(opts: {
             .for("update", { skipLocked: true });
           const identityValid =
             isValidVinLength(candidate?.vin) &&
-            candidate.engineNumber?.length === VIN_LENGTH &&
+            isValidEngineNumberLength(candidate.engineNumber) &&
             (!candidate.registration ||
               REGISTRATION_PATTERN.test(candidate.registration));
           if (!candidate || !identityValid) {

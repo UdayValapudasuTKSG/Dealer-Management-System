@@ -25,16 +25,16 @@ export interface VehicleUpdate {
   vin?: string;
   /**
      * @minLength 17
-     * @maxLength 17
+     * @maxLength 18
      */
   engineNumber?: string;
   /** @pattern ^[A-Z]{3}[0-9]{1,4}$ */
   registration?: string;
   variant?: string;
   /**
-     * Engine number — exactly 17 characters
+     * Engine number — 17 or 18 characters
      * @minLength 17
-     * @maxLength 17
+     * @maxLength 18
      */
   engine?: string;
   transmission?: string;

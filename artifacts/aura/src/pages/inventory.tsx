@@ -154,16 +154,16 @@ const STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   sold: [],
 };
 
-/** Client-side mirror: VIN 17–18 characters, engine number exactly 17. */
+/** Client-side mirror: VIN and engine number accept 17–18 characters. */
 function vehicleIdentifierError(values: Record<string, unknown>): string | null {
   const vin = values.vin as string | undefined;
   const engine = values.engine as string | undefined;
   if (vin && (vin.length < 17 || vin.length > 18)) return "VIN must be 17 or 18 characters";
-  if (engine && engine.length !== 17)
-    return "Engine number must be exactly 17 characters";
+  if (engine && (engine.length < 17 || engine.length > 18))
+    return "Engine number must be 17 or 18 characters";
   const engineNumber = values.engineNumber as string | undefined;
-  if (engineNumber && engineNumber.length !== 17)
-    return "Engine number must be exactly 17 characters";
+  if (engineNumber && (engineNumber.length < 17 || engineNumber.length > 18))
+    return "Engine number must be 17 or 18 characters";
   const registration = values.registration as string | undefined;
   if (registration && !/^[A-Z]{3}[0-9]{1,4}$/.test(registration))
     return "Registration must be 3 uppercase letters followed by 1–4 digits (e.g. PAB1234)";
@@ -257,7 +257,7 @@ function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
           } as FieldDef,
         ]
       : []),
-    { name: "engineNumber", label: "Engine Number (17 characters)", type: "text", span: "half", placeholder: "ENG1234567890ABCD", defaultValue: existing?.engineNumber ?? undefined, validate: (v) => (v.length === 17 ? null : "Engine number must be exactly 17 characters") },
+    { name: "engineNumber", label: "Engine Number (17–18 characters)", type: "text", span: "half", placeholder: "ENG1234567890ABCD", defaultValue: existing?.engineNumber ?? undefined, validate: (v) => (v.length >= 17 && v.length <= 18 ? null : "Engine number must be 17 or 18 characters") },
     { name: "registration", label: "Registration (e.g. PAB1234)", type: "text", span: "half", placeholder: "PAB1234", defaultValue: existing?.registration ?? undefined, validate: (v) => (/^[A-Z]{3}[0-9]{1,4}$/.test(v) ? null : "Format: 3 letters + 1–4 digits, e.g. PAB1234") },
     { name: "price", label: "Price (GYD)", type: "number", required: true, span: "half", placeholder: "25000000", defaultValue: existing ? String(existing.price) : undefined },
     { name: "dutyFreeAmount", label: "Duty-free amount (GYD)", type: "number", span: "half", placeholder: "0", defaultValue: existing?.dutyFreeAmount != null ? String(existing.dutyFreeAmount) : "0", validate: (v) => (!v || Number(v) >= 0 ? null : "Must be non-negative") },
@@ -287,7 +287,7 @@ function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
       defaultValue: existing?.bodyType,
       options: bodyOptions,
     },
-    { name: "engine", label: "Engine # (17 characters)", type: "text", span: "half", placeholder: "ENG0000000PCK0001", defaultValue: existing?.engine ?? undefined, validate: (v) => (v.length === 17 ? null : "Engine number must be exactly 17 characters") },
+    { name: "engine", label: "Engine # (17–18 characters)", type: "text", span: "half", placeholder: "ENG0000000PCK0001", defaultValue: existing?.engine ?? undefined, validate: (v) => (v.length >= 17 && v.length <= 18 ? null : "Engine number must be 17 or 18 characters") },
     { name: "transmission", label: "Transmission", type: "text", span: "half", placeholder: "8-speed automatic", defaultValue: existing?.transmission ?? undefined },
     {
       name: "status",

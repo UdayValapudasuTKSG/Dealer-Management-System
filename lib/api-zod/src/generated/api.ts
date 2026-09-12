@@ -219,11 +219,11 @@ export const createVehicleBodyVinMin = 17;
 export const createVehicleBodyVinMax = 18;
 
 export const createVehicleBodyEngineNumberMin = 17;
-export const createVehicleBodyEngineNumberMax = 17;
+export const createVehicleBodyEngineNumberMax = 18;
 
 export const createVehicleBodyRegistrationRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
 export const createVehicleBodyEngineMin = 17;
-export const createVehicleBodyEngineMax = 17;
+export const createVehicleBodyEngineMax = 18;
 
 export const createVehicleBodyDutyFreeAmountDefault = 0;
 export const createVehicleBodyDutyFreeAmountMin = 0;
@@ -239,10 +239,10 @@ export const CreateVehicleBody = zod.object({
   "trim": zod.string().optional(),
   "year": zod.number(),
   "vin": zod.string().min(createVehicleBodyVinMin).max(createVehicleBodyVinMax).optional().describe('VIN \/ chassis number — 17 or 18 characters'),
-  "engineNumber": zod.string().min(createVehicleBodyEngineNumberMin).max(createVehicleBodyEngineNumberMax).optional().describe('Engine number must be exactly 17 characters'),
+  "engineNumber": zod.string().min(createVehicleBodyEngineNumberMin).max(createVehicleBodyEngineNumberMax).optional().describe('Engine number must be 17 or 18 characters'),
   "registration": zod.string().regex(createVehicleBodyRegistrationRegExp).optional().describe('3 uppercase letters followed by 1-4 digits'),
   "variant": zod.string().optional(),
-  "engine": zod.string().min(createVehicleBodyEngineMin).max(createVehicleBodyEngineMax).optional().describe('Engine number — exactly 17 characters'),
+  "engine": zod.string().min(createVehicleBodyEngineMin).max(createVehicleBodyEngineMax).optional().describe('Engine number — 17 or 18 characters'),
   "transmission": zod.string().optional(),
   "price": zod.number(),
   "dutyFreeAmount": zod.number().min(createVehicleBodyDutyFreeAmountMin).default(createVehicleBodyDutyFreeAmountDefault).describe('Stored GYD duty-free amount; defaults to zero'),
@@ -383,11 +383,11 @@ export const updateVehicleBodyVinMin = 17;
 export const updateVehicleBodyVinMax = 18;
 
 export const updateVehicleBodyEngineNumberMin = 17;
-export const updateVehicleBodyEngineNumberMax = 17;
+export const updateVehicleBodyEngineNumberMax = 18;
 
 export const updateVehicleBodyRegistrationRegExp = new RegExp('^[A-Z]{3}[0-9]{1,4}$');
 export const updateVehicleBodyEngineMin = 17;
-export const updateVehicleBodyEngineMax = 17;
+export const updateVehicleBodyEngineMax = 18;
 
 export const updateVehicleBodyDutyFreeAmountMin = 0;
 
@@ -405,7 +405,7 @@ export const UpdateVehicleBody = zod.object({
   "engineNumber": zod.string().min(updateVehicleBodyEngineNumberMin).max(updateVehicleBodyEngineNumberMax).optional(),
   "registration": zod.string().regex(updateVehicleBodyRegistrationRegExp).optional(),
   "variant": zod.string().optional(),
-  "engine": zod.string().min(updateVehicleBodyEngineMin).max(updateVehicleBodyEngineMax).optional().describe('Engine number — exactly 17 characters'),
+  "engine": zod.string().min(updateVehicleBodyEngineMin).max(updateVehicleBodyEngineMax).optional().describe('Engine number — 17 or 18 characters'),
   "transmission": zod.string().optional(),
   "price": zod.number().optional(),
   "dutyFreeAmount": zod.number().min(updateVehicleBodyDutyFreeAmountMin).optional().describe('Stored GYD duty-free amount'),

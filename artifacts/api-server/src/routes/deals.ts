@@ -18,7 +18,7 @@ import {
   reservationAllocationsTable,
   defaultDeliverySteps,
   DEFAULT_PDI_ITEMS,
-  VIN_LENGTH,
+  isValidEngineNumberLength,
   isValidVinLength,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
@@ -310,7 +310,7 @@ async function allocateDealItemUnits(
 
       const identityValid =
         isValidVinLength(chosen?.vin) &&
-        chosen.engineNumber?.length === VIN_LENGTH &&
+        isValidEngineNumberLength(chosen.engineNumber) &&
         (!chosen.registration ||
           REGISTRATION_PATTERN.test(chosen.registration));
       if (!chosen || !identityValid || chosen.recallFlag || chosen.damageFlag) {
@@ -406,14 +406,14 @@ async function allocateVehicleOnCommit(
     };
   }
 
-  // Identity validation before lock: VIN + engine number exactly 17 chars,
+  // Identity validation before lock: VIN + engine number 17–18 chars,
   // registration (when present) must match the Guyana plate format.
   const identityUnmet = (v: typeof vehicle): string[] => {
     const problems: string[] = [];
     if (!isValidVinLength(v.vin))
       problems.push("VIN must be 17 or 18 characters before allocation");
-    if (!v.engineNumber || v.engineNumber.length !== VIN_LENGTH)
-      problems.push(`Engine number must be exactly ${VIN_LENGTH} characters before allocation`);
+    if (!isValidEngineNumberLength(v.engineNumber))
+      problems.push("Engine number must be 17 or 18 characters before allocation");
     if (v.registration && !REGISTRATION_PATTERN.test(v.registration))
       problems.push("Registration must be 3 uppercase letters followed by 1-4 digits");
     return problems;

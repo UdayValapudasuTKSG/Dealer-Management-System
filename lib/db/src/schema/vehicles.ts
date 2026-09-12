@@ -42,10 +42,13 @@ export const vehicleDocumentSchema = z.object({
 });
 export type VehicleDocument = z.infer<typeof vehicleDocumentSchema>;
 
-/** Standard VIN length and the required engine-number length. VINs also accept 18 characters. */
+/** Minimum VIN length. VIN and engine identifiers also accept 18 characters. */
 export const VIN_LENGTH = 17;
 export function isValidVinLength(vin: string | null | undefined): boolean {
   return !!vin && (vin.length === VIN_LENGTH || vin.length === 18);
+}
+export function isValidEngineNumberLength(engine: string | null | undefined): boolean {
+  return !!engine && (engine.length === 17 || engine.length === 18);
 }
 /** DMS spec: registration plates are 3 letters followed by 1-4 digits. */
 export const REGISTRATION_PATTERN = /^[A-Z]{3}[0-9]{1,4}$/;
@@ -102,7 +105,7 @@ export const insertVehicleSchema = createInsertSchema(vehiclesTable, {
   accessories: z.array(z.string()),
   documents: z.array(vehicleDocumentSchema),
   vin: z.string().min(VIN_LENGTH).max(18).nullable().optional(),
-  engineNumber: z.string().length(VIN_LENGTH).nullable().optional(),
+  engineNumber: z.string().min(17).max(18).nullable().optional(),
   registration: z.string().regex(REGISTRATION_PATTERN).nullable().optional(),
 }).omit({ dealerId: true,
   id: true,

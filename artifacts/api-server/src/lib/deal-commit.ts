@@ -10,7 +10,7 @@ import {
   vehiclesTable,
   defaultDeliverySteps,
   DEFAULT_PDI_ITEMS,
-  VIN_LENGTH,
+  isValidEngineNumberLength,
   isValidVinLength,
   REGISTRATION_PATTERN,
 } from "@workspace/db";
@@ -234,7 +234,7 @@ export async function commitDealInTransaction(
         )).for("update");
         const heldIdentityValid =
           isValidVinLength(heldVehicle?.vin) &&
-          heldVehicle.engineNumber?.length === VIN_LENGTH &&
+          isValidEngineNumberLength(heldVehicle.engineNumber) &&
           (!heldVehicle.registration || REGISTRATION_PATTERN.test(heldVehicle.registration));
         // A conflicting claim by ANOTHER deal (active booking or another
         // deal's active allocation) means the hold was subverted — refuse.
@@ -329,7 +329,7 @@ export async function commitDealInTransaction(
       }
       const identityValid =
         isValidVinLength(chosen?.vin) &&
-        chosen.engineNumber?.length === VIN_LENGTH &&
+        isValidEngineNumberLength(chosen.engineNumber) &&
         (!chosen.registration || REGISTRATION_PATTERN.test(chosen.registration));
       if (!chosen || !identityValid || chosen.recallFlag || chosen.damageFlag) {
         throw new InventoryAllocationError(

@@ -44,15 +44,15 @@ import { vehicleActivelyAllocated } from "../lib/reservation-allocations";
 
 const router: IRouter = Router();
 
-/** VIN accepts 17–18 characters; engine numbers remain exactly 17. */
+/** VIN and engine numbers accept 17–18 characters. */
 export function vehicleIdentifierError(body: {
   vin?: string;
   engine?: string;
 }): string | null {
   if (body.vin !== undefined && (body.vin.length < 17 || body.vin.length > 18))
     return "VIN must be 17 or 18 characters";
-  if (body.engine !== undefined && body.engine.length !== 17)
-    return "Engine number must be exactly 17 characters";
+  if (body.engine !== undefined && (body.engine.length < 17 || body.engine.length > 18))
+    return "Engine number must be 17 or 18 characters";
   return null;
 }
 
@@ -302,7 +302,7 @@ function buildInstructionsSheet(workbook: ExcelJS.Workbook): void {
     [""],
     ["Powertrain values: EV, Hybrid, Petrol, Diesel  (aliases: Electric/BEV → EV; Gas/Gasoline → Petrol; PHEV → Hybrid)"],
     ["Status (optional): available, reserved, booked, delivered, in_transit, sold, service, under_repair  (defaults to available for new vehicles)"],
-    ["VIN (optional): must be 17 or 18 characters when provided. Engine Number (optional): must be exactly 17 characters."],
+    ["VIN and Engine Number (optional): must be 17 or 18 characters when provided."],
     ["Registration (optional): 3 uppercase letters followed by 1–4 digits, e.g. PAB1234"],
     ["Division (optional): must match one of this dealer's division names exactly"],
     ["Duty-free Amount (GYD): non-negative GYD amount; leave blank or 0 if not applicable"],

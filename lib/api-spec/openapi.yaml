@@ -10916,10 +10916,10 @@ components:
         trim: { type: string }
         year: { type: integer }
         vin: { type: string, minLength: 17, maxLength: 18, description: "VIN / chassis number — 17 or 18 characters" }
-        engineNumber: { type: string, minLength: 17, maxLength: 17, description: "Engine number must be exactly 17 characters" }
+        engineNumber: { type: string, minLength: 17, maxLength: 18, description: "Engine number must be 17 or 18 characters" }
         registration: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$", description: "3 uppercase letters followed by 1-4 digits" }
         variant: { type: string }
-        engine: { type: string, minLength: 17, maxLength: 17, description: "Engine number — exactly 17 characters" }
+        engine: { type: string, minLength: 17, maxLength: 18, description: "Engine number — 17 or 18 characters" }
         transmission: { type: string }
         price: { type: number }
         dutyFreeAmount: { type: number, minimum: 0, default: 0, description: "Stored GYD duty-free amount; defaults to zero" }
@@ -10951,10 +10951,10 @@ components:
         trim: { type: string }
         year: { type: integer }
         vin: { type: string, minLength: 17, maxLength: 18, description: "VIN / chassis number — 17 or 18 characters" }
-        engineNumber: { type: string, minLength: 17, maxLength: 17 }
+        engineNumber: { type: string, minLength: 17, maxLength: 18 }
         registration: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$" }
         variant: { type: string }
-        engine: { type: string, minLength: 17, maxLength: 17, description: "Engine number — exactly 17 characters" }
+        engine: { type: string, minLength: 17, maxLength: 18, description: "Engine number — 17 or 18 characters" }
         transmission: { type: string }
         price: { type: number }
         dutyFreeAmount: { type: number, minimum: 0, description: "Stored GYD duty-free amount" }
