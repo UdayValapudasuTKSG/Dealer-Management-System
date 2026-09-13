@@ -18,7 +18,13 @@ if (!connectionString) {
   );
 }
 
-export const pool = new Pool({ connectionString });
+export const pool = new Pool({
+  connectionString,
+  // Bound connection establishment AND waits for a free pool slot during an
+  // outage. Do not impose a global query timeout on long-running transactions.
+  connectionTimeoutMillis: 10_000,
+  keepAlive: true,
+});
 
 // A dropped idle connection (hosted Postgres terminates idle sockets) emits
 // an 'error' on the pool; without a listener Node treats it as an uncaught

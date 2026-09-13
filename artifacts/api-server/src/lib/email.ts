@@ -2543,6 +2543,11 @@ export async function processQueue(): Promise<void> {
         );
       }
     }
+  } catch (err) {
+    // Includes initial selection and claim/failure-recording queries. Every
+    // timer and enqueue kick invokes this fire-and-forget, so never let a
+    // database outage become an unhandled rejection that terminates the API.
+    logger.error({ err }, "email outbox pass failed");
   } finally {
     processing = false;
   }
@@ -2552,7 +2557,23 @@ export async function processQueue(): Promise<void> {
 // Task due-date reminders — due-soon (within 24h) and overdue, once each
 // ---------------------------------------------------------------------------
 
+let processingTaskReminders = false;
+
 export async function processTaskReminders(): Promise<void> {
+  if (process.env.OUTBOX_WORKER_DISABLED === "1" || processingTaskReminders) return;
+  processingTaskReminders = true;
+  try {
+    await runTaskReminderPass();
+  } catch (err) {
+    // The initial candidate query and timezone lookup can fail before the
+    // per-task catch. Leave reminders pending so the next interval can retry.
+    logger.error({ err }, "task reminder pass failed");
+  } finally {
+    processingTaskReminders = false;
+  }
+}
+
+async function runTaskReminderPass(): Promise<void> {
   const now = new Date();
 
   const candidates = await db
