@@ -118,6 +118,133 @@ export function isExplicitLeadOutboxSuppressed(
   return leadId != null && suppressesReviewedImportedLead(metadata);
 }
 
+/** Legacy outbox rows without a lead id need an unambiguous customer match.
+ * An ambiguous match fails closed, but only for the legacy row itself; newly
+ * queued rows carrying an explicit lead id remain scoped to that lead. */
+export type LegacyReviewedOutboxDisposition =
+  | "allow"
+  | "suppress"
+  | "cancel_ambiguous";
+
+/**
+ * Legacy rows lacked a lead id, so they can only be suppressed when they are
+ * demonstrably old sales/delivery automation that predates the reviewed
+ * conversion. This is intentionally a positive list: service, collision and
+ * later lifecycle communication must not inherit a historical-sale fence just
+ * because it shares a customer or recipient with an imported record.
+ */
+export const PRE_IMPORT_SALES_DELIVERY_TEMPLATES = [
+  "lead_received",
+  "vehicle_quote",
+  "test_drive_invite",
+  "test_drive_confirmation",
+  "lead_assignment",
+  "finance_processing",
+  "finance_approved",
+  "vehicle_booking",
+  "payment_reminder",
+  "payment_received",
+  "refund_confirmation",
+  "delivery_schedule",
+  "delivery_advisor_assigned",
+  "delivery_confirmation",
+  "feedback_request",
+  "thank_you",
+  "outreach",
+  "testdrive.reminder.24h",
+  "reservation.pending",
+  "invoice.generated",
+  "document.request.customer",
+  "refund.customer",
+  "delivery.ready",
+  "warranty.document",
+] as const;
+
+export function isPreImportSalesDeliveryTemplate(template: string): boolean {
+  return (PRE_IMPORT_SALES_DELIVERY_TEMPLATES as readonly string[]).includes(
+    template,
+  );
+}
+
+function importedAt(metadata: unknown): Date | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const value = (metadata as Record<string, unknown>).importedAt;
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function legacyReviewedOutboxDisposition(
+  candidates: Array<{ importMetadata: unknown }>,
+  item?: { template: string; createdAt: Date | null | undefined },
+): LegacyReviewedOutboxDisposition {
+  // Do not infer provenance for a newly queued or context-less row. Explicit
+  // lead-id rows are handled separately and remain lead-scoped.
+  if (
+    !item ||
+    !item.createdAt ||
+    !isPreImportSalesDeliveryTemplate(item.template)
+  ) {
+    return "allow";
+  }
+  const suppressingCandidates = candidates.filter((candidate) => {
+    const convertedAt = importedAt(candidate.importMetadata);
+    return (
+      suppressesReviewedImportedLead(candidate.importMetadata) &&
+      convertedAt != null &&
+      item.createdAt! < convertedAt
+    );
+  });
+  if (suppressingCandidates.length === 0) return "allow";
+  if (candidates.length === 0) return "allow";
+  if (candidates.length > 1) {
+    return "cancel_ambiguous";
+  }
+  return "suppress";
+}
+
+/**
+ * Advisory-lock identities shared by the reviewed-history importer and the
+ * outbox workers. Explicit messages are fenced by their concrete lead id.
+ * Older identity-less messages are fenced only by the identities that their
+ * legacy lookup is allowed to inspect; this is a serialization aid, not an
+ * address-based suppression rule.
+ */
+export function reviewedOutboxCommunicationLockKeys(input: {
+  dealerId: number;
+  leadId?: number | null;
+  customerId?: number | null;
+  email?: string | null;
+  emails?: Array<string | null | undefined>;
+  whatsappPhones?: Array<string | null | undefined>;
+}): string[] {
+  const keys = new Set<string>();
+  if (input.leadId != null) {
+    keys.add(`reviewed-outbox:${input.dealerId}:lead:${input.leadId}`);
+  }
+  if (input.customerId != null) {
+    keys.add(
+      `reviewed-outbox:${input.dealerId}:legacy:customer:${input.customerId}`,
+    );
+  }
+  for (const value of [input.email, ...(input.emails ?? [])]) {
+    const email = value?.trim().toLowerCase();
+    if (email) {
+      keys.add(`reviewed-outbox:${input.dealerId}:legacy:email:${email}`);
+    }
+  }
+  for (const phone of input.whatsappPhones ?? []) {
+    const digits = phone?.replace(/\D/g, "");
+    if (digits) {
+      keys.add(
+        `reviewed-outbox:${input.dealerId}:legacy:whatsapp:${digits}`,
+      );
+    }
+  }
+  // Every caller takes multi-key locks in a canonical order.
+  return [...keys].sort();
+}
+
 /** A missing VIN will be inserted during the import and is therefore
  * allocatable; only an already persisted non-available unit blocks creation. */
 export function canCreateCommittedDealForVehicle(

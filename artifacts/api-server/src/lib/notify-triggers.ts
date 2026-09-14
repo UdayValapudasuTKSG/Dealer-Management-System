@@ -368,6 +368,7 @@ export function notifyRefundApproved(opts: {
 export function notifyRefundPaid(opts: {
   dealerId: number;
   paymentId: number;
+  leadId?: number | null;
   customerId?: number | null;
   customerName: string;
   customerEmail?: string | null;
@@ -391,6 +392,7 @@ export function notifyRefundPaid(opts: {
         to: opts.customerEmail,
         dealerId: opts.dealerId,
         customerId: opts.customerId,
+        leadId: opts.leadId,
         data,
         dedupeKey: `${key}:email`,
         notifyUserId: opts.advisorUserId ?? undefined,
@@ -402,6 +404,7 @@ export function notifyRefundPaid(opts: {
         to: opts.customerPhone,
         dealerId: opts.dealerId,
         customerId: opts.customerId,
+        leadId: opts.leadId,
         summary: `Refund processed — ${opts.reference}`,
         body: `Hello ${opts.customerName}, your refund of ${opts.amount} (ref ${opts.reference}) has been processed. It should reflect according to your bank's timelines. Thank you for your patience.`,
         dedupeKey: `${key}:whatsapp`,
@@ -540,6 +543,7 @@ export function notifyFeedbackSurvey(opts: {
   dealerId: number;
   entityType: "delivery" | "service_order";
   entityId: number;
+  leadId?: number | null;
   customerId?: number | null;
   customerName: string;
   customerEmail?: string | null;
@@ -559,6 +563,7 @@ export function notifyFeedbackSurvey(opts: {
         to: opts.customerEmail,
         dealerId: opts.dealerId,
         customerId: opts.customerId,
+        leadId: opts.leadId,
         data,
         dedupeKey: `${key}:email`,
         notifyUserId: opts.advisorUserId ?? undefined,
@@ -570,6 +575,7 @@ export function notifyFeedbackSurvey(opts: {
         to: opts.customerPhone,
         dealerId: opts.dealerId,
         customerId: opts.customerId,
+        leadId: opts.leadId,
         summary: "How did we do?",
         body: `Hello ${opts.customerName}, thank you for choosing AURA${opts.vehicle ? ` for your ${opts.vehicle}` : ""}. We'd love your feedback — simply reply to this message with a rating from 1 to 5 and any comments.`,
         dedupeKey: `${key}:whatsapp`,

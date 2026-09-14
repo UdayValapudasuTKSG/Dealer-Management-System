@@ -1,6 +1,7 @@
 import { and, desc, eq, isNotNull, isNull, lt, lte, ne, or } from "drizzle-orm";
 import {
   db,
+  pool,
   customersTable,
   dealersTable,
   emailLogsTable,
@@ -25,7 +26,12 @@ import {
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { logger } from "./logger";
-import { isExplicitLeadOutboxSuppressed } from "./reviewed-delivery-import-policy";
+import {
+  isExplicitLeadOutboxSuppressed,
+  legacyReviewedOutboxDisposition,
+  reviewedOutboxCommunicationLockKeys,
+  type LegacyReviewedOutboxDisposition,
+} from "./reviewed-delivery-import-policy";
 import {
   resolveDealerSmtp,
   smtpSkipMessage,
@@ -1144,6 +1150,17 @@ export type EnqueueOptions = {
   notifyUserId?: number;
 };
 
+/** Parse only positive integer lead ids; payload values remain untrusted text. */
+export function parseOutboxLeadId(value: unknown): number | null {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim()
+        ? Number(value.trim())
+        : NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 /**
  * Typed event API for other modules: enqueue a templated email.
  * The queue worker delivers it, retries with backoff, and logs everything.
@@ -1207,6 +1224,11 @@ async function isRecipientEmailOptedOut(
 }
 
 export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
+  const resolvedLeadId = await validatedOutboxLeadId(
+    opts.dealerId,
+    opts.leadId,
+    opts.data?.leadId,
+  );
   const { subject } = renderEmail(
     opts.template,
     opts.data ?? {},
@@ -1219,15 +1241,35 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
   const recipientOptedOut = await isRecipientEmailOptedOut(opts.dealerId, opts.to);
   const controlledImportSuppressed = await controlledImportLeadSuppressesEmail(
     opts.dealerId,
-    opts.leadId,
+    resolvedLeadId,
   );
-  if (recipientOptedOut || controlledImportSuppressed) {
+  const legacyDisposition =
+    resolvedLeadId == null
+      ? await legacyOutboxReviewDisposition(
+          {
+            channel: "email",
+            customerId: opts.customerId ?? null,
+            dealerId: opts.dealerId,
+            leadId: resolvedLeadId,
+            payload: opts.data ?? {},
+            recipient: opts.to,
+            template: opts.template,
+            createdAt: new Date(),
+          },
+          resolvedLeadId,
+        )
+      : "allow";
+  if (
+    recipientOptedOut ||
+    controlledImportSuppressed ||
+    legacyDisposition !== "allow"
+  ) {
     const [suppressed] = await db
       .insert(emailLogsTable)
       .values({
         dealerId: opts.dealerId,
         customerId: opts.customerId ?? null,
-        leadId: opts.leadId ?? null,
+        leadId: resolvedLeadId,
         recipient: opts.to,
         subject,
         template: opts.template,
@@ -1237,9 +1279,12 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
         // Suffixed so a suppressed event never consumes the real dedupe key:
         // if email is re-enabled later, a legitimate re-send still goes out.
         dedupeKey: opts.dedupeKey ? `${opts.dedupeKey}:suppressed` : null,
-        lastError: controlledImportSuppressed
-          ? "suppressed: controlled reviewed-import lead communication is disabled"
-          : "suppressed: email communication is off for this lead",
+        lastError:
+          legacyDisposition === "cancel_ambiguous"
+            ? "cancelled: legacy outbox lead identity was ambiguous"
+            : controlledImportSuppressed || legacyDisposition === "suppress"
+              ? "suppressed: controlled reviewed-import lead communication is disabled"
+              : "suppressed: email communication is off for this lead",
       })
       .onConflictDoNothing({ target: emailLogsTable.dedupeKey })
       .returning();
@@ -1255,7 +1300,7 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
     .values({
       dealerId: opts.dealerId,
       customerId: opts.customerId ?? null,
-      leadId: opts.leadId ?? null,
+      leadId: resolvedLeadId,
       recipient: opts.to,
       subject,
       template: opts.template,
@@ -1302,6 +1347,193 @@ async function controlledImportLeadSuppressesEmail(
   } catch (err) {
     logger.error({ err, dealerId, leadId }, "controlled import suppression lookup failed; refusing email enqueue");
     throw new Error("Controlled import communication suppression could not be verified; email was not queued.");
+  }
+}
+
+/**
+ * Resolve a queue row's lead identity from the explicit column first, then
+ * from a payload fallback. Payload ids are accepted only after a same-dealer,
+ * non-deleted lead lookup; an arbitrary cross-dealer payload cannot opt into
+ * (or bypass) provenance policy.
+ */
+export type OutboxLeadLookup = (
+  dealerId: number,
+  leadId: number,
+) => Promise<number | null>;
+
+export const lookupValidatedOutboxLead: OutboxLeadLookup = async (
+  dealerId,
+  leadId,
+): Promise<number | null> => {
+  const [lead] = await db
+    .select({ id: leadsTable.id })
+    .from(leadsTable)
+    .where(
+      and(
+        eq(leadsTable.id, leadId),
+        eq(leadsTable.dealerId, dealerId),
+        isNull(leadsTable.deletedAt),
+      ),
+    )
+    .limit(1);
+  return lead?.id ?? null;
+};
+
+export async function validatedOutboxLeadId(
+  dealerId: number,
+  explicitLeadId: number | null | undefined,
+  payloadLeadId: unknown,
+  lookupLead: OutboxLeadLookup = lookupValidatedOutboxLead,
+): Promise<number | null> {
+  const candidate = parseOutboxLeadId(
+    explicitLeadId != null ? explicitLeadId : payloadLeadId,
+  );
+  if (candidate == null) return null;
+  try {
+    return await lookupLead(dealerId, candidate);
+  } catch (err) {
+    logger.error(
+      { err, dealerId, leadId: candidate },
+      "outbox lead identity lookup failed",
+    );
+    throw new Error(
+      "Lead communication provenance could not be verified; message was not queued.",
+    );
+  }
+}
+
+function queuedPayloadLeadId(
+  payload: Record<string, string> | null | undefined,
+): unknown {
+  if (payload?.leadId != null) return payload.leadId;
+  if (!payload?.documentDataJson) return null;
+  try {
+    return (JSON.parse(payload.documentDataJson) as { leadId?: unknown }).leadId;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Hold a PostgreSQL session advisory lock while an outbox item crosses its
+ * final policy check and the provider hand-off. Transaction locks cannot span
+ * an SMTP/Meta request without pinning the application's transaction and its
+ * row locks; a dedicated session lock gives the importer the same exclusion
+ * while ensuring the connection is always released in finally.
+ */
+export async function withReviewedOutboxCommunicationLock<T>(
+  item: Pick<EmailLog, "id" | "channel" | "customerId" | "dealerId" | "leadId" | "payload" | "recipient">,
+  work: () => Promise<T>,
+): Promise<T> {
+  const possibleLeadId = parseOutboxLeadId(
+    item.leadId ?? queuedPayloadLeadId(item.payload),
+  );
+  const keys = reviewedOutboxCommunicationLockKeys({
+    dealerId: item.dealerId,
+    // Take a possible explicit key even before its same-dealer validation.
+    // If validation rejects it, the legacy keys below still fence the fallback.
+    leadId: possibleLeadId,
+    customerId: item.customerId,
+    email: item.channel === "email" ? item.recipient : null,
+    whatsappPhones:
+      item.channel === "whatsapp" ? [item.recipient] : undefined,
+  });
+  if (keys.length === 0) return work();
+
+  const client = await pool.connect();
+  const acquired: string[] = [];
+  try {
+    for (const key of keys) {
+      await client.query("select pg_advisory_lock(hashtext($1))", [key]);
+      acquired.push(key);
+    }
+    return await work();
+  } finally {
+    // Unlock in reverse acquisition order and release the *same* pool client:
+    // session advisory locks are otherwise retained across unrelated requests.
+    for (const key of acquired.reverse()) {
+      try {
+        await client.query("select pg_advisory_unlock(hashtext($1))", [key]);
+      } catch (err) {
+        logger.error({ err, key, outboxId: item.id }, "reviewed outbox advisory unlock failed");
+      }
+    }
+    client.release();
+  }
+}
+
+/** Reassert the claimed state while the reviewed-import fence is held. */
+async function recheckOutboxStatus(
+  id: number,
+  status: "processing" | "sending",
+): Promise<boolean> {
+  const [current] = await db
+    .update(emailLogsTable)
+    .set({ status })
+    .where(and(eq(emailLogsTable.id, id), eq(emailLogsTable.status, status)))
+    .returning({ id: emailLogsTable.id });
+  return Boolean(current);
+}
+
+async function legacyOutboxReviewDisposition(
+  item: Pick<
+    EmailLog,
+    | "channel"
+    | "customerId"
+    | "dealerId"
+    | "leadId"
+    | "payload"
+    | "recipient"
+    | "template"
+    | "createdAt"
+  >,
+  validatedLeadId: number | null,
+): Promise<LegacyReviewedOutboxDisposition> {
+  if (validatedLeadId != null) return "allow";
+  const matchers = [];
+  if (item.customerId != null) {
+    matchers.push(eq(leadsTable.customerId, item.customerId));
+  }
+  if (item.channel === "email" && item.recipient.trim()) {
+    matchers.push(
+      sql`lower(btrim(${leadsTable.email})) = lower(btrim(${item.recipient.trim()}))`,
+    );
+  }
+  if (item.channel === "whatsapp") {
+    const digits = normalizeWhatsappPhone(item.recipient);
+    if (digits) {
+      matchers.push(
+        sql`regexp_replace(coalesce(${leadsTable.phone}, ''), '[^0-9]', '', 'g') = ${digits}`,
+      );
+    }
+  }
+  if (matchers.length === 0) return "allow";
+  try {
+    const candidates = await db
+      .select({ importMetadata: leadsTable.importMetadata })
+      .from(leadsTable)
+      .where(
+        and(
+          eq(leadsTable.dealerId, item.dealerId),
+          isNull(leadsTable.deletedAt),
+          or(...matchers),
+        ),
+      );
+    return legacyReviewedOutboxDisposition(candidates, {
+      template: item.template,
+      createdAt: item.createdAt,
+    });
+  } catch (err) {
+    logger.error(
+      { err, outboxLeadId: item.leadId, recipient: item.recipient },
+      "legacy outbox provenance lookup failed; refusing delivery until retry",
+    );
+    // An unknown lookup result is not the same as an ambiguous identity. The
+    // worker's per-item failure boundary converts this into a retryable row;
+    // cancelling here would make a transient database fault permanent.
+    throw new Error(
+      "Legacy lead communication provenance could not be verified.",
+    );
   }
 }
 
@@ -1545,6 +1777,57 @@ export async function enqueueWhatsapp(
       "The recipient phone number is not a valid WhatsApp number.",
     );
   }
+  const resolvedLeadId = await validatedOutboxLeadId(
+    opts.dealerId,
+    opts.leadId,
+    opts.document?.data.leadId,
+  );
+  const queueOpts =
+    resolvedLeadId === (opts.leadId ?? null)
+      ? opts
+      : { ...opts, leadId: resolvedLeadId };
+
+  // Reviewed-import provenance suppression is independent of STOP/START
+  // acknowledgements: imported customer records must not receive WhatsApp
+  // sends through an opt-out override.
+  if (
+    await controlledImportLeadSuppressesEmail(opts.dealerId, resolvedLeadId)
+  ) {
+    return cancelledWhatsappLog(
+      queueOpts,
+      digits,
+      "suppressed: controlled reviewed-import lead communication is disabled",
+    );
+  }
+  const legacyDisposition =
+    resolvedLeadId == null
+      ? await legacyOutboxReviewDisposition(
+          {
+            channel: "whatsapp",
+            customerId: opts.customerId ?? null,
+            dealerId: opts.dealerId,
+            leadId: resolvedLeadId,
+            payload: opts.document
+              ? {
+                  documentDataJson: JSON.stringify(opts.document.data),
+                }
+              : {},
+            recipient: digits,
+            template: opts.kind,
+            createdAt: new Date(),
+          },
+          resolvedLeadId,
+        )
+      : "allow";
+  if (legacyDisposition !== "allow") {
+    return cancelledWhatsappLog(
+      queueOpts,
+      digits,
+      legacyDisposition === "cancel_ambiguous"
+        ? "cancelled: legacy outbox lead identity was ambiguous"
+        : "suppressed: controlled reviewed-import lead communication is disabled",
+    );
+  }
 
   // R6.4 opt-out enforcement at the enqueue boundary: a suppressed row is
   // still written (status "cancelled") so the outbox log shows WHY nothing
@@ -1554,7 +1837,7 @@ export async function enqueueWhatsapp(
     (await isWhatsappOptedOut(opts.dealerId, digits))
   ) {
     return cancelledWhatsappLog(
-      opts,
+      queueOpts,
       digits,
       "Recipient has opted out of WhatsApp (STOP).",
     );
@@ -1564,7 +1847,7 @@ export async function enqueueWhatsapp(
   if (!(await isWhatsappReplyWindowOpen(opts.dealerId, digits, targetTime))) {
     if (opts.document) {
       return cancelledWhatsappLog(
-        opts,
+        queueOpts,
         digits,
         "The 24-hour WhatsApp reply window is closed. Meta only allows this quote PDF after the customer sends a new message.",
       );
@@ -1572,7 +1855,7 @@ export async function enqueueWhatsapp(
     const channel = await getChannelByDealerId(opts.dealerId);
     if (!channel?.serviceTemplateName) {
       return cancelledWhatsappLog(
-        opts,
+        queueOpts,
         digits,
         "The 24-hour WhatsApp reply window is closed and no approved service template is configured.",
       );
@@ -1584,7 +1867,7 @@ export async function enqueueWhatsapp(
     .values({
       dealerId: opts.dealerId,
       customerId: opts.customerId ?? null,
-      leadId: opts.leadId ?? null,
+      leadId: resolvedLeadId,
       recipient: digits,
       subject: opts.summary ?? opts.body.slice(0, 140),
       template: opts.kind,
@@ -1635,7 +1918,7 @@ export async function enqueueWhatsapp(
     direction: "out",
     body: opts.body,
     dealerId: opts.dealerId,
-    leadId: opts.leadId ?? null,
+    leadId: resolvedLeadId,
     actor: opts.actor ?? "AURA Outbox",
     outboxId: row.id,
     deliveryStatus: "queued",
@@ -1863,6 +2146,17 @@ async function markFailed(
   }
 }
 
+/** Shared per-item recovery used when a claimed row cannot complete a
+ * pre-send policy lookup. Kept separate from provider uncertainty handling:
+ * callers must only use it before an external provider request starts. */
+export async function recoverClaimedOutboxItem(
+  item: EmailLog,
+  message: string,
+  expectedStatus: "processing" | "sending",
+): Promise<void> {
+  await markFailed(item, item.attempts + 1, message, expectedStatus);
+}
+
 /** Cancel a queued message when policy changed after enqueue (STOP/window close). */
 async function cancelQueuedWhatsapp(item: EmailLog, reason: string): Promise<void> {
   const releasedDedupeKey =
@@ -1971,20 +2265,48 @@ async function processWhatsappQueue(): Promise<void> {
     if (!claimed) continue;
     let item = claimed;
     const attempts = item.attempts + 1;
-
-    if (
-      item.payload?.allowOptOutConfirmation !== "true" &&
-      (await isWhatsappOptedOut(item.dealerId, item.recipient))
-    ) {
-      await cancelQueuedWhatsapp(
-        item,
-        "Recipient opted out of WhatsApp after this message was queued.",
-      );
-      continue;
-    }
-
     let sendStarted = false;
     try {
+      await withReviewedOutboxCommunicationLock(item, async () => {
+      // A conversion may have cancelled this item while this worker was
+      // waiting for the shared session lock. Do not carry a stale claim to
+      // any policy lookup or provider request.
+      if (!(await recheckOutboxStatus(item.id, "processing"))) return;
+      if (
+        item.payload?.allowOptOutConfirmation !== "true" &&
+        (await isWhatsappOptedOut(item.dealerId, item.recipient))
+      ) {
+        await cancelQueuedWhatsapp(
+          item,
+          "Recipient opted out of WhatsApp after this message was queued.",
+        );
+        return;
+      }
+      const whatsappLeadId = await validatedOutboxLeadId(
+        item.dealerId,
+        item.leadId,
+        queuedPayloadLeadId(item.payload),
+      );
+      const legacyDisposition =
+        whatsappLeadId == null
+          ? await legacyOutboxReviewDisposition(item, whatsappLeadId)
+          : "allow";
+      if (
+        await controlledImportLeadSuppressesEmail(
+          item.dealerId,
+          whatsappLeadId,
+        ) ||
+        legacyDisposition !== "allow"
+      ) {
+        await cancelQueuedWhatsapp(
+          item,
+          legacyDisposition === "cancel_ambiguous"
+            ? "cancelled: legacy outbox lead identity was ambiguous"
+            : "suppressed: controlled reviewed-import lead communication is disabled",
+        );
+        return;
+      }
+
       // Resolve the Meta channel for this item's dealer (DB first, then env fallback).
       const dealerChannel =
         item.dealerId != null ? await getChannelByDealerId(item.dealerId) : null;
@@ -2004,14 +2326,14 @@ async function processWhatsappQueue(): Promise<void> {
           item,
           "The 24-hour WhatsApp reply window closed before the quote PDF could be delivered. Ask the customer to send a new message, then retry.",
         );
-        continue;
+        return;
       }
       if (!insideReplyWindow && !dealerChannel.serviceTemplateName) {
         await cancelQueuedWhatsapp(
           item,
           "The 24-hour WhatsApp reply window closed before delivery and no approved service template is configured.",
         );
-        continue;
+        return;
       }
       let interactive:
         | NonNullable<EnqueueWhatsappOptions["interactive"]>
@@ -2083,7 +2405,7 @@ async function processWhatsappQueue(): Promise<void> {
           ),
         )
         .returning();
-      if (!sending) continue;
+      if (!sending) return;
       item = sending;
       sendStarted = true;
       const correlationId = `aura-outbox:${item.id}`;
@@ -2160,6 +2482,7 @@ async function processWhatsappQueue(): Promise<void> {
         },
         "whatsapp accepted by provider",
       );
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const disposition = whatsappSendFailureDisposition(err);
@@ -2193,12 +2516,18 @@ async function processWhatsappQueue(): Promise<void> {
         );
         continue;
       }
-      await markFailed(
-        item,
-        disposition === "terminal_rejection" ? MAX_ATTEMPTS : attempts,
-        message,
-        sendStarted ? "sending" : "processing",
-      );
+      if (!sendStarted && disposition !== "terminal_rejection") {
+        // Includes provenance/consent lookups before Meta hand-off. Keep the
+        // claim retryable rather than permanently leaving it `processing`.
+        await recoverClaimedOutboxItem(item, message, "processing");
+      } else {
+        await markFailed(
+          item,
+          disposition === "terminal_rejection" ? MAX_ATTEMPTS : attempts,
+          message,
+          sendStarted ? "sending" : "processing",
+        );
+      }
       logger.error({ err, id: item.id }, "whatsapp send failed");
     }
   }
@@ -2267,6 +2596,9 @@ export async function processQueue(): Promise<void> {
         )
         .returning();
       if (!item) continue; // another worker claimed it
+      try {
+        await withReviewedOutboxCommunicationLock(item, async () => {
+      if (!(await recheckOutboxStatus(item.id, "sending"))) return;
       // Scheduled service reminders are revalidated after the outbox CAS and
       // immediately before transport. A cancellation, stage change, or
       // reschedule therefore cannot leak a stale reminder even if it raced
@@ -2306,13 +2638,23 @@ export async function processQueue(): Promise<void> {
             .update(emailLogsTable)
             .set({ status: "cancelled", nextAttemptAt: null })
             .where(eq(emailLogsTable.id, item.id));
-          continue;
+          return;
         }
       }
       // Consent recheck at send time: opt-out may have been enabled after
       // this row was queued (or between scheduled retries) — never deliver.
+      const emailLeadId = await validatedOutboxLeadId(
+        item.dealerId,
+        item.leadId,
+        item.payload?.leadId,
+      );
+      const legacyDisposition =
+        emailLeadId == null
+          ? await legacyOutboxReviewDisposition(item, emailLeadId)
+          : "allow";
       if (
-        (await controlledImportLeadSuppressesEmail(item.dealerId, item.leadId)) ||
+        (await controlledImportLeadSuppressesEmail(item.dealerId, emailLeadId)) ||
+        legacyDisposition !== "allow" ||
         (await isRecipientEmailOptedOut(item.dealerId, item.recipient))
       ) {
         await db
@@ -2320,10 +2662,12 @@ export async function processQueue(): Promise<void> {
           .set({
             status: "cancelled",
             lastError:
-              "suppressed: email communication is off for this lead or controlled import",
+              legacyDisposition === "cancel_ambiguous"
+                ? "cancelled: legacy outbox lead identity was ambiguous"
+                : "suppressed: email communication is off for this lead or controlled import",
           })
           .where(eq(emailLogsTable.id, item.id));
-        continue;
+        return;
       }
       // Resolve the OWNING dealer's SMTP connection. Unconfigured/disabled
       // dealers get a terminal, non-retrying skip — never another dealer's
@@ -2341,7 +2685,7 @@ export async function processQueue(): Promise<void> {
           { id: item.id, dealerId: item.dealerId, reason: smtp.reason },
           "email skipped: dealer SMTP unavailable",
         );
-        continue;
+        return;
       }
       try {
         // Per-dealer white-label branding: header logo (inline CID), display
@@ -2520,6 +2864,10 @@ export async function processQueue(): Promise<void> {
           /"/g,
           "",
         );
+        // This conditional no-op update is the final atomic ownership check.
+        // The importer holds the same advisory identity while it installs
+        // suppression, so it cannot commit between this check and sendMail.
+        if (!(await recheckOutboxStatus(item.id, "sending"))) return;
         const sendResult = await smtp.transport.sendMail({
           from: `"${(smtp.fromName ?? fromName).replace(/"/g, "")}" <${smtp.fromEmail}>`,
           ...(smtp.replyTo ? { replyTo: smtp.replyTo } : {}),
@@ -2569,10 +2917,22 @@ export async function processQueue(): Promise<void> {
         // Never persist or log raw SMTP error text — server responses can
         // echo credential material. Store/log only the classified message.
         const safe = sanitizeSmtpError(err);
-        await markFailed(item, item.attempts, safe.message);
+        await recoverClaimedOutboxItem(item, safe.message, "sending");
         logger.error(
           { id: item.id, dealerId: item.dealerId, smtpErrorCode: safe.code },
           "email send failed",
+        );
+      }
+        });
+      } catch (err) {
+        // Provenance and lock acquisition are deliberately inside this
+        // per-item boundary. A transient lookup fault after CAS must become a
+        // retryable failure, never a permanently stranded `sending` row.
+        const safe = sanitizeSmtpError(err);
+        await markFailed(item, item.attempts, safe.message);
+        logger.error(
+          { id: item.id, dealerId: item.dealerId, smtpErrorCode: safe.code },
+          "email pre-send policy check failed",
         );
       }
     }

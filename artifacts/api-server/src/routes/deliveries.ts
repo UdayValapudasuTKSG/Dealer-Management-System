@@ -115,6 +115,22 @@ export function addBusinessDays(from: Date, days: number, tz: string): Date {
 const money = (n: number) =>
   `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
+async function leadIdForDelivery(
+  delivery: Pick<Delivery, "dealId" | "dealerId">,
+): Promise<number | null> {
+  const [deal] = await db
+    .select({ leadId: dealsTable.leadId })
+    .from(dealsTable)
+    .where(
+      and(
+        eq(dealsTable.id, delivery.dealId),
+        eq(dealsTable.dealerId, delivery.dealerId),
+      ),
+    )
+    .limit(1);
+  return deal?.leadId ?? null;
+}
+
 type Enriched = Delivery & {
   advisorName: string | null;
   vehicleLabel: string | null;
@@ -666,6 +682,7 @@ router.patch("/deliveries/:id", async (req, res): Promise<void> => {
         dealerId: row.dealerId,
         deliveryId: row.id,
         customerId: recipientCustomerId,
+        leadId: await leadIdForDelivery(row),
         customerName: row.customerName,
         advisorUserId: parsed.data.advisorUserId,
         vehicleLabel: await vehicleLabelFor(row.vehicleId, row.dealerId),
@@ -860,6 +877,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
           to: email,
           dealerId: delivery.dealerId,
           customerId: delivery.customerId,
+          leadId: await leadIdForDelivery(delivery),
           data: {
             name,
             vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
@@ -1169,6 +1187,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       onDeliveryCompleted({
         dealerId: delivery.dealerId,
         deliveryId: delivery.id,
+        leadId: before?.leadId ?? null,
         customerId: delivery.customerId,
         customerName: delivery.customerName,
         vehicleLabel: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
@@ -1370,6 +1389,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
         dealerId: delivery.dealerId,
         entityType: "delivery",
         entityId: delivery.id,
+        leadId: before?.leadId ?? null,
         customerId: delivery.customerId,
         customerName: customer?.name ?? delivery.customerName ?? "Customer",
         customerEmail: customer?.email ?? null,
@@ -1941,6 +1961,7 @@ router.post(
       to: email,
       dealerId: delivery.dealerId,
       customerId: delivery.customerId,
+      leadId: await leadIdForDelivery(delivery),
       data: {
         name: doc?.ownerName ?? delivery.customerName ?? "there",
         vehicle: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),

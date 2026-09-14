@@ -5,6 +5,7 @@ import {
   identityImportPlan,
   isExplicitLeadOutboxSuppressed,
   isReusableCommittedDeal,
+  legacyReviewedOutboxDisposition,
   matchesReviewedVehicle,
   requiresApplyIdentityConfirmation,
   suppressesReviewedImportedLead,
@@ -71,5 +72,62 @@ assert.equal(isExplicitLeadOutboxSuppressed(41, {
 assert.equal(isExplicitLeadOutboxSuppressed(null, {
   suppressCustomerCommunications: true, suppressSalesAutomation: true,
 }), false);
+
+const reviewedImport = {
+  suppressCustomerCommunications: true,
+  suppressSalesAutomation: true,
+  importedAt: "2026-08-01T12:00:00.000Z",
+};
+assert.equal(
+  legacyReviewedOutboxDisposition(
+    [{ importMetadata: reviewedImport }],
+    { template: "vehicle_quote", createdAt: new Date("2026-07-31T12:00:00.000Z") },
+  ),
+  "suppress",
+  "a pre-import leadless sales message is suppressed",
+);
+assert.equal(
+  legacyReviewedOutboxDisposition(
+    [{ importMetadata: reviewedImport }],
+    { template: "delivery_schedule", createdAt: new Date("2026-07-31T12:00:00.000Z") },
+  ),
+  "suppress",
+  "a pre-import leadless delivery message is suppressed",
+);
+for (const template of [
+  "service.appointment.confirmed",
+  "service.appointment.reminder",
+  "service.checkin.receipt",
+  "service.estimate.ready",
+  "service.invoice.issued",
+  "service.delayed",
+  "feedback.survey",
+  "collision.claim.communication",
+]) {
+  assert.equal(
+    legacyReviewedOutboxDisposition(
+      [{ importMetadata: reviewedImport }],
+      { template, createdAt: new Date("2026-07-31T12:00:00.000Z") },
+    ),
+    "allow",
+    `${template} is outside the legacy sales/delivery scope`,
+  );
+}
+assert.equal(
+  legacyReviewedOutboxDisposition(
+    [{ importMetadata: reviewedImport }],
+    { template: "vehicle_quote", createdAt: new Date("2026-08-01T12:01:00.000Z") },
+  ),
+  "allow",
+  "a future leadless sales event is outside the pre-import cutoff",
+);
+assert.equal(
+  legacyReviewedOutboxDisposition(
+    [{ importMetadata: reviewedImport }, { importMetadata: null }],
+    { template: "vehicle_quote", createdAt: new Date("2026-07-31T12:00:00.000Z") },
+  ),
+  "cancel_ambiguous",
+  "pre-import ambiguity still fails closed only for the legacy row",
+);
 
 console.log("Reviewed delivery import policy tests passed.");

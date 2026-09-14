@@ -989,6 +989,7 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
   if (refundGate) {
     const dealerId = activeDealerId(res);
     let vehicleId: number | null = null;
+    let refundLeadId: number | null = null;
     if (refundGate.refType === "deal" && refundGate.refId != null) {
       const [deal] = await db
         .select()
@@ -1001,6 +1002,7 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
         );
       if (deal) {
         vehicleId = deal.vehicleId;
+        refundLeadId = deal.leadId;
         await db
           .update(dealsTable)
           .set({ depositPaid: false })
@@ -1027,7 +1029,10 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
           ),
         )
         .returning();
-      if (booking) vehicleId = booking.vehicleId;
+      if (booking) {
+        vehicleId = booking.vehicleId;
+        refundLeadId = booking.leadId;
+      }
     }
 
     const refundAmount = Math.abs(result.payment.amount);
@@ -1080,6 +1085,7 @@ router.post("/payments", idempotent("payments.create"), async (req, res): Promis
         notifyRefundPaid({
           dealerId,
           paymentId: result.payment.id,
+          leadId: refundLeadId,
           customerId: refundGate.customerId,
           customerName: customer.name,
           customerEmail: customer.email,

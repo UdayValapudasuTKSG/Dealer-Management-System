@@ -43,6 +43,21 @@ export async function dealerExchangeRate(dealerId: number): Promise<number> {
   return dealer?.rate ?? 1;
 }
 
+async function leadIdForInvoice(invoice: Pick<Invoice, "dealerId" | "dealId">): Promise<number | null> {
+  if (invoice.dealId == null) return null;
+  const [deal] = await db
+    .select({ leadId: dealsTable.leadId })
+    .from(dealsTable)
+    .where(
+      and(
+        eq(dealsTable.id, invoice.dealId),
+        eq(dealsTable.dealerId, invoice.dealerId),
+      ),
+    )
+    .limit(1);
+  return deal?.leadId ?? null;
+}
+
 export type IssueInvoiceArgs = {
   dealerId: number;
   kind: InvoiceKind;
@@ -111,6 +126,7 @@ export async function issueInvoice(args: IssueInvoiceArgs): Promise<Invoice> {
 async function notifyInvoiceIssued(invoice: Invoice): Promise<void> {
   if (suppressesCustomerCommunications(invoice)) return;
   const key = `invoice:issued:${invoice.id}`;
+  const leadId = await leadIdForInvoice(invoice);
   const [customer] = invoice.customerId
     ? await db
         .select()
@@ -146,6 +162,7 @@ async function notifyInvoiceIssued(invoice: Invoice): Promise<void> {
       to: customer.email,
       dealerId: invoice.dealerId,
       customerId: invoice.customerId,
+      leadId,
       data,
       dedupeKey: `${key}:email`,
       notifyUserId: firstFinance,
@@ -157,6 +174,7 @@ async function notifyInvoiceIssued(invoice: Invoice): Promise<void> {
       to: customer.phone,
       dealerId: invoice.dealerId,
       customerId: invoice.customerId,
+      leadId,
       summary: `Invoice ${invoice.invoiceNumber} issued`,
       body: `Hello ${invoice.customerName}, your AURA invoice ${invoice.invoiceNumber} (${data.total}) has been issued${invoice.dueDate ? `, due ${invoice.dueDate}` : ""}. The full invoice PDF has been emailed to you — reply here if you have any questions.`,
       dedupeKey: `${key}:whatsapp`,
@@ -520,6 +538,7 @@ export async function applyPayment(args: ApplyPaymentArgs) {
     args.gateId == null &&
     !suppressesCustomerCommunications(invoice)
   ) {
+    const invoiceLeadId = await leadIdForInvoice(invoice);
     void (async () => {
       const [customer] = invoice.customerId
         ? await db
@@ -541,6 +560,7 @@ export async function applyPayment(args: ApplyPaymentArgs) {
         template: "payment_received",
         to: customer.email,
         customerId: invoice.customerId,
+        leadId: invoiceLeadId,
         dedupeKey: `payment:received:${result.payment.id}`,
         data: {
           name: customer.name ?? invoice.customerName,

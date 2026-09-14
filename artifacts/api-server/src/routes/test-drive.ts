@@ -373,6 +373,7 @@ router.post("/test-drive/:token/book", async (req, res): Promise<void> => {
       template: "test_drive_confirmation",
       to: updated!.email,
       customerId: updated!.customerId,
+      leadId: updated!.id,
       data: {
         vehicle: vehicle ?? "",
         date: dateStr,

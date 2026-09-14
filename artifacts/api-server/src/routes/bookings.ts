@@ -725,6 +725,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
         to: email,
         dealerId: booking!.dealerId,
         customerId: booking!.customerId,
+        leadId: booking!.leadId,
         data: {
           name,
           vehicle: vehicleName,
@@ -974,6 +975,7 @@ router.post("/bookings/:id/remind", async (req, res): Promise<void> => {
     to: email,
     dealerId: booking.dealerId,
     customerId: booking.customerId,
+    leadId: booking.leadId,
     data: {
       name,
       vehicle: await vehicleLabel(booking.vehicleId, booking.dealerId),

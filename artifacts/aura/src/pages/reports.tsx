@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useGetReport, GetReportType } from "@workspace/api-client-react";
 import type { Report, GetReportFormat } from "@workspace/api-client-react";
 import { useAuthz } from "@/lib/auth";
-import { dealerDayKeyPlus } from "@/lib/format";
+import { dealerDayKey, dealerDayKeyPlus } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,8 +43,6 @@ import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { PageHero } from "@/components/layout/page-hero";
 import { PersonaOverview } from "@/components/reports/persona-overview";
-
-import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 
 type ReportType = (typeof GetReportType)[keyof typeof GetReportType];
 
@@ -151,9 +149,15 @@ export default function Reports() {
   );
   const [selected, setSelected] = useState<ReportType | null>(null);
 
-  const prevMonth = subMonths(new Date(), 1);
-  const [from, setFrom] = useState(() => format(startOfMonth(prevMonth), "yyyy-MM-dd"));
-  const [to, setTo] = useState(() => format(endOfMonth(prevMonth), "yyyy-MM-dd"));
+  const [initialRange] = useState(() => {
+    const [year, month] = dealerDayKey().split("-").map(Number);
+    // Calendar arithmetic on the dealer's date, not the browser's timezone.
+    const first = new Date(Date.UTC(year!, month! - 2, 1));
+    const last = new Date(Date.UTC(year!, month! - 1, 0));
+    return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) };
+  });
+  const [from, setFrom] = useState(initialRange.from);
+  const [to, setTo] = useState(initialRange.to);
 
   const active =
     selected && visible.some((r) => r.type === selected)

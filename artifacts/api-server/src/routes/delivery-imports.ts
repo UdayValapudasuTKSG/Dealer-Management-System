@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
-import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
@@ -32,6 +32,8 @@ import {
   identityImportPlan,
   isReusableCommittedDeal,
   matchesReviewedVehicle,
+  PRE_IMPORT_SALES_DELIVERY_TEMPLATES,
+  reviewedOutboxCommunicationLockKeys,
   requiresApplyIdentityConfirmation,
 } from "../lib/reviewed-delivery-import-policy";
 
@@ -241,12 +243,27 @@ function sameText(left: string | null | undefined, right: string | null | undefi
   return (left ?? "").trim().toLocaleLowerCase() === (right ?? "").trim().toLocaleLowerCase();
 }
 
-function leadImportMetadata(row: ParsedRow, input: z.infer<typeof reviewInput>, batchFingerprint: string) {
+function leadImportMetadata(
+  row: ParsedRow,
+  input: z.infer<typeof reviewInput>,
+  batchFingerprint: string,
+  importedAt: Date,
+) {
   return {
     ...importMetadata(row, input, batchFingerprint),
+    importedAt: importedAt.toISOString(),
     suppressSalesAutomation: true,
     suppressionReason: "reviewed historical committed sale; no customer outreach or new-lead automation",
   };
+}
+
+async function lockReviewedOutboxCommunication(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  identity: Parameters<typeof reviewedOutboxCommunicationLockKeys>[0],
+): Promise<void> {
+  for (const key of reviewedOutboxCommunicationLockKeys(identity)) {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${key}))`);
+  }
 }
 
 async function preview(
@@ -693,6 +710,7 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
 
       let lead: typeof leadsTable.$inferSelect;
       let leadAction: "create_lead" | "reuse_lead";
+      const importedAt = new Date();
       if (confirmed?.leadId != null) {
         // This is the same lead-link lock used by normal deal creation and
         // archive flows. Acquire it before the row lock/update.
@@ -706,6 +724,17 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
         if (!selected) throw new Error(`CSV row ${row.row}: confirmed lead ${confirmed.leadId} is no longer an exact active lead candidate.`);
         if (selected.customerId != null && selected.customerId !== customer!.id)
           throw new Error(`CSV row ${row.row}: confirmed lead ${selected.id} is linked to a different customer.`);
+        // Acquire the exact fence that a worker holds through its final
+        // provenance check and provider hand-off. Include only legacy lookup
+        // identities, never a broad customer-email suppression rule.
+        await lockReviewedOutboxCommunication(tx, {
+          dealerId,
+          leadId: selected.id,
+          customerId: customer!.id,
+          email: row.raw["Email"],
+          emails: [selected.email, customer!.email],
+          whatsappPhones: [selected.phone, customer!.phone],
+        });
         [lead] = await tx.update(leadsTable).set({
           customerId: selected.customerId ?? customer!.id,
           // A reused historical-sale lead must leave the actionable pipeline
@@ -715,14 +744,19 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
           status: "converted",
           contactedDate: selected.contactedDate,
           stageEnteredAt: new Date(),
-          importMetadata: leadImportMetadata(row, input.data, batchFingerprint),
+          importMetadata: leadImportMetadata(row, input.data, batchFingerprint, importedAt),
         }).where(and(
           eq(leadsTable.id, selected.id), eq(leadsTable.dealerId, dealerId),
         )).returning();
-        await tx.update(emailLogsTable).set({ status: "cancelled" }).where(and(
+        await tx.update(emailLogsTable).set({
+          status: "cancelled",
+          deliveryStatus: "cancelled",
+          nextAttemptAt: null,
+          lastError: "cancelled: reviewed historical sale has customer communication suppression",
+        }).where(and(
           eq(emailLogsTable.dealerId, dealerId),
           eq(emailLogsTable.leadId, lead!.id),
-          eq(emailLogsTable.status, "queued"),
+          inArray(emailLogsTable.status, ["queued", "processing", "failed"]),
         ));
         await tx.update(tasksTable).set({
           status: "done",
@@ -740,6 +774,16 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
         // Deliberately bypass POST /leads: that endpoint starts welcome,
         // quoting, intake and manager-notification automation even for a won
         // phase. This is an already committed historical sale, not an enquiry.
+        // A newly inserted lead cannot have a pre-existing explicit outbox
+        // row, but an identity-less legacy row can match its customer/email.
+        // Fence those identities before the suppression provenance is made
+        // visible to other transactions.
+        await lockReviewedOutboxCommunication(tx, {
+          dealerId,
+          customerId: customer!.id,
+          email: row.raw["Email"],
+          whatsappPhones: [customer!.phone],
+        });
         [lead] = await tx.insert(leadsTable).values({
           dealerId,
           name: row.customerName,
@@ -761,7 +805,7 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
           contactedDate: null,
           stageEnteredAt: new Date(),
           notes: `Imported reviewed committed sale (${BATCH_KEY}); customer outreach and sales automation are suppressed by import provenance.`,
-          importMetadata: leadImportMetadata(row, input.data, batchFingerprint),
+          importMetadata: leadImportMetadata(row, input.data, batchFingerprint, importedAt),
         }).returning();
         await tx.insert(leadVehicleInterestsTable).values({
           dealerId,
@@ -778,6 +822,32 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
         });
         leadAction = "create_lead";
       }
+
+      // Before leadId was persisted on every customer outbox event, some
+      // legacy rows carried only customerId (or just the destination). Once a
+      // reviewed imported lead is converted, cancel those identity-less rows
+      // while they are still claimable. Explicitly lead-scoped rows for an
+      // unrelated same-address lead are intentionally untouched; ambiguous
+      // legacy rows fail closed here because their origin cannot be proven.
+      const importedEmail = lead!.email?.trim().toLowerCase() || null;
+      await tx.update(emailLogsTable).set({
+        status: "cancelled",
+        deliveryStatus: "cancelled",
+        nextAttemptAt: null,
+        lastError: "cancelled: legacy outbox identity is ambiguous for a suppressed imported lead",
+      }).where(and(
+        eq(emailLogsTable.dealerId, dealerId),
+        isNull(emailLogsTable.leadId),
+        inArray(emailLogsTable.template, PRE_IMPORT_SALES_DELIVERY_TEMPLATES),
+        lt(emailLogsTable.createdAt, importedAt),
+        inArray(emailLogsTable.status, ["queued", "processing", "failed"]),
+        or(
+          eq(emailLogsTable.customerId, customer!.id),
+          ...(importedEmail
+            ? [sql`lower(btrim(${emailLogsTable.recipient})) = ${importedEmail}`]
+            : []),
+        ),
+      ));
 
       const selectedVehicle = vehicle ?? (await tx.insert(vehiclesTable).values({
         dealerId,

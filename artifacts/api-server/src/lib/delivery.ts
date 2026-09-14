@@ -246,6 +246,7 @@ export async function ensureDeliveryForDeal(
           to: customerEmail,
           dealerId: deal.dealerId,
           customerId: deal.customerId,
+          leadId: deal.leadId,
           data: {
             name: deal.customerName ?? "",
             advisor: autoAdvisor.name,

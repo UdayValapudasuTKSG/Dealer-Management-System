@@ -23,6 +23,11 @@ import { recordAgentRun } from "./agent-governance";
 import { computeTaxes, dutyFreeTaxRules } from "./taxes";
 import { enqueueEmail } from "./email";
 import { dealerTimezone, zonedParts } from "./timezone";
+import {
+  resolveSalesAdvisorName,
+  snapshotSalesAdvisorPayload,
+  type SalesAdvisorLead,
+} from "./sales-advisor";
 
 // ---------------------------------------------------------------------------
 // Quote agent (A3) — auto-generates the GT-format "Code" (estimate) for every
@@ -407,7 +412,7 @@ export async function generateQuoteForLead(
       customerId: committedLead.customerId,
       leadId: committedLead.id,
       data: {
-        ...(await quotePdfPayload(quote)),
+        ...(await quotePdfPayload(quote, committedLead)),
         quoteId: String(quote.id),
         leadId: String(committedLead.id),
       },
@@ -520,6 +525,7 @@ export async function withQuoteItems<T extends Quote>(quotes: T[]): Promise<Arra
 /** Map a stored quote to the string payload the PDF builder + email queue expect. */
 export async function quotePdfPayload(
   quote: Quote,
+  authorizedLead?: SalesAdvisorLead & Pick<Lead, "id">,
 ): Promise<Record<string, string>> {
   const money = (n: number) =>
     n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -548,7 +554,33 @@ export async function quotePdfPayload(
     quantity: quote.quantity, basePrice: quote.basePrice / Math.max(quote.quantity, 1),
     totalTax: quote.totalTax, total: quote.basePrice + quote.totalTax,
   }];
-  return {
+  // Canonical callers already hold the dealer-authorized lead.  The fallback
+  // lookup keeps this shared payload safe for background callers while still
+  // scoping ownership to the quote's dealer.
+  const lead =
+    (authorizedLead &&
+    authorizedLead.id === quote.leadId &&
+    authorizedLead.dealerId === quote.dealerId
+      ? authorizedLead
+      : undefined) ??
+    (await db
+      .select({
+        dealerId: leadsTable.dealerId,
+        ownerUserId: leadsTable.ownerUserId,
+        assignedTo: leadsTable.assignedTo,
+      })
+      .from(leadsTable)
+      .where(
+        and(
+          eq(leadsTable.id, quote.leadId),
+          eq(leadsTable.dealerId, quote.dealerId),
+        ),
+      )
+      .limit(1))[0];
+  const salesAdvisorName = lead
+    ? await resolveSalesAdvisorName(lead)
+    : "";
+  const payload = {
     totalGyd: gyd(quote.total),
     dealerName: dealer?.brandName ?? dealer?.name ?? "",
     dealerAddress:
@@ -596,4 +628,5 @@ export async function quotePdfPayload(
     issuedOn: quote.issuedOn,
     validUntil: quote.validUntil,
   };
+  return snapshotSalesAdvisorPayload(payload, salesAdvisorName);
 }

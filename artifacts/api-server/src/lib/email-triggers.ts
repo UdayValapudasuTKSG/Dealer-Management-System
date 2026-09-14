@@ -144,6 +144,7 @@ async function send(opts: {
   template: Parameters<typeof enqueueEmail>[0]["template"];
   to: string | null | undefined;
   customerId?: number | null;
+  leadId?: number | null;
   data?: TemplateData;
 }): Promise<void> {
   if (!opts.to) return;
@@ -152,6 +153,7 @@ async function send(opts: {
     template: opts.template,
     to: opts.to,
     customerId: opts.customerId ?? null,
+    leadId: opts.leadId ?? null,
     data: opts.data ?? {},
   });
 }
@@ -217,6 +219,7 @@ export function onLeadCreated(lead: Lead, fallbackVehicleName?: string): void {
         template: "lead_received",
         to,
         customerId: lead.customerId,
+        leadId: lead.id,
         data: {
           name,
           ...(fallbackVehicleName ? { vehicle: fallbackVehicleName } : {}),
@@ -266,6 +269,7 @@ export async function sendTestDriveInviteEmail(
     template: "test_drive_invite",
     to,
     customerId: lead.customerId,
+    leadId: lead.id,
     data: {
       name,
       ...(advisor?.name ? { advisorName: advisor.name } : {}),
@@ -294,6 +298,7 @@ export function onLeadUpdated(before: Lead, after: Lead): void {
         template: "lead_assignment",
         to,
         customerId: after.customerId,
+        leadId: after.id,
         data: {
           advisor: after.assignedTo,
           ...(vehicle ? { vehicle } : {}),
@@ -311,6 +316,7 @@ export function onLeadUpdated(before: Lead, after: Lead): void {
         template: "test_drive_confirmation",
         to,
         customerId: after.customerId,
+        leadId: after.id,
         data: {
           ...(vehicle ? { vehicle } : {}),
           ...(after.testDriveAt
@@ -371,6 +377,7 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
           template: "finance_processing",
           to,
           customerId: after.customerId,
+          leadId: after.leadId,
           data: base,
         });
         break;
@@ -380,6 +387,7 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
           template: "finance_approved",
           to,
           customerId: after.customerId,
+          leadId: after.leadId,
           data: base,
         });
         await send({
@@ -387,6 +395,7 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
           template: "vehicle_booking",
           to,
           customerId: after.customerId,
+          leadId: after.leadId,
           data: base,
         });
         break;
@@ -410,6 +419,7 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
           template: "delivery_confirmation",
           to,
           customerId: after.customerId,
+          leadId: after.leadId,
           dedupeKey: deliveryRow
             ? `delivery_confirmation:${deliveryRow.id}`
             : `delivery_confirmation:deal-${after.id}`,
@@ -425,6 +435,7 @@ export function onDealStageChanged(before: Deal, after: Deal): void {
 export function onFinanceStatusChanged(
   app: {
     dealerId: number;
+    leadId: number | null;
     customerId: number | null;
     customerName: string;
     amount: number;
@@ -448,6 +459,7 @@ export function onFinanceStatusChanged(
         template: "finance_processing",
         to: c.email,
         customerId: app.customerId,
+        leadId: app.leadId,
         data: base,
       });
     } else if (status === "approved") {
@@ -456,6 +468,7 @@ export function onFinanceStatusChanged(
         template: "finance_approved",
         to: c.email,
         customerId: app.customerId,
+        leadId: app.leadId,
         data: base,
       });
     }
@@ -469,6 +482,7 @@ export function onFinanceStatusChanged(
 export function onDeliveryAdvisorAssigned(opts: {
   dealerId: number;
   deliveryId: number;
+  leadId?: number | null;
   customerId: number | null;
   customerName: string | null;
   advisorUserId: number;
@@ -503,6 +517,7 @@ export function onDeliveryAdvisorAssigned(opts: {
       template: "delivery_advisor_assigned",
       to,
       customerId: opts.customerId,
+      leadId: opts.leadId ?? null,
       dedupeKey: `delivery_advisor_assigned:${opts.deliveryId}:${opts.advisorUserId}`,
       data: {
         name: c.name ?? opts.customerName ?? "",
@@ -521,6 +536,7 @@ export function onDeliveryAdvisorAssigned(opts: {
 export function onDeliveryCompleted(opts: {
   dealerId: number;
   deliveryId: number;
+  leadId?: number | null;
   customerId: number | null;
   customerName: string | null;
   vehicleLabel: string;
@@ -540,6 +556,7 @@ export function onDeliveryCompleted(opts: {
       template: "delivery_confirmation",
       to: c.email,
       customerId: opts.customerId,
+      leadId: opts.leadId ?? null,
       dedupeKey: `delivery_confirmation:${opts.deliveryId}`,
       data: {
         name: c.name ?? opts.customerName ?? "",

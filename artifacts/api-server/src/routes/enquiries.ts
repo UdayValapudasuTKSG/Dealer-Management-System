@@ -195,11 +195,12 @@ router.post("/enquiries", async (req, res): Promise<void> => {
 
   // Quote (when a vehicle was matched to inventory) or welcome email.
   if (lead) onLeadCreated(lead, vehicleName?.trim() || undefined);
-  // Quote agent (A3): auto-generate the versioned Code.
-  if (lead) autoQuoteOnLeadCreated(lead);
 
   // Sales agent routes the enquiry to the least-loaded advisor automatically.
   const assigned = lead ? await autoAssignLead(lead) : null;
+  // Quote agent (A3): auto-generate only after ownership is settled so the
+  // queued advisor snapshot reflects the assigned owner.
+  if (lead) autoQuoteOnLeadCreated(assigned ?? lead);
 
   // Alert Marketing Coordinators (and managers) that a new enquiry landed.
   try {

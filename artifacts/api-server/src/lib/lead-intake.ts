@@ -247,8 +247,9 @@ async function createNewInboundLead(opts: InboundLeadOptions): Promise<Lead> {
   });
 
   onLeadCreated(lead!);
-  autoQuoteOnLeadCreated(lead!);
   const assigned = await autoAssignLead(lead!);
+  // Quote snapshots must see the owner selected by intake assignment.
+  autoQuoteOnLeadCreated(assigned ?? lead!);
   runIntakeOrchestration(assigned ?? lead!);
   notifyLeadNew(lead!);
   return assigned ?? lead!;

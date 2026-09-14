@@ -162,6 +162,7 @@ export async function assignLeadToCreator(
         to: updated.email,
         dealerId: updated.dealerId,
         customerId: updated.customerId,
+        leadId: updated.id,
         data: {
           advisor: advisorName,
           vehicle: await vehicleLabelFor(updated),
@@ -269,6 +270,7 @@ export async function autoAssignLead(lead: Lead): Promise<Lead | null> {
         to: updated.email,
         dealerId: updated.dealerId,
         customerId: updated.customerId,
+        leadId: updated.id,
         data: {
           advisor: advisorName,
           vehicle: await vehicleLabelFor(updated),

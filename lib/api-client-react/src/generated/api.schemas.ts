@@ -10118,4 +10118,3 @@ export type SubmitVehicleOnboarding201 = {
   state: SubmitVehicleOnboarding201State;
   vehicle: GarageVehicle;
 };
-

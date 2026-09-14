@@ -70,3 +70,4 @@
 - [Sales advisor activity metrics](sales-advisor-activity-metrics.md) — monthly management figures use real event dates; advisor identity is ownerUserId-first with legacy name fallback.
 - [Time-sensitive sweep priority](time-sensitive-sweep-priority.md) — scheduled reports must run before backlog sweeps, or overdue work can indefinitely delay their enqueue.
 - [Text status check constraints](text-status-check-constraints.md) — adding an app-level status constant must also update the live database CHECK constraint in the same migration.
+- [Import communication suppression](import-outbox-serialization.md) — conversion and provider hand-off must serialize; cancellation of pending rows alone cannot stop an already-claimed sender.

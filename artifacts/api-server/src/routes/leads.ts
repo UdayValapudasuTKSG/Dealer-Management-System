@@ -156,6 +156,11 @@ import {
   ownerCalendarContact,
   testDriveCalendarFields,
 } from "../lib/calendar";
+import {
+  enrichLegacySalesAdvisorPayload,
+  resolveSalesAdvisorName,
+  snapshotSalesAdvisorPayload,
+} from "../lib/sales-advisor";
 import { buildQuotePdf } from "../lib/quote-pdf";
 import {
   approvedQuoteDiscountForLead,
@@ -167,6 +172,10 @@ import {
   withQuoteItems,
 } from "../lib/quotes";
 import { getChannelByDealerId } from "../lib/whatsapp-channel";
+import {
+  selectQuoteDownloadPayload,
+  selectQuoteVersionOutboxPayload,
+} from "../lib/quote-payload";
 import { ensureLeadSources } from "../lib/lead-sources";
 import { getActiveChecklist } from "../lib/stage-checklists";
 import {
@@ -540,8 +549,6 @@ router.post("/leads", async (req, res): Promise<void> => {
   if (lead && normalizedInterests.length === 0) onLeadCreated(lead);
   // R6.2 #1 New Lead → division sales managers (In-App + Email).
   if (lead) notifyLeadNew(lead);
-  // Quote agent (A3): auto-generate the Code from inventory + tax config.
-  if (lead) autoQuoteOnLeadCreated(lead);
 
   await logLeadEvent(
     lead!,
@@ -561,6 +568,10 @@ router.post("/leads", async (req, res): Promise<void> => {
   const assigned =
     (creator ? await assignLeadToCreator(lead!, creator) : null) ??
     (await autoAssignLead(lead!));
+
+  // Quote agent (A3): auto-generate only after ownership is settled so the
+  // queued advisor snapshot reflects the assigned owner.
+  if (lead) autoQuoteOnLeadCreated(assigned ?? lead);
 
   // Intake agent: nearest showroom + WhatsApp quote share (fire-and-forget).
   runIntakeOrchestration(assigned ?? lead!);
@@ -1079,6 +1090,7 @@ async function leadQuoteContext(
   vehicle: typeof vehiclesTable.$inferSelect | null;
   quoteRef: string;
   sentPayload: Record<string, string> | null;
+  canonicalPayload: Record<string, string> | null;
   sentAt: Date | null;
 } | null> {
   const [lead] = await db
@@ -1107,11 +1119,55 @@ async function leadQuoteContext(
       and(
         eq(emailLogsTable.dealerId, dealerId),
         eq(emailLogsTable.template, "vehicle_quote"),
-        sql`${emailLogsTable.payload} ->> 'quoteRef' LIKE ${`Q-${leadId}-%`}`,
+        or(
+          // Canonical queues persist the trusted lead identity in the column
+          // and payload; older queues predate those fields and retain the
+          // Q-<lead>-... reference as their only legacy identity.
+          eq(emailLogsTable.leadId, leadId),
+          sql`${emailLogsTable.payload} ->> 'leadId' = ${String(leadId)}`,
+          sql`${emailLogsTable.payload} ->> 'quoteRef' LIKE ${`Q-${leadId}-%`}`,
+        ),
       ),
     )
     .orderBy(desc(emailLogsTable.id))
     .limit(1);
+
+  // New queues always carry the advisor snapshot, including an empty string.
+  // Only historical payloads without that key may be enriched, and only from
+  // the lead already authorized by this dealer-scoped lookup. This preserves
+  // replay semantics when an owner was assigned or renamed later.
+  let sentPayload = log?.payload ? { ...log.payload } : null;
+  if (
+    sentPayload &&
+    !Object.prototype.hasOwnProperty.call(sentPayload, "salesAdvisorName")
+  ) {
+    sentPayload = enrichLegacySalesAdvisorPayload(
+      sentPayload,
+      await resolveSalesAdvisorName(lead),
+    );
+  }
+
+  // A canonical lead may have no legacy inventory pointer: its immutable
+  // saved quote is still the correct historical source for the main
+  // quote.pdf route when no queued payload can be replayed. A current
+  // inventory pointer must never replace an existing historical snapshot.
+  let canonicalPayload: Record<string, string> | null = null;
+  if (!sentPayload) {
+    const [savedQuote] = await db
+      .select()
+      .from(quotesTable)
+      .where(
+        and(
+          eq(quotesTable.dealerId, dealerId),
+          eq(quotesTable.leadId, leadId),
+        ),
+      )
+      .orderBy(desc(quotesTable.version), desc(quotesTable.id))
+      .limit(1);
+    if (savedQuote) {
+      canonicalPayload = await quotePdfPayload(savedQuote, lead);
+    }
+  }
 
   // Fresh (never-emailed) quotes are dated today so validity isn't already expired.
   const today = zonedParts(new Date(), await dealerTimezone(dealerId));
@@ -1120,8 +1176,12 @@ async function leadQuoteContext(
   return {
     lead,
     vehicle: vehicle ?? null,
-    quoteRef: log?.payload?.quoteRef || fallbackRef,
-    sentPayload: log?.payload ?? null,
+    quoteRef:
+      sentPayload?.quoteRef ??
+      canonicalPayload?.quoteRef ??
+      fallbackRef,
+    sentPayload,
+    canonicalPayload,
     sentAt: log?.sentAt ?? null,
   };
 }
@@ -1130,15 +1190,15 @@ const quoteMoney = (n: number) =>
   `GY$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
 /** Build a fresh quote payload from inventory when no emailed quote exists. */
-function freshQuotePayload(
+async function freshQuotePayload(
   lead: Lead,
   vehicle: typeof vehiclesTable.$inferSelect,
   quoteRef: string,
   tz: string,
-): Record<string, string> {
+): Promise<Record<string, string>> {
   const issued = new Date();
   const validUntil = new Date(issued.getTime() + 30 * 24 * 60 * 60 * 1000);
-  return {
+  return snapshotSalesAdvisorPayload({
     name: lead.name,
     vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
     model: vehicle.model,
@@ -1151,7 +1211,62 @@ function freshQuotePayload(
     quoteRef,
     issuedOn: formatDealerDate(issued, tz),
     validUntil: formatDealerDate(validUntil, tz),
-  };
+  }, await resolveSalesAdvisorName(lead));
+}
+
+async function queuedQuoteVersionPayload(
+  dealerId: number,
+  leadId: number,
+  quote: { id: number; quoteNumber: string; version: number },
+): Promise<Record<string, string> | null> {
+  const quoteRef = `${quote.quoteNumber}-R${quote.version}`;
+  const nestedLeadId = String(leadId);
+  const nestedQuoteId = String(quote.id);
+  const logs = await db
+    .select({
+      dealerId: emailLogsTable.dealerId,
+      leadId: emailLogsTable.leadId,
+      channel: emailLogsTable.channel,
+      template: emailLogsTable.template,
+      payload: emailLogsTable.payload,
+    })
+    .from(emailLogsTable)
+    .where(
+      and(
+        eq(emailLogsTable.dealerId, dealerId),
+        or(
+          and(
+            eq(emailLogsTable.channel, "email"),
+            eq(emailLogsTable.template, "vehicle_quote"),
+          ),
+          eq(emailLogsTable.channel, "whatsapp"),
+        ),
+        // Keep the database result set scoped to this dealer, lead and
+        // revision. The pure selector below rechecks every identity after
+        // decoding the WhatsApp document payload.
+        or(
+          eq(emailLogsTable.leadId, leadId),
+          sql`${emailLogsTable.payload} ->> 'leadId' = ${nestedLeadId}`,
+          sql`${emailLogsTable.payload} ->> 'documentDataJson' LIKE ${`%"leadId":"${nestedLeadId}"%`}`,
+          sql`${emailLogsTable.payload} ->> 'documentDataJson' LIKE ${`%"leadId":${nestedLeadId}%`}`,
+        ),
+        or(
+          sql`${emailLogsTable.payload} ->> 'quoteId' = ${nestedQuoteId}`,
+          sql`${emailLogsTable.payload} ->> 'quoteRef' = ${quoteRef}`,
+          sql`${emailLogsTable.payload} ->> 'documentDataJson' LIKE ${`%"quoteId":"${nestedQuoteId}"%`}`,
+          sql`${emailLogsTable.payload} ->> 'documentDataJson' LIKE ${`%"quoteId":${nestedQuoteId}%`}`,
+          sql`${emailLogsTable.payload} ->> 'documentDataJson' LIKE ${`%"quoteRef":"${quoteRef}"%`}`,
+        ),
+      ),
+    )
+    .orderBy(desc(emailLogsTable.id));
+
+  return selectQuoteVersionOutboxPayload(logs, {
+    dealerId,
+    leadId,
+    quoteId: quote.id,
+    quoteRef,
+  });
 }
 
 router.get("/leads/:id/quote", async (req, res): Promise<void> => {
@@ -1166,21 +1281,24 @@ router.get("/leads/:id/quote", async (req, res): Promise<void> => {
     return;
   }
 
-  if (!ctx.vehicle && !ctx.sentPayload) {
+  if (!ctx.vehicle && !ctx.sentPayload && !ctx.canonicalPayload) {
     res.json(GetLeadQuoteResponse.parse({ available: false }));
     return;
   }
 
   const payload =
-    ctx.sentPayload ??
-    (ctx.vehicle
-      ? freshQuotePayload(
-          ctx.lead,
-          ctx.vehicle,
-          ctx.quoteRef,
-          await dealerTimezone(ctx.lead.dealerId),
-        )
-      : {});
+    selectQuoteDownloadPayload(
+      ctx.sentPayload,
+      ctx.canonicalPayload,
+      ctx.vehicle
+        ? await freshQuotePayload(
+            ctx.lead,
+            ctx.vehicle,
+            ctx.quoteRef,
+            await dealerTimezone(ctx.lead.dealerId),
+          )
+        : null,
+    ) ?? {};
   res.json(
     GetLeadQuoteResponse.parse({
       available: true,
@@ -1205,16 +1323,18 @@ router.get("/leads/:id/quote.pdf", async (req, res): Promise<void> => {
     return;
   }
 
-  const payload =
-    ctx.sentPayload ??
-    (ctx.vehicle
-      ? freshQuotePayload(
+  const payload = selectQuoteDownloadPayload(
+    ctx.sentPayload,
+    ctx.canonicalPayload,
+    ctx.vehicle
+      ? await freshQuotePayload(
           ctx.lead,
           ctx.vehicle,
           ctx.quoteRef,
           await dealerTimezone(ctx.lead.dealerId),
         )
-      : null);
+      : null,
+  );
   if (!payload) {
     res
       .status(404)
@@ -1516,8 +1636,24 @@ router.get(
       const [data] = await file.download();
       attachment = { data, fileName: quoteImage.fileName };
     }
+    const queuedPayload = await queuedQuoteVersionPayload(
+      lead.dealerId,
+      lead.id,
+      quote,
+    );
+    const historicalPayload = queuedPayload
+      ? Object.prototype.hasOwnProperty.call(
+          queuedPayload,
+          "salesAdvisorName",
+        )
+        ? queuedPayload
+        : enrichLegacySalesAdvisorPayload(
+            queuedPayload,
+            await resolveSalesAdvisorName(lead),
+          )
+      : await quotePdfPayload(quote, lead);
     const pdf = await buildQuotePdf(
-      await quotePdfPayload(quote),
+      historicalPayload,
       await dealerTimezone(lead.dealerId),
       (await getDealerPdfBranding(lead.dealerId)).logo,
       attachment,
@@ -1569,7 +1705,7 @@ router.post(
     const emailRequested = channel === "email" || channel === "both";
     const whatsappRequested = channel === "whatsapp" || channel === "both";
     const quotePayload = {
-      ...(await quotePdfPayload(quote)),
+      ...(await quotePdfPayload(quote, lead)),
       quoteId: String(quote.id),
       leadId: String(lead.id),
     };
@@ -1595,6 +1731,7 @@ router.post(
         to: lead.email,
         dealerId: lead.dealerId,
         customerId: lead.customerId,
+        leadId: lead.id,
         data: quotePayload,
       });
       emailQueued = true;
@@ -1762,6 +1899,7 @@ router.post("/leads/:id/assign", async (req, res): Promise<void> => {
       to: lead!.email,
       dealerId: lead!.dealerId,
       customerId: lead!.customerId,
+      leadId: lead!.id,
       data: { advisor: advisorName, vehicle: vehicle ?? "" },
     });
   }
@@ -2410,6 +2548,7 @@ router.post("/leads/:id/test-drive", async (req, res): Promise<void> => {
       to: lead!.email,
       dealerId: lead!.dealerId,
       customerId: lead!.customerId,
+      leadId: lead!.id,
       data: {
         vehicle: vehicle ?? "",
         date: dateStr,

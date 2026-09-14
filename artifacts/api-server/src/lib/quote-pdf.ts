@@ -6,6 +6,31 @@ export type QuotePdfData = Record<string, string>;
 const val = (d: QuotePdfData, key: string, fallback = "—") =>
   d[key] && d[key].trim() ? d[key].trim() : fallback;
 
+const textValue = (value: unknown): string => {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+};
+
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * A few historical snapshots contain the manufacturer in both fields (for
+ * example manufacturer "BYD", model "BYD Sealion 7"). Keep the model exactly
+ * as saved, but do not print a second copy of its leading brand token.
+ */
+const modelWithManufacturer = (manufacturer: string, model: string): string => {
+  const mfg = manufacturer.trim();
+  const mdl = model.trim();
+  if (!mfg) return mdl;
+  if (!mdl) return mfg;
+  const leadingBrand = new RegExp(
+    `^${escapeRegExp(mfg)}(?=$|[\\s\\-/:,|])`,
+    "iu",
+  );
+  return leadingBrand.test(mdl) ? mdl : `${mfg} ${mdl}`;
+};
+
 const GREEN = "#2e7d32";
 const HEADER_BG = "#cfe0cc";
 const LABEL_GREY = "#8a8a8a";
@@ -44,14 +69,91 @@ const bareAmount = (s: string): string => {
   return /\.\d{2}$/.test(t) ? t : `${t}.00`;
 };
 
+type PrintableQuoteItem = {
+  model: string;
+  manufacturer: string;
+  year: string;
+  variant: string;
+  color: string;
+  quantity: string;
+  total: string;
+};
+
+type QuoteDescription = PrintableQuoteItem & {
+  lines: string[];
+};
+
+type RowSegment = {
+  item: QuoteDescription;
+  lineStart: number;
+  lineCount: number;
+};
+
 /**
- * Render a dealer-branded vehicle estimate PDF matching the dealership's
- * reference estimate layout: clean sans-serif letterhead (name/address/TIN/phone/email)
- * top-left, logo top-right, green "Estimate" title, ADDRESS block +
- * ESTIMATE/DATE/EXPIRATION DATE meta, split green table header
- * (DATE | QTY/AMOUNT), spec-line vehicle description, SUBTOTAL/TAX/TOTAL
- * (bold "GYD" total), acceptance lines and a "Page 1 of 1" footer.
- * All inputs arrive as strings (email queue payloads are Record<string,string>).
+ * Wrap text using the active PDFKit font metrics.  PDFKit's `ellipsis` option
+ * is deliberately not used here: a model/trim can be a long, unbroken token
+ * and every character in a saved quote must make it into the document.
+ */
+const measuredWrap = (
+  doc: PDFKit.PDFDocument,
+  value: string,
+  width: number,
+): string[] => {
+  const paragraphs = value.replace(/\r/g, "").split("\n");
+  const lines: string[] = [];
+  for (const paragraph of paragraphs) {
+    const words = paragraph.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) continue;
+    let line = "";
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (doc.widthOfString(candidate) <= width) {
+        line = candidate;
+        continue;
+      }
+      if (line) {
+        lines.push(line);
+        line = "";
+      }
+      // A VIN-like or otherwise unbroken value still needs a measured split.
+      // Splitting by code point prevents an over-wide token from being
+      // silently clipped by PDFKit.
+      let chunk = "";
+      for (const character of Array.from(word)) {
+        const next = `${chunk}${character}`;
+        if (chunk && doc.widthOfString(next) > width) {
+          lines.push(chunk);
+          chunk = character;
+        } else {
+          chunk = next;
+        }
+      }
+      line = chunk;
+    }
+    if (line) lines.push(line);
+  }
+  return lines;
+};
+
+const quoteItemFromUnknown = (value: unknown): PrintableQuoteItem | null => {
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  const model = textValue(item.model ?? item.vehicle ?? item.vehicleLine);
+  const manufacturer = textValue(item.manufacturer);
+  const year = textValue(item.year ?? item.modelYear);
+  const variant = textValue(item.variant ?? item.trim ?? item.version);
+  const color = textValue(item.color ?? item.colour);
+  const quantity = textValue(item.quantity) || "1";
+  const total = textValue(item.total ?? item.subtotal ?? item.unitPrice);
+  return { model, manufacturer, year, variant, color, quantity, total };
+};
+
+/**
+ * Render a quote estimate with measured rows and explicit page plans.
+ *
+ * Keeping all pagination here is important: letting a PDFKit text call create
+ * an implicit page loses the repeated header and makes the `Page X of Y`
+ * footer unknowable.
  */
 export function buildQuotePdf(
   data: QuotePdfData,
@@ -62,7 +164,7 @@ export function buildQuotePdf(
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0 });
     const chunks: Buffer[] = [];
-    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
@@ -72,255 +174,308 @@ export function buildQuotePdf(
     const right = pageW - 46;
     const contentW = right - left;
     const dealerName = val(data, "dealerName", "AURA Dealership");
+    const advisorName = textValue(data.salesAdvisorName);
+    const priceNotice = "* Price can be subject to Change due to Duties and Taxes";
+
+    // Footer measurements are done before laying out rows.  Long advisor names
+    // therefore reduce the row budget rather than colliding with the notice or
+    // page number.
+    doc.font("Helvetica").fontSize(9);
+    const pageNumberY = pageH - 46;
+    const noticeHeight = Math.max(
+      10,
+      doc.heightOfString(priceNotice, { width: contentW }),
+    );
+    const advisorText = advisorName ? `Sales Advisor: ${advisorName}` : "";
+    const advisorHeight = advisorText
+      ? Math.max(10, doc.heightOfString(advisorText, { width: contentW }))
+      : 0;
+    const noticeY = pageNumberY - noticeHeight - 8;
+    const advisorY = advisorText
+      ? noticeY - advisorHeight - 4
+      : noticeY;
+    const footerStart = advisorText ? advisorY : noticeY;
+
+    const drawFooter = (pageNumber: number, totalPages: number) => {
+      doc.font("Helvetica").fontSize(9).fillColor(LABEL_GREY);
+      if (advisorText) {
+        doc.text(advisorText, left, advisorY, {
+          width: contentW,
+          align: "center",
+        });
+      }
+      doc.text(priceNotice, left, noticeY, {
+        width: contentW,
+        align: "center",
+      });
+      doc.text(`Page ${pageNumber} of ${totalPages}`, left, pageNumberY, {
+        width: contentW,
+        align: "center",
+      });
+    };
+
+    const dealerAddress = textValue(data.dealerAddress);
+    const dealerAddressParts = dealerAddress
+      ? dealerAddress
+        .replace(/\.\s*$/, "")
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean)
+      : [];
+    const letterheadLines = dealerAddressParts.length > 3
+      ? [dealerAddressParts[0]!, dealerAddressParts[1]!, dealerAddressParts.slice(2).join(", ")]
+      : dealerAddressParts;
+    if (textValue(data.dealerTin)) {
+      letterheadLines.push(`TIN: ${textValue(data.dealerTin)}`);
+    }
+    if (textValue(data.dealerPhone)) letterheadLines.push(textValue(data.dealerPhone));
+    if (textValue(data.dealerEmail)) letterheadLines.push(textValue(data.dealerEmail));
+
+    // Preflight every variable block that appears before the item table.
+    // PDFKit will otherwise create implicit pages when a wrapped customer or
+    // dealer field runs past the bottom margin, invalidating the page plan.
+    const colDate = left;
+    const colDesc = left + 82;
+    const colQty = right - 165;
+    const colAmt = right - 120;
+    const descW = colQty - colDesc - 12;
+    const gapX = colQty - 14;
+    const metaLabelX = right - 250;
+    const metaValueX = right - 130;
+    // Keep the customer column visibly clear of the metadata labels.
+    const customerW = Math.min(contentW / 2, metaLabelX - left - 8);
+    const customerLines = [
+      val(data, "name", "Valued Customer"),
+      ...(textValue(data.address)
+        ? data.address.split(",").map((part) => part.trim()).filter(Boolean)
+        : []),
+    ];
+    const metaRows = [
+      { label: "ESTIMATE", value: val(data, "quoteRef", "") },
+      { label: "DATE", value: shortDate(val(data, "issuedOn", ""), tz) },
+      ...(textValue(data.validUntil)
+        ? [{ label: "EXPIRATION DATE", value: shortDate(data.validUntil, tz) }]
+        : []),
+    ];
+    const brandHeight = (() => {
+      doc.font("Helvetica-Bold").fontSize(12);
+      return Math.max(12, doc.heightOfString(dealerName, { width: contentW / 2 }));
+    })();
+    const fallbackHeaderStart = Math.max(64, 46 + brandHeight + 6);
+    // An unreadable logo falls back to the wrapped dealer name at y=46. Keep
+    // the logo layout at least as low as that fallback, otherwise a tall
+    // dealer name can collide with the first address line after the catch.
+    const plannedHeaderStart = logo
+      ? Math.max(96, fallbackHeaderStart)
+      : fallbackHeaderStart;
+    const headerLayouts: Array<{ text: string; y: number; height: number }> = [];
+    let plannedHeaderY = plannedHeaderStart;
+    doc.font("Helvetica").fontSize(8.5);
+    for (const text of letterheadLines) {
+      const height = Math.max(
+        10,
+        doc.heightOfString(text, { width: contentW / 2 }),
+      );
+      headerLayouts.push({ text, y: plannedHeaderY, height });
+      plannedHeaderY += height + 2;
+    }
+    const titleY = Math.max(150, plannedHeaderY + 24);
+    const blockY = titleY + 28;
+
+    const metaLayouts: Array<{
+      label: string;
+      value: string;
+      y: number;
+      height: number;
+    }> = [];
+    let plannedMetaY = blockY;
+    for (const row of metaRows) {
+      doc.font("Helvetica").fontSize(9);
+      const labelHeight = Math.max(
+        10,
+        doc.heightOfString(row.label, { width: metaValueX - metaLabelX }),
+      );
+      doc.font("Helvetica").fontSize(9.5);
+      const valueHeight = Math.max(
+        10,
+        doc.heightOfString(row.value, { width: right - metaValueX }),
+      );
+      const height = Math.max(labelHeight, valueHeight);
+      metaLayouts.push({ ...row, y: plannedMetaY, height });
+      plannedMetaY += height + 4;
+    }
+    doc.font("Helvetica").fontSize(9.5);
+    const customerLayouts: Array<{ text: string; y: number; height: number }> = [];
+    // Keep the left customer block below the complete right metadata stack.
+    // This costs a little vertical compactness but prevents a wrapped quote
+    // reference or expiration value from sharing a baseline with customer
+    // text and makes the pre-table boundary unambiguous.
+    let plannedCustomerY = Math.max(blockY + 14, plannedMetaY);
+    for (const text of customerLines) {
+      const height = Math.max(
+        12,
+        doc.heightOfString(text, { width: customerW }),
+      );
+      customerLayouts.push({
+        text,
+        y: plannedCustomerY,
+        height,
+      });
+      plannedCustomerY += height + 2;
+    }
+    const tableY = Math.max(plannedCustomerY, plannedMetaY) + 18;
+    const preflightLineHeight = Math.max(
+      9,
+      doc.heightOfString("Ag", { width: descW }),
+    );
+    // A row, dashed separator, totals, acceptance and the shortest disclaimer
+    // must fit after the pre-table blocks.  This check runs before any drawing
+    // and turns unreasonable unbounded input into an explicit error instead
+    // of allowing PDFKit to append sparse, unplanned pages.
+    const minimumPreflightReserve = 190;
+    if (
+      tableY + 30 + preflightLineHeight + 6 + minimumPreflightReserve >
+      footerStart - 18
+    ) {
+      throw new Error(
+        "Quote PDF pre-table fields leave insufficient room for the estimate body",
+      );
+    }
 
     // ---- Letterhead --------------------------------------------------------
-    // Single brand mark: the dealer logo IS the letterhead (top-left), with
-    // the address/TIN/phone lines beneath it. Only when no logo is on file
-    // does the bold company name render instead — never both.
-    let hy = 64;
     let logoDrawn = false;
     if (logo) {
       try {
         doc.image(logo, left, 40, { fit: [190, 44] });
         logoDrawn = true;
-        hy = 96;
       } catch {
-        // Unreadable logo bytes — keep the text-only letterhead.
+        // Keep a text letterhead for unreadable historical logo bytes.
       }
     }
     if (!logoDrawn) {
-      doc.font("Helvetica-Bold").fontSize(12).fillColor(TEXT).text(dealerName, left, 46);
+      doc.font("Helvetica-Bold").fontSize(12).fillColor(TEXT)
+        .text(dealerName, left, 46, { width: contentW / 2 });
     }
-    const headerLine = (text: string) => {
-      doc.font("Helvetica").fontSize(8.5).fillColor("#333333").text(text, left, hy, {
-        width: contentW / 2,
-      });
-      hy += 12;
-    };
-    const dealerAddress = data.dealerAddress?.trim() ?? "";
-    if (dealerAddress) {
-      // Split a comma-separated address onto letterhead lines.
-      const parts = dealerAddress
-        .replace(/\.\s*$/, "")
-        .split(",")
-        .map((p) => p.trim())
-        .filter(Boolean);
-      // Keep it to at most 3 lines: join overflow onto the last line.
-      const lines =
-        parts.length > 3
-          ? [parts[0]!, parts[1]!, parts.slice(2).join(", ")]
-          : parts;
-      for (const line of lines) headerLine(line);
+    for (const line of headerLayouts) {
+      doc.font("Helvetica").fontSize(8.5).fillColor("#333333")
+        .text(line.text, left, line.y, { width: contentW / 2 });
     }
-    if (data.dealerTin?.trim()) headerLine(`TIN: ${data.dealerTin.trim()}`);
-    if (data.dealerPhone?.trim()) headerLine(data.dealerPhone.trim());
-    if (data.dealerEmail?.trim()) headerLine(data.dealerEmail.trim());
 
-    // ---- Title -------------------------------------------------------------
-    let y = Math.max(150, hy + 24);
-    doc.font("Helvetica").fontSize(16).fillColor(GREEN).text("Estimate", left, y);
-    y += 28;
-
-    // ---- Customer block (left) + estimate meta (right) ---------------------
-    const metaLabelX = right - 250;
-    const metaValueX = right - 130;
-    doc
-      .font("Helvetica")
-      .fontSize(9)
-      .fillColor(LABEL_GREY)
-      .text("ADDRESS", left, y, { characterSpacing: 0.5 });
-    const metaRow = (label: string, value: string, my: number) => {
-      doc
-        .font("Helvetica")
-        .fontSize(9)
-        .fillColor(LABEL_GREY)
-        .text(label, metaLabelX, my, { characterSpacing: 0.5 });
-      doc
-        .font("Helvetica")
-        .fontSize(9.5)
-        .fillColor(TEXT)
-        .text(value, metaValueX, my, { width: 130 });
-    };
-    metaRow("ESTIMATE", val(data, "quoteRef", ""), y);
-    metaRow("DATE", shortDate(val(data, "issuedOn", ""), tz), y + 16);
-    if (data.validUntil?.trim()) {
-      metaRow("EXPIRATION DATE", shortDate(data.validUntil, tz), y + 32);
+    // ---- Title and customer/meta blocks -----------------------------------
+    doc.font("Helvetica").fontSize(16).fillColor(GREEN)
+      .text("Estimate", left, titleY);
+    doc.font("Helvetica").fontSize(9).fillColor(LABEL_GREY)
+      .text("ADDRESS", left, blockY, { characterSpacing: 0.5 });
+    for (const row of metaLayouts) {
+      doc.font("Helvetica").fontSize(9).fillColor(LABEL_GREY)
+        .text(row.label, metaLabelX, row.y, {
+          characterSpacing: 0.5,
+          width: metaValueX - metaLabelX,
+        });
+      doc.font("Helvetica").fontSize(9.5).fillColor(TEXT)
+        .text(row.value, metaValueX, row.y, { width: right - metaValueX });
     }
-    y += 14;
-    const custLines = [
-      val(data, "name", "Valued Customer"),
-      ...(data.address && data.address.trim()
-        ? data.address
-            .split(",")
-            .map((p) => p.trim())
-            .filter(Boolean)
-        : []),
-    ].slice(0, 5);
-    for (const line of custLines) {
-      doc.font("Helvetica").fontSize(9.5).fillColor(TEXT).text(line, left, y, {
-        width: contentW / 2,
-      });
-      y += 14;
+    for (const line of customerLayouts) {
+      doc.font("Helvetica").fontSize(9.5).fillColor(TEXT);
+      doc.text(line.text, left, line.y, { width: customerW });
     }
-    y = Math.max(y, doc.y, custLines.length ? y : y + 14);
-    y = Math.max(y + 18, 6 + y);
 
     // ---- Line-item table ---------------------------------------------------
-    const colDate = left;
-    const colDesc = left + 82;
-    const colQty = right - 165;
-    const colAmt = right - 120;
+    const drawTableHeader = (headerY: number): number => {
+      doc.rect(left, headerY, gapX - left - 4, 18).fill(HEADER_BG);
+      doc.rect(gapX, headerY, right - gapX, 18).fill(HEADER_BG);
+      doc.font("Helvetica").fontSize(9).fillColor("#3c5a3c")
+        .text("DATE", colDate + 6, headerY + 5, { characterSpacing: 0.5 })
+        .text("QTY", colQty, headerY + 5, {
+          width: 35,
+          align: "right",
+          characterSpacing: 0.5,
+        })
+        .text("AMOUNT", colAmt, headerY + 5, {
+          width: right - colAmt - 6,
+          align: "right",
+          characterSpacing: 0.5,
+        });
+      return headerY + 30;
+    };
+    let y = drawTableHeader(tableY);
+    const firstRowsTop = y;
+    // Continuation pages draw this same header after addPage.  Only reserve
+    // its measured vertical position here; drawing it now would duplicate the
+    // header on the ordinary first page.
+    const continuationRowsTop = 48 + 30;
 
-    // Split header band (left "DATE" band + right "QTY / AMOUNT" band) like
-    // the reference estimate.
-    const gapX = colQty - 14;
-    doc.rect(left, y, gapX - left - 4, 18).fill(HEADER_BG);
-    doc.rect(gapX, y, right - gapX, 18).fill(HEADER_BG);
-    doc
-      .font("Helvetica")
-      .fontSize(9)
-      .fillColor("#3c5a3c")
-      .text("DATE", colDate + 6, y + 5, { characterSpacing: 0.5 })
-        .text("QTY", colQty, y + 5, { width: 35, align: "right", characterSpacing: 0.5 })
-      .text("AMOUNT", colAmt, y + 5, {
-        width: right - colAmt - 6,
-        align: "right",
-        characterSpacing: 0.5,
-      });
-    y += 30;
-
-    // Canonical item snapshots are supplied by quotePdfPayload. Legacy payloads
-    // fall back to the historical single-line layout.
-    let items: Array<{ model: string; manufacturer: string; year: number; variant: string; color: string; quantity: number; unitPrice: string; subtotal: string; tax: string; total: string }> = [];
+    // Parse the canonical item snapshot without imposing a renderer-side
+    // twelve-item limit.  Legacy payloads continue to render one item.
+    let parsedItems: PrintableQuoteItem[] = [];
     try {
-      const parsed = JSON.parse(data.quoteItems ?? "[]");
+      const parsed: unknown = JSON.parse(data.quoteItems ?? "[]");
       if (Array.isArray(parsed)) {
-        items = parsed.filter((item) => item && typeof item === "object").slice(0, 12);
+        parsedItems = parsed
+          .map(quoteItemFromUnknown)
+          .filter((item): item is PrintableQuoteItem => item !== null);
       }
     } catch {
-      // Legacy quote payload.
+      // Fall back to the historical single-line payload below.
     }
-    if (!items.length) items = [{
-      model: val(data, "vehicle", val(data, "model", "")),
-      manufacturer: data.manufacturer ?? "", year: Number(data.modelYear ?? 0),
-      variant: data.version ?? "", color: data.color ?? "", quantity: Number(data.quantity ?? 1),
-      unitPrice: data.unitPrice ?? "", subtotal: data.subtotal ?? data.total ?? "",
-      tax: data.totalTax ?? "0", total: data.total ?? "",
-    }];
-    const descW = colQty - colDesc - 12;
-    for (const item of items) {
-      // Keep each physical specification to two compact lines. The amount
-      // columns already carry quantity and line total, so repeating all price
-      // components in the description only causes accidental page overflow.
-      const descLines = [
-        [item.manufacturer, item.model].filter(Boolean).join(" "),
-        [
-          item.variant ? `Variant: ${item.variant}` : "",
-          item.color ? `Color: ${item.color}` : "",
-          item.year ? `Year: ${item.year}` : "",
-        ].filter(Boolean).join(" · "),
+    if (!parsedItems.length) {
+      parsedItems = [{
+        model: textValue(data.vehicle || data.model),
+        manufacturer: textValue(data.manufacturer),
+        year: textValue(data.modelYear),
+        variant: textValue(data.version),
+        color: textValue(data.color),
+        quantity: textValue(data.quantity) || "1",
+        total: textValue(data.total || data.subtotal || data.unitPrice),
+      }];
+    }
+
+    // `heightOfString` with the active font gives a measured line height, and
+    // every description line is then drawn separately so no implicit PDFKit
+    // page break can clip a row.
+    doc.font("Helvetica").fontSize(8.5);
+    const descriptionLineHeight = Math.max(
+      9,
+      doc.heightOfString("Ag", { width: descW }),
+    );
+    const descriptions: QuoteDescription[] = parsedItems.map((item) => {
+      const modelLine = modelWithManufacturer(item.manufacturer, item.model);
+      const logicalLines = [
+        modelLine,
+        item.variant ? `Variant: ${item.variant}` : "",
+        item.color ? `Color: ${item.color}` : "",
+        item.year ? `Year: ${item.year}` : "",
       ].filter(Boolean);
-      doc.font("Helvetica").fontSize(8.5).fillColor(TEXT)
-        .text(shortDate(val(data, "issuedOn", ""), tz), colDate + 6, y);
-      let dy = y;
-      for (const line of descLines) {
-        doc.text(line, colDesc, dy, {
-          width: descW,
-          height: 9,
-          ellipsis: true,
-          lineBreak: false,
-        });
-        dy += 9;
+      const lines = logicalLines.flatMap((line) =>
+        measuredWrap(doc, line, descW),
+      );
+      return {
+        ...item,
+        lines: lines.length ? lines : ["—"],
+      };
+    });
+
+    let treatmentLabels: string[] = [];
+    try {
+      const parsedTreatments: unknown = JSON.parse(data.approvedTreatments ?? "[]");
+      if (Array.isArray(parsedTreatments)) {
+        treatmentLabels = parsedTreatments
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .slice(0, 4);
       }
-      doc.text(String(item.quantity), colQty, y, { width: 35, align: "right" })
-        .text(bareAmount(item.total), colAmt, y, { width: right - colAmt - 6, align: "right" });
-      y = Math.max(dy, y + 12) + 3;
+    } catch {
+      // No approved treatments in legacy payloads.
     }
 
-    doc
-      .moveTo(left, y)
-      .lineTo(right, y)
-      .dash(1.5, { space: 2 })
-      .strokeColor("#cccccc")
-      .lineWidth(0.7)
-      .stroke()
-      .undash();
-    y += 20;
-
-    // ---- Totals (right-aligned block) --------------------------------------
-    const labelX = right - 260;
-    const totalRow = (
-      label: string,
-      value: string,
-      opts: { bold?: boolean; rule?: boolean } = {},
-    ) => {
-      doc
-        .font("Helvetica")
-        .fontSize(9.5)
-        .fillColor(LABEL_GREY)
-        .text(label, labelX, y + (opts.bold ? 4 : 1), { characterSpacing: 0.5 });
-      doc
-        .font(opts.bold ? "Helvetica-Bold" : "Helvetica")
-        .fontSize(opts.bold ? 13 : 9.5)
-        .fillColor(TEXT)
-        .text(value, right - 200, y, { width: 200, align: "right" });
-      y += opts.bold ? 24 : 22;
-      if (opts.rule) {
-        doc
-          .moveTo(labelX, y - 8)
-          .lineTo(right, y - 8)
-          .dash(1.5, { space: 2 })
-          .strokeColor("#cccccc")
-          .lineWidth(0.7)
-          .stroke()
-          .undash();
-      }
-    };
-    totalRow("SUBTOTAL", bareAmount(val(data, "subtotal", val(data, "total"))));
-    totalRow("TAX", bareAmount(val(data, "totalTax", "0.00")), { rule: true });
-    try {
-      const treatments = JSON.parse(data.approvedTreatments ?? "[]");
-      if (Array.isArray(treatments)) {
-        for (const treatment of treatments
-          .filter((v): v is string => typeof v === "string")
-          .slice(0, 4)) {
-          totalRow(treatment, "");
-        }
-      }
-    } catch { /* no approved treatments */ }
-    totalRow("TOTAL", `GYD ${bareAmount(val(data, "totalGyd", val(data, "total")))}`, {
-      bold: true,
-    });
-    y += 20;
-
-    // ---- Acceptance --------------------------------------------------------
-    doc
-      .font("Helvetica")
-      .fontSize(9.5)
-      .fillColor(LABEL_GREY)
-      .text("Accepted By", left, y)
-      .moveTo(left + 78, y + 10)
-      .lineTo(left + 245, y + 10)
-      .strokeColor("#b8b8b8")
-      .lineWidth(0.6)
-      .stroke()
-      .text("Accepted Date", left + 280, y)
-      .moveTo(left + 370, y + 10)
-      .lineTo(right, y + 10)
-      .stroke();
-    y += 32;
-
-    // ---- Disclaimer ---------------------------------------------------------
-    // Derive the validity wording from the quote's own dates so historical
-    // 30-day quotes don't contradict their printed expiration date.
+    // ---- Disclaimer measurement and page budget ---------------------------
     let validityClause = "is valid until the expiration date shown above";
-    {
-      const issued = new Date(val(data, "issuedOn", ""));
-      const until = new Date(val(data, "validUntil", ""));
-      if (!Number.isNaN(issued.getTime()) && !Number.isNaN(until.getTime())) {
-        const days = Math.round((until.getTime() - issued.getTime()) / 86400000);
-        if (days > 0) validityClause = `is valid for ${days} days`;
-      }
+    const issued = new Date(val(data, "issuedOn", ""));
+    const until = new Date(val(data, "validUntil", ""));
+    if (!Number.isNaN(issued.getTime()) && !Number.isNaN(until.getTime())) {
+      const days = Math.round((until.getTime() - issued.getTime()) / 86400000);
+      if (days > 0) validityClause = `is valid for ${days} days`;
     }
     const disclaimer =
       `All vehicles are subject to availability at the time of order confirmation. ` +
@@ -328,59 +483,201 @@ export function buildQuotePdf(
       `deposit or bank letter of undertaking is received and confirmed by ${dealerName}. ` +
       `Pricing, availability, and colors may change without notice. This quotation ` +
       `${validityClause} and does not constitute a binding agreement.`;
-    const discHeight =
-      14 +
-      doc.font("Helvetica").fontSize(8).heightOfString(disclaimer, { width: contentW });
-    // Render just under the acceptance block, never above it (moving up would
-    // overlap already-drawn content). If the page is unusually full, it sits
-    // closer to the footer rather than colliding with the content above.
-    const discY = y;
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(8.5)
-      .fillColor(LABEL_GREY)
-      .text("DISCLAIMER", left, discY, { characterSpacing: 0.5 });
-    doc
-      .font("Helvetica")
-      .fontSize(8)
-      .fillColor(LABEL_GREY)
-      .text(disclaimer, left, discY + 14, { width: contentW, align: "justify" });
+    doc.font("Helvetica").fontSize(8);
+    const disclaimerHeight = Math.max(
+      10,
+      doc.heightOfString(disclaimer, { width: contentW, align: "justify" }),
+    );
+    // This is the exact closing block budget used by the page planner.  Keep a
+    // small safety allowance for PDFKit's text baseline rounding.
+    const finalReserve =
+      20 + 22 + 22 + treatmentLabels.length * 22 + 24 +
+      20 + 32 + 14 + disclaimerHeight + 8;
+    const rowsBottom = footerStart - 18 - finalReserve;
+    const freshPageCapacity = rowsBottom - continuationRowsTop;
+    const minimumSegmentHeight = descriptionLineHeight + 6;
+    if (freshPageCapacity < minimumSegmentHeight) {
+      throw new Error(
+        "Quote PDF layout cannot fit a vehicle row after reserving the footer and closing block",
+      );
+    }
 
-    // ---- Footer ------------------------------------------------------------
-    doc
-      .font("Helvetica")
-      .fontSize(9)
-      .fillColor(LABEL_GREY)
-      .text(attachment ? "Page 1 of 2" : "Page 1 of 1", left, pageH - 46, {
-        width: contentW,
-        align: "center",
+    // ---- Explicit row pagination ------------------------------------------
+    const pagePlans: RowSegment[][] = [[]];
+    let pageIndex = 0;
+    let rowY = firstRowsTop;
+    let itemIndex = 0;
+    let lineIndex = 0;
+    while (itemIndex < descriptions.length) {
+      const item = descriptions[itemIndex]!;
+      const available = rowsBottom - rowY;
+      if (available < descriptionLineHeight + 6) {
+        pagePlans.push([]);
+        pageIndex += 1;
+        rowY = continuationRowsTop;
+        continue;
+      }
+      const wholeRowHeight = item.lines.length * descriptionLineHeight + 6;
+      // Keep ordinary rows intact when a fresh continuation page can hold
+      // them.  A row is split only when its own description exceeds the full
+      // continuation-page budget (for example an exceptionally long trim).
+      if (
+        lineIndex === 0 &&
+        wholeRowHeight > available &&
+        wholeRowHeight <= freshPageCapacity
+      ) {
+        pagePlans.push([]);
+        pageIndex += 1;
+        rowY = continuationRowsTop;
+        continue;
+      }
+      const maxLines = Math.max(
+        1,
+        Math.floor((available - 6) / descriptionLineHeight),
+      );
+      const lineCount = Math.min(maxLines, item.lines.length - lineIndex);
+      pagePlans[pageIndex]!.push({ item, lineStart: lineIndex, lineCount });
+      rowY += lineCount * descriptionLineHeight + 6;
+      lineIndex += lineCount;
+      if (lineIndex >= item.lines.length) {
+        itemIndex += 1;
+        lineIndex = 0;
+      } else {
+        pagePlans.push([]);
+        pageIndex += 1;
+        rowY = continuationRowsTop;
+      }
+    }
+    if (!pagePlans.length) pagePlans.push([]);
+
+    const totalPages = pagePlans.length + (attachment ? 1 : 0);
+    const quoteDate = shortDate(val(data, "issuedOn", ""), tz);
+
+    const drawRowSegment = (
+      segment: RowSegment,
+      segmentY: number,
+    ): number => {
+      const { item, lineStart, lineCount } = segment;
+      doc.font("Helvetica").fontSize(8.5).fillColor(TEXT);
+      if (lineStart === 0) {
+        doc.text(quoteDate, colDate + 6, segmentY);
+        doc.text(item.quantity, colQty, segmentY, {
+          width: 35,
+          align: "right",
+        });
+        doc.text(bareAmount(item.total), colAmt, segmentY, {
+          width: right - colAmt - 6,
+          align: "right",
+        });
+      }
+      const lines = item.lines.slice(lineStart, lineStart + lineCount);
+      lines.forEach((line, index) => {
+        doc.text(line, colDesc, segmentY + index * descriptionLineHeight, {
+          width: descW,
+          lineBreak: false,
+        });
       });
+      return segmentY + lineCount * descriptionLineHeight + 6;
+    };
+
+    const drawClosing = (closingY: number) => {
+      let closeY = closingY;
+      doc.moveTo(left, closeY).lineTo(right, closeY)
+        .dash(1.5, { space: 2 })
+        .strokeColor("#cccccc").lineWidth(0.7).stroke().undash();
+      closeY += 20;
+
+      const labelX = right - 260;
+      const totalRow = (
+        label: string,
+        value: string,
+        opts: { bold?: boolean; rule?: boolean } = {},
+      ) => {
+        doc.font("Helvetica").fontSize(9.5).fillColor(LABEL_GREY)
+          .text(label, labelX, closeY + (opts.bold ? 4 : 1), {
+            characterSpacing: 0.5,
+            width: 190,
+          });
+        doc.font(opts.bold ? "Helvetica-Bold" : "Helvetica")
+          .fontSize(opts.bold ? 13 : 9.5).fillColor(TEXT)
+          .text(value, right - 200, closeY, {
+            width: 200,
+            align: "right",
+          });
+        closeY += opts.bold ? 24 : 22;
+        if (opts.rule) {
+          doc.moveTo(labelX, closeY - 8).lineTo(right, closeY - 8)
+            .dash(1.5, { space: 2 })
+            .strokeColor("#cccccc").lineWidth(0.7).stroke().undash();
+        }
+      };
+      totalRow("SUBTOTAL", bareAmount(val(data, "subtotal", val(data, "total"))));
+      totalRow("TAX", bareAmount(val(data, "totalTax", "0.00")), { rule: true });
+      for (const treatment of treatmentLabels) totalRow(treatment, "");
+      totalRow("TOTAL", `GYD ${bareAmount(val(data, "totalGyd", val(data, "total")))}`, {
+        bold: true,
+      });
+      closeY += 20;
+
+      doc.font("Helvetica").fontSize(9.5).fillColor(LABEL_GREY)
+        .text("Accepted By", left, closeY)
+        .moveTo(left + 78, closeY + 10).lineTo(left + 245, closeY + 10)
+        .strokeColor("#b8b8b8").lineWidth(0.6).stroke()
+        .text("Accepted Date", left + 280, closeY)
+        .moveTo(left + 370, closeY + 10).lineTo(right, closeY + 10)
+        .stroke();
+      closeY += 32;
+
+      doc.font("Helvetica-Bold").fontSize(8.5).fillColor(LABEL_GREY)
+        .text("DISCLAIMER", left, closeY, { characterSpacing: 0.5 });
+      doc.font("Helvetica").fontSize(8).fillColor(LABEL_GREY)
+        .text(disclaimer, left, closeY + 14, {
+          width: contentW,
+          align: "justify",
+        });
+    };
+
+    // Draw the first page's planned rows, then the remaining pages.  Closing
+    // totals are intentionally only on the final estimate page.
+    let firstPageY = firstRowsTop;
+    for (const segment of pagePlans[0] ?? []) {
+      firstPageY = drawRowSegment(segment, firstPageY);
+    }
+    if (pagePlans.length === 1) drawClosing(firstPageY);
+    drawFooter(1, totalPages);
+
+    for (let index = 1; index < pagePlans.length; index += 1) {
+      doc.addPage({ size: "A4", margin: 0 });
+      doc.font("Helvetica").fontSize(10).fillColor(LABEL_GREY)
+        .text("Estimate (continued)", left, 30, { width: contentW });
+      const continuationY = drawTableHeader(48);
+      let nextY = continuationY;
+      for (const segment of pagePlans[index] ?? []) {
+        nextY = drawRowSegment(segment, nextY);
+      }
+      if (index === pagePlans.length - 1) drawClosing(nextY);
+      drawFooter(index + 1, totalPages);
+    }
 
     if (attachment) {
       doc.addPage({ size: "A4", margin: 0 });
-      doc
-        .font("Helvetica-Bold")
-        .fontSize(13)
-        .fillColor(TEXT)
+      doc.font("Helvetica-Bold").fontSize(13).fillColor(TEXT)
         .text("Quote attachment", left, 42, { width: contentW });
-      doc
-        .font("Helvetica")
-        .fontSize(8.5)
-        .fillColor(LABEL_GREY)
-        .text(attachment.fileName, left, 62, { width: contentW });
-      doc.image(attachment.data, left, 88, {
-        fit: [contentW, pageH - 150],
+      doc.font("Helvetica").fontSize(8.5).fillColor(LABEL_GREY);
+      const fileName = textValue(attachment.fileName) || "Attachment";
+      const fileNameHeight = Math.max(
+        10,
+        doc.heightOfString(fileName, { width: contentW }),
+      );
+      doc.text(fileName, left, 62, { width: contentW });
+      const imageTop = Math.max(88, 62 + fileNameHeight + 14);
+      const imageBottom = Math.min(pageH - 120, footerStart - 16);
+      doc.image(attachment.data, left, imageTop, {
+        fit: [contentW, Math.max(20, imageBottom - imageTop)],
         align: "center",
         valign: "center",
       });
-      doc
-        .font("Helvetica")
-        .fontSize(9)
-        .fillColor(LABEL_GREY)
-        .text("Page 2 of 2", left, pageH - 46, {
-          width: contentW,
-          align: "center",
-        });
+      drawFooter(totalPages, totalPages);
     }
 
     doc.end();
