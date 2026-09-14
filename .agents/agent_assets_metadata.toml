@@ -307,3 +307,10 @@ mtime_ms = 1788789497452
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:a041d552-c154-4b75-a1ba-3bdceea9ac32/2f7f71c6-edc5-42c1-a95b-a9b0dc4e094a/cba14d42-7fad-4a38-b1c3-2a4fc465c780"
 storage_version_token = "1788789551809738"
 content_type = "text/html"
+
+[[outputs]]
+id = "KqH0OpKGFU7VHLXYgfjCp"
+uri = "file://exports/gt-automotive-august-2026-review.csv"
+type = "table"
+title = "GT Automotive — August batch review"
+description = "Ten source rows with production matching results, advisor mappings, arrival date, and review holds. Review worksheet only—not compatible with the existing Inventory importer. No live changes or emails."
