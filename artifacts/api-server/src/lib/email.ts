@@ -25,6 +25,7 @@ import {
 } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { isExplicitLeadOutboxSuppressed } from "./reviewed-delivery-import-policy";
 import {
   resolveDealerSmtp,
   smtpSkipMessage,
@@ -1212,8 +1213,15 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
     { name: await getDealerBrandName(opts.dealerId) },
     await getTemplateOverride(opts.dealerId, opts.template),
   );
-  // Per-lead email kill switch: log the suppression for audit, never send.
-  if (await isRecipientEmailOptedOut(opts.dealerId, opts.to)) {
+  // Per-lead preference plus explicit controlled-import provenance. Import
+  // suppression is deliberately lead-ID scoped so it cannot suppress mail for
+  // an unrelated record sharing the same customer email address.
+  const recipientOptedOut = await isRecipientEmailOptedOut(opts.dealerId, opts.to);
+  const controlledImportSuppressed = await controlledImportLeadSuppressesEmail(
+    opts.dealerId,
+    opts.leadId,
+  );
+  if (recipientOptedOut || controlledImportSuppressed) {
     const [suppressed] = await db
       .insert(emailLogsTable)
       .values({
@@ -1229,7 +1237,9 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
         // Suffixed so a suppressed event never consumes the real dedupe key:
         // if email is re-enabled later, a legitimate re-send still goes out.
         dedupeKey: opts.dedupeKey ? `${opts.dedupeKey}:suppressed` : null,
-        lastError: "suppressed: email communication is off for this lead",
+        lastError: controlledImportSuppressed
+          ? "suppressed: controlled reviewed-import lead communication is disabled"
+          : "suppressed: email communication is off for this lead",
       })
       .onConflictDoNothing({ target: emailLogsTable.dedupeKey })
       .returning();
@@ -1273,6 +1283,26 @@ export async function enqueueEmail(opts: EnqueueOptions): Promise<EmailLog> {
   // Kick the worker soon so sends feel immediate.
   setTimeout(() => void processQueue(), 50);
   return row;
+}
+
+/** Fail closed for a controlled-import lookup: a database fault must never
+ * turn into a customer send. Callers receive an error and may retry. */
+async function controlledImportLeadSuppressesEmail(
+  dealerId: number,
+  leadId: number | null | undefined,
+): Promise<boolean> {
+  if (leadId == null) return false;
+  try {
+    const [lead] = await db
+      .select({ importMetadata: leadsTable.importMetadata })
+      .from(leadsTable)
+      .where(and(eq(leadsTable.id, leadId), eq(leadsTable.dealerId, dealerId), isNull(leadsTable.deletedAt)))
+      .limit(1);
+    return isExplicitLeadOutboxSuppressed(leadId, lead?.importMetadata);
+  } catch (err) {
+    logger.error({ err, dealerId, leadId }, "controlled import suppression lookup failed; refusing email enqueue");
+    throw new Error("Controlled import communication suppression could not be verified; email was not queued.");
+  }
 }
 
 export type EnqueueWhatsappOptions = {
@@ -2281,13 +2311,16 @@ export async function processQueue(): Promise<void> {
       }
       // Consent recheck at send time: opt-out may have been enabled after
       // this row was queued (or between scheduled retries) — never deliver.
-      if (await isRecipientEmailOptedOut(item.dealerId, item.recipient)) {
+      if (
+        (await controlledImportLeadSuppressesEmail(item.dealerId, item.leadId)) ||
+        (await isRecipientEmailOptedOut(item.dealerId, item.recipient))
+      ) {
         await db
           .update(emailLogsTable)
           .set({
             status: "cancelled",
             lastError:
-              "suppressed: email communication is off for this lead",
+              "suppressed: email communication is off for this lead or controlled import",
           })
           .where(eq(emailLogsTable.id, item.id));
         continue;

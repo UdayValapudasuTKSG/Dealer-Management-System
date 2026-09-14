@@ -13,6 +13,10 @@ import {
   dealItemsTable,
   invoicesTable,
   leadsTable,
+  leadVehicleInterestsTable,
+  paymentsTable,
+  emailLogsTable,
+  tasksTable,
   vehiclesTable,
   defaultDeliverySteps,
   DEFAULT_PDI_ITEMS,
@@ -22,6 +26,14 @@ import {
   PreviewDeliveryHistoryImportResponse,
 } from "@workspace/api-zod";
 import { activeDealerId, hasPermission } from "../middlewares/rbac";
+import {
+  canCreateCommittedDealForVehicle,
+  hasUnsafeReusableFinance,
+  identityImportPlan,
+  isReusableCommittedDeal,
+  matchesReviewedVehicle,
+  requiresApplyIdentityConfirmation,
+} from "../lib/reviewed-delivery-import-policy";
 
 const router: IRouter = Router();
 const upload = multer({
@@ -44,7 +56,12 @@ const reviewInput = z.object({
 });
 const applyInput = reviewInput.extend({
   confirmations: z
-    .array(z.object({ row: z.number().int().min(2), leadId: z.number().int().positive() }))
+    .array(z.object({
+      row: z.number().int().min(2),
+      leadId: z.number().int().positive().optional(),
+      customerId: z.number().int().positive().optional(),
+      dealId: z.number().int().positive().optional(),
+    }))
     .default([]),
 });
 
@@ -220,6 +237,18 @@ function matchesReviewedFields(
   );
 }
 
+function sameText(left: string | null | undefined, right: string | null | undefined): boolean {
+  return (left ?? "").trim().toLocaleLowerCase() === (right ?? "").trim().toLocaleLowerCase();
+}
+
+function leadImportMetadata(row: ParsedRow, input: z.infer<typeof reviewInput>, batchFingerprint: string) {
+  return {
+    ...importMetadata(row, input, batchFingerprint),
+    suppressSalesAutomation: true,
+    suppressionReason: "reviewed historical committed sale; no customer outreach or new-lead automation",
+  };
+}
+
 async function preview(
   dealerId: number,
   input: { dealershipId: number; modelYear: number; vehicleMake: string; powertrain: string; bodyType: string },
@@ -233,7 +262,7 @@ async function preview(
   const vins = parsed.rows.map((row) => row.vin);
   const batchFingerprint = sha256(buffer);
   const vehicles = vins.length
-    ? await db.select({ id: vehiclesTable.id, vin: vehiclesTable.vin }).from(vehiclesTable).where(and(
+    ? await db.select().from(vehiclesTable).where(and(
       eq(vehiclesTable.dealerId, dealerId),
       isNull(vehiclesTable.deletedAt),
       inArray(sql<string>`upper(btrim(${vehiclesTable.vin}))`, vins),
@@ -252,12 +281,16 @@ async function preview(
       inArray(sql<string>`lower(btrim(${leadsTable.name}))`, leadNames),
     ))
     : [];
-  const vehicleByVin = new Map(vehicles.map((vehicle) => [normalizedVin(vehicle.vin ?? ""), vehicle.id]));
+  const vehicleByVin = new Map(vehicles.map((vehicle) => [normalizedVin(vehicle.vin ?? ""), vehicle]));
   const existingDeliveries = vins.length
     ? await db
         .select({
+          id: deliveriesTable.id,
           vin: vehiclesTable.vin,
           customerName: deliveriesTable.customerName,
+          customerId: deliveriesTable.customerId,
+          dealId: deliveriesTable.dealId,
+          invoiceId: deliveriesTable.invoiceId,
           importMetadata: deliveriesTable.importMetadata,
         })
         .from(deliveriesTable)
@@ -299,13 +332,62 @@ async function preview(
         );
     }),
   );
+  const existingDeals = vins.length
+    ? await db
+        .select({
+          id: dealsTable.id,
+          vin: vehiclesTable.vin,
+          vehicleId: dealsTable.vehicleId,
+          customerId: dealsTable.customerId,
+          leadId: dealsTable.leadId,
+          stage: dealsTable.stage,
+          vehiclePrice: dealsTable.vehiclePrice,
+          otdPrice: dealsTable.otdPrice,
+        })
+        .from(dealsTable)
+        .innerJoin(vehiclesTable, eq(vehiclesTable.id, dealsTable.vehicleId))
+        .where(and(
+          eq(dealsTable.dealerId, dealerId),
+          eq(vehiclesTable.dealerId, dealerId),
+          inArray(sql<string>`upper(btrim(${vehiclesTable.vin}))`, vins),
+        ))
+    : [];
+  const dealsByVin = new Map<string, typeof existingDeals>();
+  for (const deal of existingDeals) {
+    const key = normalizedVin(deal.vin ?? "");
+    dealsByVin.set(key, [...(dealsByVin.get(key) ?? []), deal]);
+  }
+  const dealIds = existingDeals.map((deal) => deal.id);
+  const invoices = dealIds.length
+    ? await db
+        .select({
+          id: invoicesTable.id,
+          dealId: invoicesTable.dealId,
+          customerId: invoicesTable.customerId,
+          customerName: invoicesTable.customerName,
+          amount: invoicesTable.amount,
+          kind: invoicesTable.kind,
+          status: invoicesTable.status,
+          taxLines: invoicesTable.taxLines,
+          paymentCount: sql<number>`count(${paymentsTable.id})`,
+        })
+        .from(invoicesTable)
+        .leftJoin(paymentsTable, and(
+          eq(paymentsTable.invoiceId, invoicesTable.id),
+          eq(paymentsTable.dealerId, dealerId),
+        ))
+        .where(and(eq(invoicesTable.dealerId, dealerId), inArray(invoicesTable.dealId, dealIds)))
+        .groupBy(invoicesTable.id)
+    : [];
+  const invoicesByDeal = new Map<number, typeof invoices>();
+  for (const invoice of invoices) {
+    if (invoice.dealId == null) continue;
+    invoicesByDeal.set(invoice.dealId, [...(invoicesByDeal.get(invoice.dealId) ?? []), invoice]);
+  }
   const rows = parsed.rows.map((row) => {
     if (!advisorIds.has(row.advisorUserId)) errors.push(`CSV row ${row.row}: advisor ${row.advisorUserId} is not a member of this dealership.`);
     const candidates = candidatesByName.get(row.customerName.toLowerCase()) ?? [];
-    if (candidates.length > 1)
-      errors.push(`CSV row ${row.row}: multiple exact-name leads exist; choose a confirmed lead outside this importer before retrying.`);
     const matchingCustomers = customerMatchResults[row.row - 2] ?? [];
-    const confirmedLeadCustomerId = candidates.length === 1 ? candidates[0]!.customerId : null;
     const existingDelivery = deliveryByVin.get(row.vin);
     const prior = existingDelivery?.importMetadata as Record<string, unknown> | null | undefined;
     const verifiedReplay =
@@ -320,23 +402,63 @@ async function preview(
       errors.push(
         `CSV row ${row.row}: existing VIN delivery has different import content, customer, price, or reviewed vehicle fields.`,
       );
-    if (
-      matchingCustomers.length &&
-      !verifiedReplay &&
-      (matchingCustomers.length !== 1 || matchingCustomers[0]!.id !== confirmedLeadCustomerId)
-    )
-      errors.push(`CSV row ${row.row}: an existing customer name or email match requires an explicit confirmed customer identity; this importer will not merge by name/email.`);
-    const candidateLeadId = candidates.length === 1 ? candidates[0]!.id : null;
-    if (row.candidateLeadId != null && candidateLeadId !== row.candidateLeadId)
+    const candidateLeadIds = candidates.map((candidate) => candidate.id);
+    const candidateCustomerIds = matchingCustomers.map((candidate) => candidate.id);
+    if (row.candidateLeadId != null && !candidateLeadIds.includes(row.candidateLeadId))
       errors.push(`CSV row ${row.row}: declared lead candidate ${row.candidateLeadId} no longer exactly matches live dealership data.`);
+    const vehicle = vehicleByVin.get(row.vin);
+    if (vehicle && !matchesReviewedVehicle(vehicle, row, input))
+      errors.push(`CSV row ${row.row}: existing VIN ${row.vin} does not exactly match the reviewed model, version, engine, price, or vehicle specification.`);
+    const vinDeals = dealsByVin.get(row.vin) ?? [];
+    const compatibleDeals = vehicle
+      ? vinDeals.filter((deal) =>
+          deal.stage === "committed" &&
+          deal.vehicleId === vehicle.id &&
+          deal.vehiclePrice === row.sellingPrice &&
+          deal.otdPrice === row.sellingPrice &&
+          deal.leadId != null &&
+          deal.customerId != null &&
+          candidateLeadIds.includes(deal.leadId) &&
+          candidateCustomerIds.includes(deal.customerId),
+        )
+      : [];
+    const candidateDealIds = compatibleDeals.map((deal) => deal.id);
+    if (!verifiedReplay && vinDeals.some((deal) => !candidateDealIds.includes(deal.id)))
+      errors.push(`CSV row ${row.row}: VIN ${row.vin} has a foreign, cancelled, delivered, desking, or price-conflicting deal that cannot be reused.`);
+    for (const deal of compatibleDeals) {
+      const finals = (invoicesByDeal.get(deal.id) ?? []).filter((invoice) => invoice.kind === "final");
+      if (
+        (invoicesByDeal.get(deal.id) ?? []).some((invoice) => invoice.paymentCount !== 0) ||
+        hasUnsafeReusableFinance(finals, row.sellingPrice)
+      )
+        errors.push(`CSV row ${row.row}: reusable deal #${deal.id} has a conflicting finance state (final invoice, tax snapshot, or payment ledger).`);
+    }
+    const identityPlan = identityImportPlan(
+      candidateLeadIds,
+      candidateCustomerIds,
+      candidateDealIds,
+      verifiedReplay,
+    );
     return {
       row: row.row,
       vin: row.vin,
       customerName: row.customerName,
       action: vehicleByVin.has(row.vin) ? "reuse_vehicle" : "create_vehicle",
-      existingVehicleId: vehicleByVin.get(row.vin) ?? null,
-      candidateLeadId,
-      requiresLeadConfirmation: candidateLeadId != null,
+      existingVehicleId: vehicleByVin.get(row.vin)?.id ?? null,
+      leadAction: identityPlan.leadAction,
+      leadId: identityPlan.leadId,
+      candidateLeadIds,
+      customerAction: identityPlan.customerAction,
+      customerId: identityPlan.customerId,
+      candidateCustomerIds,
+      dealAction: identityPlan.dealAction,
+      dealId: identityPlan.dealId,
+      candidateDealIds,
+      invoiceAction: compatibleDeals.length && (invoicesByDeal.get(compatibleDeals[0]!.id) ?? []).some((invoice) => invoice.kind === "final") ? "reuse_invoice" : "create_invoice",
+      invoiceId: compatibleDeals.length === 1
+        ? ((invoicesByDeal.get(compatibleDeals[0]!.id) ?? []).find((invoice) => invoice.kind === "final")?.id ?? null)
+        : null,
+      requiresIdentityConfirmation: identityPlan.requiresIdentityConfirmation,
       sellingPriceGyd: row.sellingPrice,
       paymentState: "UNRECORDED",
       sourceStatus: row.raw["Source Pipeline Stage"] ?? null,
@@ -361,8 +483,13 @@ function canApply(
     ["deliveries", "create"],
     ["inventory", "create"],
     ["customers", "create"],
+    ["leads", "create"],
     ["deals", "create"],
     ["finance", "create"],
+    ["inventory", "edit"],
+    ["customers", "edit"],
+    ["leads", "edit"],
+    ["deals", "edit"],
     ].every(([module, category]) => hasPermission(user, module, category))
   );
 }
@@ -411,7 +538,7 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
   }
   const dealerId = activeDealerId(res);
   if (!canApply(res.locals.user!, dealerId)) {
-    res.status(403).json({ error: "This reviewed import requires the active dealership General Manager and create permission for deliveries, inventory, customers, deals, and finance." });
+    res.status(403).json({ error: "This reviewed import requires the active dealership General Manager plus explicit create permissions for deliveries, inventory, customers, leads, deals and finance, and edit permissions for inventory, customers, leads and deals when confirmed records are reused." });
     return;
   }
   const check = await preview(dealerId, input.data, req.file.buffer);
@@ -422,24 +549,34 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
   const parsed = csvRows(req.file.buffer);
   const confirmationByRow = new Map(input.data.confirmations.map((confirmation) => [confirmation.row, confirmation]));
   if (confirmationByRow.size !== input.data.confirmations.length) {
-    res.status(400).json({ error: "Each lead-confirmation row may appear only once." });
-    return;
-  }
-  if (
-    input.data.confirmations.some(
-      (confirmation) =>
-        check.rows.find((row) => row.row === confirmation.row)?.candidateLeadId !==
-        confirmation.leadId,
-    )
-  ) {
-    res.status(409).json({ error: "Every lead confirmation must match the live exact-name candidate in this review." });
+    res.status(400).json({ error: "Each identity-confirmation row may appear only once." });
     return;
   }
   for (const row of parsed.rows) {
-    const candidate = check.rows.find((item) => item.row === row.row)?.candidateLeadId ?? null;
-    if (candidate != null && confirmationByRow.get(row.row)?.leadId !== candidate) {
-      res.status(409).json({ error: `CSV row ${row.row}: exact-name lead candidate ${candidate} must be explicitly confirmed before applying.` });
+    const reviewRow = check.rows.find((item) => item.row === row.row);
+    const confirmation = confirmationByRow.get(row.row);
+    if (!reviewRow) {
+      res.status(409).json({ error: `CSV row ${row.row}: review row is missing.` });
       return;
+    }
+    // A replay has already proved its immutable source fingerprint, customer,
+    // price, and reviewed fields. It must not be made impossible merely
+    // because its own created records now appear as exact candidates.
+    if (!requiresApplyIdentityConfirmation(reviewRow)) continue;
+    const selected = [
+      ["lead", reviewRow.candidateLeadIds, confirmation?.leadId],
+      ["customer", reviewRow.candidateCustomerIds, confirmation?.customerId],
+      ["deal", reviewRow.candidateDealIds, confirmation?.dealId],
+    ] as const;
+    for (const [kind, candidates, id] of selected) {
+      if (candidates.length > 0 && (id == null || !candidates.includes(id))) {
+        res.status(409).json({ error: `CSV row ${row.row}: explicitly confirm one of the exact ${kind} candidates (${candidates.join(", ")}) before applying.` });
+        return;
+      }
+      if (candidates.length === 0 && id != null) {
+        res.status(409).json({ error: `CSV row ${row.row}: no ${kind} candidate may be supplied for this review.` });
+        return;
+      }
     }
   }
   const batchFingerprint = sha256(req.file.buffer);
@@ -450,10 +587,16 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${`vehicle-vin:${dealerId}`}))`,
     );
-    const outcomes: { row: number; deliveryId: number; status: "created" | "unchanged" }[] = [];
-  for (const row of parsed.rows) {
-    const confirmed = confirmationByRow.get(row.row);
-    const result = await tx.transaction(async (tx) => {
+    const outcomes: {
+      row: number; deliveryId: number; leadId: number; dealId: number; invoiceId: number;
+      leadAction: "create_lead" | "reuse_lead";
+      dealAction: "create_deal" | "reuse_deal";
+      invoiceAction: "create_invoice" | "reuse_invoice";
+      status: "created" | "unchanged";
+    }[] = [];
+    for (const row of parsed.rows) {
+      const confirmed = confirmationByRow.get(row.row);
+      const result = await tx.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`reviewed-delivery-import:${dealerId}:${row.vin}`}))`);
       const [advisorMembership] = await tx
         .select({ userId: dealerUsersTable.userId })
@@ -469,7 +612,12 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
         throw new Error(
           `CSV row ${row.row}: advisor ${row.advisorUserId} is no longer a member of this dealership.`,
         );
-      const [existing] = await tx.select({ id: deliveriesTable.id, customerName: deliveriesTable.customerName }).from(deliveriesTable)
+      const [existing] = await tx.select({
+        id: deliveriesTable.id,
+        customerName: deliveriesTable.customerName,
+        dealId: deliveriesTable.dealId,
+        invoiceId: deliveriesTable.invoiceId,
+      }).from(deliveriesTable)
         .innerJoin(vehiclesTable, eq(vehiclesTable.id, deliveriesTable.vehicleId))
         .where(and(
           eq(deliveriesTable.dealerId, dealerId),
@@ -491,7 +639,24 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
           !matchesReviewedFields(prior, input.data)
         )
           throw new Error(`CSV row ${row.row}: VIN ${row.vin} is already occupied by a different delivery.`);
-        return { status: "unchanged" as const, deliveryId: existing.id };
+        if (existing.invoiceId == null)
+          throw new Error(`CSV row ${row.row}: replay delivery ${existing.id} has no invoice link.`);
+        const [replayDeal] = await tx.select({ leadId: dealsTable.leadId }).from(dealsTable).where(and(
+          eq(dealsTable.id, existing.dealId),
+          eq(dealsTable.dealerId, dealerId),
+        ));
+        if (replayDeal?.leadId == null)
+          throw new Error(`CSV row ${row.row}: replay delivery ${existing.id} has no lead link.`);
+        return {
+          status: "unchanged" as const,
+          deliveryId: existing.id,
+          leadId: replayDeal.leadId,
+          dealId: existing.dealId,
+          invoiceId: existing.invoiceId,
+          leadAction: "reuse_lead" as const,
+          dealAction: "reuse_deal" as const,
+          invoiceAction: "reuse_invoice" as const,
+        };
       }
       const meta = importMetadata(row, input.data, batchFingerprint);
       const [vehicle] = await tx.select().from(vehiclesTable).where(and(
@@ -499,36 +664,122 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
         isNull(vehiclesTable.deletedAt),
         eq(sql<string>`upper(btrim(${vehiclesTable.vin}))`, row.vin),
       )).for("update");
-      if (vehicle) {
-        if (
-          vehicle.status !== "available" ||
-          vehicle.recallFlag ||
-          vehicle.damageFlag ||
-          (vehicle.holdUntil != null && vehicle.holdUntil > new Date())
-        )
-          throw new Error(`CSV row ${row.row}: existing VIN ${row.vin} is unavailable, held, sold, recalled, or damaged.`);
-        const [booking] = await tx
-          .select({ id: bookingsTable.id })
-          .from(bookingsTable)
-          .where(and(eq(bookingsTable.dealerId, dealerId), eq(bookingsTable.vehicleId, vehicle.id), eq(bookingsTable.status, "active")))
-          .limit(1);
-        const [activeDeal] = await tx
-          .select({ id: dealsTable.id })
-          .from(dealsTable)
-          .where(and(eq(dealsTable.dealerId, dealerId), eq(dealsTable.vehicleId, vehicle.id), inArray(dealsTable.stage, ["desking", "finance", "committed"])))
-          .limit(1);
-        const [activeItem] = await tx
-          .select({ id: dealItemsTable.id })
-          .from(dealItemsTable)
-          .innerJoin(dealsTable, eq(dealsTable.id, dealItemsTable.dealId))
-          .where(and(eq(dealItemsTable.dealerId, dealerId), eq(dealItemsTable.vehicleId, vehicle.id), inArray(dealsTable.stage, ["desking", "finance", "committed"])))
-          .limit(1);
-        if (booking || activeDeal || activeItem)
-          throw new Error(`CSV row ${row.row}: existing VIN ${row.vin} has an active reservation or deal allocation.`);
+      if (vehicle && !matchesReviewedVehicle(vehicle, row, input.data))
+        throw new Error(`CSV row ${row.row}: existing VIN ${row.vin} does not exactly match the reviewed specification and price.`);
+      if (vehicle && (vehicle.recallFlag || vehicle.damageFlag || (vehicle.holdUntil != null && vehicle.holdUntil > new Date())))
+        throw new Error(`CSV row ${row.row}: existing VIN ${row.vin} is held, recalled, or damaged.`);
+
+      let customer: typeof customersTable.$inferSelect;
+      if (confirmed?.customerId != null) {
+        const [selected] = await tx.select().from(customersTable).where(and(
+          eq(customersTable.id, confirmed.customerId),
+          eq(customersTable.dealerId, dealerId),
+          isNull(customersTable.deletedAt),
+          or(
+            eq(sql<string>`lower(btrim(${customersTable.name}))`, row.customerName.toLowerCase()),
+            ...(row.raw["Email"]?.trim()
+              ? [eq(sql<string>`lower(btrim(${customersTable.email}))`, row.raw["Email"]!.trim().toLowerCase())]
+              : []),
+          ),
+        )).for("update");
+        if (!selected) throw new Error(`CSV row ${row.row}: confirmed customer ${confirmed.customerId} is no longer an exact name/email candidate.`);
+        customer = selected;
+      } else {
+        [customer] = await tx.insert(customersTable).values({
+          dealerId, name: row.customerName, email: row.raw["Email"]?.trim() || null,
+          phone: null, address: row.raw["Address"]?.trim() || null,
+        }).returning();
       }
-      const selectedVehicle = vehicle
-        ? (await tx.update(vehiclesTable).set({ status: "booked", importMetadata: meta }).where(eq(vehiclesTable.id, vehicle.id)).returning())[0]!
-        : (await tx.insert(vehiclesTable).values({
+
+      let lead: typeof leadsTable.$inferSelect;
+      let leadAction: "create_lead" | "reuse_lead";
+      if (confirmed?.leadId != null) {
+        // This is the same lead-link lock used by normal deal creation and
+        // archive flows. Acquire it before the row lock/update.
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`lead-link:${dealerId}:${confirmed.leadId}`}))`);
+        const [selected] = await tx.select().from(leadsTable).where(and(
+          eq(leadsTable.id, confirmed.leadId),
+          eq(leadsTable.dealerId, dealerId),
+          isNull(leadsTable.deletedAt),
+          eq(sql<string>`lower(btrim(${leadsTable.name}))`, row.customerName.toLowerCase()),
+        )).for("update");
+        if (!selected) throw new Error(`CSV row ${row.row}: confirmed lead ${confirmed.leadId} is no longer an exact active lead candidate.`);
+        if (selected.customerId != null && selected.customerId !== customer!.id)
+          throw new Error(`CSV row ${row.row}: confirmed lead ${selected.id} is linked to a different customer.`);
+        [lead] = await tx.update(leadsTable).set({
+          customerId: selected.customerId ?? customer!.id,
+          // A reused historical-sale lead must leave the actionable pipeline
+          // too. Keep its existing valid owner/assignment; only the scoped
+          // import state is changed under the canonical lead-link lock.
+          phase: "won",
+          status: "converted",
+          contactedDate: selected.contactedDate,
+          stageEnteredAt: new Date(),
+          importMetadata: leadImportMetadata(row, input.data, batchFingerprint),
+        }).where(and(
+          eq(leadsTable.id, selected.id), eq(leadsTable.dealerId, dealerId),
+        )).returning();
+        await tx.update(emailLogsTable).set({ status: "cancelled" }).where(and(
+          eq(emailLogsTable.dealerId, dealerId),
+          eq(emailLogsTable.leadId, lead!.id),
+          eq(emailLogsTable.status, "queued"),
+        ));
+        await tx.update(tasksTable).set({
+          status: "done",
+          completedAt: new Date(),
+          description: sql`coalesce(${tasksTable.description}, '') || E'\nClosed without outreach: lead was linked to a reviewed historical committed sale.'`,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(tasksTable.dealerId, dealerId),
+          eq(tasksTable.leadId, lead!.id),
+          inArray(tasksTable.kind, ["cadence", "callback"]),
+          ne(tasksTable.status, "done"),
+        ));
+        leadAction = "reuse_lead";
+      } else {
+        // Deliberately bypass POST /leads: that endpoint starts welcome,
+        // quoting, intake and manager-notification automation even for a won
+        // phase. This is an already committed historical sale, not an enquiry.
+        [lead] = await tx.insert(leadsTable).values({
+          dealerId,
+          name: row.customerName,
+          email: row.raw["Email"]?.trim() || null,
+          address: row.raw["Address"]?.trim() || null,
+          channel: "reviewed_delivery_import",
+          source: "walk_in",
+          phase: "won",
+          status: "converted",
+          customerId: customer!.id,
+          interestedVehicleId: null,
+          selectedModel: row.raw["Model"],
+          interestedModelText: row.raw["Model"],
+          variant: row.raw["Version"] || null,
+          color: row.raw["Exterior"] || null,
+          assignedTo: row.raw["Advisor"] || null,
+          ownerUserId: row.advisorUserId,
+          emailOptOut: false,
+          contactedDate: null,
+          stageEnteredAt: new Date(),
+          notes: `Imported reviewed committed sale (${BATCH_KEY}); customer outreach and sales automation are suppressed by import provenance.`,
+          importMetadata: leadImportMetadata(row, input.data, batchFingerprint),
+        }).returning();
+        await tx.insert(leadVehicleInterestsTable).values({
+          dealerId,
+          leadId: lead!.id,
+          vehicleId: null,
+          make: input.data.vehicleMake,
+          model: row.raw["Model"],
+          modelYear: input.data.modelYear,
+          variant: row.raw["Version"] || null,
+          color: row.raw["Exterior"] || null,
+          unitPrice: row.sellingPrice,
+          quantity: 1,
+          position: 0,
+        });
+        leadAction = "create_lead";
+      }
+
+      const selectedVehicle = vehicle ?? (await tx.insert(vehiclesTable).values({
         dealerId,
         make: input.data.vehicleMake,
         model: row.raw["Model"],
@@ -546,47 +797,56 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
         status: "booked",
         importMetadata: meta,
       }).returning())[0]!;
-      const confirmedLeadId = confirmed?.leadId ?? null;
-      let customer: typeof customersTable.$inferSelect;
-      if (confirmedLeadId != null) {
-        const [lead] = await tx.select({ id: leadsTable.id, customerId: leadsTable.customerId }).from(leadsTable).where(and(
-          eq(leadsTable.id, confirmedLeadId),
-          eq(leadsTable.dealerId, dealerId),
-          eq(sql<string>`lower(btrim(${leadsTable.name}))`, row.customerName.toLowerCase()),
-        )).for("update");
-        if (!lead) throw new Error(`Confirmed lead ${confirmedLeadId} no longer exactly matches this dealership/customer.`);
-        if (lead.customerId != null) {
-          const [linked] = await tx.select().from(customersTable).where(and(eq(customersTable.id, lead.customerId), eq(customersTable.dealerId, dealerId))).for("update");
-          if (!linked || linked.name.trim().toLowerCase() !== row.customerName.toLowerCase())
-            throw new Error(`CSV row ${row.row}: confirmed lead ${confirmedLeadId} has a different linked customer.`);
-          customer = linked;
-        } else {
-          [customer] = await tx.insert(customersTable).values({
-            dealerId, name: row.customerName, email: row.raw["Email"]?.trim() || null,
-            phone: null, address: row.raw["Address"]?.trim() || null,
-          }).returning();
-          await tx.update(leadsTable).set({ customerId: customer!.id }).where(and(eq(leadsTable.id, lead.id), eq(leadsTable.dealerId, dealerId)));
-        }
+      const allVehicleDeals = await tx.select().from(dealsTable).where(and(
+        eq(dealsTable.dealerId, dealerId), eq(dealsTable.vehicleId, selectedVehicle.id),
+      )).for("update");
+      let deal: typeof dealsTable.$inferSelect;
+      let dealAction: "create_deal" | "reuse_deal";
+      if (confirmed?.dealId != null) {
+        const selected = allVehicleDeals.find((candidate) => candidate.id === confirmed.dealId);
+        if (!selected || !isReusableCommittedDeal(selected, selectedVehicle.id, customer!.id, lead!.id, row.sellingPrice))
+          throw new Error(`CSV row ${row.row}: confirmed deal ${confirmed.dealId} no longer matches the confirmed lead/customer, VIN, specification, and price.`);
+        deal = selected;
+        dealAction = "reuse_deal";
       } else {
-        [customer] = await tx.insert(customersTable).values({
-          dealerId, name: row.customerName, email: row.raw["Email"]?.trim() || null,
-          phone: null, address: row.raw["Address"]?.trim() || null,
+        if (allVehicleDeals.length)
+          throw new Error(`CSV row ${row.row}: existing deal allocation for VIN ${row.vin} was not explicitly confirmed as a safe reuse.`);
+        if (!canCreateCommittedDealForVehicle(vehicle))
+          throw new Error(`CSV row ${row.row}: existing VIN ${row.vin} is unavailable for a new committed allocation.`);
+        [deal] = await tx.insert(dealsTable).values({
+          dealerId,
+          customerId: customer!.id,
+          leadId: lead!.id,
+          vehicleId: selectedVehicle.id,
+          customerName: row.customerName,
+          stage: "committed",
+          vehiclePrice: row.sellingPrice,
+          otdPrice: row.sellingPrice,
+          depositPaid: false,
+          salesAdvisor: row.raw["Advisor"],
+          salesAdvisorUserId: row.advisorUserId,
         }).returning();
+        dealAction = "create_deal";
       }
-      const [deal] = await tx.insert(dealsTable).values({
-        dealerId,
-        customerId: customer!.id,
-        leadId: confirmedLeadId,
-        vehicleId: selectedVehicle.id,
-        customerName: row.customerName,
-        stage: "committed",
-        vehiclePrice: row.sellingPrice,
-        otdPrice: row.sellingPrice,
-        depositPaid: false,
-        salesAdvisor: row.raw["Advisor"],
-        salesAdvisorUserId: row.advisorUserId,
-      }).returning();
-      const [item] = await tx.insert(dealItemsTable).values({
+      if (vehicle && confirmed?.dealId == null)
+        await tx.update(vehiclesTable).set({ status: "booked", importMetadata: meta }).where(eq(vehiclesTable.id, vehicle.id));
+      const dealItems = await tx.select().from(dealItemsTable).where(and(
+        eq(dealItemsTable.dealerId, dealerId),
+        eq(dealItemsTable.dealId, deal!.id),
+      )).for("update");
+      const matchingItems = dealItems.filter((candidate) =>
+        candidate.vehicleId === selectedVehicle.id,
+      );
+      let item = matchingItems.find((candidate) =>
+        candidate.quantity === 1 && candidate.status === "allocated" &&
+        candidate.vehiclePrice === row.sellingPrice && candidate.total === row.sellingPrice &&
+        sameText(candidate.make, selectedVehicle.make) && sameText(candidate.model, selectedVehicle.model) &&
+        candidate.modelYear === selectedVehicle.year && sameText(candidate.variant, selectedVehicle.trim) &&
+        sameText(candidate.color, selectedVehicle.exteriorColor),
+      );
+      if (matchingItems.length && !item)
+        throw new Error(`CSV row ${row.row}: reused deal #${deal!.id} has a VIN item with a conflicting specification or price.`);
+      if (!item) [item] = await tx.insert(dealItemsTable).values({
         dealerId,
         dealId: deal!.id,
         vehicleId: selectedVehicle.id,
@@ -596,12 +856,39 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
         variant: selectedVehicle.trim,
         color: selectedVehicle.exteriorColor,
         quantity: 1,
-        position: 0,
+        position: Math.max(-1, ...dealItems.map((candidate) => candidate.position)) + 1,
         vehiclePrice: row.sellingPrice,
         total: row.sellingPrice,
         status: "allocated",
-      }).returning();
-      const [invoiceBase] = await tx.insert(invoicesTable).values({
+       }).returning();
+      const dealInvoices = await tx.select({
+        id: invoicesTable.id, kind: invoicesTable.kind, amount: invoicesTable.amount,
+        status: invoicesTable.status, customerId: invoicesTable.customerId, customerName: invoicesTable.customerName,
+        taxLines: invoicesTable.taxLines,
+      }).from(invoicesTable).where(and(
+        eq(invoicesTable.dealerId, dealerId), eq(invoicesTable.dealId, deal!.id),
+      )).for("update");
+      const paymentRows = dealInvoices.length
+        ? await tx.select({ id: paymentsTable.id }).from(paymentsTable).where(and(
+            eq(paymentsTable.dealerId, dealerId),
+            inArray(paymentsTable.invoiceId, dealInvoices.map((invoice) => invoice.id)),
+          )).for("update")
+        : [];
+      if (paymentRows.length)
+        throw new Error(`CSV row ${row.row}: reused deal #${deal!.id} has payment ledger evidence; imported payment state is unrecorded and cannot overwrite finance.`);
+      const finals = dealInvoices.filter((invoice) => invoice.kind === "final");
+      if (finals.length > 1)
+        throw new Error(`CSV row ${row.row}: reused deal #${deal!.id} has multiple final invoices and cannot be safely imported.`);
+      let invoice = finals[0];
+      let invoiceAction: "create_invoice" | "reuse_invoice" = invoice ? "reuse_invoice" : "create_invoice";
+      if (invoice && (
+        invoice.amount !== row.sellingPrice || invoice.status !== "issued" ||
+        invoice.customerId !== customer!.id || !sameText(invoice.customerName, row.customerName) ||
+        !Array.isArray(invoice.taxLines) || invoice.taxLines.length !== 0
+      ))
+        throw new Error(`CSV row ${row.row}: reused final invoice #${invoice.id} conflicts with the reviewed full-price, no-tax, unrecorded settlement.`);
+      if (!invoice) {
+       const [invoiceBase] = await tx.insert(invoicesTable).values({
         dealerId,
         invoiceNumber: "PENDING",
         customerId: customer!.id,
@@ -612,14 +899,15 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
         kind: "final",
         status: "issued",
         importMetadata: meta,
-      }).returning();
-      const [invoice] = await tx.update(invoicesTable).set({
+       }).returning();
+       [invoice] = await tx.update(invoicesTable).set({
         invoiceNumber: `INV-${new Date().getUTCFullYear()}-${String(invoiceBase!.id).padStart(4, "0")}`,
-      }).where(eq(invoicesTable.id, invoiceBase!.id)).returning();
+       }).where(eq(invoicesTable.id, invoiceBase!.id)).returning();
+      }
       const [delivery] = await tx.insert(deliveriesTable).values({
         dealerId,
-        dealId: deal!.id,
-        dealItemId: item!.id,
+         dealId: deal!.id,
+         dealItemId: item!.id,
         dealItemUnit: 0,
         vehicleId: selectedVehicle.id,
         customerId: customer!.id,
@@ -629,10 +917,13 @@ router.post("/delivery-imports/apply", async (req, res): Promise<void> => {
         currentStep: "sales_order",
         steps: defaultDeliverySteps(),
         pdiItems: DEFAULT_PDI_ITEMS,
-        invoiceId: invoice!.id,
+         invoiceId: invoice!.id,
         importMetadata: meta,
       }).returning();
-      return { status: "created" as const, deliveryId: delivery!.id };
+       return {
+         status: "created" as const, deliveryId: delivery!.id, leadId: lead!.id,
+         dealId: deal!.id, invoiceId: invoice!.id, leadAction, dealAction, invoiceAction,
+       };
     });
     outcomes.push({ row: row.row, ...result });
   }

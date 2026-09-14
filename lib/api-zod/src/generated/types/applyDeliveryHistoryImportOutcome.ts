@@ -5,10 +5,19 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ApplyDeliveryHistoryImportOutcomeDealAction } from './applyDeliveryHistoryImportOutcomeDealAction';
+import type { ApplyDeliveryHistoryImportOutcomeInvoiceAction } from './applyDeliveryHistoryImportOutcomeInvoiceAction';
+import type { ApplyDeliveryHistoryImportOutcomeLeadAction } from './applyDeliveryHistoryImportOutcomeLeadAction';
 import type { ApplyDeliveryHistoryImportOutcomeStatus } from './applyDeliveryHistoryImportOutcomeStatus';
 
 export interface ApplyDeliveryHistoryImportOutcome {
   row: number;
   deliveryId: number;
+  leadId: number;
+  dealId: number;
+  invoiceId: number;
+  leadAction: ApplyDeliveryHistoryImportOutcomeLeadAction;
+  dealAction: ApplyDeliveryHistoryImportOutcomeDealAction;
+  invoiceAction: ApplyDeliveryHistoryImportOutcomeInvoiceAction;
   status: ApplyDeliveryHistoryImportOutcomeStatus;
 }

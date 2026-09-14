@@ -931,8 +931,18 @@ export const PreviewDeliveryHistoryImportResponse = zod.object({
   "customerName": zod.string(),
   "action": zod.enum(['create_vehicle', 'reuse_vehicle']),
   "existingVehicleId": zod.number().nullable(),
-  "candidateLeadId": zod.number().nullable(),
-  "requiresLeadConfirmation": zod.boolean(),
+  "leadAction": zod.enum(['create_lead', 'reuse_lead']),
+  "leadId": zod.number().nullable(),
+  "candidateLeadIds": zod.array(zod.number()),
+  "customerAction": zod.enum(['create_customer', 'reuse_customer']),
+  "customerId": zod.number().nullable(),
+  "candidateCustomerIds": zod.array(zod.number()),
+  "dealAction": zod.enum(['create_deal', 'reuse_deal']),
+  "dealId": zod.number().nullable(),
+  "candidateDealIds": zod.array(zod.number()),
+  "invoiceAction": zod.enum(['create_invoice', 'reuse_invoice']),
+  "invoiceId": zod.number().nullable(),
+  "requiresIdentityConfirmation": zod.boolean(),
   "sellingPriceGyd": zod.number(),
   "paymentState": zod.enum(['UNRECORDED']),
   "sourceStatus": zod.string().nullable(),
@@ -953,6 +963,12 @@ export const ApplyDeliveryHistoryImportResponse = zod.object({
   "outcomes": zod.array(zod.object({
   "row": zod.number(),
   "deliveryId": zod.number(),
+  "leadId": zod.number(),
+  "dealId": zod.number(),
+  "invoiceId": zod.number(),
+  "leadAction": zod.enum(['create_lead', 'reuse_lead']),
+  "dealAction": zod.enum(['create_deal', 'reuse_deal']),
+  "invoiceAction": zod.enum(['create_invoice', 'reuse_invoice']),
   "status": zod.enum(['created', 'unchanged'])
 }))
 })

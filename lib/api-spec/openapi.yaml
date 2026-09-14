@@ -11285,10 +11285,12 @@ components:
         email: { type: ["string", "null"] }
     DeliveryHistoryImportConfirmation:
       type: object
-      required: [row, leadId]
+      required: [row]
       properties:
         row: { type: integer, minimum: 2 }
         leadId: { type: integer, minimum: 1 }
+        customerId: { type: integer, minimum: 1 }
+        dealId: { type: integer, minimum: 1 }
     DeliveryHistoryImportPreviewInput:
       type: object
       required: [dealershipId, modelYear, vehicleMake, powertrain, bodyType]
@@ -11309,15 +11311,25 @@ components:
                 $ref: "#/components/schemas/DeliveryHistoryImportConfirmation"
     DeliveryHistoryImportPreviewRow:
       type: object
-      required: [row, vin, customerName, action, existingVehicleId, candidateLeadId, requiresLeadConfirmation, sellingPriceGyd, paymentState, sourceStatus, targetStatus]
+      required: [row, vin, customerName, action, existingVehicleId, leadAction, leadId, candidateLeadIds, customerAction, customerId, candidateCustomerIds, dealAction, dealId, candidateDealIds, invoiceAction, invoiceId, requiresIdentityConfirmation, sellingPriceGyd, paymentState, sourceStatus, targetStatus]
       properties:
         row: { type: integer }
         vin: { type: string }
         customerName: { type: string }
         action: { type: string, enum: [create_vehicle, reuse_vehicle] }
         existingVehicleId: { type: ["integer", "null"] }
-        candidateLeadId: { type: ["integer", "null"] }
-        requiresLeadConfirmation: { type: boolean }
+        leadAction: { type: string, enum: [create_lead, reuse_lead] }
+        leadId: { type: ["integer", "null"] }
+        candidateLeadIds: { type: array, items: { type: integer } }
+        customerAction: { type: string, enum: [create_customer, reuse_customer] }
+        customerId: { type: ["integer", "null"] }
+        candidateCustomerIds: { type: array, items: { type: integer } }
+        dealAction: { type: string, enum: [create_deal, reuse_deal] }
+        dealId: { type: ["integer", "null"] }
+        candidateDealIds: { type: array, items: { type: integer } }
+        invoiceAction: { type: string, enum: [create_invoice, reuse_invoice] }
+        invoiceId: { type: ["integer", "null"] }
+        requiresIdentityConfirmation: { type: boolean }
         sellingPriceGyd: { type: number }
         paymentState: { type: string, enum: [UNRECORDED] }
         sourceStatus: { type: ["string", "null"] }
@@ -11338,10 +11350,16 @@ components:
         canApply: { type: boolean }
     ApplyDeliveryHistoryImportOutcome:
       type: object
-      required: [row, deliveryId, status]
+      required: [row, deliveryId, leadId, dealId, invoiceId, leadAction, dealAction, invoiceAction, status]
       properties:
         row: { type: integer }
         deliveryId: { type: integer }
+        leadId: { type: integer }
+        dealId: { type: integer }
+        invoiceId: { type: integer }
+        leadAction: { type: string, enum: [create_lead, reuse_lead] }
+        dealAction: { type: string, enum: [create_deal, reuse_deal] }
+        invoiceAction: { type: string, enum: [create_invoice, reuse_invoice] }
         status: { type: string, enum: [created, unchanged] }
     DeliveryHistoryImportApplyResult:
       type: object

@@ -131,8 +131,11 @@ export default function Deliveries() {
           {activeDealer?.dealerId === 1 &&
             (activeDealer.isGeneralManager ||
               activeDealer.roleName === "General Manager") &&
-            ["deliveries", "inventory", "customers", "deals", "finance"].every(
+            ["deliveries", "inventory", "customers", "leads", "deals", "finance"].every(
               (module) => can(module, "create"),
+            ) &&
+            ["inventory", "customers", "leads", "deals"].every(
+              (module) => can(module, "edit"),
             ) && (
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="w-4 h-4 mr-2" />
@@ -244,6 +247,12 @@ function ReviewedDeliveryImportDialog({
   const [bodyType, setBodyType] = useState("");
   const [review, setReview] = useState<DeliveryHistoryImportPreviewResult | null>(null);
   const [confirmedRows, setConfirmedRows] = useState<number[]>([]);
+  const [identitySelections, setIdentitySelections] = useState<Record<number, {
+    leadId?: number;
+    customerId?: number;
+    dealId?: number;
+  }>>({});
+  const [applied, setApplied] = useState<DeliveryHistoryImportApplyResult | null>(null);
   const [busy, setBusy] = useState(false);
 
   const fieldsValid =
@@ -267,8 +276,16 @@ function ReviewedDeliveryImportDialog({
         "confirmations",
         JSON.stringify(
           review.rows
-            .filter((row) => row.candidateLeadId && confirmedRows.includes(row.row))
-            .map((row) => ({ row: row.row, leadId: row.candidateLeadId })),
+            .filter((row) => row.requiresIdentityConfirmation && confirmedRows.includes(row.row))
+            .map((row) => {
+              const selected = identitySelections[row.row] ?? {};
+              return {
+                row: row.row,
+                ...(row.candidateLeadIds.length ? { leadId: selected.leadId ?? row.leadId! } : {}),
+                ...(row.candidateCustomerIds.length ? { customerId: selected.customerId ?? row.customerId! } : {}),
+                ...(row.candidateDealIds.length ? { dealId: selected.dealId ?? row.dealId! } : {}),
+              };
+            }),
         ),
       );
     }
@@ -285,6 +302,8 @@ function ReviewedDeliveryImportDialog({
       });
       setReview(result);
       setConfirmedRows([]);
+      setIdentitySelections({});
+      setApplied(null);
     } catch (error) {
       toast({ title: "Review failed", description: error instanceof Error ? error.message : "Could not review this CSV.", variant: "destructive" });
     } finally {
@@ -293,9 +312,21 @@ function ReviewedDeliveryImportDialog({
   };
   const apply = async () => {
     if (!review || !review.canApply) return;
-    const required = review.rows.filter((row) => row.requiresLeadConfirmation);
+    const required = review.rows.filter((row) => row.requiresIdentityConfirmation);
     if (required.some((row) => !confirmedRows.includes(row.row))) {
-      toast({ title: "Lead confirmation required", description: "Explicitly confirm every exact-name lead candidate before applying.", variant: "destructive" });
+      toast({ title: "Identity confirmation required", description: "Explicitly confirm every existing lead, customer, or deal candidate before applying.", variant: "destructive" });
+      return;
+    }
+    const missingChoice = required.find((row) => {
+      const selected = identitySelections[row.row] ?? {};
+      return (
+        (row.candidateLeadIds.length > 1 && !selected.leadId) ||
+        (row.candidateCustomerIds.length > 1 && !selected.customerId) ||
+        (row.candidateDealIds.length > 1 && !selected.dealId)
+      );
+    });
+    if (missingChoice) {
+      toast({ title: "Choose the exact identity", description: `Row ${missingChoice.row} has more than one exact candidate. Select the confirmed records before applying.`, variant: "destructive" });
       return;
     }
     setBusy(true);
@@ -312,8 +343,8 @@ function ReviewedDeliveryImportDialog({
         qc.invalidateQueries({ queryKey: getListDealsQueryKey() }),
         qc.invalidateQueries({ queryKey: getListFinanceApplicationsQueryKey() })
       ]);
-      toast({ title: "Reviewed history applied", description: `${result.created} pending workflow${result.created === 1 ? "" : "s"} created; ${result.unchanged} already present.` });
-      onOpenChange(false);
+      setApplied(result);
+      toast({ title: "Reviewed history applied", description: `${result.created} pending workflow${result.created === 1 ? "" : "s"} created; ${result.unchanged} already present. IDs are shown in the import summary.` });
       setReview(null);
       setFile(null);
     } catch (error) {
@@ -333,24 +364,65 @@ function ReviewedDeliveryImportDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Input type="file" accept=".csv,text/csv" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setReview(null); }} />
-          <Input value={modelYear} onChange={(event) => { setModelYear(event.target.value); setReview(null); }} placeholder="Reviewed model year (required)" inputMode="numeric" />
-          <Input value={vehicleMake} onChange={(event) => { setVehicleMake(event.target.value); setReview(null); }} placeholder="Reviewed vehicle make (required)" />
-          <Input value={powertrain} onChange={(event) => { setPowertrain(event.target.value); setReview(null); }} placeholder="Reviewed powertrain (required)" />
-          <Input value={bodyType} onChange={(event) => { setBodyType(event.target.value); setReview(null); }} placeholder="Reviewed body type (required)" />
+          <Input type="file" accept=".csv,text/csv" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setReview(null); setApplied(null); }} />
+          <Input value={modelYear} onChange={(event) => { setModelYear(event.target.value); setReview(null); setApplied(null); }} placeholder="Reviewed model year (required)" inputMode="numeric" />
+          <Input value={vehicleMake} onChange={(event) => { setVehicleMake(event.target.value); setReview(null); setApplied(null); }} placeholder="Reviewed vehicle make (required)" />
+          <Input value={powertrain} onChange={(event) => { setPowertrain(event.target.value); setReview(null); setApplied(null); }} placeholder="Reviewed powertrain (required)" />
+          <Input value={bodyType} onChange={(event) => { setBodyType(event.target.value); setReview(null); setApplied(null); }} placeholder="Reviewed body type (required)" />
         </div>
+        {applied && (
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
+            <p className="font-medium">Applied: {applied.created} created · {applied.unchanged} unchanged</p>
+            <ul className="mt-1 space-y-1 text-muted-foreground">
+              {applied.outcomes.map((outcome) => (
+                <li key={outcome.row}>Row {outcome.row}: delivery #{outcome.deliveryId} · lead #{outcome.leadId} ({outcome.leadAction}) · deal #{outcome.dealId} ({outcome.dealAction}) · invoice #{outcome.invoiceId} ({outcome.invoiceAction}) · {outcome.status}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {review && (
           <div className="space-y-3 rounded-lg border border-border p-3 text-sm">
             <p className="font-medium">{review.total} row{review.total === 1 ? "" : "s"} reviewed · customer email suppression will persist</p>
             {review.errors.length > 0 && <ul className="list-disc pl-5 text-destructive">{review.errors.map((error) => <li key={error}>{error}</li>)}</ul>}
             {review.rows.map((row) => (
               <div key={row.row} className="border-t border-border pt-2">
-                <p>Row {row.row}: {row.customerName} · {row.vin} · GY${Math.round(row.sellingPriceGyd).toLocaleString()} · {row.action === "reuse_vehicle" ? "existing VIN" : "new VIN"} · payment {row.paymentState.toLowerCase()}</p>
-                {row.requiresLeadConfirmation && (
-                  <label className="mt-1 flex items-center gap-2 text-amber-600">
-                    <input type="checkbox" checked={confirmedRows.includes(row.row)} onChange={(event) => setConfirmedRows((rows) => event.target.checked ? [...rows, row.row] : rows.filter((value) => value !== row.row))} />
-                    Confirm exact-name lead candidate #{row.candidateLeadId}; do not merge by name automatically.
-                  </label>
+                <p>Row {row.row}: {row.customerName} · {row.vin} · GY${Math.round(row.sellingPriceGyd).toLocaleString()} · vehicle {row.action === "reuse_vehicle" ? `reuse #${row.existingVehicleId}` : "create"} · payment {row.paymentState.toLowerCase()}</p>
+                <p className="mt-1 text-muted-foreground">
+                  Lead: {row.leadAction === "reuse_lead" ? `reuse ${row.leadId ? `#${row.leadId}` : "confirmed candidate"}` : "create"}
+                  {" · "}Customer: {row.customerAction === "reuse_customer" ? `reuse ${row.customerId ? `#${row.customerId}` : "confirmed candidate"}` : "create"}
+                  {" · "}Deal: {row.dealAction === "reuse_deal" ? `reuse ${row.dealId ? `#${row.dealId}` : "confirmed candidate"}` : "create"}
+                  {" · "}Invoice: {row.invoiceAction === "reuse_invoice" ? `reuse #${row.invoiceId}` : "create"}
+                </p>
+                {row.requiresIdentityConfirmation && (
+                  <div className="mt-2 space-y-2 rounded bg-amber-500/10 p-2 text-amber-700">
+                    {([
+                      ["leadId", "lead", row.candidateLeadIds],
+                      ["customerId", "customer", row.candidateCustomerIds],
+                      ["dealId", "deal", row.candidateDealIds],
+                    ] as const).map(([key, label, candidates]) => candidates.length > 1 && (
+                      <label key={key} className="flex items-center gap-2">
+                        <span className="capitalize">{label}</span>
+                        <select
+                          className="rounded border border-border bg-background px-2 py-1 text-foreground"
+                          value={identitySelections[row.row]?.[key] ?? ""}
+                          onChange={(event) => setIdentitySelections((current) => ({
+                            ...current,
+                            [row.row]: {
+                              ...current[row.row],
+                              [key]: event.target.value ? Number(event.target.value) : undefined,
+                            },
+                          }))}
+                        >
+                          <option value="">Choose confirmed {label}</option>
+                          {candidates.map((id) => <option key={id} value={id}>#{id}</option>)}
+                        </select>
+                      </label>
+                    ))}
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={confirmedRows.includes(row.row)} onChange={(event) => setConfirmedRows((rows) => event.target.checked ? [...rows, row.row] : rows.filter((value) => value !== row.row))} />
+                      Confirm the exact existing identity/identities shown for this row; no name, email, or VIN fuzzy merge will occur.
+                    </label>
+                  </div>
                 )}
               </div>
             ))}

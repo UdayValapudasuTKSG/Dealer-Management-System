@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DeliveryHistoryImportPreviewRowAction } from './deliveryHistoryImportPreviewRowAction';
+import type { DeliveryHistoryImportPreviewRowCustomerAction } from './deliveryHistoryImportPreviewRowCustomerAction';
+import type { DeliveryHistoryImportPreviewRowDealAction } from './deliveryHistoryImportPreviewRowDealAction';
+import type { DeliveryHistoryImportPreviewRowInvoiceAction } from './deliveryHistoryImportPreviewRowInvoiceAction';
+import type { DeliveryHistoryImportPreviewRowLeadAction } from './deliveryHistoryImportPreviewRowLeadAction';
 import type { DeliveryHistoryImportPreviewRowPaymentState } from './deliveryHistoryImportPreviewRowPaymentState';
 import type { DeliveryHistoryImportPreviewRowTargetStatus } from './deliveryHistoryImportPreviewRowTargetStatus';
 
@@ -16,9 +20,22 @@ export interface DeliveryHistoryImportPreviewRow {
   action: DeliveryHistoryImportPreviewRowAction;
   /** @nullable */
   existingVehicleId: number | null;
+  leadAction: DeliveryHistoryImportPreviewRowLeadAction;
   /** @nullable */
-  candidateLeadId: number | null;
-  requiresLeadConfirmation: boolean;
+  leadId: number | null;
+  candidateLeadIds: number[];
+  customerAction: DeliveryHistoryImportPreviewRowCustomerAction;
+  /** @nullable */
+  customerId: number | null;
+  candidateCustomerIds: number[];
+  dealAction: DeliveryHistoryImportPreviewRowDealAction;
+  /** @nullable */
+  dealId: number | null;
+  candidateDealIds: number[];
+  invoiceAction: DeliveryHistoryImportPreviewRowInvoiceAction;
+  /** @nullable */
+  invoiceId: number | null;
+  requiresIdentityConfirmation: boolean;
   sellingPriceGyd: number;
   paymentState: DeliveryHistoryImportPreviewRowPaymentState;
   /** @nullable */

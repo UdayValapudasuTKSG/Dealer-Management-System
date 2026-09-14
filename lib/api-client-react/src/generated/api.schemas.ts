@@ -2214,7 +2214,11 @@ export interface DeliveryHistoryImportConfirmation {
   /** @minimum 2 */
   row: number;
   /** @minimum 1 */
-  leadId: number;
+  leadId?: number;
+  /** @minimum 1 */
+  customerId?: number;
+  /** @minimum 1 */
+  dealId?: number;
 }
 
 export interface DeliveryHistoryImportPreviewInput {
@@ -2254,6 +2258,38 @@ export const DeliveryHistoryImportPreviewRowAction = {
   reuse_vehicle: 'reuse_vehicle',
 } as const;
 
+export type DeliveryHistoryImportPreviewRowLeadAction = typeof DeliveryHistoryImportPreviewRowLeadAction[keyof typeof DeliveryHistoryImportPreviewRowLeadAction];
+
+
+export const DeliveryHistoryImportPreviewRowLeadAction = {
+  create_lead: 'create_lead',
+  reuse_lead: 'reuse_lead',
+} as const;
+
+export type DeliveryHistoryImportPreviewRowCustomerAction = typeof DeliveryHistoryImportPreviewRowCustomerAction[keyof typeof DeliveryHistoryImportPreviewRowCustomerAction];
+
+
+export const DeliveryHistoryImportPreviewRowCustomerAction = {
+  create_customer: 'create_customer',
+  reuse_customer: 'reuse_customer',
+} as const;
+
+export type DeliveryHistoryImportPreviewRowDealAction = typeof DeliveryHistoryImportPreviewRowDealAction[keyof typeof DeliveryHistoryImportPreviewRowDealAction];
+
+
+export const DeliveryHistoryImportPreviewRowDealAction = {
+  create_deal: 'create_deal',
+  reuse_deal: 'reuse_deal',
+} as const;
+
+export type DeliveryHistoryImportPreviewRowInvoiceAction = typeof DeliveryHistoryImportPreviewRowInvoiceAction[keyof typeof DeliveryHistoryImportPreviewRowInvoiceAction];
+
+
+export const DeliveryHistoryImportPreviewRowInvoiceAction = {
+  create_invoice: 'create_invoice',
+  reuse_invoice: 'reuse_invoice',
+} as const;
+
 export type DeliveryHistoryImportPreviewRowPaymentState = typeof DeliveryHistoryImportPreviewRowPaymentState[keyof typeof DeliveryHistoryImportPreviewRowPaymentState];
 
 
@@ -2275,9 +2311,22 @@ export interface DeliveryHistoryImportPreviewRow {
   action: DeliveryHistoryImportPreviewRowAction;
   /** @nullable */
   existingVehicleId: number | null;
+  leadAction: DeliveryHistoryImportPreviewRowLeadAction;
   /** @nullable */
-  candidateLeadId: number | null;
-  requiresLeadConfirmation: boolean;
+  leadId: number | null;
+  candidateLeadIds: number[];
+  customerAction: DeliveryHistoryImportPreviewRowCustomerAction;
+  /** @nullable */
+  customerId: number | null;
+  candidateCustomerIds: number[];
+  dealAction: DeliveryHistoryImportPreviewRowDealAction;
+  /** @nullable */
+  dealId: number | null;
+  candidateDealIds: number[];
+  invoiceAction: DeliveryHistoryImportPreviewRowInvoiceAction;
+  /** @nullable */
+  invoiceId: number | null;
+  requiresIdentityConfirmation: boolean;
   sellingPriceGyd: number;
   paymentState: DeliveryHistoryImportPreviewRowPaymentState;
   /** @nullable */
@@ -2293,6 +2342,30 @@ export interface DeliveryHistoryImportPreviewResult {
   canApply: boolean;
 }
 
+export type ApplyDeliveryHistoryImportOutcomeLeadAction = typeof ApplyDeliveryHistoryImportOutcomeLeadAction[keyof typeof ApplyDeliveryHistoryImportOutcomeLeadAction];
+
+
+export const ApplyDeliveryHistoryImportOutcomeLeadAction = {
+  create_lead: 'create_lead',
+  reuse_lead: 'reuse_lead',
+} as const;
+
+export type ApplyDeliveryHistoryImportOutcomeDealAction = typeof ApplyDeliveryHistoryImportOutcomeDealAction[keyof typeof ApplyDeliveryHistoryImportOutcomeDealAction];
+
+
+export const ApplyDeliveryHistoryImportOutcomeDealAction = {
+  create_deal: 'create_deal',
+  reuse_deal: 'reuse_deal',
+} as const;
+
+export type ApplyDeliveryHistoryImportOutcomeInvoiceAction = typeof ApplyDeliveryHistoryImportOutcomeInvoiceAction[keyof typeof ApplyDeliveryHistoryImportOutcomeInvoiceAction];
+
+
+export const ApplyDeliveryHistoryImportOutcomeInvoiceAction = {
+  create_invoice: 'create_invoice',
+  reuse_invoice: 'reuse_invoice',
+} as const;
+
 export type ApplyDeliveryHistoryImportOutcomeStatus = typeof ApplyDeliveryHistoryImportOutcomeStatus[keyof typeof ApplyDeliveryHistoryImportOutcomeStatus];
 
 
@@ -2304,6 +2377,12 @@ export const ApplyDeliveryHistoryImportOutcomeStatus = {
 export interface ApplyDeliveryHistoryImportOutcome {
   row: number;
   deliveryId: number;
+  leadId: number;
+  dealId: number;
+  invoiceId: number;
+  leadAction: ApplyDeliveryHistoryImportOutcomeLeadAction;
+  dealAction: ApplyDeliveryHistoryImportOutcomeDealAction;
+  invoiceAction: ApplyDeliveryHistoryImportOutcomeInvoiceAction;
   status: ApplyDeliveryHistoryImportOutcomeStatus;
 }
 

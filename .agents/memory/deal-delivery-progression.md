@@ -27,3 +27,7 @@ An explicitly reviewed import may bring previously sold vehicles into **pending*
 **Why:** The dealership may need to generate handover/warranty documents and perform workflow checks for sales whose payments have not yet been entered in AURA. Fabricated payments or copied completion flags would defeat those checks.
 
 **How to apply:** Keep this as an audited import exception, not a relaxation of normal commitment rules. Preserve source dates separately, suppress customer communications by imported-record provenance, and require ledger-backed settlement before final handover—even if an invoice is manually marked paid.
+
+Imported confirmed-sale leads belong in Won even while delivery work remains pending.
+
+**Why:** Sales conversion and physical handover are distinct. Keeping these leads in an open sales phase would restart enquiry follow-ups for customers who have already purchased.

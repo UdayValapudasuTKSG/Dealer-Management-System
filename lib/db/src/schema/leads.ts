@@ -101,6 +101,10 @@ export const leadsTable = pgTable("leads", {
   // outbox suppresses any message addressed to the lead's (or its linked
   // customer's) email address.
   emailOptOut: boolean("email_opt_out").notNull().default(false),
+  /** Immutable provenance for controlled historical imports. This is distinct
+   * from a customer's marketing consent and allows automation to be scoped to
+   * the imported sales record. */
+  importMetadata: jsonb("import_metadata").$type<Record<string, unknown>>(),
   reservationFeePaid: boolean("reservation_fee_paid").notNull().default(false),
   reservationComments: text("reservation_comments"),
   financingQualified: boolean("financing_qualified").notNull().default(false),

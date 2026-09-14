@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify:vehicle-import": "AUTH_BYPASS=1 NODE_ENV=development tsx src/scripts/verify-vehicle-import-api.ts",
     "verify:reviewed-delivery-import": "tsx src/scripts/verify-reviewed-delivery-history-import.ts",
+    "test:reviewed-delivery-import-policy": "tsx src/scripts/test-reviewed-delivery-import-policy.ts",
     "verify:lead-call-sla": "tsx src/scripts/test-lead-call-sla.ts",
     "verify:delivery-owner-contact": "tsx src/scripts/test-delivery-owner-contact.ts",
     "verify:finance-multi-item": "tsx src/scripts/verify-finance-multi-item-commit.ts",

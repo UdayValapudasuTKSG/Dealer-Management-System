@@ -10,5 +10,9 @@ export interface DeliveryHistoryImportConfirmation {
   /** @minimum 2 */
   row: number;
   /** @minimum 1 */
-  leadId: number;
+  leadId?: number;
+  /** @minimum 1 */
+  customerId?: number;
+  /** @minimum 1 */
+  dealId?: number;
 }

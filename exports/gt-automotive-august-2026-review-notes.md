@@ -27,6 +27,7 @@ This approved CSV is for Deliveries → Import reviewed history after publishing
 - Create missing physical vehicle records only after rechecking normalized VIN uniqueness within this dealership.
 - Match inventory by normalized VIN only and link a lead only by an explicitly confirmed ID. Never auto-merge a customer by name; missing customers may be created with only supplied legitimate fields.
 - For missing customers, create only with legitimate supplied data. Never manufacture email addresses or phone numbers.
+- Create missing pipeline leads as Won/converted confirmed sales; keep delivery workflows pending. Reuse eligible existing leads, customers and committed deals only after explicit identity confirmation. Conflicting or paid finance records block the import rather than being overwritten.
 - Create a committed deal and pending ordinary delivery workflow with normal PDI, registration, insurance, invoice, appointment, handover and warranty steps. Do not set an appointment or handover date from the arrival date.
 - Preserve the joint customer name in row 4 until the primary buyer/co-buyer structure is confirmed.
 - Treat 625-1891 and 610-9487 as source Notes. Proposed Guyana phone normalization is shown separately and requires confirmation.
