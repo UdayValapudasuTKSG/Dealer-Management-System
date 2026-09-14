@@ -329,6 +329,8 @@ export function buildInvoicePdfFromPayload(
 // ---------------------------------------------------------------------------
 
 export interface HandoverPdfExtras {
+  /** Resolved customer name from the delivery/customer record. */
+  customerName?: string | null;
   salesAdvisorName?: string | null;
   dealerName?: string | null;
   /** White-label logo bytes; drawn above the dealership name when present. */
@@ -337,7 +339,10 @@ export interface HandoverPdfExtras {
   customerAddress?: string | null;
   customerEmail?: string | null;
   customerPhone?: string | null;
+  registrationNumber?: string | null;
   invoiceNumber?: string | null;
+  /** Resolved date, including imported-history blank-date semantics. */
+  handoverDate?: string | null;
   /** Manual per-field overrides from the delivery's handover_overrides. */
   overrides?: Record<string, string>;
   /** Imported workflow records must not turn an arrival/appointment into a handover date. */
@@ -461,20 +466,35 @@ export function buildHandoverPdf(
     ): number => {
       doc.font("Helvetica-Bold").fontSize(8).fillColor(INK).text(label, x, y);
       const lw = labelW ?? doc.widthOfString(label) + 6;
-      if (value) {
+      const contentWidth = Math.max(12, width - lw);
+      const text = value?.trim() ?? "";
+      const lineGap = 1.5;
+      doc.font("Helvetica").fontSize(8.5).fillColor(INK);
+      const textHeight = text
+        ? Math.max(
+            9,
+            doc.heightOfString(text, {
+              width: contentWidth,
+              lineGap,
+              lineBreak: true,
+            }),
+          )
+        : 9;
+      if (text) {
         doc
-          .font("Helvetica")
-          .fontSize(8.5)
-          .fillColor(INK)
-          .text(value, x + lw, y - 1, { width: width - lw, height: 10, ellipsis: true });
+          .text(text, x + lw, y - 1, {
+            width: contentWidth,
+            lineGap,
+            lineBreak: true,
+          });
       }
       doc
-        .moveTo(x + lw, y + 9)
-        .lineTo(x + width, y + 9)
+        .moveTo(x + lw, y + textHeight + 2)
+        .lineTo(x + width, y + textHeight + 2)
         .strokeColor(RULE)
         .lineWidth(0.7)
         .stroke();
-      return y + 16;
+      return y + textHeight + 9;
     };
 
     const checklist = (title: string, items: string[], x: number, y: number): number => {
@@ -543,17 +563,44 @@ export function buildHandoverPdf(
     // Customer details (left)
     doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("CUSTOMER DETAILS", M, y);
     let ly = y + 14;
-    ly = fieldLine("CUSTOMER NAME:", delivery.customerName ?? "", M, ly, colW, 82);
-    ly = fieldLine("ADDRESS:", ov.customerAddress ?? extras.customerAddress ?? "", M, ly, colW, 50);
-    ly = fieldLine("", "", M, ly, colW, 0);
-    ly = fieldLine("EMAIL ADDRESS:", ov.customerEmail ?? extras.customerEmail ?? "", M, ly, colW, 80);
-    ly = fieldLine("TEL NOS.:", ov.customerPhone ?? extras.customerPhone ?? "", M, ly, colW, 48);
+    ly = fieldLine(
+      "CUSTOMER NAME:",
+      extras.customerName ?? delivery.customerName ?? "",
+      M,
+      ly,
+      colW,
+      82,
+    );
+    ly = fieldLine(
+      "ADDRESS:",
+      ov.customerAddress?.trim() || extras.customerAddress || "",
+      M,
+      ly,
+      colW,
+      50,
+    );
+    ly = fieldLine(
+      "EMAIL ADDRESS:",
+      ov.customerEmail?.trim() || extras.customerEmail || "",
+      M,
+      ly,
+      colW,
+      80,
+    );
+    ly = fieldLine(
+      "TEL NOS.:",
+      ov.customerPhone?.trim() || extras.customerPhone || "",
+      M,
+      ly,
+      colW,
+      48,
+    );
 
     // Salesperson / date / invoice (right)
     let ry = y + 14;
     ry = fieldLine(
       "SALESPERSON:",
-      ov.salesperson ?? extras.salesAdvisorName ?? advisorName ?? "",
+      ov.salesperson?.trim() || extras.salesAdvisorName || advisorName || "",
       rightX,
       ry,
       colW,
@@ -561,16 +608,29 @@ export function buildHandoverPdf(
     );
     ry = fieldLine(
       "DATE:",
-      ov.date ??
+      ov.date?.trim() ||
+        extras.handoverDate ||
         (extras.suppressAutoHandoverDate
-          ? (delivery.deliveredAt ? fmtDate(delivery.deliveredAt, tz) : "")
-          : fmtDate(delivery.deliveredAt ?? delivery.appointmentAt ?? new Date(), tz)),
+          ? delivery.deliveredAt
+            ? fmtDate(delivery.deliveredAt, tz)
+            : ""
+          : fmtDate(
+              delivery.deliveredAt ?? delivery.appointmentAt ?? new Date(),
+              tz,
+            )),
       rightX,
       ry,
       colW,
       34,
     );
-    ry = fieldLine("INVOICE#", ov.invoiceNumber ?? extras.invoiceNumber ?? "", rightX, ry, colW, 48);
+    ry = fieldLine(
+      "INVOICE#",
+      ov.invoiceNumber?.trim() || extras.invoiceNumber || "",
+      rightX,
+      ry,
+      colW,
+      48,
+    );
 
     y = Math.max(ly, ry) + 6;
 
@@ -578,21 +638,51 @@ export function buildHandoverPdf(
     doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("VEHICLE DETAILS", M, y);
     y += 14;
     const halfCol = (colW - 12) / 2;
-    let vy = fieldLine("MAKE:", ov.make ?? vehicle?.make ?? "", M, y, halfCol, 34);
-    fieldLine("MODEL:", ov.model ?? vehicle?.model ?? "", M + halfCol + 12, y, halfCol, 40);
-    let vy2 = fieldLine(
+    const makeY = fieldLine(
+      "MAKE:",
+      ov.make?.trim() || vehicle?.make || "",
+      M,
+      y,
+      halfCol,
+      34,
+    );
+    const modelY = fieldLine(
+      "MODEL:",
+      ov.model?.trim() || vehicle?.model || "",
+      M + halfCol + 12,
+      y,
+      halfCol,
+      40,
+    );
+    let vy = Math.max(makeY, modelY);
+    const registrationY = fieldLine(
       "REGISTRATION#",
-      delivery.registrationNumber ?? "",
+      extras.registrationNumber ?? delivery.registrationNumber ?? "",
       M,
       vy,
       halfCol,
       74,
     );
-    fieldLine("VIN:", ov.vin ?? vehicle?.vin ?? "", M + halfCol + 12, vy, halfCol, 26);
-    const vy3 = fieldLine("KEY #", ov.keyNumber ?? "", M, vy2, halfCol, 32);
-    fieldLine(
+    const vinY = fieldLine(
+      "VIN:",
+      ov.vin?.trim() || vehicle?.vin || "",
+      M + halfCol + 12,
+      vy,
+      halfCol,
+      26,
+    );
+    const vy2 = Math.max(registrationY, vinY);
+    const keyY = fieldLine(
+      "KEY #",
+      ov.keyNumber?.trim() || "",
+      M,
+      vy2,
+      halfCol,
+      32,
+    );
+    const mileageY = fieldLine(
       "MILEAGE:",
-      ov.mileage ??
+      ov.mileage?.trim() ||
         (extras.mileageKnown !== false && vehicle?.mileageKm != null
           ? `${vehicle.mileageKm.toLocaleString("en-US")} km`
           : ""),
@@ -601,9 +691,11 @@ export function buildHandoverPdf(
       halfCol,
       48,
     );
+    const vy3 = Math.max(keyY, mileageY);
     y = fieldLine(
       "STOCK#",
-      ov.stockNumber ?? (vehicle ? `V-${String(vehicle.id).padStart(5, "0")}` : ""),
+      ov.stockNumber?.trim() ||
+        (vehicle ? `V-${String(vehicle.id).padStart(5, "0")}` : ""),
       M,
       vy3,
       halfCol,
@@ -611,16 +703,30 @@ export function buildHandoverPdf(
     );
     y += 4;
 
-    doc.font("Helvetica-Bold").fontSize(11).fillColor(INK).text("EXPLAIN AND/OR DEMONSTRATE", M, y);
-    y += 18;
+    // Keep the checklist legible when a customer/contact value wraps into
+    // several lines. Rather than compressing the checklist or allowing it to
+    // run into the page edge, continue it on a branded page of its own.
+    let checklistTop = y;
+    let rightChecklistTop = ry + 10;
+    if (checklistTop > 340) {
+      doc.addPage();
+      checklistTop = pageHeader() + 14;
+      rightChecklistTop = checklistTop;
+    }
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(11)
+      .fillColor(INK)
+      .text("EXPLAIN AND/OR DEMONSTRATE", M, checklistTop);
+    checklistTop += 18;
 
     // Checklists — left column continues from here; right column starts at the
     // same height as the vehicle details block for visual balance.
-    let leftY = y;
+    let leftY = checklistTop;
     for (const [title, items] of HANDOVER_LEFT_SECTIONS) {
       leftY = checklist(title, items, M, leftY);
     }
-    let rightY = ry + 10;
+    let rightY = rightChecklistTop;
     for (const [title, items] of HANDOVER_RIGHT_SECTIONS) {
       rightY = checklist(title, items, rightX, rightY);
     }
@@ -631,8 +737,22 @@ export function buildHandoverPdf(
 
     doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("CUSTOMER DETAILS", M, y);
     let p2y = y + 14;
-    p2y = fieldLine("CUSTOMER NAME:", delivery.customerName ?? "", M, p2y, colW, 82);
-    p2y = fieldLine("ADDRESS:", ov.customerAddress ?? extras.customerAddress ?? "", M, p2y, colW, 50);
+    p2y = fieldLine(
+      "CUSTOMER NAME:",
+      extras.customerName ?? delivery.customerName ?? "",
+      M,
+      p2y,
+      colW,
+      82,
+    );
+    p2y = fieldLine(
+      "ADDRESS:",
+      ov.customerAddress?.trim() || extras.customerAddress || "",
+      M,
+      p2y,
+      colW,
+      50,
+    );
     p2y += 14;
 
     doc.font("Helvetica-Bold").fontSize(9).fillColor(INK).text("CONDITION OF VEHICLE", M, p2y);

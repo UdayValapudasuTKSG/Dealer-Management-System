@@ -60,8 +60,8 @@ import {
   type HandoverVerification,
 } from "../lib/handover-verify";
 import { buildHandoverPdf } from "../lib/document-pdfs";
+import { resolveHandoverData } from "../lib/handover-fields";
 import { buildWarrantyBookletForDelivery } from "../lib/warranty-doc";
-import { resolveDeliveryOwnerContact } from "../lib/delivery-owner-contact";
 import { enqueueEmail, notifyUser } from "../lib/email";
 import {
   onDealStageChanged,
@@ -1773,78 +1773,12 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const delivery = await loadDelivery(params.data.id, activeDealerId(res));
+  const dealerId = activeDealerId(res);
+  const delivery = await loadDelivery(params.data.id, dealerId);
   if (!delivery) {
     res.status(404).json({ error: "Delivery not found" });
     return;
   }
-  const [vehicle] = await db
-    .select()
-    .from(vehiclesTable)
-    .where(
-      and(
-        eq(vehiclesTable.id, delivery.vehicleId),
-        eq(vehiclesTable.dealerId, delivery.dealerId),
-      ),
-    );
-  let advisorName: string | null = null;
-  if (delivery.advisorUserId) {
-    const [advisor] = await db
-      .select({ name: usersTable.name, email: usersTable.email })
-      .from(usersTable)
-      .where(eq(usersTable.id, delivery.advisorUserId));
-    advisorName = advisor?.name ?? advisor?.email ?? null;
-  }
-  const [deal] = await db
-    .select({
-      salesAdvisor: dealsTable.salesAdvisor,
-      customerId: dealsTable.customerId,
-      leadId: dealsTable.leadId,
-    })
-    .from(dealsTable)
-    .where(
-      and(
-        eq(dealsTable.id, delivery.dealId),
-        eq(dealsTable.dealerId, delivery.dealerId),
-      ),
-    );
-  const handoverCustomerId = delivery.customerId ?? deal?.customerId ?? null;
-  const [customer] = handoverCustomerId
-    ? await db
-        .select({
-          name: customersTable.name,
-          email: customersTable.email,
-          phone: customersTable.phone,
-          address: customersTable.address,
-          location: customersTable.location,
-          city: customersTable.city,
-          country: customersTable.country,
-        })
-        .from(customersTable)
-        .where(
-          and(
-            eq(customersTable.id, handoverCustomerId),
-            eq(customersTable.dealerId, delivery.dealerId),
-          ),
-        )
-    : [];
-  const [lead] = deal?.leadId
-    ? await db
-        .select({
-          name: leadsTable.name,
-          email: leadsTable.email,
-          phone: leadsTable.phone,
-          address: leadsTable.address,
-        })
-        .from(leadsTable)
-        .where(
-          and(
-            eq(leadsTable.id, deal.leadId),
-            eq(leadsTable.dealerId, delivery.dealerId),
-          ),
-        )
-    : [];
-  const ownerContact = resolveDeliveryOwnerContact(customer, lead);
   const [dealer] = await db
     .select({
       name: dealersTable.name,
@@ -1853,39 +1787,29 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
     })
     .from(dealersTable)
     .where(eq(dealersTable.id, delivery.dealerId));
-  let invoiceNumber: string | null = null;
-  if (delivery.invoiceId) {
-    const [inv] = await db
-      .select({ invoiceNumber: invoicesTable.invoiceNumber })
-      .from(invoicesTable)
-      .where(
-        and(
-          eq(invoicesTable.id, delivery.invoiceId),
-          eq(invoicesTable.dealerId, delivery.dealerId),
-        ),
-      );
-    invoiceNumber = inv?.invoiceNumber ?? null;
-  }
+  const tz = await dealerTimezone(dealerId);
+  const handover = await resolveHandoverData(delivery, dealerId, tz);
   const handoverBranding = await getDealerPdfBranding(delivery.dealerId);
-  const importProvenance = delivery.importMetadata as Record<string, unknown> | null;
   const pdf = await buildHandoverPdf(
     delivery,
-    vehicle,
-    advisorName,
-    await dealerTimezone(delivery.dealerId),
+    handover.vehicle,
+    handover.advisorName,
+    tz,
     {
-      salesAdvisorName: deal?.salesAdvisor ?? null,
+      customerName: handover.values.customerName,
+      salesAdvisorName: handover.values.salesperson,
       dealerName: handoverBranding.displayName ?? dealer?.name ?? null,
       logo: handoverBranding.logo,
       dealerAddress: [dealer?.city, dealer?.country].filter(Boolean).join(", "),
-      customerAddress: ownerContact.address,
-      customerEmail: ownerContact.email,
-      customerPhone: ownerContact.phone,
-      invoiceNumber,
+      customerAddress: handover.values.customerAddress,
+      customerEmail: handover.values.customerEmail,
+      customerPhone: handover.values.customerPhone,
+      registrationNumber: handover.values.registrationNumber,
+      invoiceNumber: handover.values.invoiceNumber,
+      handoverDate: handover.values.date,
       overrides: delivery.handoverOverrides ?? {},
-      suppressAutoHandoverDate:
-        importProvenance?.kind === "reviewed_delivery_history",
-      mileageKnown: importProvenance?.mileageKnown !== false,
+      suppressAutoHandoverDate: handover.suppressAutoHandoverDate,
+      mileageKnown: handover.mileageKnown,
     },
   );
   res
@@ -1895,6 +1819,31 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
       `inline; filename="handover-delivery-${delivery.id}.pdf"`,
     )
     .send(pdf);
+});
+
+/**
+ * The edit dialog uses this endpoint instead of displaying examples in empty
+ * fields. It intentionally returns the same resolved values as the PDF route,
+ * including stored overrides and imported-record blank date/mileage semantics.
+ */
+router.get("/deliveries/:id/handover-fields", async (req, res): Promise<void> => {
+  const params = GetDeliveryHandoverPdfParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const delivery = await loadDelivery(params.data.id, dealerId);
+  if (!delivery) {
+    res.status(404).json({ error: "Delivery not found" });
+    return;
+  }
+  const fields = await resolveHandoverData(
+    delivery,
+    dealerId,
+    await dealerTimezone(dealerId),
+  );
+  res.json(fields.values);
 });
 
 // Autofilled BYD warranty booklet (warranty step download) — the certificate

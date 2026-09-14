@@ -13,6 +13,7 @@
     "verify:reviewed-delivery-import": "tsx src/scripts/verify-reviewed-delivery-history-import.ts",
     "test:reviewed-delivery-import-policy": "tsx src/scripts/test-reviewed-delivery-import-policy.ts",
     "verify:quote-pdf": "tsx src/scripts/verify-quote-pdf.ts",
+    "verify:handover-pdf": "tsx src/scripts/test-handover-pdf.ts",
     "verify:sales-advisor-payload": "tsx src/scripts/test-sales-advisor-payload.ts",
     "verify:quote-payload-plumbing": "tsx src/scripts/test-quote-payload-plumbing.ts",
     "verify:reviewed-outbox-communication": "tsx src/scripts/test-reviewed-outbox-communication.ts",

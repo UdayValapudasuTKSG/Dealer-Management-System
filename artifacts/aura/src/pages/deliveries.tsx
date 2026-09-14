@@ -587,6 +587,10 @@ function DeliveryDetail({
   // handover PDF (customer name, plate, insurance).
   const [handoverOpen, setHandoverOpen] = useState(false);
   const [handoverDraft, setHandoverDraft] = useState<Record<string, string>>({});
+  const [handoverInitialDraft, setHandoverInitialDraft] = useState<
+    Record<string, string>
+  >({});
+  const [handoverLoading, setHandoverLoading] = useState(false);
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: getListDeliveriesQueryKey() });
@@ -1176,9 +1180,10 @@ function DeliveryDetail({
             <Button
               variant="outline"
               className="h-10 rounded-full border-border text-sm font-medium"
-              onClick={() => {
+              disabled={handoverLoading}
+              onClick={async () => {
                 const ov = (delivery.handoverOverrides ?? {}) as Record<string, string>;
-                setHandoverDraft({
+                const fallbackDraft: Record<string, string> = {
                   customerName: delivery.customerName ?? "",
                   registrationNumber: delivery.registrationNumber ?? "",
                   insuranceProvider: delivery.insuranceProvider ?? "",
@@ -1186,20 +1191,47 @@ function DeliveryDetail({
                   customerAddress: ov.customerAddress ?? "",
                   customerEmail: ov.customerEmail ?? "",
                   customerPhone: ov.customerPhone ?? "",
-                  salesperson: ov.salesperson ?? "",
+                  salesperson: ov.salesperson ?? delivery.salesAdvisorName ?? "",
                   date: ov.date ?? "",
                   invoiceNumber: ov.invoiceNumber ?? "",
                   make: ov.make ?? "",
                   model: ov.model ?? "",
-                  vin: ov.vin ?? "",
+                  vin: ov.vin ?? delivery.vin ?? "",
                   mileage: ov.mileage ?? "",
                   keyNumber: ov.keyNumber ?? "",
-                  stockNumber: ov.stockNumber ?? "",
-                });
+                  stockNumber:
+                    ov.stockNumber ??
+                    `V-${String(delivery.vehicleId).padStart(5, "0")}`,
+                };
+                setHandoverLoading(true);
+                try {
+                  const values = await customFetch<Record<string, string>>(
+                    `/api/deliveries/${delivery.id}/handover-fields`,
+                    { method: "GET", responseType: "json" },
+                  );
+                  // Resolve before opening the dialog. A late response can
+                  // therefore never replace text typed into an open form.
+                  const resolvedDraft = { ...fallbackDraft, ...values };
+                  setHandoverDraft(resolvedDraft);
+                  setHandoverInitialDraft(resolvedDraft);
+                } catch (err) {
+                  setHandoverDraft(fallbackDraft);
+                  setHandoverInitialDraft(fallbackDraft);
+                  toast({
+                    title: "Could not load system handover values",
+                    description:
+                      err instanceof Error
+                        ? `${err.message} Showing the values already on this delivery.`
+                        : "Showing the values already on this delivery.",
+                    variant: "destructive",
+                  });
+                } finally {
+                  setHandoverLoading(false);
+                }
                 setHandoverOpen(true);
               }}
             >
-              Edit Handover Form
+              {handoverLoading ? "Loading handover values…" : "Edit Handover Form"}
             </Button>
           </div>
 
@@ -1217,7 +1249,7 @@ function DeliveryDetail({
                 const field = (
                   key: string,
                   label: string,
-                  placeholder: string,
+                  placeholder = "No system value available",
                 ) => (
                   <div key={key} className="space-y-1.5">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1237,37 +1269,37 @@ function DeliveryDetail({
                     <div>
                       <p className="text-sm font-bold mb-2">Customer details</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {field("customerName", "Customer name", "Nana Adjei")}
-                        {field("customerAddress", "Address", "From customer record")}
-                        {field("customerEmail", "Email address", "From customer record")}
-                        {field("customerPhone", "Tel nos.", "From customer record")}
+                        {field("customerName", "Customer name")}
+                        {field("customerAddress", "Address")}
+                        {field("customerEmail", "Email address")}
+                        {field("customerPhone", "Tel nos.")}
                       </div>
                     </div>
                     <div>
                       <p className="text-sm font-bold mb-2">Sale details</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {field("salesperson", "Salesperson", "From the deal")}
-                        {field("date", "Date", "Delivery/appointment date")}
-                        {field("invoiceNumber", "Invoice #", "From the invoice")}
+                        {field("salesperson", "Salesperson")}
+                        {field("date", "Date")}
+                        {field("invoiceNumber", "Invoice #")}
                       </div>
                     </div>
                     <div>
                       <p className="text-sm font-bold mb-2">Vehicle details</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {field("make", "Make", "From vehicle record")}
-                        {field("model", "Model", "From vehicle record")}
-                        {field("registrationNumber", "Registration / plate", "PAB1234")}
-                        {field("vin", "VIN", "From vehicle record")}
-                        {field("keyNumber", "Key #", "Blank on form by default")}
-                        {field("mileage", "Mileage", "From vehicle record")}
-                        {field("stockNumber", "Stock #", "V-00000")}
+                        {field("make", "Make")}
+                        {field("model", "Model")}
+                        {field("registrationNumber", "Registration / plate")}
+                        {field("vin", "VIN")}
+                        {field("keyNumber", "Key #")}
+                        {field("mileage", "Mileage")}
+                        {field("stockNumber", "Stock #")}
                       </div>
                     </div>
                     <div>
                       <p className="text-sm font-bold mb-2">Insurance (registration step)</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {field("insuranceProvider", "Insurance provider", "Assuria")}
-                        {field("insurancePolicy", "Insurance policy #", "POL-000123")}
+                        {field("insuranceProvider", "Insurance provider")}
+                        {field("insurancePolicy", "Insurance policy #")}
                       </div>
                     </div>
                   </div>
@@ -1306,21 +1338,29 @@ function DeliveryDetail({
                           insuranceProvider: handoverDraft.insuranceProvider ?? "",
                           insurancePolicy: handoverDraft.insurancePolicy ?? "",
                           // Blank values clear the override so the PDF falls
-                          // back to system data.
-                          handoverOverrides: {
-                            customerAddress: handoverDraft.customerAddress ?? "",
-                            customerEmail: handoverDraft.customerEmail ?? "",
-                            customerPhone: handoverDraft.customerPhone ?? "",
-                            salesperson: handoverDraft.salesperson ?? "",
-                            date: handoverDraft.date ?? "",
-                            invoiceNumber: handoverDraft.invoiceNumber ?? "",
-                            make: handoverDraft.make ?? "",
-                            model: handoverDraft.model ?? "",
-                            vin: handoverDraft.vin ?? "",
-                            mileage: handoverDraft.mileage ?? "",
-                            keyNumber: handoverDraft.keyNumber ?? "",
-                            stockNumber: handoverDraft.stockNumber ?? "",
-                          },
+                          // back to system data. Do not turn untouched system
+                          // defaults into stored overrides merely because the
+                          // dialog was opened with them prefilled.
+                          handoverOverrides: Object.fromEntries(
+                            [
+                              "customerAddress",
+                              "customerEmail",
+                              "customerPhone",
+                              "salesperson",
+                              "date",
+                              "invoiceNumber",
+                              "make",
+                              "model",
+                              "vin",
+                              "mileage",
+                              "keyNumber",
+                              "stockNumber",
+                            ].flatMap((key) => {
+                              const current = handoverDraft[key] ?? "";
+                              const initial = handoverInitialDraft[key] ?? "";
+                              return current === initial ? [] : [[key, current]];
+                            }),
+                          ),
                         },
                       });
                       setHandoverOpen(false);
