@@ -148,6 +148,8 @@ import type {
   Delivery,
   DeliveryAdvanceInput,
   DeliveryAdvisor,
+  DeliveryHistoryImportApplyResult,
+  DeliveryHistoryImportPreviewResult,
   DeliveryInput,
   DeliveryPdiInput,
   DeliveryRevertInput,
@@ -2459,6 +2461,148 @@ export const useCreateDelivery = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getCreateDeliveryMutationOptions(options));
+    }
+
+export const getPreviewDeliveryHistoryImportUrl = () => {
+
+
+
+
+  return `/api/delivery-imports/preview`
+}
+
+/**
+ * @summary Review an uploaded, customer-communication-suppressed delivery history CSV
+ */
+export const previewDeliveryHistoryImport = async ( options?: RequestInit): Promise<DeliveryHistoryImportPreviewResult> => {
+
+  return customFetch<DeliveryHistoryImportPreviewResult>(getPreviewDeliveryHistoryImportUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getPreviewDeliveryHistoryImportMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewDeliveryHistoryImport>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewDeliveryHistoryImport>>, TError,void, TContext> => {
+
+const mutationKey = ['previewDeliveryHistoryImport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewDeliveryHistoryImport>>, void> = () => {
+
+
+          return  previewDeliveryHistoryImport(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewDeliveryHistoryImportMutationResult = NonNullable<Awaited<ReturnType<typeof previewDeliveryHistoryImport>>>
+
+    export type PreviewDeliveryHistoryImportMutationError = ErrorType<Error>
+
+    /**
+ * @summary Review an uploaded, customer-communication-suppressed delivery history CSV
+ */
+export const usePreviewDeliveryHistoryImport = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewDeliveryHistoryImport>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewDeliveryHistoryImport>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getPreviewDeliveryHistoryImportMutationOptions(options));
+    }
+
+export const getApplyDeliveryHistoryImportUrl = () => {
+
+
+
+
+  return `/api/delivery-imports/apply`
+}
+
+/**
+ * @summary Apply a reviewed GT Automotive delivery history CSV
+ */
+export const applyDeliveryHistoryImport = async ( options?: RequestInit): Promise<DeliveryHistoryImportApplyResult> => {
+
+  return customFetch<DeliveryHistoryImportApplyResult>(getApplyDeliveryHistoryImportUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getApplyDeliveryHistoryImportMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyDeliveryHistoryImport>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof applyDeliveryHistoryImport>>, TError,void, TContext> => {
+
+const mutationKey = ['applyDeliveryHistoryImport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof applyDeliveryHistoryImport>>, void> = () => {
+
+
+          return  applyDeliveryHistoryImport(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApplyDeliveryHistoryImportMutationResult = NonNullable<Awaited<ReturnType<typeof applyDeliveryHistoryImport>>>
+
+    export type ApplyDeliveryHistoryImportMutationError = ErrorType<Error>
+
+    /**
+ * @summary Apply a reviewed GT Automotive delivery history CSV
+ */
+export const useApplyDeliveryHistoryImport = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof applyDeliveryHistoryImport>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof applyDeliveryHistoryImport>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getApplyDeliveryHistoryImportMutationOptions(options));
     }
 
 export const getGetDeliveryUrl = (id: number,) => {

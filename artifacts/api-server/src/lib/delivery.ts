@@ -18,6 +18,7 @@ import {
 } from "@workspace/db";
 import { notifyUsers, notifyUser, enqueueEmail } from "./email";
 import { logger } from "./logger";
+import { suppressesCustomerCommunications } from "./delivery-import-provenance";
 
 /**
  * Timestamp-based round robin over the dealer's active Delivery Advisors:
@@ -88,7 +89,11 @@ async function deliveryUserIds(dealerId: number): Promise<number[]> {
  */
 export async function ensureDeliveryForDeal(
   dealId: number,
-  opts: { advisorUserId?: number | null; cause?: string } = {},
+  opts: {
+    advisorUserId?: number | null;
+    cause?: string;
+    importMetadata?: Record<string, unknown>;
+  } = {},
 ): Promise<Delivery | null> {
   const [existing] = await db
     .select()
@@ -145,6 +150,7 @@ export async function ensureDeliveryForDeal(
       currentStep: "sales_order",
       steps: defaultDeliverySteps(),
       pdiItems: DEFAULT_PDI_ITEMS,
+      importMetadata: opts.importMetadata ?? null,
     })
     .returning();
   if (!delivery) return null;
@@ -212,7 +218,7 @@ export async function ensureDeliveryForDeal(
       );
     }
 
-    try {
+    if (!suppressesCustomerCommunications(delivery)) try {
       const customerEmail = deal.customerId
         ? (
             await db

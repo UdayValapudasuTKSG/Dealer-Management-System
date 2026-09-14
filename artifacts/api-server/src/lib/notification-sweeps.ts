@@ -35,6 +35,7 @@ import { divisionSalesManagers } from "./notify-matrix";
 import { autoAssignLead } from "./lead-assignment";
 import { logger } from "./logger";
 import { withEffectiveContactDates } from "./lead-contact";
+import { suppressesCustomerCommunications } from "./delivery-import-provenance";
 import {
   dealerTimezone,
   formatDealerDate,
@@ -825,6 +826,7 @@ async function sweepDeliveryFeedback(): Promise<void> {
       dealerId: deliveriesTable.dealerId,
       customerId: deliveriesTable.customerId,
       customerName: deliveriesTable.customerName,
+      importMetadata: deliveriesTable.importMetadata,
       vehicleId: deliveriesTable.vehicleId,
       email: customersTable.email,
       name: customersTable.name,
@@ -860,6 +862,7 @@ async function sweepDeliveryFeedback(): Promise<void> {
     .orderBy(asc(deliveriesTable.deliveredAt))
     .limit(200);
   for (const row of rows) {
+    if (suppressesCustomerCommunications(row)) continue;
     if (!row.email) continue;
     try {
       const [v] = await db

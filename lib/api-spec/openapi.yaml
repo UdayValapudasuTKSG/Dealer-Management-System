@@ -701,6 +701,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /delivery-imports/preview:
+    post:
+      operationId: previewDeliveryHistoryImport
+      tags: [deliveries]
+      summary: Review an uploaded, customer-communication-suppressed delivery history CSV
+      requestBody:
+        required: true
+        description: CSV file in `file` plus the documented reviewed fields.
+        content:
+          multipart/form-data: {}
+      responses:
+        "200":
+          description: Authorized review result; no records are written
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryHistoryImportPreviewResult"
+        "400":
+          description: Invalid file or review fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /delivery-imports/apply:
+    post:
+      operationId: applyDeliveryHistoryImport
+      tags: [deliveries]
+      summary: Apply a reviewed GT Automotive delivery history CSV
+      requestBody:
+        required: true
+        description: CSV file in `file` plus the documented reviewed fields and JSON `confirmations`.
+        content:
+          multipart/form-data: {}
+      responses:
+        "201":
+          description: Imported rows and idempotent existing rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryHistoryImportApplyResult"
+        "403":
+          description: Requires explicit import permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Review is stale or explicit lead confirmation is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /deliveries/{id}:
     get:
       operationId: getDelivery
@@ -11145,6 +11197,10 @@ components:
         insuranceDocId: { type: ["integer", "null"] }
         handoverSheetDocId: { type: ["integer", "null"] }
         pdiWorkOrderId: { type: ["integer", "null"] }
+        importMetadata:
+          type: ["object", "null"]
+          additionalProperties: true
+          description: Immutable reviewed-import provenance when this workflow originated from an authorized history import
         deliveredAt: { type: ["string", "null"], format: date-time }
         unmet:
           type: array
@@ -11227,6 +11283,77 @@ components:
         id: { type: integer }
         name: { type: string }
         email: { type: ["string", "null"] }
+    DeliveryHistoryImportConfirmation:
+      type: object
+      required: [row, leadId]
+      properties:
+        row: { type: integer, minimum: 2 }
+        leadId: { type: integer, minimum: 1 }
+    DeliveryHistoryImportPreviewInput:
+      type: object
+      required: [dealershipId, modelYear, vehicleMake, powertrain, bodyType]
+      properties:
+        dealershipId: { type: integer, minimum: 1 }
+        modelYear: { type: integer, minimum: 1886, maximum: 2100 }
+        vehicleMake: { type: string, minLength: 1, maxLength: 80 }
+        powertrain: { type: string, minLength: 1, maxLength: 80 }
+        bodyType: { type: string, minLength: 1, maxLength: 80 }
+    DeliveryHistoryImportApplyInput:
+      allOf:
+        - $ref: "#/components/schemas/DeliveryHistoryImportPreviewInput"
+        - type: object
+          properties:
+            confirmations:
+              type: array
+              items:
+                $ref: "#/components/schemas/DeliveryHistoryImportConfirmation"
+    DeliveryHistoryImportPreviewRow:
+      type: object
+      required: [row, vin, customerName, action, existingVehicleId, candidateLeadId, requiresLeadConfirmation, sellingPriceGyd, paymentState, sourceStatus, targetStatus]
+      properties:
+        row: { type: integer }
+        vin: { type: string }
+        customerName: { type: string }
+        action: { type: string, enum: [create_vehicle, reuse_vehicle] }
+        existingVehicleId: { type: ["integer", "null"] }
+        candidateLeadId: { type: ["integer", "null"] }
+        requiresLeadConfirmation: { type: boolean }
+        sellingPriceGyd: { type: number }
+        paymentState: { type: string, enum: [UNRECORDED] }
+        sourceStatus: { type: ["string", "null"] }
+        targetStatus: { type: string, enum: [in_progress] }
+    DeliveryHistoryImportPreviewResult:
+      type: object
+      required: [batchKey, total, rows, errors, canApply]
+      properties:
+        batchKey: { type: string }
+        total: { type: integer }
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeliveryHistoryImportPreviewRow"
+        errors:
+          type: array
+          items: { type: string }
+        canApply: { type: boolean }
+    ApplyDeliveryHistoryImportOutcome:
+      type: object
+      required: [row, deliveryId, status]
+      properties:
+        row: { type: integer }
+        deliveryId: { type: integer }
+        status: { type: string, enum: [created, unchanged] }
+    DeliveryHistoryImportApplyResult:
+      type: object
+      required: [batchKey, created, unchanged, outcomes]
+      properties:
+        batchKey: { type: string }
+        created: { type: integer }
+        unchanged: { type: integer }
+        outcomes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApplyDeliveryHistoryImportOutcome"
 
     DocumentExtractionField:
       type: object

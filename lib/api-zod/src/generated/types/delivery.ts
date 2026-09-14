@@ -7,6 +7,7 @@
  */
 import type { DeliveryCurrentStep } from './deliveryCurrentStep';
 import type { DeliveryHandoverOverrides } from './deliveryHandoverOverrides';
+import type { DeliveryImportMetadata } from './deliveryImportMetadata';
 import type { DeliveryRegistrationStatus } from './deliveryRegistrationStatus';
 import type { DeliveryStatus } from './deliveryStatus';
 import type { DeliveryStepState } from './deliveryStepState';
@@ -87,6 +88,11 @@ export interface Delivery {
   handoverSheetDocId?: number | null;
   /** @nullable */
   pdiWorkOrderId?: number | null;
+  /**
+     * Immutable reviewed-import provenance when this workflow originated from an authorized history import
+     * @nullable
+     */
+  importMetadata?: DeliveryImportMetadata;
   /** @nullable */
   deliveredAt?: Date | null;
   /** What is blocking the current step from advancing */

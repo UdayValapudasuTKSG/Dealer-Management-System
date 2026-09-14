@@ -20,6 +20,7 @@ import {
 import { computeTaxes, ensureDealerTaxes } from "./taxes";
 import { ensureAccountForLead } from "./accounts";
 import { logger } from "./logger";
+import { suppressesCustomerCommunications } from "./delivery-import-provenance";
 import { enqueueEmail, enqueueWhatsapp, notifyUsers } from "./email";
 import { generalManagers } from "./notify-matrix";
 import { financeUsers } from "./notify-matrix";
@@ -108,6 +109,7 @@ export async function issueInvoice(args: IssueInvoiceArgs): Promise<Invoice> {
  * because dedupe keys are globally unique across channels).
  */
 async function notifyInvoiceIssued(invoice: Invoice): Promise<void> {
+  if (suppressesCustomerCommunications(invoice)) return;
   const key = `invoice:issued:${invoice.id}`;
   const [customer] = invoice.customerId
     ? await db
@@ -513,7 +515,11 @@ export async function applyPayment(args: ApplyPaymentArgs) {
   // Payment-received email with the receipt attached — fire-and-forget so a
   // notification hiccup never affects the recorded payment. Reversals and
   // gate-authorised refunds are excluded (refunds have their own email).
-  if (args.amount > 0 && args.gateId == null) {
+  if (
+    args.amount > 0 &&
+    args.gateId == null &&
+    !suppressesCustomerCommunications(invoice)
+  ) {
     void (async () => {
       const [customer] = invoice.customerId
         ? await db

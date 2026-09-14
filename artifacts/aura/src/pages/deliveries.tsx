@@ -18,12 +18,19 @@ import {
   getListDeliveriesQueryKey,
   getListBookingsQueryKey,
   getListGatesQueryKey,
+  getListCustomersQueryKey,
+  getListVehiclesQueryKey,
+  getListDealsQueryKey,
+  getListFinanceApplicationsQueryKey,
+  customFetch,
 } from "@workspace/api-client-react";
 import type {
   Delivery,
   Booking,
   DeliveryStepState,
   DeliveryAdvanceInput,
+  DeliveryHistoryImportPreviewResult,
+  DeliveryHistoryImportApplyResult,
 } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -41,6 +48,7 @@ import {
   Loader2,
   ChevronRight,
   X,
+  Upload,
 } from "lucide-react";
 import { useMoney, formatGuyanaDate } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +98,8 @@ export default function Deliveries() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const { data: deliveries, isLoading } = useListDeliveries();
   const { data: bookings } = useListBookings();
+  const { can, activeDealer } = useAuthz();
+  const [importOpen, setImportOpen] = useState(false);
 
   /* Triage deep link: /deliveries?delivery=<id> opens that delivery. */
   const focusDeliveryId = useFocusParam("delivery");
@@ -118,6 +128,17 @@ export default function Deliveries() {
       />
       <div className="w-full px-5 md:px-8 py-6 md:py-8 space-y-6">
         <div className="flex flex-wrap items-end justify-end gap-4">
+          {activeDealer?.dealerId === 1 &&
+            (activeDealer.isGeneralManager ||
+              activeDealer.roleName === "General Manager") &&
+            ["deliveries", "inventory", "customers", "deals", "finance"].every(
+              (module) => can(module, "create"),
+            ) && (
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-2" />
+              Import reviewed history
+            </Button>
+          )}
           <div className="flex items-center gap-1 rounded-full border border-border bg-foreground/[0.03] p-1">
             {(
               [
@@ -196,7 +217,155 @@ export default function Deliveries() {
         delivery={selected}
         onClose={() => setSelectedId(null)}
       />
+      <ReviewedDeliveryImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        dealerId={activeDealer?.dealerId ?? null}
+      />
     </div>
+  );
+}
+
+function ReviewedDeliveryImportDialog({
+  open,
+  onOpenChange,
+  dealerId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  dealerId: number | null;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+  const [modelYear, setModelYear] = useState("");
+  const [vehicleMake, setVehicleMake] = useState("");
+  const [powertrain, setPowertrain] = useState("");
+  const [bodyType, setBodyType] = useState("");
+  const [review, setReview] = useState<DeliveryHistoryImportPreviewResult | null>(null);
+  const [confirmedRows, setConfirmedRows] = useState<number[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const fieldsValid =
+    !!file &&
+    !!dealerId &&
+    /^\d{4}$/.test(modelYear) &&
+    !!vehicleMake.trim() &&
+    !!powertrain.trim() &&
+    !!bodyType.trim();
+  const form = (includeConfirmations: boolean) => {
+    if (!file || !dealerId) throw new Error("Choose a CSV and complete the reviewed vehicle fields.");
+    const data = new FormData();
+    data.append("file", file);
+    data.append("dealershipId", String(dealerId));
+    data.append("modelYear", modelYear);
+    data.append("vehicleMake", vehicleMake.trim());
+    data.append("powertrain", powertrain.trim());
+    data.append("bodyType", bodyType.trim());
+    if (includeConfirmations && review) {
+      data.append(
+        "confirmations",
+        JSON.stringify(
+          review.rows
+            .filter((row) => row.candidateLeadId && confirmedRows.includes(row.row))
+            .map((row) => ({ row: row.row, leadId: row.candidateLeadId })),
+        ),
+      );
+    }
+    return data;
+  };
+  const preview = async () => {
+    if (!fieldsValid) return;
+    setBusy(true);
+    try {
+      const result = await customFetch<DeliveryHistoryImportPreviewResult>("/api/delivery-imports/preview", {
+        method: "POST",
+        body: form(false),
+        responseType: "json",
+      });
+      setReview(result);
+      setConfirmedRows([]);
+    } catch (error) {
+      toast({ title: "Review failed", description: error instanceof Error ? error.message : "Could not review this CSV.", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const apply = async () => {
+    if (!review || !review.canApply) return;
+    const required = review.rows.filter((row) => row.requiresLeadConfirmation);
+    if (required.some((row) => !confirmedRows.includes(row.row))) {
+      toast({ title: "Lead confirmation required", description: "Explicitly confirm every exact-name lead candidate before applying.", variant: "destructive" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await customFetch<DeliveryHistoryImportApplyResult>("/api/delivery-imports/apply", {
+        method: "POST",
+        body: form(true),
+        responseType: "json",
+      });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: getListDeliveriesQueryKey() }),
+        qc.invalidateQueries({ queryKey: getListCustomersQueryKey() }),
+        qc.invalidateQueries({ queryKey: getListVehiclesQueryKey() }),
+        qc.invalidateQueries({ queryKey: getListDealsQueryKey() }),
+        qc.invalidateQueries({ queryKey: getListFinanceApplicationsQueryKey() })
+      ]);
+      toast({ title: "Reviewed history applied", description: `${result.created} pending workflow${result.created === 1 ? "" : "s"} created; ${result.unchanged} already present.` });
+      onOpenChange(false);
+      setReview(null);
+      setFile(null);
+    } catch (error) {
+      toast({ title: "Import not applied", description: error instanceof Error ? error.message : "The live review could not be applied.", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Import reviewed delivery history</DialogTitle>
+          <DialogDescription>
+            Upload the reviewed CSV. This creates pending ordinary delivery workflows only—no payments, appointments, handover dates, or customer communications.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input type="file" accept=".csv,text/csv" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setReview(null); }} />
+          <Input value={modelYear} onChange={(event) => { setModelYear(event.target.value); setReview(null); }} placeholder="Reviewed model year (required)" inputMode="numeric" />
+          <Input value={vehicleMake} onChange={(event) => { setVehicleMake(event.target.value); setReview(null); }} placeholder="Reviewed vehicle make (required)" />
+          <Input value={powertrain} onChange={(event) => { setPowertrain(event.target.value); setReview(null); }} placeholder="Reviewed powertrain (required)" />
+          <Input value={bodyType} onChange={(event) => { setBodyType(event.target.value); setReview(null); }} placeholder="Reviewed body type (required)" />
+        </div>
+        {review && (
+          <div className="space-y-3 rounded-lg border border-border p-3 text-sm">
+            <p className="font-medium">{review.total} row{review.total === 1 ? "" : "s"} reviewed · customer email suppression will persist</p>
+            {review.errors.length > 0 && <ul className="list-disc pl-5 text-destructive">{review.errors.map((error) => <li key={error}>{error}</li>)}</ul>}
+            {review.rows.map((row) => (
+              <div key={row.row} className="border-t border-border pt-2">
+                <p>Row {row.row}: {row.customerName} · {row.vin} · GY${Math.round(row.sellingPriceGyd).toLocaleString()} · {row.action === "reuse_vehicle" ? "existing VIN" : "new VIN"} · payment {row.paymentState.toLowerCase()}</p>
+                {row.requiresLeadConfirmation && (
+                  <label className="mt-1 flex items-center gap-2 text-amber-600">
+                    <input type="checkbox" checked={confirmedRows.includes(row.row)} onChange={(event) => setConfirmedRows((rows) => event.target.checked ? [...rows, row.row] : rows.filter((value) => value !== row.row))} />
+                    Confirm exact-name lead candidate #{row.candidateLeadId}; do not merge by name automatically.
+                  </label>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
+          {!review ? (
+            <Button onClick={preview} disabled={!fieldsValid || busy}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Review CSV</Button>
+          ) : (
+            <Button onClick={apply} disabled={!review.canApply || busy}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Apply reviewed import</Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -221,6 +390,14 @@ function EmptyState({
 function progressOf(d: Delivery) {
   const done = d.steps.filter((s) => s.status === "completed").length;
   return { done, total: d.steps.length };
+}
+
+function isCommunicationSuppressedImport(delivery: Delivery): boolean {
+  return (
+    !!delivery.importMetadata &&
+    typeof delivery.importMetadata === "object" &&
+    delivery.importMetadata.suppressCustomerCommunications === true
+  );
 }
 
 function DeliveryRow({
@@ -261,6 +438,11 @@ function DeliveryRow({
             >
               {delivery.status.replace("_", " ")}
             </Badge>
+            {isCommunicationSuppressedImport(delivery) && (
+              <Badge variant="secondary" className="text-[10px] bg-amber-500/15 text-amber-700">
+                Imported · email suppressed
+              </Badge>
+            )}
           </div>
           <p className="text-sm text-muted-foreground truncate mt-0.5">
             {delivery.vehicleLabel ?? `Vehicle #${delivery.vehicleId}`}
@@ -332,6 +514,7 @@ function DeliveryDetail({
   const current = delivery.steps.find(
     (s) => s.key === delivery.currentStep && delivery.status !== "completed",
   );
+  const importedSuppressed = isCommunicationSuppressedImport(delivery);
 
   const handleAdvance = () => {
     if (
@@ -623,7 +806,7 @@ function DeliveryDetail({
               </Button>
               <Button
                 variant="outline"
-                disabled={sendWarrantyEmail.isPending}
+                disabled={sendWarrantyEmail.isPending || importedSuppressed}
                 onClick={() =>
                   sendWarrantyEmail.mutate(
                     { id: delivery.id },
@@ -649,7 +832,9 @@ function DeliveryDetail({
                 <Mail className="w-4 h-4 mr-2" />
                 {sendWarrantyEmail.isPending
                   ? "Sending…"
-                  : "Send warranty email"}
+                  : importedSuppressed
+                    ? "Customer email suppressed"
+                    : "Send warranty email"}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -791,6 +976,11 @@ function DeliveryDetail({
           <p className="text-muted-foreground mt-1">
             {delivery.vehicleLabel ?? `Vehicle #${delivery.vehicleId}`}
           </p>
+          {importedSuppressed && (
+            <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800">
+              Reviewed import: source status is retained as provenance only. This is a pending workflow; payment is unrecorded, customer communications are permanently suppressed for this delivery, and final handover remains subject to the normal paid-in-full invoice gate.
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-3 mt-5">
             <div className="min-w-52">

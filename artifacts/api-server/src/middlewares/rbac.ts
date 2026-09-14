@@ -707,6 +707,15 @@ function isVehicleImportPath(req: Pick<Request, "method" | "path">): boolean {
   return req.method === "POST" && /^\/vehicles\/import\/?$/.test(req.path);
 }
 
+function isDeliveryHistoryImportPath(
+  req: Pick<Request, "method" | "path">,
+): boolean {
+  return (
+    req.method === "POST" &&
+    /^\/delivery-imports\/(?:preview|apply)\/?$/.test(req.path)
+  );
+}
+
 // Maps the first path segment after /api to a permission module.
 const PATH_MODULES: Record<string, RouteRule> = {
   vehicles: {
@@ -724,6 +733,16 @@ const PATH_MODULES: Record<string, RouteRule> = {
       // not create (POST would otherwise map to create).
       req.method === "POST" && /^\/deliveries\/\d+\/revert\/?$/.test(req.path)
         ? "edit"
+        : (METHOD_CATEGORY[req.method] ?? "view"),
+  },
+  "delivery-imports": {
+    module: "deliveries",
+    // Preview and apply perform their own explicit multi-module checks. A
+    // deliveries:view grant is enough to see a dry-run; apply requires the
+    // additional create grants in the route before any write.
+    category: (req) =>
+      isDeliveryHistoryImportPath(req)
+        ? "view"
         : (METHOD_CATEGORY[req.method] ?? "view"),
   },
   "delivery-advisors": { module: "deliveries" },

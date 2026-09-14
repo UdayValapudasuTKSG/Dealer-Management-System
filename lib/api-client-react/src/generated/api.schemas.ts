@@ -1991,6 +1991,12 @@ export const DeliveryRegistrationStatus = {
  */
 export type DeliveryHandoverOverrides = {[key: string]: string};
 
+/**
+ * Immutable reviewed-import provenance when this workflow originated from an authorized history import
+ * @nullable
+ */
+export type DeliveryImportMetadata = { [key: string]: unknown } | null;
+
 export interface Delivery {
   id: number;
   dealId: number;
@@ -2065,6 +2071,11 @@ export interface Delivery {
   handoverSheetDocId?: number | null;
   /** @nullable */
   pdiWorkOrderId?: number | null;
+  /**
+     * Immutable reviewed-import provenance when this workflow originated from an authorized history import
+     * @nullable
+     */
+  importMetadata?: DeliveryImportMetadata;
   /** @nullable */
   deliveredAt?: string | null;
   /** What is blocking the current step from advancing */
@@ -2197,6 +2208,110 @@ export interface DeliveryAdvisor {
   name: string;
   /** @nullable */
   email?: string | null;
+}
+
+export interface DeliveryHistoryImportConfirmation {
+  /** @minimum 2 */
+  row: number;
+  /** @minimum 1 */
+  leadId: number;
+}
+
+export interface DeliveryHistoryImportPreviewInput {
+  /** @minimum 1 */
+  dealershipId: number;
+  /**
+     * @minimum 1886
+     * @maximum 2100
+     */
+  modelYear: number;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  vehicleMake: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  powertrain: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  bodyType: string;
+}
+
+export type DeliveryHistoryImportApplyInput = DeliveryHistoryImportPreviewInput & {
+  confirmations?: DeliveryHistoryImportConfirmation[];
+};
+
+export type DeliveryHistoryImportPreviewRowAction = typeof DeliveryHistoryImportPreviewRowAction[keyof typeof DeliveryHistoryImportPreviewRowAction];
+
+
+export const DeliveryHistoryImportPreviewRowAction = {
+  create_vehicle: 'create_vehicle',
+  reuse_vehicle: 'reuse_vehicle',
+} as const;
+
+export type DeliveryHistoryImportPreviewRowPaymentState = typeof DeliveryHistoryImportPreviewRowPaymentState[keyof typeof DeliveryHistoryImportPreviewRowPaymentState];
+
+
+export const DeliveryHistoryImportPreviewRowPaymentState = {
+  UNRECORDED: 'UNRECORDED',
+} as const;
+
+export type DeliveryHistoryImportPreviewRowTargetStatus = typeof DeliveryHistoryImportPreviewRowTargetStatus[keyof typeof DeliveryHistoryImportPreviewRowTargetStatus];
+
+
+export const DeliveryHistoryImportPreviewRowTargetStatus = {
+  in_progress: 'in_progress',
+} as const;
+
+export interface DeliveryHistoryImportPreviewRow {
+  row: number;
+  vin: string;
+  customerName: string;
+  action: DeliveryHistoryImportPreviewRowAction;
+  /** @nullable */
+  existingVehicleId: number | null;
+  /** @nullable */
+  candidateLeadId: number | null;
+  requiresLeadConfirmation: boolean;
+  sellingPriceGyd: number;
+  paymentState: DeliveryHistoryImportPreviewRowPaymentState;
+  /** @nullable */
+  sourceStatus: string | null;
+  targetStatus: DeliveryHistoryImportPreviewRowTargetStatus;
+}
+
+export interface DeliveryHistoryImportPreviewResult {
+  batchKey: string;
+  total: number;
+  rows: DeliveryHistoryImportPreviewRow[];
+  errors: string[];
+  canApply: boolean;
+}
+
+export type ApplyDeliveryHistoryImportOutcomeStatus = typeof ApplyDeliveryHistoryImportOutcomeStatus[keyof typeof ApplyDeliveryHistoryImportOutcomeStatus];
+
+
+export const ApplyDeliveryHistoryImportOutcomeStatus = {
+  created: 'created',
+  unchanged: 'unchanged',
+} as const;
+
+export interface ApplyDeliveryHistoryImportOutcome {
+  row: number;
+  deliveryId: number;
+  status: ApplyDeliveryHistoryImportOutcomeStatus;
+}
+
+export interface DeliveryHistoryImportApplyResult {
+  batchKey: string;
+  created: number;
+  unchanged: number;
+  outcomes: ApplyDeliveryHistoryImportOutcome[];
 }
 
 export interface DocumentExtractionField {

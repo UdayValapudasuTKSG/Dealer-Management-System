@@ -1,15 +1,16 @@
 # GT Automotive — August arrival batch review
 
-This is a review worksheet, not an executable import or a file compatible with the existing Inventory importer. No production records were modified and no messages were sent. `SUPPRESS` documents a requirement; putting this value in a CSV does not disable application email delivery.
+This approved CSV is for Deliveries → Import reviewed history after publishing the new workflow. Do not edit or resave the CSV: the importer verifies the exact approved file. It is not compatible with the Inventory importer. No production records were modified and no messages were sent. Suppression is enforced by the new workflow, not by a CSV value alone.
 
 ## Scope
 
 - Dealership: GT Automotive, dealer ID 1.
 - Ten source rows; arrival date 12 August 2026. This is not a customer handover date or vehicle model year.
-- Source status: Delivered for all ten. Preserve this historical assertion without fabricating inspection sign-offs, signatures, delivery dates, invoices or payment receipts.
+- Source status: Delivered for all ten. Preserve this raw historical assertion as provenance only; the target is an ordinary pending/in-progress delivery workflow, not a completed historical handover.
 - Preserve engine numbers exactly, including their internal space.
 - Blank fields mean unknown/not supplied, not zero, false or permission to erase existing data.
-- Do not infer vehicle selling prices from the LOU amounts. Values are retained under their apparent pasted column headings pending confirmation.
+- `Source LOU AMT GYD` is confirmed to be the full quoted vehicle selling price. It must be used for the linked full-price invoice, but it is not evidence of payment.
+- The one source deposit is provenance metadata only. Do not create a payment, receipt, deposit allocation, or paid flag from it.
 
 ## Read-only production matching
 
@@ -24,16 +25,16 @@ This is a review worksheet, not an executable import or a file compatible with t
 ## Proposed handling after review
 
 - Create missing physical vehicle records only after rechecking normalized VIN uniqueness within this dealership.
-- Reuse confirmed customer/lead/deal matches; preserve existing values where this source is blank.
+- Match inventory by normalized VIN only and link a lead only by an explicitly confirmed ID. Never auto-merge a customer by name; missing customers may be created with only supplied legitimate fields.
 - For missing customers, create only with legitimate supplied data. Never manufacture email addresses or phone numbers.
-- Confirm whether historical delivered sales should create closed historical pipeline entries or only customer/deal/delivery records. Do not create active sales follow-ups for already-delivered customers.
+- Create a committed deal and pending ordinary delivery workflow with normal PDI, registration, insurance, invoice, appointment, handover and warranty steps. Do not set an appointment or handover date from the arrival date.
 - Preserve the joint customer name in row 4 until the primary buyer/co-buyer structure is confirmed.
 - Treat 625-1891 and 610-9487 as source Notes. Proposed Guyana phone normalization is shown separately and requires confirmation.
 
-## Requirements before a safe live application
+## Applying in the live app
 
-Production currently has no arrival-date/batch columns or dedicated interior-color column. The current vehicle-only importer cannot apply this complete customer/pipeline/delivery history. Do not upload this worksheet to it.
+Publish the updated app and its additive import-metadata schema first. As GT Automotive's General Manager, open Deliveries → Import reviewed history, upload this exact CSV, and supply the actual model year, make, powertrain and body type. Review all ten rows and explicitly confirm the existing lead candidate only if it is the correct person. Apply is blocked if live records conflict.
 
-A user-applied historical import needs a dry-run review, transactional/idempotent matching, arrival metadata, explicit historical-delivery handling, and a no-communications path. That path must bypass customer email, WhatsApp/SMS and deferred follow-up/report triggers for imported history, not merely omit email addresses or temporarily stop a worker. Existing unrelated live communication must remain unaffected.
+The action creates pending delivery workflows and full-price settlement invoices with no recorded payments. Arrival/interior/source facts are retained as import metadata. Staff can use the existing handover and warranty document actions and proceed through the ordinary steps. Customer delivery communications stay suppressed; unrelated communications are unaffected. Finance must enter the actual payments before final handover can pass its settlement gate.
 
 The review contains personal customer information; share only with authorized dealership staff.

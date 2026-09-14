@@ -225,6 +225,12 @@ export const deliveriesTable = pgTable("deliveries", {
   insuranceDocId: integer("insurance_doc_id"),
   handoverSheetDocId: integer("handover_sheet_doc_id"),
   pdiWorkOrderId: integer("pdi_work_order_id"),
+  /**
+   * Immutable source/provenance facts for explicitly authorised historical
+   * imports. In particular, suppressCustomerCommunications is consulted by
+   * delivery workflows; it is never a global mail switch.
+   */
+  importMetadata: jsonb("import_metadata").$type<Record<string, unknown>>(),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })

@@ -71,6 +71,7 @@ import {
 import { ensureAccountForLead } from "../lib/accounts";
 import { ensureFinalInvoiceForDeal } from "../lib/invoicing";
 import { logger } from "../lib/logger";
+import { suppressesCustomerCommunications } from "../lib/delivery-import-provenance";
 import { activeDealerId } from "../middlewares/rbac";
 import {
   notifyDeliveryReady,
@@ -190,6 +191,7 @@ async function computeUnmet(d: Delivery): Promise<string[]> {
       const [outstanding] = await db
         .select({
           due: sql<number>`coalesce(sum(${invoicesTable.amount} - coalesce(p.paid, 0)), 0)`,
+          count: sql<number>`count(${invoicesTable.id})::int`,
         })
         .from(invoicesTable)
         .leftJoin(
@@ -204,6 +206,57 @@ async function computeUnmet(d: Delivery): Promise<string[]> {
             sql`${invoicesTable.status} not in ('paid', 'void')`,
           ),
         );
+      if ((outstanding?.count ?? 0) === 0)
+        unmet.push("A final settlement invoice is required before handover");
+      const imported = d.importMetadata as Record<string, unknown> | null;
+      const importedPrice =
+        imported?.kind === "reviewed_delivery_history"
+          ? Number(imported.confirmedSellingPriceGyd)
+          : null;
+      if (importedPrice != null && Number.isFinite(importedPrice)) {
+        // Imported rows are deliberately stricter: invoice status can never
+        // stand in for payment evidence. The ledger is authoritative even if
+        // somebody manually patched an invoice to "paid".
+        const [ledgerSettlement] = await db
+          .select({
+            due: sql<number>`coalesce(sum(${invoicesTable.amount} - coalesce(p.paid, 0)), 0)`,
+          })
+          .from(invoicesTable)
+          .leftJoin(
+            sql`lateral (select sum(amount) as paid from payments where payments.invoice_id = ${invoicesTable.id} and payments.dealer_id = ${invoicesTable.dealerId}) p`,
+            sql`true`,
+          )
+          .where(
+            and(
+              eq(invoicesTable.dealId, d.dealId),
+              eq(invoicesTable.dealerId, d.dealerId),
+              eq(invoicesTable.kind, "final"),
+              sql`${invoicesTable.status} <> 'void'`,
+            ),
+          );
+        const finalInvoices = await db
+          .select({ amount: invoicesTable.amount })
+          .from(invoicesTable)
+          .where(
+            and(
+              eq(invoicesTable.dealId, d.dealId),
+              eq(invoicesTable.dealerId, d.dealerId),
+              eq(invoicesTable.kind, "final"),
+              sql`${invoicesTable.status} not in ('void')`,
+            ),
+          );
+        if (
+          finalInvoices.length !== 1 ||
+          Math.abs(finalInvoices[0]!.amount - importedPrice) > 0.005
+        )
+          unmet.push(
+            "Imported delivery requires one issued final invoice at the confirmed full selling price before handover",
+          );
+        if ((ledgerSettlement?.due ?? 0) > 0.005)
+          unmet.push(
+            `Imported settlement requires ledger-backed payment — GY$${ledgerSettlement!.due.toLocaleString("en-US", { maximumFractionDigits: 0 })} remains unrecorded`,
+          );
+      }
       if ((outstanding?.due ?? 0) > 0.005)
         unmet.push(
           `Settlement invoice not fully paid — GY$${(outstanding!.due).toLocaleString("en-US", { maximumFractionDigits: 0 })} outstanding must be received before handover`,
@@ -590,7 +643,10 @@ router.patch("/deliveries/:id", async (req, res): Promise<void> => {
     );
     // Introduce the advisor to the customer (deduped per delivery+advisor,
     // so re-saving the same advisor never re-sends).
-    if (parsed.data.advisorUserId !== current.advisorUserId) {
+    if (
+      parsed.data.advisorUserId !== current.advisorUserId &&
+      !suppressesCustomerCommunications(row)
+    ) {
       // Fall back to the deal's customer when the delivery row hasn't been
       // linked yet (that linkage is otherwise only reconciled at completion).
       let recipientCustomerId = row.customerId;
@@ -721,7 +777,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
   const skipping = parsed.data.skip === true;
 
   // L7/L8 readiness gates — a single 422 shape { error, unmet[] }.
-  if (!skipping) {
+  if (!skipping || step === "delivery") {
     const unmet = await computeUnmet(gated);
     if (step === "signature" && !parsed.data.signatureName) {
       unmet.push("Customer signature name is required");
@@ -795,7 +851,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
         )
         .limit(1);
       if (alreadyAnnounced && priorAt === at.getTime()) break;
-      void (async () => {
+       if (!suppressesCustomerCommunications(delivery)) void (async () => {
         const { email, name } = await customerEmailFor(delivery);
         if (!email) return;
         const tz = await dealerTimezone(delivery.dealerId);
@@ -810,9 +866,9 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
             date: formatDealerDateTime(at, tz),
           },
         });
-      })().catch((err) =>
+       })().catch((err) =>
         logger.error({ err }, "delivery schedule email failed"),
-      );
+       );
       // R6.2 #12 Delivery Ready → delivery + sales advisors (In-App + Email):
       // invoice + appointment are both cleared once this step completes.
       void (async () => {
@@ -1109,13 +1165,15 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
       if (after) onDealStageChanged(before, after);
     }
     // Handover celebration email (deduped per delivery).
-    onDeliveryCompleted({
-      dealerId: delivery.dealerId,
-      deliveryId: delivery.id,
-      customerId: delivery.customerId,
-      customerName: delivery.customerName,
-      vehicleLabel: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
-    });
+    if (!suppressesCustomerCommunications(delivery)) {
+      onDeliveryCompleted({
+        dealerId: delivery.dealerId,
+        deliveryId: delivery.id,
+        customerId: delivery.customerId,
+        customerName: delivery.customerName,
+        vehicleLabel: await vehicleLabelFor(delivery.vehicleId, delivery.dealerId),
+      });
+    }
     // Lifetime Asset: the delivered vehicle joins the account's garage and is
     // handed off to a Service Advisor for the ownership phase.
     if (delivery.customerId) {
@@ -1263,7 +1321,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
             });
           }
 
-          if (serviceAdvisor) {
+          if (serviceAdvisor && !suppressesCustomerCommunications(delivery)) {
             // Ownership-phase kickoff: the advisor calls the customer within
             // 5 business days of delivery (dealership business calendar).
             const tz = await dealerTimezone(delivery.dealerId);
@@ -1292,7 +1350,7 @@ router.post("/deliveries/:id/advance", async (req, res): Promise<void> => {
 
     // R6.2 #16 Feedback survey → customer (WhatsApp + Email), keyed on the
     // delivery (replaces the old single-channel feedback_request email).
-    void (async () => {
+    if (!suppressesCustomerCommunications(delivery)) void (async () => {
       const [customer] = delivery.customerId
         ? await db
             .select({
@@ -1789,6 +1847,7 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
     invoiceNumber = inv?.invoiceNumber ?? null;
   }
   const handoverBranding = await getDealerPdfBranding(delivery.dealerId);
+  const importProvenance = delivery.importMetadata as Record<string, unknown> | null;
   const pdf = await buildHandoverPdf(
     delivery,
     vehicle,
@@ -1804,6 +1863,9 @@ router.get("/deliveries/:id/handover.pdf", async (req, res): Promise<void> => {
       customerPhone: ownerContact.phone,
       invoiceNumber,
       overrides: delivery.handoverOverrides ?? {},
+      suppressAutoHandoverDate:
+        importProvenance?.kind === "reviewed_delivery_history",
+      mileageKnown: importProvenance?.mileageKnown !== false,
     },
   );
   res
@@ -1854,6 +1916,12 @@ router.post(
     const delivery = await loadDelivery(params.data.id, activeDealerId(res));
     if (!delivery) {
       res.status(404).json({ error: "Delivery not found" });
+      return;
+    }
+    if (suppressesCustomerCommunications(delivery)) {
+      res.status(422).json({
+        error: "Customer communications are suppressed for this imported delivery.",
+      });
       return;
     }
     const doc = await buildWarrantyBookletForDelivery(

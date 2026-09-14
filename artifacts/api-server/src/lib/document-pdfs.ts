@@ -340,6 +340,10 @@ export interface HandoverPdfExtras {
   invoiceNumber?: string | null;
   /** Manual per-field overrides from the delivery's handover_overrides. */
   overrides?: Record<string, string>;
+  /** Imported workflow records must not turn an arrival/appointment into a handover date. */
+  suppressAutoHandoverDate?: boolean;
+  /** A legacy required numeric mileage sentinel is never a real odometer reading. */
+  mileageKnown?: boolean;
 }
 
 // Checklist content mirrors the dealership's printed "New Vehicle Handover
@@ -557,7 +561,10 @@ export function buildHandoverPdf(
     );
     ry = fieldLine(
       "DATE:",
-      ov.date ?? fmtDate(delivery.deliveredAt ?? delivery.appointmentAt ?? new Date(), tz),
+      ov.date ??
+        (extras.suppressAutoHandoverDate
+          ? (delivery.deliveredAt ? fmtDate(delivery.deliveredAt, tz) : "")
+          : fmtDate(delivery.deliveredAt ?? delivery.appointmentAt ?? new Date(), tz)),
       rightX,
       ry,
       colW,
@@ -586,7 +593,7 @@ export function buildHandoverPdf(
     fieldLine(
       "MILEAGE:",
       ov.mileage ??
-        (vehicle?.mileageKm != null
+        (extras.mileageKnown !== false && vehicle?.mileageKm != null
           ? `${vehicle.mileageKm.toLocaleString("en-US")} km`
           : ""),
       M + halfCol + 12,

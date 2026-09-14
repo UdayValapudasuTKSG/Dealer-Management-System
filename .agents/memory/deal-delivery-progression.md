@@ -19,3 +19,11 @@ POST /deliveries/:id/revert sets a completed/skipped step back to pending (point
 - Revert runs in a tx with SELECT … FOR UPDATE; keep it that way (advance's whole-array write is still unguarded — don't copy that pattern).
 - Re-advancing after a reopen must NOT repeat side effects: appointment email/notify skipped unless the time changed (deduped via delivery_appointment timeline event); feedback CSAT review is upserted, not inserted.
 - RBAC: the revert path is overridden to deliveries:edit (not create); UI shows Reopen only with that permission.
+
+## Reviewed imports with later payment entry
+
+An explicitly reviewed import may bring previously sold vehicles into **pending** delivery workflows. A source spreadsheet saying “Delivered” does not authorize completed steps or signatures. Confirmed quoted selling prices are separate from payment-ledger evidence.
+
+**Why:** The dealership may need to generate handover/warranty documents and perform workflow checks for sales whose payments have not yet been entered in AURA. Fabricated payments or copied completion flags would defeat those checks.
+
+**How to apply:** Keep this as an audited import exception, not a relaxation of normal commitment rules. Preserve source dates separately, suppress customer communications by imported-record provenance, and require ledger-backed settlement before final handover—even if an invoice is manually marked paid.

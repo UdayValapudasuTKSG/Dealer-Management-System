@@ -48,6 +48,8 @@ export const invoicesTable = pgTable("invoices", {
   /** Amounts are USD-scale; GYD display uses the snapshot exchange rate. */
   currency: text("currency").notNull().default("GYD"),
   exchangeRate: doublePrecision("exchange_rate"),
+  /** Import provenance, including durable customer-communications suppression. */
+  importMetadata: jsonb("import_metadata").$type<Record<string, unknown>>(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

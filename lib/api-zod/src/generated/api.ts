@@ -821,6 +821,7 @@ export const ListDeliveriesResponseItem = zod.object({
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
+  "importMetadata": zod.record(zod.string(), zod.unknown()).nullish().describe('Immutable reviewed-import provenance when this workflow originated from an authorized history import'),
   "deliveredAt": zod.coerce.date().nullish(),
   "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
   "handoverVerification": zod.union([zod.object({
@@ -898,6 +899,7 @@ export const CreateDeliveryResponse = zod.object({
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
+  "importMetadata": zod.record(zod.string(), zod.unknown()).nullish().describe('Immutable reviewed-import provenance when this workflow originated from an authorized history import'),
   "deliveredAt": zod.coerce.date().nullish(),
   "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
   "handoverVerification": zod.union([zod.object({
@@ -914,6 +916,45 @@ export const CreateDeliveryResponse = zod.object({
 }),zod.null()]).optional(),
   "completedAt": zod.coerce.date().nullish(),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Review an uploaded, customer-communication-suppressed delivery history CSV
+ */
+export const PreviewDeliveryHistoryImportResponse = zod.object({
+  "batchKey": zod.string(),
+  "total": zod.number(),
+  "rows": zod.array(zod.object({
+  "row": zod.number(),
+  "vin": zod.string(),
+  "customerName": zod.string(),
+  "action": zod.enum(['create_vehicle', 'reuse_vehicle']),
+  "existingVehicleId": zod.number().nullable(),
+  "candidateLeadId": zod.number().nullable(),
+  "requiresLeadConfirmation": zod.boolean(),
+  "sellingPriceGyd": zod.number(),
+  "paymentState": zod.enum(['UNRECORDED']),
+  "sourceStatus": zod.string().nullable(),
+  "targetStatus": zod.enum(['in_progress'])
+})),
+  "errors": zod.array(zod.string()),
+  "canApply": zod.boolean()
+})
+
+
+/**
+ * @summary Apply a reviewed GT Automotive delivery history CSV
+ */
+export const ApplyDeliveryHistoryImportResponse = zod.object({
+  "batchKey": zod.string(),
+  "created": zod.number(),
+  "unchanged": zod.number(),
+  "outcomes": zod.array(zod.object({
+  "row": zod.number(),
+  "deliveryId": zod.number(),
+  "status": zod.enum(['created', 'unchanged'])
+}))
 })
 
 
@@ -970,6 +1011,7 @@ export const GetDeliveryResponse = zod.object({
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
+  "importMetadata": zod.record(zod.string(), zod.unknown()).nullish().describe('Immutable reviewed-import provenance when this workflow originated from an authorized history import'),
   "deliveredAt": zod.coerce.date().nullish(),
   "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
   "handoverVerification": zod.union([zod.object({
@@ -1074,6 +1116,7 @@ export const UpdateDeliveryResponse = zod.object({
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
+  "importMetadata": zod.record(zod.string(), zod.unknown()).nullish().describe('Immutable reviewed-import provenance when this workflow originated from an authorized history import'),
   "deliveredAt": zod.coerce.date().nullish(),
   "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
   "handoverVerification": zod.union([zod.object({
@@ -1169,6 +1212,7 @@ export const AdvanceDeliveryResponse = zod.object({
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
+  "importMetadata": zod.record(zod.string(), zod.unknown()).nullish().describe('Immutable reviewed-import provenance when this workflow originated from an authorized history import'),
   "deliveredAt": zod.coerce.date().nullish(),
   "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
   "handoverVerification": zod.union([zod.object({
@@ -1249,6 +1293,7 @@ export const RevertDeliveryStepResponse = zod.object({
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
+  "importMetadata": zod.record(zod.string(), zod.unknown()).nullish().describe('Immutable reviewed-import provenance when this workflow originated from an authorized history import'),
   "deliveredAt": zod.coerce.date().nullish(),
   "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
   "handoverVerification": zod.union([zod.object({
@@ -1333,6 +1378,7 @@ export const UpdateDeliveryPdiResponse = zod.object({
   "insuranceDocId": zod.number().nullish(),
   "handoverSheetDocId": zod.number().nullish(),
   "pdiWorkOrderId": zod.number().nullish(),
+  "importMetadata": zod.record(zod.string(), zod.unknown()).nullish().describe('Immutable reviewed-import provenance when this workflow originated from an authorized history import'),
   "deliveredAt": zod.coerce.date().nullish(),
   "unmet": zod.array(zod.string()).optional().describe('What is blocking the current step from advancing'),
   "handoverVerification": zod.union([zod.object({

@@ -54,6 +54,7 @@ import {
   testDriveCalendarFields,
 } from "./calendar";
 import { logger } from "./logger";
+import { deliverySuppressesCustomerCommunications } from "./delivery-import-provenance";
 import {
   dealerTimezone,
   formatDealerDate,
@@ -336,6 +337,24 @@ async function dealRecipient(
 export function onDealStageChanged(before: Deal, after: Deal): void {
   if (before.stage === after.stage) return;
   fire("deal_stage_changed", async () => {
+    const [delivery] = await db
+      .select({ id: deliveriesTable.id })
+      .from(deliveriesTable)
+      .where(
+        and(
+          eq(deliveriesTable.dealId, after.id),
+          eq(deliveriesTable.dealerId, after.dealerId),
+        ),
+      )
+      .limit(1);
+    if (
+      delivery &&
+      (await deliverySuppressesCustomerCommunications(
+        delivery.id,
+        after.dealerId,
+      ))
+    )
+      return;
     const { to, name } = await dealRecipient(after);
     if (!to) return;
     const vehicle = await vehicleName(after.dealerId, after.vehicleId);
@@ -456,6 +475,13 @@ export function onDeliveryAdvisorAssigned(opts: {
   vehicleLabel: string;
 }): void {
   fire("delivery_advisor_assigned", async () => {
+    if (
+      await deliverySuppressesCustomerCommunications(
+        opts.deliveryId,
+        opts.dealerId,
+      )
+    )
+      return;
     const c = await customerEmail(opts.dealerId, opts.customerId);
     const to = c.email;
     if (!to) return;
@@ -500,6 +526,13 @@ export function onDeliveryCompleted(opts: {
   vehicleLabel: string;
 }): void {
   fire("delivery_completed", async () => {
+    if (
+      await deliverySuppressesCustomerCommunications(
+        opts.deliveryId,
+        opts.dealerId,
+      )
+    )
+      return;
     const c = await customerEmail(opts.dealerId, opts.customerId);
     if (!c.email) return;
     await enqueueEmail({
