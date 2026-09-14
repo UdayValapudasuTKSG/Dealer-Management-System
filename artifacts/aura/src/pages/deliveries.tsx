@@ -367,7 +367,17 @@ function ReviewedDeliveryImportDialog({
           <Input type="file" accept=".csv,text/csv" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setReview(null); setApplied(null); }} />
           <Input value={modelYear} onChange={(event) => { setModelYear(event.target.value); setReview(null); setApplied(null); }} placeholder="Reviewed model year (required)" inputMode="numeric" />
           <Input value={vehicleMake} onChange={(event) => { setVehicleMake(event.target.value); setReview(null); setApplied(null); }} placeholder="Reviewed vehicle make (required)" />
-          <Input value={powertrain} onChange={(event) => { setPowertrain(event.target.value); setReview(null); setApplied(null); }} placeholder="Reviewed powertrain (required)" />
+          <Select value={powertrain} onValueChange={(value) => { setPowertrain(value); setReview(null); setApplied(null); }}>
+            <SelectTrigger>
+              <SelectValue placeholder="Reviewed powertrain (required)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="EV">Electric</SelectItem>
+              <SelectItem value="Hybrid">Hybrid</SelectItem>
+              <SelectItem value="Petrol">Petrol</SelectItem>
+              <SelectItem value="Diesel">Diesel</SelectItem>
+            </SelectContent>
+          </Select>
           <Input value={bodyType} onChange={(event) => { setBodyType(event.target.value); setReview(null); setApplied(null); }} placeholder="Reviewed body type (required)" />
         </div>
         {applied && (

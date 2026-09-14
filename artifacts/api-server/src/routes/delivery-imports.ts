@@ -37,6 +37,10 @@ import {
   reviewedOutboxCommunicationLockKeys,
   requiresApplyIdentityConfirmation,
 } from "../lib/reviewed-delivery-import-policy";
+import {
+  normalizePowertrain,
+  VEHICLE_POWERTRAINS,
+} from "../lib/vehicle-compat";
 
 const router: IRouter = Router();
 const upload = multer({
@@ -54,7 +58,10 @@ const reviewInput = z.object({
   dealershipId: z.number().int().positive(),
   modelYear: z.number().int().min(1886).max(2100),
   vehicleMake: z.string().trim().min(1).max(80),
-  powertrain: z.string().trim().min(1).max(80),
+  powertrain: z.preprocess(
+    normalizePowertrain,
+    z.enum(VEHICLE_POWERTRAINS),
+  ),
   bodyType: z.string().trim().min(1).max(80),
 });
 const applyInput = reviewInput.extend({
@@ -238,7 +245,8 @@ function matchesReviewedFields(
     typeof fields === "object" &&
     (fields as Record<string, unknown>).modelYear === input.modelYear &&
     (fields as Record<string, unknown>).make === input.vehicleMake &&
-    (fields as Record<string, unknown>).powertrain === input.powertrain &&
+    normalizePowertrain((fields as Record<string, unknown>).powertrain) ===
+      input.powertrain &&
     (fields as Record<string, unknown>).bodyType === input.bodyType
   );
 }

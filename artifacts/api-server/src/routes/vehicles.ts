@@ -41,6 +41,11 @@ import {
 import { defaultDivisionId, divisionBelongsToDealer } from "./divisions";
 import { computeTaxes, ensureDealerTaxes } from "../lib/taxes";
 import { vehicleActivelyAllocated } from "../lib/reservation-allocations";
+import {
+  canonicalizeVehiclePowertrain,
+  normalizePowertrain,
+  normalizeVehiclePowertrainInput,
+} from "../lib/vehicle-compat";
 
 const router: IRouter = Router();
 
@@ -84,8 +89,17 @@ router.get("/vehicles", async (req, res): Promise<void> => {
   if (query.data.divisionId)
     filters.push(eq(vehiclesTable.divisionId, query.data.divisionId));
   if (query.data.status) filters.push(eq(vehiclesTable.status, query.data.status));
-  if (query.data.powertrain)
-    filters.push(eq(vehiclesTable.powertrain, query.data.powertrain));
+  if (query.data.powertrain) {
+    const powertrain = normalizePowertrain(query.data.powertrain);
+    // Existing reviewed history may still contain the pre-contract
+    // "electric" spelling.  Treat it as EV for filters without mutating the
+    // imported row.
+    filters.push(
+      powertrain === "EV"
+        ? or(eq(vehiclesTable.powertrain, "EV"), eq(vehiclesTable.powertrain, "electric"))!
+        : eq(vehiclesTable.powertrain, String(powertrain)),
+    );
+  }
   if (query.data.search) {
     const term = `%${query.data.search}%`;
     const searchClause = or(
@@ -105,14 +119,15 @@ router.get("/vehicles", async (req, res): Promise<void> => {
     .orderBy(desc(vehiclesTable.featured), desc(vehiclesTable.createdAt));
 
   const visible = await redactHiddenFields(res.locals.user, "inventory", rows);
-  res.json(ListVehiclesResponse.parse(visible));
+  res.json(ListVehiclesResponse.parse(visible.map(canonicalizeVehiclePowertrain)));
 });
 
 router.post("/vehicles", async (req, res): Promise<void> => {
-  const parsed = CreateVehicleBody.safeParse(req.body);
+  const normalizedBody = normalizeVehiclePowertrainInput(req.body);
+  const parsed = CreateVehicleBody.safeParse(normalizedBody);
   if (!parsed.success) {
     res.status(400).json({
-      error: vehicleIdentifierError(req.body ?? {}) ?? parsed.error.message,
+      error: vehicleIdentifierError(normalizedBody ?? {}) ?? parsed.error.message,
     });
     return;
   }
@@ -178,7 +193,9 @@ router.post("/vehicles", async (req, res): Promise<void> => {
     return;
   }
 
-  res.status(201).json(GetVehicleResponse.parse(outcome.vehicle));
+  res.status(201).json(
+    GetVehicleResponse.parse(canonicalizeVehiclePowertrain(outcome.vehicle)),
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -385,7 +402,7 @@ router.get("/vehicles/export", async (req, res): Promise<void> => {
       r["transmission"] ?? "",
       r["price"] ?? 0,
       r["dutyFreeAmount"] ?? 0,
-      r["powertrain"] ?? "",
+      normalizePowertrain(r["powertrain"]) ?? "",
       r["rangeKm"] ?? "",
       r["mileageKm"] ?? "",
       r["exteriorColor"] ?? "",
@@ -498,18 +515,6 @@ function splitList(text: string): string[] {
 
 const NUMBER_FIELDS = new Set(["year", "price", "rangeKm", "mileageKm"]);
 
-const POWERTRAIN_ALIASES: Record<string, string> = {
-  ev: "EV",
-  electric: "EV",
-  bev: "EV",
-  hybrid: "Hybrid",
-  phev: "Hybrid",
-  petrol: "Petrol",
-  gas: "Petrol",
-  gasoline: "Petrol",
-  diesel: "Diesel",
-};
-
 function normalizeHeader(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -576,7 +581,12 @@ function normalizeExistingRow(
   ];
   for (const f of stringFields) {
     const v = row[f];
-    out[f] = v != null && v !== "" ? String(v) : undefined;
+    out[f] =
+      v != null && v !== ""
+        ? f === "powertrain"
+          ? normalizePowertrain(v)
+          : String(v)
+        : undefined;
   }
   // Numbers
   const numFields = ["year", "price", "rangeKm", "mileageKm", "dutyFreeAmount"];
@@ -845,7 +855,7 @@ router.post(
         } else if (field === "registration") {
           raw[field] = text.toUpperCase().replace(/[\s-]/g, "");
         } else if (field === "powertrain") {
-          raw[field] = POWERTRAIN_ALIASES[text.toLowerCase()] ?? text;
+          raw[field] = normalizePowertrain(text);
         } else if (field === "status") {
           raw[field] = text.toLowerCase().replace(/[\s-]+/g, "_");
         } else if (field === "featured") {
@@ -1674,7 +1684,11 @@ router.get("/vehicles/:id", async (req, res): Promise<void> => {
   } catch (err) {
     req.log.error({ err, vehicleId: vehicle.id }, "vehicle price composition failed");
   }
-  res.json(GetVehicleResponse.parse({ ...visible, ...priceExtras }));
+  res.json(
+    GetVehicleResponse.parse(
+      canonicalizeVehiclePowertrain({ ...visible, ...priceExtras }),
+    ),
+  );
 });
 
 router.patch("/vehicles/:id", async (req, res): Promise<void> => {
@@ -1684,10 +1698,11 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const parsed = UpdateVehicleBody.safeParse(req.body);
+  const normalizedBody = normalizeVehiclePowertrainInput(req.body);
+  const parsed = UpdateVehicleBody.safeParse(normalizedBody);
   if (!parsed.success) {
     res.status(400).json({
-      error: vehicleIdentifierError(req.body ?? {}) ?? parsed.error.message,
+      error: vehicleIdentifierError(normalizedBody ?? {}) ?? parsed.error.message,
     });
     return;
   }
@@ -1842,7 +1857,9 @@ router.patch("/vehicles/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(UpdateVehicleResponse.parse(outcome.vehicle));
+  res.json(
+    UpdateVehicleResponse.parse(canonicalizeVehiclePowertrain(outcome.vehicle)),
+  );
 });
 
 router.delete("/vehicles/:id", async (req, res): Promise<void> => {
@@ -1912,7 +1929,9 @@ router.post("/vehicles/:id/restore", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Vehicle not found" });
     return;
   }
-  res.json(UpdateVehicleResponse.parse(vehicle));
+  res.json(
+    UpdateVehicleResponse.parse(canonicalizeVehiclePowertrain(vehicle)),
+  );
 });
 
 export default router;

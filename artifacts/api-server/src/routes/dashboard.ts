@@ -25,6 +25,7 @@ import {
   GetPredictiveAnalyticsResponse,
 } from "@workspace/api-zod";
 import { dealerTimezone, zonedDayKey, zonedParts } from "../lib/timezone";
+import { normalizePowertrain } from "../lib/vehicle-compat";
 
 const router: IRouter = Router();
 
@@ -617,7 +618,8 @@ router.get("/dashboard/inventory-breakdown", async (_req, res): Promise<void> =>
 
   const counts = new Map<string, number>();
   for (const v of vehicles) {
-    counts.set(v.powertrain, (counts.get(v.powertrain) ?? 0) + 1);
+    const powertrain = String(normalizePowertrain(v.powertrain));
+    counts.set(powertrain, (counts.get(powertrain) ?? 0) + 1);
   }
   const byPowertrain = Array.from(counts.entries()).map(
     ([powertrain, count]) => ({ powertrain, count }),

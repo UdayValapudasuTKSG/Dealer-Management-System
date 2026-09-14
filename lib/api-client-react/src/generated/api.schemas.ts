@@ -2221,6 +2221,19 @@ export interface DeliveryHistoryImportConfirmation {
   dealId?: number;
 }
 
+/**
+ * Canonical powertrain; historical electric input is normalized to EV by the server
+ */
+export type DeliveryHistoryImportPreviewInputPowertrain = typeof DeliveryHistoryImportPreviewInputPowertrain[keyof typeof DeliveryHistoryImportPreviewInputPowertrain];
+
+
+export const DeliveryHistoryImportPreviewInputPowertrain = {
+  EV: 'EV',
+  Hybrid: 'Hybrid',
+  Petrol: 'Petrol',
+  Diesel: 'Diesel',
+} as const;
+
 export interface DeliveryHistoryImportPreviewInput {
   /** @minimum 1 */
   dealershipId: number;
@@ -2234,11 +2247,8 @@ export interface DeliveryHistoryImportPreviewInput {
      * @maxLength 80
      */
   vehicleMake: string;
-  /**
-     * @minLength 1
-     * @maxLength 80
-     */
-  powertrain: string;
+  /** Canonical powertrain; historical electric input is normalized to EV by the server */
+  powertrain: DeliveryHistoryImportPreviewInputPowertrain;
   /**
      * @minLength 1
      * @maxLength 80
@@ -2566,6 +2576,9 @@ export type LeadVehicleInterest = LeadVehicleInterestInput & ({
   vehicleId: number | null;
 });
 
+/**
+ * Intake channel, including the immutable provenance channel for reviewed historical delivery imports
+ */
 export type LeadChannel = typeof LeadChannel[keyof typeof LeadChannel];
 
 
@@ -2575,6 +2588,7 @@ export const LeadChannel = {
   mobile: 'mobile',
   walkin: 'walkin',
   email: 'email',
+  reviewed_delivery_import: 'reviewed_delivery_import',
 } as const;
 
 export type LeadPriority = typeof LeadPriority[keyof typeof LeadPriority];
@@ -2646,6 +2660,7 @@ export interface Lead {
   email?: string | null;
   /** @nullable */
   phone?: string | null;
+  /** Intake channel, including the immutable provenance channel for reviewed historical delivery imports */
   channel: LeadChannel;
   source: string;
   /** @nullable */

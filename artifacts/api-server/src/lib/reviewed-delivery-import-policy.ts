@@ -1,3 +1,5 @@
+import { normalizePowertrain } from "./vehicle-compat";
+
 export function parseReviewedCandidateLeadId(value: string | undefined): number | null {
   const text = (value ?? "").trim();
   if (!text) return null;
@@ -38,7 +40,8 @@ export function matchesReviewedVehicle(
     vehicle.year === input.modelYear &&
     sameText(vehicle.engineNumber, row.raw["Engine No"]) &&
     vehicle.price === row.sellingPrice &&
-    sameText(vehicle.powertrain, input.powertrain) &&
+    normalizePowertrain(vehicle.powertrain) ===
+      normalizePowertrain(input.powertrain) &&
     sameText(vehicle.bodyType, input.bodyType) &&
     (!(row.raw["Exterior"] ?? "").trim() || sameText(vehicle.exteriorColor, row.raw["Exterior"]))
   );

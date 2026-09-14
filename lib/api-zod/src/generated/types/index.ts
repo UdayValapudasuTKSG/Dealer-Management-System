@@ -281,6 +281,7 @@ export * from './deliveryHistoryImportApplyInput';
 export * from './deliveryHistoryImportApplyResult';
 export * from './deliveryHistoryImportConfirmation';
 export * from './deliveryHistoryImportPreviewInput';
+export * from './deliveryHistoryImportPreviewInputPowertrain';
 export * from './deliveryHistoryImportPreviewResult';
 export * from './deliveryHistoryImportPreviewRow';
 export * from './deliveryHistoryImportPreviewRowAction';

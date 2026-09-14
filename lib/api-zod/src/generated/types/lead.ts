@@ -23,6 +23,7 @@ export interface Lead {
   email?: string | null;
   /** @nullable */
   phone?: string | null;
+  /** Intake channel, including the immutable provenance channel for reviewed historical delivery imports */
   channel: LeadChannel;
   source: string;
   /** @nullable */

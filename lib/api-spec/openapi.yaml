@@ -11298,7 +11298,10 @@ components:
         dealershipId: { type: integer, minimum: 1 }
         modelYear: { type: integer, minimum: 1886, maximum: 2100 }
         vehicleMake: { type: string, minLength: 1, maxLength: 80 }
-        powertrain: { type: string, minLength: 1, maxLength: 80 }
+        powertrain:
+          type: string
+          enum: [EV, Hybrid, Petrol, Diesel]
+          description: "Canonical powertrain; historical electric input is normalized to EV by the server"
         bodyType: { type: string, minLength: 1, maxLength: 80 }
     DeliveryHistoryImportApplyInput:
       allOf:
@@ -11512,7 +11515,10 @@ components:
         name: { type: string }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
-        channel: { type: string, enum: [web, social, mobile, walkin, email] }
+        channel:
+          type: string
+          enum: [web, social, mobile, walkin, email, reviewed_delivery_import]
+          description: "Intake channel, including the immutable provenance channel for reviewed historical delivery imports"
         source: { type: string }
         sourceDetail: { type: ["string", "null"] }
         priority: { type: string, enum: [high, medium, low] }
@@ -11567,7 +11573,9 @@ components:
         name: { type: string, minLength: 1 }
         email: { type: string }
         phone: { type: string }
-        channel: { type: string, enum: [web, social, mobile, walkin, email] }
+        channel:
+          type: string
+          enum: [web, social, mobile, walkin, email]
         source: { type: string, minLength: 1 }
         sourceDetail: { type: string }
         priority: { type: string, enum: [high, medium, low] }
@@ -11597,7 +11605,9 @@ components:
         name: { type: string, minLength: 1 }
         email: { type: string }
         phone: { type: string }
-        channel: { type: string, enum: [web, social, mobile, walkin, email] }
+        channel:
+          type: string
+          enum: [web, social, mobile, walkin, email]
         source: { type: string, minLength: 1 }
         sourceDetail: { type: ["string", "null"] }
         priority: { type: string, enum: [high, medium, low] }

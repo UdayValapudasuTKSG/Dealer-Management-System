@@ -100,6 +100,7 @@ import {
   isAgentEnabled,
   recordAgentRun,
 } from "../lib/agent-governance";
+import { canonicalizeVehiclePowertrain } from "../lib/vehicle-compat";
 
 const router: IRouter = Router();
 
@@ -223,7 +224,7 @@ async function personaPayload(
           eq(vehiclesTable.dealerId, dealerId),
         ),
       );
-    aiRecommendedVehicle = v ?? null;
+    aiRecommendedVehicle = v ? canonicalizeVehiclePowertrain(v) : null;
   }
 
   const leadScore = computeLeadScore(b.persona, {
@@ -1580,7 +1581,7 @@ router.get("/customers/:id/overview", async (req, res): Promise<void> => {
     persona,
     notes,
     documents,
-    ownedVehicles,
+    ownedVehicles: ownedVehicles.map(canonicalizeVehiclePowertrain),
     activeDeal,
     deals,
     appraisals,

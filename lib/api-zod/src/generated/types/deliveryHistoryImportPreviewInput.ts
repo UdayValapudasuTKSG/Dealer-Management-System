@@ -5,6 +5,7 @@
  * AURA Dealership Operating System API
  * OpenAPI spec version: 0.1.0
  */
+import type { DeliveryHistoryImportPreviewInputPowertrain } from './deliveryHistoryImportPreviewInputPowertrain';
 
 export interface DeliveryHistoryImportPreviewInput {
   /** @minimum 1 */
@@ -19,11 +20,8 @@ export interface DeliveryHistoryImportPreviewInput {
      * @maxLength 80
      */
   vehicleMake: string;
-  /**
-     * @minLength 1
-     * @maxLength 80
-     */
-  powertrain: string;
+  /** Canonical powertrain; historical electric input is normalized to EV by the server */
+  powertrain: DeliveryHistoryImportPreviewInputPowertrain;
   /**
      * @minLength 1
      * @maxLength 80

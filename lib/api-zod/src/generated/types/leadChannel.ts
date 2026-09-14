@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Intake channel, including the immutable provenance channel for reviewed historical delivery imports
+ */
 export type LeadChannel = typeof LeadChannel[keyof typeof LeadChannel];
 
 
@@ -15,4 +18,5 @@ export const LeadChannel = {
   mobile: 'mobile',
   walkin: 'walkin',
   email: 'email',
+  reviewed_delivery_import: 'reviewed_delivery_import',
 } as const;

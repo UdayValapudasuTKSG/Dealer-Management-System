@@ -14,3 +14,7 @@ The Express API validates response payloads against the generated Zod schemas be
 **Seed-time guard:** DB columns are plain `text()`, so drizzle-zod insert schemas do NOT enforce the API enums by default. The enum values were re-declared as `createInsertSchema(table, { col: z.enum([...]) })` refinements (customers/timelineEvents/gates), and `scripts/src/seed-connectivity.ts` `.parse()`s every row before insert so a bad enum fails loudly at seed time, not at request time. If you add new seed enum fields, refine the matching insert schema too — the enum lives in `lib/api-spec/openapi.yaml` as the source of truth.
 
 **New gate types touch the OpenAPI enum too:** the gates `type` field is an enum in `lib/api-spec/openapi.yaml`; adding a gate type only to the DB/server makes `POST /gates/:id/resolve` (and gate lists) 500 with `invalid_enum_value` on output validation even though the cascade already ran. Add the value to the OpenAPI enum + codegen whenever introducing a gate type.
+
+**Import verification must include downstream reads:** test imported payloads against the real lead and vehicle response schemas, not just import-policy helpers.
+
+**Why:** a successful import can still make whole operational lists fail when free-text input or a new provenance channel violates the API contract. Preserve genuine provenance rather than relabeling imports as walk-ins; where production writes are prohibited, restore compatibility in the read path.
