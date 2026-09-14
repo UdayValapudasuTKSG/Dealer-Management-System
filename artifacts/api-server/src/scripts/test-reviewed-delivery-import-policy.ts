@@ -7,9 +7,17 @@ import {
   isReusableCommittedDeal,
   legacyReviewedOutboxDisposition,
   matchesReviewedVehicle,
+  parseReviewedCandidateLeadId,
   requiresApplyIdentityConfirmation,
   suppressesReviewedImportedLead,
 } from "../lib/reviewed-delivery-import-policy";
+
+// Empty CSV cells mean no declared match, never the numeric candidate zero.
+for (const value of [undefined, "", " ", "\t", "0", "-1", "1.5", "invalid"]) {
+  assert.equal(parseReviewedCandidateLeadId(value), null);
+}
+assert.equal(parseReviewedCandidateLeadId("8383"), 8383);
+assert.equal(parseReviewedCandidateLeadId(" 8383 "), 8383);
 
 const input = { modelYear: 2026, vehicleMake: "Example", powertrain: "Hybrid", bodyType: "SUV" };
 const row = {

@@ -1,0 +1,60 @@
+Import reviewed delivery history
+Upload the reviewed CSV. This creates pending ordinary delivery workflows only—no payments, appointments, handover dates, or customer communications.
+
+gt-automotive-august-2026-review.csv
+2026
+BYD
+electric
+SUV
+10 rows reviewed · customer email suppression will persist
+
+CSV row 2: declared lead candidate 0 no longer exactly matches live dealership data.
+CSV row 3: declared lead candidate 0 no longer exactly matches live dealership data.
+CSV row 4: declared lead candidate 0 no longer exactly matches live dealership data.
+CSV row 5: declared lead candidate 0 no longer exactly matches live dealership data.
+CSV row 6: declared lead candidate 0 no longer exactly matches live dealership data.
+CSV row 8: declared lead candidate 0 no longer exactly matches live dealership data.
+CSV row 9: declared lead candidate 0 no longer exactly matches live dealership data.
+CSV row 10: declared lead candidate 0 no longer exactly matches live dealership data.
+CSV row 11: declared lead candidate 0 no longer exactly matches live dealership data.
+Row 2: Carlyn Cato · LC0CE4CB7V4016852 · GY$5,500,000 · vehicle create · payment unrecorded
+
+Lead: create · Customer: create · Deal: create · Invoice: create
+
+Row 3: Elizabeth Huntley · LC0CE4CB5V4016851 · GY$5,200,000 · vehicle create · payment unrecorded
+
+Lead: create · Customer: create · Deal: create · Invoice: create
+
+Row 4: Oneeda Bascom · LC0CE4CB1V4016863 · GY$5,500,000 · vehicle create · payment unrecorded
+
+Lead: create · Customer: create · Deal: create · Invoice: create
+
+Row 5: Raffeldo Christopher George & Anteisha George · LC0CE4CB7V4016883 · GY$5,500,000 · vehicle create · payment unrecorded
+
+Lead: create · Customer: create · Deal: create · Invoice: create
+
+Row 6: Rondell Bourne · LC0CE4CB9V4016867 · GY$5,500,000 · vehicle create · payment unrecorded
+
+Lead: create · Customer: create · Deal: create · Invoice: create
+
+Row 7: Euyette Cameron · LC0CE4CB0V4016885 · GY$5,500,000 · vehicle create · payment unrecorded
+
+Lead: reuse #8383 · Customer: create · Deal: create · Invoice: create
+
+Confirm the exact existing identity/identities shown for this row; no name, email, or VIN fuzzy merge will occur.
+Row 8: Yogesh Kumar Etwaru · LC0CE4CB1V4016846 · GY$5,200,000 · vehicle create · payment unrecorded
+
+Lead: create · Customer: create · Deal: create · Invoice: create
+
+Row 9: Amit Mohabir · LC0CE4CB5V4016879 · GY$5,500,000 · vehicle create · payment unrecorded
+
+Lead: create · Customer: create · Deal: create · Invoice: create
+
+Row 10: Temica Sparman · LC0CE4CB2V4016869 · GY$4,675,000 · vehicle create · payment unrecorded
+
+Lead: create · Customer: create · Deal: create · Invoice: create
+
+Row 11: Otella Linda King · LC0CE4CB7V4016866 · GY$5,500,000 · vehicle create · payment unrecorded
+
+Lead: create · Customer: create · Deal: create · Invoice: create
+

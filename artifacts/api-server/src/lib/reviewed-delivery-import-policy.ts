@@ -1,3 +1,10 @@
+export function parseReviewedCandidateLeadId(value: string | undefined): number | null {
+  const text = (value ?? "").trim();
+  if (!text) return null;
+  const id = Number(text);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 export type ReviewedImportVehicle = {
   make: string | null;
   model: string | null;

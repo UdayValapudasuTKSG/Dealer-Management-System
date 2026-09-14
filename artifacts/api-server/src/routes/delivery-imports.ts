@@ -32,6 +32,7 @@ import {
   identityImportPlan,
   isReusableCommittedDeal,
   matchesReviewedVehicle,
+  parseReviewedCandidateLeadId,
   PRE_IMPORT_SALES_DELIVERY_TEMPLATES,
   reviewedOutboxCommunicationLockKeys,
   requiresApplyIdentityConfirmation,
@@ -168,6 +169,9 @@ function csvRows(buffer: Buffer): { rows: ParsedRow[]; errors: string[] } {
       errors.push(`CSV row ${row}: this reviewed importer only accepts Delivered source rows.`);
     if (seen.has(vin)) errors.push(`CSV row ${row}: duplicate VIN in uploaded file.`);
     seen.add(vin);
+    const candidateLeadId = parseReviewedCandidateLeadId(raw["Candidate Lead ID"]);
+    if ((raw["Candidate Lead ID"] ?? "").trim() && candidateLeadId === null)
+      errors.push(`CSV row ${row}: Candidate Lead ID must be blank or a positive integer.`);
     rows.push({
       row,
       raw,
@@ -175,7 +179,7 @@ function csvRows(buffer: Buffer): { rows: ParsedRow[]; errors: string[] } {
       customerName,
       advisorUserId,
       sellingPrice,
-      candidateLeadId: Number.isInteger(Number(raw["Candidate Lead ID"])) ? Number(raw["Candidate Lead ID"]) : null,
+      candidateLeadId,
     });
   });
   if (rows.length !== 10) errors.push("This reviewed import accepts exactly the ten approved GT Automotive rows.");
