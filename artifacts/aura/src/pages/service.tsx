@@ -1870,12 +1870,28 @@ function BookingsTab() {
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <div className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
+                    <div className="col-span-2 min-w-0 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
                       <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                         <User className="h-3.5 w-3.5" /> Customer
                       </div>
-                      <div className="mt-1 truncate text-sm font-medium">
+                      <div className="mt-1 break-words text-sm font-medium">
                         {order.customerName || "Unknown customer"}
+                      </div>
+                      <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                        <div className="flex min-w-0 items-start gap-1.5">
+                          <Phone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          <span className="break-all">
+                            <span className="sr-only">Phone: </span>
+                            {order.customerPhoneSnapshot?.trim() || "Phone not recorded"}
+                          </span>
+                        </div>
+                        <div className="flex min-w-0 items-start gap-1.5">
+                          <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          <span className="break-all">
+                            <span className="sr-only">Email: </span>
+                            {order.customerEmail?.trim() || "Email not recorded"}
+                          </span>
+                        </div>
                       </div>
                     </div>
                     <div className="rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
@@ -1901,6 +1917,14 @@ function BookingsTab() {
                       <div className="mt-1 truncate text-sm font-medium capitalize">
                         {order.type.replace(/_/g, " ")}
                         {order.estimatedHours ? ` · ${order.estimatedHours}h` : ""}
+                      </div>
+                    </div>
+                    <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5">
+                      <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                        VIN
+                      </div>
+                      <div className="mt-1 break-all font-mono text-sm font-medium">
+                        {order.vin?.trim() || "Not recorded"}
                       </div>
                     </div>
                   </div>
