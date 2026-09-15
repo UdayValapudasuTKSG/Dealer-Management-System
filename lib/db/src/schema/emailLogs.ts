@@ -90,6 +90,8 @@ export const WHATSAPP_KINDS = [
   "refund.customer",
   "feedback.survey",
   "service.cadence.due",
+  // Explicit staff-triggered confirmed service appointment utility template.
+  "service.appointment.confirmed",
 ] as const;
 export type WhatsappKind = (typeof WHATSAPP_KINDS)[number];
 

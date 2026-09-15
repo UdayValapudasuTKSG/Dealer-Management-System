@@ -3510,7 +3510,7 @@ paths:
     post:
       operationId: sendServiceReminder
       tags: [service]
-      summary: Send a service reminder email to the customer
+      summary: Send a service reminder (email for unconfirmed bookings, approved WhatsApp template for confirmed appointments)
       parameters:
         - name: id
           in: path
@@ -3530,7 +3530,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "422":
-          description: Customer has no email on file
+          description: Customer contact, confirmed schedule, WhatsApp configuration, or communication policy prevented delivery
           content:
             application/json:
               schema:
@@ -3540,7 +3540,7 @@ paths:
     post:
       operationId: confirmServiceAppointment
       tags: [service]
-      summary: Confirm a requested service appointment and queue the customer email
+      summary: Confirm a requested service appointment without sending a customer message
       parameters:
         - name: id
           in: path
@@ -3554,11 +3554,11 @@ paths:
               $ref: "#/components/schemas/ServiceAppointmentConfirmationInput"
       responses:
         "200":
-          description: Appointment confirmed and confirmation email queued
+          description: Appointment confirmed; customer messaging remains an explicit Remind action
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RemindAck"
+                $ref: "#/components/schemas/ServiceAppointmentConfirmationAck"
         "404":
           description: Not found
           content:
@@ -3572,7 +3572,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "422":
-          description: Customer email or appointment schedule is missing
+          description: Appointment schedule is missing
           content:
             application/json:
               schema:
@@ -13158,6 +13158,13 @@ components:
       properties:
         status: { type: string }
         recipient: { type: string }
+
+    ServiceAppointmentConfirmationAck:
+      type: object
+      required: [status, recipient]
+      properties:
+        status: { type: string }
+        recipient: { type: ["string", "null"] }
 
     ServiceAppointmentConfirmationInput:
       type: object

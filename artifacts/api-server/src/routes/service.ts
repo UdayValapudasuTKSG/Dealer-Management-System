@@ -8,6 +8,7 @@ import {
 } from "../lib/document-pdfs";
 import {
   dealerTimezone,
+  formatDealerDate,
   zonedDayKey,
   zonedParts,
   zonedTimeToUtc,
@@ -28,6 +29,7 @@ import {
   coveragePlansTable,
   serviceInvoicesTable,
   customersTable,
+  dealersTable,
   usersTable,
   rolesTable,
   dealerUsersTable,
@@ -147,10 +149,14 @@ import {
   onJobCardIntakeRecorded,
   onServiceEstimateReady,
   onServiceAppointmentChanged,
-  queueServiceAppointmentConfirmation,
   onJobCardStatusChanged,
 } from "../lib/email-triggers";
-import { enqueueEmail, notifyUser } from "../lib/email";
+import {
+  enqueueEmail,
+  enqueueWhatsapp,
+  notifyUser,
+  whatsappOutboxDisposition,
+} from "../lib/email";
 import { generalManagers } from "../lib/notify-matrix";
 import { activeDealerId } from "../middlewares/rbac";
 import { resolveDealerUserIdByName } from "../lib/user-lookup";
@@ -159,6 +165,12 @@ import { computeServiceTax, ensureDealerTaxes } from "../lib/taxes";
 import { logger } from "../lib/logger";
 import { coordinateCollisionClaim } from "../lib/collision-coordinator";
 import { effectiveServiceReminderRecipient } from "../lib/service-booking-contact";
+import { getChannelByDealerId } from "../lib/whatsapp-channel";
+import { normalizeWhatsappPhone } from "../lib/whatsapp-phone";
+import {
+  renderServiceAppointmentConfirmedBody,
+  SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE,
+} from "../lib/service-appointment-whatsapp";
 
 const router: IRouter = Router();
 const objectStorage = new ObjectStorageService();
@@ -190,10 +202,14 @@ function toDateString(value: unknown): string | undefined {
 async function customerEmail(
   customerId: number | null | undefined,
   dealerId: number,
-): Promise<{ email: string | null; name: string | null }> {
-  if (customerId == null) return { email: null, name: null };
+): Promise<{ email: string | null; name: string | null; phone: string | null }> {
+  if (customerId == null) return { email: null, name: null, phone: null };
   const [row] = await db
-    .select({ email: customersTable.email, name: customersTable.name })
+    .select({
+      email: customersTable.email,
+      name: customersTable.name,
+      phone: customersTable.phone,
+    })
     .from(customersTable)
     .where(
       and(
@@ -206,6 +222,7 @@ async function customerEmail(
   return {
     email: effectiveServiceReminderRecipient(row?.email),
     name: row?.name ?? null,
+    phone: row?.phone?.trim() || null,
   };
 }
 
@@ -954,7 +971,6 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
   ) {
     onServiceAppointmentChanged(order);
   }
-
   const effectiveEmail = await customerEmail(order.customerId, dealerId);
   res.json(
     UpdateServiceOrderResponse.parse({ ...order, customerEmail: effectiveEmail.email }),
@@ -1068,25 +1084,126 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Service order not found" });
     return;
   }
-  const effectiveEmail = await customerEmail(order.customerId, order.dealerId);
-  const recipient = effectiveServiceReminderRecipient(effectiveEmail.email);
-  if (!recipient) {
-    res.status(422).json({ error: "Customer has no email on file" });
+  const contact = await customerEmail(order.customerId, order.dealerId);
+
+  // Existing unconfirmed bookings retain the email reminder behavior.  The
+  // approved confirmation template is deliberately reachable only from the
+  // acknowledged path below.
+  if (order.status !== "acknowledged") {
+    const recipient = effectiveServiceReminderRecipient(contact.email);
+    if (!recipient) {
+      res.status(422).json({ error: "Customer has no email on file" });
+      return;
+    }
+    await enqueueEmail({
+      template: "service_reminder",
+      to: recipient,
+      dealerId: order.dealerId,
+      customerId: order.customerId,
+      data: {
+        vehicle: order.vehicleInfo,
+        service: order.type,
+        date: order.scheduledDate,
+      },
+    });
+    res.json(
+      SendServiceReminderResponse.parse({ status: "queued", recipient }),
+    );
     return;
   }
-  await enqueueEmail({
-    template: "service_reminder",
+
+  const recipient = normalizeWhatsappPhone(
+    order.customerPhoneSnapshot || contact.phone || "",
+  );
+  if (!recipient) {
+    res.status(422).json({ error: "Customer has no WhatsApp phone on file" });
+    return;
+  }
+  if (!(await getChannelByDealerId(order.dealerId))) {
+    res.status(422).json({
+      error: "WhatsApp is not configured or is paused for this dealership",
+    });
+    return;
+  }
+
+  const [card] = await db
+    .select({ scheduledAt: jobCardsTable.scheduledAt })
+    .from(jobCardsTable)
+    .where(
+      and(
+        eq(jobCardsTable.serviceOrderId, order.id),
+        eq(jobCardsTable.dealerId, order.dealerId),
+      ),
+    )
+    .limit(1);
+  if (!card?.scheduledAt) {
+    res.status(422).json({
+      error: "This confirmed booking has no appointment schedule",
+    });
+    return;
+  }
+
+  const [dealer] = await db
+    .select({ name: dealersTable.name })
+    .from(dealersTable)
+    .where(eq(dealersTable.id, order.dealerId))
+    .limit(1);
+  const timezone = await dealerTimezone(order.dealerId);
+  const customerName = order.customerName?.trim() || contact.name?.trim();
+  const dealershipName = dealer?.name?.trim();
+  if (!customerName || !dealershipName) {
+    res.status(422).json({
+      error: "Customer and dealership names are required for the WhatsApp template",
+    });
+    return;
+  }
+  const bodyParameters = [
+    customerName,
+    dealershipName,
+    `RO-${String(order.id).padStart(5, "0")}`,
+    order.type,
+    formatDealerDate(card.scheduledAt, timezone),
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(card.scheduledAt),
+    order.vehicleInfo,
+    order.registrationNumber?.trim() || "Not recorded",
+  ] as const;
+  const body = renderServiceAppointmentConfirmedBody(bodyParameters);
+  const outbox = await enqueueWhatsapp({
+    kind: "service.appointment.confirmed",
     to: recipient,
     dealerId: order.dealerId,
     customerId: order.customerId,
-    data: {
-      vehicle: order.vehicleInfo,
-      service: order.type,
-      date: order.scheduledDate,
+    summary: "Service Appointment Confirmed",
+    body,
+    dedupeKey: `svc:${order.id}:appointment-confirmed:${card.scheduledAt.getTime()}`,
+    approvedTemplate: {
+      name: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.name,
+      language: SERVICE_APPOINTMENT_CONFIRMED_TEMPLATE.language,
+      bodyParameters,
+    },
+    context: {
+      serviceOrderId: String(order.id),
+      appointmentScheduledAt: card.scheduledAt.toISOString(),
     },
   });
+  const disposition = whatsappOutboxDisposition(outbox);
+  if (disposition === "blocked") {
+    res.status(422).json({
+      error:
+        outbox.lastError ||
+        "WhatsApp reminder was blocked by communication policy",
+    });
+    return;
+  }
   res.json(
-    SendServiceReminderResponse.parse({ status: "queued", recipient }),
+    SendServiceReminderResponse.parse({
+      status: disposition === "already_sent" ? "sent" : "queued",
+      recipient,
+    }),
   );
 });
 
@@ -1117,11 +1234,6 @@ router.post("/service-orders/:id/confirm", async (req, res): Promise<void> => {
   }
   if (!["open", "acknowledged"].includes(order.status)) {
     res.status(409).json({ error: "This booking is no longer awaiting confirmation" });
-    return;
-  }
-  const recipient = await customerEmail(order.customerId, dealerId);
-  if (!recipient.email) {
-    res.status(422).json({ error: "Customer has no email on file" });
     return;
   }
   const timezone = await dealerTimezone(dealerId);
@@ -1210,15 +1322,10 @@ router.post("/service-orders/:id/confirm", async (req, res): Promise<void> => {
     return;
   }
 
-  const queuedTo = await queueServiceAppointmentConfirmation(confirmed);
-  if (!queuedTo) {
-    res.status(422).json({ error: "Customer email or appointment schedule is missing" });
-    return;
-  }
   res.json(
     ConfirmServiceAppointmentResponse.parse({
-      status: "queued",
-      recipient: queuedTo,
+      status: "confirmed",
+      recipient: null,
     }),
   );
 });

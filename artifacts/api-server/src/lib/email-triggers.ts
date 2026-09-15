@@ -867,7 +867,8 @@ export function onServiceOrderStatusChanged(
     };
     switch (after.status) {
       case "acknowledged":
-        await queueServiceAppointmentConfirmation(after);
+        // Confirmation delivery is intentionally manual.  The request receipt
+        // remains the only automatic communication before staff click Remind.
         break;
       case "closed":
         await cancelServiceReminders(after.id, after.dealerId);

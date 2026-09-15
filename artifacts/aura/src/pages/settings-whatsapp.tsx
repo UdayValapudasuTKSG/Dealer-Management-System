@@ -396,7 +396,12 @@ export default function SettingsWhatsapp() {
                       <FormDescription>
                         Used only when Meta's 24-hour reply window is closed.
                         The approved template must contain exactly one text body
-                        variable for AURA's message.
+                        variable for AURA's generic message. Confirmed service
+                        booking Remind uses the separately approved
+                        <code>service_appointment_confirmed</code> utility
+                        template in English (<code>en</code>) with eight
+                        appointment variables; see the deployment setup
+                        artifact for the exact Meta copy.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

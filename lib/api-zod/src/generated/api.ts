@@ -5569,7 +5569,7 @@ export const AdvanceServiceOrderResponse = zod.object({
 
 
 /**
- * @summary Send a service reminder email to the customer
+ * @summary Send a service reminder (email for unconfirmed bookings, approved WhatsApp template for confirmed appointments)
  */
 export const SendServiceReminderParams = zod.object({
   "id": zod.coerce.number()
@@ -5582,7 +5582,7 @@ export const SendServiceReminderResponse = zod.object({
 
 
 /**
- * @summary Confirm a requested service appointment and queue the customer email
+ * @summary Confirm a requested service appointment without sending a customer message
  */
 export const ConfirmServiceAppointmentParams = zod.object({
   "id": zod.coerce.number()
@@ -5598,7 +5598,7 @@ export const ConfirmServiceAppointmentBody = zod.object({
 
 export const ConfirmServiceAppointmentResponse = zod.object({
   "status": zod.string(),
-  "recipient": zod.string()
+  "recipient": zod.string().nullable()
 })
 
 

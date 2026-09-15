@@ -353,6 +353,7 @@ import type {
   SendQuoteInput,
   SendQuoteResult,
   SentimentAnalysis,
+  ServiceAppointmentConfirmationAck,
   ServiceAppointmentConfirmationInput,
   ServiceCustomerVehicle,
   ServiceDiscountDecision,
@@ -10383,7 +10384,7 @@ export const getSendServiceReminderUrl = (id: number,) => {
 }
 
 /**
- * @summary Send a service reminder email to the customer
+ * @summary Send a service reminder (email for unconfirmed bookings, approved WhatsApp template for confirmed appointments)
  */
 export const sendServiceReminder = async (id: number, options?: RequestInit): Promise<RemindAck> => {
 
@@ -10432,7 +10433,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type SendServiceReminderMutationError = ErrorType<Error>
 
     /**
- * @summary Send a service reminder email to the customer
+ * @summary Send a service reminder (email for unconfirmed bookings, approved WhatsApp template for confirmed appointments)
  */
 export const useSendServiceReminder = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendServiceReminder>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -10454,12 +10455,12 @@ export const getConfirmServiceAppointmentUrl = (id: number,) => {
 }
 
 /**
- * @summary Confirm a requested service appointment and queue the customer email
+ * @summary Confirm a requested service appointment without sending a customer message
  */
 export const confirmServiceAppointment = async (id: number,
-    serviceAppointmentConfirmationInput: ServiceAppointmentConfirmationInput, options?: RequestInit): Promise<RemindAck> => {
+    serviceAppointmentConfirmationInput: ServiceAppointmentConfirmationInput, options?: RequestInit): Promise<ServiceAppointmentConfirmationAck> => {
 
-  return customFetch<RemindAck>(getConfirmServiceAppointmentUrl(id),
+  return customFetch<ServiceAppointmentConfirmationAck>(getConfirmServiceAppointmentUrl(id),
   {
     ...options,
     method: 'POST',
@@ -10504,7 +10505,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type ConfirmServiceAppointmentMutationError = ErrorType<Error>
 
     /**
- * @summary Confirm a requested service appointment and queue the customer email
+ * @summary Confirm a requested service appointment without sending a customer message
  */
 export const useConfirmServiceAppointment = <TError = ErrorType<Error>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof confirmServiceAppointment>>, TError,{id: number;data: BodyType<ServiceAppointmentConfirmationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}

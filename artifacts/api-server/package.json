@@ -29,7 +29,8 @@
     "verify:service-customer-actions": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/verify-service-customer-actions.ts",
     "verify:vehicle-onboarding": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/verify-vehicle-onboarding.ts",
     "verify:service-claim-onboarding": "NODE_ENV=development OUTBOX_WORKER_DISABLED=1 tsx src/scripts/verify-service-claim-onboarding.ts",
-    "test:service-booking-contract": "tsx src/scripts/test-service-booking-contract.ts"
+    "test:service-booking-contract": "tsx src/scripts/test-service-booking-contract.ts",
+    "test:service-appointment-whatsapp": "tsx src/scripts/test-service-appointment-whatsapp.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.95",

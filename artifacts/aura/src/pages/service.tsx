@@ -84,6 +84,7 @@ import {
   FileText,
   User,
   MessageSquareWarning,
+  MessageSquare,
   Loader2,
   CalendarClock,
   Clock,
@@ -1712,10 +1713,17 @@ function BookingDetailsDialog({
     : undefined;
   if (!order) return null;
 
+  const confirmed = order.status === "acknowledged";
   const effectiveEmail = order.customerEmail?.trim() || "";
-  const reminderDisabledReason = effectiveEmail
-    ? `Send a reminder to ${effectiveEmail}`
-    : "Cannot send a reminder: this customer has no email on file";
+  const effectivePhone = order.customerPhoneSnapshot?.trim() || "";
+  const reminderRecipient = confirmed ? effectivePhone : effectiveEmail;
+  const reminderDisabledReason = confirmed
+    ? effectivePhone
+      ? `Queue the approved WhatsApp appointment confirmation to ${effectivePhone}`
+      : "Cannot send a WhatsApp reminder: this customer has no phone on file"
+    : effectiveEmail
+      ? `Send an email reminder to ${effectiveEmail}`
+      : "Cannot send a reminder: this customer has no email on file";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1899,17 +1907,24 @@ function BookingDetailsDialog({
           <Button
             size="sm"
             variant="outline"
-            disabled={remind.isPending || !effectiveEmail}
+            disabled={remind.isPending || !reminderRecipient}
             title={reminderDisabledReason}
-            aria-label={effectiveEmail ? `Remind ${effectiveEmail}` : reminderDisabledReason}
+            aria-label={
+              reminderRecipient
+                ? `Remind ${reminderRecipient}`
+                : reminderDisabledReason
+            }
             className="rounded-full border-white/15 gap-1.5 text-xs h-8"
             onClick={async () => {
-              if (!effectiveEmail) return;
+              if (!reminderRecipient) return;
               try {
                 const result = await remind.mutateAsync({ id: order.id });
+                const wasSent = result.status === "sent";
                 toast({
-                  title: "Reminder sent",
-                  description: `Email queued to ${result.recipient}.`,
+                  title: wasSent ? "Reminder sent" : "Reminder queued",
+                  description: confirmed
+                    ? `WhatsApp appointment confirmation ${wasSent ? "sent" : "queued"} to ${result.recipient}.`
+                    : `Email reminder queued to ${result.recipient}.`,
                 });
               } catch (error: unknown) {
                 const message =
@@ -1926,7 +1941,12 @@ function BookingDetailsDialog({
               }
             }}
           >
-            <Mail className="w-3.5 h-3.5" /> Remind
+            {confirmed ? (
+              <MessageSquare className="w-3.5 h-3.5" />
+            ) : (
+              <Mail className="w-3.5 h-3.5" />
+            )}{" "}
+            Remind
           </Button>
           <SelfOnboardButton order={order} />
           <AdvanceAndFeedback order={order} review={review} />
@@ -2279,8 +2299,9 @@ function ConfirmAppointmentButton({ order }: { order: ServiceOrder }) {
         <DialogHeader>
           <DialogTitle>Set appointment date & time</DialogTitle>
           <DialogDescription>
-            This marks RO #{order.id.toString().padStart(5, "0")} as confirmed and emails the
-            customer the appointment details with a calendar invitation.
+            This marks RO #{order.id.toString().padStart(5, "0")} as confirmed.
+            Use the Remind button afterward to send the approved WhatsApp
+            appointment confirmation; no message is sent by this action.
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-4 py-2">
@@ -2317,7 +2338,8 @@ function ConfirmAppointmentButton({ order }: { order: ServiceOrder }) {
                 });
                 toast({
                   title: "Appointment confirmed",
-                  description: `Confirmation email queued to ${result.recipient}.`,
+                  description:
+                    "No customer message was sent. Use Remind to queue the approved WhatsApp confirmation.",
                 });
               } catch (error: unknown) {
                 const message =

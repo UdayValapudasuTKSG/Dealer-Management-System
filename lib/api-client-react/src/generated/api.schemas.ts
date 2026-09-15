@@ -5516,6 +5516,12 @@ export interface RemindAck {
   recipient: string;
 }
 
+export interface ServiceAppointmentConfirmationAck {
+  status: string;
+  /** @nullable */
+  recipient: string | null;
+}
+
 export interface ServiceAppointmentConfirmationInput {
   date: string;
   /** @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$ */

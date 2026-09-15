@@ -729,6 +729,7 @@ export * from './sentimentHighlight';
 export * from './sentimentHighlightSentiment';
 export * from './sentimentTheme';
 export * from './sentimentThemeSentiment';
+export * from './serviceAppointmentConfirmationAck';
 export * from './serviceAppointmentConfirmationInput';
 export * from './serviceCustomerVehicle';
 export * from './serviceCustomerVehicleStatus';

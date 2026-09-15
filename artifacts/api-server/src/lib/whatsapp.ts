@@ -1,5 +1,8 @@
 import twilio from "twilio";
 import { logger } from "./logger";
+import {
+  SERVICE_APPOINTMENT_CONFIRMED_BODY_PARAMETER_COUNT,
+} from "./service-appointment-whatsapp";
 
 // ---------------------------------------------------------------------------
 // Meta WhatsApp Business Platform (Cloud API) — outbound send helper.
@@ -300,17 +303,25 @@ export async function sendWhatsappDocument(
   );
 }
 
-/**
- * Send an approved Meta template. AURA's configured service template must
- * contain one body text variable; the intended message is supplied to it.
- */
-export async function sendWhatsappTemplate(
-  cfg: { accessToken: string; phoneNumberId: string },
-  to: string,
-  opts: { name: string; language: string; body: string },
-  correlationId?: string,
-): Promise<WhatsappSendResult> {
-  return send(cfg, to, {
+export function whatsappTemplateMessagePayload(opts: {
+  name: string;
+  language: string;
+  body?: string;
+  bodyParameters?: readonly string[];
+}): Record<string, unknown> {
+  const bodyParameters = opts.bodyParameters ?? [opts.body ?? ""];
+  if (
+    bodyParameters.length === 0 ||
+    bodyParameters.some((parameter) => !parameter.trim()) ||
+    (opts.name === "service_appointment_confirmed" &&
+      bodyParameters.length !== SERVICE_APPOINTMENT_CONFIRMED_BODY_PARAMETER_COUNT)
+  ) {
+    throw new WhatsappProviderSendError(
+      "WhatsApp template body parameters are invalid",
+      "terminal_rejection",
+    );
+  }
+  return {
     type: "template",
     template: {
       name: opts.name,
@@ -318,11 +329,34 @@ export async function sendWhatsappTemplate(
       components: [
         {
           type: "body",
-          parameters: [{ type: "text", text: opts.body }],
+          parameters: bodyParameters.map((text) => ({ type: "text", text })),
         },
       ],
     },
-  }, correlationId);
+  };
+}
+
+/**
+ * Send an approved Meta template. AURA's configured service template must
+ * contain one body text variable; the intended message is supplied to it.
+ */
+export async function sendWhatsappTemplate(
+  cfg: { accessToken: string; phoneNumberId: string },
+  to: string,
+  opts: {
+    name: string;
+    language: string;
+    body?: string;
+    bodyParameters?: readonly string[];
+  },
+  correlationId?: string,
+): Promise<WhatsappSendResult> {
+  return send(
+    cfg,
+    to,
+    whatsappTemplateMessagePayload(opts),
+    correlationId,
+  );
 }
 
 export type WhatsappButton = { id: string; title: string };
