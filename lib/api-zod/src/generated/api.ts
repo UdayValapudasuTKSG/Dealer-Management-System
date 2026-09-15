@@ -237,7 +237,7 @@ export const CreateVehicleBody = zod.object({
   "make": zod.string().min(1),
   "model": zod.string().min(1),
   "trim": zod.string().optional(),
-  "year": zod.number(),
+  "year": zod.number().optional().describe('Optional for new GT Automotive (dealer 1) inventory; defaults to 2026 there. Required for other dealers.'),
   "vin": zod.string().min(createVehicleBodyVinMin).max(createVehicleBodyVinMax).optional().describe('VIN \/ chassis number — 17 or 18 characters'),
   "engineNumber": zod.string().min(createVehicleBodyEngineNumberMin).max(createVehicleBodyEngineNumberMax).optional().describe('Engine number must be 17 or 18 characters'),
   "registration": zod.string().regex(createVehicleBodyRegistrationRegExp).optional().describe('3 uppercase letters followed by 1-4 digits'),
@@ -313,6 +313,48 @@ export const CreateVehicleResponse = zod.object({
   "amount": zod.number()
 })).optional().describe('Server-computed tax\/duty composition from dealer_taxes (detail reads only; client never computes tax)'),
   "priceTotalWithTax": zod.number().optional().describe('price + all applicable tax lines (USD-scale)')
+})
+
+
+/**
+ * Preview how many non-deleted vehicles in dealer 1, across all statuses, would change to model year 2026.
+ * @summary Preview the GT Automotive model-year normalization
+ */
+export const previewVehicleModelYear2026ResponseAffectedCountMin = 0;
+
+
+
+export const PreviewVehicleModelYear2026Response = zod.object({
+  "targetYear": zod.literal(2026),
+  "affectedCount": zod.number().min(previewVehicleModelYear2026ResponseAffectedCountMin),
+  "scope": zod.object({
+  "dealerId": zod.literal(1),
+  "statuses": zod.enum(['all']),
+  "includeDeleted": zod.literal(false)
+})
+})
+
+
+/**
+ * Update only the year of non-deleted dealer 1 vehicles, across all statuses. The operation is transactional and idempotent.
+ * @summary Set all GT Automotive inventory model years to 2026
+ */
+export const UpdateVehicleModelYear2026Body = zod.object({
+  "confirm": zod.literal(true)
+})
+
+export const updateVehicleModelYear2026ResponseChangedCountMin = 0;
+
+
+
+export const UpdateVehicleModelYear2026Response = zod.object({
+  "targetYear": zod.literal(2026),
+  "changedCount": zod.number().min(updateVehicleModelYear2026ResponseChangedCountMin),
+  "scope": zod.object({
+  "dealerId": zod.literal(1),
+  "statuses": zod.enum(['all']),
+  "includeDeleted": zod.literal(false)
+})
 })
 
 

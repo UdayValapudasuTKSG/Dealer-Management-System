@@ -139,6 +139,7 @@ export function ImportVehiclesDialog({ trigger }: { trigger: React.ReactNode }) 
           <DialogDescription className="text-muted-foreground">
             Upload an .xlsx stock sheet to add vehicles or update existing stock.
             Keep exported Inventory IDs unchanged; a blank ID uses VIN matching or creates a new vehicle.
+            For GT Automotive, a new row with no Year defaults to 2026; explicit years are preserved.
             (Max 1,000 rows, 10 MB).
           </DialogDescription>
         </DialogHeader>
@@ -184,7 +185,8 @@ export function ImportVehiclesDialog({ trigger }: { trigger: React.ReactNode }) 
             <FileSpreadsheet className="w-8 h-8 text-primary" />
             <div className="text-sm font-medium">Drop your .xlsx here or click to browse</div>
             <div className="text-xs text-muted-foreground">
-              Required columns: Make, Model, Year, Price, Powertrain, Mileage, Exterior Color, Body Type
+              Required columns: Make, Model, Price, Powertrain, Mileage, Exterior Color, Body Type
+              · Year is optional for new GT Automotive rows (defaults to 2026)
             </div>
           </button>
         ) : (

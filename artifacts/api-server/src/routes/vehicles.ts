@@ -8,6 +8,7 @@ import {
   ilike,
   or,
   inArray,
+  ne,
   isNull,
   isNotNull,
   sql,
@@ -16,6 +17,7 @@ import {
 import {
   db,
   vehiclesTable,
+  auditLogsTable,
   divisionsTable,
   VEHICLE_STATUS_TRANSITIONS,
   type VehicleStatus,
@@ -32,6 +34,9 @@ import {
   UpdateVehicleResponse,
   ImportVehiclesResponse,
   ImportVehiclesQueryParams,
+  PreviewVehicleModelYear2026Response,
+  UpdateVehicleModelYear2026Body,
+  UpdateVehicleModelYear2026Response,
 } from "@workspace/api-zod";
 import { activeDealerId, hasPermission } from "../middlewares/rbac";
 import {
@@ -46,6 +51,14 @@ import {
   normalizePowertrain,
   normalizeVehiclePowertrainInput,
 } from "../lib/vehicle-compat";
+import {
+  GT_AUTOMOTIVE_DEALER_ID,
+  GT_AUTOMOTIVE_DEFAULT_YEAR,
+  modelYearBulkScope,
+  defaultVehicleYearForDealer,
+  vehicleYearRequirementError,
+  canNormalizeGtAutomotiveModelYears as canNormalizeGtAutomotiveModelYearsPolicy,
+} from "../lib/model-year-bulk";
 
 const router: IRouter = Router();
 
@@ -124,6 +137,7 @@ router.get("/vehicles", async (req, res): Promise<void> => {
 
 router.post("/vehicles", async (req, res): Promise<void> => {
   const normalizedBody = normalizeVehiclePowertrainInput(req.body);
+  const dealerId = activeDealerId(res);
   const parsed = CreateVehicleBody.safeParse(normalizedBody);
   if (!parsed.success) {
     res.status(400).json({
@@ -144,7 +158,6 @@ router.post("/vehicles", async (req, res): Promise<void> => {
     return;
   }
 
-  const dealerId = activeDealerId(res);
   let divisionId = parsed.data.divisionId ?? null;
   if (divisionId != null && !(await divisionBelongsToDealer(divisionId, dealerId))) {
     res.status(404).json({ error: "Division not found" });
@@ -152,9 +165,18 @@ router.post("/vehicles", async (req, res): Promise<void> => {
   }
   if (divisionId == null) divisionId = await defaultDivisionId(dealerId);
 
+  const year = defaultVehicleYearForDealer(dealerId, parsed.data.year);
+  const yearError = vehicleYearRequirementError(dealerId, parsed.data.year);
+  if (year === undefined || yearError) {
+    res.status(400).json({
+      error: yearError ?? "Year is required for this dealership.",
+    });
+    return;
+  }
   const normalizedVin = normalizeVin(parsed.data.vin);
   const createData = {
     ...parsed.data,
+    year,
     ...(normalizedVin ? { vin: normalizedVin } : {}),
   };
   const outcome = await db.transaction(async (tx) => {
@@ -195,6 +217,126 @@ router.post("/vehicles", async (req, res): Promise<void> => {
 
   res.status(201).json(
     GetVehicleResponse.parse(canonicalizeVehiclePowertrain(outcome.vehicle)),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// GT Automotive dealer-1 model-year normalization
+// ---------------------------------------------------------------------------
+
+router.get("/vehicles/model-year-2026", async (_req, res): Promise<void> => {
+  const dealerId = activeDealerId(res);
+  if (
+    !canNormalizeGtAutomotiveModelYearsPolicy(
+      dealerId,
+      !!res.locals.user &&
+        hasPermission(res.locals.user, "inventory", "edit"),
+    )
+  ) {
+    res.status(403).json({
+      error:
+        "Only GT Automotive users with inventory edit permission can review model years.",
+    });
+    return;
+  }
+
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(vehiclesTable)
+    .where(
+      and(
+        eq(vehiclesTable.dealerId, GT_AUTOMOTIVE_DEALER_ID),
+        isNull(vehiclesTable.deletedAt),
+        ne(vehiclesTable.year, GT_AUTOMOTIVE_DEFAULT_YEAR),
+      ),
+    );
+
+  res.json(
+    PreviewVehicleModelYear2026Response.parse({
+      targetYear: GT_AUTOMOTIVE_DEFAULT_YEAR,
+      affectedCount: Number(count ?? 0),
+      scope: modelYearBulkScope(),
+    }),
+  );
+});
+
+router.post("/vehicles/model-year-2026", async (req, res): Promise<void> => {
+  const dealerId = activeDealerId(res);
+  const user = res.locals.user;
+  if (
+    !canNormalizeGtAutomotiveModelYearsPolicy(
+      dealerId,
+      !!user && hasPermission(user, "inventory", "edit"),
+    )
+  ) {
+    res.status(403).json({
+      error:
+        "Only GT Automotive users with inventory edit permission can update model years.",
+    });
+    return;
+  }
+  const blocked = await findBlockedEditField(
+    user,
+    "inventory",
+    { year: GT_AUTOMOTIVE_DEFAULT_YEAR },
+  );
+  if (blocked) {
+    res.status(403).json({
+      error: `Your role cannot edit ${blocked.groupLabel} (field: ${blocked.field})`,
+    });
+    return;
+  }
+  const parsedBody = UpdateVehicleModelYear2026Body.safeParse(req.body);
+  if (!parsedBody.success || parsedBody.data.confirm !== true) {
+    res.status(400).json({
+      error: "Explicit confirmation is required to update all GT Automotive model years.",
+    });
+    return;
+  }
+
+  const scope = modelYearBulkScope();
+  const result = await db.transaction(async (tx) => {
+    const changed = await tx
+      .update(vehiclesTable)
+      .set({ year: GT_AUTOMOTIVE_DEFAULT_YEAR })
+      .where(
+        and(
+          eq(vehiclesTable.dealerId, GT_AUTOMOTIVE_DEALER_ID),
+          isNull(vehiclesTable.deletedAt),
+          ne(vehiclesTable.year, GT_AUTOMOTIVE_DEFAULT_YEAR),
+        ),
+      )
+      .returning({ id: vehiclesTable.id });
+    const changedCount = changed.length;
+
+    await tx.insert(auditLogsTable).values({
+      dealerId: GT_AUTOMOTIVE_DEALER_ID,
+      actorUserId: user?.id ?? null,
+      actorClerkId: user?.clerkId ?? null,
+      actorName: user?.name ?? null,
+      actorEmail: user?.email ?? null,
+      action: "update",
+      module: "inventory",
+      entityType: "vehicle_inventory",
+      entityId: "model-year-2026",
+      summary: `${user?.name ?? user?.email ?? "Inventory user"} set GT Automotive model years to 2026`,
+      details: {
+        targetYear: GT_AUTOMOTIVE_DEFAULT_YEAR,
+        changedCount,
+        scope,
+        fieldsChanged: ["year"],
+      },
+    });
+
+    return { changedCount };
+  });
+
+  res.json(
+    UpdateVehicleModelYear2026Response.parse({
+      targetYear: GT_AUTOMOTIVE_DEFAULT_YEAR,
+      changedCount: result.changedCount,
+      scope,
+    }),
   );
 });
 
@@ -315,7 +457,7 @@ function buildInstructionsSheet(workbook: ExcelJS.Workbook): void {
     ],
     ["4. Duplicate Inventory IDs or duplicate VINs within the file are rejected as row errors."],
     [""],
-    ["Required columns: Make, Model, Year, Price, Powertrain, Mileage (km), Exterior Color, Body Type"],
+    ["Required columns: Make, Model, Year, Price, Powertrain, Mileage (km), Exterior Color, Body Type. GT Automotive (dealer 1) may leave Year blank for new rows; it defaults to 2026."],
     [""],
     ["Powertrain values: EV, Hybrid, Petrol, Diesel  (aliases: Electric/BEV → EV; Gas/Gasoline → Petrol; PHEV → Hybrid)"],
     ["Status (optional): available, reserved, booked, delivered, in_transit, sold, service, under_repair  (defaults to available for new vehicles)"],
@@ -639,6 +781,10 @@ function isUnchanged(
     "status", "featured", "powertrain", "divisionId",
   ];
   for (const f of scalarFields) {
+    // A blank Year cell on an existing import row means "leave the current
+    // year unchanged"; only newly-created GT Automotive rows receive the
+    // dealer-specific default at insert time.
+    if (f === "year" && imp[f] === undefined) continue;
     // For fields with create defaults, treat an absent import value as its
     // default so that an exported workbook reimports as unchanged.
     const dflt = IMPORT_DEFAULTS[f];
@@ -775,13 +921,13 @@ router.post(
     const requiredFields = [
       "make",
       "model",
-      "year",
       "price",
       "powertrain",
       "mileageKm",
       "exteriorColor",
       "bodyType",
     ];
+    if (dealerId !== GT_AUTOMOTIVE_DEALER_ID) requiredFields.splice(2, 0, "year");
     const missing = requiredFields.filter((f) => !mappedFields.has(f));
     if (missing.length > 0) {
       res.status(422).json({
@@ -990,6 +1136,14 @@ router.post(
           row: rowNumber,
           field: first ? String(first.path[0] ?? null) : null,
           message: issues,
+        });
+        return;
+      }
+      if (parsed.data.year === undefined && dealerId !== GT_AUTOMOTIVE_DEALER_ID) {
+        errors.push({
+          row: rowNumber,
+          field: "year",
+          message: "Year is required for this dealership.",
         });
         return;
       }
@@ -1495,6 +1649,13 @@ router.post(
               : { kind: "concurrent" as const };
           }
 
+          const insertYear = defaultVehicleYearForDealer(
+            dealerId,
+            cr.data.year,
+          );
+          if (insertYear === undefined) {
+            return { kind: "year-required" as const };
+          }
           const normalizedInsertVin = normalizeVin(cr.data.vin);
           if (normalizedInsertVin) {
             await tx.execute(
@@ -1524,6 +1685,7 @@ router.post(
 
           await tx.insert(vehiclesTable).values({
             ...cr.data,
+            year: insertYear,
             ...(normalizedInsertVin ? { vin: normalizedInsertVin } : {}),
             divisionId: cr.data.divisionId ?? importDivisionId,
             dealerId,
@@ -1548,6 +1710,12 @@ router.post(
             row: cr.row,
             field: "status",
             message: `Status transition ${outcome.currentStatus} → ${outcome.requestedStatus} is not allowed (concurrent status change).`,
+          });
+        } else if (outcome.kind === "year-required") {
+          errors.push({
+            row: cr.row,
+            field: "year",
+            message: "Year is required for this dealership.",
           });
         } else {
           errors.push({

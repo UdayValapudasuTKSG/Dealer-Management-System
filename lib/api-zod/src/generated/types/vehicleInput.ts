@@ -16,7 +16,8 @@ export interface VehicleInput {
   /** @minLength 1 */
   model: string;
   trim?: string;
-  year: number;
+  /** Optional for new GT Automotive (dealer 1) inventory; defaults to 2026 there. Required for other dealers. */
+  year?: number;
   /**
      * VIN / chassis number — 17 or 18 characters
      * @minLength 17

@@ -363,6 +363,55 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Vehicle"
+  /vehicles/model-year-2026:
+    get:
+      operationId: previewVehicleModelYear2026
+      tags: [vehicles]
+      summary: Preview the GT Automotive model-year normalization
+      description: Preview how many non-deleted vehicles in dealer 1, across all statuses, would change to model year 2026.
+      responses:
+        "200":
+          description: A dealer-scoped preview of the year-only bulk action
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleModelYearBulkPreview"
+        "403":
+          description: The active dealership is not GT Automotive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: updateVehicleModelYear2026
+      tags: [vehicles]
+      summary: Set all GT Automotive inventory model years to 2026
+      description: Update only the year of non-deleted dealer 1 vehicles, across all statuses. The operation is transactional and idempotent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleModelYearBulkUpdate"
+      responses:
+        "200":
+          description: Number of vehicle years changed by the transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleModelYearBulkResult"
+        "400":
+          description: Explicit confirmation was not supplied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The active dealership or user is not permitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /vehicles/{id}:
     get:
       operationId: getVehicle
@@ -10960,13 +11009,13 @@ components:
         url: { type: string, minLength: 1 }
     VehicleInput:
       type: object
-      required: [make, model, year, price, powertrain, mileageKm, exteriorColor, bodyType]
+      required: [make, model, price, powertrain, mileageKm, exteriorColor, bodyType]
       properties:
         divisionId: { type: integer }
         make: { type: string, minLength: 1 }
         model: { type: string, minLength: 1 }
         trim: { type: string }
-        year: { type: integer }
+        year: { type: integer, description: "Optional for new GT Automotive (dealer 1) inventory; defaults to 2026 there. Required for other dealers." }
         vin: { type: string, minLength: 17, maxLength: 18, description: "VIN / chassis number — 17 or 18 characters" }
         engineNumber: { type: string, minLength: 17, maxLength: 18, description: "Engine number must be 17 or 18 characters" }
         registration: { type: string, pattern: "^[A-Z]{3}[0-9]{1,4}$", description: "3 uppercase letters followed by 1-4 digits" }
@@ -11031,6 +11080,34 @@ components:
             $ref: "#/components/schemas/VehicleDocument"
         description: { type: string }
         featured: { type: boolean }
+    VehicleModelYearBulkScope:
+      type: object
+      required: [dealerId, statuses, includeDeleted]
+      properties:
+        dealerId: { type: integer, enum: [1] }
+        statuses: { type: string, enum: [all] }
+        includeDeleted: { type: boolean, enum: [false] }
+    VehicleModelYearBulkPreview:
+      type: object
+      required: [targetYear, affectedCount, scope]
+      properties:
+        targetYear: { type: integer, enum: [2026] }
+        affectedCount: { type: integer, minimum: 0 }
+        scope:
+          $ref: "#/components/schemas/VehicleModelYearBulkScope"
+    VehicleModelYearBulkUpdate:
+      type: object
+      required: [confirm]
+      properties:
+        confirm: { type: boolean, enum: [true] }
+    VehicleModelYearBulkResult:
+      type: object
+      required: [targetYear, changedCount, scope]
+      properties:
+        targetYear: { type: integer, enum: [2026] }
+        changedCount: { type: integer, minimum: 0 }
+        scope:
+          $ref: "#/components/schemas/VehicleModelYearBulkScope"
     VehicleImportError:
       type: object
       required: [row, message]

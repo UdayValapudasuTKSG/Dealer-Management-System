@@ -1564,7 +1564,8 @@ export interface VehicleInput {
   /** @minLength 1 */
   model: string;
   trim?: string;
-  year: number;
+  /** Optional for new GT Automotive (dealer 1) inventory; defaults to 2026 there. Required for other dealers. */
+  year?: number;
   /**
      * VIN / chassis number — 17 or 18 characters
      * @minLength 17
@@ -1683,6 +1684,58 @@ export interface VehicleUpdate {
   documents?: VehicleDocument[];
   description?: string;
   featured?: boolean;
+}
+
+export type VehicleModelYearBulkScopeDealerId = typeof VehicleModelYearBulkScopeDealerId[keyof typeof VehicleModelYearBulkScopeDealerId];
+
+
+export const VehicleModelYearBulkScopeDealerId = {
+  NUMBER_1: 1,
+} as const;
+
+export type VehicleModelYearBulkScopeStatuses = typeof VehicleModelYearBulkScopeStatuses[keyof typeof VehicleModelYearBulkScopeStatuses];
+
+
+export const VehicleModelYearBulkScopeStatuses = {
+  all: 'all',
+} as const;
+
+export interface VehicleModelYearBulkScope {
+  dealerId: VehicleModelYearBulkScopeDealerId;
+  statuses: VehicleModelYearBulkScopeStatuses;
+  includeDeleted: false;
+}
+
+export type VehicleModelYearBulkPreviewTargetYear = typeof VehicleModelYearBulkPreviewTargetYear[keyof typeof VehicleModelYearBulkPreviewTargetYear];
+
+
+export const VehicleModelYearBulkPreviewTargetYear = {
+  NUMBER_2026: 2026,
+} as const;
+
+export interface VehicleModelYearBulkPreview {
+  targetYear: VehicleModelYearBulkPreviewTargetYear;
+  /** @minimum 0 */
+  affectedCount: number;
+  scope: VehicleModelYearBulkScope;
+}
+
+export interface VehicleModelYearBulkUpdate {
+  confirm: true;
+}
+
+export type VehicleModelYearBulkResultTargetYear = typeof VehicleModelYearBulkResultTargetYear[keyof typeof VehicleModelYearBulkResultTargetYear];
+
+
+export const VehicleModelYearBulkResultTargetYear = {
+  NUMBER_2026: 2026,
+} as const;
+
+export interface VehicleModelYearBulkResult {
+  targetYear: VehicleModelYearBulkResultTargetYear;
+  /** @minimum 0 */
+  changedCount: number;
+  scope: VehicleModelYearBulkScope;
 }
 
 export interface VehicleImportError {
@@ -10133,3 +10186,4 @@ export type SubmitVehicleOnboarding201 = {
   state: SubmitVehicleOnboarding201State;
   vehicle: GarageVehicle;
 };
+

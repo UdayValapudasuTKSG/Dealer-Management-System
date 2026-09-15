@@ -411,6 +411,9 @@ import type {
   VehicleModelGlCodeInput,
   VehicleModelGlCodeList,
   VehicleModelGlCodeValidationResult,
+  VehicleModelYearBulkPreview,
+  VehicleModelYearBulkResult,
+  VehicleModelYearBulkUpdate,
   VehicleOnboardingState,
   VehicleOnboardingSubmission,
   VehicleOnboardingUploadRequest,
@@ -1432,6 +1435,156 @@ export const useCreateVehicle = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateVehicleMutationOptions(options));
+    }
+
+export const getPreviewVehicleModelYear2026Url = () => {
+
+
+
+
+  return `/api/vehicles/model-year-2026`
+}
+
+/**
+ * Preview how many non-deleted vehicles in dealer 1, across all statuses, would change to model year 2026.
+ * @summary Preview the GT Automotive model-year normalization
+ */
+export const previewVehicleModelYear2026 = async ( options?: RequestInit): Promise<VehicleModelYearBulkPreview> => {
+
+  return customFetch<VehicleModelYearBulkPreview>(getPreviewVehicleModelYear2026Url(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getPreviewVehicleModelYear2026QueryKey = () => {
+    return [
+    `/api/vehicles/model-year-2026`
+    ] as const;
+    }
+
+
+export const getPreviewVehicleModelYear2026QueryOptions = <TData = Awaited<ReturnType<typeof previewVehicleModelYear2026>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof previewVehicleModelYear2026>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getPreviewVehicleModelYear2026QueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof previewVehicleModelYear2026>>> = ({ signal }) => previewVehicleModelYear2026({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof previewVehicleModelYear2026>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type PreviewVehicleModelYear2026QueryResult = NonNullable<Awaited<ReturnType<typeof previewVehicleModelYear2026>>>
+export type PreviewVehicleModelYear2026QueryError = ErrorType<Error>
+
+
+/**
+ * @summary Preview the GT Automotive model-year normalization
+ */
+
+export function usePreviewVehicleModelYear2026<TData = Awaited<ReturnType<typeof previewVehicleModelYear2026>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof previewVehicleModelYear2026>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getPreviewVehicleModelYear2026QueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateVehicleModelYear2026Url = () => {
+
+
+
+
+  return `/api/vehicles/model-year-2026`
+}
+
+/**
+ * Update only the year of non-deleted dealer 1 vehicles, across all statuses. The operation is transactional and idempotent.
+ * @summary Set all GT Automotive inventory model years to 2026
+ */
+export const updateVehicleModelYear2026 = async (vehicleModelYearBulkUpdate: VehicleModelYearBulkUpdate, options?: RequestInit): Promise<VehicleModelYearBulkResult> => {
+
+  return customFetch<VehicleModelYearBulkResult>(getUpdateVehicleModelYear2026Url(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vehicleModelYearBulkUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateVehicleModelYear2026MutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVehicleModelYear2026>>, TError,{data: BodyType<VehicleModelYearBulkUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateVehicleModelYear2026>>, TError,{data: BodyType<VehicleModelYearBulkUpdate>}, TContext> => {
+
+const mutationKey = ['updateVehicleModelYear2026'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateVehicleModelYear2026>>, {data: BodyType<VehicleModelYearBulkUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateVehicleModelYear2026(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateVehicleModelYear2026MutationResult = NonNullable<Awaited<ReturnType<typeof updateVehicleModelYear2026>>>
+    export type UpdateVehicleModelYear2026MutationBody = BodyType<VehicleModelYearBulkUpdate>
+    export type UpdateVehicleModelYear2026MutationError = ErrorType<Error>
+
+    /**
+ * @summary Set all GT Automotive inventory model years to 2026
+ */
+export const useUpdateVehicleModelYear2026 = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVehicleModelYear2026>>, TError,{data: BodyType<VehicleModelYearBulkUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateVehicleModelYear2026>>,
+        TError,
+        {data: BodyType<VehicleModelYearBulkUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateVehicleModelYear2026MutationOptions(options));
     }
 
 export const getGetVehicleUrl = (id: number,) => {

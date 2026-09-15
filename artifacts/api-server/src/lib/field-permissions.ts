@@ -6,6 +6,9 @@ import {
   type FieldAccessLevel,
 } from "@workspace/db";
 import type { AuthedUser } from "../middlewares/rbac";
+import { blockedEditFieldFromGrants } from "./field-permission-policy";
+
+export { blockedEditFieldFromGrants } from "./field-permission-policy";
 
 /**
  * Field-level access control. Role field grants are cached briefly (same
@@ -73,15 +76,7 @@ export async function findBlockedEditField(
   body: Record<string, unknown>,
 ): Promise<{ field: string; groupLabel: string } | null> {
   const grants = await fieldAccessFor(user, module);
-  for (const { group, access } of grants) {
-    if (access === "edit") continue;
-    for (const field of group.fields) {
-      if (body[field] !== undefined) {
-        return { field, groupLabel: group.label };
-      }
-    }
-  }
-  return null;
+  return blockedEditFieldFromGrants(grants, body);
 }
 
 /**

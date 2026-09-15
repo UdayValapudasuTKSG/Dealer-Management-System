@@ -6,10 +6,13 @@ import {
   useCreateBooking,
   useCreateVehicle,
   useUpdateVehicle,
+  usePreviewVehicleModelYear2026,
+  useUpdateVehicleModelYear2026,
   useListDivisions,
   useListLeads,
   getListVehiclesQueryKey,
   getListBookingsQueryKey,
+  getPreviewVehicleModelYear2026QueryKey,
 } from "@workspace/api-client-react";
 import type {
   Vehicle,
@@ -25,6 +28,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
@@ -220,7 +225,11 @@ function toVehicleInput(values: Record<string, unknown>): VehicleInput {
   };
 }
 
-function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
+function vehicleFields(
+  existing?: Vehicle,
+  divisions?: Division[],
+  dealerId?: number,
+): FieldDef[] {
   const bodyOptions = Array.from(
     new Set([...BODY_TYPES, ...(existing?.bodyType ? [existing.bodyType] : [])]),
   ).map((b) => ({ value: b, label: b }));
@@ -237,7 +246,7 @@ function vehicleFields(existing?: Vehicle, divisions?: Division[]): FieldDef[] {
     { name: "make", label: "Make", type: "text", required: true, span: "half", placeholder: "BMW", defaultValue: existing?.make },
     { name: "model", label: "Model", type: "text", required: true, span: "half", placeholder: "i7", defaultValue: existing?.model },
     { name: "trim", label: "Trim", type: "text", span: "half", placeholder: "xDrive60 M Sport", defaultValue: existing?.trim ?? undefined },
-    { name: "year", label: "Year", type: "number", required: true, span: "half", placeholder: "2026", defaultValue: existing ? String(existing.year) : undefined },
+    { name: "year", label: "Year", type: "number", required: true, span: "half", placeholder: "2026", defaultValue: existing ? String(existing.year) : dealerId === 1 ? "2026" : undefined },
     { name: "vin", label: "VIN (17–18 characters)", type: "text", span: "half", placeholder: "WBY73AW0XPCK00000", defaultValue: existing?.vin ?? undefined, validate: (v) => (v.length >= 17 && v.length <= 18 ? null : "VIN must be 17 or 18 characters") },
     ...(divisions && divisions.length > 0
       ? [
@@ -308,6 +317,13 @@ export default function Inventory() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const createVehicle = useCreateVehicle();
+  const yearBulkPreview = usePreviewVehicleModelYear2026({
+    query: {
+      queryKey: getPreviewVehicleModelYear2026QueryKey(),
+      enabled: false,
+    },
+  });
+  const yearBulkUpdate = useUpdateVehicleModelYear2026();
   const money = useMoney();
   const [body, setBody] = useState<string>("all");
   const [division, setDivision] = useState<string>("all");
@@ -315,7 +331,80 @@ export default function Inventory() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Vehicle | null>(null);
   const [isDownloadingExcel, setIsDownloadingExcel] = useState(false);
+  const [yearBulkOpen, setYearBulkOpen] = useState(false);
+  const [yearBulkPreviewResult, setYearBulkPreviewResult] = useState<{
+    targetYear: number;
+    affectedCount: number;
+    scope: { dealerId: number; statuses: string; includeDeleted: boolean };
+  } | null>(null);
+  const [yearBulkLoading, setYearBulkLoading] = useState(false);
+  const [yearBulkError, setYearBulkError] = useState<string | null>(null);
   const { density, setDensity, layout, setLayout } = useViewMode("inventory");
+
+  const isGtAutomotive = activeDealer?.dealerId === 1;
+  const canBulkNormalizeYears =
+    isGtAutomotive && can("inventory", "edit");
+
+  const openYearBulkReview = async () => {
+    setYearBulkOpen(true);
+    setYearBulkPreviewResult(null);
+    setYearBulkError(null);
+    setYearBulkLoading(true);
+    try {
+      const result = await yearBulkPreview.refetch();
+      if (result.data) setYearBulkPreviewResult(result.data);
+      else setYearBulkError("The server did not return a review count.");
+    } catch (error) {
+      setYearBulkError(
+        error instanceof Error ? error.message : "Could not load the review count.",
+      );
+    } finally {
+      setYearBulkLoading(false);
+    }
+  };
+
+  const applyYearBulkUpdate = async () => {
+    setYearBulkLoading(true);
+    setYearBulkError(null);
+    try {
+      const result = await yearBulkUpdate.mutateAsync({
+        data: { confirm: true },
+      });
+      qc.invalidateQueries({
+        predicate: (query) => {
+          const key = String(query.queryKey[0] ?? "");
+          return [
+            "/api/vehicles",
+            "/api/bookings",
+            "/api/dashboard",
+            "/api/search",
+            "/api/pipeline",
+            "/api/enquiries",
+            "/api/test-drives",
+            "/api/leads",
+            "/api/deals",
+            "/api/calendar",
+            "/api/reports",
+          ].some((prefix) => key.startsWith(prefix));
+        },
+      });
+      setYearBulkOpen(false);
+      setYearBulkPreviewResult(null);
+      toast({
+        title: "Model years updated",
+        description:
+          result.changedCount === 0
+            ? "All non-deleted GT Automotive inventory was already set to 2026."
+            : `${result.changedCount} vehicle${result.changedCount === 1 ? "" : "s"} updated to model year 2026.`,
+      });
+    } catch (error) {
+      setYearBulkError(
+        error instanceof Error ? error.message : "Could not update model years.",
+      );
+    } finally {
+      setYearBulkLoading(false);
+    }
+  };
 
   const downloadInventoryExcel = async () => {
     setIsDownloadingExcel(true);
@@ -641,8 +730,21 @@ export default function Inventory() {
                 {isDownloadingExcel ? "Preparing Excel…" : "Download Excel"}
               </Button>
             )}
-            {(can("inventory", "create") || can("inventory", "edit")) && (
+            {(can("inventory", "create") ||
+              can("inventory", "edit") ||
+              canBulkNormalizeYears) && (
               <div className="flex flex-wrap items-center gap-3">
+                {canBulkNormalizeYears && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void openYearBulkReview()}
+                    className="rounded-full px-6 h-12 gap-2 font-medium tracking-wide border-primary/30 text-primary hover:bg-primary/10"
+                  >
+                    <Calendar className="w-5 h-5" />
+                    Set all model years to 2026
+                  </Button>
+                )}
                 <ImportVehiclesDialog
                   trigger={
                     <Button
@@ -666,7 +768,7 @@ export default function Inventory() {
                         Add Vehicle
                       </Button>
                     }
-                    fields={vehicleFields(undefined, divisions)}
+                     fields={vehicleFields(undefined, divisions, activeDealer?.dealerId)}
                     onSubmit={submitVehicle}
                   />
                 )}
@@ -674,6 +776,78 @@ export default function Inventory() {
             )}
           </div>
         </div>
+
+        <Dialog
+          open={yearBulkOpen}
+          onOpenChange={(open) => {
+            setYearBulkOpen(open);
+            if (!open) {
+              setYearBulkPreviewResult(null);
+              setYearBulkError(null);
+            }
+          }}
+        >
+          <DialogContent className="glass-panel border-white/10 sm:max-w-[520px]">
+            <DialogTitle>Set all model years to 2026?</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Review the exact scope before confirming. This action changes only
+              the model year and does not change vehicle status or deleted records.
+            </DialogDescription>
+            {yearBulkLoading && !yearBulkPreviewResult ? (
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-foreground/[0.03] px-4 py-4 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                Counting affected vehicles…
+              </div>
+            ) : yearBulkPreviewResult ? (
+              <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/[0.05] px-4 py-4">
+                <div className="text-2xl font-semibold tabular-nums">
+                  {yearBulkPreviewResult.affectedCount}{" "}
+                  <span className="text-base font-normal text-muted-foreground">
+                    vehicle
+                    {yearBulkPreviewResult.affectedCount === 1 ? "" : "s"} will change
+                  </span>
+                </div>
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <div>Scope: GT Automotive · dealer 1</div>
+                  <div>Statuses: all</div>
+                  <div>Deleted records: excluded</div>
+                  <div>Field changed: model year only → 2026</div>
+                </div>
+              </div>
+            ) : null}
+            {yearBulkError && (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {yearBulkError}
+              </div>
+            )}
+            <DialogFooter className="mt-2 gap-2 sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setYearBulkOpen(false)}
+                disabled={yearBulkLoading}
+                className="rounded-full border-white/15"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void applyYearBulkUpdate()}
+                disabled={
+                  yearBulkLoading ||
+                  !yearBulkPreviewResult ||
+                  yearBulkPreviewResult.affectedCount === 0
+                }
+                className="rounded-full bg-primary px-6 text-white hover:bg-primary/90"
+              >
+                {yearBulkLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                Confirm and update
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Grid */}
         {isLoading ? (
@@ -902,6 +1076,8 @@ export default function Inventory() {
           fields={vehicleFields(
             {
               ...stockSeed,
+              year:
+                activeDealer?.dealerId === 1 ? 2026 : stockSeed.year,
               vin: null,
               engineNumber: null,
               engine: null,
@@ -909,6 +1085,7 @@ export default function Inventory() {
               status: "available",
             } as Vehicle,
             divisions,
+            activeDealer?.dealerId,
           )}
           onSubmit={async (values) => {
             await submitVehicle(values);

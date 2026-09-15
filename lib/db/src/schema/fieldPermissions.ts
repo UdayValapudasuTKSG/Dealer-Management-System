@@ -85,7 +85,7 @@ export const FIELD_GROUPS: readonly FieldGroupDef[] = [
     key: "vehicle_identity",
     label: "Vehicle · VIN / engine / registration",
     module: "inventory",
-    fields: ["vin", "engineNumber", "registration"],
+    fields: ["year", "vin", "engineNumber", "registration"],
     redactable: ["vin", "engineNumber", "registration"],
   },
   {

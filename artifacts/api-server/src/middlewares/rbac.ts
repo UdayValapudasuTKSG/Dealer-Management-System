@@ -707,6 +707,15 @@ function isVehicleImportPath(req: Pick<Request, "method" | "path">): boolean {
   return req.method === "POST" && /^\/vehicles\/import\/?$/.test(req.path);
 }
 
+function isVehicleModelYearBulkPath(
+  req: Pick<Request, "method" | "path">,
+): boolean {
+  return (
+    (req.method === "GET" || req.method === "POST") &&
+    /^\/vehicles\/model-year-2026\/?$/.test(req.path)
+  );
+}
+
 function isDeliveryHistoryImportPath(
   req: Pick<Request, "method" | "path">,
 ): boolean {
@@ -721,8 +730,8 @@ const PATH_MODULES: Record<string, RouteRule> = {
   vehicles: {
     module: "inventory",
     category: (req) =>
-      isVehicleImportPath(req)
-        ? "view" // Import self-checks create/edit per row; RBAC only needs view.
+      isVehicleImportPath(req) || isVehicleModelYearBulkPath(req)
+        ? "view" // These actions perform their own fine-grained checks.
         : (METHOD_CATEGORY[req.method] ?? "view"),
   },
   bookings: { module: "inventory" },
