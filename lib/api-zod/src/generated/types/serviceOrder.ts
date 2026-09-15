@@ -18,6 +18,8 @@ export interface ServiceOrder {
   customerName?: string | null;
   /** @nullable */
   customerPhoneSnapshot?: string | null;
+  /** @nullable */
+  customerEmail?: string | null;
   vehicleInfo: string;
   /** @nullable */
   vin: string | null;

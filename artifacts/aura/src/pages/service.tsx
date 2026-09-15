@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useFocusParam, useFocusHighlight } from "@/lib/use-focus-param";
 import {
@@ -647,8 +647,8 @@ function CreateBookingDialog() {
             const customer = customers?.find(c => String(c.id) === val);
             if (customer) {
               setField("customerName", customer.name || "");
-              if (customer.email) setField("customerEmail", customer.email);
-              if (customer.phone) setField("customerPhoneSnapshot", customer.phone);
+              setField("customerEmail", customer.email || "");
+              setField("customerPhoneSnapshot", customer.phone || "");
             }
           }
         },
@@ -736,7 +736,13 @@ function CreateBookingDialog() {
 }
 
 /* Edit an existing booking's scheduling and details */
-function EditBookingDialog({ order }: { order: ServiceOrder }) {
+function EditBookingDialog({
+  order,
+  onUpdated,
+}: {
+  order: ServiceOrder;
+  onUpdated?: (order: ServiceOrder) => void;
+}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const update = useUpdateServiceOrder();
@@ -748,6 +754,7 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
   const [customerId, setCustomerId] = useState<string>("none");
   const [customerName, setCustomerName] = useState<string>("");
   const [customerPhoneSnapshot, setCustomerPhoneSnapshot] = useState<string>("");
+  const [customerEmail, setCustomerEmail] = useState<string>("");
   const [vehicleInfo, setVehicleInfo] = useState<string>("");
   const [vin, setVin] = useState<string>("");
   const [registrationNumber, setRegistrationNumber] = useState<string>("");
@@ -758,12 +765,20 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
   const [estimatedCost, setEstimatedCost] = useState("");
   const [estimatedHours, setEstimatedHours] = useState("");
   const [technicianUserId, setTechnicianUserId] = useState("");
+  // Selecting a linked customer fills untouched contact fields, but never
+  // overwrites a value the operator has deliberately edited.
+  const editedFields = useRef(new Set<string>());
 
   useEffect(() => {
     if (open) {
       setCustomerId(order.customerId != null ? String(order.customerId) : "none");
       setCustomerName(order.customerName ?? "");
       setCustomerPhoneSnapshot(order.customerPhoneSnapshot ?? "");
+      setCustomerEmail(
+        order.customerEmail ??
+          customers?.find((customer) => customer.id === order.customerId)?.email ??
+          "",
+      );
       setVehicleInfo(order.vehicleInfo ?? "");
       setVin(order.vin ?? "");
       setRegistrationNumber(order.registrationNumber ?? "");
@@ -774,6 +789,7 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
       setEstimatedCost(order.estimatedCost != null ? String(order.estimatedCost) : "");
       setEstimatedHours(order.estimatedHours != null ? String(order.estimatedHours) : "");
       setTechnicianUserId(order.technicianUserId != null ? String(order.technicianUserId) : "none");
+      editedFields.current.clear();
     }
   }, [open, order]);
 
@@ -782,18 +798,32 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
   const selectedCustomer = customers?.find(c => String(c.id) === customerId);
 
   const handleCustomerChange = (val: string) => {
+    if (val === customerId) {
+      setCustomerSelectOpen(false);
+      return;
+    }
     setCustomerId(val);
+    const fillIfUntouched = (field: string, setter: (value: string) => void, value: string) => {
+      if (!editedFields.current.has(field)) setter(value);
+    };
     if (val !== "none") {
       const customer = customers?.find(c => String(c.id) === val);
       if (customer) {
-        if (customer.name) setCustomerName(customer.name);
-        if (customer.phone) setCustomerPhoneSnapshot(customer.phone);
+        fillIfUntouched("customerName", setCustomerName, customer.name ?? "");
+        fillIfUntouched("customerPhoneSnapshot", setCustomerPhoneSnapshot, customer.phone ?? "");
+        fillIfUntouched("customerEmail", setCustomerEmail, customer.email ?? "");
       }
     } else {
-      setCustomerName("");
-      setCustomerPhoneSnapshot("");
+      fillIfUntouched("customerName", setCustomerName, "");
+      fillIfUntouched("customerPhoneSnapshot", setCustomerPhoneSnapshot, "");
+      fillIfUntouched("customerEmail", setCustomerEmail, "");
     }
     setCustomerSelectOpen(false);
+  };
+
+  const editField = <T,>(field: string, setter: (value: T) => void, value: T) => {
+    editedFields.current.add(field);
+    setter(value);
   };
 
   const canSubmit =
@@ -812,40 +842,16 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
         scheduledDate,
         vehicleInfo: vehicleInfo.trim(),
         customerId: customerId !== "none" ? Number(customerId) : null,
+        customerName: customerName.trim() || null,
+        customerEmail: customerEmail.trim() || null,
+        customerPhoneSnapshot: customerPhoneSnapshot.trim() || null,
+        vin: vin.trim() || null,
+        registrationNumber: registrationNumber.trim() || null,
+        complaint: complaint.trim() || null,
+        odometer: odometer === "" ? null : Number(odometer),
+        estimatedCost: estimatedCost === "" ? null : Number(estimatedCost),
+        estimatedHours: estimatedHours === "" ? null : Number(estimatedHours),
       };
-
-      if (vin.trim()) payload.vin = vin.trim();
-      if (registrationNumber.trim()) {
-        payload.registrationNumber = registrationNumber.trim();
-      }
-
-      if (customerName.trim()) {
-        payload.customerName = customerName.trim();
-      }
-
-      if (customerPhoneSnapshot.trim()) {
-        payload.customerPhoneSnapshot = customerPhoneSnapshot.trim();
-      } else {
-        payload.customerPhoneSnapshot = null;
-      }
-
-      if (complaint.trim()) {
-        payload.complaint = complaint.trim();
-      } else {
-        payload.complaint = "";
-      }
-
-      if (odometer !== "") {
-        payload.odometer = Number(odometer);
-      }
-
-      if (estimatedCost !== "") {
-        payload.estimatedCost = Number(estimatedCost);
-      }
-
-      if (estimatedHours !== "") {
-        payload.estimatedHours = Number(estimatedHours);
-      }
 
       if (technicianUserId && technicianUserId !== "none" && technicianUserId !== "auto") {
         payload.technicianUserId = Number(technicianUserId);
@@ -853,12 +859,13 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
         if (tech) payload.technician = tech.name;
       } else {
         payload.technicianUserId = null;
-        payload.technician = "";
+        payload.technician = null;
       }
 
-      await update.mutateAsync({ id: order.id, data: payload });
+      const updatedOrder = await update.mutateAsync({ id: order.id, data: payload });
       queryClient.invalidateQueries({ queryKey: getListServiceOrdersQueryKey() });
       queryClient.invalidateQueries({ queryKey: getListJobCardsQueryKey() });
+      onUpdated?.(updatedOrder);
       toast({ title: "Booking updated", description: `RO #${order.id} updated successfully.` });
       setOpen(false);
     } catch (err: unknown) {
@@ -945,7 +952,7 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
                 type="text"
                 placeholder="Nana Adjei"
                 value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
+                onChange={(e) => editField("customerName", setCustomerName, e.target.value)}
                 className="h-9 bg-white/[0.04]"
               />
             </div>
@@ -956,7 +963,18 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
                 type="tel"
                 placeholder="+592..."
                 value={customerPhoneSnapshot}
-                onChange={(e) => setCustomerPhoneSnapshot(e.target.value)}
+                onChange={(e) => editField("customerPhoneSnapshot", setCustomerPhoneSnapshot, e.target.value)}
+                className="h-9 bg-white/[0.04]"
+              />
+            </div>
+
+            <div className="col-span-2 sm:col-span-1 space-y-1.5">
+              <Label>Customer Email</Label>
+              <Input
+                type="email"
+                placeholder="customer@email.com"
+                value={customerEmail}
+                onChange={(e) => editField("customerEmail", setCustomerEmail, e.target.value)}
                 className="h-9 bg-white/[0.04]"
               />
             </div>
@@ -968,7 +986,7 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
                 required
                 placeholder="2022 BMW X5"
                 value={vehicleInfo}
-                onChange={(e) => setVehicleInfo(e.target.value)}
+                onChange={(e) => editField("vehicleInfo", setVehicleInfo, e.target.value)}
                 className="h-9 bg-white/[0.04]"
               />
             </div>
@@ -979,7 +997,7 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
                 type="text"
                 placeholder="Vehicle identification number"
                 value={vin}
-                onChange={(event) => setVin(event.target.value)}
+                onChange={(event) => editField("vin", setVin, event.target.value)}
                 className="h-9 bg-white/[0.04]"
               />
             </div>
@@ -990,7 +1008,7 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
                 type="text"
                 placeholder="PAB 1234"
                 value={registrationNumber}
-                onChange={(event) => setRegistrationNumber(event.target.value)}
+                onChange={(event) => editField("registrationNumber", setRegistrationNumber, event.target.value)}
                 className="h-9 bg-white/[0.04]"
               />
             </div>
@@ -1002,7 +1020,7 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
 
             <div className="col-span-2 sm:col-span-1 space-y-1.5">
               <Label>Service Type</Label>
-              <Select value={type} onValueChange={setType}>
+              <Select value={type} onValueChange={(value) => editField("type", setType, value)}>
                 <SelectTrigger className="h-9 bg-white/[0.04]">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
@@ -1024,7 +1042,7 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
                 type="date"
                 required
                 value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
+                onChange={(e) => editField("scheduledDate", setScheduledDate, e.target.value)}
                 className="h-9 bg-white/[0.04]"
               />
             </div>
@@ -1035,7 +1053,7 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
                 type="number"
                 placeholder="0"
                 value={odometer}
-                onChange={(e) => setOdometer(e.target.value)}
+                onChange={(e) => editField("odometer", setOdometer, e.target.value)}
                 className="h-9 bg-white/[0.04]"
               />
             </div>
@@ -1051,7 +1069,7 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
                 type="number"
                 placeholder="0"
                 value={estimatedCost}
-                onChange={(e) => setEstimatedCost(e.target.value)}
+                onChange={(e) => editField("estimatedCost", setEstimatedCost, e.target.value)}
                 className="h-9 bg-white/[0.04]"
               />
             </div>
@@ -1063,14 +1081,17 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
                 step="0.1"
                 placeholder="e.g. 2.5"
                 value={estimatedHours}
-                onChange={(e) => setEstimatedHours(e.target.value)}
+                onChange={(e) => editField("estimatedHours", setEstimatedHours, e.target.value)}
                 className="h-9 bg-white/[0.04]"
               />
             </div>
 
             <div className="col-span-2 sm:col-span-1 space-y-1.5">
               <Label>Technician</Label>
-              <Select value={technicianUserId} onValueChange={setTechnicianUserId}>
+              <Select
+                value={technicianUserId}
+                onValueChange={(value) => editField("technicianUserId", setTechnicianUserId, value)}
+              >
                 <SelectTrigger className="h-9 bg-white/[0.04]">
                   <SelectValue placeholder="Select technician" />
                 </SelectTrigger>
@@ -1089,7 +1110,7 @@ function EditBookingDialog({ order }: { order: ServiceOrder }) {
                 placeholder="Customer complaint..."
                 rows={3}
                 value={complaint}
-                onChange={(e) => setComplaint(e.target.value)}
+                onChange={(e) => editField("complaint", setComplaint, e.target.value)}
                 className="bg-white/[0.04] resize-none"
               />
             </div>
@@ -1406,10 +1427,12 @@ function BookingDetailsDialog({
   order,
   open,
   onOpenChange,
+  onOrderUpdated,
 }: {
   order: ServiceOrder | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOrderUpdated?: (order: ServiceOrder) => void;
 }) {
   const money = useMoney();
   const { toast } = useToast();
@@ -1422,8 +1445,12 @@ function BookingDetailsDialog({
           candidate.refId === order.id,
       )
     : undefined;
-
   if (!order) return null;
+
+  const effectiveEmail = order.customerEmail?.trim() || "";
+  const reminderDisabledReason = effectiveEmail
+    ? `Send a reminder to ${effectiveEmail}`
+    : "Cannot send a reminder: this customer has no email on file";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1607,9 +1634,12 @@ function BookingDetailsDialog({
           <Button
             size="sm"
             variant="outline"
-            disabled={remind.isPending}
+            disabled={remind.isPending || !effectiveEmail}
+            title={reminderDisabledReason}
+            aria-label={effectiveEmail ? `Remind ${effectiveEmail}` : reminderDisabledReason}
             className="rounded-full border-white/15 gap-1.5 text-xs h-8"
             onClick={async () => {
+              if (!effectiveEmail) return;
               try {
                 const result = await remind.mutateAsync({ id: order.id });
                 toast({
@@ -1641,7 +1671,7 @@ function BookingDetailsDialog({
             refId={order.id}
             contextLabel={`RO #${order.id.toString().padStart(5, "0")} — ${order.vehicleInfo}`}
           />
-          <EditBookingDialog order={order} />
+          <EditBookingDialog order={order} onUpdated={onOrderUpdated} />
           <DeleteOrderButton order={order} />
         </DialogFooter>
       </DialogContent>
@@ -1923,6 +1953,7 @@ function BookingsTab() {
       order={selectedOrder}
       open={!!selectedOrder}
       onOpenChange={(open) => !open && setSelectedOrder(null)}
+      onOrderUpdated={setSelectedOrder}
     />
     </>
   );

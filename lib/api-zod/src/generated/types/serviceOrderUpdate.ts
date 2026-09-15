@@ -15,8 +15,14 @@ export interface ServiceOrderUpdate {
   /**
      * @minLength 1
      * @maxLength 200
+     * @nullable
      */
-  customerName?: string;
+  customerName?: string | null;
+  /**
+     * @minLength 3
+     * @nullable
+     */
+  customerEmail?: string | null;
   /**
      * @maxLength 40
      * @nullable
@@ -30,27 +36,34 @@ export interface ServiceOrderUpdate {
   /**
      * @minLength 1
      * @maxLength 50
+     * @nullable
      */
-  vin?: string;
+  vin?: string | null;
   /**
      * @minLength 1
      * @maxLength 50
+     * @nullable
      */
-  registrationNumber?: string;
+  registrationNumber?: string | null;
   type?: ServiceOrderUpdateType;
   payType?: ServiceOrderUpdatePayType;
   status?: ServiceOrderUpdateStatus;
   scheduledDate?: Date;
-  complaint?: string;
-  odometer?: number;
-  technician?: string;
+  /** @nullable */
+  complaint?: string | null;
+  /** @nullable */
+  odometer?: number | null;
+  /** @nullable */
+  technician?: string | null;
   /** @nullable */
   technicianUserId?: number | null;
-  estimatedCost?: number;
+  /** @nullable */
+  estimatedCost?: number | null;
   /**
      * @minimum 0.25
      * @maximum 24
+     * @nullable
      */
-  estimatedHours?: number;
+  estimatedHours?: number | null;
   jobs?: string[];
 }

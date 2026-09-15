@@ -152,7 +152,15 @@ export function CreateRecordDialog({
 
   const set = (name: string, value: string) => {
     setField(name, value);
-    fields.find((f) => f.name === name)?.onChange?.(value, setField);
+    setTouched((current) => ({ ...current, [name]: true }));
+    const setAutofillField = (fieldName: string, fieldValue: string) => {
+      // A linked-record selector may prefill sibling fields, but once an
+      // operator has typed into one of them, selecting another record must
+      // not silently overwrite that edit.
+      if (touched[fieldName]) return;
+      setField(fieldName, fieldValue);
+    };
+    fields.find((f) => f.name === name)?.onChange?.(value, setAutofillField);
   };
 
   const errors = Object.fromEntries(

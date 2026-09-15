@@ -13027,6 +13027,7 @@ components:
         customerId: { type: ["integer", "null"] }
         customerName: { type: ["string", "null"] }
         customerPhoneSnapshot: { type: ["string", "null"] }
+        customerEmail: { type: ["string", "null"] }
         vehicleInfo: { type: string }
         vin: { type: ["string", "null"] }
         registrationNumber: { type: ["string", "null"] }
@@ -13091,21 +13092,22 @@ components:
       type: object
       properties:
         customerId: { type: ["integer", "null"] }
-        customerName: { type: string, minLength: 1, maxLength: 200 }
+        customerName: { type: ["string", "null"], minLength: 1, maxLength: 200 }
+        customerEmail: { type: ["string", "null"], minLength: 3 }
         customerPhoneSnapshot: { type: ["string", "null"], maxLength: 40 }
         vehicleInfo: { type: string, minLength: 1, maxLength: 200 }
-        vin: { type: string, minLength: 1, maxLength: 50 }
-        registrationNumber: { type: string, minLength: 1, maxLength: 50 }
+        vin: { type: ["string", "null"], minLength: 1, maxLength: 50 }
+        registrationNumber: { type: ["string", "null"], minLength: 1, maxLength: 50 }
         type: { type: string, enum: [maintenance, repair, warranty, recall, inspection, comeback, unscheduled] }
         payType: { type: string, enum: [customer, warranty, goodwill, rectify] }
         status: { type: string, enum: [open, acknowledged, in_progress, on_hold, resolved, closed, cancelled] }
         scheduledDate: { type: string, format: date }
-        complaint: { type: string }
-        odometer: { type: integer }
-        technician: { type: string }
+        complaint: { type: ["string", "null"] }
+        odometer: { type: ["integer", "null"] }
+        technician: { type: ["string", "null"] }
         technicianUserId: { type: ["integer", "null"] }
-        estimatedCost: { type: number }
-        estimatedHours: { type: number, minimum: 0.25, maximum: 24 }
+        estimatedCost: { type: ["number", "null"] }
+        estimatedHours: { type: ["number", "null"], minimum: 0.25, maximum: 24 }
         jobs:
           type: array
           items: { type: string }

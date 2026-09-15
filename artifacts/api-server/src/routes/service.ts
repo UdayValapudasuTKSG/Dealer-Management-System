@@ -15,7 +15,7 @@ import {
 import { getServiceSettings } from "../lib/service-settings";
 import { queueCustomerSync } from "../lib/erpnext/entities";
 import { dealerExchangeRate } from "../lib/invoicing";
-import { and, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   db,
   serviceOrdersTable,
@@ -153,6 +153,7 @@ import { ObjectNotFoundError, ObjectStorageService } from "../lib/objectStorage"
 import { computeServiceTax, ensureDealerTaxes } from "../lib/taxes";
 import { logger } from "../lib/logger";
 import { coordinateCollisionClaim } from "../lib/collision-coordinator";
+import { effectiveServiceReminderRecipient } from "../lib/service-booking-contact";
 
 const router: IRouter = Router();
 const objectStorage = new ObjectStorageService();
@@ -190,9 +191,17 @@ async function customerEmail(
     .select({ email: customersTable.email, name: customersTable.name })
     .from(customersTable)
     .where(
-      and(eq(customersTable.id, customerId), eq(customersTable.dealerId, dealerId)),
+      and(
+        eq(customersTable.id, customerId),
+        eq(customersTable.dealerId, dealerId),
+        isNull(customersTable.deletedAt),
+        isNull(customersTable.erasedAt),
+      ),
     );
-  return { email: row?.email ?? null, name: row?.name ?? null };
+  return {
+    email: effectiveServiceReminderRecipient(row?.email),
+    name: row?.name ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -329,7 +338,41 @@ router.get("/service-orders", async (req, res): Promise<void> => {
     )
     .orderBy(desc(serviceOrdersTable.scheduledDate));
 
-  res.json(ListServiceOrdersResponse.parse(rows));
+  const customerIds = [
+    ...new Set(
+      rows
+        .map((row) => row.customerId)
+        .filter((customerId): customerId is number => customerId != null),
+    ),
+  ];
+  const customerEmailRows =
+    customerIds.length > 0
+      ? await db
+          .select({ id: customersTable.id, email: customersTable.email })
+          .from(customersTable)
+          .where(
+            and(
+              eq(customersTable.dealerId, activeDealerId(res)),
+              inArray(customersTable.id, customerIds),
+              isNull(customersTable.deletedAt),
+              isNull(customersTable.erasedAt),
+            ),
+          )
+      : [];
+  const customerEmails = new Map(
+    customerEmailRows.map((customer) => [customer.id, customer.email?.trim() || null]),
+  );
+  res.json(
+    ListServiceOrdersResponse.parse(
+      rows.map((row) => ({
+        ...row,
+        customerEmail:
+          row.customerId == null
+            ? null
+            : effectiveServiceReminderRecipient(customerEmails.get(row.customerId)),
+      })),
+    ),
+  );
 });
 
 router.post("/service-orders", async (req, res): Promise<void> => {
@@ -345,6 +388,9 @@ router.post("/service-orders", async (req, res): Promise<void> => {
             : {}),
           ...(typeof req.body.registrationNumber === "string"
             ? { registrationNumber: req.body.registrationNumber.trim() }
+            : {}),
+          ...(typeof req.body.customerEmail === "string"
+            ? { customerEmail: req.body.customerEmail.trim() }
             : {}),
         }
       : req.body;
@@ -546,7 +592,10 @@ router.post("/service-orders", async (req, res): Promise<void> => {
 
   // Note: when assignmentNote is set the order goes out unassigned; the
   // client detects technician == null and surfaces the capacity warning.
-  res.status(201).json(CreateServiceOrderResponse.parse(order));
+  const effectiveEmail = await customerEmail(order.customerId, createDealerId);
+  res.status(201).json(
+    CreateServiceOrderResponse.parse({ ...order, customerEmail: effectiveEmail.email }),
+  );
 });
 
 router.patch("/service-orders/:id", async (req, res): Promise<void> => {
@@ -559,9 +608,19 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
   // names/vehicle labels reject whitespace-only values, while a blank phone
   // deliberately clears the optional snapshot.
   const normalizedBody = { ...(req.body ?? {}) };
-  for (const field of ["customerName", "vehicleInfo", "vin", "registrationNumber"] as const) {
+  if (typeof normalizedBody.vehicleInfo === "string") {
+    normalizedBody.vehicleInfo = normalizedBody.vehicleInfo.trim();
+  }
+  for (const field of [
+    "customerName",
+    "vin",
+    "registrationNumber",
+    "technician",
+    "complaint",
+    "customerEmail",
+  ] as const) {
     if (typeof normalizedBody[field] === "string") {
-      normalizedBody[field] = normalizedBody[field].trim();
+      normalizedBody[field] = normalizedBody[field].trim() || null;
     }
   }
   if (typeof normalizedBody.customerPhoneSnapshot === "string") {
@@ -574,7 +633,13 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const { scheduledDate, ...rest } = parsed.data;
+  const {
+    scheduledDate,
+    customerEmail: requestedEmail,
+    estimatedCost: requestedEstimatedCost,
+    estimatedHours: requestedEstimatedHours,
+    ...rest
+  } = parsed.data;
   const dateStr = toDateString(scheduledDate);
 
   const dealerId = activeDealerId(res);
@@ -599,6 +664,13 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
   const updateValues: Partial<typeof serviceOrdersTable.$inferInsert> = {
     ...rest,
   };
+  if (requestedEstimatedCost !== undefined) {
+    updateValues.estimatedCost = requestedEstimatedCost ?? 0;
+  }
+  if (requestedEstimatedHours !== undefined) {
+    updateValues.estimatedHours =
+      requestedEstimatedHours ?? (await getServiceSettings(dealerId)).defaultJobHours;
+  }
   if (
     rest.customerPhoneSnapshot != null &&
     !validPhone(rest.customerPhoneSnapshot)
@@ -636,10 +708,58 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
     }
   }
   if (rest.technician !== undefined && rest.technicianUserId === undefined) {
-    updateValues.technicianUserId = await resolveDealerUserIdByName(
-      dealerId,
-      rest.technician,
-    );
+    updateValues.technicianUserId =
+      rest.technician == null
+        ? null
+        : await resolveDealerUserIdByName(dealerId, rest.technician);
+  }
+
+  // customerEmail is an effective customer contact, not a separate booking
+  // snapshot. Persist it on the linked customer so the edit form, reminder
+  // button, and every server-side email trigger resolve the same address.
+  let bookingCustomerId = rest.customerId !== undefined ? rest.customerId : before.customerId;
+  if (requestedEmail !== undefined && requestedEmail != null && bookingCustomerId == null) {
+    const [existingCustomer] = await db
+      .select({ id: customersTable.id })
+      .from(customersTable)
+      .where(
+        and(
+          eq(customersTable.dealerId, dealerId),
+          sql`lower(${customersTable.email}) = ${requestedEmail.toLowerCase()}`,
+          isNull(customersTable.deletedAt),
+          isNull(customersTable.erasedAt),
+        ),
+      )
+      .limit(1);
+    if (existingCustomer) {
+      bookingCustomerId = existingCustomer.id;
+    } else {
+      const [created] = await db
+        .insert(customersTable)
+        .values({
+          dealerId,
+          name: rest.customerName?.trim() || before.customerName?.trim() || requestedEmail,
+          email: requestedEmail,
+        })
+        .returning({ id: customersTable.id });
+      bookingCustomerId = created?.id ?? null;
+    }
+    updateValues.customerId = bookingCustomerId;
+  }
+  if (requestedEmail !== undefined && bookingCustomerId != null) {
+    const [updatedCustomer] = await db
+      .update(customersTable)
+      .set({ email: requestedEmail, updatedAt: new Date() })
+      .where(
+        and(
+          eq(customersTable.id, bookingCustomerId),
+          eq(customersTable.dealerId, dealerId),
+          isNull(customersTable.deletedAt),
+          isNull(customersTable.erasedAt),
+        ),
+      )
+      .returning({ id: customersTable.id });
+    if (updatedCustomer) queueCustomerSync(dealerId, updatedCustomer.id);
   }
   if (dateStr) updateValues.scheduledDate = dateStr;
 
@@ -694,7 +814,10 @@ router.patch("/service-orders/:id", async (req, res): Promise<void> => {
     onServiceAppointmentChanged(order);
   }
 
-  res.json(UpdateServiceOrderResponse.parse(order));
+  const effectiveEmail = await customerEmail(order.customerId, dealerId);
+  res.json(
+    UpdateServiceOrderResponse.parse({ ...order, customerEmail: effectiveEmail.email }),
+  );
 });
 
 /** Technicians may only touch orders assigned to them (404, not 403, to avoid leaking existence). */
@@ -804,14 +927,15 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Service order not found" });
     return;
   }
-  const { email } = await customerEmail(order.customerId, order.dealerId);
-  if (!email) {
+  const effectiveEmail = await customerEmail(order.customerId, order.dealerId);
+  const recipient = effectiveServiceReminderRecipient(effectiveEmail.email);
+  if (!recipient) {
     res.status(422).json({ error: "Customer has no email on file" });
     return;
   }
   await enqueueEmail({
     template: "service_reminder",
-    to: email,
+    to: recipient,
     dealerId: order.dealerId,
     customerId: order.customerId,
     data: {
@@ -821,7 +945,7 @@ router.post("/service-orders/:id/remind", async (req, res): Promise<void> => {
     },
   });
   res.json(
-    SendServiceReminderResponse.parse({ status: "queued", recipient: email }),
+    SendServiceReminderResponse.parse({ status: "queued", recipient }),
   );
 });
 

@@ -5301,6 +5301,7 @@ export const ListServiceOrdersResponseItem = zod.object({
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "customerPhoneSnapshot": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
@@ -5376,6 +5377,7 @@ export const CreateServiceOrderResponse = zod.object({
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "customerPhoneSnapshot": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
@@ -5420,6 +5422,8 @@ export const UpdateServiceOrderParams = zod.object({
 
 export const updateServiceOrderBodyCustomerNameMax = 200;
 
+export const updateServiceOrderBodyCustomerEmailMin = 3;
+
 export const updateServiceOrderBodyCustomerPhoneSnapshotMax = 40;
 
 export const updateServiceOrderBodyVehicleInfoMax = 200;
@@ -5435,21 +5439,22 @@ export const updateServiceOrderBodyEstimatedHoursMax = 24;
 
 export const UpdateServiceOrderBody = zod.object({
   "customerId": zod.number().nullish(),
-  "customerName": zod.string().min(1).max(updateServiceOrderBodyCustomerNameMax).optional(),
+  "customerName": zod.string().min(1).max(updateServiceOrderBodyCustomerNameMax).nullish(),
+  "customerEmail": zod.string().min(updateServiceOrderBodyCustomerEmailMin).nullish(),
   "customerPhoneSnapshot": zod.string().max(updateServiceOrderBodyCustomerPhoneSnapshotMax).nullish(),
   "vehicleInfo": zod.string().min(1).max(updateServiceOrderBodyVehicleInfoMax).optional(),
-  "vin": zod.string().min(1).max(updateServiceOrderBodyVinMax).optional(),
-  "registrationNumber": zod.string().min(1).max(updateServiceOrderBodyRegistrationNumberMax).optional(),
+  "vin": zod.string().min(1).max(updateServiceOrderBodyVinMax).nullish(),
+  "registrationNumber": zod.string().min(1).max(updateServiceOrderBodyRegistrationNumberMax).nullish(),
   "type": zod.enum(['maintenance', 'repair', 'warranty', 'recall', 'inspection', 'comeback', 'unscheduled']).optional(),
   "payType": zod.enum(['customer', 'warranty', 'goodwill', 'rectify']).optional(),
   "status": zod.enum(['open', 'acknowledged', 'in_progress', 'on_hold', 'resolved', 'closed', 'cancelled']).optional(),
   "scheduledDate": zod.coerce.date().optional(),
-  "complaint": zod.string().optional(),
-  "odometer": zod.number().optional(),
-  "technician": zod.string().optional(),
+  "complaint": zod.string().nullish(),
+  "odometer": zod.number().nullish(),
+  "technician": zod.string().nullish(),
   "technicianUserId": zod.number().nullish(),
-  "estimatedCost": zod.number().optional(),
-  "estimatedHours": zod.number().min(updateServiceOrderBodyEstimatedHoursMin).max(updateServiceOrderBodyEstimatedHoursMax).optional(),
+  "estimatedCost": zod.number().nullish(),
+  "estimatedHours": zod.number().min(updateServiceOrderBodyEstimatedHoursMin).max(updateServiceOrderBodyEstimatedHoursMax).nullish(),
   "jobs": zod.array(zod.string()).optional()
 })
 
@@ -5458,6 +5463,7 @@ export const UpdateServiceOrderResponse = zod.object({
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "customerPhoneSnapshot": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
@@ -5508,6 +5514,7 @@ export const AdvanceServiceOrderResponse = zod.object({
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "customerPhoneSnapshot": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
@@ -5619,6 +5626,7 @@ export const ClaimServiceOrderResponse = zod.object({
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "customerPhoneSnapshot": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
@@ -5945,6 +5953,7 @@ export const GetJobCardResponse = zod.object({
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "customerPhoneSnapshot": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
@@ -10753,6 +10762,7 @@ export const GetCustomerOverviewResponse = zod.object({
   "customerId": zod.number().nullish(),
   "customerName": zod.string().nullish(),
   "customerPhoneSnapshot": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
   "vehicleInfo": zod.string(),
   "vin": zod.string().nullable(),
   "registrationNumber": zod.string().nullable(),
