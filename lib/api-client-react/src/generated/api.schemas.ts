@@ -5212,6 +5212,31 @@ export interface PublicServiceEstimate {
   decidedAt?: string | null;
 }
 
+export type ServiceCustomerVehicleStatus = typeof ServiceCustomerVehicleStatus[keyof typeof ServiceCustomerVehicleStatus];
+
+
+export const ServiceCustomerVehicleStatus = {
+  active: 'active',
+  transferred: 'transferred',
+} as const;
+
+export interface ServiceCustomerVehicle {
+  vehicleId: number;
+  /** @nullable */
+  assetId: number | null;
+  label: string;
+  make: string;
+  model: string;
+  year: number;
+  /** @nullable */
+  trim?: string | null;
+  /** @nullable */
+  vin: string | null;
+  /** @nullable */
+  registration: string | null;
+  status: ServiceCustomerVehicleStatus;
+}
+
 export type ServiceEstimateDecisionInputDecision = typeof ServiceEstimateDecisionInputDecision[keyof typeof ServiceEstimateDecisionInputDecision];
 
 

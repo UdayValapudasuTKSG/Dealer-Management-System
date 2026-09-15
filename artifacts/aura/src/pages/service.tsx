@@ -62,6 +62,8 @@ import {
   type ServiceInvoice,
   type ServiceOrderAdvanceBodyTargetStatus,
   useListCustomers,
+  useListServiceCustomerVehicles,
+  getListServiceCustomerVehiclesQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -161,6 +163,13 @@ import { useAuthz } from "@/lib/auth";
 import { ViewControls } from "@/components/view-controls";
 import { PartRequisitionForm } from "@/components/service/part-requisition-form";
 import { cn } from "@/lib/utils";
+import {
+  isCurrentServiceVehicleLookup,
+  selectServiceCustomerVehicle,
+  serviceVehicleFields,
+  serviceVehicleLabel,
+  shouldAutofillServiceVehicleField,
+} from "@/lib/service-customer-vehicles";
 import {
   formatDealerDateShort,
   formatCalendarDateShort,
@@ -622,6 +631,55 @@ function CreateBookingDialog() {
   const createOrder = useCreateServiceOrder();
   const { data: technicians } = useListServiceTechnicians();
   const { data: customers } = useListCustomers();
+  const [open, setOpen] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const vehicleRequestRef = useRef(0);
+  const vehicleCustomerRef = useRef<number | null>(null);
+  const autofillFieldRef = useRef<(name: string, value: string) => void>(() => undefined);
+  const { data: customerVehicles } = useListServiceCustomerVehicles(
+    selectedCustomerId ?? 0,
+    {
+      query: {
+        enabled: open && selectedCustomerId != null,
+        queryKey: getListServiceCustomerVehiclesQueryKey(selectedCustomerId ?? 0),
+      },
+    },
+  );
+
+  const applyVehicleAutofill = (
+    vehicle: NonNullable<typeof customerVehicles>[number],
+    setAutofillField: (name: string, value: string) => void,
+  ) => {
+    const fields = serviceVehicleFields(vehicle);
+    setAutofillField("vehicleInfo", fields.vehicleInfo);
+    setAutofillField("vin", fields.vin);
+    setAutofillField("registrationNumber", fields.registrationNumber);
+  };
+
+  useEffect(() => {
+    if (
+      !open ||
+      selectedCustomerId == null ||
+      !isCurrentServiceVehicleLookup({
+        dialogOpen: open,
+        activeCustomerId: vehicleCustomerRef.current,
+        responseCustomerId: selectedCustomerId,
+      }) ||
+      !selectServiceCustomerVehicle(customerVehicles, {
+        vin: "",
+        registrationNumber: "",
+      })
+    ) return;
+    if (vehicleRequestRef.current === 0) return;
+    const setAutofillField = autofillFieldRef.current;
+    const vehicle = selectServiceCustomerVehicle(customerVehicles, {
+      vin: "",
+      registrationNumber: "",
+    });
+    if (!vehicle) return;
+    setAutofillField("customerVehicleId", String(vehicle.vehicleId));
+    applyVehicleAutofill(vehicle, setAutofillField);
+  }, [customerVehicles, open, selectedCustomerId]);
 
   return (
     <CreateRecordDialog
@@ -629,6 +687,16 @@ function CreateBookingDialog() {
       description="Log the complaint, schedule the bay — AURA handles the rest."
       pending={createOrder.isPending}
       submitLabel="Create booking"
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          vehicleRequestRef.current += 1;
+          setSelectedCustomerId(null);
+          vehicleCustomerRef.current = null;
+          autofillFieldRef.current = () => undefined;
+        }
+      }}
       trigger={
         <Button className="bg-primary hover:bg-primary/90 text-white rounded-full px-4 h-9 text-sm shadow-md shadow-primary/20 gap-1.5 font-medium tracking-wide">
           <Plus className="w-4 h-4" />
@@ -643,18 +711,67 @@ function CreateBookingDialog() {
           searchable: true,
           span: "half",
           options: customers?.map(c => ({ value: String(c.id), label: c.name })) ?? [],
-          onChange: (val, setField) => {
+          onChange: (val, setAutofillField, setField) => {
+            vehicleRequestRef.current += 1;
+            const request = vehicleRequestRef.current;
+            const nextCustomerId = val && val !== "none" ? Number(val) : null;
+            setSelectedCustomerId(nextCustomerId);
+            vehicleCustomerRef.current = nextCustomerId;
+            autofillFieldRef.current = setAutofillField;
+            // The selector is a deliberate choice, so always clear it.
+            // Identity values are cleared only when they were autofilled;
+            // manually typed edits remain protected by CreateRecordDialog.
+            setField("customerVehicleId", "");
+            setAutofillField("vehicleInfo", "");
+            setAutofillField("vin", "");
+            setAutofillField("registrationNumber", "");
             const customer = customers?.find(c => String(c.id) === val);
             if (customer) {
-              setField("customerName", customer.name || "");
-              setField("customerEmail", customer.email || "");
-              setField("customerPhoneSnapshot", customer.phone || "");
+              setAutofillField("customerName", customer.name || "");
+              setAutofillField("customerEmail", customer.email || "");
+              setAutofillField("customerPhoneSnapshot", customer.phone || "");
+            }
+            if (!nextCustomerId || request !== vehicleRequestRef.current) {
+              setSelectedCustomerId(null);
             }
           }
         },
         { name: "customerName", label: "Customer Name", type: "text", span: "half", placeholder: "Nana Adjei" },
         { name: "customerPhoneSnapshot", label: "Contact Phone (Job Card)", type: "phone", span: "half", required: true, placeholder: "+592..." },
         { name: "customerEmail", label: "Customer Email", type: "email", span: "half", placeholder: "customer@email.com" },
+        {
+          name: "customerVehicleId",
+          label: "Saved customer vehicle",
+          type: "custom",
+          span: "full",
+          render: (value, set) => {
+            if (selectedCustomerId == null) return null;
+            if (customerVehicles === undefined) {
+              return <div className="h-8 rounded-md border border-white/10 bg-white/[0.04] px-3 flex items-center text-xs text-muted-foreground">Loading saved vehicles…</div>;
+            }
+            if (customerVehicles.length === 0) {
+              return <div className="rounded-md border border-dashed border-white/10 px-3 py-2 text-xs text-muted-foreground">No delivered vehicles are linked to this customer. Enter the vehicle details below.</div>;
+            }
+            return (
+              <Select value={value} onValueChange={set}>
+                <SelectTrigger className="h-8 text-xs bg-white/[0.04] border-white/10">
+                  <SelectValue placeholder={customerVehicles.length > 1 ? "Select a vehicle" : "Saved vehicle"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {customerVehicles.map((vehicle) => (
+                    <SelectItem key={vehicle.vehicleId} value={String(vehicle.vehicleId)}>
+                      {serviceVehicleLabel(vehicle)}{vehicle.registration ? ` · ${vehicle.registration}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            );
+          },
+          onChange: (value, setAutofillField) => {
+            const vehicle = customerVehicles?.find((candidate) => String(candidate.vehicleId) === value);
+            if (vehicle) applyVehicleAutofill(vehicle, setAutofillField);
+          },
+        },
         { name: "vehicleInfo", label: "Vehicle", type: "text", required: true, span: "half", placeholder: "2022 BMW X5" },
         { name: "vin", label: "VIN", type: "text", required: true, span: "half", placeholder: "WBA..." },
         { name: "registrationNumber", label: "Registration", type: "text", required: true, span: "half", placeholder: "PAB 1234" },
@@ -695,6 +812,7 @@ function CreateBookingDialog() {
       ]}
       onSubmit={async (values) => {
         const v = values as Record<string, unknown>;
+        delete v.customerVehicleId;
         if (v.customerId != null && v.customerId !== "") {
           v.customerId = Number(v.customerId);
         } else {
@@ -749,6 +867,10 @@ function EditBookingDialog({
   const { data: technicians } = useListServiceTechnicians();
   const { data: customers } = useListCustomers();
   const [open, setOpen] = useState(false);
+  const [selectedVehicleId, setSelectedVehicleId] = useState("");
+  const vehicleRequestRef = useRef(0);
+  const vehicleCustomerRef = useRef<number | null>(null);
+  const autoDerivedFields = useRef(new Set<string>());
 
   // States
   const [customerId, setCustomerId] = useState<string>("none");
@@ -765,6 +887,16 @@ function EditBookingDialog({
   const [estimatedCost, setEstimatedCost] = useState("");
   const [estimatedHours, setEstimatedHours] = useState("");
   const [technicianUserId, setTechnicianUserId] = useState("");
+  const customerVehicleId = customerId !== "none" ? Number(customerId) : 0;
+  const { data: customerVehicles } = useListServiceCustomerVehicles(
+    customerVehicleId,
+    {
+      query: {
+        enabled: open && customerId !== "none",
+        queryKey: getListServiceCustomerVehiclesQueryKey(customerVehicleId),
+      },
+    },
+  );
   // Selecting a linked customer fills untouched contact fields, but never
   // overwrites a value the operator has deliberately edited.
   const editedFields = useRef(new Set<string>());
@@ -772,6 +904,7 @@ function EditBookingDialog({
   useEffect(() => {
     if (open) {
       setCustomerId(order.customerId != null ? String(order.customerId) : "none");
+      vehicleCustomerRef.current = order.customerId ?? null;
       setCustomerName(order.customerName ?? "");
       setCustomerPhoneSnapshot(order.customerPhoneSnapshot ?? "");
       setCustomerEmail(
@@ -782,6 +915,7 @@ function EditBookingDialog({
       setVehicleInfo(order.vehicleInfo ?? "");
       setVin(order.vin ?? "");
       setRegistrationNumber(order.registrationNumber ?? "");
+      setSelectedVehicleId("");
       setType(order.type);
       setScheduledDate(order.scheduledDate ? order.scheduledDate.split("T")[0] : "");
       setComplaint(order.complaint ?? "");
@@ -790,6 +924,16 @@ function EditBookingDialog({
       setEstimatedHours(order.estimatedHours != null ? String(order.estimatedHours) : "");
       setTechnicianUserId(order.technicianUserId != null ? String(order.technicianUserId) : "none");
       editedFields.current.clear();
+      autoDerivedFields.current.clear();
+      if (order.customerId != null) {
+        for (const [field, value] of [
+          ["vehicleInfo", order.vehicleInfo],
+          ["vin", order.vin ?? ""],
+          ["registrationNumber", order.registrationNumber ?? ""],
+        ] as const) {
+          if (value) autoDerivedFields.current.add(field);
+        }
+      }
     }
   }, [open, order]);
 
@@ -797,10 +941,79 @@ function EditBookingDialog({
   const [customerSelectOpen, setCustomerSelectOpen] = useState(false);
   const selectedCustomer = customers?.find(c => String(c.id) === customerId);
 
+  const applyVehicle = (
+    vehicle: NonNullable<typeof customerVehicles>[number],
+  ) => {
+    setSelectedVehicleId(String(vehicle.vehicleId));
+    const fields = serviceVehicleFields(vehicle);
+    const fillVehicleField = (
+      field: string,
+      setter: (value: string) => void,
+      value: string,
+    ) => {
+      if (!shouldAutofillServiceVehicleField(editedFields.current, field)) return;
+      setter(value);
+      autoDerivedFields.current.add(field);
+    };
+    fillVehicleField("vehicleInfo", setVehicleInfo, fields.vehicleInfo);
+    fillVehicleField("vin", setVin, fields.vin);
+    fillVehicleField("registrationNumber", setRegistrationNumber, fields.registrationNumber);
+  };
+
+  const clearAutoDerivedVehicle = () => {
+    if (autoDerivedFields.current.has("vehicleInfo") && !editedFields.current.has("vehicleInfo")) {
+      setVehicleInfo("");
+    }
+    if (autoDerivedFields.current.has("vin") && !editedFields.current.has("vin")) {
+      setVin("");
+    }
+    if (
+      autoDerivedFields.current.has("registrationNumber") &&
+      !editedFields.current.has("registrationNumber")
+    ) {
+      setRegistrationNumber("");
+    }
+    autoDerivedFields.current.clear();
+    setSelectedVehicleId("");
+  };
+
+  useEffect(() => {
+    if (
+      !open ||
+      customerId === "none" ||
+      !isCurrentServiceVehicleLookup({
+        dialogOpen: open,
+        activeCustomerId: vehicleCustomerRef.current,
+        responseCustomerId: Number(customerId),
+      }) ||
+      !customerVehicles
+    ) return;
+    const savedVehicle = selectServiceCustomerVehicle(customerVehicles, {
+      vin,
+      registrationNumber,
+    });
+    // A saved VIN/registration is authoritative for edit: select the matching
+    // association. Otherwise a single canonical vehicle is safe to autofill;
+    // multiple vehicles must be selected explicitly.
+    if (savedVehicle) {
+      applyVehicle(savedVehicle);
+    } else {
+      setSelectedVehicleId("");
+    }
+  }, [customerVehicles, customerId, open]);
+
   const handleCustomerChange = (val: string) => {
-    if (val === customerId) {
-      setCustomerSelectOpen(false);
-      return;
+    const isSameCustomer = val === customerId;
+    if (!isSameCustomer) {
+      vehicleRequestRef.current += 1;
+      vehicleCustomerRef.current = val !== "none" ? Number(val) : null;
+      clearAutoDerivedVehicle();
+    } else if (customerVehicles?.length) {
+      const savedVehicle = selectServiceCustomerVehicle(customerVehicles, {
+        vin,
+        registrationNumber,
+      });
+      if (savedVehicle) applyVehicle(savedVehicle);
     }
     setCustomerId(val);
     const fillIfUntouched = (field: string, setter: (value: string) => void, value: string) => {
@@ -823,6 +1036,7 @@ function EditBookingDialog({
 
   const editField = <T,>(field: string, setter: (value: T) => void, value: T) => {
     editedFields.current.add(field);
+    autoDerivedFields.current.delete(field);
     setter(value);
   };
 
@@ -875,7 +1089,19 @@ function EditBookingDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          // Invalidate any in-flight vehicle lookup before the dialog can be
+          // reopened for another booking/customer.
+          vehicleRequestRef.current += 1;
+          vehicleCustomerRef.current = null;
+          setSelectedVehicleId("");
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="rounded-full border-white/15 gap-1.5 text-xs h-8" aria-label={`Edit booking #${order.id}`}>
           <PenTool className="w-3.5 h-3.5" /> Edit
@@ -978,6 +1204,45 @@ function EditBookingDialog({
                 className="h-9 bg-white/[0.04]"
               />
             </div>
+
+            {customerId !== "none" && (
+              <div className="col-span-2 space-y-1.5">
+                <Label>Saved customer vehicle</Label>
+                {customerVehicles === undefined ? (
+                  <div className="h-9 rounded-md border border-white/10 bg-white/[0.04] px-3 flex items-center text-xs text-muted-foreground">
+                    Loading saved vehicles…
+                  </div>
+                ) : customerVehicles.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-white/10 px-3 py-2 text-xs text-muted-foreground">
+                    No delivered vehicles are linked to this customer. Enter the vehicle details below.
+                  </div>
+                ) : (
+                  <Select
+                    value={selectedVehicleId}
+                    onValueChange={(value) => {
+                      const vehicle = customerVehicles.find(
+                        (candidate) => String(candidate.vehicleId) === value,
+                      );
+                      if (vehicle) {
+                        vehicleRequestRef.current += 1;
+                        applyVehicle(vehicle);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-9 bg-white/[0.04]">
+                      <SelectValue placeholder={customerVehicles.length > 1 ? "Select a vehicle" : "Saved vehicle"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {customerVehicles.map((vehicle) => (
+                        <SelectItem key={vehicle.vehicleId} value={String(vehicle.vehicleId)}>
+                          {serviceVehicleLabel(vehicle)}{vehicle.registration ? ` · ${vehicle.registration}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
 
             <div className="col-span-2 sm:col-span-1 space-y-1.5">
               <Label>Vehicle Info</Label>

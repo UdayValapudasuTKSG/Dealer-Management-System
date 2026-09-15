@@ -3392,6 +3392,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceOrder"
+  /service-orders/customer-vehicles/{customerId}:
+    get:
+      operationId: listServiceCustomerVehicles
+      tags: [service]
+      summary: List dealer-scoped vehicles associated with a customer for service booking
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Customer vehicle associations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceCustomerVehicle"
+        "404":
+          description: Customer not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /service-orders/{id}:
     delete:
       operationId: deleteServiceOrder
@@ -13013,6 +13038,21 @@ components:
           items: { $ref: "#/components/schemas/ServiceEstimateLine" }
         expiresAt: { type: string, format: date-time }
         decidedAt: { type: ["string", "null"], format: date-time }
+    ServiceCustomerVehicle:
+      type: object
+      required: [vehicleId, assetId, label, make, model, year, vin, registration, status]
+      properties:
+        vehicleId: { type: integer }
+        assetId: { type: ["integer", "null"] }
+        label: { type: string }
+        make: { type: string }
+        model: { type: string }
+        year: { type: integer }
+        trim: { type: ["string", "null"] }
+        vin: { type: ["string", "null"] }
+        registration: { type: ["string", "null"] }
+        status: { type: string, enum: [active, transferred] }
+
     ServiceEstimateDecisionInput:
       type: object
       required: [decision]

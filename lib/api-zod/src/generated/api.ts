@@ -5407,6 +5407,31 @@ export const CreateServiceOrderResponse = zod.object({
 
 
 /**
+ * @summary List dealer-scoped vehicles associated with a customer for service booking
+ */
+
+
+
+export const ListServiceCustomerVehiclesParams = zod.object({
+  "customerId": zod.coerce.number().min(1)
+})
+
+export const ListServiceCustomerVehiclesResponseItem = zod.object({
+  "vehicleId": zod.number(),
+  "assetId": zod.number().nullable(),
+  "label": zod.string(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "trim": zod.string().nullish(),
+  "vin": zod.string().nullable(),
+  "registration": zod.string().nullable(),
+  "status": zod.enum(['active', 'transferred'])
+})
+export const ListServiceCustomerVehiclesResponse = zod.array(ListServiceCustomerVehiclesResponseItem)
+
+
+/**
  * @summary Delete a booking and its job cards (blocked once invoiced)
  */
 export const DeleteServiceOrderParams = zod.object({

@@ -59,7 +59,11 @@ export type FieldDef = {
   render?: (value: string, set: (value: string) => void) => ReactNode;
   /** Optional observer so pages can react to a field change (e.g. show a
    * dependent field or prefill sibling fields via setField). */
-  onChange?: (value: string, setField: (name: string, value: string) => void) => void;
+  onChange?: (
+    value: string,
+    setAutofillField: (name: string, value: string) => void,
+    setField: (name: string, value: string) => void,
+  ) => void;
   /** Optional custom validator; return an error message or null. Runs after
    * the built-in type checks. */
   validate?: (value: string) => string | null;
@@ -147,20 +151,27 @@ export function CreateRecordDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Keep the autofill guard current even when a page retains the setter and
+  // applies it after an async linked-record lookup completes.
+  const touchedRef = useRef(touched);
+  touchedRef.current = touched;
+
   const setField = (name: string, value: string) =>
     setValues((v) => ({ ...v, [name]: value }));
+
+  const setAutofillField = (fieldName: string, fieldValue: string) => {
+    if (touchedRef.current[fieldName]) return;
+    setField(fieldName, fieldValue);
+  };
 
   const set = (name: string, value: string) => {
     setField(name, value);
     setTouched((current) => ({ ...current, [name]: true }));
-    const setAutofillField = (fieldName: string, fieldValue: string) => {
-      // A linked-record selector may prefill sibling fields, but once an
-      // operator has typed into one of them, selecting another record must
-      // not silently overwrite that edit.
-      if (touched[fieldName]) return;
-      setField(fieldName, fieldValue);
-    };
-    fields.find((f) => f.name === name)?.onChange?.(value, setAutofillField);
+    // A linked-record selector may prefill sibling fields, but once an
+    // operator has typed into one of them, selecting another record must not
+    // silently overwrite that edit. `setAutofillField` reads a ref so the
+    // same protection also applies to delayed network responses.
+    fields.find((f) => f.name === name)?.onChange?.(value, setAutofillField, setField);
   };
 
   const errors = Object.fromEntries(

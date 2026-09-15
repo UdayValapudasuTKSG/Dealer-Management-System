@@ -354,6 +354,7 @@ import type {
   SendQuoteResult,
   SentimentAnalysis,
   ServiceAppointmentConfirmationInput,
+  ServiceCustomerVehicle,
   ServiceDiscountDecision,
   ServiceDiscountRequest,
   ServiceEstimateDecisionInput,
@@ -10086,6 +10087,83 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getCreateServiceOrderMutationOptions(options));
     }
+
+export const getListServiceCustomerVehiclesUrl = (customerId: number,) => {
+
+
+
+
+  return `/api/service-orders/customer-vehicles/${customerId}`
+}
+
+/**
+ * @summary List dealer-scoped vehicles associated with a customer for service booking
+ */
+export const listServiceCustomerVehicles = async (customerId: number, options?: RequestInit): Promise<ServiceCustomerVehicle[]> => {
+
+  return customFetch<ServiceCustomerVehicle[]>(getListServiceCustomerVehiclesUrl(customerId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListServiceCustomerVehiclesQueryKey = (customerId: number,) => {
+    return [
+    `/api/service-orders/customer-vehicles/${customerId}`
+    ] as const;
+    }
+
+
+export const getListServiceCustomerVehiclesQueryOptions = <TData = Awaited<ReturnType<typeof listServiceCustomerVehicles>>, TError = ErrorType<Error>>(customerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listServiceCustomerVehicles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListServiceCustomerVehiclesQueryKey(customerId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listServiceCustomerVehicles>>> = ({ signal }) => listServiceCustomerVehicles(customerId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: customerId !== null && customerId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listServiceCustomerVehicles>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListServiceCustomerVehiclesQueryResult = NonNullable<Awaited<ReturnType<typeof listServiceCustomerVehicles>>>
+export type ListServiceCustomerVehiclesQueryError = ErrorType<Error>
+
+
+/**
+ * @summary List dealer-scoped vehicles associated with a customer for service booking
+ */
+
+export function useListServiceCustomerVehicles<TData = Awaited<ReturnType<typeof listServiceCustomerVehicles>>, TError = ErrorType<Error>>(
+ customerId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listServiceCustomerVehicles>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListServiceCustomerVehiclesQueryOptions(customerId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getDeleteServiceOrderUrl = (id: number,) => {
 

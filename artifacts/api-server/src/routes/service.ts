@@ -19,6 +19,9 @@ import { and, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from "drizzl
 import {
   db,
   serviceOrdersTable,
+  assetsTable,
+  vehiclesTable,
+  dealsTable,
   jobCardsTable,
   jobCardPartsTable,
   partsTable,
@@ -47,6 +50,8 @@ import {
 } from "@workspace/db";
 import {
   CreateServiceOrderBody,
+  ListServiceCustomerVehiclesParams,
+  ListServiceCustomerVehiclesResponse,
   UpdateServiceOrderBody,
   UpdateServiceOrderParams,
   ListServiceOrdersQueryParams,
@@ -373,6 +378,142 @@ router.get("/service-orders", async (req, res): Promise<void> => {
       })),
     ),
   );
+});
+
+/**
+ * Canonical customer vehicle associations used by service booking forms.
+ *
+ * Assets are the ownership record created at delivery.  Delivered deals are
+ * retained as a legacy fallback for dealers that predate asset creation. Both
+ * reads are constrained by the active dealer and the customer id; no
+ * inventory-wide vehicle list is exposed to the caller.
+ */
+router.get("/service-orders/customer-vehicles/:customerId", async (req, res): Promise<void> => {
+  const params = ListServiceCustomerVehiclesParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const dealerId = activeDealerId(res);
+  const customerId = params.data.customerId;
+  const [customer] = await db
+    .select({ id: customersTable.id })
+    .from(customersTable)
+    .where(
+      and(
+        eq(customersTable.id, customerId),
+        eq(customersTable.dealerId, dealerId),
+        isNull(customersTable.deletedAt),
+        isNull(customersTable.erasedAt),
+      ),
+    )
+    .limit(1);
+  if (!customer) {
+    res.status(404).json({ error: "Customer not found" });
+    return;
+  }
+
+  const [assetRows, deliveredDeals, vehicles] = await Promise.all([
+    db
+      .select({
+        assetId: assetsTable.id,
+        vehicleId: assetsTable.vehicleId,
+        status: assetsTable.status,
+        deliveredAt: assetsTable.deliveredAt,
+      })
+      .from(assetsTable)
+      .where(
+        and(
+          eq(assetsTable.dealerId, dealerId),
+          eq(assetsTable.accountId, customerId),
+        ),
+      )
+      .orderBy(desc(assetsTable.deliveredAt)),
+    db
+      .select({
+        vehicleId: dealsTable.vehicleId,
+        createdAt: dealsTable.createdAt,
+      })
+      .from(dealsTable)
+      .where(
+        and(
+          eq(dealsTable.dealerId, dealerId),
+          eq(dealsTable.customerId, customerId),
+          eq(dealsTable.stage, "delivered"),
+        ),
+      )
+      .orderBy(desc(dealsTable.createdAt)),
+    db
+      .select({
+        id: vehiclesTable.id,
+        make: vehiclesTable.make,
+        model: vehiclesTable.model,
+        trim: vehiclesTable.trim,
+        year: vehiclesTable.year,
+        vin: vehiclesTable.vin,
+        registration: vehiclesTable.registration,
+      })
+      .from(vehiclesTable)
+      .where(
+        and(
+          eq(vehiclesTable.dealerId, dealerId),
+          isNull(vehiclesTable.deletedAt),
+        ),
+      ),
+  ]);
+
+  const vehicleById = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
+  const associations = new Map<number, {
+    vehicleId: number;
+    assetId: number | null;
+    label: string;
+    make: string;
+    model: string;
+    year: number;
+    trim: string | null;
+    vin: string | null;
+    registration: string | null;
+    status: "active" | "transferred";
+  }>();
+
+  for (const asset of assetRows) {
+    const vehicle = vehicleById.get(asset.vehicleId);
+    if (!vehicle) continue;
+    associations.set(asset.vehicleId, {
+      vehicleId: vehicle.id,
+      assetId: asset.assetId,
+      label: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+      make: vehicle.make,
+      model: vehicle.model,
+      year: vehicle.year,
+      trim: vehicle.trim,
+      vin: vehicle.vin,
+      registration: vehicle.registration,
+      status: asset.status === "transferred" ? "transferred" : "active",
+    });
+  }
+
+  // Legacy deliveries may not have an assets row. They are still canonical
+  // ownership evidence because the deal reached the delivered stage.
+  for (const deal of deliveredDeals) {
+    if (associations.has(deal.vehicleId)) continue;
+    const vehicle = vehicleById.get(deal.vehicleId);
+    if (!vehicle) continue;
+    associations.set(deal.vehicleId, {
+      vehicleId: vehicle.id,
+      assetId: null,
+      label: `${vehicle.year} ${vehicle.make} ${vehicle.model}`,
+      make: vehicle.make,
+      model: vehicle.model,
+      year: vehicle.year,
+      trim: vehicle.trim,
+      vin: vehicle.vin,
+      registration: vehicle.registration,
+      status: "active",
+    });
+  }
+
+  res.json(ListServiceCustomerVehiclesResponse.parse([...associations.values()]));
 });
 
 router.post("/service-orders", async (req, res): Promise<void> => {
