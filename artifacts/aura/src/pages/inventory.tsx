@@ -734,17 +734,6 @@ export default function Inventory() {
               can("inventory", "edit") ||
               canBulkNormalizeYears) && (
               <div className="flex flex-wrap items-center gap-3">
-                {canBulkNormalizeYears && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void openYearBulkReview()}
-                    className="rounded-full px-6 h-12 gap-2 font-medium tracking-wide border-primary/30 text-primary hover:bg-primary/10"
-                  >
-                    <Calendar className="w-5 h-5" />
-                    Set all model years to 2026
-                  </Button>
-                )}
                 <ImportVehiclesDialog
                   trigger={
                     <Button
