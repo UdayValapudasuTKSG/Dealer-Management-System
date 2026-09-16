@@ -39,7 +39,7 @@
     "@workspace/db": "workspace:*",
     "@workspace/gra-duty": "workspace:*",
     "drizzle-orm": "catalog:",
-    "xlsx": "^0.18.5"
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",

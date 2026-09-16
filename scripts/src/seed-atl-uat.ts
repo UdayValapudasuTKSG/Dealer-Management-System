@@ -21,7 +21,7 @@
 // Run: pnpm --filter @workspace/scripts run seed-atl-uat
 // Requires the api-server workflow running in dev (x-test-user-email honored).
 
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 
@@ -230,7 +230,9 @@ const IMPORT_HEADERS = [
   "Range km", "Description",
 ];
 
-function buildWorkbook(rows: { row: Row; vinIndex: number }[]): Buffer {
+async function buildWorkbook(
+  rows: { row: Row; vinIndex: number }[],
+): Promise<Buffer> {
   const data: (string | number)[][] = [IMPORT_HEADERS];
   for (const { row: r, vinIndex } of rows) {
     data.push([
@@ -240,9 +242,9 @@ function buildWorkbook(rows: { row: Row; vinIndex: number }[]): Buffer {
       r.transmission ?? "", r.rangeKm ?? "", r.description ?? "",
     ]);
   }
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), "Vehicles");
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  const wb = new ExcelJS.Workbook();
+  wb.addWorksheet("Vehicles").addRows(data);
+  return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
 async function importVehicles(): Promise<void> {
@@ -268,7 +270,7 @@ async function importVehicles(): Promise<void> {
   }
 
   // Build one workbook with only the missing rows (their stable VINs).
-  const buf = buildWorkbook(pending);
+  const buf = await buildWorkbook(pending);
 
   const makeForm = () => {
     const form = new FormData();

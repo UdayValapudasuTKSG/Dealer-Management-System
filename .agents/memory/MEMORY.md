@@ -2,6 +2,7 @@
 - [Tailwind v4 theme tokens](tailwind-v4-theme-tokens.md) — `bg-*/text-*/border-*` utilities only work if the matching `--color-*` token is declared in `@theme inline`; unregistered = silent no-op (transparent).
 - [Verify UI computed styles](verify-ui-computed-styles.md) — the screenshot tool's persistent browser can serve stale images; verify theme/DOM via getComputedStyle or a workflow restart, not screenshots alone.
 - [Orval query-hook options](orval-query-hooks.md) — generated `useGet*` `options.query` is the full `UseQueryOptions`; partial options fail typecheck — omit options or supply `queryKey`.
+- [Orval and Zod 3 compatibility](orval-zod3-compat.md) — Orval 8.22 is patched and Zod 3-compatible; newer releases can emit Zod 4-only `zod.int()` output.
 - [Generated payload casts](generated-payload-casts.md) — never `as never`/`as any` a generated mutation payload; it hides fields missing from the OpenAPI schema (Zod strips them → empty update → 500).
 - [Server output Zod validation](server-output-validation.md) — list endpoints validate EVERY returned row against Zod; one bad seed row 500s the whole endpoint (invalid_enum_value).
 - [CopilotKit runtime](copilotkit-runtime.md) — non-obvious constraints for CopilotKit runtime behind the Replit reverse proxy (headers, body-parsing exclusion, req.url).

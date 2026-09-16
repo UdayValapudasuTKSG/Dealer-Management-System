@@ -25,7 +25,7 @@
 // Run: pnpm --filter @workspace/scripts run expand-atl-uat
 // Requires the api-server workflow running in dev (x-test-user-email honored).
 
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 
@@ -357,7 +357,7 @@ const IMPORT_HEADERS = [
 
 type Unit = { m: Model; modelIdx: number; unit: number };
 
-function buildWorkbook(units: Unit[]): Buffer {
+async function buildWorkbook(units: Unit[]): Promise<Buffer> {
   const data: (string | number)[][] = [IMPORT_HEADERS];
   for (const { m, modelIdx, unit } of units) {
     const id = idFor(modelIdx, unit);
@@ -368,9 +368,9 @@ function buildWorkbook(units: Unit[]): Buffer {
       "UAT sample — publicly listed ATL model (catalogue expansion)",
     ]);
   }
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), "Vehicles");
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  const wb = new ExcelJS.Workbook();
+  wb.addWorksheet("Vehicles").addRows(data);
+  return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
 async function importVehicles(): Promise<void> {
@@ -420,7 +420,7 @@ async function importVehicles(): Promise<void> {
     return;
   }
 
-  const buf = buildWorkbook(pending);
+  const buf = await buildWorkbook(pending);
   const makeForm = () => {
     const form = new FormData();
     form.append(

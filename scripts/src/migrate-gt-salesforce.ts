@@ -26,7 +26,7 @@
  * In production, run with the production DATABASE_URL set.
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { db } from "@workspace/db";
 import {
   vehiclesTable,
@@ -59,10 +59,29 @@ if (!filePath) {
 
 type Row = Record<string, string>;
 
-function sheetRows(wb: XLSX.WorkBook, name: string): Row[] {
-  const ws = wb.Sheets[name];
-  if (!ws) return [];
-  return XLSX.utils.sheet_to_json<Row>(ws, { raw: false, defval: "" });
+function sheetRows(wb: ExcelJS.Workbook, name: string): Row[] {
+  const ws = wb.getWorksheet(name);
+  if (!ws || ws.rowCount === 0) return [];
+
+  const headers: string[] = [];
+  ws.getRow(1).eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+    headers[columnNumber - 1] = cell.text;
+  });
+
+  const rows: Row[] = [];
+  for (let rowNumber = 2; rowNumber <= ws.rowCount; rowNumber += 1) {
+    const row = ws.getRow(rowNumber);
+    const values: Row = {};
+    let hasValue = false;
+    headers.forEach((header, index) => {
+      if (!header) return;
+      const value = row.getCell(index + 1).text;
+      values[header] = value;
+      hasValue ||= value.length > 0;
+    });
+    if (hasValue) rows.push(values);
+  }
+  return rows;
 }
 
 // ---------------------------------------------------------------- helpers
@@ -149,7 +168,10 @@ async function main() {
     `migrate-gt-salesforce: file=${filePath} dealer=${DEALER_ID} mode=${execute ? "EXECUTE" : "DRY-RUN"}`,
   );
 
-  const wb = XLSX.read(readFileSync(filePath!), { type: "buffer" });
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(
+    readFileSync(filePath!) as unknown as Parameters<typeof wb.xlsx.load>[0],
+  );
 
   const [dealer] = await db
     .select()
