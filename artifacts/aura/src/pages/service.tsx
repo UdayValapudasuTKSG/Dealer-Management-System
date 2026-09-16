@@ -174,6 +174,7 @@ import { useAuthz } from "@/lib/auth";
 import { ViewControls } from "@/components/view-controls";
 import { ListPagination } from "@/components/list-pagination";
 import { PartRequisitionForm } from "@/components/service/part-requisition-form";
+import { TechnicianTimesheetsTab } from "@/components/service/technician-timesheets";
 import { cn } from "@/lib/utils";
 import {
   isCurrentServiceVehicleLookup,
@@ -209,6 +210,7 @@ const TABS = [
   { key: "invoices", label: "Invoices", icon: Receipt },
   { key: "coverage", label: "Warranty & AMC", icon: ShieldCheck },
   { key: "history", label: "History", icon: History },
+  { key: "timesheets", label: "Timesheets", icon: Clock },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -330,6 +332,7 @@ export default function Service() {
           {tab === "invoices" && <InvoicesTab />}
           {tab === "coverage" && <CoverageTab />}
           {tab === "history" && <HistoryTab />}
+          {tab === "timesheets" && <TechnicianTimesheetsTab />}
         </motion.div>
       </AnimatePresence>
     </Page>

@@ -480,6 +480,13 @@ export const serviceInvoicesTable = pgTable(
   paidAt: timestamp("paid_at", { withTimezone: true }),
   // Totals lock at issue (FR-SR-09); later changes append adjustments.
   lockedAt: timestamp("locked_at", { withTimezone: true }),
+  /** Immutable labour-hour snapshot; null means historical hours are unknown. */
+  invoicedLaborHours: doublePrecision("invoiced_labor_hours"),
+  invoicedLaborHoursSource: text("invoiced_labor_hours_source")
+    .notNull()
+    .default("historical_unknown"),
+  /** Invoice issue instant used for dealer-day reporting. */
+  issuedAt: timestamp("issued_at", { withTimezone: true }),
   adjustments: jsonb("adjustments")
     .$type<InvoiceAdjustment[]>()
     .notNull()

@@ -816,6 +816,16 @@ const PATH_MODULES: Record<string, RouteRule> = {
     },
   },
   "service-technicians": { module: "service" },
+  "service-timesheets": {
+    module: "service",
+    category: (req) => {
+      // Manual time is editable by assigned technicians and managers; the
+      // route performs the finer self/team scope checks.
+      if (req.method === "GET") return "view";
+      if (req.method === "DELETE") return "delete";
+      return "edit";
+    },
+  },
   "job-cards": {
     module: "service",
     category: (req) => {

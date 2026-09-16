@@ -5861,6 +5861,204 @@ export const ListServiceTechniciansResponse = zod.array(ListServiceTechniciansRe
 
 
 /**
+ * Date is a dealer-local YYYY-MM-DD. Logged actual hours are manual daily entries only; cumulative job-card timers are returned separately and are never treated as daily actuals. Approved sold hours use the current estimate version's approvalAt dealer day. Invoiced sold hours use issuedAt dealer day and an immutable invoice labour snapshot; historical invoices without that snapshot are explicitly unknown.
+ * @summary Get the dealer-day technician timesheet and efficiency summary
+ */
+export const getDailyTechnicianTimesheetQueryDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+
+export const GetDailyTechnicianTimesheetQueryParams = zod.object({
+  "date": zod.coerce.string().regex(getDailyTechnicianTimesheetQueryDateRegExp),
+  "technicianUserId": zod.coerce.number().optional()
+})
+
+export const getDailyTechnicianTimesheetResponseRowsItemEntriesItemWorkDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const getDailyTechnicianTimesheetResponseRowsItemEntriesItemDurationMinutesMax = 1440;
+
+export const getDailyTechnicianTimesheetResponseRowsItemApprovedJobsItemHoursMin = 0;
+
+export const getDailyTechnicianTimesheetResponseRowsItemInvoicedJobsItemHoursMin = 0;
+
+
+
+export const GetDailyTechnicianTimesheetResponse = zod.object({
+  "date": zod.coerce.date(),
+  "timezone": zod.string(),
+  "summary": zod.object({
+  "availableHours": zod.number(),
+  "bookedHours": zod.number(),
+  "approvedSoldHours": zod.number(),
+  "invoicedSoldHours": zod.number(),
+  "invoicedHoursKnown": zod.boolean(),
+  "loggedActualHours": zod.number(),
+  "existingTimerHours": zod.number(),
+  "remainingCapacityHours": zod.number(),
+  "efficiencyPct": zod.number().nullable(),
+  "productivityPct": zod.number().nullable()
+}),
+  "rows": zod.array(zod.object({
+  "technicianUserId": zod.number(),
+  "technicianName": zod.string(),
+  "availableHours": zod.number(),
+  "availabilitySource": zod.enum(['default', 'override']),
+  "bookedHours": zod.number(),
+  "approvedSoldHours": zod.number(),
+  "invoicedSoldHours": zod.number(),
+  "invoicedHoursKnown": zod.boolean(),
+  "loggedActualHours": zod.number(),
+  "existingTimerHours": zod.number().describe('Cumulative timer total; not a daily actual'),
+  "remainingCapacityHours": zod.number(),
+  "efficiencyPct": zod.number().nullable().describe('Approved sold hours \/ manual logged actual hours; null when actual is zero'),
+  "productivityPct": zod.number().nullable().describe('Invoiced sold hours \/ manual logged actual hours; null when actual is zero'),
+  "entries": zod.array(zod.object({
+  "id": zod.number(),
+  "technicianUserId": zod.number(),
+  "workDate": zod.string().regex(getDailyTechnicianTimesheetResponseRowsItemEntriesItemWorkDateRegExp),
+  "jobCardId": zod.number().nullish(),
+  "jobCardTitle": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "durationMinutes": zod.number().min(1).max(getDailyTechnicianTimesheetResponseRowsItemEntriesItemDurationMinutesMax),
+  "note": zod.string().nullish(),
+  "source": zod.enum(['manual']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "approvedJobs": zod.array(zod.object({
+  "jobCardId": zod.number(),
+  "title": zod.string(),
+  "customerName": zod.string().nullable(),
+  "vehicleInfo": zod.string(),
+  "hours": zod.number().min(getDailyTechnicianTimesheetResponseRowsItemApprovedJobsItemHoursMin)
+})),
+  "invoicedJobs": zod.array(zod.object({
+  "jobCardId": zod.number(),
+  "title": zod.string(),
+  "customerName": zod.string().nullable(),
+  "vehicleInfo": zod.string(),
+  "hours": zod.number().min(getDailyTechnicianTimesheetResponseRowsItemInvoicedJobsItemHoursMin)
+}))
+}))
+})
+
+
+/**
+ * @summary Add one manual daily actual entry
+ */
+export const createTechnicianTimesheetEntryBodyWorkDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const createTechnicianTimesheetEntryBodyDurationMinutesMax = 1440;
+
+export const createTechnicianTimesheetEntryBodyNoteMax = 2000;
+
+
+
+export const CreateTechnicianTimesheetEntryBody = zod.object({
+  "technicianUserId": zod.number(),
+  "workDate": zod.string().regex(createTechnicianTimesheetEntryBodyWorkDateRegExp),
+  "jobCardId": zod.number().nullish(),
+  "durationMinutes": zod.number().min(1).max(createTechnicianTimesheetEntryBodyDurationMinutesMax),
+  "note": zod.string().max(createTechnicianTimesheetEntryBodyNoteMax).nullish()
+})
+
+export const createTechnicianTimesheetEntryResponseWorkDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const createTechnicianTimesheetEntryResponseDurationMinutesMax = 1440;
+
+
+
+export const CreateTechnicianTimesheetEntryResponse = zod.object({
+  "id": zod.number(),
+  "technicianUserId": zod.number(),
+  "workDate": zod.string().regex(createTechnicianTimesheetEntryResponseWorkDateRegExp),
+  "jobCardId": zod.number().nullish(),
+  "jobCardTitle": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "durationMinutes": zod.number().min(1).max(createTechnicianTimesheetEntryResponseDurationMinutesMax),
+  "note": zod.string().nullish(),
+  "source": zod.enum(['manual']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Edit one manual daily actual entry
+ */
+export const UpdateTechnicianTimesheetEntryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateTechnicianTimesheetEntryBodyDurationMinutesMax = 1440;
+
+export const updateTechnicianTimesheetEntryBodyNoteMax = 2000;
+
+
+
+export const UpdateTechnicianTimesheetEntryBody = zod.object({
+  "durationMinutes": zod.number().min(1).max(updateTechnicianTimesheetEntryBodyDurationMinutesMax).optional(),
+  "note": zod.string().max(updateTechnicianTimesheetEntryBodyNoteMax).nullish()
+})
+
+export const updateTechnicianTimesheetEntryResponseWorkDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const updateTechnicianTimesheetEntryResponseDurationMinutesMax = 1440;
+
+
+
+export const UpdateTechnicianTimesheetEntryResponse = zod.object({
+  "id": zod.number(),
+  "technicianUserId": zod.number(),
+  "workDate": zod.string().regex(updateTechnicianTimesheetEntryResponseWorkDateRegExp),
+  "jobCardId": zod.number().nullish(),
+  "jobCardTitle": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "durationMinutes": zod.number().min(1).max(updateTechnicianTimesheetEntryResponseDurationMinutesMax),
+  "note": zod.string().nullish(),
+  "source": zod.enum(['manual']),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete one manual daily actual entry
+ */
+export const DeleteTechnicianTimesheetEntryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteTechnicianTimesheetEntryResponse = zod.void()
+
+
+/**
+ * @summary Override one technician's available hours for a dealer day
+ */
+export const SetTechnicianDailyAvailabilityParams = zod.object({
+  "technicianUserId": zod.coerce.number()
+})
+
+export const setTechnicianDailyAvailabilityBodyWorkDateRegExp = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+export const setTechnicianDailyAvailabilityBodyAvailableHoursMin = 0;
+export const setTechnicianDailyAvailabilityBodyAvailableHoursMax = 24;
+
+
+
+export const SetTechnicianDailyAvailabilityBody = zod.object({
+  "workDate": zod.string().regex(setTechnicianDailyAvailabilityBodyWorkDateRegExp),
+  "availableHours": zod.number().min(setTechnicianDailyAvailabilityBodyAvailableHoursMin).max(setTechnicianDailyAvailabilityBodyAvailableHoursMax)
+})
+
+export const setTechnicianDailyAvailabilityResponseAvailableHoursMin = 0;
+export const setTechnicianDailyAvailabilityResponseAvailableHoursMax = 24;
+
+
+
+export const SetTechnicianDailyAvailabilityResponse = zod.object({
+  "technicianUserId": zod.number(),
+  "workDate": zod.coerce.date(),
+  "availableHours": zod.number().min(setTechnicianDailyAvailabilityResponseAvailableHoursMin).max(setTechnicianDailyAvailabilityResponseAvailableHoursMax),
+  "source": zod.enum(['default', 'override'])
+})
+
+
+/**
  * @summary Open workshop jobs, including dealer-day carry-over ageing
  */
 export const listWorkshopWipQueryMinAgeDaysMin = 0;
@@ -7641,6 +7839,9 @@ export const CreateJobCardInvoiceResponse = zod.object({
   "paidBy": zod.string().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
+  "invoicedLaborHours": zod.number().nullable().describe('Immutable labour-hour snapshot; null on historical invoices whose line-hour snapshot was unavailable'),
+  "invoicedLaborHoursSource": zod.enum(['estimate_snapshot', 'historical_unknown']),
+  "issuedAt": zod.coerce.date().nullable(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),
   "reason": zod.string(),
@@ -8423,6 +8624,9 @@ export const ListServiceInvoicesResponseItem = zod.object({
   "paidBy": zod.string().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
+  "invoicedLaborHours": zod.number().nullable().describe('Immutable labour-hour snapshot; null on historical invoices whose line-hour snapshot was unavailable'),
+  "invoicedLaborHoursSource": zod.enum(['estimate_snapshot', 'historical_unknown']),
+  "issuedAt": zod.coerce.date().nullable(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),
   "reason": zod.string(),
@@ -8482,6 +8686,9 @@ export const UpdateServiceInvoiceResponse = zod.object({
   "paidBy": zod.string().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
+  "invoicedLaborHours": zod.number().nullable().describe('Immutable labour-hour snapshot; null on historical invoices whose line-hour snapshot was unavailable'),
+  "invoicedLaborHoursSource": zod.enum(['estimate_snapshot', 'historical_unknown']),
+  "issuedAt": zod.coerce.date().nullable(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),
   "reason": zod.string(),
@@ -8541,6 +8748,9 @@ export const RequestServiceInvoiceDiscountResponse = zod.object({
   "paidBy": zod.string().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
+  "invoicedLaborHours": zod.number().nullable().describe('Immutable labour-hour snapshot; null on historical invoices whose line-hour snapshot was unavailable'),
+  "invoicedLaborHoursSource": zod.enum(['estimate_snapshot', 'historical_unknown']),
+  "issuedAt": zod.coerce.date().nullable(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),
   "reason": zod.string(),
@@ -8595,6 +8805,9 @@ export const DecideServiceInvoiceDiscountResponse = zod.object({
   "paidBy": zod.string().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
+  "invoicedLaborHours": zod.number().nullable().describe('Immutable labour-hour snapshot; null on historical invoices whose line-hour snapshot was unavailable'),
+  "invoicedLaborHoursSource": zod.enum(['estimate_snapshot', 'historical_unknown']),
+  "issuedAt": zod.coerce.date().nullable(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),
   "reason": zod.string(),
@@ -8654,6 +8867,9 @@ export const AdjustServiceInvoiceResponse = zod.object({
   "paidBy": zod.string().nullish(),
   "paidAt": zod.coerce.date().nullish(),
   "lockedAt": zod.coerce.date().nullish(),
+  "invoicedLaborHours": zod.number().nullable().describe('Immutable labour-hour snapshot; null on historical invoices whose line-hour snapshot was unavailable'),
+  "invoicedLaborHoursSource": zod.enum(['estimate_snapshot', 'historical_unknown']),
+  "issuedAt": zod.coerce.date().nullable(),
   "adjustments": zod.array(zod.object({
   "amount": zod.number(),
   "reason": zod.string(),

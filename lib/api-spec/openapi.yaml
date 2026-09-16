@@ -3728,6 +3728,128 @@ paths:
                 items:
                   $ref: "#/components/schemas/TechnicianRef"
 
+  /service-timesheets:
+    get:
+      operationId: getDailyTechnicianTimesheet
+      tags: [service]
+      summary: Get the dealer-day technician timesheet and efficiency summary
+      description: >
+        Date is a dealer-local YYYY-MM-DD. Logged actual hours are manual
+        daily entries only; cumulative job-card timers are returned separately
+        and are never treated as daily actuals. Approved sold hours use the
+        current estimate version's approvalAt dealer day. Invoiced sold hours
+        use issuedAt dealer day and an immutable invoice labour snapshot;
+        historical invoices without that snapshot are explicitly unknown.
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema: { type: string, pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+        - name: technicianUserId
+          in: query
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Daily technician summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyTechnicianTimesheet"
+    post:
+      operationId: createTechnicianTimesheetEntry
+      tags: [service]
+      summary: Add one manual daily actual entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TechnicianTimesheetEntryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TechnicianTimesheetEntry"
+        "409":
+          description: Duplicate job/day entry or concurrent daily total
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid scope or daily duration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /service-timesheets/entries/{id}:
+    patch:
+      operationId: updateTechnicianTimesheetEntry
+      tags: [service]
+      summary: Edit one manual daily actual entry
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TechnicianTimesheetEntryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TechnicianTimesheetEntry"
+        "404":
+          description: Not found in dealer scope
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Invalid scope or daily duration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      operationId: deleteTechnicianTimesheetEntry
+      tags: [service]
+      summary: Delete one manual daily actual entry
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+
+  /service-timesheets/availability/{technicianUserId}:
+    patch:
+      operationId: setTechnicianDailyAvailability
+      tags: [service]
+      summary: Override one technician's available hours for a dealer day
+      parameters:
+        - { name: technicianUserId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TechnicianDailyAvailabilityInput"
+      responses:
+        "200":
+          description: Saved override
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TechnicianDailyAvailability"
+        "403":
+          description: Managers only
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /job-cards/wip:
     get:
       operationId: listWorkshopWip
@@ -13428,6 +13550,117 @@ components:
         id: { type: integer }
         name: { type: string }
 
+    TechnicianTimesheetJob:
+      type: object
+      required: [jobCardId, title, customerName, vehicleInfo, hours]
+      properties:
+        jobCardId: { type: integer }
+        title: { type: string }
+        customerName: { type: ["string", "null"] }
+        vehicleInfo: { type: string }
+        hours: { type: number, minimum: 0 }
+
+    TechnicianTimesheetEntry:
+      type: object
+      required: [id, technicianUserId, workDate, durationMinutes, source, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        technicianUserId: { type: integer }
+        workDate: { type: string, pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+        jobCardId: { type: ["integer", "null"] }
+        jobCardTitle: { type: ["string", "null"] }
+        customerName: { type: ["string", "null"] }
+        durationMinutes: { type: integer, minimum: 1, maximum: 1440 }
+        note: { type: ["string", "null"] }
+        source: { type: string, enum: [manual] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    TechnicianTimesheetEntryInput:
+      type: object
+      required: [technicianUserId, workDate, durationMinutes]
+      properties:
+        technicianUserId: { type: integer }
+        workDate: { type: string, pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+        jobCardId: { type: ["integer", "null"] }
+        durationMinutes: { type: integer, minimum: 1, maximum: 1440 }
+        note: { type: ["string", "null"], maxLength: 2000 }
+
+    TechnicianTimesheetEntryUpdate:
+      type: object
+      properties:
+        durationMinutes: { type: integer, minimum: 1, maximum: 1440 }
+        note: { type: ["string", "null"], maxLength: 2000 }
+
+    TechnicianDailyAvailability:
+      type: object
+      required: [technicianUserId, workDate, availableHours, source]
+      properties:
+        technicianUserId: { type: integer }
+        workDate: { type: string, format: date }
+        availableHours: { type: number, minimum: 0, maximum: 24 }
+        source: { type: string, enum: [default, override] }
+
+    TechnicianDailyAvailabilityInput:
+      type: object
+      required: [workDate, availableHours]
+      properties:
+        workDate: { type: string, pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+        availableHours: { type: number, minimum: 0, maximum: 24 }
+
+    DailyTechnicianTimesheetRow:
+      type: object
+      required: [technicianUserId, technicianName, availableHours, availabilitySource, bookedHours, approvedSoldHours, invoicedSoldHours, invoicedHoursKnown, loggedActualHours, existingTimerHours, remainingCapacityHours, efficiencyPct, productivityPct, entries, approvedJobs, invoicedJobs]
+      properties:
+        technicianUserId: { type: integer }
+        technicianName: { type: string }
+        availableHours: { type: number }
+        availabilitySource: { type: string, enum: [default, override] }
+        bookedHours: { type: number }
+        approvedSoldHours: { type: number }
+        invoicedSoldHours: { type: number }
+        invoicedHoursKnown: { type: boolean }
+        loggedActualHours: { type: number }
+        existingTimerHours: { type: number, description: "Cumulative timer total; not a daily actual" }
+        remainingCapacityHours: { type: number }
+        efficiencyPct: { type: ["number", "null"], description: "Approved sold hours / manual logged actual hours; null when actual is zero" }
+        productivityPct: { type: ["number", "null"], description: "Invoiced sold hours / manual logged actual hours; null when actual is zero" }
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/TechnicianTimesheetEntry" }
+        approvedJobs:
+          type: array
+          items: { $ref: "#/components/schemas/TechnicianTimesheetJob" }
+        invoicedJobs:
+          type: array
+          items: { $ref: "#/components/schemas/TechnicianTimesheetJob" }
+
+    DailyTechnicianTimesheetSummary:
+      type: object
+      required: [availableHours, bookedHours, approvedSoldHours, invoicedSoldHours, invoicedHoursKnown, loggedActualHours, existingTimerHours, remainingCapacityHours, efficiencyPct, productivityPct]
+      properties:
+        availableHours: { type: number }
+        bookedHours: { type: number }
+        approvedSoldHours: { type: number }
+        invoicedSoldHours: { type: number }
+        invoicedHoursKnown: { type: boolean }
+        loggedActualHours: { type: number }
+        existingTimerHours: { type: number }
+        remainingCapacityHours: { type: number }
+        efficiencyPct: { type: ["number", "null"] }
+        productivityPct: { type: ["number", "null"] }
+
+    DailyTechnicianTimesheet:
+      type: object
+      required: [date, timezone, summary, rows]
+      properties:
+        date: { type: string, format: date }
+        timezone: { type: string }
+        summary: { $ref: "#/components/schemas/DailyTechnicianTimesheetSummary" }
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/DailyTechnicianTimesheetRow" }
+
     ChecklistItem:
       type: object
       required: [label, done]
@@ -13923,7 +14156,7 @@ components:
 
     ServiceInvoice:
       type: object
-      required: [id, serviceOrderId, jobCardId, vehicleInfo, partsTotal, laborTotal, surchargeTotal, discountTotal, discountStatus, tax, total, originalTotal, balance, customerCreditBalance, status, adjustments, createdAt]
+      required: [id, serviceOrderId, jobCardId, vehicleInfo, partsTotal, laborTotal, surchargeTotal, discountTotal, discountStatus, tax, total, originalTotal, balance, customerCreditBalance, status, adjustments, invoicedLaborHours, invoicedLaborHoursSource, issuedAt, createdAt]
       properties:
         id: { type: integer }
         serviceOrderId: { type: integer }
@@ -13955,6 +14188,9 @@ components:
         paidBy: { type: ["string", "null"] }
         paidAt: { type: ["string", "null"], format: date-time }
         lockedAt: { type: ["string", "null"], format: date-time }
+        invoicedLaborHours: { type: ["number", "null"], description: "Immutable labour-hour snapshot; null on historical invoices whose line-hour snapshot was unavailable" }
+        invoicedLaborHoursSource: { type: string, enum: [estimate_snapshot, historical_unknown] }
+        issuedAt: { type: ["string", "null"], format: date-time }
         adjustments:
           type: array
           items: { $ref: "#/components/schemas/InvoiceAdjustmentEntry" }

@@ -5603,6 +5603,164 @@ export interface TechnicianRef {
   name: string;
 }
 
+export interface TechnicianTimesheetJob {
+  jobCardId: number;
+  title: string;
+  /** @nullable */
+  customerName: string | null;
+  vehicleInfo: string;
+  /** @minimum 0 */
+  hours: number;
+}
+
+export type TechnicianTimesheetEntrySource = typeof TechnicianTimesheetEntrySource[keyof typeof TechnicianTimesheetEntrySource];
+
+
+export const TechnicianTimesheetEntrySource = {
+  manual: 'manual',
+} as const;
+
+export interface TechnicianTimesheetEntry {
+  id: number;
+  technicianUserId: number;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  workDate: string;
+  /** @nullable */
+  jobCardId?: number | null;
+  /** @nullable */
+  jobCardTitle?: string | null;
+  /** @nullable */
+  customerName?: string | null;
+  /**
+     * @minimum 1
+     * @maximum 1440
+     */
+  durationMinutes: number;
+  /** @nullable */
+  note?: string | null;
+  source: TechnicianTimesheetEntrySource;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TechnicianTimesheetEntryInput {
+  technicianUserId: number;
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  workDate: string;
+  /** @nullable */
+  jobCardId?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 1440
+     */
+  durationMinutes: number;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  note?: string | null;
+}
+
+export interface TechnicianTimesheetEntryUpdate {
+  /**
+     * @minimum 1
+     * @maximum 1440
+     */
+  durationMinutes?: number;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  note?: string | null;
+}
+
+export type TechnicianDailyAvailabilitySource = typeof TechnicianDailyAvailabilitySource[keyof typeof TechnicianDailyAvailabilitySource];
+
+
+export const TechnicianDailyAvailabilitySource = {
+  default: 'default',
+  override: 'override',
+} as const;
+
+export interface TechnicianDailyAvailability {
+  technicianUserId: number;
+  workDate: string;
+  /**
+     * @minimum 0
+     * @maximum 24
+     */
+  availableHours: number;
+  source: TechnicianDailyAvailabilitySource;
+}
+
+export interface TechnicianDailyAvailabilityInput {
+  /** @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ */
+  workDate: string;
+  /**
+     * @minimum 0
+     * @maximum 24
+     */
+  availableHours: number;
+}
+
+export type DailyTechnicianTimesheetRowAvailabilitySource = typeof DailyTechnicianTimesheetRowAvailabilitySource[keyof typeof DailyTechnicianTimesheetRowAvailabilitySource];
+
+
+export const DailyTechnicianTimesheetRowAvailabilitySource = {
+  default: 'default',
+  override: 'override',
+} as const;
+
+export interface DailyTechnicianTimesheetRow {
+  technicianUserId: number;
+  technicianName: string;
+  availableHours: number;
+  availabilitySource: DailyTechnicianTimesheetRowAvailabilitySource;
+  bookedHours: number;
+  approvedSoldHours: number;
+  invoicedSoldHours: number;
+  invoicedHoursKnown: boolean;
+  loggedActualHours: number;
+  /** Cumulative timer total; not a daily actual */
+  existingTimerHours: number;
+  remainingCapacityHours: number;
+  /**
+     * Approved sold hours / manual logged actual hours; null when actual is zero
+     * @nullable
+     */
+  efficiencyPct: number | null;
+  /**
+     * Invoiced sold hours / manual logged actual hours; null when actual is zero
+     * @nullable
+     */
+  productivityPct: number | null;
+  entries: TechnicianTimesheetEntry[];
+  approvedJobs: TechnicianTimesheetJob[];
+  invoicedJobs: TechnicianTimesheetJob[];
+}
+
+export interface DailyTechnicianTimesheetSummary {
+  availableHours: number;
+  bookedHours: number;
+  approvedSoldHours: number;
+  invoicedSoldHours: number;
+  invoicedHoursKnown: boolean;
+  loggedActualHours: number;
+  existingTimerHours: number;
+  remainingCapacityHours: number;
+  /** @nullable */
+  efficiencyPct: number | null;
+  /** @nullable */
+  productivityPct: number | null;
+}
+
+export interface DailyTechnicianTimesheet {
+  date: string;
+  timezone: string;
+  summary: DailyTechnicianTimesheetSummary;
+  rows: DailyTechnicianTimesheetRow[];
+}
+
 export interface ChecklistItem {
   label: string;
   done: boolean;
@@ -6674,6 +6832,14 @@ export const ServiceInvoicePaymentMethod = {
   other: 'other',
 } as const;
 
+export type ServiceInvoiceInvoicedLaborHoursSource = typeof ServiceInvoiceInvoicedLaborHoursSource[keyof typeof ServiceInvoiceInvoicedLaborHoursSource];
+
+
+export const ServiceInvoiceInvoicedLaborHoursSource = {
+  estimate_snapshot: 'estimate_snapshot',
+  historical_unknown: 'historical_unknown',
+} as const;
+
 export interface InvoiceAdjustmentEntry {
   amount: number;
   reason: string;
@@ -6730,6 +6896,14 @@ export interface ServiceInvoice {
   paidAt?: string | null;
   /** @nullable */
   lockedAt?: string | null;
+  /**
+     * Immutable labour-hour snapshot; null on historical invoices whose line-hour snapshot was unavailable
+     * @nullable
+     */
+  invoicedLaborHours: number | null;
+  invoicedLaborHoursSource: ServiceInvoiceInvoicedLaborHoursSource;
+  /** @nullable */
+  issuedAt: string | null;
   adjustments: InvoiceAdjustmentEntry[];
   /** @nullable */
   signedCopyFiledBy?: string | null;
@@ -10329,6 +10503,14 @@ export type ClaimServiceOrder200 = {
   jobCard: JobCard;
   /** @minimum 1 */
   assignedJobCardCount: number;
+};
+
+export type GetDailyTechnicianTimesheetParams = {
+/**
+ * @pattern ^[0-9]{4}-[0-9]{2}-[0-9]{2}$
+ */
+date: string;
+technicianUserId?: number;
 };
 
 export type ListWorkshopWipParams = {

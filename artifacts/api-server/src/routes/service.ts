@@ -5047,6 +5047,14 @@ async function issueServiceInvoice(
           originalTotal: lockedBreakdown.total,
           balance: lockedBreakdown.total,
           status: "issued",
+          // Snapshot the hours from the locked estimate. Daily reporting never
+          // derives historical invoice hours from mutable card values or money.
+          invoicedLaborHours: effectiveQuotedLaborHours(
+            lockedCard.quotedLaborHours,
+            lockedCard.laborHours,
+          ),
+          invoicedLaborHoursSource: "estimate_snapshot",
+          issuedAt: new Date(),
           // Totals lock at issue (FR-SR-09); discount approval and the
           // adjustment endpoint are the only sanctioned paths that change them.
           lockedAt: new Date(),

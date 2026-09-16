@@ -8,6 +8,7 @@
 import type { InvoiceAdjustmentEntry } from './invoiceAdjustmentEntry';
 import type { ServiceInvoiceCreditReconciliationStatus } from './serviceInvoiceCreditReconciliationStatus';
 import type { ServiceInvoiceDiscountStatus } from './serviceInvoiceDiscountStatus';
+import type { ServiceInvoiceInvoicedLaborHoursSource } from './serviceInvoiceInvoicedLaborHoursSource';
 import type { ServiceInvoicePaymentMethod } from './serviceInvoicePaymentMethod';
 import type { ServiceInvoiceStatus } from './serviceInvoiceStatus';
 
@@ -60,6 +61,14 @@ export interface ServiceInvoice {
   paidAt?: Date | null;
   /** @nullable */
   lockedAt?: Date | null;
+  /**
+     * Immutable labour-hour snapshot; null on historical invoices whose line-hour snapshot was unavailable
+     * @nullable
+     */
+  invoicedLaborHours: number | null;
+  invoicedLaborHoursSource: ServiceInvoiceInvoicedLaborHoursSource;
+  /** @nullable */
+  issuedAt: Date | null;
   adjustments: InvoiceAdjustmentEntry[];
   /** @nullable */
   signedCopyFiledBy?: string | null;

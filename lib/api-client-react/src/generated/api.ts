@@ -129,6 +129,7 @@ import type {
   CustomerPersona,
   CustomerPersonaInput,
   CustomerUpdate,
+  DailyTechnicianTimesheet,
   DashboardSummary,
   Deal,
   DealInput,
@@ -190,6 +191,7 @@ import type {
   GateResolution,
   GenerateQuoteInput,
   GetCalendarParams,
+  GetDailyTechnicianTimesheetParams,
   GetPermissionMeta200,
   GetPipelineSuggestionsParams,
   GetReportParams,
@@ -390,7 +392,12 @@ import type {
   TaskInput,
   TaskUpdate,
   TeamMemberProfile,
+  TechnicianDailyAvailability,
+  TechnicianDailyAvailabilityInput,
   TechnicianRef,
+  TechnicianTimesheetEntry,
+  TechnicianTimesheetEntryInput,
+  TechnicianTimesheetEntryUpdate,
   TelephonyConfig,
   TelephonyToken,
   TestDrive,
@@ -10979,6 +10986,377 @@ export function useListServiceTechnicians<TData = Awaited<ReturnType<typeof list
 
 
 
+
+export const getGetDailyTechnicianTimesheetUrl = (params: GetDailyTechnicianTimesheetParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/service-timesheets?${stringifiedParams}` : `/api/service-timesheets`
+}
+
+/**
+ * Date is a dealer-local YYYY-MM-DD. Logged actual hours are manual daily entries only; cumulative job-card timers are returned separately and are never treated as daily actuals. Approved sold hours use the current estimate version's approvalAt dealer day. Invoiced sold hours use issuedAt dealer day and an immutable invoice labour snapshot; historical invoices without that snapshot are explicitly unknown.
+ * @summary Get the dealer-day technician timesheet and efficiency summary
+ */
+export const getDailyTechnicianTimesheet = async (params: GetDailyTechnicianTimesheetParams, options?: RequestInit): Promise<DailyTechnicianTimesheet> => {
+
+  return customFetch<DailyTechnicianTimesheet>(getGetDailyTechnicianTimesheetUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDailyTechnicianTimesheetQueryKey = (params?: GetDailyTechnicianTimesheetParams,) => {
+    return [
+    `/api/service-timesheets`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetDailyTechnicianTimesheetQueryOptions = <TData = Awaited<ReturnType<typeof getDailyTechnicianTimesheet>>, TError = ErrorType<unknown>>(params: GetDailyTechnicianTimesheetParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDailyTechnicianTimesheet>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDailyTechnicianTimesheetQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDailyTechnicianTimesheet>>> = ({ signal }) => getDailyTechnicianTimesheet(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDailyTechnicianTimesheet>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDailyTechnicianTimesheetQueryResult = NonNullable<Awaited<ReturnType<typeof getDailyTechnicianTimesheet>>>
+export type GetDailyTechnicianTimesheetQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the dealer-day technician timesheet and efficiency summary
+ */
+
+export function useGetDailyTechnicianTimesheet<TData = Awaited<ReturnType<typeof getDailyTechnicianTimesheet>>, TError = ErrorType<unknown>>(
+ params: GetDailyTechnicianTimesheetParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDailyTechnicianTimesheet>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDailyTechnicianTimesheetQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateTechnicianTimesheetEntryUrl = () => {
+
+
+
+
+  return `/api/service-timesheets`
+}
+
+/**
+ * @summary Add one manual daily actual entry
+ */
+export const createTechnicianTimesheetEntry = async (technicianTimesheetEntryInput: TechnicianTimesheetEntryInput, options?: RequestInit): Promise<TechnicianTimesheetEntry> => {
+
+  return customFetch<TechnicianTimesheetEntry>(getCreateTechnicianTimesheetEntryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(technicianTimesheetEntryInput)
+  }
+);}
+
+
+
+
+
+export const getCreateTechnicianTimesheetEntryMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTechnicianTimesheetEntry>>, TError,{data: BodyType<TechnicianTimesheetEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTechnicianTimesheetEntry>>, TError,{data: BodyType<TechnicianTimesheetEntryInput>}, TContext> => {
+
+const mutationKey = ['createTechnicianTimesheetEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTechnicianTimesheetEntry>>, {data: BodyType<TechnicianTimesheetEntryInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTechnicianTimesheetEntry(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTechnicianTimesheetEntryMutationResult = NonNullable<Awaited<ReturnType<typeof createTechnicianTimesheetEntry>>>
+    export type CreateTechnicianTimesheetEntryMutationBody = BodyType<TechnicianTimesheetEntryInput>
+    export type CreateTechnicianTimesheetEntryMutationError = ErrorType<Error>
+
+    /**
+ * @summary Add one manual daily actual entry
+ */
+export const useCreateTechnicianTimesheetEntry = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTechnicianTimesheetEntry>>, TError,{data: BodyType<TechnicianTimesheetEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTechnicianTimesheetEntry>>,
+        TError,
+        {data: BodyType<TechnicianTimesheetEntryInput>},
+        TContext
+      > => {
+      return useMutation(getCreateTechnicianTimesheetEntryMutationOptions(options));
+    }
+
+export const getUpdateTechnicianTimesheetEntryUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-timesheets/entries/${id}`
+}
+
+/**
+ * @summary Edit one manual daily actual entry
+ */
+export const updateTechnicianTimesheetEntry = async (id: number,
+    technicianTimesheetEntryUpdate: TechnicianTimesheetEntryUpdate, options?: RequestInit): Promise<TechnicianTimesheetEntry> => {
+
+  return customFetch<TechnicianTimesheetEntry>(getUpdateTechnicianTimesheetEntryUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(technicianTimesheetEntryUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateTechnicianTimesheetEntryMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTechnicianTimesheetEntry>>, TError,{id: number;data: BodyType<TechnicianTimesheetEntryUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTechnicianTimesheetEntry>>, TError,{id: number;data: BodyType<TechnicianTimesheetEntryUpdate>}, TContext> => {
+
+const mutationKey = ['updateTechnicianTimesheetEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTechnicianTimesheetEntry>>, {id: number;data: BodyType<TechnicianTimesheetEntryUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateTechnicianTimesheetEntry(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTechnicianTimesheetEntryMutationResult = NonNullable<Awaited<ReturnType<typeof updateTechnicianTimesheetEntry>>>
+    export type UpdateTechnicianTimesheetEntryMutationBody = BodyType<TechnicianTimesheetEntryUpdate>
+    export type UpdateTechnicianTimesheetEntryMutationError = ErrorType<Error>
+
+    /**
+ * @summary Edit one manual daily actual entry
+ */
+export const useUpdateTechnicianTimesheetEntry = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTechnicianTimesheetEntry>>, TError,{id: number;data: BodyType<TechnicianTimesheetEntryUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTechnicianTimesheetEntry>>,
+        TError,
+        {id: number;data: BodyType<TechnicianTimesheetEntryUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateTechnicianTimesheetEntryMutationOptions(options));
+    }
+
+export const getDeleteTechnicianTimesheetEntryUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-timesheets/entries/${id}`
+}
+
+/**
+ * @summary Delete one manual daily actual entry
+ */
+export const deleteTechnicianTimesheetEntry = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteTechnicianTimesheetEntryUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteTechnicianTimesheetEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTechnicianTimesheetEntry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTechnicianTimesheetEntry>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteTechnicianTimesheetEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTechnicianTimesheetEntry>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteTechnicianTimesheetEntry(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTechnicianTimesheetEntryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTechnicianTimesheetEntry>>>
+
+    export type DeleteTechnicianTimesheetEntryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete one manual daily actual entry
+ */
+export const useDeleteTechnicianTimesheetEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTechnicianTimesheetEntry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTechnicianTimesheetEntry>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteTechnicianTimesheetEntryMutationOptions(options));
+    }
+
+export const getSetTechnicianDailyAvailabilityUrl = (technicianUserId: number,) => {
+
+
+
+
+  return `/api/service-timesheets/availability/${technicianUserId}`
+}
+
+/**
+ * @summary Override one technician's available hours for a dealer day
+ */
+export const setTechnicianDailyAvailability = async (technicianUserId: number,
+    technicianDailyAvailabilityInput: TechnicianDailyAvailabilityInput, options?: RequestInit): Promise<TechnicianDailyAvailability> => {
+
+  return customFetch<TechnicianDailyAvailability>(getSetTechnicianDailyAvailabilityUrl(technicianUserId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(technicianDailyAvailabilityInput)
+  }
+);}
+
+
+
+
+
+export const getSetTechnicianDailyAvailabilityMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setTechnicianDailyAvailability>>, TError,{technicianUserId: number;data: BodyType<TechnicianDailyAvailabilityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setTechnicianDailyAvailability>>, TError,{technicianUserId: number;data: BodyType<TechnicianDailyAvailabilityInput>}, TContext> => {
+
+const mutationKey = ['setTechnicianDailyAvailability'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setTechnicianDailyAvailability>>, {technicianUserId: number;data: BodyType<TechnicianDailyAvailabilityInput>}> = (props) => {
+          const {technicianUserId,data} = props ?? {};
+
+          return  setTechnicianDailyAvailability(technicianUserId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetTechnicianDailyAvailabilityMutationResult = NonNullable<Awaited<ReturnType<typeof setTechnicianDailyAvailability>>>
+    export type SetTechnicianDailyAvailabilityMutationBody = BodyType<TechnicianDailyAvailabilityInput>
+    export type SetTechnicianDailyAvailabilityMutationError = ErrorType<Error>
+
+    /**
+ * @summary Override one technician's available hours for a dealer day
+ */
+export const useSetTechnicianDailyAvailability = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setTechnicianDailyAvailability>>, TError,{technicianUserId: number;data: BodyType<TechnicianDailyAvailabilityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setTechnicianDailyAvailability>>,
+        TError,
+        {technicianUserId: number;data: BodyType<TechnicianDailyAvailabilityInput>},
+        TContext
+      > => {
+      return useMutation(getSetTechnicianDailyAvailabilityMutationOptions(options));
+    }
 
 export const getListWorkshopWipUrl = (params?: ListWorkshopWipParams,) => {
   const normalizedParams = new URLSearchParams();
